@@ -6,7 +6,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -29,7 +29,13 @@ pub fn topbar(ctx: &Ctx, name: &str) -> Element {
     .padding_horizontal(SpacingSize::Section)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(Text::new(&breadcrumb).variant(TypographyStyle::Description))
+    .child(
+      Text::new(&breadcrumb)
+        .variant(TypographyStyle::Description)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex(1.0),
+    )
     .into()
 }
 

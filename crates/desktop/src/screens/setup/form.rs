@@ -90,6 +90,8 @@ impl Component for ProjectForm {
       .and_then(|errors| errors.name.as_ref())
       .filter(|_| !name.is_empty())
       .map(|error| message_text(ctx, error));
+    // Only a name the rules accept is repeated in the breadcrumb and the explanation.
+    let shown_name = if name_error.is_some() { "" } else { name };
 
     // Fields scroll when the window is shorter than the design; the actions stay visible.
     let fields = Column::new()
@@ -112,7 +114,7 @@ impl Component for ProjectForm {
           .width(Dimension::Px(CHANGE_GITHUB_WIDTH))
           .render(ctx),
       )
-      .child(ownership(ctx, name));
+      .child(ownership(ctx, shown_name));
     let actions = Column::new()
       .width(Dimension::Pct(100.0))
       .padding_horizontal(ExtraSpacing::Page.role())
@@ -121,7 +123,7 @@ impl Component for ProjectForm {
     Column::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
-      .child(topbar(ctx, name))
+      .child(topbar(ctx, shown_name))
       .child(heading(ctx))
       .child(ScrollVertical::new(fields).width(Dimension::Pct(100.0)).flex(1.0))
       .child(actions)
