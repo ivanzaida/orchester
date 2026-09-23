@@ -8,7 +8,7 @@ Personal agent orchestration first, with a future path to teams. The user reques
 
 Navigation selects a project first. Every functional section uses that project context. All projects is a project-switching entry point; it does not make operational resources global. Imported resources are independent local copies with dependency remapping.
 
-The design is an editable desktop application reference at 1440 × 960. English UI copy, grayscale surfaces, Inter for interface text and Geist Mono for identifiers and prompts. No runtime, framework, provider or storage implementation has been selected by this work.
+The design is an editable desktop application reference at 1440 × 960. English UI copy, grayscale application surfaces, Inter for interface text and Geist Mono for identifiers and prompts. The user explicitly requested GitHub-like colored code: syntax and diff content now use a restrained GitHub Dark-inspired palette while application chrome remains neutral. No runtime, framework, provider or storage implementation has been selected by this work.
 
 All project names, runs, PRs, credentials, reports, usage events, token estimates and budgets are illustrative fixtures. No repository connection, deployment, database query, approval or secret storage actually occurred.
 
@@ -16,7 +16,7 @@ All project names, runs, PRs, credentials, reports, usage events, token estimate
 
 File: `H:/projects/orchester/data/orchester.pen`, edited exclusively through Pencil MCP.
 
-The root contains eight numbered sections in one horizontal band, ordered left to right with a 320px gutter. Reading order within a flow is left to right, then the next row. Main-flow labels use section.step numbers; alternative states use letters. The layer tree follows the same order.
+The root contains nine numbered sections in one horizontal band, ordered left to right with a 320px gutter. Reading order within a flow is left to right, then the next row. Main-flow labels use section.step numbers; alternative states use letters. The layer tree follows the same order.
 
 | Section | Node |
 | --- | --- |
@@ -28,6 +28,7 @@ The root contains eight numbered sections in one horizontal band, ordered left t
 | 05 / Instructions & context | `MRxol` |
 | 06 / Tools & imports | `V8h6d` |
 | 07 / Secrets & access | `b3N1Ix` |
+| 08 / Pull requests | `McWTM` |
 
 Canonical screens and states, in canvas order:
 
@@ -39,12 +40,19 @@ Canonical screens and states, in canvas order:
 | 01.04 · Runner & agent models | `w6ODp4` | [Preview](previews/w6ODp4.png) |
 | 01.05 · Ready → Create first task | `x1YpfN` | [Preview](previews/x1YpfN.png) |
 | 01.A · Setup blocked / Restore provider access | `Q7htyU` | [Preview](previews/Q7htyU.png) |
-| 02.01 · Project overview | `Twtqc` | [Preview](previews/Twtqc.png) |
-| 02.02 · New task / Brief, context & limits | `l2YA4` | [Preview](previews/l2YA4.png) |
-| 02.03 · Research running | `RD4pc` | [Preview](previews/RD4pc.png) |
-| 02.04 · Review & approve plan | `x3lVC` | [Preview](previews/x3lVC.png) |
-| 02.05 · Working task / Conversation | `jgqPe` | [Preview](previews/jgqPe.png) |
-| 02.06 · Ready for review | `vpgrJ` | [Preview](previews/vpgrJ.png) |
+| 02.01 · Orchestrator / New conversation | `dOIrp` | [Preview](previews/dOIrp.png) |
+| 02.02 · Orchestrator / Task proposal | `I7TCI` | [Preview](previews/I7TCI.png) |
+| 02.03 · Tasks / Select drafts to run | `J9467` | [Preview](previews/J9467.png) |
+| 02.04 · Create multiple tasks / Review briefs | `OqmXc` | [Preview](previews/OqmXc.png) |
+| 02.05 · Run selected tasks / Parallel | `W1Dq6` | [Preview](previews/W1Dq6.png) |
+| 02.06 · Run selected tasks / Sequential | `IyJ5a` | [Preview](previews/IyJ5a.png) |
+| 02.07 · Task queue / Running and waiting | `Z22wg` | [Preview](previews/Z22wg.png) |
+| 02.08 · Project overview | `Twtqc` | [Preview](previews/Twtqc.png) |
+| 02.09 · New task / Brief, context & limits | `l2YA4` | [Preview](previews/l2YA4.png) |
+| 02.10 · Research running | `RD4pc` | [Preview](previews/RD4pc.png) |
+| 02.11 · Review & approve plan | `x3lVC` | [Preview](previews/x3lVC.png) |
+| 02.12 · Working task / Conversation | `jgqPe` | [Preview](previews/jgqPe.png) |
+| 02.13 · Ready for review | `vpgrJ` | [Preview](previews/vpgrJ.png) |
 | 02.A · Paused / Resume from checkpoint | `Oqmog` | [Preview](previews/Oqmog.png) |
 | 02.B · Retry limit / Review recovery | `J3JZaT` | [Preview](previews/J3JZaT.png) |
 | 03.01 · Pipeline / Feature delivery | `Q21HOA` | [Preview](previews/Q21HOA.png) |
@@ -66,22 +74,29 @@ Canonical screens and states, in canvas order:
 | 07.02 · Add project credential | `tpF7R` | [Preview](previews/tpF7R.png) |
 | 07.03 · Runtime approval / One deployment | `nuuZL` | [Preview](previews/nuuZL.png) |
 | 07.A · Duplicate secret name | `m9Dhp` | [Preview](previews/m9Dhp.png) |
+| 08.01 · Pull requests / Review inbox | `wGtxT` | [Preview](previews/wGtxT.png) |
+| 08.02 · Pull request / Request an agent fix | `Rrmhf` | [Preview](previews/Rrmhf.png) |
+| 08.03 · Pull request / Verify the agent fix | `i4GUz` | [Preview](previews/i4GUz.png) |
+| 08.A · Pull request / Agent answers a question | `qJKSC` | [Preview](previews/qJKSC.png) |
+| 08.B · PR updated while composing (compact state) | `hfoDa` | [Preview](previews/hfoDa.png) |
+| 08.C · Agent request queued (compact state) | `uD6Ho` | [Preview](previews/uD6Ho.png) |
 
-All 33 screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Section subgroups have a 96px gap.
+There are 44 full screen frames; the previous 40 screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
 
 - Getting started: first launch → GitHub authorization → repository → runner/agents → ready. Setup blocking and compact empty-project feedback are below the main flow.
-- Tasks & runs: overview → new task → research → plan approval → working conversation → ready for review, together in `D4pfd`. Pause and retry are alternatives in `O4vgKt`; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`.
+- Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue. The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. Pause and retry are alternatives in `O4vgKt`; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Group positions are y 160 / 1376 / 3640 / 5904 / 7120 respectively; the section height is 8216.
 - Pipelines: the visual editor is separate from task execution.
 - Agents & connections: connections → add provider → assign connection/model in the agent profile; expired-access recovery is below.
 - Instructions: rules → composed prompt → variable catalog; unavailable-variable state is below.
 - Tools & imports: library → configuration → access policy in the first group. Select → resolve dependencies → ready to import is a separate complete row in `TSGMX`. Success/failure panels remain in `tjNmM`.
 - Secrets & access: library → add credential → runtime approval; duplicate-name validation is below.
+- Pull requests: `scsYh` contains the review inbox → line-specific fix request → verification on a new commit. `u77pi` contains the question/answer alternative and compact stale-revision and queued-request states. The section is at x 41728 / y 0, width 4896 and height 2592.
 
 Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & runs](previews/organization/g7ncNr.png), [Pipelines](previews/organization/Y6XGt.png), [Agents & connections](previews/organization/wNy9i.png), [Instructions](previews/organization/MRxol.png), [Tools & imports](previews/organization/V8h6d.png), [Secrets & access](previews/organization/b3N1Ix.png).
 
 ## Components and tokens
 
-30 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. Screens use linked instances; content, icon, state and supported size are intended overrides.
+37 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
 
 | Family | Node |
 | --- | --- |
@@ -112,9 +127,16 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 | Import selectable resource | `cuocA` |
 | Import dependency mapping | `HfNoA` |
 | Conversation message | `J5MIT` |
+| Conversation composer | `C3nu0z` |
+| Orchestrator proposed task | `SGjO0` |
 | Task conversation panel | `kjsmd` |
 | Agent model assignment row | `kOI6w` |
 | Orchester brand | `a0S44m` |
+| Task queue row | `clVjO` |
+| Task execution mode | `lcwsy` |
+| Pull request list row | `QHBNZ` |
+| Changed file | `j9NDM` |
+| Diff line | `vEZ42` |
 
 Colors: canvas `#101010`, sidebar `#141414`, surface `#1A1A1A`, raised `#222222`, hover/selection `#2C2C2C`, border `#363636`, hairline `#2B2B2B`, text `#EEEEEE`, muted `#A3A3A3`, subtle `#8F8F8F`, primary action `#E6E6E6` with `#181818` text. Variables also hold fonts, spacing and 7/12px control/panel radii. Status always includes text and an icon.
 
@@ -131,6 +153,52 @@ The task creation fixture includes four acceptance criteria, including cancelled
 
 Pause first settles at a safe checkpoint and stops new scheduling/tool calls; only then may the UI claim Paused. Resume continues the same run and version snapshot. Cancel stops new scheduling and preserves work and artifacts; it does not undo completed external operations, and unresolved in-flight outcomes remain visible. Retry-limit recovery offers one explicitly authorized additional attempt within the remaining budget or revision of the task first. The exhausted example is an alternative Run 129 / Attempt 3; the normal Run 128 shows intermediate checkpoint `4b92ad0` and final reviewed revision `8f3a2c1`.
 
+## Task library, bulk creation and scheduling
+
+The user explicitly requested creating ten tasks and letting agents work on them either concurrently or in sequence. A pipeline defines the steps within one task; the task queue coordinates separate task runs. All of this remains within the selected project.
+
+Tasks (`J9467`) is the main backlog, with All tasks, Drafts, Queue, Needs review and Done tabs. New task opens the existing single-task form; Create multiple opens `OqmXc`. Rows expose task ID, title, published pipeline, status and readiness/dependency, with selection and direct entry to task details/conversation. Run selected opens a scheduling review rather than immediately starting work.
+
+Create multiple supports pasting one title per line, adding rows and editing each task's brief, acceptance criteria, pipeline, limits and dependencies. Pasting titles does not invent accepted requirements. The drawn state shows ten completed briefs, with Task 03 selected. Create 10 tasks creates ten drafts and returns to Tasks; it does not start agents. It remains valid to save incomplete drafts, but missing required details are surfaced before queueing. Creating and queueing must each be idempotent; a failed response must not result in duplicate tasks or runs on retry.
+
+The fixture uses tasks ORC-129–138 in a separate sample backlog from the original overview. ORC-131, Add switcher keyboard shortcuts, depends on ORC-129, Add repository switcher, being merged to main. References to Task 01 before creation are mapped to the new local task identity during creation. All ten tasks use published Feature delivery v3, a $5 per-task cap and 30-minute run limit; the selected group cap is $50. These remain fictional values and records.
+
+| Setting | Proposed behavior |
+| --- | --- |
+| Parallel (`W1Dq6`) | Start eligible tasks by priority up to the configured task-run limit. The fixture uses two concurrent tasks. A task waiting for plan approval still occupies a task-run slot. Dependency-blocked tasks have not started and occupy no slot; other eligible tasks may proceed. |
+| Sequential (`IyJ5a`) | Run one task at a time in the chosen order. The drawn completion gate is Previous task is ready for review. A blocked next task holds this sequence rather than silently skipping ahead. |
+| Dependencies | Both modes enforce explicit prerequisites. Ready for review is distinct from Merged to main. A merge dependency releases only after the merge is verified; the dependent task starts from the updated base. |
+| Agent capacity | Concurrent task runs and agent slots are separate constraints. A pipeline can itself use several agents. The runner also enforces its available agent slots; insufficient capacity leaves work waiting with a reason. |
+| Failure policy | The fixture pauses remaining tasks on an unrecovered task failure. Already active tasks continue; no automatic discard or cancellation is implied. Explicit recovery can retry the failed task or resume the remaining queue. |
+| Pause scheduling | Stops new task starts in the selected group. Active task runs continue. Their existing per-task Pause and Cancel controls remain separate. |
+| Budgets | Enforce both per-task and group caps. Exhausting the shared cap stops further scheduling and exposes a budget reason; the exact accounting and in-flight settlement remain runtime engineering work. |
+
+Queue 10 tasks schedules the reviewed group with pinned configuration versions. Each task retains its own run, conversation, branch and result. The group does not become one shared agent conversation. Plan approvals and tool access decisions come from each pipeline and tool policy; bulk scheduling does not bypass them. Separate branches/workspaces are required for concurrent edits; reviewed PRs and explicit merges determine integration order. Parallel execution does not guarantee conflict-free merging.
+
+The active queue (`Z22wg`) demonstrates Group 07 with two tasks researching, seven waiting for concurrency and one blocked on merge. Each waiting row explains why it has not started. Edit queue changes pending order/limits; reductions in concurrency drain through existing work rather than cancelling it. Changes to already-started run snapshots require a separate explicit operation. Queue-tab counts include all unfinished scheduled work, including running and dependency-blocked tasks; the status summary disambiguates those counts.
+
+Preflight must validate required briefs, available published configuration, authorization, runner readiness, dependency cycles and impossible sequential order. Invalid work stays intact with actionable reasons; any partial queueing must be an explicit selection, not a silent skip. Self/cyclic dependencies are rejected. A prerequisite outside the selected group must be visibly identified and must not be automatically started without selection. If a prerequisite fails, is cancelled or its merge is reverted, dependent work remains blocked for review.
+
+Interaction notes: select-all applies to the current filtered set and displays its count. Task-row activation opens details; the checkbox only changes selection. Drag reorder also needs keyboard Move up/down actions and one undoable reorder. Paste a task list is an explicit user action with a reviewable result. Closing retains the batch draft; destructive discard is separate. Disabled/pending/error states, live scheduling and delivery remain implementation work. Proposed strings extend `tasks.bulkCreate.*`, `tasks.selection.*`, `taskQueue.*`, `taskDependencies.*` and `runGroups.*`.
+
+## Project orchestrator conversation
+
+Orchestrator is a permanent project navigation entry between Overview and Tasks. It opens a project conversation without requiring a task. New conversation starts a separate discussion; History finds prior discussions within the selected project. The empty composition state is `dOIrp`; the ten-task proposal state is `I7TCI`. These are proposed product interactions, not an implemented chat service.
+
+The project chat handles ideation, decomposition, queue coordination and cross-task progress questions. A task's Conversation stays scoped to that task/run, with Orchestrator or a participating agent as recipient. Its panel now explicitly says Task conversation and To: Orchestrator · this task. Opening a task or project chat preserves the other conversation and its draft. A project message is not silently broadcast into every agent's task context.
+
+The header identifies the project Orchestrator profile and model; Agent profile links to the existing profile editor. Project instructions apply to the project coordinator, and Manage context shows attached files, selected tasks and applicable source versions. Chat text alone does not publish permanent instructions. Repository access is not proof the entire repository was read; responses must identify sources actually consulted. Tool credentials and raw secrets remain excluded. Provider/model names in this fixture have the same unverified illustrative status as the other model screens.
+
+The shown user asks to plan from an attached scope.md. The Orchestrator proposes ten briefs with acceptance criteria, a merge dependency, parallelism of two tasks and a $50 aggregate cap. The proposal's local task numbers are not persisted task IDs. Review & create tasks opens the existing bulk brief editor (`OqmXc`) populated with that proposal. Selecting a proposed row opens its brief in that editor. Create 10 tasks then saves drafts and returns confirmed IDs/links to this conversation; it does not queue work. Run selected opens the existing parallel or sequential scheduling review with the proposal settings carried over. Edits preserve the conversation/proposal link. This is one connected flow, not a second task or scheduler implementation.
+
+Natural-language queue commands use the same project actions, permission checks, scheduling limits and plan/tool approvals as direct UI controls. Resolve the intended task/group scope; ambiguous requests need clarification. An explicit authorized action need not acquire an unrelated extra chat approval. Changes and their outcomes remain inspectable with exact affected task links. Requests to pause scheduling hold new starts; pausing a working task is a separate action at its checkpoint. Progress answers read actual run state and link to tasks; an unavailable status source is reported as unavailable. Fresh authorization, missing credentials or a changed configuration cannot be bypassed through chat.
+
+The composer is the existing `C3nu0z` promoted to Conversation / Composer and reused by linked references; `SGjO0` is the new Orchestrator / Proposed task row. Existing message, button, status, property and navigation components are reused. The composer is disabled while empty. Suggestions populate an editable prompt rather than dispatching an implicit operation. Enter adds a newline; Ctrl/Cmd+Enter sends. Escape closes History/context overlays and restores focus. History and context overlays are specified entry points, not additional drawn screens.
+
+Proposed runtime states: preserve drafts on failed sends and show Retry; deduplicate message and action retries; distinguish Sending, Thinking, Delivered and action-confirmed outcomes. A response failure must not erase the user's sent message or existing proposal. Stop response only stops response generation, not running tasks. Provider access failure links to Connections while retaining the conversation. Loading must not impersonate a new empty conversation. Revalidate proposal/configuration versions before creation or launch; never apply stale settings silently. Conversation retention, context compaction and history search need an engineering contract. Proposed copy namespaces extend `orchestrator.*`, `conversation.history.*`, `conversation.context.*` and `orchestrator.proposal.*`.
+
+At narrower widths the task proposal becomes an on-demand panel above the composer, keeping chat usable; collapse project navigation first. Keyboard focus, panel transitions, persistence, response streaming and actual routing require runtime acceptance tests. [Project chat overview](previews/organization/I0Ij1T.png).
+
 ## Task conversation
 
 The task has a visible Conversation tab, an Open conversation entry on the review summary, and a conversation panel beside running/paused progress. The recipient defaults to Orchestrator; the picker can target a participating agent directly. Orchestrator routes messages, while direct messages retain their selected recipient. Messages belong to the task and record run, step, recipient and author.
@@ -138,6 +206,34 @@ The task has a visible Conversation tab, an Open conversation entry on the revie
 Delivery states distinguish Queued, Delivered and Acknowledged. Acknowledgement does not prove the requested change was applied. Work-changing messages are delivered at the next checkpoint; Pause is the visible control for an urgent interruption. While paused, messages remain queued and are delivered before the next action on resume. Scope changes return to plan review rather than silently changing approved work.
 
 Proposed interaction contract: failed or pending sends retain the draft; retries deduplicate the message; Enter adds a newline and Ctrl/Cmd+Enter sends. Escape closes the recipient picker and restores focus. Keyboard, delivery and persistence behavior remains to be implemented and tested.
+
+## Pull request review and agent feedback
+
+The user requested viewing pull requests and leaving comments for an agent to fix code or answer a question. Pull requests is now a project navigation entry after Tasks. It lists PRs from the selected project's repository with linked task, feedback state, current head and agent verification. Ready for review (`vpgrJ`) now opens Review PR in Orchester; Ask agent opens general feedback for the linked PR. Open in GitHub remains a clearly separate external destination.
+
+The new inbox (`wGtxT`) shows three illustrative open PRs: #42 needs review, #43 has an agent fixing feedback, and #44 is not linked to an agent task. An unlinked PR remains readable; link or create an authorized project task before asking an agent to execute work. PR open/draft/merged/closed state is distinct from agent readiness and local verification. Refresh errors preserve existing data with a stale marker and last successful sync time; loading and empty results must not fabricate PRs. Connection/permission failures lead to the relevant project Connection. Repository lookup, GitHub API synchronization and access have not been implemented or verified by these screens.
+
+The diff view (`Rrmhf`) includes a changed-file list, selected revision range, unified code diff, Viewed state and a contextual feedback panel. Code additions/removals use plus/minus signs, line numbers and muted green/red surfaces; a comment selection uses blue, so meaning is not dependent on color alone. The selected fixture shows new lines 43–45 of src/auth/github.ts at 8f3a2c1. The full PR totals six files and +248 / −32; the shown handler is one excerpt, not the entire diff. The test counts are illustrative agent/local evidence, not a claim about GitHub Actions or required branch checks.
+
+Code styling follows the color roles in the official [GitHub theme](https://github.com/primer/github-vscode-theme/blob/main/src/theme.js), adapted to the existing application. Semantic tokens: code-bg #0D1117, code-text #E6EDF3, code-keyword #FF7B72, code-string #A5D6FF, code-function #D2A8FF, code-variable #FFA657, code-constant #79C0FF and code-comment #8B949E. Diff additions use #14261C with #7EE787 markers; removals use #301C20 with #FFA198 markers; selected ranges use #1B3652 with a #58A6FF edge. The application navigation, forms, buttons and feedback panels remain grayscale. These are design tokens inspired by GitHub Dark, not a claim of pixel-identical GitHub rendering.
+
+The shared diff-line component now contains colored text spans with the same 12px Geist Mono typography and original whitespace; line content is retained in metadata for inspection. All 39 displayed code lines across the three review screens were checked by concatenating rendered token contents against the original strings. A linked component specimen in Foundations (`z8v8m7`) covers comment, deletion, addition and selected-addition states. This is editable design content, not a production tokenizer: implementation needs a language-aware syntax highlighter, safe text rendering and correct tab/Unicode/long-line handling. No runtime highlighter was implemented or selected.
+
+Agent feedback has explicit Ask a question and Request a fix modes. Both record project/repository, PR identity, selected base/head, file, diff side, line/range, source excerpt, author and target agent. General PR feedback omits the line anchor but retains the revision context. The target selector defaults to the linked task's Builder profile and displays its model and task; runtime must resolve the actual profile and permissions, not infer an agent from a GitHub author name. Questions request an explanation without changing code. A fix request is an explicit instruction to continue the linked task on its existing PR branch, preserving the applicable run configuration and approval policies.
+
+Proposed visibility choice: the shown comments are Orchester-only and this is labeled beside every thread and before sending. They are not GitHub review comments, do not post to GitHub, and do not constitute a GitHub Request changes review. GitHub discussions, formal approval and merge remain available through Open in GitHub. Native GitHub discussion import/posting is outside this increment and would need explicit source/visibility and delivery states. No actual GitHub comment, review, task execution or push occurred during this design work.
+
+Sending preserves a local draft until persistence is confirmed and deduplicates retries. Distinguish Saved/Queued, Delivered, Working, Answered, Ready to verify and Resolved; a successful send alone must not claim execution. Questions can fail or need clarification without becoming code work. A queued request (`uD6Ho`) links to the existing task queue. A fix respects task concurrency, agent capacity, branch/worktree serialization and the remaining task budget; multiple requests must not create concurrent writers on one PR branch. The sample shows $3.72 remaining from the existing $5 cap. If budget, time, access or agent availability prevents execution, show the actual blocking reason and retain the request. Previously finished tasks can return from review to implementation; never create a duplicate task or silently reset limits.
+
+On completion (`i4GUz`), the thread links the agent's answer, pushed commit b7c92e4, changed files and checks for that exact revision. Since your review compares 8f3a2c1 with b7c92e4 and shows two updated files (+4 in the handler, +12 in its test), while the PR still contains six changed files in total. The original 43–45 anchor maps to current 47–49; the added cancellation guard is highlighted separately. The agent reports what it did, but the thread remains Ready to verify. Mark resolved is the reviewer's action and closes only the Orchester thread; it does not approve or merge the PR. Reply or request another fix keeps the conversation and source references together. Resolved threads remain inspectable and can be reopened.
+
+The question state (`qJKSC`) is an alternative first-thread scenario on the original head, not a second event after the fix. It shows a question about lines 48–49, the Builder's explanation and a source link. No code changed and no implementation run was requested by that question. Follow-up questions remain questions; Request a fix explicitly changes the requested action. Answered does not silently mean Resolved.
+
+New commits never discard comments or move them to unrelated code. Track anchors against immutable revisions and explicitly identify a mapped/current or outdated location. If the PR changes while a fix request is drafted (`hfoDa`), preserve the draft, expose the new head, and review/reanchor before sending work against it. A question about historical code can retain its original revision. Force-push, deleted files, renames, binary/large/generated files, repository permission loss and merged/closed PRs need clear handling; do not invent a mapping or write to an obsolete branch. Revalidate the head before applying work and serialize external updates with runner changes. Viewed markers and evidence apply to known content/revisions; modified files and new code require renewed review. Preserve the original review baseline when incoming updates arrive.
+
+Keyboard requirements: file search, file selection, focusable diff lines, keyboard range selection and a visible Add feedback action; Escape closes the contextual composer while retaining the draft and restores the selected-line focus. Ctrl/Cmd+Enter sends, Enter inserts a newline, and empty input disables sending. Pending/failed sends expose progress or Retry without duplicating work. At narrower widths the file list collapses and feedback opens as a panel, leaving the diff readable with deliberate horizontal scrolling for long code. Screen-reader labels must include old/new line, change type and thread state.
+
+The three new reusable components are QHBNZ (PR list row), j9NDM (changed file), and vEZ42 (diff line). Messages, composer, navigation, tabs, status, properties, notices and recovery panels reuse existing linked components. Proposed copy namespaces: `pullRequests.*`, `pullRequests.diff.*`, `pullRequests.feedback.*`, `pullRequests.revisions.*` and `pullRequests.recovery.*`. Source code, review text and repository paths are user/repository data. [Review-flow overview](previews/organization/McWTM.png).
 
 ## Agent profiles and connections
 
@@ -245,5 +341,13 @@ Desktop is verified visually at 1440 × 960. At narrower widths collapse navigat
 Visual evidence: the original 13 screens and 20 additional screens were inspected through live Pencil nodes and screenshot/export review. The independent audit was repeated against the expanded 32-screen set; its remaining import/library fixture mismatch was corrected by adding the existing draft Deploy preview and updating the count. The subsequently requested first-launch screen received primary-agent layout and full-size visual review. Full-size export review caught and corrected a tool-list overlap and import-tab spacing that the structural check did not flag. Repeated controls use 30 linked component definitions. See the [audit and resolution record](../evidence/design-consistency-audit-2026-09-23.md).
 
 The subsequent canvas-organization pass grouped the same 33 screens into eight numbered sections, aligned the layer tree and screen labels, and separated normal flows from alternate states. All 33 screens passed depth-9 layout checks after relocation; section exports were inspected for actual visibility and ordering. Reflow exposed excess tool-list height, which was corrected in the library and three import backgrounds. The product flows and screen IDs were preserved.
+
+The task-management extension added five screens for the ten-task backlog, bulk creation, parallel scheduling, sequential scheduling and the active queue. Each received a full-size visual review and passed depth-9 layout checks; Foundations and the expanded section hierarchy also passed. That extension brought the design to 38 screens and 32 reusable components. It received primary-agent design verification, not another independent audit. [Task-management overview](previews/organization/UIc5y.png).
+
+The subsequent project-orchestrator extension added the new-conversation and task-proposal screens, bringing the design at that point to 40 screens and 34 reusable components. Both new screens were inspected at 1440 × 960. The shared sidebar and task-chat labeling were checked visually on the working-task and Instructions screens; all 40 screens plus Foundations passed depth-9 layout checks. That root layout retained eight numbered sections. The new chat screens sit first in section 02; old screen IDs remain stable and the numbered labels were updated. This was primary-agent verification, not a new independent audit.
+
+The PR-review extension adds four full screens and two compact recovery states in section 08. All four screens and both compact states received full-size visual inspection; the updated task-review entry point and section overview were also inspected. A clipped footer on the fix-verification panel was corrected by reducing its layout gap and rechecked. All 44 full screens, Foundations and the PR alternate-state group passed depth-9 layout checks; root layout passed. The shared sidebar now includes Pull requests. The current document has nine numbered sections and 37 reusable components. This was primary-agent design verification; execution, GitHub synchronization, comment persistence and diff anchoring remain unimplemented specifications.
+
+The subsequent colored-code request updated the same three diff screens and shared diff-line component without changing the fixtures or screen IDs. All three screens and Foundations passed depth-11 layout checks after token sizing was corrected; final full-size exports were inspected. Code-only color exceptions are now part of the user-selected visual direction. [Syntax and diff states](previews/z8v8m7.png).
 
 These are static design checks. Actual orchestration, provider authentication, chat delivery, persistence, responsive behavior, accessibility and credential isolation were not implemented or tested. No production code or real external service state was changed by this design work.
