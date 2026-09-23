@@ -1,0 +1,127 @@
+//! Form field (`UOlUX` with `ZGwlv`): a label over a control, with an inline error or hint.
+//! Inputs use lurq's form input roles, filled from the design in `theme::form`.
+
+use std::sync::Arc;
+
+use lurq::{
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+  },
+  components::{Column, Row, Text, TextInput, TextOverflow},
+  core::Signal,
+  layout::Alignment,
+  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+};
+
+use super::icon::{Icon, IconSize, icon};
+
+/// Below the control: nothing, or the error of the current value.
+pub enum FieldNote {
+  None,
+  Error(Arc<str>),
+}
+
+pub fn field(label: &str, control: Element, note: FieldNote) -> Element {
+  let column = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(Text::new(label).variant(TypographyStyle::Caption))
+    .child(control);
+  match note {
+    FieldNote::None => column.into(),
+    FieldNote::Error(error) => column
+      .child(
+        Row::new()
+          .spacing(SpacingSize::Xs)
+          .align_items(Alignment::Center)
+          .describe("role", "field-error")
+          .child(icon(Icon::AlertCircle, IconSize::Small, PaletteColor::TextPrimary))
+          .child(
+            Text::new(&error)
+              .variant(TypographyStyle::Caption)
+              .color(PaletteColor::TextPrimary),
+          ),
+      )
+      .into(),
+  }
+}
+
+/// A single-line text input bound to `value`.
+pub fn text_input(ctx: &Ctx, id: &'static str, value: Signal<String>) -> Element {
+  let theme = ctx.theme();
+  let input = theme.form().input.clone();
+  let text = input.text.resolve(&theme.typography(), &theme.palette());
+  TextInput::styled(value, text)
+    .id(id)
+    .single_line()
+    .width(Dimension::Pct(100.0))
+    .height(input.height)
+    .padding_custom(input.padding)
+    .background(input.background)
+    .caret_color(input.caret)
+    .border(Border::inside(BorderSize::Sm, input.border))
+    .rounded(input.radius)
+    .focused_style(Style::new().border(Border::inside(BorderSize::Md, input.border_focus)))
+    .into()
+}
+
+/// How a value box reads.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ValueTone {
+  /// A real value, e.g. the chosen repository folder.
+  Value,
+  /// Nothing chosen yet.
+  Placeholder,
+  /// The control depends on something this version cannot do; drawn like a disabled field.
+  Unavailable,
+}
+
+/// Select field (`ZGwlv`): a value with a trailing icon. With `on_click` it opens a chooser
+/// (the trailing icon says which); an unavailable box shows a lock instead.
+pub fn value_box(
+  ctx: &Ctx,
+  id: &'static str,
+  text: &str,
+  tone: ValueTone,
+  choose: Option<(Icon, Box<dyn Fn() + Send + Sync>)>,
+) -> Element {
+  let input = ctx.theme().form().input.clone();
+  let (background, color) = match tone {
+    ValueTone::Value => (input.background, PaletteColor::TextPrimary),
+    ValueTone::Placeholder => (input.background, PaletteColor::TextSecondary),
+    ValueTone::Unavailable => (PaletteColor::SurfacePanel, PaletteColor::TextMuted),
+  };
+  let row = Row::new()
+    .id(id)
+    .width(Dimension::Pct(100.0))
+    .height(input.height)
+    .padding_custom(input.padding)
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .background(background)
+    .border(Border::inside(BorderSize::Sm, input.border.clone()))
+    .rounded(input.radius)
+    .child(
+      Text::new(text)
+        .variant(input.text.typography)
+        .color(color)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex(1.0),
+    );
+  match choose {
+    Some((glyph, on_click)) if tone != ValueTone::Unavailable => row
+      .child(icon(glyph, IconSize::Button, PaletteColor::TextSecondary))
+      .cursor(CursorIcon::Pointer)
+      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, input.border_focus)))
+      .on_click(move |_| on_click())
+      .into(),
+    _ if tone == ValueTone::Unavailable => row
+      .describe("state", "unavailable")
+      .cursor(CursorIcon::NotAllowed)
+      .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))
+      .into(),
+    _ => row.into(),
+  }
+}

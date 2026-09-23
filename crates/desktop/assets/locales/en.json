@@ -1,5 +1,110 @@
 {
   "app": {
-    "name": "Orchester"
+    "name": "Orchester",
+    "wordmark": "orchester"
+  },
+  "common": {
+    "back": "Back",
+    "notAvailableYet": "Not available in this version yet"
+  },
+  "workspace": {
+    "personal": "Personal workspace"
+  },
+  "setup": {
+    "welcome": {
+      "eyebrow": "WELCOME TO ORCHESTER",
+      "title": "Build with a team\nof AI agents.",
+      "description": "Connect a repository, assign models to roles, and guide each task from a plan to a reviewed pull request.",
+      "createFirstProject": "Create your first project",
+      "createNext": "Choose a local repository next.",
+      "stepsHeading": "THREE STEPS TO YOUR FIRST TASK",
+      "stepRepository": "Connect a repository",
+      "stepRepositorySummary": "Choose a project and its local git repository.",
+      "stepAgents": "Assign your agents",
+      "stepAgentsSummary": "Mix providers and models for each role.",
+      "stepTask": "Start a task",
+      "stepTaskSummary": "Approve the plan, then follow the work.",
+      "projectScope": "Instructions, tools, secrets and connections stay within each project.",
+      "noProjects": "No projects yet"
+    },
+    "rail": {
+      "heading": "PROJECT SETUP",
+      "project": "1. Project & repository",
+      "agents": "2. Runner & agents",
+      "ready": "3. Ready to start",
+      "backHint": "Nothing is saved until you create the project."
+    },
+    "project": {
+      "breadcrumb": "All projects / New project",
+      "breadcrumbNamed": "All projects / Set up {{name}}",
+      "title": "Create your project",
+      "description": "Choose a name and connect the repository your agents will work in.",
+      "name": "Project name",
+      "key": "Project key",
+      "githubUnavailable": "GitHub is not connected",
+      "githubUnavailableDetail": "Connecting GitHub is not available in this version yet. Choose a git repository on this computer instead.",
+      "repository": "Repository folder",
+      "noRepository": "No folder chosen",
+      "chooseRepositoryTitle": "Choose the project's git repository",
+      "defaultBranch": "Default branch",
+      "branchUnavailable": "Available once GitHub is connected",
+      "changeGithub": "Change GitHub account or access",
+      "ownershipTitle": "A home for this project’s work",
+      "ownershipDetail": "Tasks, agent profiles, instructions, tools, secrets and connections stay in this project. You can import independent copies from another project later.",
+      "ownershipDetailNamed": "Tasks, agent profiles, instructions, tools, secrets and connections stay in {{name}}. You can import independent copies from another project later.",
+      "createExplanation": "Creates the project in the repository’s .orchester folder.",
+      "create": "Create project & continue",
+      "creating": "Creating project…"
+    }
+  },
+  "nav": {
+    "overview": "Overview",
+    "orchestrator": "Orchestrator",
+    "tasks": "Tasks",
+    "pullRequests": "Pull requests",
+    "pipelines": "Pipelines",
+    "instructions": "Instructions",
+    "agents": "Agents",
+    "tools": "Tools",
+    "secrets": "Secrets",
+    "connections": "Connections",
+    "allProjects": "All projects",
+    "importResources": "Import resources",
+    "projectSettings": "Project settings"
+  },
+  "runner": {
+    "none": "No runner yet",
+    "noneDetail": "Agents cannot run in this version yet."
+  },
+  "overview": {
+    "description": "Everything moving in this project, and what needs you.",
+    "newTask": "New task",
+    "emptyTitle": "No tasks yet",
+    "emptyDetail": "Tasks, runs and agents are not available in this version yet. The project is ready in its repository.",
+    "projectKey": "Project key",
+    "repository": "Repository"
+  },
+  "recovery": {
+    "startupFailed": {
+      "title": "Orchester cannot open its database"
+    },
+    "projectUnavailable": {
+      "title": "{{name}} cannot be opened",
+      "setUpNew": "Set up a new project"
+    }
+  },
+  "errors": {
+    "nameRequired": "Enter a project name.",
+    "nameTooLong": "Use at most {{max}} characters.",
+    "projectKeyInvalid": "Use {{min}}–{{max}} capital letters or digits, starting with a letter.",
+    "repositoryRequired": "Choose the repository folder.",
+    "notAGitRepository": "This folder is not the root of a git repository.",
+    "alreadyInitialized": "This repository already contains an Orchester project.",
+    "projectMissing": "The repository no longer contains its Orchester project. It may have been moved or deleted.",
+    "newerSchema": "The data was written by a newer version of Orchester.",
+    "unsupportedPath": "This folder path cannot be stored. Choose a folder whose path uses standard characters.",
+    "storage": "The data could not be read or written. The log has the details.",
+    "interrupted": "The operation stopped unexpectedly. The log has the details.",
+    "executableLocation": "The folder of the Orchester program could not be determined."
   }
 }
