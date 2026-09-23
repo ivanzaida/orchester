@@ -15,9 +15,12 @@ use lurq::{
 
 use crate::{
   background,
+  close::Lifecycle,
   messages::{self, Message},
   navigation::{Navigation, Screen},
-  screens::{project::ProjectShell, setup::ProjectSetup, unavailable, welcome::Welcome},
+  screens::{
+    close_confirmation::CloseConfirmation, project::ProjectShell, setup::ProjectSetup, unavailable, welcome::Welcome,
+  },
   theme::{ExtraColor, TITLE_BAR_HEIGHT, WINDOW_CONTROL_WIDTH},
   ui::{
     icon::{Icon, window_control},
@@ -30,7 +33,10 @@ use crate::{
 /// How startup went, decided in `main` before the window opens.
 #[derive(Clone, PartialEq)]
 pub enum Startup {
-  Ready(Workspace),
+  Ready {
+    workspace: Workspace,
+    lifecycle: Lifecycle,
+  },
   /// The application database cannot be used; `path` is the file involved, if known.
   Failed {
     message: Message,
@@ -49,8 +55,14 @@ impl Component for Root {
 
   fn create(ctx: &mut Ctx) -> Self {
     let screen = ctx.signal(None);
-    if let Startup::Ready(workspace) = ctx.props::<Startup>().clone() {
+    if let Startup::Ready { workspace, lifecycle } = ctx.props::<Startup>().clone() {
       ctx.provide(Navigation::new(workspace, screen.clone()));
+      let close = lifecycle.clone();
+      ctx
+        .window()
+        .on_close_requested(move |request| close.on_close_requested(request));
+      ctx.provide(lifecycle.runners().clone());
+      ctx.provide(lifecycle);
     }
     Self { screen }
   }
@@ -58,7 +70,7 @@ impl Component for Root {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let content = match ctx.props::<Startup>().clone() {
       Startup::Failed { message, path } => startup_failed(ctx, &message, path.as_deref()),
-      Startup::Ready(workspace) => self.workspace(ctx, workspace),
+      Startup::Ready { workspace, lifecycle } => self.workspace(ctx, workspace, &lifecycle),
     };
     let screen = Column::new()
       .width(Dimension::Pct(100.0))
@@ -70,7 +82,7 @@ impl Component for Root {
 }
 
 impl Root {
-  fn workspace(&self, ctx: &mut Ctx, workspace: Workspace) -> Element {
+  fn workspace(&self, ctx: &mut Ctx, workspace: Workspace, lifecycle: &Lifecycle) -> Element {
     let navigation = Navigation::new(workspace.clone(), self.screen.clone());
     let landing = ctx.future(workspace, |workspace| async move {
       background::run(move || workspace.landing())
@@ -85,7 +97,15 @@ impl Root {
     if let Some(error) = landing.error.as_ref() {
       return startup_failed(ctx, error, None);
     }
-    match self.screen.get().or(landing.data) {
+    let screen = self.screen.get().or(landing.data);
+    // The open project's runner starts as soon as the project is shown, at startup or after
+    // setup, and stops when another screen replaces it. Repeating the same project is a no-op.
+    let project = match &screen {
+      Some(Screen::Project(project)) => Some(project.repo_root.as_path()),
+      _ => None,
+    };
+    lifecycle.runners().show(project);
+    let content = match screen {
       // Reading the workspace takes milliseconds; nothing is shown until it is known.
       None => Column::new().into(),
       Some(Screen::Welcome) => ctx.mount_keyed::<Welcome>("welcome", ()),
@@ -96,7 +116,14 @@ impl Root {
         repo_root,
         reason,
       }) => unavailable::render(ctx, &navigation, &name, &repo_root, &reason),
-    }
+    };
+    // The confirmation is a modal, so it takes no space in this column.
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .child(content)
+      .child(ctx.mount_keyed::<CloseConfirmation>("close-confirmation", lifecycle.clone()))
+      .into()
   }
 }
 

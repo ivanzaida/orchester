@@ -38,6 +38,7 @@ lurq = { workspace = true, features = [
   "clipboard",
   "tokio",
 ] }
+orchester-ipc.workspace = true
 orchester-store.workspace = true
 parking_lot.workspace = true
 rfd.workspace = true

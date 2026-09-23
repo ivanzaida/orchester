@@ -4,6 +4,8 @@
 use orchester_core::name::{Name, NameError};
 use orchester_store::StoreError;
 
+use crate::runner::state::RunnerFailure;
+
 /// A translatable message: `key` in the locale files and the values of its placeholders.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Message {
@@ -54,4 +56,13 @@ pub fn store_error(error: &StoreError) -> Message {
 /// Work that ran on a background thread panicked or was cancelled; the cause is logged.
 pub fn interrupted() -> Message {
   Message::new("errors.interrupted")
+}
+
+pub fn runner_failure(failure: &RunnerFailure) -> Message {
+  match failure {
+    RunnerFailure::MissingExecutable { .. } => Message::new("errors.runnerMissing"),
+    RunnerFailure::AlreadyServed => Message::new("errors.runnerAlreadyServed"),
+    RunnerFailure::StartFailed => Message::new("errors.runnerStartFailed"),
+    RunnerFailure::Lost => Message::new("errors.runnerLost"),
+  }
 }

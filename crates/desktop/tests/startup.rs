@@ -3,6 +3,7 @@ use std::{fs, path::Path};
 use orchester_desktop::{
   app_paths::app_database_beside, project_setup::ProjectDraft, session::AppSession, workspace::Landing,
 };
+use orchester_store::SessionEnd;
 use tempfile::TempDir;
 
 fn git_repo(parent: &Path, name: &str) -> std::path::PathBuf {
@@ -46,7 +47,7 @@ fn startup_lands_on_first_launch_then_on_the_created_project() {
   .validate()
   .expect("valid draft");
   let created = session.workspace().create(new).expect("project is created");
-  session.end().expect("session ends");
+  session.end(SessionEnd::Clean).expect("session ends");
 
   let session = AppSession::start_at(&database).expect("session starts again");
   let Ok(Landing::Project(opened)) = session.workspace().landing() else {

@@ -5,6 +5,7 @@
   },
   "common": {
     "back": "Back",
+    "cancel": "Cancel",
     "notAvailableYet": "Not available in this version yet"
   },
   "workspace": {
@@ -72,8 +73,31 @@
     "projectSettings": "Project settings"
   },
   "runner": {
-    "none": "No runner yet",
-    "noneDetail": "Agents cannot run yet."
+    "starting": "Starting local runner…",
+    "startingDetail": "Agents can run once it is online.",
+    "online": "Local runner online",
+    "onlineDetail": "Agent slots are not available yet.",
+    "reconnecting": "Local runner reconnecting…",
+    "reconnectingDetail": "It dropped; reconnecting automatically.",
+    "stopping": "Stopping local runner…",
+    "stoppingDetail": "Letting it finish cleanly.",
+    "offline": "Local runner offline",
+    "offlineDetail": "Restart it from Overview.",
+    "droppedTitle": "The runner dropped, reconnecting…",
+    "droppedDetail": "Attempt {{attempt}} of {{limit}}. Orchester retries on its own.",
+    "reconnectedTitle": "Runner reconnected",
+    "reconnectedDetail": "The local runner is back online.",
+    "offlineTitle": "Your runner is offline",
+    "stoppedDetail": "The runner was stopped.",
+    "restart": "Restart runner"
+  },
+  "close": {
+    "confirmTitle": "Agents are still working",
+    "confirmDetail": "Closing Orchester stops them. Wait for them to save at their next checkpoint, or quit now without a checkpoint.",
+    "waitingTitle": "Waiting for agents to save…",
+    "waitingDetail": "Orchester closes once every agent has reached its checkpoint.",
+    "waitForAgents": "Wait for agents to save",
+    "quitNow": "Quit now"
   },
   "overview": {
     "description": "Everything moving in this project, and what needs you.",
@@ -102,6 +126,10 @@
     "unsupportedPath": "This folder path cannot be stored. Choose a folder whose path uses standard characters.",
     "storage": "The data could not be read or written. The log has the details.",
     "interrupted": "The operation stopped unexpectedly. The log has the details.",
-    "executableLocation": "The folder of the Orchester program could not be determined."
+    "executableLocation": "The folder of the Orchester program could not be determined.",
+    "runnerMissing": "The runner program was not found next to Orchester.",
+    "runnerAlreadyServed": "Another Orchester window is already running this project's runner.",
+    "runnerStartFailed": "The runner could not be started. The log has the details.",
+    "runnerLost": "The runner stopped unexpectedly and could not be reconnected. The log has the details."
   }
 }
