@@ -16,8 +16,8 @@ pub const ACCENT: &str = "#E6E6E6";
 pub const INVERSE_TEXT: &str = "#181818";
 
 pub const FONT: &str = "Inter";
-/// Pencil's `mono` is Geist Mono, which is not bundled yet; this is the system fallback.
-pub const MONO: &str = "monospace";
+/// Pencil's `mono`, bundled from `assets/fonts/GeistMono-Regular.ttf` (SIL OFL 1.1).
+pub const MONO: &str = "Geist Mono";
 
 pub const RADIUS_CONTROL: f32 = 7.0;
 pub const RADIUS_PANEL: f32 = 12.0;

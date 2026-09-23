@@ -64,3 +64,14 @@ fn extra_typography_follows_pencil() {
   );
   assert_eq!(theme.typography_style(ExtraTypography::Metric.role()).font_size, 23.0);
 }
+
+#[test]
+fn mono_text_uses_bundled_geist_mono() {
+  let app = themed_app();
+  let mono = app.theme().typography_style(TypographyStyle::Mono);
+  assert_eq!(&*mono.font_family, "Geist Mono");
+  assert_eq!(
+    &*app.theme().typography_style(ExtraTypography::Metric.role()).font_family,
+    "Geist Mono"
+  );
+}

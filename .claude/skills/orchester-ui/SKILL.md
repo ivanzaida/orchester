@@ -107,7 +107,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `Caption` | 11 muted | metadata, counts, property rows |
 | `Button` | 12/500 | button labels |
 | `Link` | 11/500 | inline actions ("Answer question →") |
-| `Mono` | 10 | revisions, shortcuts, counts (Geist Mono not bundled yet) |
+| `Mono` | 10 | revisions, shortcuts, counts (Geist Mono) |
 | `ExtraTypography::SectionHeading.role()` | 15/500 | content section heading ("What changed") |
 | `ExtraTypography::CardTitle.role()` | 14/500 | card and panel titles ("Needs you") |
 | `ExtraTypography::Overline.role()` | 9/600 subtle | uppercase category label ("REVIEW PULL REQUEST") |

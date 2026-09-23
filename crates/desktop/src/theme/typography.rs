@@ -91,7 +91,7 @@ pub fn typography() -> ThemeTypography {
     button: style(12.0, FontWeight::Medium, TEXT),
     // Inline actions, e.g. "Answer question →" (`p9lUhC`).
     link: style(11.0, FontWeight::Medium, TEXT),
-    // Revisions, shortcuts and counts (`q91Jf8`, `dNVoK`).
+    // Revisions, shortcuts and counts (`q91Jf8`, `dNVoK`), in Geist Mono.
     mono: mono(10.0, MUTED),
     extra: ExtraTypography::ALL
       .into_iter()

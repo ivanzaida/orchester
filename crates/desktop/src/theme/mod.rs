@@ -18,6 +18,7 @@ const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Medium.ttf"),
   include_bytes!("../../assets/fonts/Inter-SemiBold.ttf"),
   include_bytes!("../../assets/fonts/Inter-Bold.ttf"),
+  include_bytes!("../../assets/fonts/GeistMono-Regular.ttf"),
 ];
 
 pub fn install(app: &mut App) {
