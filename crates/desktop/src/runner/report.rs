@@ -1,6 +1,9 @@
 //! The published runner status and the reporter a runner task uses to change it.
 
-use std::path::{Path, PathBuf};
+use std::{
+  path::{Path, PathBuf},
+  time::Instant,
+};
 
 use tokio::sync::watch;
 
@@ -14,6 +17,9 @@ pub struct RunnerStatus {
   generation: u64,
   project: Option<PathBuf>,
   state: RunnerState,
+  /// When the state ends on its own: the next reconnect attempt, or the reconnected notice
+  /// closing.
+  until: Option<Instant>,
 }
 
 impl RunnerStatus {
@@ -23,6 +29,7 @@ impl RunnerStatus {
       generation,
       project: None,
       state: RunnerState::Stopped,
+      until: None,
     }
   }
 
@@ -31,6 +38,7 @@ impl RunnerStatus {
       generation,
       project: Some(project),
       state: RunnerState::Starting,
+      until: None,
     }
   }
 
@@ -38,12 +46,18 @@ impl RunnerStatus {
     self.generation
   }
 
-  pub(super) fn project(&self) -> Option<&Path> {
+  pub fn state(&self) -> &RunnerState {
+    &self.state
+  }
+
+  /// The project whose runner this is.
+  pub fn project_root(&self) -> Option<&Path> {
     self.project.as_deref()
   }
 
-  pub fn state(&self) -> &RunnerState {
-    &self.state
+  /// When the current state ends on its own, if it does.
+  pub fn until(&self) -> Option<Instant> {
+    self.until
   }
 
   /// The state of the runner for `project`; a runner for another project does not count, and
@@ -58,9 +72,12 @@ impl RunnerStatus {
 
   pub(super) fn apply(&mut self, event: RunnerEvent) -> bool {
     let next = self.state.clone().apply(event);
-    let changed = next != self.state;
+    if next == self.state {
+      return false;
+    }
+    self.until = next.duration().map(|duration| Instant::now() + duration);
     self.state = next;
-    changed
+    true
   }
 }
 

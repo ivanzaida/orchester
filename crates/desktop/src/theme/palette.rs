@@ -4,7 +4,7 @@ use lurq::{
 };
 
 use super::tokens::{
-  ACCENT, BORDER, CANVAS, HAIRLINE, HOVER, INVERSE_TEXT, MUTED, RAISED, SIDEBAR, SUBTLE, SURFACE, TEXT,
+  ACCENT, BORDER, CANVAS, HAIRLINE, HOVER, INVERSE_TEXT, MUTED, RAISED, SCRIM, SIDEBAR, SUBTLE, SURFACE, TEXT,
 };
 
 /// Pencil colors without a built-in lurq role, registered as `PaletteColor::Extra`.
@@ -15,15 +15,18 @@ pub enum ExtraColor {
   Surface,
   /// Row and section dividers (Pencil `hairline`, e.g. `zemhy`).
   Hairline,
+  /// Dims the window behind a dialog (`a8U756`).
+  Scrim,
 }
 
 impl ExtraColor {
-  const ALL: [Self; 2] = [Self::Surface, Self::Hairline];
+  const ALL: [Self; 3] = [Self::Surface, Self::Hairline, Self::Scrim];
 
   fn name(self) -> &'static str {
     match self {
       Self::Surface => "surface",
       Self::Hairline => "hairline",
+      Self::Scrim => "scrim",
     }
   }
 
@@ -31,6 +34,7 @@ impl ExtraColor {
     Color::from_hex(match self {
       Self::Surface => SURFACE,
       Self::Hairline => HAIRLINE,
+      Self::Scrim => SCRIM,
     })
   }
 

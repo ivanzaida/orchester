@@ -9,6 +9,8 @@ use std::{path::PathBuf, time::Duration};
 pub const RECONNECT_LIMIT: u32 = 6;
 const FIRST_RECONNECT_DELAY: Duration = Duration::from_millis(500);
 const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(8);
+/// How long the "runner reconnected" notice stays unless dismissed.
+pub const RECONNECTED_NOTICE: Duration = Duration::from_secs(5);
 
 /// How long to wait before reconnect attempt `attempt` (1-based): doubling from 0.5 s, at most
 /// 8 s.
@@ -53,8 +55,12 @@ pub enum RunnerState {
   },
   Stopping,
   Stopped,
-  /// Not running and not retrying; only a manual restart starts it again.
-  Failed(RunnerFailure),
+  /// Not running and not retrying; only a manual restart starts it again. `attempts` counts
+  /// the reconnect attempts made before giving up (0 when it never got online).
+  Failed {
+    cause: RunnerFailure,
+    attempts: u32,
+  },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -75,15 +81,15 @@ impl RunnerState {
     match (self, event) {
       (Self::Starting, Event::Launched) => Self::Online { reconnected: false },
       (Self::Reconnecting { .. }, Event::Launched) => Self::Online { reconnected: true },
-      (Self::Starting, Event::LaunchFailed(failure)) | (Self::Stopping, Event::Dropped(failure)) => {
-        Self::Failed(failure)
+      (Self::Starting, Event::LaunchFailed(cause)) | (Self::Stopping, Event::Dropped(cause)) => {
+        Self::Failed { cause, attempts: 0 }
       }
       (Self::Reconnecting { attempt, .. }, Event::LaunchFailed(failure)) => Self::reconnect(attempt + 1, failure),
       (Self::Online { .. }, Event::Dropped(failure)) => Self::reconnect(1, failure),
       (Self::Online { reconnected: true }, Event::ReconnectNoticeExpired) => Self::Online { reconnected: false },
       (Self::Starting | Self::Online { .. } | Self::Reconnecting { .. }, Event::StopRequested) => Self::Stopping,
       (Self::Stopping, Event::Stopped) => Self::Stopped,
-      (Self::Failed(_) | Self::Stopped, Event::RestartRequested) => Self::Starting,
+      (Self::Failed { .. } | Self::Stopped, Event::RestartRequested) => Self::Starting,
       (state, _) => state,
     }
   }
@@ -92,7 +98,10 @@ impl RunnerState {
     if cause.is_retryable() && attempt <= RECONNECT_LIMIT {
       Self::Reconnecting { attempt, cause }
     } else {
-      Self::Failed(cause)
+      Self::Failed {
+        cause,
+        attempts: attempt - 1,
+      }
     }
   }
 
@@ -104,8 +113,17 @@ impl RunnerState {
     }
   }
 
+  /// How long this state lasts on its own: the pause before the next reconnect attempt, or
+  /// how long the "runner reconnected" notice stays.
+  pub fn duration(&self) -> Option<Duration> {
+    match self {
+      Self::Online { reconnected: true } => Some(RECONNECTED_NOTICE),
+      _ => self.reconnect_delay(),
+    }
+  }
+
   pub fn can_restart(&self) -> bool {
-    matches!(self, Self::Failed(_) | Self::Stopped)
+    matches!(self, Self::Failed { .. } | Self::Stopped)
   }
 }
 

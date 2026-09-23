@@ -61,12 +61,9 @@ impl Component for ProjectShell {
         }
       },
     );
-    let runner = status
-      .state()
-      .get()
-      .data
-      .unwrap_or_else(|| runners.status())
-      .state_for(&open.repo_root);
+    let status = status.state().get().data.unwrap_or_else(|| runners.status());
+    let runner = status.state_for(&open.repo_root);
+    let overview = overview(ctx, &open, &status, &runner, &runners);
     Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
@@ -76,7 +73,7 @@ impl Component for ProjectShell {
           .flex(1.0)
           .height(Dimension::Pct(100.0))
           .child(project_bar(ctx, &open))
-          .child(overview(ctx, &open, &runner, &runners)),
+          .child(overview),
       )
   }
 }
@@ -99,7 +96,14 @@ fn project_bar(ctx: &Ctx, open: &OpenProject) -> Element {
     .into()
 }
 
-fn overview(ctx: &Ctx, open: &OpenProject, runner: &RunnerState, runners: &Runners) -> Element {
+fn overview(
+  ctx: &mut Ctx,
+  open: &OpenProject,
+  status: &RunnerStatus,
+  runner: &RunnerState,
+  runners: &Runners,
+) -> Element {
+  let notice = runner::connection_notice(ctx, status, runner, runners);
   let heading = Row::new()
     .width(Dimension::Pct(100.0))
     .justify(Justify::SpaceBetween)
@@ -123,15 +127,21 @@ fn overview(ctx: &Ctx, open: &OpenProject, runner: &RunnerState, runners: &Runne
         .roomy()
         .render(ctx),
     );
-  let content = runner::offline_panel(ctx, runner, runners).unwrap_or_else(|| empty_overview(ctx, open));
+  // The overview body spaces its sections by 28 (`FMRs3`), by 24 below a connection notice
+  // (`G8JTc`, `c7qiCh`, `s3EdDI`).
+  let spacing = if notice.is_some() {
+    SpacingSize::Lg
+  } else {
+    ExtraSpacing::Rail.role()
+  };
   Column::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .padding(SpacingSize::Section)
-    .spacing(ExtraSpacing::Rail.role())
+    .spacing(spacing)
+    .with_children(notice)
     .child(heading)
-    .with_children(runner::reconnect_notice(ctx, runner))
-    .child(content)
+    .child(empty_overview(ctx, open))
     .into()
 }
 

@@ -1,4 +1,4 @@
-pub mod close_confirmation;
+pub mod close_dialog;
 pub mod project;
 pub mod setup;
 pub mod unavailable;

@@ -10,7 +10,7 @@ use orchester_desktop::{
   app_paths::runner_beside,
   close::{CloseKind, ClosePlan, close_plan, session_end},
   runner::{
-    ActiveWork, ShutdownOutcome,
+    ActiveWork, ActiveWorkFields, ShutdownOutcome,
     state::{RECONNECT_LIMIT, RunnerEvent, RunnerFailure, RunnerState, reconnect_delay},
   },
 };
@@ -43,7 +43,10 @@ fn runner_state_that_cannot_start_fails_without_retrying() {
       RunnerState::Starting,
       [RunnerEvent::LaunchFailed(RunnerFailure::StartFailed)]
     ),
-    RunnerState::Failed(RunnerFailure::StartFailed)
+    RunnerState::Failed {
+      cause: RunnerFailure::StartFailed,
+      attempts: 0
+    }
   );
 }
 
@@ -88,7 +91,13 @@ fn runner_state_gives_up_after_the_reconnect_limit() {
     RunnerState::Online { reconnected: false },
     std::iter::once(RunnerEvent::Dropped(RunnerFailure::Lost)).chain(failed_attempts),
   );
-  assert_eq!(state, RunnerState::Failed(RunnerFailure::StartFailed));
+  assert_eq!(
+    state,
+    RunnerState::Failed {
+      cause: RunnerFailure::StartFailed,
+      attempts: RECONNECT_LIMIT
+    }
+  );
   assert!(state.can_restart());
   assert_eq!(state.reconnect_delay(), None);
 }
@@ -105,12 +114,21 @@ fn runner_state_does_not_retry_a_missing_program() {
       RunnerEvent::LaunchFailed(missing.clone()),
     ],
   );
-  assert_eq!(state, RunnerState::Failed(missing));
+  assert_eq!(
+    state,
+    RunnerState::Failed {
+      cause: missing,
+      attempts: 1
+    }
+  );
 }
 
 #[test]
 fn runner_state_manual_restart_resets_the_attempts() {
-  let failed = RunnerState::Failed(RunnerFailure::Lost);
+  let failed = RunnerState::Failed {
+    cause: RunnerFailure::Lost,
+    attempts: RECONNECT_LIMIT,
+  };
   let restarted = failed.apply(RunnerEvent::RestartRequested);
   assert_eq!(restarted, RunnerState::Starting);
   let dropped_again = apply(
@@ -153,7 +171,10 @@ fn runner_state_stops_when_asked() {
       RunnerState::Online { reconnected: false },
       [RunnerEvent::StopRequested, RunnerEvent::Dropped(RunnerFailure::Lost)]
     ),
-    RunnerState::Failed(RunnerFailure::Lost)
+    RunnerState::Failed {
+      cause: RunnerFailure::Lost,
+      attempts: 0
+    }
   );
 }
 
@@ -164,7 +185,14 @@ fn close_without_active_work_stops_quietly() {
 
 #[test]
 fn close_with_active_work_asks_first() {
-  let work = ActiveWork::new("ORC-1 Fix login", "Implement", "Codex");
+  let work = ActiveWork::new(&ActiveWorkFields {
+    project: "Kontur",
+    task_key: "ORC-1",
+    task_title: "Fix login",
+    step: "Implement",
+    agent: "Builder",
+    model: "Codex · Sol",
+  });
   assert_eq!(close_plan(vec![work.clone()]), ClosePlan::Confirm(vec![work].into()));
 }
 

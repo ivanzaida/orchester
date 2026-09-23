@@ -88,6 +88,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `hover` #2C2C2C | `AccentMuted` — hover, selected nav item, status label |
 | `border` #363636 | `Border` |
 | `hairline` #2B2B2B | `ExtraColor::Hairline.role()` — row and section dividers |
+| backdrop #000000A6 (`a8U756`) | `ExtraColor::Scrim.role()` — behind dialogs |
 | `text` #EEEEEE | `TextPrimary`, `BorderFocus` |
 | `muted` #A3A3A3 | `TextSecondary` |
 | `subtle` #8F8F8F | `TextMuted`, `BorderStrong` |
@@ -112,6 +113,9 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::CardTitle.role()` | 14/500 | card and panel titles ("Needs you") |
 | `ExtraTypography::Overline.role()` | 9/600 subtle | uppercase category label ("REVIEW PULL REQUEST") |
 | `ExtraTypography::Metric.role()` | mono 23 | large metric figure |
+| `ExtraTypography::DialogTitle.role()` | 20/500 | dialog title (`bhcaX`) |
+| `ExtraTypography::Explanation.role()` | 12 muted, 1.6 | dialog explanation (`ClBsl`) |
+| `ExtraTypography::NoticeHeading.role()` | 12/500 | emphasized notice heading, dialog option title (`T9TyR`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

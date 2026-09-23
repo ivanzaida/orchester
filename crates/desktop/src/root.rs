@@ -19,7 +19,7 @@ use crate::{
   messages::{self, Message},
   navigation::{Navigation, Screen},
   screens::{
-    close_confirmation::CloseConfirmation, project::ProjectShell, setup::ProjectSetup, unavailable, welcome::Welcome,
+    close_dialog::CloseConfirmation, project::ProjectShell, setup::ProjectSetup, unavailable, welcome::Welcome,
   },
   theme::{ExtraColor, TITLE_BAR_HEIGHT, WINDOW_CONTROL_WIDTH},
   ui::{

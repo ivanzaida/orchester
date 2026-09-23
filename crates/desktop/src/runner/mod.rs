@@ -1,18 +1,22 @@
 //! The runner of the open project (`docs/architecture/storage.md`, "Processes"): one
 //! `orchester-runner` per open project, started when the project opens, reconnected when it
 //! drops and stopped when the project or the application closes.
+//!
+//! Windows only for now: the IPC client (`orchester_ipc::RunnerClient`, a named pipe and a job
+//! object) and opening the runner log through Explorer exist only on Windows.
 
 mod connection;
 mod report;
 pub mod state;
 
 use std::{
+  io,
   path::{Path, PathBuf},
   sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
   },
-  time::Duration,
+  time::{Duration, SystemTime},
 };
 
 use parking_lot::Mutex;
@@ -36,26 +40,50 @@ pub enum ShutdownOutcome {
   Unanswered,
 }
 
-/// Work in progress that closing the application would interrupt, as listed by the close
-/// confirmation.
+/// A run with an agent at work that closing the application would interrupt, as listed by the
+/// close confirmation (`clVjO` rows in `um9B1`). Every value is runtime data.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActiveWork {
-  task: Arc<str>,
+  project: Arc<str>,
+  task_key: Arc<str>,
+  task_title: Arc<str>,
   step: Arc<str>,
   agent: Arc<str>,
+  model: Arc<str>,
+}
+
+/// The fields of [`ActiveWork`], named so they cannot be swapped by position.
+pub struct ActiveWorkFields<'a> {
+  pub project: &'a str,
+  pub task_key: &'a str,
+  pub task_title: &'a str,
+  pub step: &'a str,
+  pub agent: &'a str,
+  pub model: &'a str,
 }
 
 impl ActiveWork {
-  pub fn new(task: &str, step: &str, agent: &str) -> Self {
+  pub fn new(fields: &ActiveWorkFields<'_>) -> Self {
     Self {
-      task: task.into(),
-      step: step.into(),
-      agent: agent.into(),
+      project: fields.project.into(),
+      task_key: fields.task_key.into(),
+      task_title: fields.task_title.into(),
+      step: fields.step.into(),
+      agent: fields.agent.into(),
+      model: fields.model.into(),
     }
   }
 
-  pub fn task(&self) -> &str {
-    &self.task
+  pub fn project(&self) -> &str {
+    &self.project
+  }
+
+  pub fn task_key(&self) -> &str {
+    &self.task_key
+  }
+
+  pub fn task_title(&self) -> &str {
+    &self.task_title
   }
 
   pub fn step(&self) -> &str {
@@ -64,6 +92,11 @@ impl ActiveWork {
 
   pub fn agent(&self) -> &str {
     &self.agent
+  }
+
+  /// Provider and model, e.g. "Codex · Sol".
+  pub fn model(&self) -> &str {
+    &self.model
   }
 }
 
@@ -113,7 +146,7 @@ impl Runners {
     }
     let mut current = self.inner.current.lock();
     let status = self.inner.status.borrow().clone();
-    if status.project() == project {
+    if status.project_root() == project {
       return;
     }
     let previous = current.take();
@@ -140,13 +173,13 @@ impl Runners {
     }
     let mut current = self.inner.current.lock();
     let restarted = self.inner.status.send_if_modified(|status| {
-      status.project().is_some() && status.state().can_restart() && status.apply(RunnerEvent::RestartRequested)
+      status.project_root().is_some() && status.state().can_restart() && status.apply(RunnerEvent::RestartRequested)
     });
     if !restarted {
       return;
     }
     let status = self.inner.status.borrow().clone();
-    let Some(project) = status.project() else {
+    let Some(project) = status.project_root() else {
       return;
     };
     tracing::info!(project = %project.display(), "restarting the runner");
@@ -163,6 +196,27 @@ impl Runners {
       Reporter::new(generation, self.inner.status.clone()),
       previous,
     )
+  }
+
+  /// Closes the "runner reconnected" notice before it closes on its own.
+  pub fn dismiss_reconnected_notice(&self) {
+    self
+      .inner
+      .status
+      .send_if_modified(|status| status.apply(RunnerEvent::ReconnectNoticeExpired));
+  }
+
+  /// Opens today's runner log of the open project with its default program, or the logs
+  /// folder when the runner has not written a log today.
+  pub fn open_log(&self) {
+    let Some(project) = self.status().project_root().map(Path::to_path_buf) else {
+      return;
+    };
+    self.inner.runtime.spawn_blocking(move || {
+      if let Err(error) = open_log(&project) {
+        tracing::error!(project = %project.display(), %error, "cannot open the runner log");
+      }
+    });
   }
 
   pub fn subscribe(&self) -> watch::Receiver<RunnerStatus> {
@@ -195,4 +249,19 @@ impl Runners {
     self.inner.closing.store(true, Ordering::Release);
     drop(self.inner.current.lock().take());
   }
+}
+
+fn open_log(project: &Path) -> io::Result<()> {
+  let log = orchester_ipc::runner_log_path(project, SystemTime::now());
+  let target = if log.is_file() {
+    log
+  } else {
+    orchester_ipc::runner_log_dir(project)
+  };
+  // Explorer hands a path to its default program and exits; its exit code does not report
+  // whether that worked, so only a failure to start it is an error.
+  std::process::Command::new("explorer.exe")
+    .arg(target)
+    .status()
+    .map(drop)
 }

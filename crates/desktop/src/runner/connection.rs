@@ -16,13 +16,11 @@ use tokio::{
 use super::{
   ShutdownOutcome,
   report::Reporter,
-  state::{RunnerEvent, RunnerFailure, RunnerState},
+  state::{RECONNECTED_NOTICE, RunnerEvent, RunnerFailure, RunnerState},
 };
 
 /// How long the runner may take to exit after it reported `Stopped` and the connection closed.
 const EXIT_TIMEOUT: Duration = Duration::from_secs(2);
-/// How long the "runner reconnected" notice stays.
-const RECONNECTED_NOTICE: Duration = Duration::from_secs(5);
 
 enum Control {
   Stop { reply: oneshot::Sender<ShutdownOutcome> },

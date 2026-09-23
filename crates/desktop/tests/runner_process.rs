@@ -88,7 +88,10 @@ async fn runner_process_missing_program_fails_visibly() {
   let failed = wait_for(&mut updates, project.path(), |state| *state != RunnerState::Starting).await;
   assert_eq!(
     failed,
-    RunnerState::Failed(RunnerFailure::MissingExecutable { path: missing })
+    RunnerState::Failed {
+      cause: RunnerFailure::MissingExecutable { path: missing },
+      attempts: 0
+    }
   );
   assert_eq!(
     runners.shutdown(Some(QUIET_STOP_TIMEOUT)).await,

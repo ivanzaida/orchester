@@ -73,31 +73,57 @@
     "projectSettings": "Project settings"
   },
   "runner": {
-    "starting": "Starting local runner…",
-    "startingDetail": "Agents can run once it is online.",
-    "online": "Local runner online",
-    "onlineDetail": "Agent slots are not available yet.",
-    "reconnecting": "Local runner reconnecting…",
-    "reconnectingDetail": "It dropped; reconnecting automatically.",
-    "stopping": "Stopping local runner…",
-    "stoppingDetail": "Letting it finish cleanly.",
-    "offline": "Local runner offline",
-    "offlineDetail": "Restart it from Overview.",
-    "droppedTitle": "The runner dropped, reconnecting…",
-    "droppedDetail": "Attempt {{attempt}} of {{limit}}. Orchester retries on its own.",
-    "reconnectedTitle": "Runner reconnected",
-    "reconnectedDetail": "The local runner is back online.",
-    "offlineTitle": "Your runner is offline",
-    "stoppedDetail": "The runner was stopped.",
-    "restart": "Restart runner"
+    "card": {
+      "starting": "Starting local runner",
+      "startingDetail": "Agents can start when it’s ready",
+      "online": "Local runner online",
+      "onlineDetail": "No agents running",
+      "reconnecting": "Reconnecting to runner",
+      "reconnectingDetail": "Attempt {{attempt}} of {{limit}}",
+      "stopping": "Stopping local runner",
+      "stoppingDetail": "Letting it finish cleanly",
+      "offline": "Runner offline",
+      "stoppedDetail": "Stopped",
+      "notStartedDetail": "Could not start · see runner log",
+      "notRestartedDetail": "Could not restart · see runner log"
+    },
+    "connection": {
+      "reconnectingTitle": "Runner stopped unexpectedly — reconnecting (attempt {{attempt}} of {{limit}})",
+      "reconnectingDetail": "New work won’t start until the runner is back.",
+      "nextAttempt": "Next attempt in {{seconds}} s",
+      "attempting": "Reconnecting now…",
+      "reconnectedTitle": "Runner reconnected",
+      "reconnectedDetail": "The local runner is back online.",
+      "closesIn": "Closes in {{seconds}} s",
+      "closing": "Closing…",
+      "notStartedTitle": "Could not start the runner",
+      "notRestartedTitle": "Could not restart the runner",
+      "notRestartedDetail": "Tried {{attempts}} times. Nothing runs until the runner starts.",
+      "openLog": "Open runner log",
+      "restart": "Restart runner"
+    }
   },
-  "close": {
-    "confirmTitle": "Agents are still working",
-    "confirmDetail": "Closing Orchester stops them. Wait for them to save at their next checkpoint, or quit now without a checkpoint.",
-    "waitingTitle": "Waiting for agents to save…",
-    "waitingDetail": "Orchester closes once every agent has reached its checkpoint.",
-    "waitForAgents": "Wait for agents to save",
-    "quitNow": "Quit now"
+  "lifecycle": {
+    "close": {
+      "confirmTitle": "Close Orchester while agents are working?",
+      "confirmDetail": "Closing stops the runner and every agent in it. Orchester has no background mode, so nothing keeps running after the window closes.",
+      "waitingTitle": "Saving before closing",
+      "waitingDetail": "No new steps or tool calls will start. Each agent is finishing its current work up to the next checkpoint. Orchester closes when every run is saved and paused.",
+      "inProgress": "In progress · {{project}}",
+      "savingRuns": {
+        "one": "Saving {{count}} run · {{project}}",
+        "other": "Saving {{count}} runs · {{project}}"
+      },
+      "stepAgent": "{{step}} · {{agent}}",
+      "running": "Running",
+      "saving": "Saving at next checkpoint…",
+      "waitForAgents": "Wait for agents to save",
+      "waitForAgentsDetail": "No new steps or tool calls start. Each agent continues to its next checkpoint, the runs are marked paused, then Orchester closes. This can take a few minutes. Resume the runs as usual next time.",
+      "quitNow": "Quit now",
+      "quitNowDetail": "Stops the runner and agents immediately. Work after each run's last checkpoint is not recorded as progress. Uncommitted changes stay in the worktree and are shown on next start.",
+      "waitingNote": "Taking too long? Quit now stops the remaining agents. Their runs keep the last checkpoint they already saved; work after it is not recorded as progress.",
+      "closesWhenSaved": "Closes when every run is saved"
+    }
   },
   "overview": {
     "description": "Everything moving in this project, and what needs you.",
@@ -127,7 +153,7 @@
     "storage": "The data could not be read or written. The log has the details.",
     "interrupted": "The operation stopped unexpectedly. The log has the details.",
     "executableLocation": "The folder of the Orchester program could not be determined.",
-    "runnerMissing": "The runner program was not found next to Orchester.",
+    "runnerMissing": "The runner program was not found at {{path}}.",
     "runnerAlreadyServed": "Another Orchester window is already running this project's runner.",
     "runnerStartFailed": "The runner could not be started. The log has the details.",
     "runnerLost": "The runner stopped unexpectedly and could not be reconnected. The log has the details."

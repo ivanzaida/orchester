@@ -18,8 +18,8 @@ impl Message {
     Self { key, args: Vec::new() }
   }
 
-  fn with(mut self, name: &'static str, value: usize) -> Self {
-    self.args.push((name, value.to_string()));
+  fn with(mut self, name: &'static str, value: String) -> Self {
+    self.args.push((name, value));
     self
   }
 }
@@ -29,7 +29,7 @@ impl lurq::app::component::DevtoolsInspectable for Message {}
 pub fn name_error(error: &NameError) -> Message {
   match error {
     NameError::Blank => Message::new("errors.nameRequired"),
-    NameError::TooLong { .. } => Message::new("errors.nameTooLong").with("max", Name::MAX_CHARS),
+    NameError::TooLong { .. } => Message::new("errors.nameTooLong").with("max", Name::MAX_CHARS.to_string()),
   }
 }
 
@@ -60,7 +60,9 @@ pub fn interrupted() -> Message {
 
 pub fn runner_failure(failure: &RunnerFailure) -> Message {
   match failure {
-    RunnerFailure::MissingExecutable { .. } => Message::new("errors.runnerMissing"),
+    RunnerFailure::MissingExecutable { path } => {
+      Message::new("errors.runnerMissing").with("path", path.display().to_string())
+    }
     RunnerFailure::AlreadyServed => Message::new("errors.runnerAlreadyServed"),
     RunnerFailure::StartFailed => Message::new("errors.runnerStartFailed"),
     RunnerFailure::Lost => Message::new("errors.runnerLost"),

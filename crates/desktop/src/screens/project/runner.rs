@@ -1,6 +1,6 @@
-//! The open project's runner in the shell: the sidebar card (`O2Jjjf` in `zo9Py`), the
-//! offline panel (`nW2Yu` in `y8TKW8`, a recovery panel `iN90G`) and the reconnect notices.
-//! Agent slots do not exist yet, so the card shows no capacity.
+//! The open project's runner in the shell: the sidebar card (`O2Jjjf` in `zo9Py`, states
+//! `O5NoB1`) and the connection notice at the top of the overview (02.F `MAn7V`, 02.G `YHS1v`,
+//! 02.H `EFY7I`). Agent slots and runs do not exist yet, so neither shows counts of them.
 
 use std::sync::Arc;
 
@@ -9,38 +9,44 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Rect, Row, Text},
+  components::{Button, Column, Rect, Row, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
 
 use crate::{
   messages,
   runner::{
-    Runners,
-    state::{RECONNECT_LIMIT, RunnerFailure, RunnerState},
+    RunnerStatus, Runners,
+    state::{RECONNECT_LIMIT, RunnerState},
   },
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
-  ui::{button::ActionButton, icon::Icon, message_text, notice::notice, panel::RecoveryPanel},
+  ui::{
+    button::ActionButton,
+    countdown::{Countdown, CountdownProps},
+    icon::{Icon, IconSize, icon},
+    message_text,
+    notice::Notice,
+  },
 };
 
-/// Runner indicator size (`fK4mR`).
+/// Online indicator size (`fK4mR`) and notice action height (`atylT`, `Yfte7`).
 const INDICATOR_SIZE: f32 = 5.0;
+const NOTICE_ACTION_HEIGHT: f32 = 32.0;
 
-/// Sidebar runner card (`O2Jjjf`).
+/// Sidebar runner card (`O2Jjjf`) in the states of `O5NoB1`.
 pub fn card(ctx: &Ctx, state: &RunnerState) -> Element {
-  let (title, detail, indicator) = match state {
-    RunnerState::Starting => ("runner.starting", "runner.startingDetail", PaletteColor::TextMuted),
-    RunnerState::Online { .. } => ("runner.online", "runner.onlineDetail", PaletteColor::TextPrimary),
-    RunnerState::Reconnecting { .. } => (
-      "runner.reconnecting",
-      "runner.reconnectingDetail",
-      PaletteColor::TextMuted,
-    ),
-    RunnerState::Stopping => ("runner.stopping", "runner.stoppingDetail", PaletteColor::TextMuted),
-    RunnerState::Stopped | RunnerState::Failed(_) => {
-      ("runner.offline", "runner.offlineDetail", PaletteColor::TextMuted)
-    }
+  let (glyph, title, detail) = card_copy(state);
+  let marker: Element = match glyph {
+    Some(glyph) => icon(glyph, IconSize::Small, PaletteColor::TextPrimary).into(),
+    None => Rect::new(Dimension::Px(INDICATOR_SIZE), Dimension::Px(INDICATOR_SIZE))
+      .background(PaletteColor::TextPrimary)
+      .rounded(RadiusSize::Lg)
+      .into(),
+  };
+  let detail = match state {
+    RunnerState::Reconnecting { attempt, .. } => attempt_text(ctx, detail, *attempt),
+    _ => ctx.t(detail),
   };
   Column::new()
     .id("runner-status")
@@ -55,19 +61,40 @@ pub fn card(ctx: &Ctx, state: &RunnerState) -> Element {
       Row::new()
         .spacing(ExtraSpacing::Indicator.role())
         .align_items(Alignment::Center)
-        .child(
-          Rect::new(Dimension::Px(INDICATOR_SIZE), Dimension::Px(INDICATOR_SIZE))
-            .background(indicator)
-            .rounded(RadiusSize::Lg),
-        )
+        .child(marker)
         .child(
           Text::new(&ctx.t(title))
             .variant(TypographyStyle::Caption)
             .color(PaletteColor::TextPrimary),
         ),
     )
-    .child(Text::new(&ctx.t(detail)).variant(ExtraTypography::Footnote.role()))
+    .child(Text::new(&detail).variant(ExtraTypography::Footnote.role()))
     .into()
+}
+
+/// Icon (none: the online dot), title key and detail key of the card.
+fn card_copy(state: &RunnerState) -> (Option<Icon>, &'static str, &'static str) {
+  match state {
+    RunnerState::Starting => (Some(Icon::Loader), "runner.card.starting", "runner.card.startingDetail"),
+    RunnerState::Online { .. } => (None, "runner.card.online", "runner.card.onlineDetail"),
+    RunnerState::Reconnecting { .. } => (
+      Some(Icon::RefreshCw),
+      "runner.card.reconnecting",
+      "runner.card.reconnectingDetail",
+    ),
+    RunnerState::Stopping => (Some(Icon::Loader), "runner.card.stopping", "runner.card.stoppingDetail"),
+    RunnerState::Stopped => (Some(Icon::Unplug), "runner.card.offline", "runner.card.stoppedDetail"),
+    RunnerState::Failed { attempts: 0, .. } => (
+      Some(Icon::Unplug),
+      "runner.card.offline",
+      "runner.card.notStartedDetail",
+    ),
+    RunnerState::Failed { .. } => (
+      Some(Icon::Unplug),
+      "runner.card.offline",
+      "runner.card.notRestartedDetail",
+    ),
+  }
 }
 
 /// For tooling (`lurq_read_tree`): the runner state without reading the copy.
@@ -78,53 +105,112 @@ fn state_name(state: &RunnerState) -> &'static str {
     RunnerState::Reconnecting { .. } => "reconnecting",
     RunnerState::Stopping => "stopping",
     RunnerState::Stopped => "stopped",
-    RunnerState::Failed(_) => "failed",
+    RunnerState::Failed { .. } => "failed",
   }
 }
 
-/// The notice above the overview while the runner reconnects or just came back (placeholder
-/// presentation with the inline notice `q5LzI` until the notices are designed).
-pub fn reconnect_notice(ctx: &Ctx, state: &RunnerState) -> Option<Element> {
-  match state {
-    RunnerState::Reconnecting { attempt, .. } => {
-      let attempt = attempt.to_string();
-      let limit = RECONNECT_LIMIT.to_string();
-      let detail = ctx.t_args(
-        "runner.droppedDetail",
-        [("attempt", attempt.as_str()), ("limit", limit.as_str())],
-      );
-      Some(notice(Icon::Unplug, &ctx.t("runner.droppedTitle"), &detail))
+fn attempt_text(ctx: &Ctx, key: &str, attempt: u32) -> Arc<str> {
+  let attempt = attempt.to_string();
+  let limit = RECONNECT_LIMIT.to_string();
+  ctx.t_args(key, [("attempt", attempt.as_str()), ("limit", limit.as_str())])
+}
+
+/// The connection notice at the top of the overview, while the runner is not simply online.
+pub fn connection_notice(
+  ctx: &mut Ctx,
+  status: &RunnerStatus,
+  state: &RunnerState,
+  runners: &Runners,
+) -> Option<Element> {
+  let notice = match state {
+    RunnerState::Reconnecting { attempt, .. } => Notice::new(
+      Icon::RefreshCw,
+      attempt_text(ctx, "runner.connection.reconnectingTitle", *attempt),
+      ctx.t("runner.connection.reconnectingDetail"),
+    )
+    .action(countdown(
+      ctx,
+      status,
+      "runner.connection.nextAttempt",
+      "runner.connection.attempting",
+    ))
+    .action(open_log(ctx, runners)),
+    RunnerState::Online { reconnected: true } => Notice::new(
+      Icon::CircleCheck,
+      ctx.t("runner.connection.reconnectedTitle"),
+      ctx.t("runner.connection.reconnectedDetail"),
+    )
+    .action(countdown(
+      ctx,
+      status,
+      "runner.connection.closesIn",
+      "runner.connection.closing",
+    ))
+    .action(dismiss(runners)),
+    RunnerState::Failed { cause, attempts } => {
+      let (title, detail) = if *attempts == 0 {
+        (
+          ctx.t("runner.connection.notStartedTitle"),
+          message_text(ctx, &messages::runner_failure(cause)),
+        )
+      } else {
+        let attempts = attempts.to_string();
+        (
+          ctx.t("runner.connection.notRestartedTitle"),
+          ctx.t_args(
+            "runner.connection.notRestartedDetail",
+            [("attempts", attempts.as_str())],
+          ),
+        )
+      };
+      Notice::new(Icon::Unplug, title, detail)
+        .action(open_log(ctx, runners))
+        .action(restart(ctx, runners))
     }
-    RunnerState::Online { reconnected: true } => Some(notice(
-      Icon::Plug,
-      &ctx.t("runner.reconnectedTitle"),
-      &ctx.t("runner.reconnectedDetail"),
-    )),
-    _ => None,
-  }
-}
-
-/// The offline panel (`nW2Yu`) with the restart action, when the runner is not running and
-/// no longer retrying.
-pub fn offline_panel(ctx: &Ctx, state: &RunnerState, runners: &Runners) -> Option<Element> {
-  let explanation: Arc<str> = match state {
-    RunnerState::Failed(failure) => message_text(ctx, &messages::runner_failure(failure)),
-    RunnerState::Stopped => ctx.t("runner.stoppedDetail"),
     _ => return None,
   };
+  Some(notice.emphasized().id("runner-notice").into())
+}
+
+/// Seconds until the current state ends on its own (`Q1TRov`, `R4Nsnb`).
+fn countdown(ctx: &mut Ctx, status: &RunnerStatus, counting: &'static str, done: &'static str) -> Element {
+  let Some(until) = status.until() else {
+    return Column::new().into();
+  };
+  ctx.mount_keyed::<Countdown>(counting, CountdownProps { until, counting, done })
+}
+
+/// "Open runner log" (`atylT`, `JUsfL`).
+fn open_log(ctx: &Ctx, runners: &Runners) -> Element {
   let runners = runners.clone();
-  let restart = ActionButton::new(ctx.t("runner.restart"))
+  ActionButton::new(ctx.t("runner.connection.openLog"))
+    .icon(Icon::FileText)
+    .id("runner-open-log")
+    .height(Dimension::Px(NOTICE_ACTION_HEIGHT))
+    .on_click(move || runners.open_log())
+    .render(ctx)
+}
+
+/// "Restart runner" (`Yfte7`).
+fn restart(ctx: &Ctx, runners: &Runners) -> Element {
+  let runners = runners.clone();
+  ActionButton::new(ctx.t("runner.connection.restart"))
+    .primary()
     .icon(Icon::RefreshCw)
     .id("runner-restart")
+    .height(Dimension::Px(NOTICE_ACTION_HEIGHT))
     .on_click(move || runners.restart())
-    .render(ctx);
-  let mut panel = RecoveryPanel::new(Icon::Unplug, &ctx.t("runner.offlineTitle"), &explanation).action(restart);
-  if let RunnerState::Failed(RunnerFailure::MissingExecutable { path }) = state {
-    panel = panel.detail(
-      Text::new(&path.display().to_string())
-        .variant(TypographyStyle::Caption)
-        .selectable(true),
-    );
-  }
-  Some(panel.into())
+    .render(ctx)
+}
+
+/// Dismiss control of the reconnected notice (`KGM0S`).
+fn dismiss(runners: &Runners) -> Element {
+  let runners = runners.clone();
+  Button::empty()
+    .button()
+    .id("runner-notice-dismiss")
+    .cursor(CursorIcon::Pointer)
+    .child(icon(Icon::X, IconSize::Dismiss, PaletteColor::TextSecondary))
+    .on_click(move |_| runners.dismiss_reconnected_notice())
+    .into()
 }
