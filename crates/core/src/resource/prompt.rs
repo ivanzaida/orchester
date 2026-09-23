@@ -5,6 +5,7 @@ use super::variable::Variable;
 
 const OPEN: &str = "{{";
 const CLOSE: &str = "}}";
+const ESCAPE: char = '\\';
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum PromptError {
@@ -16,7 +17,8 @@ pub enum PromptError {
 
 /// Markdown prompt text whose `{{variable}}` placeholders all name catalog variables.
 /// Placeholders are data references, never expressions; surrounding spaces inside the braces
-/// are ignored. There is no escape syntax: every `{{` opens a placeholder.
+/// are ignored. `\{{` is a literal `{{` (e.g. a template example in a prompt); rendering drops
+/// the backslash.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct PromptText {
@@ -66,6 +68,10 @@ fn placeholders(text: &str) -> Result<Vec<Variable>, PromptError> {
   while let Some(open) = text[start..].find(OPEN) {
     let offset = start + open;
     let inner_start = offset + OPEN.len();
+    if text[..offset].ends_with(ESCAPE) {
+      start = inner_start;
+      continue;
+    }
     let inner_len = text[inner_start..]
       .find(CLOSE)
       .ok_or(PromptError::UnclosedPlaceholder { offset })?;

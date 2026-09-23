@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use orchester_core::{
   id::ResourceId,
+  name::Name,
   resource::{AgentTargets, InjectionEvent, Instruction, InstructionError, InstructionScope, PromptText, StepKey},
 };
 
@@ -9,23 +10,26 @@ fn text(value: &str) -> PromptText {
   PromptText::new(value).expect("valid prompt")
 }
 
+fn roles(names: &[&str]) -> BTreeSet<Name> {
+  names.iter().map(|role| Name::new(role).expect("valid role")).collect()
+}
+
 fn start_and_resume() -> BTreeSet<InjectionEvent> {
   BTreeSet::from([InjectionEvent::Start, InjectionEvent::Resume])
 }
 
 #[test]
-fn instruction_targets_selected_profiles_at_selected_events() {
-  let builder = ResourceId::generate();
+fn instruction_targets_selected_roles_at_selected_events() {
   let instruction = Instruction::new(
     text("Work on {{run.branch}} only."),
-    AgentTargets::Profiles(BTreeSet::from([builder])),
+    AgentTargets::Roles(roles(&["Builder", "Reviewer"])),
     start_and_resume(),
     InstructionScope::Project,
   )
   .unwrap();
   assert_eq!(
     instruction.targets(),
-    &AgentTargets::Profiles(BTreeSet::from([builder]))
+    &AgentTargets::Roles(roles(&["Builder", "Reviewer"]))
   );
   assert_eq!(instruction.events(), &start_and_resume());
   assert_eq!(instruction.scope(), &InstructionScope::Project);
@@ -36,7 +40,7 @@ fn instruction_scopes_cover_role_pipeline_and_step() {
   let pipeline = ResourceId::generate();
   let scopes = [
     InstructionScope::AgentRole {
-      profile: ResourceId::generate(),
+      role: Name::new("Builder").unwrap(),
     },
     InstructionScope::Pipeline { pipeline },
     InstructionScope::Step {
@@ -64,15 +68,15 @@ fn instruction_rejects_blank_text() {
 }
 
 #[test]
-fn instruction_rejects_an_empty_profile_selection() {
+fn instruction_rejects_an_empty_role_selection() {
   assert_eq!(
     Instruction::new(
       text("Rule."),
-      AgentTargets::Profiles(BTreeSet::new()),
+      AgentTargets::Roles(BTreeSet::new()),
       start_and_resume(),
       InstructionScope::Project
     ),
-    Err(InstructionError::NoProfiles)
+    Err(InstructionError::NoRoles)
   );
 }
 
@@ -90,14 +94,14 @@ fn instruction_needs_an_injection_event() {
 }
 
 #[test]
-fn instruction_for_a_role_cannot_target_other_profiles() {
+fn instruction_for_a_role_cannot_target_other_roles() {
   let scope = InstructionScope::AgentRole {
-    profile: ResourceId::generate(),
+    role: Name::new("Builder").unwrap(),
   };
-  let targets = AgentTargets::Profiles(BTreeSet::from([ResourceId::generate()]));
+  let targets = AgentTargets::Roles(roles(&["Reviewer"]));
   assert_eq!(
     Instruction::new(text("Rule."), targets, start_and_resume(), scope),
-    Err(InstructionError::RoleScopeTargetsProfiles)
+    Err(InstructionError::RoleScopeTargetsRoles)
   );
 }
 

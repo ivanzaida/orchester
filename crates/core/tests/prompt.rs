@@ -58,3 +58,11 @@ fn prompt_catalog_has_the_24_designed_variables() {
     assert!(names.contains(name), "{name} is missing");
   }
 }
+
+#[test]
+fn prompt_escaped_braces_are_literal_text() {
+  let prompt = PromptText::new(r"Use \{{name}} in Handlebars, not {{task.title}}; \{{ alone is fine too.")
+    .expect("escaped placeholders are not parsed");
+  assert_eq!(prompt.variables(), [Variable::TaskTitle]);
+  assert!(PromptText::new(r"\{{unclosed").is_ok());
+}

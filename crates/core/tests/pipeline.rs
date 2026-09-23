@@ -4,7 +4,7 @@ use orchester_core::{
   id::ResourceId,
   money::{Currency, Money},
   name::Name,
-  resource::{FailureRoute, Pipeline, PipelineError, PromptText, RepositoryAccess, Step, StepKey, StepKind},
+  resource::{FailureRoute, ModelId, Pipeline, PipelineError, PromptText, RepositoryAccess, Step, StepKey, StepKind},
 };
 
 fn key(value: &str) -> StepKey {
@@ -18,6 +18,7 @@ fn step(value: &str, depends_on: &[&str]) -> Step {
     kind: StepKind::Agent {
       profile: ResourceId::generate(),
       repository: RepositoryAccess::ReadOnly,
+      model: None,
     },
     instructions: PromptText::new("").expect("valid prompt"),
     depends_on: depends_on.iter().map(|dependency| key(dependency)).collect(),
@@ -44,6 +45,7 @@ fn feature_delivery() -> Vec<Step> {
     kind: StepKind::Agent {
       profile: ResourceId::generate(),
       repository: RepositoryAccess::Write,
+      model: Some(ModelId::new("opus").expect("valid model")),
     },
     instructions: PromptText::new("Implement {{task.title}}.").expect("valid prompt"),
     budget: Some(Money::from_micros(2_000_000, Currency::USD)),

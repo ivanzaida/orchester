@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
+  agent_profile::ModelId,
   lifecycle::{Slug, SlugError},
   prompt::PromptText,
 };
@@ -60,10 +61,13 @@ pub enum RepositoryAccess {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StepKind {
-  /// Runs an agent with the model of the selected profile.
+  /// Runs an agent of the selected profile, with the profile's model unless `model`
+  /// overrides it for this step.
   Agent {
     profile: ResourceId,
     repository: RepositoryAccess,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    model: Option<ModelId>,
   },
   /// Calls a project tool under the tool's access policy.
   Tool { tool: ResourceId },

@@ -76,6 +76,7 @@ fn pipeline() -> Pipeline {
     kind: StepKind::Agent {
       profile: ResourceId::generate(),
       repository: RepositoryAccess::Write,
+      model: None,
     },
     instructions: PromptText::new("").expect("valid prompt"),
     depends_on: depends_on

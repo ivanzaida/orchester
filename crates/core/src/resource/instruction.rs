@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{pipeline::StepKey, prompt::PromptText};
-use crate::id::ResourceId;
+use crate::{id::ResourceId, name::Name};
 
 /// Point in an agent's life at which an instruction is injected. The design leaves the final
 /// vocabulary open; new events are added as variants, and stored names stay stable.
@@ -17,12 +17,13 @@ pub enum InjectionEvent {
   Resume,
 }
 
-/// Which agent profiles receive an instruction.
+/// Which agents receive an instruction, by agent role (e.g. `Builder`). Every profile with a
+/// targeted role receives it, whichever connection or model the profile uses.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentTargets {
   All,
-  Profiles(BTreeSet<ResourceId>),
+  Roles(BTreeSet<Name>),
 }
 
 /// Where an instruction sits in prompt assembly: agent role → project rules → pipeline
@@ -31,7 +32,7 @@ pub enum AgentTargets {
 #[serde(rename_all = "snake_case")]
 pub enum InstructionScope {
   Project,
-  AgentRole { profile: ResourceId },
+  AgentRole { role: Name },
   Pipeline { pipeline: ResourceId },
   Step { pipeline: ResourceId, step: StepKey },
 }
@@ -40,12 +41,12 @@ pub enum InstructionScope {
 pub enum InstructionError {
   #[error("instruction text must not be blank")]
   BlankText,
-  #[error("an instruction for selected profiles needs at least one profile")]
-  NoProfiles,
+  #[error("an instruction for selected roles needs at least one role")]
+  NoRoles,
   #[error("an instruction needs at least one injection event")]
   NoEvents,
-  #[error("an agent role instruction applies to its own role and cannot target other profiles")]
-  RoleScopeTargetsProfiles,
+  #[error("an agent role instruction applies to its own role and cannot target other roles")]
+  RoleScopeTargetsRoles,
 }
 
 /// A project instruction: prompt text injected into selected agents at selected events.
@@ -88,9 +89,9 @@ impl Instruction {
       return Err(InstructionError::NoEvents);
     }
     match (&scope, &targets) {
-      (_, AgentTargets::Profiles(profiles)) if profiles.is_empty() => return Err(InstructionError::NoProfiles),
-      (InstructionScope::AgentRole { .. }, AgentTargets::Profiles(_)) => {
-        return Err(InstructionError::RoleScopeTargetsProfiles);
+      (_, AgentTargets::Roles(roles)) if roles.is_empty() => return Err(InstructionError::NoRoles),
+      (InstructionScope::AgentRole { .. }, AgentTargets::Roles(_)) => {
+        return Err(InstructionError::RoleScopeTargetsRoles);
       }
       _ => {}
     }
