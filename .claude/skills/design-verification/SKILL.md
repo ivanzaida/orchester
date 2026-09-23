@@ -24,8 +24,9 @@ what is actually on screen.
    `.tmp/verify/<screen>/design.png`. Never Read or Grep the `.pen` file.
 2. **App screenshot in the same state.** Build and run the implementation with
    `cargo run -p orchester-desktop --features mcp`. Find the MCP discovery file of *your*
-   process (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`). Resize the window to the design frame
-   size (1440 × 960 logical) with `lurq_resize`, drive the app into the designed state
+   process (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`). Resize the window to 1440 × 992 logical
+   with `lurq_resize` (the 32px custom title bar from "Window chrome" in the design doc plus
+   the 1440 × 960 screen frame), drive the app into the designed state
    (`lurq_read_tree`, `lurq_interact`, `lurq_set_value`), wait for idle (`lurq_wait`),
    and capture `lurq_screenshot` to `.tmp/verify/<screen>/app.png`. Use fixture data that
    matches the design's content where the app allows it, so text lengths are comparable.
@@ -41,8 +42,10 @@ what is actually on screen.
      status label …), icons and their sizes;
    - copy: exact text of labels, titles and hints (translations aside);
    - states: disabled/unavailable, empty, error, focus.
-4. **Also check what surrounds the design frame**: native window chrome, window border,
-   scrollbars, anything the OS or toolkit adds that the design does not show.
+4. **Check the window chrome separately**: the top 32px against the platform title bar
+   component (`QQmsI` Windows, `V70DN` macOS), the rest against the screen frame. There must be
+   no native title bar or window border, and nothing else the OS or toolkit adds that the
+   design does not show.
 5. **Report** a table per screen: region, design, app, severity (`blocking` = visibly a
    different screen or wrong structure; `major` = wrong size/spacing/typography/color on a
    prominent element; `minor` = small offset or subtle color), and a suggested fix. Attach

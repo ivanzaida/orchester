@@ -3019,6 +3019,7 @@
               "reusable": true,
               "width": 600,
               "height": 24,
+              "fill": "$code-bg",
               "gap": 10,
               "padding": [
                 0,
@@ -3030,7 +3031,7 @@
                   "type": "text",
                   "id": "b8bSop",
                   "name": "Old line",
-                  "fill": "$muted",
+                  "fill": "$code-comment",
                   "textGrowth": "fixed-width",
                   "width": 24,
                   "content": "41",
@@ -3043,7 +3044,7 @@
                   "type": "text",
                   "id": "U4wNN",
                   "name": "New line",
-                  "fill": "$muted",
+                  "fill": "$code-comment",
                   "textGrowth": "fixed-width",
                   "width": 24,
                   "content": "41",
@@ -3065,16 +3066,168 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "type": "text",
-                  "id": "i0Ib6",
-                  "name": "Code",
-                  "fill": "$text",
-                  "textGrowth": "fixed-width",
+                  "type": "frame",
+                  "id": "DQMrs",
+                  "name": "Code tokens",
                   "width": "fill_container",
-                  "content": "const result = await github.signIn();",
-                  "fontFamily": "$mono",
-                  "fontSize": 12,
-                  "fontWeight": "normal"
+                  "height": 20,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "OoMg1",
+                      "name": "Token 00",
+                      "fill": "$code-text",
+                      "textGrowth": "fixed-width-height",
+                      "width": 14.4,
+                      "height": 20,
+                      "content": "  ",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "w7L6e",
+                      "name": "Token 01",
+                      "fill": "$code-keyword",
+                      "textGrowth": "fixed-width-height",
+                      "width": 36,
+                      "height": 20,
+                      "content": "const",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "t5M0D",
+                      "name": "Token 02",
+                      "fill": "$code-text",
+                      "textGrowth": "fixed-width-height",
+                      "width": 7.2,
+                      "height": 20,
+                      "content": " ",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "v65xiE",
+                      "name": "Token 03",
+                      "fill": "$code-variable",
+                      "textGrowth": "fixed-width-height",
+                      "width": 43.2,
+                      "height": 20,
+                      "content": "result",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "FWh6p",
+                      "name": "Token 04",
+                      "fill": "$code-text",
+                      "textGrowth": "fixed-width-height",
+                      "width": 7.2,
+                      "height": 20,
+                      "content": " ",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "f7CIo",
+                      "name": "Token 05",
+                      "fill": "$code-keyword",
+                      "textGrowth": "fixed-width-height",
+                      "width": 7.2,
+                      "height": 20,
+                      "content": "=",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "V5CFkn",
+                      "name": "Token 06",
+                      "fill": "$code-text",
+                      "textGrowth": "fixed-width-height",
+                      "width": 7.2,
+                      "height": 20,
+                      "content": " ",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "FufaQ",
+                      "name": "Token 07",
+                      "fill": "$code-keyword",
+                      "textGrowth": "fixed-width-height",
+                      "width": 36,
+                      "height": 20,
+                      "content": "await",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ySe4a",
+                      "name": "Token 08",
+                      "fill": "$code-text",
+                      "textGrowth": "fixed-width-height",
+                      "width": 57.60000000000001,
+                      "height": 20,
+                      "content": " github.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "V5NXVc",
+                      "name": "Token 09",
+                      "fill": "$code-function",
+                      "textGrowth": "fixed-width-height",
+                      "width": 43.2,
+                      "height": 20,
+                      "content": "signIn",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "NyLLA",
+                      "name": "Token 10",
+                      "fill": "$code-text",
+                      "textGrowth": "fixed-width-height",
+                      "width": 21.6,
+                      "height": 20,
+                      "content": "();",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
                 },
                 {
                   "type": "icon",
@@ -3085,6 +3238,477 @@
                   "icon": "plus",
                   "library": "lucide",
                   "fill": "$muted"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "z8v8m7",
+              "x": 2640,
+              "y": 1760,
+              "name": "Code / Syntax and diff states",
+              "width": 760,
+              "height": 176,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "rKapa",
+                  "name": "Code styles heading",
+                  "fill": "$muted",
+                  "content": "CODE · GITHUB DARK INSPIRED",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                },
+                {
+                  "id": "kMig9",
+                  "type": "ref",
+                  "ref": "vEZ42",
+                  "name": "Line 42 // Preserve the session before navigation.",
+                  "width": "fill_container",
+                  "fill": "$code-bg",
+                  "stroke": "$diff-selection-border",
+                  "strokeWidth": 0,
+                  "descendants": {
+                    "b8bSop": {
+                      "content": "42"
+                    },
+                    "U4wNN": {
+                      "content": "42"
+                    },
+                    "K3NKFG": {
+                      "content": " ",
+                      "fill": "$code-comment"
+                    },
+                    "DQMrs": {
+                      "height": 20
+                    },
+                    "OoMg1": {
+                      "content": "// Preserve the session before navigation.",
+                      "fill": "$code-comment",
+                      "width": 302.40000000000003
+                    },
+                    "w7L6e": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "t5M0D": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "v65xiE": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "FWh6p": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "f7CIo": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "V5CFkn": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "FufaQ": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "ySe4a": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "V5NXVc": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "NyLLA": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "OIc4y": {
+                      "icon": "plus",
+                      "opacity": 0.35,
+                      "fill": "$code-comment"
+                    }
+                  }
+                },
+                {
+                  "id": "x9o1I",
+                  "type": "ref",
+                  "ref": "vEZ42",
+                  "name": "Line      showAuthError(result.error);",
+                  "width": "fill_container",
+                  "fill": "$diff-remove-bg",
+                  "stroke": "$diff-selection-border",
+                  "strokeWidth": 0,
+                  "descendants": {
+                    "b8bSop": {
+                      "content": "44"
+                    },
+                    "U4wNN": {
+                      "content": ""
+                    },
+                    "K3NKFG": {
+                      "content": "−",
+                      "fill": "$diff-remove-text"
+                    },
+                    "DQMrs": {
+                      "height": 20
+                    },
+                    "OoMg1": {
+                      "content": "    ",
+                      "fill": "$code-text",
+                      "width": 28.8
+                    },
+                    "w7L6e": {
+                      "content": "showAuthError",
+                      "fill": "$code-function",
+                      "width": 93.60000000000001
+                    },
+                    "t5M0D": {
+                      "content": "(result.error);",
+                      "fill": "$code-text",
+                      "width": 108.00000000000001
+                    },
+                    "v65xiE": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "FWh6p": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "f7CIo": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "V5CFkn": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "FufaQ": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "ySe4a": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "V5NXVc": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "NyLLA": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "OIc4y": {
+                      "icon": "plus",
+                      "opacity": 0.35,
+                      "fill": "$code-comment"
+                    }
+                  }
+                },
+                {
+                  "id": "Lg9s3",
+                  "type": "ref",
+                  "ref": "vEZ42",
+                  "name": "Line 43   if (result.error?.code === 'user_cancelled') {",
+                  "width": "fill_container",
+                  "fill": "$diff-add-bg",
+                  "stroke": "$diff-selection-border",
+                  "strokeWidth": 0,
+                  "descendants": {
+                    "b8bSop": {
+                      "content": ""
+                    },
+                    "U4wNN": {
+                      "content": "43"
+                    },
+                    "K3NKFG": {
+                      "content": "+",
+                      "fill": "$diff-add-text"
+                    },
+                    "DQMrs": {
+                      "height": 20
+                    },
+                    "OoMg1": {
+                      "content": "  ",
+                      "fill": "$code-text",
+                      "width": 14.4
+                    },
+                    "w7L6e": {
+                      "content": "if",
+                      "fill": "$code-keyword",
+                      "width": 14.4
+                    },
+                    "t5M0D": {
+                      "content": " (result.error",
+                      "fill": "$code-text",
+                      "width": 100.8
+                    },
+                    "v65xiE": {
+                      "content": "?.",
+                      "fill": "$code-keyword",
+                      "width": 14.4
+                    },
+                    "FWh6p": {
+                      "content": "code ",
+                      "fill": "$code-text",
+                      "width": 36
+                    },
+                    "f7CIo": {
+                      "content": "===",
+                      "fill": "$code-keyword",
+                      "width": 21.6
+                    },
+                    "V5CFkn": {
+                      "content": " ",
+                      "fill": "$code-text",
+                      "width": 7.2
+                    },
+                    "FufaQ": {
+                      "content": "'user_cancelled'",
+                      "fill": "$code-string",
+                      "width": 115.2
+                    },
+                    "ySe4a": {
+                      "content": ") {",
+                      "fill": "$code-text",
+                      "width": 21.6
+                    },
+                    "V5NXVc": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "NyLLA": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "OIc4y": {
+                      "icon": "plus",
+                      "opacity": 0.35,
+                      "fill": "$code-comment"
+                    }
+                  }
+                },
+                {
+                  "id": "wfnTz",
+                  "type": "ref",
+                  "ref": "vEZ42",
+                  "name": "Line 44     return;",
+                  "width": "fill_container",
+                  "fill": "$diff-selection-bg",
+                  "stroke": "$diff-selection-border",
+                  "strokeWidth": {
+                    "left": 2
+                  },
+                  "descendants": {
+                    "b8bSop": {
+                      "content": ""
+                    },
+                    "U4wNN": {
+                      "content": "44"
+                    },
+                    "K3NKFG": {
+                      "content": "+",
+                      "fill": "$diff-add-text"
+                    },
+                    "DQMrs": {
+                      "height": 20
+                    },
+                    "OoMg1": {
+                      "content": "    ",
+                      "fill": "$code-text",
+                      "width": 28.8
+                    },
+                    "w7L6e": {
+                      "content": "return",
+                      "fill": "$code-keyword",
+                      "width": 43.2
+                    },
+                    "t5M0D": {
+                      "content": ";",
+                      "fill": "$code-text",
+                      "width": 7.2
+                    },
+                    "v65xiE": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "FWh6p": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "f7CIo": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "V5CFkn": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "FufaQ": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "ySe4a": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "V5NXVc": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "NyLLA": {
+                      "content": "",
+                      "width": 0
+                    },
+                    "OIc4y": {
+                      "icon": "message-square",
+                      "opacity": 1,
+                      "fill": "$diff-selection-border"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "QQmsI",
+              "x": 48,
+              "y": 1380,
+              "name": "Window / Title bar / Windows",
+              "reusable": true,
+              "width": 1440,
+              "height": 32,
+              "fill": "$canvas",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Q5v1g",
+                  "name": "Drag area",
+                  "width": "fill_container",
+                  "height": "fill_container"
+                },
+                {
+                  "type": "frame",
+                  "id": "H9yNY",
+                  "name": "Minimize",
+                  "width": 46,
+                  "height": 32,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "JMuPI",
+                      "name": "Minimize icon",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "minus",
+                      "library": "lucide",
+                      "fill": "$muted"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "cyDD6",
+                  "name": "Maximize",
+                  "width": 46,
+                  "height": 32,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "a9fB7u",
+                      "name": "Maximize icon",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "square",
+                      "library": "lucide",
+                      "fill": "$muted"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "m3HyY",
+                  "name": "Close",
+                  "width": 46,
+                  "height": 32,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "y8Y34",
+                      "name": "Close icon",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "x",
+                      "library": "lucide",
+                      "fill": "$muted"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "V70DN",
+              "x": 48,
+              "y": 1440,
+              "name": "Window / Title bar / macOS",
+              "reusable": true,
+              "width": 1440,
+              "height": 32,
+              "fill": "$canvas",
+              "gap": 8,
+              "padding": [
+                0,
+                12
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "lenEp",
+                  "name": "Close",
+                  "fill": "#FF5F57",
+                  "width": 12,
+                  "height": 12
+                },
+                {
+                  "type": "ellipse",
+                  "id": "nsw7u",
+                  "name": "Minimize",
+                  "fill": "#FEBC2E",
+                  "width": 12,
+                  "height": 12
+                },
+                {
+                  "type": "ellipse",
+                  "id": "Vw8Pc",
+                  "name": "Zoom",
+                  "fill": "#28C840",
+                  "width": 12,
+                  "height": 12
+                },
+                {
+                  "type": "frame",
+                  "id": "ykwVj",
+                  "name": "Drag area",
+                  "width": "fill_container",
+                  "height": "fill_container"
                 }
               ]
             }
@@ -52406,6 +53030,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 38 }",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "38"
@@ -52414,14 +53041,61 @@
                                       "content": "38"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": "}"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "}",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -52431,6 +53105,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 39  ",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "39"
@@ -52439,14 +53116,61 @@
                                       "content": "39"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": " "
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -52456,7 +53180,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 40 export async function signInWithGitHub() {",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -52465,14 +53191,68 @@
                                       "content": "40"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "export async function signInWithGitHub() {"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "export",
+                                      "fill": "$code-keyword",
+                                      "width": 43.2
+                                    },
+                                    "w7L6e": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "t5M0D": {
+                                      "content": "async",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "v65xiE": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "FWh6p": {
+                                      "content": "function",
+                                      "fill": "$code-keyword",
+                                      "width": 57.6
+                                    },
+                                    "f7CIo": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "V5CFkn": {
+                                      "content": "signInWithGitHub",
+                                      "fill": "$code-function",
+                                      "width": 115.2
+                                    },
+                                    "FufaQ": {
+                                      "content": "() {",
+                                      "fill": "$code-text",
+                                      "width": 28.8
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -52482,7 +53262,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 41   const result = await github.signIn();",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -52491,14 +53273,71 @@
                                       "content": "41"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  const result = await github.signIn();"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "const",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "t5M0D": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "result",
+                                      "fill": "$code-variable",
+                                      "width": 43.2
+                                    },
+                                    "FWh6p": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "f7CIo": {
+                                      "content": "=",
+                                      "fill": "$code-keyword",
+                                      "width": 7.2
+                                    },
+                                    "V5CFkn": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "FufaQ": {
+                                      "content": "await",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "ySe4a": {
+                                      "content": " github.",
+                                      "fill": "$code-text",
+                                      "width": 57.60000000000001
+                                    },
+                                    "V5NXVc": {
+                                      "content": "signIn",
+                                      "fill": "$code-function",
+                                      "width": 43.2
+                                    },
+                                    "NyLLA": {
+                                      "content": "();",
+                                      "fill": "$code-text",
+                                      "width": 21.6
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -52508,7 +53347,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 42  ",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -52517,14 +53358,61 @@
                                       "content": "42"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": " "
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -52534,8 +53422,8 @@
                                   "ref": "vEZ42",
                                   "name": "Line 43   if (result.error) {",
                                   "width": "fill_container",
-                                  "fill": "$hover",
-                                  "stroke": "$text",
+                                  "fill": "$diff-selection-bg",
+                                  "stroke": "$diff-selection-border",
                                   "strokeWidth": {
                                     "left": 2
                                   },
@@ -52547,14 +53435,63 @@
                                       "content": "43"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  if (result.error) {"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "if",
+                                      "fill": "$code-keyword",
+                                      "width": 14.4
+                                    },
+                                    "t5M0D": {
+                                      "content": " (result.error) {",
+                                      "fill": "$code-text",
+                                      "width": 122.4
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "message-square",
-                                      "opacity": 1
+                                      "opacity": 1,
+                                      "fill": "$diff-selection-border"
                                     }
                                   }
                                 },
@@ -52564,8 +53501,8 @@
                                   "ref": "vEZ42",
                                   "name": "Line 44     showAuthError(result.error);",
                                   "width": "fill_container",
-                                  "fill": "$hover",
-                                  "stroke": "$text",
+                                  "fill": "$diff-selection-bg",
+                                  "stroke": "$diff-selection-border",
                                   "strokeWidth": {
                                     "left": 2
                                   },
@@ -52577,14 +53514,63 @@
                                       "content": "44"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "    showAuthError(result.error);"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "    ",
+                                      "fill": "$code-text",
+                                      "width": 28.8
+                                    },
+                                    "w7L6e": {
+                                      "content": "showAuthError",
+                                      "fill": "$code-function",
+                                      "width": 93.60000000000001
+                                    },
+                                    "t5M0D": {
+                                      "content": "(result.error);",
+                                      "fill": "$code-text",
+                                      "width": 108.00000000000001
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "message-square",
-                                      "opacity": 1
+                                      "opacity": 1,
+                                      "fill": "$diff-selection-border"
                                     }
                                   }
                                 },
@@ -52594,8 +53580,8 @@
                                   "ref": "vEZ42",
                                   "name": "Line 45     return;",
                                   "width": "fill_container",
-                                  "fill": "$hover",
-                                  "stroke": "$text",
+                                  "fill": "$diff-selection-bg",
+                                  "stroke": "$diff-selection-border",
                                   "strokeWidth": {
                                     "left": 2
                                   },
@@ -52607,14 +53593,63 @@
                                       "content": "45"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "    return;"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "    ",
+                                      "fill": "$code-text",
+                                      "width": 28.8
+                                    },
+                                    "w7L6e": {
+                                      "content": "return",
+                                      "fill": "$code-keyword",
+                                      "width": 43.2
+                                    },
+                                    "t5M0D": {
+                                      "content": ";",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "message-square",
-                                      "opacity": 1
+                                      "opacity": 1,
+                                      "fill": "$diff-selection-border"
                                     }
                                   }
                                 },
@@ -52624,7 +53659,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 46   }",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -52633,14 +53670,61 @@
                                       "content": "46"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  }"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  }",
+                                      "fill": "$code-text",
+                                      "width": 21.6
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -52650,7 +53734,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 47  ",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -52659,14 +53745,61 @@
                                       "content": "47"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": " "
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -52676,7 +53809,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 48   await saveSession(result.session);",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -52685,14 +53820,65 @@
                                       "content": "48"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  await saveSession(result.session);"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "await",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "t5M0D": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "saveSession",
+                                      "fill": "$code-function",
+                                      "width": 79.2
+                                    },
+                                    "FWh6p": {
+                                      "content": "(result.session);",
+                                      "fill": "$code-text",
+                                      "width": 122.4
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -52702,7 +53888,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 49   navigate('/workspace');",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -52711,14 +53899,65 @@
                                       "content": "49"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  navigate('/workspace');"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "navigate",
+                                      "fill": "$code-function",
+                                      "width": 57.6
+                                    },
+                                    "t5M0D": {
+                                      "content": "(",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "'/workspace'",
+                                      "fill": "$code-string",
+                                      "width": 86.4
+                                    },
+                                    "FWh6p": {
+                                      "content": ");",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -52728,7 +53967,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 50 }",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -52737,14 +53978,61 @@
                                       "content": "50"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "}"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "}",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 }
@@ -53607,6 +54895,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 40 export async function signInWithGitHub() {",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "40"
@@ -53615,14 +54906,68 @@
                                       "content": "40"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": "export async function signInWithGitHub() {"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "export",
+                                      "fill": "$code-keyword",
+                                      "width": 43.2
+                                    },
+                                    "w7L6e": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "t5M0D": {
+                                      "content": "async",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "v65xiE": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "FWh6p": {
+                                      "content": "function",
+                                      "fill": "$code-keyword",
+                                      "width": 57.6
+                                    },
+                                    "f7CIo": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "V5CFkn": {
+                                      "content": "signInWithGitHub",
+                                      "fill": "$code-function",
+                                      "width": 115.2
+                                    },
+                                    "FufaQ": {
+                                      "content": "() {",
+                                      "fill": "$code-text",
+                                      "width": 28.8
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -53632,6 +54977,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 41   const result = await github.signIn();",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "41"
@@ -53640,14 +54988,71 @@
                                       "content": "41"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  const result = await github.signIn();"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "const",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "t5M0D": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "result",
+                                      "fill": "$code-variable",
+                                      "width": 43.2
+                                    },
+                                    "FWh6p": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "f7CIo": {
+                                      "content": "=",
+                                      "fill": "$code-keyword",
+                                      "width": 7.2
+                                    },
+                                    "V5CFkn": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "FufaQ": {
+                                      "content": "await",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "ySe4a": {
+                                      "content": " github.",
+                                      "fill": "$code-text",
+                                      "width": 57.60000000000001
+                                    },
+                                    "V5NXVc": {
+                                      "content": "signIn",
+                                      "fill": "$code-function",
+                                      "width": 43.2
+                                    },
+                                    "NyLLA": {
+                                      "content": "();",
+                                      "fill": "$code-text",
+                                      "width": 21.6
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -53657,6 +55062,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 42  ",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "42"
@@ -53665,14 +55073,61 @@
                                       "content": "42"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": " "
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -53682,8 +55137,8 @@
                                   "ref": "vEZ42",
                                   "name": "Line 43   if (result.error?.code === 'user_cancelled') {",
                                   "width": "fill_container",
-                                  "fill": "$hover",
-                                  "stroke": "$text",
+                                  "fill": "$diff-selection-bg",
+                                  "stroke": "$diff-selection-border",
                                   "strokeWidth": {
                                     "left": 2
                                   },
@@ -53695,14 +55150,69 @@
                                       "content": "43"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  if (result.error?.code === 'user_cancelled') {"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "if",
+                                      "fill": "$code-keyword",
+                                      "width": 14.4
+                                    },
+                                    "t5M0D": {
+                                      "content": " (result.error",
+                                      "fill": "$code-text",
+                                      "width": 100.8
+                                    },
+                                    "v65xiE": {
+                                      "content": "?.",
+                                      "fill": "$code-keyword",
+                                      "width": 14.4
+                                    },
+                                    "FWh6p": {
+                                      "content": "code ",
+                                      "fill": "$code-text",
+                                      "width": 36
+                                    },
+                                    "f7CIo": {
+                                      "content": "===",
+                                      "fill": "$code-keyword",
+                                      "width": 21.6
+                                    },
+                                    "V5CFkn": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "FufaQ": {
+                                      "content": "'user_cancelled'",
+                                      "fill": "$code-string",
+                                      "width": 115.2
+                                    },
+                                    "ySe4a": {
+                                      "content": ") {",
+                                      "fill": "$code-text",
+                                      "width": 21.6
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "message-square",
-                                      "opacity": 1
+                                      "opacity": 1,
+                                      "fill": "$diff-selection-border"
                                     }
                                   }
                                 },
@@ -53712,8 +55222,8 @@
                                   "ref": "vEZ42",
                                   "name": "Line 44     return;",
                                   "width": "fill_container",
-                                  "fill": "$hover",
-                                  "stroke": "$text",
+                                  "fill": "$diff-selection-bg",
+                                  "stroke": "$diff-selection-border",
                                   "strokeWidth": {
                                     "left": 2
                                   },
@@ -53725,14 +55235,63 @@
                                       "content": "44"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "    return;"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "    ",
+                                      "fill": "$code-text",
+                                      "width": 28.8
+                                    },
+                                    "w7L6e": {
+                                      "content": "return",
+                                      "fill": "$code-keyword",
+                                      "width": 43.2
+                                    },
+                                    "t5M0D": {
+                                      "content": ";",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "message-square",
-                                      "opacity": 1
+                                      "opacity": 1,
+                                      "fill": "$diff-selection-border"
                                     }
                                   }
                                 },
@@ -53742,8 +55301,8 @@
                                   "ref": "vEZ42",
                                   "name": "Line 45   }",
                                   "width": "fill_container",
-                                  "fill": "$hover",
-                                  "stroke": "$text",
+                                  "fill": "$diff-selection-bg",
+                                  "stroke": "$diff-selection-border",
                                   "strokeWidth": {
                                     "left": 2
                                   },
@@ -53755,14 +55314,61 @@
                                       "content": "45"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  }"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  }",
+                                      "fill": "$code-text",
+                                      "width": 21.6
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "message-square",
-                                      "opacity": 1
+                                      "opacity": 1,
+                                      "fill": "$diff-selection-border"
                                     }
                                   }
                                 },
@@ -53772,7 +55378,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 46  ",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -53781,14 +55389,61 @@
                                       "content": "46"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": " "
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -53798,6 +55453,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 47   if (result.error) {",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "43"
@@ -53806,14 +55464,63 @@
                                       "content": "47"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  if (result.error) {"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "if",
+                                      "fill": "$code-keyword",
+                                      "width": 14.4
+                                    },
+                                    "t5M0D": {
+                                      "content": " (result.error) {",
+                                      "fill": "$code-text",
+                                      "width": 122.4
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -53823,6 +55530,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 48     showAuthError(result.error);",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "44"
@@ -53831,14 +55541,63 @@
                                       "content": "48"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": "    showAuthError(result.error);"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "    ",
+                                      "fill": "$code-text",
+                                      "width": 28.8
+                                    },
+                                    "w7L6e": {
+                                      "content": "showAuthError",
+                                      "fill": "$code-function",
+                                      "width": 93.60000000000001
+                                    },
+                                    "t5M0D": {
+                                      "content": "(result.error);",
+                                      "fill": "$code-text",
+                                      "width": 108.00000000000001
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -53848,6 +55607,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 49     return;",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "45"
@@ -53856,14 +55618,63 @@
                                       "content": "49"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": "    return;"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "    ",
+                                      "fill": "$code-text",
+                                      "width": 28.8
+                                    },
+                                    "w7L6e": {
+                                      "content": "return",
+                                      "fill": "$code-keyword",
+                                      "width": 43.2
+                                    },
+                                    "t5M0D": {
+                                      "content": ";",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -53873,6 +55684,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 50   }",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "46"
@@ -53881,14 +55695,61 @@
                                       "content": "50"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  }"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  }",
+                                      "fill": "$code-text",
+                                      "width": 21.6
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -53898,6 +55759,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 51  ",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "47"
@@ -53906,14 +55770,61 @@
                                       "content": "51"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": " "
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -53923,6 +55834,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 52   await saveSession(result.session);",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "48"
@@ -53931,14 +55845,65 @@
                                       "content": "52"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  await saveSession(result.session);"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "await",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "t5M0D": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "saveSession",
+                                      "fill": "$code-function",
+                                      "width": 79.2
+                                    },
+                                    "FWh6p": {
+                                      "content": "(result.session);",
+                                      "fill": "$code-text",
+                                      "width": 122.4
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 }
@@ -54926,6 +56891,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 38 }",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "38"
@@ -54934,14 +56902,61 @@
                                       "content": "38"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": "}"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "}",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -54951,6 +56966,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 39  ",
                                   "width": "fill_container",
+                                  "fill": "$code-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": "39"
@@ -54959,14 +56977,61 @@
                                       "content": "39"
                                     },
                                     "K3NKFG": {
-                                      "content": " "
+                                      "content": " ",
+                                      "fill": "$code-comment"
                                     },
-                                    "i0Ib6": {
-                                      "content": " "
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -54976,7 +57041,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 40 export async function signInWithGitHub() {",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -54985,14 +57052,68 @@
                                       "content": "40"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "export async function signInWithGitHub() {"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "export",
+                                      "fill": "$code-keyword",
+                                      "width": 43.2
+                                    },
+                                    "w7L6e": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "t5M0D": {
+                                      "content": "async",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "v65xiE": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "FWh6p": {
+                                      "content": "function",
+                                      "fill": "$code-keyword",
+                                      "width": 57.6
+                                    },
+                                    "f7CIo": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "V5CFkn": {
+                                      "content": "signInWithGitHub",
+                                      "fill": "$code-function",
+                                      "width": 115.2
+                                    },
+                                    "FufaQ": {
+                                      "content": "() {",
+                                      "fill": "$code-text",
+                                      "width": 28.8
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -55002,7 +57123,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 41   const result = await github.signIn();",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -55011,14 +57134,71 @@
                                       "content": "41"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  const result = await github.signIn();"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "const",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "t5M0D": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "result",
+                                      "fill": "$code-variable",
+                                      "width": 43.2
+                                    },
+                                    "FWh6p": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "f7CIo": {
+                                      "content": "=",
+                                      "fill": "$code-keyword",
+                                      "width": 7.2
+                                    },
+                                    "V5CFkn": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "FufaQ": {
+                                      "content": "await",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "ySe4a": {
+                                      "content": " github.",
+                                      "fill": "$code-text",
+                                      "width": 57.60000000000001
+                                    },
+                                    "V5NXVc": {
+                                      "content": "signIn",
+                                      "fill": "$code-function",
+                                      "width": 43.2
+                                    },
+                                    "NyLLA": {
+                                      "content": "();",
+                                      "fill": "$code-text",
+                                      "width": 21.6
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -55028,7 +57208,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 42  ",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -55037,14 +57219,61 @@
                                       "content": "42"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": " "
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -55052,11 +57281,11 @@
                                   "id": "J11qd",
                                   "type": "ref",
                                   "ref": "vEZ42",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
                                   "strokeWidth": 0,
                                   "name": "Line 43   if (result.error) {",
                                   "width": "fill_container",
-                                  "stroke": "$text",
+                                  "stroke": "$diff-selection-border",
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -55065,14 +57294,63 @@
                                       "content": "43"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  if (result.error) {"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "if",
+                                      "fill": "$code-keyword",
+                                      "width": 14.4
+                                    },
+                                    "t5M0D": {
+                                      "content": " (result.error) {",
+                                      "fill": "$code-text",
+                                      "width": 122.4
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -55080,11 +57358,11 @@
                                   "id": "Qmyok",
                                   "type": "ref",
                                   "ref": "vEZ42",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
                                   "strokeWidth": 0,
                                   "name": "Line 44     showAuthError(result.error);",
                                   "width": "fill_container",
-                                  "stroke": "$text",
+                                  "stroke": "$diff-selection-border",
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -55093,14 +57371,63 @@
                                       "content": "44"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "    showAuthError(result.error);"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "    ",
+                                      "fill": "$code-text",
+                                      "width": 28.8
+                                    },
+                                    "w7L6e": {
+                                      "content": "showAuthError",
+                                      "fill": "$code-function",
+                                      "width": 93.60000000000001
+                                    },
+                                    "t5M0D": {
+                                      "content": "(result.error);",
+                                      "fill": "$code-text",
+                                      "width": 108.00000000000001
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -55108,11 +57435,11 @@
                                   "id": "e2x5P",
                                   "type": "ref",
                                   "ref": "vEZ42",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
                                   "strokeWidth": 0,
                                   "name": "Line 45     return;",
                                   "width": "fill_container",
-                                  "stroke": "$text",
+                                  "stroke": "$diff-selection-border",
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -55121,14 +57448,63 @@
                                       "content": "45"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "    return;"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "    ",
+                                      "fill": "$code-text",
+                                      "width": 28.8
+                                    },
+                                    "w7L6e": {
+                                      "content": "return",
+                                      "fill": "$code-keyword",
+                                      "width": 43.2
+                                    },
+                                    "t5M0D": {
+                                      "content": ";",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -55138,7 +57514,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 46   }",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -55147,14 +57525,61 @@
                                       "content": "46"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  }"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  }",
+                                      "fill": "$code-text",
+                                      "width": 21.6
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -55164,7 +57589,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 47  ",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -55173,14 +57600,61 @@
                                       "content": "47"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": " "
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 },
@@ -55188,8 +57662,8 @@
                                   "id": "giOdn",
                                   "type": "ref",
                                   "ref": "vEZ42",
-                                  "fill": "$hover",
-                                  "stroke": "$text",
+                                  "fill": "$diff-selection-bg",
+                                  "stroke": "$diff-selection-border",
                                   "strokeWidth": {
                                     "left": 2
                                   },
@@ -55203,14 +57677,65 @@
                                       "content": "48"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  await saveSession(result.session);"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "await",
+                                      "fill": "$code-keyword",
+                                      "width": 36
+                                    },
+                                    "t5M0D": {
+                                      "content": " ",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "saveSession",
+                                      "fill": "$code-function",
+                                      "width": 79.2
+                                    },
+                                    "FWh6p": {
+                                      "content": "(result.session);",
+                                      "fill": "$code-text",
+                                      "width": 122.4
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "message-square",
-                                      "opacity": 1
+                                      "opacity": 1,
+                                      "fill": "$diff-selection-border"
                                     }
                                   }
                                 },
@@ -55218,8 +57743,8 @@
                                   "id": "CJOzI",
                                   "type": "ref",
                                   "ref": "vEZ42",
-                                  "fill": "$hover",
-                                  "stroke": "$text",
+                                  "fill": "$diff-selection-bg",
+                                  "stroke": "$diff-selection-border",
                                   "strokeWidth": {
                                     "left": 2
                                   },
@@ -55233,14 +57758,65 @@
                                       "content": "49"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "  navigate('/workspace');"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "  ",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "w7L6e": {
+                                      "content": "navigate",
+                                      "fill": "$code-function",
+                                      "width": 57.6
+                                    },
+                                    "t5M0D": {
+                                      "content": "(",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "v65xiE": {
+                                      "content": "'/workspace'",
+                                      "fill": "$code-string",
+                                      "width": 86.4
+                                    },
+                                    "FWh6p": {
+                                      "content": ");",
+                                      "fill": "$code-text",
+                                      "width": 14.4
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "message-square",
-                                      "opacity": 1
+                                      "opacity": 1,
+                                      "fill": "$diff-selection-border"
                                     }
                                   }
                                 },
@@ -55250,7 +57826,9 @@
                                   "ref": "vEZ42",
                                   "name": "Line 50 }",
                                   "width": "fill_container",
-                                  "fill": "$raised",
+                                  "fill": "$diff-add-bg",
+                                  "stroke": "$diff-selection-border",
+                                  "strokeWidth": 0,
                                   "descendants": {
                                     "b8bSop": {
                                       "content": ""
@@ -55259,14 +57837,61 @@
                                       "content": "50"
                                     },
                                     "K3NKFG": {
-                                      "content": "+"
+                                      "content": "+",
+                                      "fill": "$diff-add-text"
                                     },
-                                    "i0Ib6": {
-                                      "content": "}"
+                                    "DQMrs": {
+                                      "height": 20
+                                    },
+                                    "OoMg1": {
+                                      "content": "}",
+                                      "fill": "$code-text",
+                                      "width": 7.2
+                                    },
+                                    "w7L6e": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "t5M0D": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "v65xiE": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FWh6p": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "f7CIo": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5CFkn": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "FufaQ": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "ySe4a": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "V5NXVc": {
+                                      "content": "",
+                                      "width": 0
+                                    },
+                                    "NyLLA": {
+                                      "content": "",
+                                      "width": 0
                                     },
                                     "OIc4y": {
                                       "icon": "plus",
-                                      "opacity": 0.35
+                                      "opacity": 0.35,
+                                      "fill": "$code-comment"
                                     }
                                   }
                                 }
@@ -55755,6 +58380,62 @@
     "space-lg": {
       "type": "number",
       "value": 24
+    },
+    "code-bg": {
+      "type": "color",
+      "value": "#0D1117"
+    },
+    "code-text": {
+      "type": "color",
+      "value": "#E6EDF3"
+    },
+    "code-keyword": {
+      "type": "color",
+      "value": "#FF7B72"
+    },
+    "code-string": {
+      "type": "color",
+      "value": "#A5D6FF"
+    },
+    "code-function": {
+      "type": "color",
+      "value": "#D2A8FF"
+    },
+    "code-variable": {
+      "type": "color",
+      "value": "#FFA657"
+    },
+    "code-constant": {
+      "type": "color",
+      "value": "#79C0FF"
+    },
+    "code-comment": {
+      "type": "color",
+      "value": "#8B949E"
+    },
+    "diff-add-bg": {
+      "type": "color",
+      "value": "#14261C"
+    },
+    "diff-remove-bg": {
+      "type": "color",
+      "value": "#301C20"
+    },
+    "diff-add-text": {
+      "type": "color",
+      "value": "#7EE787"
+    },
+    "diff-remove-text": {
+      "type": "color",
+      "value": "#FFA198"
+    },
+    "diff-selection-bg": {
+      "type": "color",
+      "value": "#1B3652"
+    },
+    "diff-selection-border": {
+      "type": "color",
+      "value": "#58A6FF"
     }
   },
   "fileToken": "5586bdca-76fd-49cd-8b99-1b6e9003c957"
