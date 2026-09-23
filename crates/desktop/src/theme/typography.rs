@@ -50,10 +50,12 @@ pub enum ExtraTypography {
   IconFeature,
   /// Recovery panel icon (`xEwzT`).
   IconPanel,
+  /// Window control icons in the title bar (`QQmsI`), 14px.
+  IconWindowControl,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 19] = [
+  const ALL: [Self; 20] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -73,6 +75,7 @@ impl ExtraTypography {
     Self::IconNav,
     Self::IconFeature,
     Self::IconPanel,
+    Self::IconWindowControl,
   ];
 
   fn name(self) -> &'static str {
@@ -96,6 +99,7 @@ impl ExtraTypography {
       Self::IconNav => "icon-nav",
       Self::IconFeature => "icon-feature",
       Self::IconPanel => "icon-panel",
+      Self::IconWindowControl => "icon-window-control",
     }
   }
 
@@ -167,6 +171,7 @@ impl ExtraTypography {
       Self::IconNav => icon(17.0),
       Self::IconFeature => icon(19.0),
       Self::IconPanel => icon(24.0),
+      Self::IconWindowControl => icon(14.0),
     }
   }
 }

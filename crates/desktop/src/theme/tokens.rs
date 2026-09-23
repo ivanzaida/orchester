@@ -61,3 +61,5 @@ pub const SPACE_MARGIN: f32 = 120.0;
 
 /// Custom window title bar height (`QQmsI`, `V70DN`).
 pub const TITLE_BAR_HEIGHT: f32 = 32.0;
+/// Width of each Windows window control (`QQmsI`).
+pub const WINDOW_CONTROL_WIDTH: f32 = 46.0;

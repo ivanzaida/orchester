@@ -5,7 +5,8 @@ use lurq::{
     theme::{PaletteColor, TypographyStyle},
   },
   components::{
-    ChromeBorderPolicy, ChromeTitleBar, Column, Text, WindowChrome, WindowChromeMode, WindowChromeProps, WindowControls,
+    ChromeBorderPolicy, ChromeTitleBar, Column, Text, WindowChrome, WindowChromeMode, WindowChromeProps,
+    WindowControlKind, WindowControls,
   },
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
@@ -17,8 +18,12 @@ use crate::{
   messages::{self, Message},
   navigation::{Navigation, Screen},
   screens::{project::ProjectShell, setup::ProjectSetup, unavailable, welcome::Welcome},
-  theme::{ExtraColor, TITLE_BAR_HEIGHT},
-  ui::{icon::Icon, message_text, panel::RecoveryPanel},
+  theme::{ExtraColor, TITLE_BAR_HEIGHT, WINDOW_CONTROL_WIDTH},
+  ui::{
+    icon::{Icon, window_control},
+    message_text,
+    panel::RecoveryPanel,
+  },
   workspace::Workspace,
 };
 
@@ -97,7 +102,6 @@ impl Root {
 
 /// Custom chrome (`QQmsI` on Windows, `V70DN` on macOS): no native title bar or border, a
 /// canvas-colored bar whose empty part drags the window and maximizes on double-click.
-/// The window controls are lurq's `WindowControls`; see the report on their styling gap.
 fn window_chrome(ctx: &mut Ctx, screen: Element) -> Element {
   WindowChrome::new()
     .props(
@@ -111,10 +115,25 @@ fn window_chrome(ctx: &mut Ctx, screen: Element) -> Element {
       ChromeTitleBar::new()
         .background(PaletteColor::SurfaceBase)
         .border_bottom(None)
-        .controls(WindowControls::new()),
+        .controls(window_controls()),
     )
     .content(screen)
     .mount(ctx)
+}
+
+/// Windows controls as in `QQmsI`: lucide icons in the muted text color and one shared hover
+/// background; macOS keeps lurq's standard traffic lights (`V70DN`).
+fn window_controls() -> WindowControls {
+  WindowControls::new()
+    .button_size(WINDOW_CONTROL_WIDTH, TITLE_BAR_HEIGHT)
+    .content(WindowControlKind::Minimize, window_control(Icon::Minus))
+    .content(WindowControlKind::Maximize, window_control(Icon::Square))
+    .content(WindowControlKind::Restore, window_control(Icon::Copy))
+    .content(WindowControlKind::Close, window_control(Icon::X))
+    .foreground(PaletteColor::TextSecondary)
+    .background(PaletteColor::SurfaceBase)
+    .hover_background(PaletteColor::AccentMuted)
+    .active_background(PaletteColor::AccentMuted)
 }
 
 /// The application database could not be opened or read. There is no recovery design yet, so

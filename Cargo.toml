@@ -30,7 +30,7 @@ redundant_clone = "warn"
 orchester-core = { path = "crates/core" }
 orchester-ipc = { path = "crates/ipc" }
 orchester-store = { path = "crates/store" }
-lurq = { version = "0.21.0", default-features = false }
+lurq = { version = "0.22.0", default-features = false }
 parking_lot = "0.12"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"

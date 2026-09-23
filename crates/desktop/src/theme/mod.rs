@@ -16,6 +16,8 @@ pub use typography::ExtraTypography;
 
 /// Height of the custom title bar drawn above every screen (`QQmsI`, `V70DN`).
 pub const TITLE_BAR_HEIGHT: f32 = tokens::TITLE_BAR_HEIGHT;
+/// Width of each Windows window control (`QQmsI`).
+pub const WINDOW_CONTROL_WIDTH: f32 = tokens::WINDOW_CONTROL_WIDTH;
 
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),

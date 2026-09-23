@@ -1,6 +1,9 @@
 //! Lucide icons, drawn as glyphs of the bundled icon font. Names follow the Pencil icon nodes.
 
-use lurq::{app::theme::PaletteColor, components::Text};
+use lurq::{
+  app::theme::PaletteColor,
+  components::{Text, WindowControlContent},
+};
 
 use crate::theme::ExtraTypography;
 
@@ -16,6 +19,7 @@ pub enum Icon {
   CircleCheck,
   CircleDot,
   CloudOff,
+  Copy,
   Download,
   ExternalLink,
   FolderGit,
@@ -27,12 +31,15 @@ pub enum Icon {
   LayoutDashboard,
   Lock,
   MessagesSquare,
+  Minus,
   Plug,
   Plus,
   ServerOff,
   Settings,
+  Square,
   Workflow,
   Wrench,
+  X,
 }
 
 impl Icon {
@@ -49,6 +56,7 @@ impl Icon {
       Self::CircleCheck => '\u{e07c}',
       Self::CircleDot => '\u{e345}',
       Self::CloudOff => '\u{e08d}',
+      Self::Copy => '\u{e09e}',
       Self::Download => '\u{e0b2}',
       Self::ExternalLink => '\u{e0b9}',
       Self::FolderGit => '\u{e40a}',
@@ -60,12 +68,15 @@ impl Icon {
       Self::LayoutDashboard => '\u{e1c1}',
       Self::Lock => '\u{e10b}',
       Self::MessagesSquare => '\u{e40d}',
+      Self::Minus => '\u{e11c}',
       Self::Plug => '\u{e37f}',
       Self::Plus => '\u{e13d}',
       Self::ServerOff => '\u{e1ea}',
       Self::Settings => '\u{e245}',
+      Self::Square => '\u{e167}',
       Self::Workflow => '\u{e425}',
       Self::Wrench => '\u{e1b1}',
+      Self::X => '\u{e1b2}',
     }
   }
 }
@@ -97,4 +108,16 @@ pub fn icon(icon: Icon, size: IconSize, color: PaletteColor) -> Text {
     .variant(size.role().role())
     .color(color)
     .nowrap()
+}
+
+/// A title-bar window control drawn with a lucide glyph in the color lurq passes for the
+/// control's state.
+pub fn window_control(icon: Icon) -> WindowControlContent {
+  WindowControlContent::element(move |color| {
+    Text::new(icon.glyph().encode_utf8(&mut [0; 4]))
+      .variant(ExtraTypography::IconWindowControl.role())
+      .color(color)
+      .nowrap()
+      .into()
+  })
 }
