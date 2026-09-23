@@ -2400,7 +2400,13 @@ version = "0.1.0"
 dependencies = [
  "lurq",
  "orchester-core",
+ "orchester-store",
+ "parking_lot",
+ "rfd",
  "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]

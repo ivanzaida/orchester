@@ -10,8 +10,12 @@ mod tokens;
 mod typography;
 
 use lurq::app::App;
+pub use metrics::{ExtraRadius, ExtraSpacing};
 pub use palette::ExtraColor;
 pub use typography::ExtraTypography;
+
+/// Height of the custom title bar drawn above every screen (`QQmsI`, `V70DN`).
+pub const TITLE_BAR_HEIGHT: f32 = tokens::TITLE_BAR_HEIGHT;
 
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),
@@ -19,6 +23,8 @@ const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-SemiBold.ttf"),
   include_bytes!("../../assets/fonts/Inter-Bold.ttf"),
   include_bytes!("../../assets/fonts/GeistMono-Regular.ttf"),
+  // Lucide icons (ISC license), the same font lurq bundles for its DevTools.
+  include_bytes!("../../assets/fonts/lucide.ttf"),
 ];
 
 pub fn install(app: &mut App) {

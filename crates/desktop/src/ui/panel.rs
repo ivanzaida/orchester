@@ -1,0 +1,65 @@
+//! Recovery panel (`iN90G`): icon, title, explanation and an optional action, on a bordered
+//! surface. Used for empty and failure states.
+
+use lurq::{
+  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+  components::{Column, Text},
+  node::{Element, dimension::Dimension},
+};
+
+use super::icon::{Icon, IconSize, icon};
+use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography};
+
+/// Panel width (`iN90G`).
+const PANEL_WIDTH: f32 = 416.0;
+
+pub struct RecoveryPanel {
+  icon: Icon,
+  title: String,
+  explanation: String,
+  details: Vec<Element>,
+  action: Option<Element>,
+}
+
+impl RecoveryPanel {
+  pub fn new(icon: Icon, title: &str, explanation: &str) -> Self {
+    Self {
+      icon,
+      title: title.to_owned(),
+      explanation: explanation.to_owned(),
+      details: Vec::new(),
+      action: None,
+    }
+  }
+
+  /// Extra content under the explanation, such as the path involved.
+  pub fn detail(mut self, detail: impl Into<Element>) -> Self {
+    self.details.push(detail.into());
+    self
+  }
+
+  pub fn action(mut self, action: Element) -> Self {
+    self.action = Some(action);
+    self
+  }
+}
+
+impl From<RecoveryPanel> for Element {
+  fn from(panel: RecoveryPanel) -> Self {
+    let mut column = Column::new()
+      .width(Dimension::Px(PANEL_WIDTH))
+      .padding(SpacingSize::Lg)
+      .spacing(ExtraSpacing::Group.role())
+      .background(ExtraColor::Surface.role())
+      .border_inside(BorderSize::Sm, PaletteColor::Border)
+      .rounded(RadiusSize::Lg)
+      .child(icon(panel.icon, IconSize::Panel, PaletteColor::TextSecondary))
+      .child(Text::new(&panel.title).variant(ExtraTypography::Subheading.role()))
+      .child(Text::new(&panel.explanation).variant(TypographyStyle::Description))
+      .with_children(panel.details);
+    if let Some(action) = panel.action {
+      column = column.child(Column::new().padding_top(SpacingSize::Sm).child(action));
+    }
+    column.into()
+  }
+}

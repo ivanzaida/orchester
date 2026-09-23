@@ -1,5 +1,10 @@
-use lurq::app::{App, Tree, theme::PaletteColor, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
-use orchester_desktop::{i18n, root, theme};
+use lurq::app::{App, Tree, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
+use orchester_desktop::{
+  i18n,
+  root::{self, Startup},
+  session::AppSession,
+  theme,
+};
 use tracing_subscriber::EnvFilter;
 
 fn main() {
@@ -7,13 +12,28 @@ fn main() {
     .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
     .init();
 
+  let runtime = tokio::runtime::Runtime::new().expect("the OS provides threads for the background runtime");
   let mut app = App::new();
+  app.set_tokio_handle(runtime.handle().clone());
   theme::install(&mut app);
   i18n::install(&app).expect("bundled locale files are valid JSON; covered by tests/i18n.rs");
 
+  // Opened before the window exists, so there is no UI to block yet.
+  let session = AppSession::start();
+  let startup = match &session {
+    Ok(session) => Startup::Ready(session.workspace().clone()),
+    Err(error) => {
+      tracing::error!(%error, "cannot start the session");
+      Startup::Failed {
+        message: error.message(),
+        path: error.path().map(|path| path.display().to_string()),
+      }
+    }
+  };
+
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  tree.mount_root::<root::Root>(&mut app, ());
+  tree.mount_root::<root::Root>(&mut app, startup);
 
   #[cfg(feature = "devtools")]
   {
@@ -29,11 +49,18 @@ fn main() {
   };
 
   let title = app.i18n().t("app.name");
-  let title_bar = app.theme().palette_color(PaletteColor::SurfaceBase);
   WinitWindow::new(app, tree)
     .with_title(&title)
-    .with_size(1440, 960)
-    .with_min_size(960, 640)
-    .with_title_bar_color(title_bar)
+    // A 1440x960 screen below the 32px custom title bar; the chrome draws the bar itself.
+    .with_size(1440, 992)
+    .with_min_size(960, 672)
+    .with_decorations(false)
     .run();
+
+  // `run` returns once the window has closed normally.
+  if let Ok(session) = session
+    && let Err(error) = session.end()
+  {
+    tracing::error!(%error, "cannot record the end of the session");
+  }
 }

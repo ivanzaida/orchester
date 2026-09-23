@@ -6,7 +6,7 @@ use lurq::{
   node::color::Color,
 };
 
-use super::tokens::{FONT, MONO, MUTED, SUBTLE, TEXT};
+use super::tokens::{FONT, ICON_FONT, MONO, MUTED, SUBTLE, TEXT};
 
 /// Pencil text styles without a built-in lurq role, registered as `TypographyStyle::Extra`.
 /// Use these instead of spelling extra names at call sites.
@@ -20,10 +20,60 @@ pub enum ExtraTypography {
   Overline,
   /// Large monospaced figure in project metrics (`PwPmH`).
   Metric,
+  /// Product name in the Orchester brand (`qudYK`).
+  Brand,
+  /// Product name heading the setup rail (`PIceE`).
+  SetupBrand,
+  /// First launch headline (`cmrMC`).
+  Display,
+  /// First launch introduction under the headline (`oJkK5`).
+  Lead,
+  /// Spaced uppercase label above a group, e.g. "WELCOME TO ORCHESTER" (`rrrpd`, `M58ysd`, `K1H7ld`).
+  Eyebrow,
+  /// Step and explanation headings, e.g. "Connect a repository" (`WTDFX` in `Qazxp`, `Qbj0J`, `yhFcb`).
+  Subheading,
+  /// Numbered step marker, e.g. "01" (`AtKp7` in `Qazxp`).
+  StepNumber,
+  /// Page title of the setup steps, e.g. "Create your project" (`j6LVi`).
+  PageTitle,
+  /// Supporting detail under a notice heading or a rail action (`szYuk` in `q5LzI`, `et2jb`).
+  Detail,
+  /// Smallest supporting line, e.g. runner capacity (`tGGua`).
+  Footnote,
+  /// Chevrons and other 12px icons (`B1lur`, `Y9sVM2`).
+  IconSmall,
+  /// Button and secondary navigation icons (`xfnek`, `ssq5w`).
+  IconButton,
+  /// Primary navigation icons (`sQnmq`).
+  IconNav,
+  /// Footer icon on the first launch screen (`OYpN8`).
+  IconFeature,
+  /// Recovery panel icon (`xEwzT`).
+  IconPanel,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 4] = [Self::SectionHeading, Self::CardTitle, Self::Overline, Self::Metric];
+  const ALL: [Self; 19] = [
+    Self::SectionHeading,
+    Self::CardTitle,
+    Self::Overline,
+    Self::Metric,
+    Self::Brand,
+    Self::SetupBrand,
+    Self::Display,
+    Self::Lead,
+    Self::Eyebrow,
+    Self::Subheading,
+    Self::StepNumber,
+    Self::PageTitle,
+    Self::Detail,
+    Self::Footnote,
+    Self::IconSmall,
+    Self::IconButton,
+    Self::IconNav,
+    Self::IconFeature,
+    Self::IconPanel,
+  ];
 
   fn name(self) -> &'static str {
     match self {
@@ -31,6 +81,21 @@ impl ExtraTypography {
       Self::CardTitle => "card-title",
       Self::Overline => "overline",
       Self::Metric => "metric",
+      Self::Brand => "brand",
+      Self::SetupBrand => "setup-brand",
+      Self::Display => "display",
+      Self::Lead => "lead",
+      Self::Eyebrow => "eyebrow",
+      Self::Subheading => "subheading",
+      Self::StepNumber => "step-number",
+      Self::PageTitle => "page-title",
+      Self::Detail => "detail",
+      Self::Footnote => "footnote",
+      Self::IconSmall => "icon-small",
+      Self::IconButton => "icon-button",
+      Self::IconNav => "icon-nav",
+      Self::IconFeature => "icon-feature",
+      Self::IconPanel => "icon-panel",
     }
   }
 
@@ -56,6 +121,14 @@ fn mono(font_size: f32, color: &str) -> TextStyle {
   }
 }
 
+fn icon(font_size: f32) -> TextStyle {
+  TextStyle {
+    font_family: ICON_FONT.into(),
+    line_height: 1.0,
+    ..style(font_size, FontWeight::Normal, MUTED)
+  }
+}
+
 impl ExtraTypography {
   fn style(self) -> TextStyle {
     match self {
@@ -63,6 +136,37 @@ impl ExtraTypography {
       Self::CardTitle => style(14.0, FontWeight::Medium, TEXT),
       Self::Overline => style(9.0, FontWeight::SemiBold, SUBTLE),
       Self::Metric => mono(23.0, TEXT),
+      Self::Brand => TextStyle {
+        letter_spacing: -0.7,
+        ..style(19.0, FontWeight::SemiBold, TEXT)
+      },
+      Self::SetupBrand => style(23.0, FontWeight::SemiBold, TEXT),
+      Self::Display => TextStyle {
+        letter_spacing: -1.2,
+        line_height: 1.18,
+        ..style(44.0, FontWeight::Medium, TEXT)
+      },
+      Self::Lead => TextStyle {
+        line_height: 1.65,
+        ..style(16.0, FontWeight::Normal, MUTED)
+      },
+      Self::Eyebrow => TextStyle {
+        letter_spacing: 1.6,
+        ..style(10.0, FontWeight::Normal, MUTED)
+      },
+      Self::Subheading => style(17.0, FontWeight::Medium, TEXT),
+      Self::StepNumber => mono(12.0, SUBTLE),
+      Self::PageTitle => style(27.0, FontWeight::Medium, TEXT),
+      Self::Detail => TextStyle {
+        line_height: 1.6,
+        ..style(11.0, FontWeight::Normal, MUTED)
+      },
+      Self::Footnote => style(10.0, FontWeight::Normal, MUTED),
+      Self::IconSmall => icon(12.0),
+      Self::IconButton => icon(15.0),
+      Self::IconNav => icon(17.0),
+      Self::IconFeature => icon(19.0),
+      Self::IconPanel => icon(24.0),
     }
   }
 }

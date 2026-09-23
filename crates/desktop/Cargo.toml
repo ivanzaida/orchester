@@ -36,9 +36,16 @@ lurq = { workspace = true, features = [
   "svg",
   "markdown",
   "clipboard",
+  "tokio",
 ] }
+orchester-store.workspace = true
+parking_lot.workspace = true
+rfd.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+tempfile.workspace = true
