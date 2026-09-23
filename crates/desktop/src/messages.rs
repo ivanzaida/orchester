@@ -57,7 +57,12 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }
     | StoreError::TaskNotFound(_)
-    | StoreError::EmptyBatch => Message::new("errors.storage"),
+    | StoreError::EmptyBatch
+    | StoreError::ResourceNotFound(_)
+    | StoreError::ResourceKindMismatch { .. }
+    | StoreError::DuplicateSlug { .. }
+    | StoreError::NoDraft(_)
+    | StoreError::Publish(_) => Message::new("errors.storage"),
   }
 }
 

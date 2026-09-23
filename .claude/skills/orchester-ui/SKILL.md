@@ -164,6 +164,12 @@ pattern list — changing the rules needs the user's approval.
 
 ## Verify
 
-Run `powershell -File tools/check.ps1`, the affected `tests/i18n.rs` / `tests/theme.rs`
-tests by name, and look at the screen in the running app (`cargo run -p orchester-desktop
---features mcp`, `lurq_screenshot`) next to the Pencil preview in `docs/design/previews/`.
+Run `powershell -File tools/check.ps1` and the affected `tests/i18n.rs` / `tests/theme.rs`
+tests by name. Then hand the screens you changed (with their Pencil node ids) to a
+**separate agent** that follows `.claude/skills/design-verification/SKILL.md`: it compares a
+Pencil screenshot of each design node with an app screenshot of the same state at 1440 × 960
+and reports every mismatch. Your own screenshots do not count. The work is done only when that
+verifier reports no blocking or major findings; fix and re-verify until it does.
+
+Before building a screen, take the Pencil screenshot of its node yourself and build against
+it, including what the frame does *not* contain (e.g. no native title bar, no outer border).

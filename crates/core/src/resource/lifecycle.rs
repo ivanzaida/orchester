@@ -30,7 +30,7 @@ pub enum SlugError {
 }
 
 /// Stable, URL-safe handle of a resource within its project, e.g. `feature-delivery`.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Slug(String);
 
 impl Slug {

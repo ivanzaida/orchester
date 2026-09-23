@@ -137,8 +137,24 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 | Pull request list row | `QHBNZ` |
 | Changed file | `j9NDM` |
 | Diff line | `vEZ42` |
+| Window title bar (Windows) | `QQmsI` |
+| Window title bar (macOS) | `V70DN` |
 
 Colors: canvas `#101010`, sidebar `#141414`, surface `#1A1A1A`, raised `#222222`, hover/selection `#2C2C2C`, border `#363636`, hairline `#2B2B2B`, text `#EEEEEE`, muted `#A3A3A3`, subtle `#8F8F8F`, primary action `#E6E6E6` with `#181818` text. Variables also hold fonts, spacing and 7/12px control/panel radii. Status always includes text and an icon.
+
+## Window chrome
+
+The application draws its own window chrome; the operating system's title bar and window border
+are not shown. A 32px title bar in `$canvas` sits above every 1440 × 960 screen frame, so the
+window is 1440 × 992. The empty part of the bar is the drag area (double-click maximizes).
+
+- Windows (`QQmsI`): minimize, maximize/restore and close on the right, 46 × 32 each, lucide
+  icons at 14px in `$muted`; hover fills the control with `$hover`.
+- macOS (`V70DN`): the three window buttons on the left, 12px, 8px apart, 12px from the edge,
+  in the platform's standard colors — the only non-grayscale colors in the application.
+
+Screens do not include the bar; design verification compares the screen below the bar with the
+screen frame and the bar with the platform component.
 
 ## Core workflow
 
