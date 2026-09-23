@@ -37,6 +37,31 @@ impl ProjectKey {
   pub fn as_str(&self) -> &str {
     &self.0
   }
+
+  /// A key derived from a project name, so the user does not have to invent one: the
+  /// initials of a multi-word name (`Personal website` → `PW`), otherwise the first three
+  /// characters (`Kontur` → `KON`). Only words starting with an ASCII letter count; a name
+  /// without any falls back to `PRJ`. The user can change the key later.
+  pub fn suggest(name: &Name) -> Self {
+    const FALLBACK: &str = "PRJ";
+    const SINGLE_WORD_CHARS: usize = 3;
+    const MAX_INITIALS: usize = 4;
+    let words: Vec<String> = name
+      .as_str()
+      .split(|c: char| !c.is_ascii_alphanumeric())
+      .map(|word| word.to_ascii_uppercase())
+      .filter(|word| word.starts_with(|c: char| c.is_ascii_alphabetic()))
+      .collect();
+    let candidate: String = match words.as_slice() {
+      [single] => single.chars().take(SINGLE_WORD_CHARS).collect(),
+      several => several
+        .iter()
+        .filter_map(|word| word.chars().next())
+        .take(MAX_INITIALS)
+        .collect(),
+    };
+    Self::new(&candidate).unwrap_or_else(|_| Self(FALLBACK.to_owned()))
+  }
 }
 
 /// Display key of a task (`ORC-129`). Tasks are referenced by `TaskId`; this is for people.

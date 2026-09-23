@@ -120,3 +120,48 @@ async fn closing_the_desktop_job_kills_the_runner() {
   .await
   .expect("runner lock released");
 }
+
+#[tokio::test]
+async fn the_desktop_refuses_a_pipe_served_by_another_process() {
+  let project = project();
+  let endpoint = orchester_ipc::Endpoint::for_project(project.path()).expect("endpoint");
+  let squatter = tokio::net::windows::named_pipe::ServerOptions::new()
+    .first_pipe_instance(true)
+    .create(endpoint.name())
+    .expect("squat on the pipe name");
+  let accepting = tokio::spawn(async move {
+    let _connected = squatter.connect().await;
+    squatter
+  });
+
+  let result = timeout(PATIENCE, RunnerClient::launch(Path::new(RUNNER), project.path()))
+    .await
+    .expect("launch returns in time");
+  assert!(
+    matches!(result, Err(LaunchError::ForeignPipeServer { found }) if found == std::process::id()),
+    "{:?}",
+    result.err()
+  );
+  drop(accepting);
+}
+
+#[tokio::test]
+async fn runner_logs_to_the_project_log_directory() {
+  let project = project();
+  let client = launch(project.path()).await;
+  let (commands, events, mut process) = client.into_parts();
+  drop((commands, events));
+  timeout(PATIENCE, process.wait())
+    .await
+    .expect("runner exits in time")
+    .expect("wait");
+
+  let logs: Vec<_> = fs::read_dir(project.path().join(".orchester/logs"))
+    .expect("log directory")
+    .map(|entry| entry.expect("log entry").path())
+    .collect();
+  assert_eq!(logs.len(), 1, "{logs:?}");
+  let name = logs[0].file_name().and_then(|name| name.to_str()).expect("utf-8 name");
+  assert!(name.starts_with("runner-") && name.ends_with(".log"), "{name}");
+  assert!(!fs::read_to_string(&logs[0]).expect("read log").is_empty());
+}

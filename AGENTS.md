@@ -50,26 +50,33 @@ Hard requirements:
    is correct.
 8. No speculative code: no trait with a single implementation unless it is a real boundary (storage, runner,
    provider, clock), no generic parameters or config knobs "for later", no dead code, no commented-out code.
-9. Domain types enforce their invariants through constructors; do not make fields public just to allow raw struct
+9. `unsafe` is denied workspace-wide. It is allowed only for FFI without a safe wrapper, in a dedicated module that
+   starts with `#![allow(unsafe_code)]`, explains why at the top, keeps each `unsafe` block minimal and precedes it
+   with a `// SAFETY:` comment stating the invariants (today: `crates/ipc/src/pipe_owner.rs`).
+10. Domain types enforce their invariants through constructors; do not make fields public just to allow raw struct
    literals from other modules.
-10. Secrets: a secret value never reaches logs, `Debug`/`Display` output, prompts, variables, copied text, errors,
+11. Secrets: a secret value never reaches logs, `Debug`/`Display` output, prompts, variables, copied text, errors,
     test snapshots or the MCP tree. Secret-holding types must redact in `Debug` and must not implement `Display`.
-11. Locks: `tokio::sync::{Mutex, RwLock}` when held across `.await`; `parking_lot::{Mutex, RwLock}` for short
+12. Locks: `tokio::sync::{Mutex, RwLock}` when held across `.await`; `parking_lot::{Mutex, RwLock}` for short
     synchronous critical sections. Never `std::sync::Mutex` in new code.
-12. Every user-facing string goes through i18n with a key in every shipped locale (exact key and placeholder
+13. Every user-facing string goes through i18n with a key in every shipped locale (exact key and placeholder
     parity), and every color, font, text size, spacing, radius and border comes from a lurq theme role. Design
     values live only in `crates/desktop/src/theme/`. Exempt from i18n: developer logs, identifiers, raw user data.
-13. Tests live in a `tests/` folder of the crate they cover, not in large inline modules. Every `cargo test` carries
+14. Tests live in a `tests/` folder of the crate they cover, not in large inline modules. Every `cargo test` carries
     a name filter (`cargo test -p <crate> --test <binary> <filter>`); batch edits and run the affected tests once per
     milestone. `cargo check` / `cargo clippy` are fine at any time.
-14. Every user-visible UI change is verified against the Pencil design by a separate agent that did not implement
+15. Every user-visible UI change is verified against the Pencil design by a separate agent that did not implement
     it, following `.claude/skills/design-verification/SKILL.md`: a Pencil screenshot of the design node and an
     app screenshot of the same state at the same size (via the embedded MCP server), compared region by region.
     The change is not done until that verifier reports no blocking or major mismatches. `cargo check`, unit tests
     and the implementer's own screenshots are not design verification. If a state cannot be reached, say so.
-15. Dependencies go into `[workspace.dependencies]` and are pulled with `workspace = true`. Do not add a crate for
+16. Never send input to the desktop globally (`SendKeys`, global mouse/keyboard injection) and never capture the
+    whole screen: other windows belong to the user. Drive the app through its embedded MCP server
+    (`lurq_interact`, `lurq_set_value`, `lurq_screenshot`); a native dialog of your own process may be driven only
+    by targeting that dialog window explicitly. Stop and report if that is not possible.
+17. Dependencies go into `[workspace.dependencies]` and are pulled with `workspace = true`. Do not add a crate for
     something a few lines of code can do; state why a new dependency is needed.
-16. Before reporting work as done, run `powershell -File tools/check.ps1` and report its result. Report which tests
+18. Before reporting work as done, run `powershell -File tools/check.ps1` and report its result. Report which tests
     you ran and state plainly what you did not run.
 
 Scratch files:

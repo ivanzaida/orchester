@@ -7,6 +7,7 @@
 #![cfg(windows)]
 
 pub mod lock;
+pub mod log_file;
 pub mod server;
 pub mod supervisor;
 pub mod worktree;
