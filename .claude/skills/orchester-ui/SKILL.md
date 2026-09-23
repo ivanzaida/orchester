@@ -72,7 +72,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
   read via the `pencil` MCP `get_variables`, or node properties via `batch_get`). Private to
   the theme module.
 - `palette.rs`, `typography.rs`, `metrics.rs`, `form.rs` — fill lurq's roles from tokens.
-- `theme::ExtraColor` — design colors without a built-in lurq role.
+- `theme::ExtraColor`, `theme::ExtraTypography` — design values without a built-in lurq role,
+  registered as lurq `Extra` roles. Call sites use these enums, never raw extra names.
 - `tests/theme.rs` — asserts roles resolve to the Pencil values; update it when a mapping
   changes.
 
@@ -107,6 +108,10 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `Button` | 12/500 | button labels |
 | `Link` | 11/500 | inline actions ("Answer question →") |
 | `Mono` | 10 | revisions, shortcuts, counts (Geist Mono not bundled yet) |
+| `ExtraTypography::SectionHeading.role()` | 15/500 | content section heading ("What changed") |
+| `ExtraTypography::CardTitle.role()` | 14/500 | card and panel titles ("Needs you") |
+| `ExtraTypography::Overline.role()` | 9/600 subtle | uppercase category label ("REVIEW PULL REQUEST") |
+| `ExtraTypography::Metric.role()` | mono 23 | large metric figure |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.
@@ -134,13 +139,13 @@ number matches.
 
 1. Check whether the value is a Pencil variable (`get_variables`) or a one-off on a node.
 2. Add it to `tokens.rs` with the Pencil node id in a comment, and map it: a color becomes
-   an `ExtraColor` variant; anything else goes through the matching lurq role or extra.
+   an `ExtraColor` variant, a text style an `ExtraTypography` variant. lurq (0.21+) also has
+   `Extra` roles for `RadiusSize`, `SpacingSize` and `BorderSize`; add an app enum the same
+   way when the first such value is needed. Weights take any CSS value (`FontWeight::SemiBold`,
+   `FontWeight::Numeric(n)`) and `TextStyle::letter_spacing` is available.
 3. Update the mapping tables above and `tests/theme.rs` in the same change.
-4. If lurq cannot express it (font weight, letter spacing, a typography/radius/spacing/border
-   role beyond the built-in set), stop and report it. lurq support for `Extra` typography,
-   radius, spacing and border roles, arbitrary font weights and letter spacing is being
-   added on the lurq branch `claude/theme-roles`; once Orchester depends on it, extend
-   this skill instead of working around the gap.
+4. If lurq still cannot express it, stop and report it instead of working around the gap;
+   lurq is maintained alongside Orchester and gets the missing capability.
 5. Values the audit (`docs/evidence/design-consistency-audit-2026-09-23.md`) or the
    design shows inconsistently (e.g. status label radius 5 vs nav item 6): use the role,
    and mention the inconsistency in the report rather than adding a near-duplicate token.

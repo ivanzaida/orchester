@@ -10,6 +10,7 @@ pub fn radii() -> ThemeRadii {
     sm: RADIUS_ITEM,
     md: RADIUS_CONTROL,
     lg: RADIUS_PANEL,
+    ..ThemeRadii::default()
   }
 }
 

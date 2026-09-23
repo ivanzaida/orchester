@@ -11,6 +11,7 @@ mod typography;
 
 use lurq::app::App;
 pub use palette::ExtraColor;
+pub use typography::ExtraTypography;
 
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),

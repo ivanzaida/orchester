@@ -3,9 +3,10 @@ use lurq::{
     App,
     theme::{PaletteColor, RadiusSize, TypographyStyle},
   },
+  layout::text_style::FontWeight,
   node::color::Color,
 };
-use orchester_desktop::theme::{self, ExtraColor};
+use orchester_desktop::theme::{self, ExtraColor, ExtraTypography};
 
 fn themed_app() -> App {
   let mut app = App::new();
@@ -44,4 +45,22 @@ fn typography_and_radii_follow_pencil() {
   assert_eq!(&*heading.font_family, "Inter");
   assert_eq!(theme.radius_value(RadiusSize::Md), 7.0);
   assert_eq!(theme.radius_value(RadiusSize::Lg), 12.0);
+}
+
+#[test]
+fn extra_typography_follows_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  let overline = theme.typography_style(ExtraTypography::Overline.role());
+  assert_eq!(overline.font_size, 9.0);
+  assert_eq!(overline.weight, FontWeight::SemiBold);
+  assert_eq!(
+    theme.typography_style(ExtraTypography::SectionHeading.role()).font_size,
+    15.0
+  );
+  assert_eq!(
+    theme.typography_style(ExtraTypography::CardTitle.role()).font_size,
+    14.0
+  );
+  assert_eq!(theme.typography_style(ExtraTypography::Metric.role()).font_size, 23.0);
 }

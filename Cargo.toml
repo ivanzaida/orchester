@@ -27,7 +27,7 @@ redundant_clone = "warn"
 
 [workspace.dependencies]
 orchester-core = { path = "crates/core" }
-lurq = { version = "0.20.0", default-features = false }
+lurq = { version = "0.21.0", default-features = false }
 serde_json = "1"
 thiserror = "2"
 tracing = "0.1"
