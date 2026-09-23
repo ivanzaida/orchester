@@ -67,9 +67,13 @@ Hard requirements:
     app screenshot of the same state at the same size (via the embedded MCP server), compared region by region.
     The change is not done until that verifier reports no blocking or major mismatches. `cargo check`, unit tests
     and the implementer's own screenshots are not design verification. If a state cannot be reached, say so.
-15. Dependencies go into `[workspace.dependencies]` and are pulled with `workspace = true`. Do not add a crate for
+15. Never send input to the desktop globally (`SendKeys`, global mouse/keyboard injection) and never capture the
+    whole screen: other windows belong to the user. Drive the app through its embedded MCP server
+    (`lurq_interact`, `lurq_set_value`, `lurq_screenshot`); a native dialog of your own process may be driven only
+    by targeting that dialog window explicitly. Stop and report if that is not possible.
+16. Dependencies go into `[workspace.dependencies]` and are pulled with `workspace = true`. Do not add a crate for
     something a few lines of code can do; state why a new dependency is needed.
-16. Before reporting work as done, run `powershell -File tools/check.ps1` and report its result. Report which tests
+17. Before reporting work as done, run `powershell -File tools/check.ps1` and report its result. Report which tests
     you ran and state plainly what you did not run.
 
 Scratch files:
