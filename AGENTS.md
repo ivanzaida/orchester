@@ -62,9 +62,11 @@ Hard requirements:
 13. Tests live in a `tests/` folder of the crate they cover, not in large inline modules. Every `cargo test` carries
     a name filter (`cargo test -p <crate> --test <binary> <filter>`); batch edits and run the affected tests once per
     milestone. `cargo check` / `cargo clippy` are fine at any time.
-14. Every user-visible UI change is verified in the running app: `cargo run --features mcp`, drive it through the
-    embedded MCP server (`lurq_read_tree`, `lurq_interact`, `lurq_screenshot`) and look at the screenshots.
-    `cargo check` and unit tests are not UI verification. If a state cannot be reached, say so explicitly.
+14. Every user-visible UI change is verified against the Pencil design by a separate agent that did not implement
+    it, following `.claude/skills/design-verification/SKILL.md`: a Pencil screenshot of the design node and an
+    app screenshot of the same state at the same size (via the embedded MCP server), compared region by region.
+    The change is not done until that verifier reports no blocking or major mismatches. `cargo check`, unit tests
+    and the implementer's own screenshots are not design verification. If a state cannot be reached, say so.
 15. Dependencies go into `[workspace.dependencies]` and are pulled with `workspace = true`. Do not add a crate for
     something a few lines of code can do; state why a new dependency is needed.
 16. Before reporting work as done, run `powershell -File tools/check.ps1` and report its result. Report which tests
