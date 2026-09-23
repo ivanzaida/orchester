@@ -34,3 +34,26 @@ pub const BUTTON_HEIGHT: f32 = 36.0;
 pub const CONTROL_PADDING_X: f32 = 12.0;
 /// Focused field stroke (`o8Oug`).
 pub const FOCUS_STROKE: f32 = 1.5;
+/// Lucide icon font, the icon library of every Pencil icon node.
+pub const ICON_FONT: &str = "lucide";
+
+/// Corner radius of inline notices and the runner status card (`q5LzI`, `O2Jjjf`).
+pub const RADIUS_NOTICE: f32 = 8.0;
+/// Corner radius of the bars in the Orchester mark (`DIMZ6`).
+pub const RADIUS_MARK: f32 = 2.0;
+
+/// Gaps and paddings used by the Getting started screens, the sidebar and the overview.
+/// Pencil node ids are listed on the `ExtraSpacing` variants that use them.
+pub const SPACE_MARK: f32 = 3.0;
+pub const SPACE_INLINE: f32 = 10.0;
+pub const SPACE_STACK: f32 = 12.0;
+pub const SPACE_GROUP: f32 = 14.0;
+pub const SPACE_STEP: f32 = 20.0;
+pub const SPACE_RAIL: f32 = 28.0;
+pub const SPACE_SECTION: f32 = 32.0;
+pub const SPACE_INDENT: f32 = 40.0;
+pub const SPACE_PAGE: f32 = 48.0;
+pub const SPACE_HERO: f32 = 64.0;
+pub const SPACE_FOOTER: f32 = 72.0;
+pub const SPACE_COLUMNS: f32 = 112.0;
+pub const SPACE_MARGIN: f32 = 120.0;

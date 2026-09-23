@@ -1,12 +1,12 @@
 use lurq::{
   app::{
     App,
-    theme::{PaletteColor, RadiusSize, TypographyStyle},
+    theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   layout::text_style::FontWeight,
-  node::color::Color,
+  node::{color::Color, dimension::Dimension},
 };
-use orchester_desktop::theme::{self, ExtraColor, ExtraTypography};
+use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography};
 
 fn themed_app() -> App {
   let mut app = App::new();
@@ -63,4 +63,24 @@ fn extra_typography_follows_pencil() {
     14.0
   );
   assert_eq!(theme.typography_style(ExtraTypography::Metric.role()).font_size, 23.0);
+}
+
+#[test]
+fn getting_started_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  let display = theme.typography_style(ExtraTypography::Display.role());
+  assert_eq!(display.font_size, 44.0);
+  assert_eq!(display.letter_spacing, -1.2);
+  assert_eq!(
+    theme.typography_style(ExtraTypography::Eyebrow.role()).letter_spacing,
+    1.6
+  );
+  assert_eq!(
+    &*theme.typography_style(ExtraTypography::IconNav.role()).font_family,
+    "lucide"
+  );
+  assert_eq!(theme.spacing_value(ExtraSpacing::Columns.role()), Dimension::Px(112.0));
+  assert_eq!(theme.spacing_value(SpacingSize::Section), Dimension::Px(32.0));
+  assert_eq!(theme.radius_value(ExtraRadius::Notice.role()), 8.0);
 }

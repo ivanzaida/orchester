@@ -10,6 +10,7 @@ mod tokens;
 mod typography;
 
 use lurq::app::App;
+pub use metrics::{ExtraRadius, ExtraSpacing};
 pub use palette::ExtraColor;
 pub use typography::ExtraTypography;
 
@@ -18,6 +19,8 @@ const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Medium.ttf"),
   include_bytes!("../../assets/fonts/Inter-SemiBold.ttf"),
   include_bytes!("../../assets/fonts/Inter-Bold.ttf"),
+  // Lucide icons (ISC license), the same font lurq bundles for its DevTools.
+  include_bytes!("../../assets/fonts/lucide.ttf"),
 ];
 
 pub fn install(app: &mut App) {
