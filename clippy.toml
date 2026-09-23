@@ -1,0 +1,6 @@
+# Limits enforced by `tools/check.ps1` (warnings are denied there). See AGENTS.md.
+too-many-lines-threshold = 80
+cognitive-complexity-threshold = 25
+too-many-arguments-threshold = 6
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

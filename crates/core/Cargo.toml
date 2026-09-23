@@ -1,0 +1,12 @@
+[package]
+name = "orchester-core"
+description = "Orchester domain model, independent of UI and transport."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

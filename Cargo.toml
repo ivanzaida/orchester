@@ -1,0 +1,68 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/desktop"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+too_many_lines = "warn"
+cognitive_complexity = "warn"
+large_enum_variant = "warn"
+needless_pass_by_value = "warn"
+redundant_clone = "warn"
+
+[workspace.dependencies]
+orchester-core = { path = "crates/core" }
+lurq = { version = "0.20.0", default-features = false }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# lurq's text shaping at opt-level 0 makes text-heavy screens crawl in dev builds.
+# These overrides must live in the consuming workspace; lurq's own do not apply here.
+[profile.dev.package.cosmic-text]
+opt-level = 2
+
+[profile.dev.package.swash]
+opt-level = 2
+
+[profile.dev.package.rustybuzz]
+opt-level = 2
+
+[profile.dev.package.ttf-parser]
+opt-level = 2
+
+[profile.dev.package.fontdb]
+opt-level = 2
+
+[profile.dev.package.unicode-bidi]
+opt-level = 2
+
+[profile.dev.package.unicode-linebreak]
+opt-level = 2
+
+[profile.dev.package.unicode-script]
+opt-level = 2
+
+[profile.dev.package.skrifa]
+opt-level = 2
+
+[profile.dev.package.read-fonts]
+opt-level = 2
+
+[profile.dev.package.font-types]
+opt-level = 2
