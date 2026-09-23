@@ -22,6 +22,7 @@ const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Medium.ttf"),
   include_bytes!("../../assets/fonts/Inter-SemiBold.ttf"),
   include_bytes!("../../assets/fonts/Inter-Bold.ttf"),
+  include_bytes!("../../assets/fonts/GeistMono-Regular.ttf"),
   // Lucide icons (ISC license), the same font lurq bundles for its DevTools.
   include_bytes!("../../assets/fonts/lucide.ttf"),
 ];
