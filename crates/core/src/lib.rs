@@ -8,5 +8,6 @@ pub mod money;
 pub mod name;
 pub mod project;
 pub mod resource;
+pub mod store;
 pub mod task;
 pub mod time;

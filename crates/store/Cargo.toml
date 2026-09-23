@@ -1,0 +1,19 @@
+[package]
+name = "orchester-store"
+description = "Local SQLite persistence for Orchester: the project store in <repo>/.orchester and the application database."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+orchester-core.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+rusqlite.workspace = true

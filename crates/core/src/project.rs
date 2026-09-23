@@ -2,6 +2,8 @@ use std::{fmt, num::NonZeroU32};
 
 use thiserror::Error;
 
+use crate::{id::ProjectId, name::Name};
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ProjectKeyError {
   #[error(
@@ -61,5 +63,31 @@ impl TaskKey {
 impl fmt::Display for TaskKey {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "{}-{}", self.project.as_str(), self.number)
+  }
+}
+
+/// A repository managed by Orchester. Everything operational belongs to exactly one project.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Project {
+  id: ProjectId,
+  key: ProjectKey,
+  name: Name,
+}
+
+impl Project {
+  pub const fn new(id: ProjectId, key: ProjectKey, name: Name) -> Self {
+    Self { id, key, name }
+  }
+
+  pub const fn id(&self) -> ProjectId {
+    self.id
+  }
+
+  pub const fn key(&self) -> &ProjectKey {
+    &self.key
+  }
+
+  pub const fn name(&self) -> &Name {
+    &self.name
   }
 }
