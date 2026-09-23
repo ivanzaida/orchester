@@ -19,6 +19,8 @@ mod client;
 #[cfg(windows)]
 mod job;
 #[cfg(windows)]
+mod pipe_owner;
+#[cfg(windows)]
 mod transport;
 
 #[cfg(windows)]

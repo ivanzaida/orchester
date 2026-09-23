@@ -120,3 +120,27 @@ async fn closing_the_desktop_job_kills_the_runner() {
   .await
   .expect("runner lock released");
 }
+
+#[tokio::test]
+async fn the_desktop_refuses_a_pipe_served_by_another_process() {
+  let project = project();
+  let endpoint = orchester_ipc::Endpoint::for_project(project.path()).expect("endpoint");
+  let squatter = tokio::net::windows::named_pipe::ServerOptions::new()
+    .first_pipe_instance(true)
+    .create(endpoint.name())
+    .expect("squat on the pipe name");
+  let accepting = tokio::spawn(async move {
+    let _connected = squatter.connect().await;
+    squatter
+  });
+
+  let result = timeout(PATIENCE, RunnerClient::launch(Path::new(RUNNER), project.path()))
+    .await
+    .expect("launch returns in time");
+  assert!(
+    matches!(result, Err(LaunchError::ForeignPipeServer { found }) if found == std::process::id()),
+    "{:?}",
+    result.err()
+  );
+  drop(accepting);
+}

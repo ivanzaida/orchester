@@ -9,7 +9,8 @@ license = "MIT"
 publish = false
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# `unsafe` only in FFI modules that `#![allow(unsafe_code)]` with `// SAFETY:` comments (AGENTS.md).
+unsafe_code = "deny"
 unused_must_use = "deny"
 
 [workspace.lints.clippy]
@@ -39,6 +40,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 win32job = "2"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes"] }
 
 # lurq's text shaping at opt-level 0 makes text-heavy screens crawl in dev builds.
 # These overrides must live in the consuming workspace; lurq's own do not apply here.

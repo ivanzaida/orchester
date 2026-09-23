@@ -18,7 +18,7 @@ use tokio::{
 use crate::{
   ClientStream, Command, Endpoint, Event, IpcError, KillOnCloseJob,
   frame::{FrameReader, FrameWriter},
-  handshake,
+  handshake, pipe_owner,
 };
 
 /// How long a freshly started runner may take to open its pipe.
@@ -43,6 +43,9 @@ pub enum LaunchError {
   ConnectTimeout(Duration),
   #[error("cannot connect to the runner: {0}")]
   Connect(io::Error),
+  /// The pipe is served by a process other than the runner that was started.
+  #[error("the runner pipe is served by process {found}, not by the runner that was started")]
+  ForeignPipeServer { found: u32 },
   #[error(transparent)]
   Ipc(#[from] IpcError),
 }
@@ -176,7 +179,13 @@ async fn connect(
   let deadline = Instant::now() + CONNECT_TIMEOUT;
   loop {
     match endpoint.connect() {
-      Ok(stream) => return Ok((stream, process)),
+      Ok(stream) => {
+        let found = pipe_owner::server_process_id(&stream).map_err(LaunchError::Connect)?;
+        if process.id() != Some(found) {
+          return Err(LaunchError::ForeignPipeServer { found });
+        }
+        return Ok((stream, process));
+      }
       Err(error) if error.kind() == io::ErrorKind::NotFound || error.raw_os_error() == Some(ERROR_PIPE_BUSY) => {}
       Err(error) => return Err(LaunchError::Connect(error)),
     }
