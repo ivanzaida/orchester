@@ -48,3 +48,19 @@ fn currency_requires_three_uppercase_letters() {
   assert_eq!(Currency::new("usd"), Err(MoneyError::InvalidCurrency("usd".into())));
   assert!(Currency::new("US").is_err());
 }
+
+#[test]
+fn project_key_is_suggested_from_the_name() {
+  let suggest = |name: &str| {
+    ProjectKey::suggest(&Name::new(name).expect("valid name"))
+      .as_str()
+      .to_owned()
+  };
+  assert_eq!(suggest("Kontur"), "KON");
+  assert_eq!(suggest("orchester"), "ORC");
+  assert_eq!(suggest("Personal website"), "PW");
+  assert_eq!(suggest("my-cool api v2"), "MCAV");
+  assert_eq!(suggest("2048 game"), "GAM");
+  assert_eq!(suggest("Контур"), "PRJ");
+  assert_eq!(suggest("A"), "PRJ");
+}
