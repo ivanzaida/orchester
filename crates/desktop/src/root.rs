@@ -1,6 +1,12 @@
 use lurq::{
-  app::{component::Component, ctx::Ctx, theme::TypographyStyle},
-  components::{Column, Text},
+  app::{
+    component::Component,
+    ctx::Ctx,
+    theme::{PaletteColor, TypographyStyle},
+  },
+  components::{
+    ChromeBorderPolicy, ChromeTitleBar, Column, Text, WindowChrome, WindowChromeMode, WindowChromeProps, WindowControls,
+  },
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
@@ -11,7 +17,7 @@ use crate::{
   messages::{self, Message},
   navigation::{Navigation, Screen},
   screens::{project::ProjectShell, setup::ProjectSetup, unavailable, welcome::Welcome},
-  theme::ExtraColor,
+  theme::{ExtraColor, TITLE_BAR_HEIGHT},
   ui::{icon::Icon, message_text, panel::RecoveryPanel},
   workspace::Workspace,
 };
@@ -49,11 +55,12 @@ impl Component for Root {
       Startup::Failed { message, path } => startup_failed(ctx, &message, path.as_deref()),
       Startup::Ready(workspace) => self.workspace(ctx, workspace),
     };
-    Column::new()
+    let screen = Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .background(ExtraColor::Surface.role())
-      .child(content)
+      .child(content);
+    window_chrome(ctx, screen.into())
   }
 }
 
@@ -86,6 +93,27 @@ impl Root {
       }) => unavailable::render(ctx, &navigation, &name, &repo_root, &reason),
     }
   }
+}
+
+/// Custom chrome (`QQmsI` on Windows, `V70DN` on macOS): no native title bar or border, a
+/// canvas-colored bar whose empty part drags the window and maximizes on double-click.
+/// The window controls are lurq's `WindowControls`; see the report on their styling gap.
+fn window_chrome(ctx: &mut Ctx, screen: Element) -> Element {
+  WindowChrome::new()
+    .props(
+      WindowChromeProps::new()
+        .mode(WindowChromeMode::CustomDesktop)
+        .border(ChromeBorderPolicy::Hidden)
+        .windows_height(TITLE_BAR_HEIGHT)
+        .macos_height(TITLE_BAR_HEIGHT),
+    )
+    .title_bar(
+      ChromeTitleBar::new()
+        .background(PaletteColor::SurfaceBase)
+        .controls(WindowControls::new()),
+    )
+    .content(screen)
+    .mount(ctx)
 }
 
 /// The application database could not be opened or read. There is no recovery design yet, so

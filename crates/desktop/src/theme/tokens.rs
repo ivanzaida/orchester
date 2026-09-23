@@ -57,3 +57,6 @@ pub const SPACE_HERO: f32 = 64.0;
 pub const SPACE_FOOTER: f32 = 72.0;
 pub const SPACE_COLUMNS: f32 = 112.0;
 pub const SPACE_MARGIN: f32 = 120.0;
+
+/// Custom window title bar height (`QQmsI`, `V70DN`).
+pub const TITLE_BAR_HEIGHT: f32 = 32.0;

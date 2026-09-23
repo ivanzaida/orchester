@@ -3,7 +3,7 @@ use orchester_desktop::{
   i18n,
   root::{self, Startup},
   session::AppSession,
-  theme::{self, ExtraColor},
+  theme,
 };
 use tracing_subscriber::EnvFilter;
 
@@ -49,12 +49,12 @@ fn main() {
   };
 
   let title = app.i18n().t("app.name");
-  let title_bar = app.theme().palette_color(ExtraColor::Surface.role());
   WinitWindow::new(app, tree)
     .with_title(&title)
-    .with_size(1440, 960)
-    .with_min_size(960, 640)
-    .with_title_bar_color(title_bar)
+    // A 1440x960 screen below the 32px custom title bar; the chrome draws the bar itself.
+    .with_size(1440, 992)
+    .with_min_size(960, 672)
+    .with_decorations(false)
     .run();
 
   // `run` returns once the window has closed normally.

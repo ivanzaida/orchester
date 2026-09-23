@@ -14,6 +14,9 @@ pub use metrics::{ExtraRadius, ExtraSpacing};
 pub use palette::ExtraColor;
 pub use typography::ExtraTypography;
 
+/// Height of the custom title bar drawn above every screen (`QQmsI`, `V70DN`).
+pub const TITLE_BAR_HEIGHT: f32 = tokens::TITLE_BAR_HEIGHT;
+
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),
   include_bytes!("../../assets/fonts/Inter-Medium.ttf"),
