@@ -17,9 +17,10 @@ use crate::{
   workspace::OpenProject,
 };
 
-/// Sidebar width, project selector and avatar sizes, runner indicator size (`zo9Py`, `ZcJDx`,
-/// `I01Ke`, `fK4mR`).
+/// Sidebar width, current project block, project selector and avatar sizes, runner indicator
+/// size (`zo9Py`, `RaOff`, `ZcJDx`, `I01Ke`, `fK4mR`).
 const SIDEBAR_WIDTH: f32 = 216.0;
+const CURRENT_PROJECT_HEIGHT: f32 = 70.0;
 const SELECTOR_HEIGHT: f32 = 42.0;
 const AVATAR_SIZE: f32 = 24.0;
 const INDICATOR_SIZE: f32 = 5.0;
@@ -61,9 +62,9 @@ fn project_selector(open: &OpenProject) -> Element {
     .child(Text::new(&initial).variant(TypographyStyle::Button));
   Column::new()
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(CURRENT_PROJECT_HEIGHT))
     .padding_top(SpacingSize::Sm)
     .padding_horizontal(SpacingSize::Md)
-    .padding_bottom(SpacingSize::Md)
     .child(
       Row::new()
         .id("project-selector")
