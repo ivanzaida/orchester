@@ -144,3 +144,24 @@ async fn the_desktop_refuses_a_pipe_served_by_another_process() {
   );
   drop(accepting);
 }
+
+#[tokio::test]
+async fn runner_logs_to_the_project_log_directory() {
+  let project = project();
+  let client = launch(project.path()).await;
+  let (commands, events, mut process) = client.into_parts();
+  drop((commands, events));
+  timeout(PATIENCE, process.wait())
+    .await
+    .expect("runner exits in time")
+    .expect("wait");
+
+  let logs: Vec<_> = fs::read_dir(project.path().join(".orchester/logs"))
+    .expect("log directory")
+    .map(|entry| entry.expect("log entry").path())
+    .collect();
+  assert_eq!(logs.len(), 1, "{logs:?}");
+  let name = logs[0].file_name().and_then(|name| name.to_str()).expect("utf-8 name");
+  assert!(name.starts_with("runner-") && name.ends_with(".log"), "{name}");
+  assert!(!fs::read_to_string(&logs[0]).expect("read log").is_empty());
+}

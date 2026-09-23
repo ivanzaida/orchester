@@ -1,14 +1,14 @@
 //! `orchester-runner <project-root>`: started by the desktop, one per project.
 
-use std::{io, path::PathBuf, process::ExitCode};
+use std::{io, path::PathBuf, process::ExitCode, sync::Arc};
 
 use orchester_ipc::IpcError;
 use orchester_runner::{
   lock::{LockError, RunnerLock},
-  server,
+  log_file, server,
 };
 use thiserror::Error;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Debug, Error)]
 enum RunnerError {
@@ -23,13 +23,32 @@ enum RunnerError {
 }
 
 fn main() -> ExitCode {
+  let project_root = project_root_argument();
+  let (log_file, log_error) = match project_root.as_ref().map(|root| log_file::open(root)) {
+    Ok(Ok((_, file))) => (Some(file), None),
+    Ok(Err(error)) => (None, Some(error)),
+    Err(_) => (None, None),
+  };
   // The desktop reads stderr: it logs each line and reports it when the runner fails to start.
-  tracing_subscriber::fmt()
-    .with_writer(io::stderr)
-    .with_ansi(false)
-    .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+  // The same events also go to the project's runner log, when the project has one.
+  let file_layer = log_file.map(|file| {
+    tracing_subscriber::fmt::layer()
+      .with_ansi(false)
+      .with_writer(Arc::new(file))
+  });
+  tracing_subscriber::registry()
+    .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+    .with(
+      tracing_subscriber::fmt::layer()
+        .with_ansi(false)
+        .with_writer(io::stderr),
+    )
+    .with(file_layer)
     .init();
-  match run() {
+  if let Some(error) = log_error {
+    tracing::warn!("runner log file unavailable, logging to stderr only: {error}");
+  }
+  match run(project_root) {
     Ok(()) => ExitCode::SUCCESS,
     Err(error) => {
       tracing::error!("{error}");
@@ -38,8 +57,8 @@ fn main() -> ExitCode {
   }
 }
 
-fn run() -> Result<(), RunnerError> {
-  let project_root = project_root_argument()?;
+fn run(project_root: Result<PathBuf, RunnerError>) -> Result<(), RunnerError> {
+  let project_root = project_root?;
   let _lock = RunnerLock::acquire(&project_root)?;
   let runtime = tokio::runtime::Builder::new_current_thread()
     .enable_all()

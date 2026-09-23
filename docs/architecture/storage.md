@@ -74,6 +74,7 @@ dialog (`on_close_requested` / `CloseRequest`), which is what the wait path need
   orchester.db                 project database
   blobs/<aa>/<sha256>          zstd-compressed content
   worktrees/<run-id>/          agent git worktrees
+  logs/runner-<YYYY-MM-DD>.log runner process log (UTC date), kept in full
   runner.lock                  one runner per project
 ```
 
