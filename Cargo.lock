@@ -2417,6 +2417,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "orchester-runner"
+version = "0.1.0"
+dependencies = [
+ "orchester-core",
+ "orchester-ipc",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "orchester-store"
 version = "0.1.0"
 dependencies = [

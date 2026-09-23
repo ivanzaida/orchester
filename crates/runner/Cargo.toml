@@ -1,0 +1,26 @@
+[package]
+name = "orchester-runner"
+description = "Orchester runner process: serves one project's IPC pipe, supervises agent processes and manages run worktrees."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "orchester-runner"
+path = "src/main.rs"
+
+[dependencies]
+orchester-core.workspace = true
+orchester-ipc.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true
