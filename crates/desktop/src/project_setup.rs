@@ -8,6 +8,7 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
 };
+use orchester_store::StoreError;
 
 use crate::messages::{self, Message};
 
@@ -45,5 +46,52 @@ impl ProjectDraft<'_> {
         repository_missing: repository.is_none(),
       }),
     }
+  }
+}
+
+/// Where a creation error is shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ErrorPlace {
+  /// Under the repository folder field: the folder itself is the problem.
+  Repository,
+  /// Beside Create: nothing the user entered is at fault.
+  Form,
+}
+
+/// Creating the project failed. It stays relevant only while the name and folder it was
+/// raised for are unchanged.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateFailure {
+  pub message: Message,
+  pub place: ErrorPlace,
+  name: String,
+  repo_root: PathBuf,
+}
+
+impl lurq::app::component::DevtoolsInspectable for CreateFailure {}
+
+impl CreateFailure {
+  pub fn from_store(new: &NewProject, error: &StoreError) -> Self {
+    let place = match error {
+      StoreError::NotAGitRepository(_) | StoreError::AlreadyInitialized(_) | StoreError::Unrepresentable(_) => {
+        ErrorPlace::Repository
+      }
+      _ => ErrorPlace::Form,
+    };
+    Self::new(new, messages::store_error(error), place)
+  }
+
+  pub fn new(new: &NewProject, message: Message, place: ErrorPlace) -> Self {
+    Self {
+      message,
+      place,
+      name: new.project.name().as_str().to_owned(),
+      repo_root: new.repo_root.clone(),
+    }
+  }
+
+  /// Whether the failure still describes `draft`; editing the name or folder retires it.
+  pub fn applies_to(&self, draft: &ProjectDraft<'_>) -> bool {
+    draft.name.trim() == self.name && draft.repository == Some(self.repo_root.as_path())
   }
 }

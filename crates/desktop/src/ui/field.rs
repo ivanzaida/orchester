@@ -80,6 +80,8 @@ pub enum ValueTone {
   Value,
   /// Nothing chosen yet.
   Placeholder,
+  /// A value with an error shown under the field; drawn with a stronger border.
+  Invalid,
   /// The control depends on something this version cannot do; drawn like a disabled field.
   Unavailable,
 }
@@ -97,6 +99,7 @@ pub fn value_box(
   let (background, color) = match tone {
     ValueTone::Value => (input.background, PaletteColor::TextPrimary),
     ValueTone::Placeholder => (input.background, PaletteColor::TextSecondary),
+    ValueTone::Invalid => (input.background, PaletteColor::TextPrimary),
     ValueTone::Unavailable => (PaletteColor::SurfacePanel, PaletteColor::TextMuted),
   };
   let row = Row::new()
@@ -107,7 +110,14 @@ pub fn value_box(
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .background(background)
-    .border(Border::inside(BorderSize::Sm, input.border.clone()))
+    .border(Border::inside(
+      BorderSize::Sm,
+      if tone == ValueTone::Invalid {
+        PaletteColor::BorderStrong
+      } else {
+        input.border.clone()
+      },
+    ))
     .rounded(input.radius)
     .child(
       Text::new(text)

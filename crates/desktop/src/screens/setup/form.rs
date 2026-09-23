@@ -6,7 +6,7 @@ use std::{path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::Component,
-    ctx::{Ctx, FutureAction, FutureState},
+    ctx::{Ctx, FutureAction},
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
@@ -18,9 +18,9 @@ use lurq::{
 use super::page::{heading, ownership, topbar};
 use crate::{
   background, display,
-  messages::{self, Message},
+  messages::Message,
   navigation::{Navigation, Screen},
-  project_setup::{NewProject, ProjectDraft},
+  project_setup::{CreateFailure, ErrorPlace, NewProject, ProjectDraft},
   theme::ExtraSpacing,
   ui::{
     button::ActionButton,
@@ -46,7 +46,7 @@ impl lurq::app::component::DevtoolsInspectable for Folder {}
 /// The dialog title and the folder chosen so far, kept when the dialog is cancelled.
 type PickArgs = (Arc<str>, Option<Folder>);
 type PickAction = FutureAction<PickArgs, Option<Folder>, Message>;
-type CreateAction = FutureAction<NewProject, OpenProject, Message>;
+type CreateAction = FutureAction<NewProject, OpenProject, CreateFailure>;
 
 pub struct ProjectForm {
   name: Signal<String>,
@@ -78,11 +78,23 @@ impl Component for ProjectForm {
     let create_state = create.state().get();
     let raw_name = self.name.get();
     let name = raw_name.trim();
-    let draft = ProjectDraft {
+    let input = ProjectDraft {
       name: &raw_name,
       repository: repository.as_ref().map(|folder| folder.0.as_path()),
-    }
-    .validate();
+    };
+    let draft = input.validate();
+    // A creation error stays only while the name and folder it was raised for are unchanged.
+    let failure = create_state
+      .error
+      .as_ref()
+      .filter(|failure| !create_state.is_pending() && failure.applies_to(&input));
+    let failure_at = |place: ErrorPlace| {
+      failure
+        .filter(|failure| failure.place == place)
+        .map(|failure| message_text(ctx, &failure.message))
+    };
+    let folder_error = failure_at(ErrorPlace::Repository);
+    let form_error = failure_at(ErrorPlace::Form);
     // A blank name only keeps Create disabled; a name the rules reject says why.
     let name_error = draft
       .as_ref()
@@ -106,7 +118,7 @@ impl Component for ProjectForm {
         &ctx.t("setup.project.githubUnavailable"),
         &ctx.t("setup.project.githubUnavailableDetail"),
       ))
-      .child(repository_row(ctx, &pick, repository.as_ref()))
+      .child(repository_row(ctx, &pick, repository.as_ref(), folder_error))
       .child(
         ActionButton::new(ctx.t("setup.project.changeGithub"))
           .icon(Icon::ExternalLink)
@@ -119,7 +131,7 @@ impl Component for ProjectForm {
       .width(Dimension::Pct(100.0))
       .padding_horizontal(ExtraSpacing::Page.role())
       .padding_bottom(SpacingSize::Section)
-      .child(actions(ctx, &create, &create_state, draft.ok()));
+      .child(actions(ctx, &create, create_state.is_pending(), form_error, draft.ok()));
     Column::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
@@ -145,12 +157,12 @@ impl ProjectForm {
 fn actions(
   ctx: &Ctx,
   create: &CreateAction,
-  state: &FutureState<OpenProject, Message>,
+  pending: bool,
+  error: Option<Arc<str>>,
   ready: Option<NewProject>,
 ) -> Element {
-  let pending = state.is_pending();
-  let status: Element = match state.error.as_ref().filter(|_| !pending) {
-    Some(error) => inline_error(&message_text(ctx, error)),
+  let status: Element = match error {
+    Some(error) => inline_error(&error),
     None => Text::new(&ctx.t("setup.project.createExplanation"))
       .variant(TypographyStyle::Caption)
       .into(),
@@ -204,18 +216,27 @@ fn create_action(ctx: &mut Ctx, workspace: Workspace) -> CreateAction {
   ctx.future_action(move |new: NewProject| {
     let workspace = workspace.clone();
     async move {
-      background::run(move || workspace.create(new)).await?.map_err(|error| {
+      let attempted = new.clone();
+      let created = background::run(move || workspace.create(new))
+        .await
+        .map_err(|message| CreateFailure::new(&attempted, message, ErrorPlace::Form))?;
+      created.map_err(|error| {
         tracing::error!(%error, "cannot create the project");
-        messages::store_error(&error)
+        CreateFailure::from_store(&attempted, &error)
       })
     }
   })
 }
 
-fn repository_row(ctx: &Ctx, pick: &PickAction, repository: Option<&Folder>) -> Element {
+fn repository_row(ctx: &Ctx, pick: &PickAction, repository: Option<&Folder>, error: Option<Arc<str>>) -> Element {
   let picking = pick.state().get_untracked().is_pending();
+  let tone = if error.is_some() {
+    ValueTone::Invalid
+  } else {
+    ValueTone::Value
+  };
   let (path, tone) = match repository {
-    Some(folder) => (display::shorten_path(&folder.0, PATH_CHARS), ValueTone::Value),
+    Some(folder) => (display::shorten_path(&folder.0, PATH_CHARS), tone),
     None => (ctx.t("setup.project.noRepository").to_string(), ValueTone::Placeholder),
   };
   let choose: Option<(Icon, Box<dyn Fn() + Send + Sync>)> = (!picking).then(|| {
@@ -236,11 +257,11 @@ fn repository_row(ctx: &Ctx, pick: &PickAction, repository: Option<&Folder>) -> 
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Lg)
-    .child(
-      Column::new()
-        .flex(1.0)
-        .child(field(&ctx.t("setup.project.repository"), folder, FieldNote::None)),
-    )
+    .child(Column::new().flex(1.0).child(field(
+      &ctx.t("setup.project.repository"),
+      folder,
+      error.map_or(FieldNote::None, FieldNote::Error),
+    )))
     .child(
       Column::new()
         .flex(1.0)
