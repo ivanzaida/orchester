@@ -1,0 +1,83 @@
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+use super::variable::Variable;
+
+const OPEN: &str = "{{";
+const CLOSE: &str = "}}";
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum PromptError {
+  #[error("the placeholder opened at byte {offset} has no closing `}}}}`")]
+  UnclosedPlaceholder { offset: usize },
+  #[error("`{name}` at byte {offset} is not a variable in the catalog")]
+  UnknownVariable { name: String, offset: usize },
+}
+
+/// Markdown prompt text whose `{{variable}}` placeholders all name catalog variables.
+/// Placeholders are data references, never expressions; surrounding spaces inside the braces
+/// are ignored. There is no escape syntax: every `{{` opens a placeholder.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct PromptText {
+  text: String,
+  variables: Vec<Variable>,
+}
+
+impl PromptText {
+  pub fn new(text: &str) -> Result<Self, PromptError> {
+    Self::try_from(text.to_owned())
+  }
+
+  pub fn as_str(&self) -> &str {
+    &self.text
+  }
+
+  /// Referenced variables in order of first use, without repeats.
+  pub fn variables(&self) -> &[Variable] {
+    &self.variables
+  }
+
+  pub fn is_blank(&self) -> bool {
+    self.text.trim().is_empty()
+  }
+}
+
+impl TryFrom<String> for PromptText {
+  type Error = PromptError;
+
+  fn try_from(text: String) -> Result<Self, PromptError> {
+    Ok(Self {
+      variables: placeholders(&text)?,
+      text,
+    })
+  }
+}
+
+impl From<PromptText> for String {
+  fn from(prompt: PromptText) -> Self {
+    prompt.text
+  }
+}
+
+fn placeholders(text: &str) -> Result<Vec<Variable>, PromptError> {
+  let mut variables = Vec::new();
+  let mut start = 0;
+  while let Some(open) = text[start..].find(OPEN) {
+    let offset = start + open;
+    let inner_start = offset + OPEN.len();
+    let inner_len = text[inner_start..]
+      .find(CLOSE)
+      .ok_or(PromptError::UnclosedPlaceholder { offset })?;
+    let name = text[inner_start..inner_start + inner_len].trim();
+    let variable = name.parse::<Variable>().map_err(|_| PromptError::UnknownVariable {
+      name: name.to_owned(),
+      offset,
+    })?;
+    if !variables.contains(&variable) {
+      variables.push(variable);
+    }
+    start = inner_start + inner_len + CLOSE.len();
+  }
+  Ok(variables)
+}

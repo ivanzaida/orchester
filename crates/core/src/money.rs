@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -7,7 +8,8 @@ pub enum MoneyError {
 }
 
 /// ISO 4217 currency code.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct Currency([u8; 3]);
 
 impl Currency {
@@ -25,8 +27,22 @@ impl Currency {
   }
 }
 
+impl TryFrom<String> for Currency {
+  type Error = MoneyError;
+
+  fn try_from(code: String) -> Result<Self, MoneyError> {
+    Self::new(&code)
+  }
+}
+
+impl From<Currency> for String {
+  fn from(currency: Currency) -> Self {
+    currency.code().to_owned()
+  }
+}
+
 /// An amount in millionths of the currency unit; floating point is never used for money.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Money {
   micros: i64,
   currency: Currency,

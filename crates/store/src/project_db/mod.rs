@@ -1,3 +1,4 @@
+mod resources;
 mod schema;
 mod tasks;
 

@@ -37,7 +37,7 @@ thiserror = "2"
 tokio = { version = "1.53", features = ["io-util", "macros", "net", "process", "rt", "sync", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1", features = ["v7"] }
+uuid = { version = "1", features = ["v7", "serde"] }
 win32job = "2"
 
 # lurq's text shaping at opt-level 0 makes text-heavy screens crawl in dev builds.

@@ -1,12 +1,14 @@
 use std::{fmt, str::FromStr};
 
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Defines a typed UUIDv7 identifier so ids of different entities cannot be swapped.
 macro_rules! define_id {
   ($(#[$doc:meta])* $name:ident) => {
     $(#[$doc])*
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+    #[serde(transparent)]
     pub struct $name(Uuid);
 
     impl $name {
@@ -56,6 +58,14 @@ define_id!(TaskId);
 define_id!(
   /// One execution of a task; names its branch and worktree.
   RunId
+);
+define_id!(
+  /// A project connection to a repository host, agent provider or MCP server.
+  ConnectionId
+);
+define_id!(
+  /// A project secret. Bodies and rows hold only this reference; the value stays in the OS keychain.
+  SecretId
 );
 define_id!(
   /// Client-generated key that makes a create/queue/send action safe to retry.

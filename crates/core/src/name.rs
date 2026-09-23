@@ -1,5 +1,6 @@
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -11,7 +12,8 @@ pub enum NameError {
 }
 
 /// A user-facing name or title: trimmed, not blank, bounded in length.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct Name(String);
 
 impl Name {
@@ -37,5 +39,19 @@ impl Name {
 impl fmt::Display for Name {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.write_str(&self.0)
+  }
+}
+
+impl TryFrom<String> for Name {
+  type Error = NameError;
+
+  fn try_from(value: String) -> Result<Self, NameError> {
+    Self::new(&value)
+  }
+}
+
+impl From<Name> for String {
+  fn from(name: Name) -> Self {
+    name.0
   }
 }

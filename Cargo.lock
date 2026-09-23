@@ -2388,6 +2388,8 @@ dependencies = [
 name = "orchester-core"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "thiserror 2.0.20",
  "uuid",
 ]
@@ -2435,6 +2437,7 @@ version = "0.1.0"
 dependencies = [
  "orchester-core",
  "rusqlite",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.20",
 ]
