@@ -23,13 +23,22 @@ enum Kind {
   Secondary,
 }
 
+enum State {
+  Enabled(Handler),
+  /// Temporarily off, e.g. while the input is incomplete or work is running.
+  Disabled,
+  /// The feature does not exist yet; marked with a lock like other unavailable controls.
+  Unavailable,
+}
+
 pub struct ActionButton {
   label: Arc<str>,
   icon: Option<Icon>,
   kind: Kind,
-  on_click: Option<Handler>,
+  state: State,
   width: Option<Dimension>,
   height: Option<Dimension>,
+  roomy: bool,
   id: Option<&'static str>,
 }
 
@@ -40,9 +49,10 @@ impl ActionButton {
       label,
       icon: None,
       kind: Kind::Secondary,
-      on_click: None,
+      state: State::Unavailable,
       width: None,
       height: None,
+      roomy: false,
       id: None,
     }
   }
@@ -58,14 +68,14 @@ impl ActionButton {
   }
 
   pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    self.on_click = Some(Arc::new(handler));
+    self.state = State::Enabled(Arc::new(handler));
     self
   }
 
-  /// Available only when `enabled`; otherwise the button renders as unavailable.
+  /// When not `enabled`, an available button renders disabled.
   pub fn enabled(mut self, enabled: bool) -> Self {
-    if !enabled {
-      self.on_click = None;
+    if !enabled && matches!(self.state, State::Enabled(_)) {
+      self.state = State::Disabled;
     }
     self
   }
@@ -73,6 +83,22 @@ impl ActionButton {
   pub fn size(mut self, width: impl Into<Dimension>, height: impl Into<Dimension>) -> Self {
     self.width = Some(width.into());
     self.height = Some(height.into());
+    self
+  }
+
+  pub fn width(mut self, width: impl Into<Dimension>) -> Self {
+    self.width = Some(width.into());
+    self
+  }
+
+  pub fn height(mut self, height: impl Into<Dimension>) -> Self {
+    self.height = Some(height.into());
+    self
+  }
+
+  /// Wider horizontal padding, as on page header actions (`nMeVq`).
+  pub fn roomy(mut self) -> Self {
+    self.roomy = true;
     self
   }
 
@@ -87,6 +113,22 @@ impl ActionButton {
     self
   }
 
+  fn colors(&self, role: &FormButtonRole) -> (PaletteColor, PaletteColor, PaletteColor) {
+    match (&self.state, self.kind) {
+      (State::Enabled(_), _) => (role.background.clone(), role.border.clone(), role.text.color.clone()),
+      (_, Kind::Primary) => (
+        PaletteColor::TextMuted,
+        PaletteColor::TextMuted,
+        PaletteColor::TextInverse,
+      ),
+      (_, Kind::Secondary) => (
+        PaletteColor::SurfaceRaised,
+        PaletteColor::Border,
+        PaletteColor::TextMuted,
+      ),
+    }
+  }
+
   pub fn render(self, ctx: &Ctx) -> Element {
     let form = ctx.theme().form();
     let role = match self.kind {
@@ -94,16 +136,7 @@ impl ActionButton {
       Kind::Secondary => form.button.secondary.clone(),
     };
     drop(form);
-    let available = self.on_click.is_some();
-    let (background, border, text) = if available {
-      (role.background.clone(), role.border.clone(), role.text.color.clone())
-    } else {
-      (
-        PaletteColor::SurfacePanel,
-        PaletteColor::Border,
-        PaletteColor::TextMuted,
-      )
-    };
+    let (background, border, text) = self.colors(&role);
 
     let mut content = Row::new().spacing(SpacingSize::Sm).align_items(Alignment::Center);
     if let Some(glyph) = self.icon {
@@ -112,9 +145,12 @@ impl ActionButton {
     content = content.child(
       Text::new(&self.label)
         .variant(role.text.typography)
-        .color(text)
+        .color(text.clone())
         .nowrap(),
     );
+    if matches!(self.state, State::Unavailable) {
+      content = content.child(icon(Icon::Lock, IconSize::Small, text));
+    }
 
     let mut button = Button::empty()
       .button()
@@ -125,17 +161,22 @@ impl ActionButton {
       .rounded(role.radius)
       .align_items(Alignment::Center)
       .justify(Justify::Center)
-      .describe("available", if available { "true" } else { "false" })
       .child(content);
+    if self.roomy {
+      button = button.padding_horizontal(SpacingSize::Md);
+    }
     if let Some(width) = self.width {
       button = button.width(width);
     }
     if let Some(id) = self.id {
       button = button.id(id);
     }
-    match self.on_click {
-      Some(handler) => with_interaction(button, &role).on_click(move |_| handler()),
-      None => button.cursor(CursorIcon::NotAllowed),
+    match self.state {
+      State::Enabled(handler) => with_interaction(button, &role)
+        .describe("state", "enabled")
+        .on_click(move |_| handler()),
+      State::Disabled => button.describe("state", "disabled").cursor(CursorIcon::NotAllowed),
+      State::Unavailable => button.describe("state", "unavailable").cursor(CursorIcon::NotAllowed),
     }
     .into()
   }

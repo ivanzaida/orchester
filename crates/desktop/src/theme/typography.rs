@@ -34,6 +34,12 @@ pub enum ExtraTypography {
   Subheading,
   /// Numbered step marker, e.g. "01" (`AtKp7` in `Qazxp`).
   StepNumber,
+  /// Page title of the setup steps, e.g. "Create your project" (`j6LVi`).
+  PageTitle,
+  /// Supporting detail under a notice heading or a rail action (`szYuk` in `q5LzI`, `et2jb`).
+  Detail,
+  /// Smallest supporting line, e.g. runner capacity (`tGGua`).
+  Footnote,
   /// Chevrons and other 12px icons (`B1lur`, `Y9sVM2`).
   IconSmall,
   /// Button and secondary navigation icons (`xfnek`, `ssq5w`).
@@ -47,7 +53,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 16] = [
+  const ALL: [Self; 19] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -59,6 +65,9 @@ impl ExtraTypography {
     Self::Eyebrow,
     Self::Subheading,
     Self::StepNumber,
+    Self::PageTitle,
+    Self::Detail,
+    Self::Footnote,
     Self::IconSmall,
     Self::IconButton,
     Self::IconNav,
@@ -79,6 +88,9 @@ impl ExtraTypography {
       Self::Eyebrow => "eyebrow",
       Self::Subheading => "subheading",
       Self::StepNumber => "step-number",
+      Self::PageTitle => "page-title",
+      Self::Detail => "detail",
+      Self::Footnote => "footnote",
       Self::IconSmall => "icon-small",
       Self::IconButton => "icon-button",
       Self::IconNav => "icon-nav",
@@ -144,6 +156,12 @@ impl ExtraTypography {
       },
       Self::Subheading => style(17.0, FontWeight::Medium, TEXT),
       Self::StepNumber => mono(12.0, SUBTLE),
+      Self::PageTitle => style(27.0, FontWeight::Medium, TEXT),
+      Self::Detail => TextStyle {
+        line_height: 1.6,
+        ..style(11.0, FontWeight::Normal, MUTED)
+      },
+      Self::Footnote => style(10.0, FontWeight::Normal, MUTED),
       Self::IconSmall => icon(12.0),
       Self::IconButton => icon(15.0),
       Self::IconNav => icon(17.0),

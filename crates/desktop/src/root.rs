@@ -110,6 +110,7 @@ fn window_chrome(ctx: &mut Ctx, screen: Element) -> Element {
     .title_bar(
       ChromeTitleBar::new()
         .background(PaletteColor::SurfaceBase)
+        .border_bottom(None)
         .controls(WindowControls::new()),
     )
     .content(screen)

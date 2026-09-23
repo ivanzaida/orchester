@@ -41,7 +41,6 @@ fn startup_lands_on_first_launch_then_on_the_created_project() {
   assert!(matches!(session.workspace().landing(), Ok(Landing::FirstLaunch)));
   let new = ProjectDraft {
     name: "Kontur",
-    key: "KON",
     repository: Some(&repo),
   }
   .validate()
@@ -64,7 +63,6 @@ fn startup_reports_a_project_whose_repository_lost_its_data() {
   let session = AppSession::start_at(&database).expect("session starts");
   let new = ProjectDraft {
     name: "Kontur",
-    key: "KON",
     repository: Some(&repo),
   }
   .validate()

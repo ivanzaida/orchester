@@ -3,6 +3,7 @@
 
 pub mod app_paths;
 mod background;
+pub mod display;
 pub mod i18n;
 pub mod messages;
 mod navigation;

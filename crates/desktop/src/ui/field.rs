@@ -47,8 +47,8 @@ pub fn field(label: &str, control: Element, note: FieldNote) -> Element {
   }
 }
 
-/// A single-line text input bound to `value`.
-pub fn text_input(ctx: &Ctx, id: &'static str, value: Signal<String>) -> Element {
+/// A single-line text input bound to `value`; an `invalid` input gets a stronger border.
+pub fn text_input(ctx: &Ctx, id: &'static str, value: Signal<String>, invalid: bool) -> Element {
   let theme = ctx.theme();
   let input = theme.form().input.clone();
   let text = input.text.resolve(&theme.typography(), &theme.palette());
@@ -60,7 +60,14 @@ pub fn text_input(ctx: &Ctx, id: &'static str, value: Signal<String>) -> Element
     .padding_custom(input.padding)
     .background(input.background)
     .caret_color(input.caret)
-    .border(Border::inside(BorderSize::Sm, input.border))
+    .border(Border::inside(
+      BorderSize::Sm,
+      if invalid {
+        PaletteColor::BorderStrong
+      } else {
+        input.border
+      },
+    ))
     .rounded(input.radius)
     .focused_style(Style::new().border(Border::inside(BorderSize::Md, input.border_focus)))
     .into()

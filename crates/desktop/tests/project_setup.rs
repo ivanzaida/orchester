@@ -1,7 +1,8 @@
 use std::{collections::BTreeSet, path::Path};
 
-use orchester_core::{name::NameError, project::ProjectKeyError};
+use orchester_core::name::NameError;
 use orchester_desktop::{
+  display,
   i18n::{FALLBACK_LOCALE, LOCALES},
   messages::{self, Message},
   project_setup::ProjectDraft,
@@ -36,35 +37,42 @@ fn assert_translatable(message: &Message) {
 }
 
 #[test]
-fn draft_reports_every_invalid_field() {
+fn draft_reports_a_blank_name_and_a_missing_repository() {
   let errors = ProjectDraft {
     name: "  ",
-    key: "orc",
     repository: None,
   }
   .validate()
   .expect_err("nothing is valid");
   assert_eq!(errors.name.map(|message| message.key), Some("errors.nameRequired"));
-  assert_eq!(errors.key.map(|message| message.key), Some("errors.projectKeyInvalid"));
-  assert_eq!(
-    errors.repository.map(|message| message.key),
-    Some("errors.repositoryRequired")
-  );
+  assert!(errors.repository_missing);
 }
 
 #[test]
-fn draft_trims_the_name_and_keeps_the_repository() {
+fn draft_trims_the_name_and_suggests_the_key() {
   let repo = Path::new("C:/work/kontur");
   let new = ProjectDraft {
     name: " Kontur ",
-    key: "KON2",
     repository: Some(repo),
   }
   .validate()
   .expect("valid draft");
   assert_eq!(new.project.name().as_str(), "Kontur");
-  assert_eq!(new.project.key().as_str(), "KON2");
+  assert_eq!(new.project.key().as_str(), "KON");
   assert_eq!(new.repo_root, repo);
+}
+
+#[test]
+fn long_paths_keep_the_repository_folder() {
+  let path = Path::new(r"H:\projects\orchester\.tmp\worktrees\claude-desktop-onboarding\.tmp\ui\kontur");
+  let short = display::shorten_path(path, 40);
+  assert!(short.chars().count() <= 40, "{short}");
+  assert!(short.starts_with(r"H:\…\"), "{short}");
+  assert!(short.ends_with(r"\ui\kontur"), "{short}");
+  assert_eq!(
+    display::shorten_path(Path::new(r"C:\work\kontur"), 40),
+    r"C:\work\kontur"
+  );
 }
 
 #[test]
@@ -72,8 +80,6 @@ fn draft_messages_are_translatable() {
   let messages = [
     messages::name_error(&NameError::Blank),
     messages::name_error(&NameError::TooLong { length: 201 }),
-    messages::project_key_error(&ProjectKeyError::Invalid("x".into())),
-    messages::repository_required(),
     messages::interrupted(),
   ];
   messages.iter().for_each(assert_translatable);

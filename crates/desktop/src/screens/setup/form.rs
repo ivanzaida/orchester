@@ -1,5 +1,5 @@
-//! The project form of 01.03 (`Allwo`): name, key and local repository, then creation through
-//! the workspace. Validation is `ProjectDraft::validate`; storage rules belong to the store.
+//! The project form of 01.03 (`Allwo`): name and local repository, then creation through the
+//! workspace. Validation is `ProjectDraft::validate`; storage rules belong to the store.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -7,20 +7,21 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction, FutureState},
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, dimension::Dimension},
 };
 
+use super::page::{heading, ownership, topbar};
 use crate::{
-  background,
+  background, display,
   messages::{self, Message},
   navigation::{Navigation, Screen},
-  project_setup::{DraftErrors, NewProject, ProjectDraft},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  project_setup::{NewProject, ProjectDraft},
+  theme::ExtraSpacing,
   ui::{
     button::ActionButton,
     field::{FieldNote, ValueTone, field, text_input, value_box},
@@ -31,8 +32,10 @@ use crate::{
   workspace::{OpenProject, Workspace},
 };
 
-/// Topbar height (`MYfj5`).
-const TOPBAR_HEIGHT: f32 = 64.0;
+/// Width of "Change GitHub account or access" (`w5XOc`).
+const CHANGE_GITHUB_WIDTH: f32 = 284.0;
+/// Longest repository path shown in full; longer paths keep their last folders (`A3kRgn`).
+const PATH_CHARS: usize = 64;
 
 /// A folder chosen in the native folder dialog.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,8 +50,6 @@ type CreateAction = FutureAction<NewProject, OpenProject, Message>;
 
 pub struct ProjectForm {
   name: Signal<String>,
-  key: Signal<String>,
-  errors: Signal<DraftErrors>,
 }
 
 impl Component for ProjectForm {
@@ -64,17 +65,9 @@ impl Component for ProjectForm {
         navigation.show(Screen::Project(project));
       }
     });
-    let form = Self {
+    Self {
       name: ctx.signal(String::new()),
-      key: ctx.signal(String::new()),
-      errors: ctx.signal(DraftErrors::default()),
-    };
-    // A field's error describes the value it was raised for; editing the field retires it.
-    let errors = form.errors.clone();
-    ctx.watch(&form.name, move |_| errors.update(|errors| errors.name = None));
-    let errors = form.errors.clone();
-    ctx.watch(&form.key, move |_| errors.update(|errors| errors.key = None));
-    form
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -82,10 +75,22 @@ impl Component for ProjectForm {
     let pick = pick_action(ctx);
     let create = create_action(ctx, workspace);
     let repository = pick.state().get().data.flatten();
-    let errors = self.errors.get();
     let create_state = create.state().get();
-    let name = self.name.get();
-    let name = name.trim();
+    let raw_name = self.name.get();
+    let name = raw_name.trim();
+    let draft = ProjectDraft {
+      name: &raw_name,
+      repository: repository.as_ref().map(|folder| folder.0.as_path()),
+    }
+    .validate();
+    // A blank name only keeps Create disabled; a name the rules reject says why.
+    let name_error = draft
+      .as_ref()
+      .err()
+      .and_then(|errors| errors.name.as_ref())
+      .filter(|_| !name.is_empty())
+      .map(|error| message_text(ctx, error));
+
     // Fields scroll when the window is shorter than the design; the actions stay visible.
     let fields = Column::new()
       .width(Dimension::Pct(100.0))
@@ -93,17 +98,18 @@ impl Component for ProjectForm {
       .padding_horizontal(ExtraSpacing::Page.role())
       .padding_bottom(SpacingSize::Lg)
       .spacing(SpacingSize::Lg)
-      .child(self.identity_row(ctx, &errors))
+      .child(self.name_field(ctx, name_error))
       .child(notice(
         Icon::CloudOff,
         &ctx.t("setup.project.githubUnavailable"),
         &ctx.t("setup.project.githubUnavailableDetail"),
       ))
-      .child(repository_row(ctx, &pick, repository.as_ref(), &errors))
+      .child(repository_row(ctx, &pick, repository.as_ref()))
       .child(
         ActionButton::new(ctx.t("setup.project.changeGithub"))
           .icon(Icon::ExternalLink)
           .id("change-github")
+          .width(Dimension::Px(CHANGE_GITHUB_WIDTH))
           .render(ctx),
       )
       .child(ownership(ctx, name));
@@ -111,7 +117,7 @@ impl Component for ProjectForm {
       .width(Dimension::Pct(100.0))
       .padding_horizontal(ExtraSpacing::Page.role())
       .padding_bottom(SpacingSize::Section)
-      .child(self.actions(ctx, &create, &create_state, repository));
+      .child(actions(ctx, &create, &create_state, draft.ok()));
     Column::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
@@ -123,86 +129,60 @@ impl Component for ProjectForm {
 }
 
 impl ProjectForm {
-  /// Project name as designed, with the project key beside it: the key is required by
-  /// `orchester_core::project::Project` and has no field in the design yet.
-  fn identity_row(&self, ctx: &Ctx, errors: &DraftErrors) -> Element {
-    let error = |message: Option<&Message>| {
-      message.map_or(FieldNote::None, |message| FieldNote::Error(message_text(ctx, message)))
-    };
-    let name = field(
+  fn name_field(&self, ctx: &Ctx, error: Option<Arc<str>>) -> Element {
+    let invalid = error.is_some();
+    field(
       &ctx.t("setup.project.name"),
-      text_input(ctx, "project-name", self.name.clone()),
-      error(errors.name.as_ref()),
-    );
-    let key = field(
-      &ctx.t("setup.project.key"),
-      text_input(ctx, "project-key", self.key.clone()),
-      error(errors.key.as_ref()),
-    );
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Lg)
-      .child(Column::new().flex(1.0).child(name))
-      .child(Column::new().flex(1.0).child(key))
-      .into()
+      text_input(ctx, "project-name", self.name.clone(), invalid),
+      error.map_or(FieldNote::None, FieldNote::Error),
+    )
   }
+}
 
-  fn actions(
-    &self,
-    ctx: &Ctx,
-    create: &CreateAction,
-    state: &FutureState<OpenProject, Message>,
-    repository: Option<Folder>,
-  ) -> Element {
-    let pending = state.is_pending();
-    let status: Element = match state.error.as_ref().filter(|_| !pending) {
-      Some(error) => inline_error(&message_text(ctx, error)),
-      None => Text::new(&ctx.t("setup.project.createExplanation"))
-        .variant(TypographyStyle::Caption)
-        .into(),
-    };
-    let label = if pending {
-      ctx.t("setup.project.creating")
-    } else {
-      ctx.t("setup.project.create")
-    };
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Stack.role())
-      .align_items(Alignment::Center)
-      .child(status)
-      .child(Spacer::new().flex(1.0))
-      .child(
-        ActionButton::new(label)
-          .primary()
-          .icon(Icon::ArrowRight)
-          .id("create-project")
-          .on_click(self.submit(create.clone(), repository))
-          .enabled(!pending)
-          .render(ctx),
-      )
-      .into()
-  }
-
-  fn submit(&self, create: CreateAction, repository: Option<Folder>) -> impl Fn() + Send + Sync + 'static {
-    let (name, key, errors) = (self.name.clone(), self.key.clone(), self.errors.clone());
+/// Explanation or creation error, and Create, which stays disabled until the draft is valid.
+fn actions(
+  ctx: &Ctx,
+  create: &CreateAction,
+  state: &FutureState<OpenProject, Message>,
+  ready: Option<NewProject>,
+) -> Element {
+  let pending = state.is_pending();
+  let status: Element = match state.error.as_ref().filter(|_| !pending) {
+    Some(error) => inline_error(&message_text(ctx, error)),
+    None => Text::new(&ctx.t("setup.project.createExplanation"))
+      .variant(TypographyStyle::Caption)
+      .into(),
+  };
+  let label = if pending {
+    ctx.t("setup.project.creating")
+  } else {
+    ctx.t("setup.project.create")
+  };
+  let enabled = ready.is_some() && !pending;
+  let run = {
+    let create = create.clone();
     move || {
-      let name = name.get_untracked();
-      let key = key.get_untracked();
-      let draft = ProjectDraft {
-        name: &name,
-        key: &key,
-        repository: repository.as_ref().map(|folder| folder.0.as_path()),
-      };
-      match draft.validate() {
-        Ok(new) => {
-          errors.set(DraftErrors::default());
-          create.run(new);
-        }
-        Err(problems) => errors.set(problems),
+      if let Some(new) = ready.clone() {
+        create.run(new);
       }
     }
-  }
+  };
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Stack.role())
+    .align_items(Alignment::Center)
+    .child(status)
+    .child(Spacer::new().flex(1.0))
+    .child(
+      ActionButton::new(label)
+        .primary()
+        .icon(Icon::ArrowRight)
+        .id("create-project")
+        .on_click(run)
+        .enabled(enabled)
+        .render(ctx),
+    )
+    .into()
 }
 
 fn navigation(ctx: &mut Ctx) -> Navigation {
@@ -230,10 +210,10 @@ fn create_action(ctx: &mut Ctx, workspace: Workspace) -> CreateAction {
   })
 }
 
-fn repository_row(ctx: &Ctx, pick: &PickAction, repository: Option<&Folder>, errors: &DraftErrors) -> Element {
+fn repository_row(ctx: &Ctx, pick: &PickAction, repository: Option<&Folder>) -> Element {
   let picking = pick.state().get_untracked().is_pending();
   let (path, tone) = match repository {
-    Some(folder) => (folder.0.display().to_string(), ValueTone::Value),
+    Some(folder) => (display::shorten_path(&folder.0, PATH_CHARS), ValueTone::Value),
     None => (ctx.t("setup.project.noRepository").to_string(), ValueTone::Placeholder),
   };
   let choose: Option<(Icon, Box<dyn Fn() + Send + Sync>)> = (!picking).then(|| {
@@ -243,11 +223,6 @@ fn repository_row(ctx: &Ctx, pick: &PickAction, repository: Option<&Folder>, err
     let open: Box<dyn Fn() + Send + Sync> = Box::new(move || pick.run((title.clone(), current.clone())));
     (Icon::FolderOpen, open)
   });
-  let note = errors
-    .repository
-    .as_ref()
-    .filter(|_| repository.is_none())
-    .map_or(FieldNote::None, |error| FieldNote::Error(message_text(ctx, error)));
   let folder = value_box(ctx, "repository-path", &path, tone, choose);
   let branch = value_box(
     ctx,
@@ -262,62 +237,12 @@ fn repository_row(ctx: &Ctx, pick: &PickAction, repository: Option<&Folder>, err
     .child(
       Column::new()
         .flex(1.0)
-        .child(field(&ctx.t("setup.project.repository"), folder, note)),
+        .child(field(&ctx.t("setup.project.repository"), folder, FieldNote::None)),
     )
     .child(
       Column::new()
         .flex(1.0)
         .child(field(&ctx.t("setup.project.defaultBranch"), branch, FieldNote::None)),
-    )
-    .into()
-}
-
-/// Topbar (`MYfj5`) with the breadcrumb. There is no setup draft, so no save status.
-fn topbar(ctx: &Ctx, name: &str) -> Element {
-  let breadcrumb = if name.is_empty() {
-    ctx.t("setup.project.breadcrumb")
-  } else {
-    ctx.t_args("setup.project.breadcrumbNamed", [("name", name)])
-  };
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(TOPBAR_HEIGHT))
-    .padding_horizontal(SpacingSize::Section)
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(Text::new(&breadcrumb).variant(TypographyStyle::Description))
-    .into()
-}
-
-/// Page heading (`b0m9CN`).
-fn heading(ctx: &Ctx) -> Element {
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding_top(ExtraSpacing::Rail.role())
-    .padding_horizontal(SpacingSize::Section)
-    .padding_bottom(SpacingSize::Lg)
-    .spacing(ExtraSpacing::Stack.role())
-    .child(Text::new(&ctx.t("setup.project.title")).variant(TypographyStyle::Heading))
-    .child(Text::new(&ctx.t("setup.project.description")).variant(TypographyStyle::Description))
-    .into()
-}
-
-fn ownership(ctx: &Ctx, name: &str) -> Element {
-  let detail = if name.is_empty() {
-    ctx.t("setup.project.ownershipDetail")
-  } else {
-    ctx.t_args("setup.project.ownershipDetailNamed", [("name", name)])
-  };
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding_vertical(SpacingSize::Lg)
-    .spacing(ExtraSpacing::Stack.role())
-    .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(Text::new(&ctx.t("setup.project.ownershipTitle")).variant(ExtraTypography::Subheading.role()))
-    .child(
-      Text::new(&detail)
-        .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextSecondary),
     )
     .into()
 }

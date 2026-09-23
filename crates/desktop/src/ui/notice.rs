@@ -7,7 +7,7 @@ use lurq::{
 };
 
 use super::icon::{Icon, IconSize, icon};
-use crate::theme::{ExtraRadius, ExtraSpacing};
+use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography};
 
 pub fn notice(glyph: Icon, heading: &str, detail: &str) -> Element {
   Row::new()
@@ -20,13 +20,13 @@ pub fn notice(glyph: Icon, heading: &str, detail: &str) -> Element {
     .child(
       Column::new()
         .flex(1.0)
-        .spacing(SpacingSize::Xs)
+        .spacing(ExtraSpacing::Tight.role())
         .child(
           Text::new(heading)
             .variant(TypographyStyle::FieldLabel)
             .color(PaletteColor::TextPrimary),
         )
-        .child(Text::new(detail).variant(TypographyStyle::Caption)),
+        .child(Text::new(detail).variant(ExtraTypography::Detail.role())),
     )
     .into()
 }

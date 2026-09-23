@@ -83,4 +83,7 @@ fn getting_started_roles_follow_pencil() {
   assert_eq!(theme.spacing_value(ExtraSpacing::Columns.role()), Dimension::Px(112.0));
   assert_eq!(theme.spacing_value(SpacingSize::Section), Dimension::Px(32.0));
   assert_eq!(theme.radius_value(ExtraRadius::Notice.role()), 8.0);
+  assert_eq!(theme.typography_style(ExtraTypography::PageTitle.role()).font_size, 27.0);
+  assert_eq!(theme.typography_style(ExtraTypography::Detail.role()).line_height, 1.6);
+  assert_eq!(theme.spacing_value(ExtraSpacing::Tight.role()), Dimension::Px(6.0));
 }

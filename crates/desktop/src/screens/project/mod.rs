@@ -16,6 +16,7 @@ use lurq::{
 
 use self::sidebar::sidebar;
 use crate::{
+  display,
   theme::{ExtraColor, ExtraSpacing},
   ui::{
     button::ActionButton,
@@ -25,8 +26,11 @@ use crate::{
   workspace::OpenProject,
 };
 
-/// Project bar height (`CsB3h`).
+/// Project bar height (`CsB3h`) and New task button height (`nMeVq`).
 const PROJECT_BAR_HEIGHT: f32 = 64.0;
+const NEW_TASK_HEIGHT: f32 = 38.0;
+/// Longest repository path shown in full in the overview panel.
+const PATH_CHARS: usize = 48;
 
 pub struct ProjectShell;
 
@@ -91,6 +95,8 @@ fn overview(ctx: &Ctx, open: &OpenProject) -> Element {
         .primary()
         .icon(Icon::Plus)
         .id("new-task")
+        .height(Dimension::Px(NEW_TASK_HEIGHT))
+        .roomy()
         .render(ctx),
     );
   let empty = RecoveryPanel::new(
@@ -99,9 +105,9 @@ fn overview(ctx: &Ctx, open: &OpenProject) -> Element {
     &ctx.t("overview.emptyDetail"),
   )
   .detail(property(&ctx.t("overview.projectKey"), open.project.key().as_str()))
-  .detail(location(
+  .detail(property(
     &ctx.t("overview.repository"),
-    &open.repo_root.display().to_string(),
+    &display::shorten_path(&open.repo_root, PATH_CHARS),
   ));
   Column::new()
     .width(Dimension::Pct(100.0))
@@ -120,21 +126,6 @@ fn property(label: &str, value: &str) -> Element {
     .spacing(SpacingSize::Sm)
     .justify(Justify::SpaceBetween)
     .child(Text::new(label).variant(TypographyStyle::Caption).nowrap())
-    .child(
-      Text::new(value)
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary)
-        .selectable(true),
-    )
-    .into()
-}
-
-/// A long value such as a path, under its label so it can use the full width.
-fn location(label: &str, value: &str) -> Element {
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Xs)
-    .child(Text::new(label).variant(TypographyStyle::Caption))
     .child(
       Text::new(value)
         .variant(TypographyStyle::Caption)

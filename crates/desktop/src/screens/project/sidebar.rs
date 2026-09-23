@@ -12,7 +12,7 @@ use lurq::{
 };
 
 use crate::{
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{brand::brand, icon::Icon, nav_item::NavItem},
   workspace::OpenProject,
 };
@@ -126,7 +126,7 @@ fn footer(ctx: &Ctx) -> Element {
             .color(PaletteColor::TextPrimary),
         ),
     )
-    .child(Text::new(&ctx.t("runner.noneDetail")).variant(TypographyStyle::Caption));
+    .child(Text::new(&ctx.t("runner.noneDetail")).variant(ExtraTypography::Footnote.role()));
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(ExtraSpacing::Stack.role())

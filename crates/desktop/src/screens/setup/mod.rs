@@ -2,12 +2,13 @@
 //! local git repository. GitHub, runner and agent steps are shown as unavailable.
 
 mod form;
+mod page;
 
 use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
   node::{Element, border::Border, dimension::Dimension},
@@ -69,6 +70,6 @@ fn rail(ctx: &Ctx, navigation: Navigation) -> Element {
     .child(NavItem::new("setup-step-ready", Icon::Circle, ctx.t("setup.rail.ready")).step())
     .child(Spacer::new().flex(1.0))
     .child(back)
-    .child(Text::new(&ctx.t("setup.rail.backHint")).variant(TypographyStyle::Caption))
+    .child(Text::new(&ctx.t("setup.rail.backHint")).variant(ExtraTypography::Detail.role()))
     .into()
 }

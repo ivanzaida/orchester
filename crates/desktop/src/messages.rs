@@ -1,10 +1,7 @@
 //! User-facing messages for errors from core and store: an i18n key plus its placeholder
 //! values. Errors are mapped here, at the UI boundary; their `Display` text is for logs only.
 
-use orchester_core::{
-  name::{Name, NameError},
-  project::{ProjectKey, ProjectKeyError},
-};
+use orchester_core::name::{Name, NameError};
 use orchester_store::StoreError;
 
 /// A translatable message: `key` in the locale files and the values of its placeholders.
@@ -32,18 +29,6 @@ pub fn name_error(error: &NameError) -> Message {
     NameError::Blank => Message::new("errors.nameRequired"),
     NameError::TooLong { .. } => Message::new("errors.nameTooLong").with("max", Name::MAX_CHARS),
   }
-}
-
-pub fn project_key_error(error: &ProjectKeyError) -> Message {
-  match error {
-    ProjectKeyError::Invalid(_) => Message::new("errors.projectKeyInvalid")
-      .with("min", ProjectKey::MIN_CHARS)
-      .with("max", ProjectKey::MAX_CHARS),
-  }
-}
-
-pub fn repository_required() -> Message {
-  Message::new("errors.repositoryRequired")
 }
 
 pub fn store_error(error: &StoreError) -> Message {
