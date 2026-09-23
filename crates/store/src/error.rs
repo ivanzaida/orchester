@@ -1,6 +1,9 @@
 use std::{io, path::PathBuf};
 
-use orchester_core::id::TaskId;
+use orchester_core::{
+  id::{ResourceId, TaskId},
+  resource::{PublishError, ResourceKind},
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -27,6 +30,20 @@ pub enum StoreError {
   TaskNotFound(TaskId),
   #[error("a task batch must contain at least one task")]
   EmptyBatch,
+  #[error("resource {0} does not exist")]
+  ResourceNotFound(ResourceId),
+  #[error("resource {resource} is a {found:?}, not a {expected:?}")]
+  ResourceKindMismatch {
+    resource: ResourceId,
+    expected: ResourceKind,
+    found: ResourceKind,
+  },
+  #[error("a {kind:?} with slug `{slug}` already exists")]
+  DuplicateSlug { kind: ResourceKind, slug: String },
+  #[error("resource {0} has no draft to publish")]
+  NoDraft(ResourceId),
+  #[error(transparent)]
+  Publish(#[from] PublishError),
 }
 
 impl StoreError {
