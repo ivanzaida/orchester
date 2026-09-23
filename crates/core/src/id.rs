@@ -54,6 +54,10 @@ define_id!(
 );
 define_id!(TaskId);
 define_id!(
+  /// One execution of a task; names its branch and worktree.
+  RunId
+);
+define_id!(
   /// Client-generated key that makes a create/queue/send action safe to retry.
   IdempotencyKey
 );
