@@ -2400,6 +2400,7 @@ version = "0.1.0"
 dependencies = [
  "lurq",
  "orchester-core",
+ "orchester-ipc",
  "orchester-store",
  "parking_lot",
  "rfd",

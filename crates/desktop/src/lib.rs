@@ -3,13 +3,16 @@
 
 pub mod app_paths;
 mod background;
+pub mod close;
 pub mod display;
 pub mod i18n;
 pub mod messages;
 mod navigation;
 pub mod project_setup;
 pub mod root;
+pub mod runner;
 mod screens;
+pub use screens::close_dialog;
 pub mod session;
 pub mod theme;
 mod ui;

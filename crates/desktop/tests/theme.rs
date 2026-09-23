@@ -34,6 +34,10 @@ fn palette_roles_resolve_to_pencil_values() {
     theme.palette_color(ExtraColor::Hairline.role()),
     Color::from_hex("#2B2B2B")
   );
+  assert_eq!(
+    theme.palette_color(ExtraColor::Scrim.role()),
+    Color::from_hex("#000000A6")
+  );
 }
 
 #[test]
@@ -89,6 +93,19 @@ fn getting_started_roles_follow_pencil() {
   );
   assert_eq!(theme.typography_style(ExtraTypography::Detail.role()).line_height, 1.6);
   assert_eq!(theme.spacing_value(ExtraSpacing::Tight.role()), Dimension::Px(6.0));
+  assert_eq!(theme.spacing_value(ExtraSpacing::Indicator.role()), Dimension::Px(7.0));
+  assert_eq!(
+    theme.typography_style(ExtraTypography::DialogTitle.role()).font_size,
+    20.0
+  );
+  assert_eq!(
+    theme.typography_style(ExtraTypography::Explanation.role()).line_height,
+    1.6
+  );
+  assert_eq!(
+    theme.typography_style(ExtraTypography::IconNotice.role()).font_size,
+    18.0
+  );
 }
 
 #[test]

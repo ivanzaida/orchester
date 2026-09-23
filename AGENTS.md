@@ -26,6 +26,10 @@ Workspace layout:
   app and the future server share the same core.
 - `crates/desktop` (`orchester-desktop`, binary `orchester`): lurq UI. Screens call into core; business rules do not
   live in components. Theme tokens live in `crates/desktop/src/theme.rs`.
+- `crates/runner` (`orchester-runner`): one process per open project, started by the desktop from the desktop's
+  own directory. Run the app with `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g.
+  `--features mcp`); plain `cargo run -p orchester-desktop` does not build the runner, and the app then shows the
+  runner as unable to start. The desktop's runner integration is Windows-only for now.
 - Add a crate only when a real boundary exists (for example the server or a runner). No empty placeholder crates.
 
 Hard requirements:

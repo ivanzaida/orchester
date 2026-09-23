@@ -12,6 +12,7 @@
 mod error;
 pub mod frame;
 mod handshake;
+mod log_path;
 mod message;
 
 #[cfg(windows)]
@@ -29,6 +30,7 @@ pub use error::{FrameError, IpcError};
 pub use handshake::{Handshake, PROTOCOL_VERSION, handshake};
 #[cfg(windows)]
 pub use job::KillOnCloseJob;
+pub use log_path::{runner_log_dir, runner_log_path, utc_date};
 pub use message::{Command, Event, OutputStream, ProcessEvent, ProcessExit, ProcessId, ShutdownMode};
 #[cfg(windows)]
 pub use transport::{ClientStream, Endpoint, ServerStream};

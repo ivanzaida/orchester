@@ -1,30 +1,31 @@
 //! Shell sidebar (`zo9Py`). Overview is the only project screen so far; every other entry is
-//! shown but unavailable, and the runner card says that no runner exists yet.
+//! shown but unavailable. The runner card shows the open project's runner.
 
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Rect, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 
 use crate::{
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
+  runner::state::RunnerState,
+  theme::{ExtraColor, ExtraSpacing},
   ui::{brand::brand, icon::Icon, nav_item::NavItem},
   workspace::OpenProject,
 };
 
-/// Sidebar width, project selector and avatar sizes, runner indicator size (`zo9Py`, `ZcJDx`,
-/// `I01Ke`, `fK4mR`).
+/// Sidebar width, current project block, project selector and avatar sizes (`zo9Py`, `RaOff`,
+/// `ZcJDx`, `I01Ke`).
 const SIDEBAR_WIDTH: f32 = 216.0;
+const CURRENT_PROJECT_HEIGHT: f32 = 70.0;
 const SELECTOR_HEIGHT: f32 = 42.0;
 const AVATAR_SIZE: f32 = 24.0;
-const INDICATOR_SIZE: f32 = 5.0;
 
-pub fn sidebar(ctx: &Ctx, open: &OpenProject) -> Element {
+pub fn sidebar(ctx: &Ctx, open: &OpenProject, runner: &RunnerState) -> Element {
   Column::new()
     .width(Dimension::Px(SIDEBAR_WIDTH))
     .height(Dimension::Pct(100.0))
@@ -43,7 +44,7 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject) -> Element {
         .child(NavItem::new("nav-import", Icon::Download, ctx.t("nav.importResources")).secondary()),
     )
     .child(Spacer::new().flex(1.0))
-    .child(footer(ctx))
+    .child(footer(ctx, runner))
     .into()
 }
 
@@ -61,9 +62,9 @@ fn project_selector(open: &OpenProject) -> Element {
     .child(Text::new(&initial).variant(TypographyStyle::Button));
   Column::new()
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(CURRENT_PROJECT_HEIGHT))
     .padding_top(SpacingSize::Sm)
     .padding_horizontal(SpacingSize::Md)
-    .padding_bottom(SpacingSize::Md)
     .child(
       Row::new()
         .id("project-selector")
@@ -102,38 +103,14 @@ fn primary_navigation(ctx: &Ctx) -> Element {
     .into()
 }
 
-fn footer(ctx: &Ctx) -> Element {
-  let runner = Column::new()
-    .id("runner-status")
-    .width(Dimension::Pct(100.0))
-    .padding(ExtraSpacing::Stack.role())
-    .spacing(SpacingSize::Sm)
-    .background(ExtraColor::Surface.role())
-    .border(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .rounded(ExtraRadius::Notice.role())
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(
-          Rect::new(Dimension::Px(INDICATOR_SIZE), Dimension::Px(INDICATOR_SIZE))
-            .background(PaletteColor::TextMuted)
-            .rounded(RadiusSize::Lg),
-        )
-        .child(
-          Text::new(&ctx.t("runner.none"))
-            .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextPrimary),
-        ),
-    )
-    .child(Text::new(&ctx.t("runner.noneDetail")).variant(ExtraTypography::Footnote.role()));
+fn footer(ctx: &Ctx, runner: &RunnerState) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(ExtraSpacing::Stack.role())
     .padding_horizontal(SpacingSize::Md)
     .padding_bottom(ExtraSpacing::Step.role())
     .spacing(ExtraSpacing::Group.role())
-    .child(runner)
+    .child(super::runner::card(ctx, runner))
     .child(NavItem::new("nav-settings", Icon::Settings, ctx.t("nav.projectSettings")).compact())
     .into()
 }

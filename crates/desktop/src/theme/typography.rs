@@ -40,12 +40,24 @@ pub enum ExtraTypography {
   Detail,
   /// Smallest supporting line, e.g. runner capacity (`tGGua`).
   Footnote,
+  /// Emphasized notice heading and dialog option title (`T9TyR`, `Oq9Jc`).
+  NoticeHeading,
+  /// Dialog title (`bhcaX`).
+  DialogTitle,
+  /// Dialog explanation under its title (`ClBsl`).
+  Explanation,
   /// Chevrons and other 12px icons (`B1lur`, `Y9sVM2`).
   IconSmall,
   /// Button and secondary navigation icons (`xfnek`, `ssq5w`).
   IconButton,
   /// Primary navigation icons (`sQnmq`).
   IconNav,
+  /// Dismiss icon of a notice (`KGM0S`), 14px.
+  IconDismiss,
+  /// Option icons in a dialog (`dsi3B`), 16px.
+  IconOption,
+  /// Inline notice icon (`GkfFF` in `q5LzI`), 18px.
+  IconNotice,
   /// Footer icon on the first launch screen (`OYpN8`).
   IconFeature,
   /// Recovery panel icon (`xEwzT`).
@@ -55,7 +67,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 20] = [
+  const ALL: [Self; 26] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -70,9 +82,15 @@ impl ExtraTypography {
     Self::PageTitle,
     Self::Detail,
     Self::Footnote,
+    Self::NoticeHeading,
+    Self::DialogTitle,
+    Self::Explanation,
     Self::IconSmall,
     Self::IconButton,
     Self::IconNav,
+    Self::IconDismiss,
+    Self::IconOption,
+    Self::IconNotice,
     Self::IconFeature,
     Self::IconPanel,
     Self::IconWindowControl,
@@ -94,9 +112,15 @@ impl ExtraTypography {
       Self::PageTitle => "page-title",
       Self::Detail => "detail",
       Self::Footnote => "footnote",
+      Self::NoticeHeading => "notice-heading",
+      Self::DialogTitle => "dialog-title",
+      Self::Explanation => "explanation",
       Self::IconSmall => "icon-small",
       Self::IconButton => "icon-button",
       Self::IconNav => "icon-nav",
+      Self::IconDismiss => "icon-dismiss",
+      Self::IconOption => "icon-option",
+      Self::IconNotice => "icon-notice",
       Self::IconFeature => "icon-feature",
       Self::IconPanel => "icon-panel",
       Self::IconWindowControl => "icon-window-control",
@@ -166,9 +190,18 @@ impl ExtraTypography {
         ..style(11.0, FontWeight::Normal, MUTED)
       },
       Self::Footnote => style(10.0, FontWeight::Normal, MUTED),
+      Self::NoticeHeading => style(12.0, FontWeight::Medium, TEXT),
+      Self::DialogTitle => style(20.0, FontWeight::Medium, TEXT),
+      Self::Explanation => TextStyle {
+        line_height: 1.6,
+        ..style(12.0, FontWeight::Normal, MUTED)
+      },
       Self::IconSmall => icon(12.0),
       Self::IconButton => icon(15.0),
       Self::IconNav => icon(17.0),
+      Self::IconDismiss => icon(14.0),
+      Self::IconOption => icon(16.0),
+      Self::IconNotice => icon(18.0),
       Self::IconFeature => icon(19.0),
       Self::IconPanel => icon(24.0),
       Self::IconWindowControl => icon(14.0),

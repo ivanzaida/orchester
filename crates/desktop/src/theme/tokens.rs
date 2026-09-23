@@ -14,6 +14,8 @@ pub const MUTED: &str = "#A3A3A3";
 pub const SUBTLE: &str = "#8F8F8F";
 pub const ACCENT: &str = "#E6E6E6";
 pub const INVERSE_TEXT: &str = "#181818";
+/// Backdrop behind the close dialog (`a8U756`).
+pub const SCRIM: &str = "#000000A6";
 
 pub const FONT: &str = "Inter";
 /// Pencil's `mono`, bundled from `assets/fonts/GeistMono-Regular.ttf` (SIL OFL 1.1).
@@ -46,6 +48,7 @@ pub const RADIUS_MARK: f32 = 2.0;
 /// Pencil node ids are listed on the `ExtraSpacing` variants that use them.
 pub const SPACE_MARK: f32 = 3.0;
 pub const SPACE_TIGHT: f32 = 6.0;
+pub const SPACE_INDICATOR: f32 = 7.0;
 pub const SPACE_INLINE: f32 = 10.0;
 pub const SPACE_STACK: f32 = 12.0;
 pub const SPACE_GROUP: f32 = 14.0;

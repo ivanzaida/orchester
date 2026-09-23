@@ -69,9 +69,9 @@ impl AppSession {
     &self.workspace
   }
 
-  /// Records a normal close. There are no runs yet, so every normal close is clean.
-  pub fn end(self) -> Result<(), StoreError> {
-    self.workspace.end_session(self.id, SessionEnd::Clean)
+  /// Records how the window closed (see `close::session_end`).
+  pub fn end(self, end: SessionEnd) -> Result<(), StoreError> {
+    self.workspace.end_session(self.id, end)
   }
 }
 

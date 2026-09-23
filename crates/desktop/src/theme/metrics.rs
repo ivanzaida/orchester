@@ -5,8 +5,8 @@ use lurq::{
 
 use super::tokens::{
   FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, SPACE_COLUMNS, SPACE_FOOTER,
-  SPACE_GROUP, SPACE_HERO, SPACE_INDENT, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE,
-  SPACE_RAIL, SPACE_SECTION, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TIGHT,
+  SPACE_GROUP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD,
+  SPACE_PAGE, SPACE_RAIL, SPACE_SECTION, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TIGHT,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -17,6 +17,8 @@ pub enum ExtraSpacing {
   Mark,
   /// Notice heading to its detail (`w8Szl`).
   Tight,
+  /// Status indicator to its label (`rvPqs`).
+  Indicator,
   /// Icon to label in navigation items and the brand (`TSJpn`, `a0S44m`).
   Inline,
   /// Title to description, notice content, nav item padding (`b0m9CN`, `q5LzI`, `TSJpn`).
@@ -42,9 +44,10 @@ pub enum ExtraSpacing {
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 13] = [
+  const ALL: [Self; 14] = [
     Self::Mark,
     Self::Tight,
+    Self::Indicator,
     Self::Inline,
     Self::Stack,
     Self::Group,
@@ -62,6 +65,7 @@ impl ExtraSpacing {
     match self {
       Self::Mark => "mark",
       Self::Tight => "tight",
+      Self::Indicator => "indicator",
       Self::Inline => "inline",
       Self::Stack => "stack",
       Self::Group => "group",
@@ -80,6 +84,7 @@ impl ExtraSpacing {
     match self {
       Self::Mark => SPACE_MARK,
       Self::Tight => SPACE_TIGHT,
+      Self::Indicator => SPACE_INDICATOR,
       Self::Inline => SPACE_INLINE,
       Self::Stack => SPACE_STACK,
       Self::Group => SPACE_GROUP,

@@ -1,10 +1,15 @@
 use lurq::app::{App, Tree, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
 use orchester_desktop::{
+  app_paths,
+  close::{CloseKind, Lifecycle, session_end},
   i18n,
+  messages::Message,
   root::{self, Startup},
-  session::AppSession,
+  runner::{QUIET_STOP_TIMEOUT, Runners},
+  session::{AppSession, StartupError},
   theme,
 };
+use tokio::runtime::Runtime;
 use tracing_subscriber::EnvFilter;
 
 fn main() {
@@ -12,7 +17,7 @@ fn main() {
     .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
     .init();
 
-  let runtime = tokio::runtime::Runtime::new().expect("the OS provides threads for the background runtime");
+  let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
   let mut app = App::new();
   app.set_tokio_handle(runtime.handle().clone());
   theme::install(&mut app);
@@ -20,15 +25,10 @@ fn main() {
 
   // Opened before the window exists, so there is no UI to block yet.
   let session = AppSession::start();
-  let startup = match &session {
-    Ok(session) => Startup::Ready(session.workspace().clone()),
-    Err(error) => {
-      tracing::error!(%error, "cannot start the session");
-      Startup::Failed {
-        message: error.message(),
-        path: error.path().map(|path| path.display().to_string()),
-      }
-    }
+  let startup = startup(&session, &runtime);
+  let lifecycle = match &startup {
+    Startup::Ready { lifecycle, .. } => Some(lifecycle.clone()),
+    Startup::Failed { .. } => None,
   };
 
   let mut tree = Tree::new();
@@ -57,10 +57,41 @@ fn main() {
     .with_decorations(false)
     .run();
 
-  // `run` returns once the window has closed normally.
-  if let Ok(session) = session
-    && let Err(error) = session.end()
-  {
+  // `run` returns once the window has closed; the close flow has normally stopped the runner.
+  let (Ok(session), Some(lifecycle)) = (session, lifecycle) else {
+    return;
+  };
+  let end = lifecycle.session_end().unwrap_or_else(|| {
+    let outcome = runtime.block_on(lifecycle.runners().shutdown(Some(QUIET_STOP_TIMEOUT)));
+    session_end(CloseKind::Quiet, outcome)
+  });
+  if let Err(error) = session.end(end) {
     tracing::error!(%error, "cannot record the end of the session");
+  }
+}
+
+fn startup(session: &Result<AppSession, StartupError>, runtime: &Runtime) -> Startup {
+  let session = match session {
+    Ok(session) => session,
+    Err(error) => {
+      tracing::error!(%error, "cannot start the session");
+      return Startup::Failed {
+        message: error.message(),
+        path: error.path().map(|path| path.display().to_string()),
+      };
+    }
+  };
+  match app_paths::runner_path() {
+    Ok(runner) => Startup::Ready {
+      workspace: session.workspace().clone(),
+      lifecycle: Lifecycle::new(Runners::new(runner, runtime.handle().clone()), runtime.handle().clone()),
+    },
+    Err(error) => {
+      tracing::error!(%error, "cannot locate the runner program");
+      Startup::Failed {
+        message: Message::new("errors.executableLocation"),
+        path: None,
+      }
+    }
   }
 }
