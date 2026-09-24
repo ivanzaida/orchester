@@ -35,7 +35,10 @@ use crate::{
     list::missing_key,
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::icon::{Icon, IconSize, icon},
+  ui::{
+    form::{Submit, form},
+    icon::{Icon, IconSize, icon},
+  },
   workspace::OpenProject,
 };
 
@@ -124,7 +127,9 @@ impl Component for NewTaskForm {
     let props = ctx.props::<NewTaskProps>().clone();
     let save = save_action(ctx);
     let state = self.state(&save);
-    let run_save = self.save_handler(&save, &props.project, state.ready.clone());
+    let submit = self
+      .save_handler(&save, &props.project, state.ready.clone())
+      .filter(|_| !state.saving);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
@@ -138,7 +143,7 @@ impl Component for NewTaskForm {
         self,
         props.pipelines.as_deref(),
         &state,
-        run_save,
+        submit.clone(),
       ));
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -150,7 +155,7 @@ impl Component for NewTaskForm {
         state.saving,
       ))
       .child(heading(ctx))
-      .child(content)
+      .child(form(submit, content))
   }
 }
 
@@ -191,17 +196,12 @@ impl NewTaskForm {
   }
 
   /// Saves the valid form under the form's key; `None` while it cannot be saved.
-  fn save_handler(
-    &self,
-    save: &SaveAction,
-    project: &OpenProject,
-    ready: Option<TaskDetails>,
-  ) -> Option<Box<dyn Fn() + Send + Sync>> {
+  fn save_handler(&self, save: &SaveAction, project: &OpenProject, ready: Option<TaskDetails>) -> Submit {
     let details = ready?;
     let save = save.clone();
     let repo_root = project.repo_root.clone();
     let batch = self.batch;
-    Some(Box::new(move || {
+    Some(Arc::new(move || {
       save.run((repo_root.clone(), batch, details.clone()));
     }))
   }

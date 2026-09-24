@@ -8,7 +8,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextInput, TextOverflow},
+  components::{Button, Column, Row, Text, TextInput, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, SelectPartStyle, Style, border::Border, dimension::Dimension},
@@ -129,7 +129,8 @@ pub fn value_box(
 }
 
 /// [`value_box`] at a height other than the standard field height, e.g. the 36px filters of
-/// the task list (`d5tAIZ`).
+/// the task list (`d5tAIZ`). A box with a chooser is a button: Tab reaches it, Enter or
+/// Space opens the chooser, and it shows the focused field stroke (`o8Oug`) while focused.
 pub fn value_box_sized(
   ctx: &Ctx,
   id: &'static str,
@@ -145,43 +146,57 @@ pub fn value_box_sized(
     ValueTone::Invalid => (input.background, PaletteColor::TextPrimary),
     ValueTone::Unavailable => (PaletteColor::SurfacePanel, PaletteColor::TextMuted),
   };
-  let row = Row::new()
-    .id(id)
-    .width(Dimension::Pct(100.0))
-    .height(height)
-    .padding_custom(input.padding)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .background(background)
-    .border(Border::inside(
-      BorderSize::Sm,
-      if tone == ValueTone::Invalid {
-        PaletteColor::BorderStrong
-      } else {
-        input.border.clone()
-      },
-    ))
-    .rounded(input.radius)
-    .child(
-      Text::new(text)
-        .variant(input.text.typography)
-        .color(color)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .flex(1.0),
-    );
+  let border = if tone == ValueTone::Invalid {
+    PaletteColor::BorderStrong
+  } else {
+    input.border.clone()
+  };
+  let value = Text::new(text)
+    .variant(input.text.typography)
+    .color(color)
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis)
+    .flex(1.0);
   match choose {
-    Some((glyph, on_click)) if tone != ValueTone::Unavailable => row
+    Some((glyph, on_click)) if tone != ValueTone::Unavailable => Button::empty()
+      .button()
+      .id(id)
+      .width(Dimension::Pct(100.0))
+      .height(height)
+      .padding_custom(input.padding)
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .background(background)
+      .border(Border::inside(BorderSize::Sm, border))
+      .rounded(input.radius)
+      .child(value)
       .child(icon(glyph, IconSize::Button, PaletteColor::TextSecondary))
       .cursor(CursorIcon::Pointer)
-      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, input.border_focus)))
+      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, input.border_focus.clone())))
+      .focused_style(Style::new().border(Border::inside(BorderSize::Md, input.border_focus)))
       .on_click(move |_| on_click())
       .into(),
-    _ if tone == ValueTone::Unavailable => row
-      .describe("state", "unavailable")
-      .cursor(CursorIcon::NotAllowed)
-      .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))
-      .into(),
-    _ => row.into(),
+    _ => {
+      let row = Row::new()
+        .id(id)
+        .width(Dimension::Pct(100.0))
+        .height(height)
+        .padding_custom(input.padding)
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .background(background)
+        .border(Border::inside(BorderSize::Sm, border))
+        .rounded(input.radius)
+        .child(value);
+      if tone == ValueTone::Unavailable {
+        row
+          .describe("state", "unavailable")
+          .cursor(CursorIcon::NotAllowed)
+          .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))
+          .into()
+      } else {
+        row.into()
+      }
+    }
   }
 }

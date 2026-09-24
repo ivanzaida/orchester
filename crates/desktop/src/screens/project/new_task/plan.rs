@@ -9,7 +9,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Select, Spacer, Text},
+  components::{Button, Column, Row, Select, Spacer, Text},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -21,8 +21,9 @@ use crate::{
   tasks::{data::PipelineChoice, form::BUDGET_CURRENCY},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, SELECT_CHEVRON_SIZE},
   ui::{
-    button::ActionButton,
+    button::{ActionButton, SKIPPED_BY_TAB},
     field::{ValueTone, select_trigger, styled_input, value_box_sized},
+    form::Submit,
     icon::Icon,
     message_text,
   },
@@ -42,7 +43,7 @@ pub fn execution_plan(
   form: &NewTaskForm,
   pipelines: Option<&Vec<PipelineChoice>>,
   state: &FormState,
-  save: Option<Box<dyn Fn() + Send + Sync>>,
+  save: Submit,
 ) -> Element {
   let selected = form.pipeline.get().0;
   let steps = pipelines
@@ -200,12 +201,13 @@ fn limit_row(ctx: &Ctx, label: &str, id: &'static str, value: &Signal<String>, u
 }
 
 /// Create & run, unavailable with its reason, then Save as draft (`Hc1Cp`, `Q4xE7q`).
-fn actions(ctx: &Ctx, state: &FormState, save: Option<Box<dyn Fn() + Send + Sync>>) -> Element {
+/// `save` is `None` while the draft cannot be saved, including while it is being saved.
+fn actions(ctx: &Ctx, state: &FormState, save: Submit) -> Element {
   let status: Option<Element> = state
     .save_error
     .as_ref()
     .map(|error| error_note(&message_text(ctx, error)));
-  let enabled = save.is_some() && !state.saving;
+  let enabled = save.is_some();
   let label = if state.saving {
     ctx.t("tasks.new.savingDraft")
   } else {
@@ -216,20 +218,25 @@ fn actions(ctx: &Ctx, state: &FormState, save: Option<Box<dyn Fn() + Send + Sync
   } else {
     PaletteColor::TextMuted
   });
-  let mut save_draft = Row::new()
+  let save_draft = Button::empty()
+    .button()
     .id("save-draft")
     .width(Dimension::Pct(100.0))
     .padding_vertical(SpacingSize::Xs)
+    .align_items(Alignment::Start)
     .justify(Justify::Center)
     .rounded(RadiusSize::Sm)
     .child(text);
-  save_draft = match save.filter(|_| enabled) {
+  let save_draft = match save {
     Some(save) => save_draft
       .describe("state", "enabled")
       .cursor(CursorIcon::Pointer)
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
       .on_click(move |_| save()),
-    None => save_draft.describe("state", "disabled").cursor(CursorIcon::NotAllowed),
+    None => save_draft
+      .describe("state", "disabled")
+      .cursor(CursorIcon::NotAllowed)
+      .tab_index(SKIPPED_BY_TAB),
   };
   Column::new()
     .width(Dimension::Pct(100.0))

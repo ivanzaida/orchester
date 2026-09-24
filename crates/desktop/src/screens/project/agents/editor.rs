@@ -32,7 +32,13 @@ use crate::{
   messages::Message,
   screens::project::page::{self, TOPBAR_BUTTON_HEIGHT},
   theme::ExtraSpacing,
-  ui::{button::ActionButton, icon::Icon, message_text, notice::Notice},
+  ui::{
+    button::ActionButton,
+    form::{Submit, form},
+    icon::Icon,
+    message_text,
+    notice::Notice,
+  },
 };
 
 /// The chosen connection.
@@ -115,7 +121,7 @@ impl Component for ProfileEditor {
         ("role", &*self.title(ctx)),
       ],
     );
-    Column::new()
+    let page = Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(page::topbar(&breadcrumb, self.topbar_actions(ctx, &state)))
@@ -136,7 +142,9 @@ impl Component for ProfileEditor {
               .flex(1.0)
               .height(Dimension::Pct(100.0)),
           ),
-      )
+      );
+    // Enter in a field saves the draft, as Save draft does.
+    form(self.save_draft(&state), page)
   }
 }
 
@@ -255,19 +263,26 @@ impl ProfileEditor {
       .icon(Icon::Save)
       .id("agent-save-draft")
       .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT));
+    match self.save_draft(state) {
+      Some(save) => button.on_click(move || save()),
+      None => button.on_click(|| {}).enabled(false),
+    }
+    .render(ctx)
+  }
+
+  /// Saves the changed draft; `None` while the fields say what is missing, nothing changed,
+  /// or a save is running.
+  fn save_draft(&self, state: &EditorState) -> Submit {
     let change = match (&state.profile, &self.context.editing) {
       (Ok(profile), Editing::New) => ProfileChange::Create(profile.clone()),
       (Ok(profile), Editing::Profile(entry)) => ProfileChange::SaveDraft(entry.id, profile.clone()),
-      // The fields say what is missing; nothing to save until then.
-      (Err(_), _) => return button.on_click(|| {}).enabled(false).render(ctx),
+      (Err(_), _) => return None,
     };
     if !state.dirty || state.saving {
-      return button.on_click(|| {}).enabled(false).render(ctx);
+      return None;
     }
     let (action, repo_root) = (self.context.change.clone(), self.context.project.repo_root.clone());
-    button
-      .on_click(move || action.run((repo_root.clone(), change.clone())))
-      .render(ctx)
+    Some(Arc::new(move || action.run((repo_root.clone(), change.clone()))))
   }
 
   /// Publishes the saved draft; unsaved changes must be saved first.
