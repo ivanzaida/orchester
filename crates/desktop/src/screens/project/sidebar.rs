@@ -1,5 +1,5 @@
-//! Shell sidebar (`zo9Py`). Overview is the only project screen so far; every other entry is
-//! shown but unavailable. The runner card shows the open project's runner.
+//! Shell sidebar (`zo9Py`). Overview and Tasks open their screens; every other entry is shown
+//! but unavailable. The runner card shows the open project's runner.
 
 use lurq::{
   app::{
@@ -11,6 +11,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 
+use super::{ProjectNav, Section, TasksState};
 use crate::{
   runner::state::RunnerState,
   theme::{ExtraColor, ExtraSpacing},
@@ -25,7 +26,14 @@ const CURRENT_PROJECT_HEIGHT: f32 = 70.0;
 const SELECTOR_HEIGHT: f32 = 42.0;
 const AVATAR_SIZE: f32 = 24.0;
 
-pub fn sidebar(ctx: &Ctx, open: &OpenProject, runner: &RunnerState) -> Element {
+pub fn sidebar(
+  ctx: &Ctx,
+  open: &OpenProject,
+  runner: &RunnerState,
+  section: Section,
+  tasks: &TasksState,
+  nav: &ProjectNav,
+) -> Element {
   Column::new()
     .width(Dimension::Px(SIDEBAR_WIDTH))
     .height(Dimension::Pct(100.0))
@@ -33,7 +41,7 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject, runner: &RunnerState) -> Element {
     .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Column::new().padding_horizontal(SpacingSize::Lg).child(brand(ctx)))
     .child(project_selector(open))
-    .child(primary_navigation(ctx))
+    .child(primary_navigation(ctx, section, tasks, nav))
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
@@ -82,11 +90,21 @@ fn project_selector(open: &OpenProject) -> Element {
     .into()
 }
 
-fn primary_navigation(ctx: &Ctx) -> Element {
+/// Tasks stays selected while a new task is written (`l2YA4`).
+fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &ProjectNav) -> Element {
+  let open = |target: Section| {
+    let nav = nav.clone();
+    move || nav.show(target)
+  };
   let items = [
-    NavItem::new("nav-overview", Icon::LayoutDashboard, ctx.t("nav.overview")).selected(true),
+    NavItem::new("nav-overview", Icon::LayoutDashboard, ctx.t("nav.overview"))
+      .selected(section == Section::Overview)
+      .on_click(open(Section::Overview)),
     NavItem::new("nav-orchestrator", Icon::MessagesSquare, ctx.t("nav.orchestrator")),
-    NavItem::new("nav-tasks", Icon::CircleCheck, ctx.t("nav.tasks")),
+    NavItem::new("nav-tasks", Icon::CircleCheck, ctx.t("nav.tasks"))
+      .selected(matches!(section, Section::Tasks | Section::NewTask))
+      .on_click(open(Section::Tasks))
+      .count(tasks.ready().map(|tasks| tasks.tasks.len())),
     NavItem::new("nav-pull-requests", Icon::GitPullRequest, ctx.t("nav.pullRequests")),
     NavItem::new("nav-pipelines", Icon::Workflow, ctx.t("nav.pipelines")),
     NavItem::new("nav-instructions", Icon::BookOpen, ctx.t("nav.instructions")),

@@ -18,7 +18,7 @@ impl Message {
     Self { key, args: Vec::new() }
   }
 
-  fn with(mut self, name: &'static str, value: String) -> Self {
+  pub fn with(mut self, name: &'static str, value: String) -> Self {
     self.args.push((name, value));
     self
   }

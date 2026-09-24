@@ -6,7 +6,8 @@
   "common": {
     "back": "Back",
     "cancel": "Cancel",
-    "notAvailableYet": "Not available in this version yet"
+    "notAvailableYet": "Not available in this version yet",
+    "separator": "·"
   },
   "workspace": {
     "personal": "Personal workspace"
@@ -129,9 +130,109 @@
     "description": "Everything moving in this project, and what needs you.",
     "newTask": "New task",
     "emptyTitle": "No tasks yet",
-    "emptyDetail": "Tasks, runs and agents are not available in this version yet. The project is ready in its repository.",
+    "emptyDetail": "Create a task to describe what agents should build. Runs and agents are not available in this version yet.",
     "projectKey": "Project key",
-    "repository": "Repository"
+    "repository": "Repository",
+    "tabs": {
+      "running": "Running",
+      "needsYou": "Needs you",
+      "queued": "Queued"
+    },
+    "viewAllTasks": "View all tasks  →"
+  },
+  "tasks": {
+    "title": "Tasks",
+    "breadcrumb": "{{project}} / Tasks",
+    "description": "Prepare your backlog, then choose what agents should work on.",
+    "createMultiple": "Create multiple",
+    "loadFailed": "Tasks cannot be read",
+    "emptyTitle": "No tasks yet",
+    "emptyDetail": "Describe what agents should build as a task. Drafts can be saved before every detail is known.",
+    "emptyTab": "No tasks in this tab.",
+    "tabs": {
+      "all": "All tasks",
+      "drafts": "Drafts",
+      "queue": "Queue",
+      "needsReview": "Needs review",
+      "done": "Done"
+    },
+    "filters": {
+      "search": "Search tasks…",
+      "allPipelines": "All pipelines",
+      "manualOrder": "Manual order"
+    },
+    "selection": {
+      "unavailable": "Selecting tasks is not available yet",
+      "readiness": "{{ready}} ready to queue · {{incomplete}} incomplete",
+      "setPipeline": "Set pipeline",
+      "runSelected": "Run selected"
+    },
+    "columns": {
+      "key": "ID",
+      "task": "Task",
+      "pipeline": "Pipeline",
+      "status": "Status",
+      "readiness": "Dependency / readiness"
+    },
+    "status": {
+      "draft": "Draft",
+      "queued": "Queued"
+    },
+    "readiness": {
+      "ready": "Ready to queue",
+      "missingBrief": "Needs a brief",
+      "missingCriteria": "Needs acceptance criteria",
+      "missingPipeline": "Needs a pipeline",
+      "missingLimits": "Needs a budget and time limit",
+      "missingCount": "Needs {{count}} details"
+    },
+    "pipeline": {
+      "notChosen": "No pipeline",
+      "published": "{{name}} · {{version}}",
+      "unavailable": "Pipeline not published"
+    },
+    "count": {
+      "one": "{{count}} task",
+      "other": "{{count}} tasks"
+    },
+    "footer": {
+      "one": "{{count}} task · no runs started",
+      "other": "{{count}} tasks · no runs started"
+    },
+    "new": {
+      "breadcrumb": "{{project}} / Tasks / New task",
+      "notSaved": "Not saved yet",
+      "saving": "Saving draft…",
+      "title": "What would you like to build?",
+      "description": "Describe the outcome and how to check it. The task is saved as a draft.",
+      "project": "Project · current context",
+      "taskTitle": "Task title",
+      "titlePlaceholder": "Name the outcome",
+      "brief": "Describe the outcome",
+      "briefPlaceholder": "What should change, and why?",
+      "briefHint": "Add context, constraints, or links.",
+      "criteria": "Acceptance criteria",
+      "criterionPlaceholder": "Describe an outcome that can be checked",
+      "addCriterion": "+  Add criterion",
+      "context": "Context",
+      "attachContext": "Attach context",
+      "executionPlan": "Execution plan",
+      "pipelinesLoading": "Reading pipelines…",
+      "noPipelines": "No published pipelines in this project",
+      "budget": "Run budget",
+      "timeLimit": "Time limit",
+      "minutes": "min",
+      "createAndRun": "Create & run",
+      "runUnavailable": "Running tasks is not available in this version yet. Save the task as a draft for now.",
+      "saveDraft": "Save as draft",
+      "savingDraft": "Saving draft…"
+    }
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
   },
   "recovery": {
     "startupFailed": {
@@ -156,6 +257,13 @@
     "runnerMissing": "The runner program was not found at {{path}}.",
     "runnerAlreadyServed": "Another Orchester window is already running this project's runner.",
     "runnerStartFailed": "The runner could not be started. The log has the details.",
-    "runnerLost": "The runner stopped unexpectedly and could not be reconnected. The log has the details."
+    "runnerLost": "The runner stopped unexpectedly and could not be reconnected. The log has the details.",
+    "titleRequired": "Enter a title to save the draft.",
+    "budgetRequired": "Enter a budget too, or clear the time limit.",
+    "budgetInvalid": "Enter an amount such as 5 or 5.50.",
+    "budgetNotPositive": "The budget must be more than zero.",
+    "timeLimitRequired": "Enter a time limit too, or clear the budget.",
+    "timeLimitInvalid": "Enter whole minutes, such as 30.",
+    "timeLimitZero": "The time limit must be at least one minute."
   }
 }

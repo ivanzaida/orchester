@@ -14,6 +14,7 @@ pub mod runner;
 mod screens;
 pub use screens::close_dialog;
 pub mod session;
+pub mod tasks;
 pub mod theme;
 mod ui;
 pub mod workspace;
