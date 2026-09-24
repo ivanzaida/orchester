@@ -42,21 +42,33 @@ pub enum ExtraTypography {
   Footnote,
   /// Emphasized notice heading and dialog option title (`T9TyR`, `Oq9Jc`).
   NoticeHeading,
+  /// Title of a project screen below its topbar, e.g. "Tasks" (`eQKWX`, `E4mnm8`).
+  ScreenTitle,
+  /// Label above a field of the new task form, e.g. "Task title" (`Pg9E7`).
+  FormLabel,
+  /// Text of a status label, e.g. "Draft" (`JuW4o` in `DeizF`).
+  StatusLabel,
+  /// Count beside a navigation item (`LTXft` in `TSJpn`).
+  NavCount,
+  /// Task brief as it is written (`E9moJ`).
+  Brief,
   /// Dialog title (`bhcaX`).
   DialogTitle,
   /// Dialog explanation under its title (`ClBsl`).
   Explanation,
   /// Chevrons and other 12px icons (`B1lur`, `Y9sVM2`).
   IconSmall,
+  /// Acceptance criterion marker (`JjM8I`), 13px.
+  IconMarker,
   /// Button and secondary navigation icons (`xfnek`, `ssq5w`).
   IconButton,
   /// Primary navigation icons (`sQnmq`).
   IconNav,
   /// Dismiss icon of a notice (`KGM0S`), 14px.
   IconDismiss,
-  /// Option icons in a dialog (`dsi3B`), 16px.
+  /// Option icons in a dialog, task selection and task state icons (`dsi3B`, `R7idX`, `UR2gw`), 16px.
   IconOption,
-  /// Inline notice icon (`GkfFF` in `q5LzI`), 18px.
+  /// Inline notice icon and the repository of the new task form (`GkfFF` in `q5LzI`, `iuGdG`), 18px.
   IconNotice,
   /// Footer icon on the first launch screen (`OYpN8`).
   IconFeature,
@@ -67,7 +79,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 26] = [
+  const ALL: [Self; 32] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -83,9 +95,15 @@ impl ExtraTypography {
     Self::Detail,
     Self::Footnote,
     Self::NoticeHeading,
+    Self::ScreenTitle,
+    Self::FormLabel,
+    Self::StatusLabel,
+    Self::NavCount,
+    Self::Brief,
     Self::DialogTitle,
     Self::Explanation,
     Self::IconSmall,
+    Self::IconMarker,
     Self::IconButton,
     Self::IconNav,
     Self::IconDismiss,
@@ -113,9 +131,15 @@ impl ExtraTypography {
       Self::Detail => "detail",
       Self::Footnote => "footnote",
       Self::NoticeHeading => "notice-heading",
+      Self::ScreenTitle => "screen-title",
+      Self::FormLabel => "form-label",
+      Self::StatusLabel => "status-label",
+      Self::NavCount => "nav-count",
+      Self::Brief => "brief",
       Self::DialogTitle => "dialog-title",
       Self::Explanation => "explanation",
       Self::IconSmall => "icon-small",
+      Self::IconMarker => "icon-marker",
       Self::IconButton => "icon-button",
       Self::IconNav => "icon-nav",
       Self::IconDismiss => "icon-dismiss",
@@ -191,12 +215,21 @@ impl ExtraTypography {
       },
       Self::Footnote => style(10.0, FontWeight::Normal, MUTED),
       Self::NoticeHeading => style(12.0, FontWeight::Medium, TEXT),
+      Self::ScreenTitle => style(28.0, FontWeight::Medium, TEXT),
+      Self::FormLabel => style(12.0, FontWeight::Medium, TEXT),
+      Self::StatusLabel => style(11.0, FontWeight::Medium, TEXT),
+      Self::NavCount => mono(11.0, MUTED),
+      Self::Brief => TextStyle {
+        line_height: 1.7,
+        ..style(13.0, FontWeight::Normal, TEXT)
+      },
       Self::DialogTitle => style(20.0, FontWeight::Medium, TEXT),
       Self::Explanation => TextStyle {
         line_height: 1.6,
         ..style(12.0, FontWeight::Normal, MUTED)
       },
       Self::IconSmall => icon(12.0),
+      Self::IconMarker => icon(13.0),
       Self::IconButton => icon(15.0),
       Self::IconNav => icon(17.0),
       Self::IconDismiss => icon(14.0),

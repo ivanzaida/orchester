@@ -5,8 +5,9 @@ use lurq::{
 
 use super::tokens::{
   FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, SPACE_COLUMNS, SPACE_FOOTER,
-  SPACE_GROUP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD,
-  SPACE_PAGE, SPACE_RAIL, SPACE_SECTION, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TIGHT,
+  SPACE_GROUP, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE,
+  SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_RAIL, SPACE_SECTION, SPACE_SM, SPACE_STACK,
+  SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -17,7 +18,7 @@ pub enum ExtraSpacing {
   Mark,
   /// Notice heading to its detail (`w8Szl`).
   Tight,
-  /// Status indicator to its label (`rvPqs`).
+  /// Status indicator to its label, task title to its metadata (`rvPqs`, `i3svLs`).
   Indicator,
   /// Icon to label in navigation items and the brand (`TSJpn`, `a0S44m`).
   Inline,
@@ -29,7 +30,12 @@ pub enum ExtraSpacing {
   Step,
   /// Setup rail padding and page heading top padding (`Hw5eX`, `b0m9CN`).
   Rail,
-  /// Left indent of the getting started steps after their divider (`ZZqwk`).
+  /// Top padding of a project screen heading (`LIfyO`).
+  HeadingTop,
+  /// Bottom padding of a project screen heading; brief to its hint (`LIfyO`, `bGakk`).
+  HeadingBottom,
+  /// Left indent of the getting started steps after their divider; horizontal padding and
+  /// column gap of the new task form (`ZZqwk`, `hkWbp`, `uZeUx`).
   Indent,
   /// Horizontal page padding of the welcome topbar and the setup form (`DY5WC`, `Allwo`).
   Page,
@@ -44,7 +50,7 @@ pub enum ExtraSpacing {
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 14] = [
+  const ALL: [Self; 16] = [
     Self::Mark,
     Self::Tight,
     Self::Indicator,
@@ -53,6 +59,8 @@ impl ExtraSpacing {
     Self::Group,
     Self::Step,
     Self::Rail,
+    Self::HeadingTop,
+    Self::HeadingBottom,
     Self::Indent,
     Self::Page,
     Self::Hero,
@@ -71,6 +79,8 @@ impl ExtraSpacing {
       Self::Group => "group",
       Self::Step => "step",
       Self::Rail => "rail",
+      Self::HeadingTop => "heading-top",
+      Self::HeadingBottom => "heading-bottom",
       Self::Indent => "indent",
       Self::Page => "page",
       Self::Hero => "hero",
@@ -90,6 +100,8 @@ impl ExtraSpacing {
       Self::Group => SPACE_GROUP,
       Self::Step => SPACE_STEP,
       Self::Rail => SPACE_RAIL,
+      Self::HeadingTop => SPACE_HEADING_TOP,
+      Self::HeadingBottom => SPACE_HEADING_BOTTOM,
       Self::Indent => SPACE_INDENT,
       Self::Page => SPACE_PAGE,
       Self::Hero => SPACE_HERO,
@@ -107,7 +119,8 @@ impl ExtraSpacing {
 /// Pencil radii without a built-in lurq role, registered as `RadiusSize::Extra`.
 #[derive(Clone, Copy)]
 pub enum ExtraRadius {
-  /// Inline notices and the runner status card (`q5LzI`, `O2Jjjf`).
+  /// Inline notices, the runner status card, the task state tile and the brief field
+  /// (`q5LzI`, `O2Jjjf`, `aqRNL`, `bGakk`).
   Notice,
   /// Bars of the Orchester mark (`DIMZ6`).
   Mark,
@@ -165,6 +178,7 @@ pub fn spacing() -> ThemeSpacing {
 pub fn border_sizes() -> ThemeBorderSizes {
   ThemeBorderSizes {
     md: FOCUS_STROKE,
+    lg: TAB_INDICATOR_STROKE,
     ..ThemeBorderSizes::default()
   }
 }

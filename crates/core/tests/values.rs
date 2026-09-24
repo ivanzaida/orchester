@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   id::TaskId,
-  money::{Currency, MoneyError},
+  money::{Currency, Money, MoneyError},
   name::{Name, NameError},
   project::{ProjectKey, TaskKey},
 };
@@ -47,6 +47,22 @@ fn currency_requires_three_uppercase_letters() {
   assert_eq!(Currency::new("EUR").unwrap().code(), "EUR");
   assert_eq!(Currency::new("usd"), Err(MoneyError::InvalidCurrency("usd".into())));
   assert!(Currency::new("US").is_err());
+}
+
+#[test]
+fn money_parses_decimal_amounts_exactly() {
+  let parse = |text: &str| Money::parse(text, Currency::USD).map(Money::micros);
+  assert_eq!(parse("5"), Ok(5_000_000));
+  assert_eq!(parse(" 5.5 "), Ok(5_500_000));
+  assert_eq!(parse("0.000001"), Ok(1));
+  assert_eq!(parse("12."), Ok(12_000_000));
+  for invalid in ["", ".5", "-1", "+1", "1,5", "1.0000001", "5 USD", "99999999999999"] {
+    assert_eq!(
+      parse(invalid),
+      Err(MoneyError::InvalidAmount(invalid.into())),
+      "{invalid:?} should be rejected"
+    );
+  }
 }
 
 #[test]

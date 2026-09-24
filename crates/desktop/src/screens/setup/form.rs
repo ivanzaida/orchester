@@ -147,7 +147,14 @@ impl ProjectForm {
     let invalid = error.is_some();
     field(
       &ctx.t("setup.project.name"),
-      text_input(ctx, "project-name", self.name.clone(), invalid),
+      text_input(
+        ctx,
+        "project-name",
+        self.name.clone(),
+        invalid,
+        TypographyStyle::FieldLabel,
+      )
+      .into(),
       error.map_or(FieldNote::None, FieldNote::Error),
     )
   }

@@ -36,6 +36,10 @@ pub const BUTTON_HEIGHT: f32 = 36.0;
 pub const CONTROL_PADDING_X: f32 = 12.0;
 /// Focused field stroke (`o8Oug`).
 pub const FOCUS_STROKE: f32 = 1.5;
+/// Underline of the selected tab (`Iefue`, `Okyxt`).
+pub const TAB_INDICATOR_STROKE: f32 = 2.0;
+/// Disclosure icon of a select field (`eASPF` in `ZGwlv`).
+pub const SELECT_CHEVRON_SIZE: f32 = 14.0;
 /// Lucide icon font, the icon library of every Pencil icon node.
 pub const ICON_FONT: &str = "lucide";
 
@@ -54,6 +58,8 @@ pub const SPACE_STACK: f32 = 12.0;
 pub const SPACE_GROUP: f32 = 14.0;
 pub const SPACE_STEP: f32 = 20.0;
 pub const SPACE_RAIL: f32 = 28.0;
+pub const SPACE_HEADING_TOP: f32 = 26.0;
+pub const SPACE_HEADING_BOTTOM: f32 = 22.0;
 pub const SPACE_SECTION: f32 = 32.0;
 pub const SPACE_INDENT: f32 = 40.0;
 pub const SPACE_PAGE: f32 = 48.0;

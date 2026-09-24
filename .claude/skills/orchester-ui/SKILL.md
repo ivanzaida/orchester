@@ -95,7 +95,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `accent` / `inverse-text` | `Accent` / `TextInverse` — primary action |
 | `radius-control` 7 / `radius-panel` 12 / nav item 6 | `RadiusSize::Md` / `Lg` / `Sm` |
 | `space-sm/md/lg` 8/16/24 | `SpacingSize::Sm/Md/Lg` |
-| stroke 1 / focus stroke 1.5 | `BorderSize::Sm` / `Md` |
+| stroke 1 / focus stroke 1.5 / selected tab underline 2 | `BorderSize::Sm` / `Md` / `Lg` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |
@@ -116,6 +116,11 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::DialogTitle.role()` | 20/500 | dialog title (`bhcaX`) |
 | `ExtraTypography::Explanation.role()` | 12 muted, 1.6 | dialog explanation (`ClBsl`) |
 | `ExtraTypography::NoticeHeading.role()` | 12/500 | emphasized notice heading, dialog option title (`T9TyR`) |
+| `ExtraTypography::ScreenTitle.role()` | 28/500 | project screen title below its topbar ("Tasks", `eQKWX`) |
+| `ExtraTypography::FormLabel.role()` | 12/500 | new task form field label (`Pg9E7`) |
+| `ExtraTypography::StatusLabel.role()` | 11/500 | status label text (`DeizF`) |
+| `ExtraTypography::NavCount.role()` | mono 11 muted | count beside a navigation item (`LTXft`) |
+| `ExtraTypography::Brief.role()` | 13, 1.7 | task brief text (`E9moJ`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

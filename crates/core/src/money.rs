@@ -5,6 +5,11 @@ use thiserror::Error;
 pub enum MoneyError {
   #[error("currency code must be three uppercase ASCII letters, got `{0}`")]
   InvalidCurrency(String),
+  #[error(
+    "amount must be digits with at most {places} decimal places, got `{0}`",
+    places = Money::DECIMAL_PLACES
+  )]
+  InvalidAmount(String),
 }
 
 /// ISO 4217 currency code.
@@ -49,6 +54,30 @@ pub struct Money {
 }
 
 impl Money {
+  /// Decimal places an amount can carry: one micro-unit is the smallest step.
+  pub const DECIMAL_PLACES: usize = 6;
+
+  /// Reads a non-negative decimal amount such as `5`, `5.5` or `0.25`, as a person types it.
+  /// Signs, separators and more than [`Self::DECIMAL_PLACES`] decimals are rejected rather
+  /// than rounded, so the stored amount is exactly what was entered.
+  pub fn parse(amount: &str, currency: Currency) -> Result<Self, MoneyError> {
+    let invalid = || MoneyError::InvalidAmount(amount.to_owned());
+    let trimmed = amount.trim();
+    let (units, fraction) = trimmed.split_once('.').unwrap_or((trimmed, ""));
+    let digits_only = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
+    if units.is_empty() || !digits_only(units) || !digits_only(fraction) || fraction.len() > Self::DECIMAL_PLACES {
+      return Err(invalid());
+    }
+    let padded = format!("{fraction:0<width$}", width = Self::DECIMAL_PLACES);
+    let units: i64 = units.parse().map_err(|_| invalid())?;
+    let fraction: i64 = padded.parse().map_err(|_| invalid())?;
+    let micros = units
+      .checked_mul(1_000_000)
+      .and_then(|micros| micros.checked_add(fraction))
+      .ok_or_else(invalid)?;
+    Ok(Self { micros, currency })
+  }
+
   pub const fn from_micros(micros: i64, currency: Currency) -> Self {
     Self { micros, currency }
   }

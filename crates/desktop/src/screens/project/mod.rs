@@ -1,177 +1,174 @@
-//! Project shell: the sidebar (`zo9Py`) beside the project overview (`Twtqc`). Tasks, runs and
-//! agents do not exist yet, so the overview shows what the project is and says so, and the
-//! state of the project's runner.
+//! Project shell: the sidebar (`zo9Py`) beside the open project screen — the overview
+//! (`Twtqc`), the task list (`J9467`) or the new task form (`l2YA4`). The shell reads the
+//! project's tasks once and hands them to the sidebar and the screen.
 
+mod new_task;
+mod overview;
 mod runner;
 mod sidebar;
+mod task_rows;
+mod tasks;
 
 use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, StreamEmitter},
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, border::Border, dimension::Dimension},
+  components::{Column, Row},
+  core::Signal,
+  node::{Element, dimension::Dimension},
 };
 
-use self::sidebar::sidebar;
+use self::{
+  new_task::{NewTaskForm, NewTaskProps},
+  sidebar::sidebar,
+  tasks::{TasksProps, TasksScreen},
+};
 use crate::{
-  display,
-  runner::{RunnerStatus, Runners, state::RunnerState},
-  theme::{ExtraColor, ExtraSpacing},
-  ui::{
-    button::ActionButton,
-    icon::{Icon, IconSize, icon},
-    panel::RecoveryPanel,
-  },
+  background,
+  messages::{self, Message},
+  runner::{RunnerStatus, Runners},
+  tasks::data::ProjectTasks,
   workspace::OpenProject,
 };
 
-/// Project bar height (`CsB3h`) and New task button height (`nMeVq`).
-const PROJECT_BAR_HEIGHT: f32 = 64.0;
-const NEW_TASK_HEIGHT: f32 = 38.0;
-/// Longest repository path shown in full in the overview panel.
-const PATH_CHARS: usize = 48;
+/// The screen shown beside the sidebar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Section {
+  Overview,
+  Tasks,
+  NewTask,
+}
 
-pub struct ProjectShell;
+impl lurq::app::component::DevtoolsInspectable for Section {}
+
+/// Provided by the shell: switching screens and announcing that tasks changed.
+#[derive(Clone)]
+pub struct ProjectNav {
+  section: Signal<Section>,
+  revision: Signal<u64>,
+}
+
+impl ProjectNav {
+  pub fn show(&self, section: Section) {
+    self.section.set(section);
+  }
+
+  /// Tasks were saved; the shell reads them again.
+  pub fn tasks_changed(&self) {
+    self.revision.update(|revision| *revision += 1);
+  }
+}
+
+/// The project's tasks as far as they are known.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TasksState {
+  Loading,
+  /// Also kept while the tasks are read again after a change.
+  Ready(ProjectTasks),
+  Failed(Message),
+}
+
+impl lurq::app::component::DevtoolsInspectable for TasksState {}
+
+impl TasksState {
+  pub fn ready(&self) -> Option<&ProjectTasks> {
+    match self {
+      Self::Ready(tasks) => Some(tasks),
+      Self::Loading | Self::Failed(_) => None,
+    }
+  }
+}
+
+pub struct ProjectShell {
+  nav: ProjectNav,
+}
 
 impl Component for ProjectShell {
   type Props = OpenProject;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      nav: ProjectNav {
+        section: ctx.signal(Section::Overview),
+        revision: ctx.signal(0),
+      },
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    // Provided on every render: a re-render from the root replaces this component's context
+    // with the root's, which does not contain it.
+    ctx.provide(self.nav.clone());
     let open = ctx.props::<OpenProject>().clone();
     let runners = ctx
       .use_context::<Runners>()
       .expect("the root provides Runners before mounting screens");
-    let status = ctx.stream(
-      runners.clone(),
-      |runners, emitter: StreamEmitter<RunnerStatus, ()>| async move {
-        let mut updates = runners.subscribe();
-        loop {
-          let status = updates.borrow_and_update().clone();
-          if !emitter.emit(status) || updates.changed().await.is_err() {
-            return;
-          }
-        }
-      },
-    );
-    let status = status.state().get().data.unwrap_or_else(|| runners.status());
+    let status = runner_status(ctx, &runners);
     let runner = status.state_for(&open.repo_root);
-    let overview = overview(ctx, &open, &status, &runner, &runners);
+    let tasks = self.tasks(ctx, &open);
+    let section = self.nav.section.get();
+    let content = match section {
+      Section::Overview => {
+        let notice = runner::connection_notice(ctx, &status, &runner, &runners);
+        overview::overview(ctx, &open, notice, &tasks, &self.nav)
+      }
+      Section::Tasks => ctx.mount_keyed::<TasksScreen>(
+        "tasks",
+        TasksProps {
+          project: open.project.name().as_str().into(),
+          tasks: tasks.clone(),
+        },
+      ),
+      Section::NewTask => ctx.mount_keyed::<NewTaskForm>(
+        "new-task",
+        NewTaskProps {
+          project: open.clone(),
+          pipelines: tasks.ready().map(|tasks| tasks.pipelines.clone()),
+        },
+      ),
+    };
     Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(sidebar(ctx, &open, &runner))
-      .child(
-        Column::new()
-          .flex(1.0)
-          .height(Dimension::Pct(100.0))
-          .child(project_bar(ctx, &open))
-          .child(overview),
-      )
+      .child(sidebar(ctx, &open, &runner, section, &tasks, &self.nav))
+      .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(content))
   }
 }
 
-fn project_bar(ctx: &Ctx, open: &OpenProject) -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(PROJECT_BAR_HEIGHT))
-    .padding_horizontal(SpacingSize::Section)
-    .spacing(ExtraSpacing::Inline.role())
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(Text::new(open.project.name().as_str()).variant(TypographyStyle::Description))
-    .child(icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted))
-    .child(
-      Text::new(&ctx.t("nav.overview"))
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary),
-    )
-    .into()
+impl ProjectShell {
+  fn tasks(&self, ctx: &mut Ctx, open: &OpenProject) -> TasksState {
+    let deps = (open.repo_root.clone(), self.nav.revision.get());
+    let load = ctx.future(deps, |(repo_root, _)| async move {
+      background::run(move || ProjectTasks::load(&repo_root))
+        .await?
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the project's tasks");
+          messages::store_error(&error)
+        })
+    });
+    let state = load.state().get();
+    // A failed reload must not leave the previous tasks on screen as if they were current.
+    match (state.data, state.error) {
+      (_, Some(error)) => TasksState::Failed(error),
+      (Some(tasks), None) => TasksState::Ready(tasks),
+      (None, None) => TasksState::Loading,
+    }
+  }
 }
 
-fn overview(
-  ctx: &mut Ctx,
-  open: &OpenProject,
-  status: &RunnerStatus,
-  runner: &RunnerState,
-  runners: &Runners,
-) -> Element {
-  let notice = runner::connection_notice(ctx, status, runner, runners);
-  let heading = Row::new()
-    .width(Dimension::Pct(100.0))
-    .justify(Justify::SpaceBetween)
-    .align_items(Alignment::Center)
-    .child(
-      Column::new()
-        .spacing(SpacingSize::Sm)
-        .child(Text::new(open.project.name().as_str()).variant(TypographyStyle::Heading))
-        .child(
-          Text::new(&ctx.t("overview.description"))
-            .variant(TypographyStyle::Body)
-            .color(PaletteColor::TextSecondary),
-        ),
-    )
-    .child(
-      ActionButton::new(ctx.t("overview.newTask"))
-        .primary()
-        .icon(Icon::Plus)
-        .id("new-task")
-        .height(Dimension::Px(NEW_TASK_HEIGHT))
-        .roomy()
-        .render(ctx),
-    );
-  // The overview body spaces its sections by 28 (`FMRs3`), by 24 below a connection notice
-  // (`G8JTc`, `c7qiCh`, `s3EdDI`).
-  let spacing = if notice.is_some() {
-    SpacingSize::Lg
-  } else {
-    ExtraSpacing::Rail.role()
-  };
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .padding(SpacingSize::Section)
-    .spacing(spacing)
-    .with_children(notice)
-    .child(heading)
-    .child(empty_overview(ctx, open))
-    .into()
-}
-
-/// No tasks yet: what the project is.
-fn empty_overview(ctx: &Ctx, open: &OpenProject) -> Element {
-  RecoveryPanel::new(
-    Icon::FolderGit,
-    &ctx.t("overview.emptyTitle"),
-    &ctx.t("overview.emptyDetail"),
-  )
-  .detail(property(&ctx.t("overview.projectKey"), open.project.key().as_str()))
-  .detail(property(
-    &ctx.t("overview.repository"),
-    &display::shorten_path(&open.repo_root, PATH_CHARS),
-  ))
-  .into()
-}
-
-/// Key/value property (`tfGRt`).
-fn property(label: &str, value: &str) -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .justify(Justify::SpaceBetween)
-    .child(Text::new(label).variant(TypographyStyle::Caption).nowrap())
-    .child(
-      Text::new(value)
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary)
-        .selectable(true),
-    )
-    .into()
+fn runner_status(ctx: &mut Ctx, runners: &Runners) -> RunnerStatus {
+  let status = ctx.stream(
+    runners.clone(),
+    |runners, emitter: StreamEmitter<RunnerStatus, ()>| async move {
+      let mut updates = runners.subscribe();
+      loop {
+        let status = updates.borrow_and_update().clone();
+        if !emitter.emit(status) || updates.changed().await.is_err() {
+          return;
+        }
+      }
+    },
+  );
+  status.state().get().data.unwrap_or_else(|| runners.status())
 }

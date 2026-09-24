@@ -1,5 +1,5 @@
-//! Navigation item (`TSJpn`): icon and label. An item is either the selected screen or visibly
-//! unavailable, because no other project screen exists yet.
+//! Navigation item (`TSJpn`): icon, label and an optional count. An item is the selected
+//! screen, a screen that can be opened, or visibly unavailable when the screen does not exist yet.
 
 use std::sync::Arc;
 
@@ -7,11 +7,11 @@ use lurq::{
   app::theme::{PaletteColor, RadiusSize, TypographyStyle},
   components::{Row, Text},
   layout::Alignment,
-  node::{CursorIcon, Element, dimension::Dimension},
+  node::{CursorIcon, Element, Style, dimension::Dimension},
 };
 
 use super::icon::{Icon, IconSize, icon};
-use crate::theme::ExtraSpacing;
+use crate::theme::{ExtraSpacing, ExtraTypography};
 
 /// Item heights: primary navigation (`TSJpn`), setup steps (`aaeeO`), footer entries (`wqkkE`).
 const ITEM_HEIGHT: f32 = 38.0;
@@ -29,28 +29,54 @@ enum Density {
   Compact,
 }
 
+type Handler = Arc<dyn Fn() + Send + Sync>;
+
+enum State {
+  Selected,
+  Available(Handler),
+  Unavailable,
+}
+
 pub struct NavItem {
   icon: Icon,
   label: Arc<str>,
-  selected: bool,
+  count: Option<usize>,
+  state: State,
   density: Density,
   id: &'static str,
 }
 
 impl NavItem {
-  /// An unavailable item unless marked `selected`.
+  /// An unavailable item unless marked `selected` or given `on_click`.
   pub fn new(id: &'static str, icon: Icon, label: Arc<str>) -> Self {
     Self {
       icon,
       label,
-      selected: false,
+      count: None,
+      state: State::Unavailable,
       density: Density::Primary,
       id,
     }
   }
 
+  /// Opens the item's screen. A selected item stays inert.
+  pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
+    if !matches!(self.state, State::Selected) {
+      self.state = State::Available(Arc::new(handler));
+    }
+    self
+  }
+
   pub fn selected(mut self, selected: bool) -> Self {
-    self.selected = selected;
+    if selected {
+      self.state = State::Selected;
+    }
+    self
+  }
+
+  /// Number of things in the screen, e.g. tasks (`LTXft`).
+  pub fn count(mut self, count: Option<usize>) -> Self {
+    self.count = count;
     self
   }
 
@@ -72,10 +98,10 @@ impl NavItem {
 
 impl From<NavItem> for Element {
   fn from(item: NavItem) -> Self {
-    let color = if item.selected {
-      PaletteColor::TextPrimary
-    } else {
-      PaletteColor::TextMuted
+    let color = match item.state {
+      State::Selected => PaletteColor::TextPrimary,
+      State::Available(_) => PaletteColor::TextSecondary,
+      State::Unavailable => PaletteColor::TextMuted,
     };
     let (height, icon_size, label_style) = match item.density {
       Density::Primary => (ITEM_HEIGHT, IconSize::Nav, TypographyStyle::Body),
@@ -98,17 +124,28 @@ impl From<NavItem> for Element {
           .color(color)
           .nowrap()
           .flex(1.0),
+      )
+      .with_children(
+        item
+          .count
+          .map(|count| Text::new(&count.to_string()).variant(ExtraTypography::NavCount.role())),
       );
-    if item.selected {
-      return row
+    match item.state {
+      State::Selected => row
         .background(PaletteColor::AccentMuted)
         .describe("state", "selected")
-        .into();
+        .into(),
+      State::Available(handler) => row
+        .describe("state", "enabled")
+        .cursor(CursorIcon::Pointer)
+        .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+        .on_click(move |_| handler())
+        .into(),
+      State::Unavailable => row
+        .describe("state", "unavailable")
+        .cursor(CursorIcon::NotAllowed)
+        .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))
+        .into(),
     }
-    row
-      .describe("state", "unavailable")
-      .cursor(CursorIcon::NotAllowed)
-      .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))
-      .into()
   }
 }

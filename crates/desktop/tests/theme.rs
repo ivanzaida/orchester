@@ -1,7 +1,7 @@
 use lurq::{
   app::{
     App,
-    theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   layout::text_style::FontWeight,
   node::{color::Color, dimension::Dimension},
@@ -117,4 +117,31 @@ fn mono_text_uses_bundled_geist_mono() {
     &*app.theme().typography_style(ExtraTypography::Metric.role()).font_family,
     "Geist Mono"
   );
+}
+
+#[test]
+fn task_screen_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  let size = |role: ExtraTypography| theme.typography_style(role.role()).font_size;
+  assert_eq!(size(ExtraTypography::ScreenTitle), 28.0);
+  assert_eq!(size(ExtraTypography::FormLabel), 12.0);
+  assert_eq!(size(ExtraTypography::StatusLabel), 11.0);
+  assert_eq!(size(ExtraTypography::NavCount), 11.0);
+  assert_eq!(size(ExtraTypography::IconMarker), 13.0);
+  assert_eq!(
+    &*theme.typography_style(ExtraTypography::NavCount.role()).font_family,
+    "Geist Mono"
+  );
+  let brief = theme.typography_style(ExtraTypography::Brief.role());
+  assert_eq!((brief.font_size, brief.line_height), (13.0, 1.7));
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::HeadingTop.role()),
+    Dimension::Px(26.0)
+  );
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::HeadingBottom.role()),
+    Dimension::Px(22.0)
+  );
+  assert_eq!(theme.border_size_value(BorderSize::Lg), 2.0);
 }
