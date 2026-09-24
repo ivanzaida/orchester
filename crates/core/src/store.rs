@@ -2,9 +2,10 @@
 //! will implement the same traits later, so domain code depends only on these.
 
 use crate::{
-  id::{IdempotencyKey, ResourceId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, TaskId},
   name::Name,
   resource::{Draft, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
+  run::{Checkpoint, NewRun, Run, RunEvent},
   task::{Task, TaskDetails},
   time::Timestamp,
 };
@@ -66,4 +67,33 @@ pub trait ResourceStore {
     resource: ResourceId,
     number: VersionNumber,
   ) -> Result<Option<Version<B>>, Self::Error>;
+}
+
+/// Execution data, written by the runner. A run changes only by appending the events a
+/// transition returned; the resulting state is stored alongside in the same transaction.
+pub trait RunStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Creates a pending run of `new.task` with the project's next run number and stores its
+  /// creation event, atomically. Repeating the call with the same `key` returns the run
+  /// created the first time instead of a new one.
+  fn create_run(&mut self, key: IdempotencyKey, new: NewRun, now: Timestamp) -> Result<Run, Self::Error>;
+
+  /// Appends `events`, which must not be empty, and stores `run`, the state after them,
+  /// atomically. The first event must directly follow the stored log; otherwise another writer
+  /// appended first and the call fails with a sequence conflict, changing nothing.
+  fn append_events(&mut self, run: &Run, events: &[RunEvent]) -> Result<(), Self::Error>;
+
+  fn run(&self, id: RunId) -> Result<Option<Run>, Self::Error>;
+
+  /// Runs of a task, ordered by number.
+  fn runs_of_task(&self, task: TaskId) -> Result<Vec<Run>, Self::Error>;
+
+  /// The complete event log of a run, in sequence order.
+  fn events(&self, run: RunId) -> Result<Vec<RunEvent>, Self::Error>;
+
+  fn latest_checkpoint(&self, run: RunId) -> Result<Option<Checkpoint>, Self::Error>;
+
+  /// Interrupted runs of the project, ordered by number, for recovery.
+  fn interrupted_runs(&self) -> Result<Vec<Run>, Self::Error>;
 }

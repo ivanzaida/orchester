@@ -71,3 +71,15 @@ define_id!(
   /// Client-generated key that makes a create/queue/send action safe to retry.
   IdempotencyKey
 );
+define_id!(
+  /// One attempt of a run; a failure routed back to an upstream step starts a new attempt.
+  AttemptId
+);
+define_id!(
+  /// One execution of a pipeline step within an attempt.
+  StepExecutionId
+);
+define_id!(
+  /// A persisted point a run can continue from after a pause or an interruption.
+  CheckpointId
+);
