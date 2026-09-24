@@ -8,9 +8,11 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::{Ctx, Placement},
+    events::KeyboardEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Popup, Rect, Row, ScrollVertical, Text},
+  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension},
 };
@@ -43,7 +45,15 @@ const DIVIDER_HEIGHT: f32 = 1.0;
 /// row's time lines up.
 const CHEVRON_WIDTH: f32 = 12.0;
 
-pub fn popover(ctx: &mut Ctx, log: &ActivityLog, opener: &Opener, anchors: &Anchors) -> Element {
+/// `escaped` is set when Escape closes the popover, so the bar can give the focus back to the
+/// activity item it hangs from.
+pub fn popover(
+  ctx: &mut Ctx,
+  log: &ActivityLog,
+  opener: &Opener,
+  anchors: &Anchors,
+  escaped: &Signal<bool>,
+) -> Element {
   let running: Vec<&Operation> = log.running().collect();
   let recent = log.recent();
   let mut list = Column::new()
@@ -77,6 +87,14 @@ pub fn popover(ctx: &mut Ctx, log: &ActivityLog, opener: &Opener, anchors: &Anch
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .box_shadow(ExtraShadow::Popover.role())
+    .on_key_down({
+      let escaped = escaped.clone();
+      move |event: KeyboardEvent| {
+        if event.key == "Escape" {
+          escaped.set(true);
+        }
+      }
+    })
     .child(header(ctx, running.len()))
     .child(
       ScrollVertical::new(list)

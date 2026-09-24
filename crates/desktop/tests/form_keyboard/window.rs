@@ -1,3 +1,5 @@
+use orchester_desktop::{activity::OperationSpec, messages::Message};
+
 use crate::harness::{Desktop, expected};
 
 /// More than the window has stops on these screens.
@@ -67,4 +69,25 @@ fn pressing_an_unavailable_item_clears_the_focus() {
   // Tools does not exist yet: it cannot take the focus, so the press clears it.
   desktop.press("nav-tools");
   assert_eq!(desktop.focused(), None);
+}
+
+#[test]
+fn escape_in_the_operations_popover_returns_the_focus_to_the_activity_item() {
+  // Without a project nothing opens a failure, so the activity item opens the popover, whose
+  // row for the failure has a dismiss button.
+  let mut desktop = Desktop::first_launch();
+  desktop.wait_for("create-first-project");
+  let failed = Message::new("statusBar.operations.title");
+  desktop
+    .activity
+    .start(OperationSpec::new(failed.clone(), failed.clone(), failed.clone()))
+    .fail(failed);
+  desktop.wait_for("status-activity");
+  desktop.tab_to("status-activity", MAX_STOPS);
+  desktop.enter();
+  desktop.wait_for("status-operations");
+  desktop.tab_to("status-operation-dismiss", MAX_STOPS);
+  desktop.key("Escape", "Escape");
+  assert!(desktop.tree.get_element_by_id("status-operations").is_none());
+  assert_eq!(desktop.focused().as_deref(), Some("status-activity"));
 }

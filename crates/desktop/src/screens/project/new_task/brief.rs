@@ -15,7 +15,7 @@ use lurq::{
 };
 use orchester_core::task::MissingDetail;
 
-use super::{FormState, NewTaskForm, error_note, missing_note};
+use super::{FOCUS_ROOM, FormState, NewTaskForm, error_note, missing_note};
 use crate::{
   display,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
@@ -57,8 +57,11 @@ impl Criterion {
 }
 
 pub fn brief_form(ctx: &Ctx, form: &NewTaskForm, project: &OpenProject, state: &FormState) -> Element {
+  // `FOCUS_ROOM` on the left, where the viewport starts that much earlier (see `mod.rs`), so
+  // focus rings of controls on the content's left edge are not cut by the viewport.
   let fields = Column::new()
     .width(Dimension::Pct(100.0))
+    .padding_left(FOCUS_ROOM)
     .spacing(SpacingSize::Lg)
     .child(labelled(ctx, "tasks.new.project", repository(project)))
     .child(title_field(ctx, form, state))
@@ -173,12 +176,14 @@ fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
     .map(|criterion| criterion_row(ctx, &form.criteria, criterion, removable))
     .collect();
   let signal = form.criteria.clone();
-  let add = keyboard_stop(Button::empty().button(), Ring::Inset)
+  // The link's padding keeps its focus ring off the text, and an equal shift back keeps the text
+  // in line with the criterion markers (`Sc8e9` in `l2YA4`). The ring reaches into the room the
+  // form's scroll content keeps on its left.
+  let padding = ctx.theme().spacing_value(SpacingSize::Xs).resolve(0.0);
+  let add = keyboard_stop(Button::empty().button(), Ring::Outer)
     .id("add-criterion")
-    // Room between the text and the inset focus ring; the ring is inset because the button
-    // sits on the edge of the form's scroll viewport.
-    .padding_horizontal(SpacingSize::Sm)
-    .padding_vertical(SpacingSize::Xs)
+    .padding_horizontal(SpacingSize::Xs)
+    .offset(-padding, 0.0)
     .rounded(RadiusSize::Sm)
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
@@ -206,6 +211,8 @@ fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
     .with_children(rows)
     .child(add)
     .with_children(missing_note(ctx, state, MissingDetail::AcceptanceCriteria))
+    // Add criterion may be last; its focus ring reaches past the column.
+    .overflow_visible()
     .into()
 }
 

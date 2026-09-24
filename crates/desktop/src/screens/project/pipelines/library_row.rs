@@ -23,7 +23,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{Ring, pressable, surface},
+    pressable::{Ring, hairline_row_focused, pressable, surface},
     status_label::status_label,
   },
 };
@@ -149,5 +149,7 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
     ))
     .child(cell(&published, PUBLISHED_WIDTH, PaletteColor::TextSecondary))
     .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
-  pressable(row, Ring::Inset, move || open.open(id)).into()
+  pressable(row, Ring::Inset, move || open.open(id))
+    .focused_style(hairline_row_focused())
+    .into()
 }

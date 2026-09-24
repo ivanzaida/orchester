@@ -6,6 +6,10 @@
 mod brief;
 mod plan;
 
+/// Room the brief's scroll content keeps on its left for the outer focus rings of controls on
+/// its edge: the ring (`focus-extent`) and the padding of a link inside it.
+const FOCUS_ROOM: SpacingSize = SpacingSize::Sm;
+
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
@@ -132,11 +136,16 @@ impl Component for NewTaskForm {
     let submit = self
       .save_handler(&save, &props.project, state.ready.clone())
       .filter(|_| !state.saving);
+    // The brief's scroll viewport starts `FOCUS_ROOM` early and its content is padded by the
+    // same amount, so the content stays at the designed inset and keeps room for focus rings.
+    let brief_left = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0)
+      - ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .padding_top(SpacingSize::Sm)
-      .padding_horizontal(ExtraSpacing::Indent.role())
+      .padding_left(Dimension::Px(brief_left))
+      .padding_right(ExtraSpacing::Indent.role())
       .padding_bottom(SpacingSize::Section)
       .spacing(ExtraSpacing::Indent.role())
       .child(brief::brief_form(ctx, self, &props.project, &state))

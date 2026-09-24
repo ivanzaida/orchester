@@ -80,6 +80,7 @@ impl Component for ProfileEditor {
     let context = ctx
       .use_context::<EditorContext>()
       .expect("the agents screen provides the editor context");
+    context.list_focus.restore(ctx);
     let editor = match &context.editing {
       Editing::Profile(entry) => Self::seeded(ctx, &context, &entry.profile),
       Editing::New => Self::blank(ctx, &context),
@@ -135,6 +136,7 @@ impl Component for ProfileEditor {
             &self.context.agents,
             entry.map_or(ListSelection::New, |entry| ListSelection::Profile(entry.id)),
             &self.context.nav,
+            &self.context.list_focus,
           ))
           .child(
             ScrollVertical::new(body)

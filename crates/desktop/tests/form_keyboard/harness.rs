@@ -32,6 +32,8 @@ const HEIGHT: u32 = 960;
 pub struct Desktop {
   pub tree: Tree,
   pub repo: PathBuf,
+  /// The session's background operations, shown in the status bar.
+  pub activity: Activity,
   app: App,
   _session: AppSession,
   _runtime: Runtime,
@@ -78,7 +80,7 @@ impl Desktop {
     let startup = Startup::Ready {
       workspace: session.workspace().clone(),
       lifecycle: Lifecycle::new(runners, runtime.handle().clone()),
-      activity,
+      activity: activity.clone(),
     };
     let mut tree = Tree::new();
     tree.resize(WIDTH, HEIGHT);
@@ -86,6 +88,7 @@ impl Desktop {
     Self {
       tree,
       repo,
+      activity,
       app,
       _session: session,
       _runtime: runtime,
