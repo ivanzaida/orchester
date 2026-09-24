@@ -1,5 +1,6 @@
 use lurq::app::{App, Tree, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
 use orchester_desktop::{
+  activity::Activity,
   app_paths,
   close::{CloseKind, Lifecycle, session_end},
   i18n,
@@ -51,9 +52,10 @@ fn main() {
   let title = app.i18n().t("app.name");
   WinitWindow::new(app, tree)
     .with_title(&title)
-    // A 1440x960 screen below the 32px custom title bar; the chrome draws the bar itself.
-    .with_size(1440, 992)
-    .with_min_size(960, 672)
+    // A 1440x960 screen between the 32px custom title bar and the 28px status bar; the app
+    // draws both bars itself.
+    .with_size(1440, 1020)
+    .with_min_size(960, 700)
     .with_decorations(false)
     .run();
 
@@ -82,10 +84,15 @@ fn startup(session: &Result<AppSession, StartupError>, runtime: &Runtime) -> Sta
     }
   };
   match app_paths::runner_path() {
-    Ok(runner) => Startup::Ready {
-      workspace: session.workspace().clone(),
-      lifecycle: Lifecycle::new(Runners::new(runner, runtime.handle().clone()), runtime.handle().clone()),
-    },
+    Ok(runner) => {
+      let activity = Activity::new();
+      let runners = Runners::new(runner, runtime.handle().clone(), activity.clone());
+      Startup::Ready {
+        workspace: session.workspace().clone(),
+        lifecycle: Lifecycle::new(runners, runtime.handle().clone()),
+        activity,
+      }
+    }
     Err(error) => {
       tracing::error!(%error, "cannot locate the runner program");
       Startup::Failed {

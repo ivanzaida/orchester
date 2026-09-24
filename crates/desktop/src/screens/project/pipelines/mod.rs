@@ -52,17 +52,27 @@ impl PipelinesNav {
   }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PipelinesProps {
+  pub project: OpenProject,
+  /// The pipeline to open first instead of the library, e.g. from the status bar.
+  pub open: Option<ResourceId>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for PipelinesProps {}
+
 pub struct PipelinesScreen {
   nav: PipelinesNav,
 }
 
 impl Component for PipelinesScreen {
-  type Props = OpenProject;
+  type Props = PipelinesProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let open = ctx.props::<PipelinesProps>().open.map(PipelineId);
     Self {
       nav: PipelinesNav {
-        open: ctx.signal(None),
+        open: ctx.signal(open),
         revision: ctx.signal(0),
       },
     }
@@ -70,7 +80,7 @@ impl Component for PipelinesScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     ctx.provide(self.nav.clone());
-    let project = ctx.props::<OpenProject>().clone();
+    let project = ctx.props::<PipelinesProps>().project.clone();
     match self.nav.open.get() {
       None => ctx.mount_keyed::<Library>(
         "pipelines-library",

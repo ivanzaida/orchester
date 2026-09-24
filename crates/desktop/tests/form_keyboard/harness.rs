@@ -11,6 +11,7 @@ use std::{
 
 use lurq::app::{App, Tree};
 use orchester_desktop::{
+  activity::Activity,
   close::Lifecycle,
   i18n,
   project_setup::ProjectDraft,
@@ -65,10 +66,16 @@ impl Desktop {
     theme::install(&mut app);
     i18n::install(&app).expect("bundled locales load");
     // No runner program exists here; the project shows its runner as unable to start.
-    let runners = Runners::new(dir.path().join("no-runner.exe"), runtime.handle().clone());
+    let activity = Activity::new();
+    let runners = Runners::new(
+      dir.path().join("no-runner.exe"),
+      runtime.handle().clone(),
+      activity.clone(),
+    );
     let startup = Startup::Ready {
       workspace: session.workspace().clone(),
       lifecycle: Lifecycle::new(runners, runtime.handle().clone()),
+      activity,
     };
     let mut tree = Tree::new();
     tree.mount_root::<Root>(&mut app, startup);

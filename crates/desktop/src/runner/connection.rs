@@ -16,7 +16,7 @@ use tokio::{
 use super::{
   ShutdownOutcome,
   report::Reporter,
-  state::{RECONNECTED_NOTICE, RunnerEvent, RunnerFailure, RunnerState},
+  state::{RunnerEvent, RunnerFailure},
 };
 
 /// How long the runner may take to exit after it reported `Stopped` and the connection closed.
@@ -107,11 +107,8 @@ impl Supervisor {
         }
         None => return,
       };
-      let Some(state) = self.reporter.report(RunnerEvent::Launched) else {
+      if self.reporter.report(RunnerEvent::Launched).is_none() {
         return;
-      };
-      if state == (RunnerState::Online { reconnected: true }) {
-        self.expire_reconnected_notice();
       }
       match Session::start(client).serve(&mut self.requests, &self.reporter).await {
         Served::Dropped(failure) => {
@@ -165,14 +162,6 @@ impl Supervisor {
     self.reporter.report(RunnerEvent::Stopped);
     // The desktop may have stopped waiting (close timeout); the result no longer matters then.
     let _ = reply.send(ShutdownOutcome::NoRunner);
-  }
-
-  fn expire_reconnected_notice(&self) {
-    let reporter = self.reporter.clone();
-    tokio::spawn(async move {
-      tokio::time::sleep(RECONNECTED_NOTICE).await;
-      reporter.report(RunnerEvent::ReconnectNoticeExpired);
-    });
   }
 }
 

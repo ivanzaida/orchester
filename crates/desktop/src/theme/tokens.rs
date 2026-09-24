@@ -50,6 +50,7 @@ pub const RADIUS_MARK: f32 = 2.0;
 
 /// Gaps and paddings used by the Getting started screens, the sidebar and the overview.
 /// Pencil node ids are listed on the `ExtraSpacing` variants that use them.
+pub const SPACE_HAIR: f32 = 2.0;
 pub const SPACE_MARK: f32 = 3.0;
 pub const SPACE_TIGHT: f32 = 6.0;
 pub const SPACE_INDICATOR: f32 = 7.0;

@@ -14,12 +14,18 @@ use lurq::{
 };
 
 use crate::{
+  activity::Activity,
   background,
   close::Lifecycle,
   messages::{self, Message},
   navigation::{Navigation, Screen},
   screens::{
-    close_dialog::CloseConfirmation, project::ProjectShell, setup::ProjectSetup, unavailable, welcome::Welcome,
+    close_dialog::CloseConfirmation,
+    project::ProjectShell,
+    setup::ProjectSetup,
+    status_bar::{StatusBar, StatusBarProps},
+    unavailable,
+    welcome::Welcome,
   },
   theme::{ExtraColor, TITLE_BAR_HEIGHT, WINDOW_CONTROL_WIDTH},
   ui::{
@@ -36,12 +42,11 @@ pub enum Startup {
   Ready {
     workspace: Workspace,
     lifecycle: Lifecycle,
+    /// Background operations of the session, for the status bar.
+    activity: Activity,
   },
   /// The application database cannot be used; `path` is the file involved, if known.
-  Failed {
-    message: Message,
-    path: Option<String>,
-  },
+  Failed { message: Message, path: Option<String> },
 }
 
 impl lurq::app::component::DevtoolsInspectable for Startup {}
@@ -55,7 +60,17 @@ impl Component for Root {
 
   fn create(ctx: &mut Ctx) -> Self {
     let screen = ctx.signal(None);
-    if let Startup::Ready { workspace, lifecycle } = ctx.props::<Startup>().clone() {
+    let startup = ctx.props::<Startup>().clone();
+    // Without a session nothing reports activity; the status bar still shows the version.
+    let activity = match &startup {
+      Startup::Ready { activity, .. } => activity.clone(),
+      Startup::Failed { .. } => Activity::new(),
+    };
+    ctx.provide(activity);
+    if let Startup::Ready {
+      workspace, lifecycle, ..
+    } = startup
+    {
       ctx.provide(Navigation::new(workspace, screen.clone()));
       let close = lifecycle.clone();
       ctx
@@ -69,8 +84,10 @@ impl Component for Root {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let content = match ctx.props::<Startup>().clone() {
-      Startup::Failed { message, path } => startup_failed(ctx, &message, path.as_deref()),
-      Startup::Ready { workspace, lifecycle } => self.workspace(ctx, workspace, &lifecycle),
+      Startup::Failed { message, path } => with_status_bar(ctx, startup_failed(ctx, &message, path.as_deref())),
+      Startup::Ready {
+        workspace, lifecycle, ..
+      } => self.workspace(ctx, workspace, &lifecycle),
     };
     let screen = Column::new()
       .width(Dimension::Pct(100.0))
@@ -105,17 +122,27 @@ impl Root {
       _ => None,
     };
     lifecycle.runners().show(project);
+    // The project shell puts the project's status bar below its sidebar and screen.
     let content = match screen {
       // Reading the workspace takes milliseconds; nothing is shown until it is known.
       None => Column::new().into(),
-      Some(Screen::Welcome) => ctx.mount_keyed::<Welcome>("welcome", ()),
-      Some(Screen::Setup) => ctx.mount_keyed::<ProjectSetup>("setup", ()),
       Some(Screen::Project(project)) => ctx.mount_keyed::<ProjectShell>("project", project),
+      Some(Screen::Welcome) => {
+        let welcome = ctx.mount_keyed::<Welcome>("welcome", ());
+        with_status_bar(ctx, welcome)
+      }
+      Some(Screen::Setup) => {
+        let setup = ctx.mount_keyed::<ProjectSetup>("setup", ());
+        with_status_bar(ctx, setup)
+      }
       Some(Screen::Unavailable {
         name,
         repo_root,
         reason,
-      }) => unavailable::render(ctx, &navigation, &name, &repo_root, &reason),
+      }) => {
+        let unavailable = unavailable::render(ctx, &navigation, &name, &repo_root, &reason);
+        with_status_bar(ctx, unavailable)
+      }
     };
     // The confirmation is a modal, so it takes no space in this column.
     Column::new()
@@ -125,6 +152,17 @@ impl Root {
       .child(ctx.mount_keyed::<CloseConfirmation>("close-confirmation", lifecycle.clone()))
       .into()
   }
+}
+
+/// A screen without a project above the status bar (`pmOpt`), which then shows only the
+/// activity and the version.
+fn with_status_bar(ctx: &mut Ctx, screen: Element) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .child(Column::new().width(Dimension::Pct(100.0)).flex(1.0).child(screen))
+    .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: None }))
+    .into()
 }
 
 /// Custom chrome (`QQmsI` on Windows, `V70DN` on macOS): no native title bar or border, a

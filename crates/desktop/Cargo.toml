@@ -23,6 +23,7 @@ mcp = ["lurq/mcp"]
 perf_profile = ["lurq/perf_profile"]
 
 [dependencies]
+chrono.workspace = true
 orchester-core.workspace = true
 lurq = { workspace = true, features = [
   "winit",

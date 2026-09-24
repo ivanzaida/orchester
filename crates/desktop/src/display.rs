@@ -1,6 +1,9 @@
 //! Formatting of raw data for narrow places in the UI.
 
-use std::path::{MAIN_SEPARATOR, Path};
+use std::{
+  path::{MAIN_SEPARATOR, Path},
+  time::{Duration, SystemTime},
+};
 
 use orchester_core::{
   money::{Currency, Money},
@@ -81,4 +84,20 @@ pub fn elapsed(now: Timestamp, then: Timestamp) -> Message {
     return Message::new("time.justNow");
   };
   Message::new(key).with("count", count.to_string())
+}
+
+/// A running operation's elapsed time: whole seconds under a minute (`4 s`), whole minutes
+/// after that (`3 min`).
+pub fn duration(elapsed: Duration) -> Message {
+  let seconds = elapsed.as_secs();
+  if seconds < 60 {
+    Message::new("time.seconds").with("count", seconds.to_string())
+  } else {
+    Message::new("time.minutes").with("count", (seconds / 60).to_string())
+  }
+}
+
+/// Local wall-clock time of `at`, e.g. `14:32`, as the status bar shows event times.
+pub fn clock_time(at: SystemTime) -> String {
+  chrono::DateTime::<chrono::Local>::from(at).format("%H:%M").to_string()
 }

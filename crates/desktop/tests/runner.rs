@@ -32,7 +32,7 @@ fn apply(state: RunnerState, events: impl IntoIterator<Item = RunnerEvent>) -> R
 fn runner_state_starts_then_goes_online() {
   assert_eq!(
     apply(RunnerState::Starting, [RunnerEvent::Launched]),
-    RunnerState::Online { reconnected: false }
+    RunnerState::Online
   );
 }
 
@@ -51,8 +51,8 @@ fn runner_state_that_cannot_start_fails_without_retrying() {
 }
 
 #[test]
-fn runner_state_drop_reconnects_then_reports_reconnected() {
-  let online = RunnerState::Online { reconnected: false };
+fn runner_state_drop_reconnects_then_goes_online() {
+  let online = RunnerState::Online;
   let dropped = online.apply(RunnerEvent::Dropped(RunnerFailure::Lost));
   assert_eq!(
     dropped,
@@ -61,12 +61,7 @@ fn runner_state_drop_reconnects_then_reports_reconnected() {
       cause: RunnerFailure::Lost
     }
   );
-  let back = dropped.apply(RunnerEvent::Launched);
-  assert_eq!(back, RunnerState::Online { reconnected: true });
-  assert_eq!(
-    back.apply(RunnerEvent::ReconnectNoticeExpired),
-    RunnerState::Online { reconnected: false }
-  );
+  assert_eq!(dropped.apply(RunnerEvent::Launched), RunnerState::Online);
 }
 
 #[test]
@@ -75,7 +70,7 @@ fn runner_state_reconnect_delays_back_off_up_to_eight_seconds() {
   let expected = [500, 1000, 2000, 4000, 8000, 8000].map(Duration::from_millis);
   assert_eq!(delays, expected);
 
-  let mut state = RunnerState::Online { reconnected: false }.apply(RunnerEvent::Dropped(RunnerFailure::Lost));
+  let mut state = RunnerState::Online.apply(RunnerEvent::Dropped(RunnerFailure::Lost));
   let mut seen = Vec::new();
   while let Some(delay) = state.reconnect_delay() {
     seen.push(delay);
@@ -88,7 +83,7 @@ fn runner_state_reconnect_delays_back_off_up_to_eight_seconds() {
 fn runner_state_gives_up_after_the_reconnect_limit() {
   let failed_attempts = (0..RECONNECT_LIMIT).map(|_| RunnerEvent::LaunchFailed(RunnerFailure::StartFailed));
   let state = apply(
-    RunnerState::Online { reconnected: false },
+    RunnerState::Online,
     std::iter::once(RunnerEvent::Dropped(RunnerFailure::Lost)).chain(failed_attempts),
   );
   assert_eq!(
@@ -108,7 +103,7 @@ fn runner_state_does_not_retry_a_missing_program() {
     path: PathBuf::from("orchester-runner.exe"),
   };
   let state = apply(
-    RunnerState::Online { reconnected: false },
+    RunnerState::Online,
     [
       RunnerEvent::Dropped(RunnerFailure::Lost),
       RunnerEvent::LaunchFailed(missing.clone()),
@@ -146,7 +141,7 @@ fn runner_state_manual_restart_resets_the_attempts() {
 
 #[test]
 fn runner_state_restart_is_ignored_while_running() {
-  let online = RunnerState::Online { reconnected: false };
+  let online = RunnerState::Online;
   assert!(!online.can_restart());
   assert_eq!(online.clone().apply(RunnerEvent::RestartRequested), online);
 }
@@ -155,7 +150,7 @@ fn runner_state_restart_is_ignored_while_running() {
 fn runner_state_stops_when_asked() {
   for running in [
     RunnerState::Starting,
-    RunnerState::Online { reconnected: false },
+    RunnerState::Online,
     RunnerState::Reconnecting {
       attempt: 2,
       cause: RunnerFailure::Lost,
@@ -168,7 +163,7 @@ fn runner_state_stops_when_asked() {
   }
   assert_eq!(
     apply(
-      RunnerState::Online { reconnected: false },
+      RunnerState::Online,
       [RunnerEvent::StopRequested, RunnerEvent::Dropped(RunnerFailure::Lost)]
     ),
     RunnerState::Failed {

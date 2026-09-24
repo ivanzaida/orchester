@@ -40,15 +40,20 @@ fn locale_leaves(contents: &str) -> BTreeMap<String, Vec<String>> {
   out
 }
 
-/// First string-literal argument of every `t(`, `t_args(`, `t_ns(`/`t_ns_args(` call
-/// (the key, or the namespace for `t_ns*`, which the default-namespace check skips).
+/// First string-literal argument of every `t(`, `t_args(` and `Message::new(` call, and every
+/// `statusBar.*` literal (the status bar picks some keys by value, e.g. what an item opens).
 fn keys_used_in(source: &str) -> Vec<String> {
   let mut keys = Vec::new();
-  for call in [".t(\"", ".t_args(\""] {
+  for call in [".t(\"", ".t_args(\"", "Message::new(\""] {
     for part in source.split(call).skip(1) {
       if let Some((key, _)) = part.split_once('"') {
         keys.push(key.to_owned());
       }
+    }
+  }
+  for part in source.split("\"statusBar.").skip(1) {
+    if let Some((key, _)) = part.split_once('"') {
+      keys.push(format!("statusBar.{key}"));
     }
   }
   keys

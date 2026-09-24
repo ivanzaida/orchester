@@ -22,6 +22,7 @@ use orchester_core::{
 
 use super::{PipelineId, PipelinesNav, starter_text};
 use crate::{
+  activity::{Activity, OperationSpec, operations},
   background,
   messages::{self, Message},
   pipelines::library::{CreateError, NewPipeline, StartFrom, create_in},
@@ -62,7 +63,7 @@ impl PartialEq for NewPipelineProps {
 
 impl lurq::app::component::DevtoolsInspectable for NewPipelineProps {}
 
-type CreateArgs = (PathBuf, NewPipeline);
+type CreateArgs = (PathBuf, NewPipeline, OperationSpec);
 type CreateAction = FutureAction<CreateArgs, PipelineId, Message>;
 
 pub struct NewPipelineDialog {
@@ -109,13 +110,14 @@ impl Component for NewPipelineDialog {
         starter_text(ctx),
         name.clone(),
       );
+      let spec = operations::pipeline_create(&props.project, name.as_str());
       Arc::new(move || {
         let new = NewPipeline {
           name: name.clone(),
           start,
           starter: text.clone(),
         };
-        create.run((repo_root.clone(), new));
+        create.run((repo_root.clone(), new, spec.clone()));
       }) as Arc<dyn Fn() + Send + Sync>
     });
     let project = props.project.project.name().as_str();
@@ -307,12 +309,21 @@ pub fn create_error(error: &CreateError) -> Message {
 }
 
 fn create_action(ctx: &mut Ctx) -> CreateAction {
-  ctx.future_action(|(repo_root, new): CreateArgs| async move {
-    let created = background::run(move || create_in(&repo_root, new)).await?;
-    created.map(PipelineId).map_err(|error| {
-      tracing::error!(%error, "cannot create the pipeline");
-      create_error(&error)
-    })
+  let activity = Activity::of(ctx);
+  ctx.future_action(move |(repo_root, new, spec): CreateArgs| {
+    let activity = activity.clone();
+    async move {
+      let root = repo_root.clone();
+      let create = async move {
+        let created = background::run(move || create_in(&repo_root, new)).await?;
+        created.map(PipelineId).map_err(|error| {
+          tracing::error!(%error, "cannot create the pipeline");
+          create_error(&error)
+        })
+      };
+      let target = |created: &PipelineId| Some(operations::pipeline(&root, created.0));
+      activity.track_to(spec, create, target).await
+    }
   })
 }
 

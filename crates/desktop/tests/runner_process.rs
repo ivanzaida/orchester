@@ -8,6 +8,7 @@ use std::{
 };
 
 use orchester_desktop::{
+  activity::Activity,
   app_paths::runner_beside,
   close::{CloseKind, session_end},
   runner::{
@@ -64,12 +65,12 @@ async fn wait_for(
 #[tokio::test(flavor = "multi_thread")]
 async fn runner_process_goes_online_and_stops_gracefully() {
   let project = project();
-  let runners = Runners::new(runner_program(), Handle::current());
+  let runners = Runners::new(runner_program(), Handle::current(), Activity::new());
   let mut updates = runners.subscribe();
 
   runners.show(Some(project.path()));
   let online = wait_for(&mut updates, project.path(), |state| *state != RunnerState::Starting).await;
-  assert_eq!(online, RunnerState::Online { reconnected: false });
+  assert_eq!(online, RunnerState::Online);
 
   let outcome = runners.shutdown(Some(QUIET_STOP_TIMEOUT)).await;
   assert_eq!(outcome, ShutdownOutcome::Stopped);
@@ -81,7 +82,7 @@ async fn runner_process_goes_online_and_stops_gracefully() {
 async fn runner_process_missing_program_fails_visibly() {
   let project = project();
   let missing = project.path().join("orchester-runner.exe");
-  let runners = Runners::new(missing.clone(), Handle::current());
+  let runners = Runners::new(missing.clone(), Handle::current(), Activity::new());
   let mut updates = runners.subscribe();
 
   runners.show(Some(project.path()));
