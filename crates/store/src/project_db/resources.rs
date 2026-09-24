@@ -8,12 +8,11 @@ use orchester_core::{
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, Params, Row, params};
-use serde_json::{Value, json};
 
 use super::ProjectDb;
 use crate::{
   StoreError,
-  rows::{corrupt, parse},
+  rows::{corrupt, decode_json, encode_json, parse},
 };
 
 const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM resources";
@@ -256,28 +255,12 @@ impl ResourceRow {
   }
 }
 
-/// Stores a body as `{"schema": n, "body": …}` so its shape can evolve without a table migration.
 fn encode<B: ResourceBody>(body: &B) -> Result<String, StoreError> {
-  let body = serde_json::to_value(body).map_err(|_| StoreError::Unrepresentable("resource body"))?;
-  Ok(json!({ "schema": B::SCHEMA, "body": body }).to_string())
+  encode_json("resource body", B::SCHEMA, body)
 }
 
-/// Reads a stored body back through the domain constructors.
 fn decode<B: ResourceBody>(text: &str) -> Result<B, StoreError> {
-  const WHAT: &str = "resource body";
-  let mut document: Value = serde_json::from_str(text).map_err(|error| corrupt(WHAT, error))?;
-  let schema = document.get("schema").and_then(Value::as_u64);
-  if schema != Some(u64::from(B::SCHEMA)) {
-    return Err(corrupt(
-      WHAT,
-      format!("schema {schema:?} is not the supported schema {}", B::SCHEMA),
-    ));
-  }
-  let body = document
-    .get_mut("body")
-    .map(Value::take)
-    .ok_or_else(|| corrupt(WHAT, "the body is missing"))?;
-  serde_json::from_value(body).map_err(|error| corrupt(WHAT, error))
+  decode_json("resource body", B::SCHEMA, text)
 }
 
 fn version_number(number: i64) -> Result<VersionNumber, StoreError> {

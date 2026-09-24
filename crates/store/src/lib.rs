@@ -9,5 +9,5 @@ mod project_db;
 mod rows;
 
 pub use app_db::{AppDb, PreviousSession, RegisteredProject, SessionEnd, SessionId};
-pub use error::StoreError;
+pub use error::{RunStoreError, StoreError};
 pub use project_db::ProjectDb;
