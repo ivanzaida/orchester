@@ -23,7 +23,7 @@ use crate::{
     icon::{Icon, IconSize, icon},
     message_text,
     panel::RecoveryPanel,
-    tab::Tab,
+    tab::{Tab, tab_row},
   },
   workspace::OpenProject,
 };
@@ -140,31 +140,31 @@ fn task_list(ctx: &Ctx, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
     .cursor(CursorIcon::NotAllowed)
     .child(Text::new(&ctx.t("tasks.filters.allPipelines")).variant(TypographyStyle::Caption))
     .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted));
-  let tabs = Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(TAB_ROW_HEIGHT))
-    .spacing(SpacingSize::Sm)
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(
+  let tabs = tab_row(
+    Dimension::Px(TAB_ROW_HEIGHT),
+    SpacingSize::Sm,
+    None,
+    [
       Tab::new("overview-tab-all", ctx.t("tasks.tabs.all"), Dimension::Px(TAB_HEIGHT))
         .count(Some(tasks.tasks.len()))
         .selected(true),
-    )
-    .child(Tab::new(
-      "overview-tab-running",
-      ctx.t("overview.tabs.running"),
-      Dimension::Px(TAB_HEIGHT),
-    ))
-    .child(Tab::new(
-      "overview-tab-needs-you",
-      ctx.t("overview.tabs.needsYou"),
-      Dimension::Px(TAB_HEIGHT),
-    ))
-    .child(Tab::new(
-      "overview-tab-queued",
-      ctx.t("overview.tabs.queued"),
-      Dimension::Px(TAB_HEIGHT),
-    ));
+      Tab::new(
+        "overview-tab-running",
+        ctx.t("overview.tabs.running"),
+        Dimension::Px(TAB_HEIGHT),
+      ),
+      Tab::new(
+        "overview-tab-needs-you",
+        ctx.t("overview.tabs.needsYou"),
+        Dimension::Px(TAB_HEIGHT),
+      ),
+      Tab::new(
+        "overview-tab-queued",
+        ctx.t("overview.tabs.queued"),
+        Dimension::Px(TAB_HEIGHT),
+      ),
+    ],
+  );
   Column::new()
     .id("overview-tasks")
     .width(Dimension::Pct(100.0))
