@@ -14,7 +14,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
-    pressable::{pressable, surface},
+    pressable::{Ring, pressable, surface},
   },
 };
 
@@ -37,7 +37,7 @@ pub fn item(id: &'static str) -> Button {
 
 /// An item that opens something: pointer, the `$hover` fill and keyboard use.
 pub fn clickable(item: Button, open: impl Fn() + Send + Sync + 'static) -> Button {
-  pressable(item, open).hovered_style(Style::new().background(PaletteColor::AccentMuted))
+  pressable(item, Ring::Inset, open).hovered_style(Style::new().background(PaletteColor::AccentMuted))
 }
 
 pub fn glyph(glyph: Icon, color: PaletteColor) -> Element {

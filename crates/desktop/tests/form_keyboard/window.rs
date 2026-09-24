@@ -50,7 +50,8 @@ fn tasks_tab_row_selects_from_the_keyboard() {
   // All tasks is selected, so only Drafts is a stop in the tab row.
   desktop.tab_to("tasks-tab-drafts", MAX_STOPS);
   desktop.enter();
-  // Drafts is selected now and All tasks can be chosen instead.
+  // Drafts is selected now and All tasks can be chosen instead; the empty Drafts list offers
+  // New task next.
   desktop.tab_to("tasks-tab-all", MAX_STOPS);
-  assert_eq!(desktop.stops(1, false), expected(&[Some("status-runner")]));
+  assert_eq!(desktop.stops(1, false), expected(&[Some("empty-new-task")]));
 }

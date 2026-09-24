@@ -33,7 +33,7 @@ use crate::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{pressable, surface},
+    pressable::{Ring, pressable, surface},
     status_label::topbar_status_label,
   },
 };
@@ -61,7 +61,10 @@ pub fn topbar(
   publish: impl Fn() + Send + Sync + 'static,
 ) -> Element {
   let back = nav.clone();
-  let breadcrumb = pressable(surface().id("pipeline-breadcrumb-library"), move || back.library()).child(
+  let breadcrumb = pressable(surface().id("pipeline-breadcrumb-library"), Ring::Outer, move || {
+    back.library()
+  })
+  .child(
     Text::new(&ctx.t_args("pipelines.library.breadcrumb", [("project", project)]))
       .variant(TypographyStyle::Description),
   );

@@ -30,7 +30,7 @@ use crate::{
   ui::{
     icon::Icon,
     message_text,
-    pressable::{pressable, surface},
+    pressable::{Ring, pressable, surface},
   },
 };
 
@@ -114,6 +114,8 @@ fn footer(ctx: &Ctx, opener: &Opener) -> Element {
     .padding_bottom(SpacingSize::Xs)
     .justify(Justify::SpaceBetween)
     .align_items(Alignment::Center)
+    // Open runner log sits on the right edge; its focus ring reaches into the panel padding.
+    .overflow_visible()
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(
       Text::new(&ctx.t("statusBar.operations.retention"))
@@ -123,8 +125,10 @@ fn footer(ctx: &Ctx, opener: &Opener) -> Element {
   if opener.can_open(&Target::RunnerLog) {
     let log = opener.clone();
     row = row.child(
-      pressable(surface().id("status-operations-open-log"), move || log.open_log())
-        .child(Text::new(&ctx.t("runner.connection.openLog")).variant(TypographyStyle::Link)),
+      pressable(surface().id("status-operations-open-log"), Ring::Outer, move || {
+        log.open_log()
+      })
+      .child(Text::new(&ctx.t("runner.connection.openLog")).variant(TypographyStyle::Link)),
     );
   }
   row.into()
@@ -210,7 +214,7 @@ fn row(parts: RowParts, target: &Target, failure: Option<OperationId>, opener: &
       .with_children(content);
     row
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-      .child(pressable(button, move || open.open(&target, failure)))
+      .child(pressable(button, Ring::Inset, move || open.open(&target, failure)))
   } else {
     row
       .padding(SpacingSize::Sm)

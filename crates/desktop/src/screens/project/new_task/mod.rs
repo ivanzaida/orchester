@@ -39,7 +39,7 @@ use crate::{
   ui::{
     form::{Submit, form},
     icon::{Icon, IconSize, icon},
-    pressable::{pressable, surface},
+    pressable::{Ring, pressable, surface},
   },
   workspace::OpenProject,
 };
@@ -233,10 +233,12 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
 /// until Save as draft, so the state says so rather than claiming a saved draft.
 fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, saving: bool) -> Element {
   let nav = nav.clone();
-  let back = pressable(surface().id("new-task-back"), move || nav.show(Section::Tasks))
-    .rounded(RadiusSize::Sm)
-    .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-    .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));
+  let back = pressable(surface().id("new-task-back"), Ring::Outer, move || {
+    nav.show(Section::Tasks)
+  })
+  .rounded(RadiusSize::Sm)
+  .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+  .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));
   let state = if saving {
     ctx.t("tasks.new.saving")
   } else {

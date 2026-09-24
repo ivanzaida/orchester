@@ -26,7 +26,7 @@ use crate::{
     form::Submit,
     icon::Icon,
     message_text,
-    pressable::keyboard_stop,
+    pressable::{Ring, keyboard_stop},
   },
 };
 
@@ -241,7 +241,7 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit) -> Element {
     .rounded(RadiusSize::Sm)
     .child(text);
   let save_draft = match save {
-    Some(save) => keyboard_stop(save_draft)
+    Some(save) => keyboard_stop(save_draft, Ring::Outer)
       .describe("state", "enabled")
       .cursor(CursorIcon::Pointer)
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))

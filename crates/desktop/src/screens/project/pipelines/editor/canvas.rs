@@ -37,7 +37,7 @@ use crate::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     notice::Notice,
-    pressable::{pressable, surface},
+    pressable::{Ring, pressable, surface},
   },
 };
 
@@ -251,7 +251,7 @@ impl Canvas {
       .border(Border::inside(BorderSize::Sm, PaletteColor::TextSecondary))
       .rounded(RadiusSize::Lg)
       .child(content);
-    pressable(slot, move || add_step(&handle, name.clone()))
+    pressable(slot, Ring::Outer, move || add_step(&handle, name.clone()))
       .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
       .into()
   }

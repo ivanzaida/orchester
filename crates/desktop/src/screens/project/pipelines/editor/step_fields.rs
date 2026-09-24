@@ -35,7 +35,7 @@ use crate::{
     },
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::keyboard_stop,
+    pressable::{Ring, keyboard_stop},
   },
 };
 
@@ -312,7 +312,7 @@ fn toggle(text: &str, on: bool, flip: impl Fn() + Send + Sync + 'static) -> Elem
   } else {
     PaletteColor::TextSecondary
   };
-  keyboard_stop(Button::empty().button())
+  keyboard_stop(Button::empty().button(), Ring::Inset)
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
@@ -420,7 +420,7 @@ fn property_input(ctx: &Ctx, key: &str, id: &'static str, value: &Signal<String>
 pub fn approval(ctx: &Ctx, props: &StepInspectorProps, handle: &EditorHandle) -> Element {
   let on = props.step.approval_gate;
   let (handle, key) = (handle.clone(), props.step.key.clone());
-  keyboard_stop(Button::empty().button())
+  keyboard_stop(Button::empty().button(), Ring::Inset)
     .id("step-approval")
     .describe("checked", if on { "true" } else { "false" })
     .width(Dimension::Pct(100.0))

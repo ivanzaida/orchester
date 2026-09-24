@@ -19,7 +19,7 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
-    pressable::{pressable, surface},
+    pressable::{Ring, pressable, surface},
     status_label::compact_status_label as label,
   },
 };
@@ -103,7 +103,7 @@ pub fn connection_row(
   if state.selected {
     return row.describe("state", "selected").into();
   }
-  pressable(row, on_click)
+  pressable(row, Ring::Inset, on_click)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .into()
 }

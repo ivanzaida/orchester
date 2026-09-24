@@ -1,9 +1,6 @@
-//! The whole desktop mounted headlessly on a temporary application database, driven by keys,
-//! with the focus read from the tree.
-//!
-//! Pages are driven without a layout pass: lurq 0.24.0's window chrome lays its title bar out
-//! as a modal, which then traps Tab with no stops in it. Dialogs are modals too and exist only
-//! after a layout pass ([`Desktop::lay_out`]), so their tests wait for that lurq fix.
+//! The whole desktop mounted headlessly on a temporary application database, driven by keys.
+//! Every step runs a headless lurq pass (layout, modals included, without a window), so pages,
+//! inspectors and dialogs are all reachable, and the focus is read from the tree.
 
 use std::{
   fs,
@@ -135,7 +132,7 @@ impl Desktop {
   }
 
   /// A headless pass: rebuilds what changed and lays out the window, modals included.
-  pub fn lay_out(&mut self) {
+  pub fn pass(&mut self) {
     self.tree.pass_headless(&mut self.app);
   }
 
@@ -143,7 +140,7 @@ impl Desktop {
   pub fn settle(&mut self, what: &str, done: impl Fn(&mut Tree) -> bool) {
     for _ in 0..SETTLE_TRIES {
       self.tree.tick_futures();
-      self.tree.rebuild();
+      self.pass();
       if done(&mut self.tree) {
         return;
       }
@@ -158,10 +155,13 @@ impl Desktop {
 
   pub fn click(&mut self, id: &str) {
     self.tree.get_element_by_id_mut(id).expect(id).click();
+    self.pass();
   }
 
+  /// A key press, then a pass so the next step sees what it changed.
   pub fn key(&mut self, key: &str, code: &str) {
     self.tree.key_down(key.into(), code.into(), false, false, false);
+    self.pass();
   }
 
   pub fn tab(&mut self) {
@@ -170,6 +170,7 @@ impl Desktop {
 
   pub fn shift_tab(&mut self) {
     self.tree.key_down("Tab".into(), "Tab".into(), true, false, false);
+    self.pass();
   }
 
   pub fn enter(&mut self) {

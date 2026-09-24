@@ -13,7 +13,7 @@ use lurq::{
 
 use super::{
   icon::{Icon, IconSize, icon},
-  pressable::{pressable, surface},
+  pressable::{Ring, pressable, surface},
 };
 use crate::theme::{ExtraSpacing, ExtraTypography};
 
@@ -139,7 +139,7 @@ impl From<NavItem> for Element {
         .background(PaletteColor::AccentMuted)
         .describe("state", "selected")
         .into(),
-      State::Available(handler) => pressable(row, move || handler())
+      State::Available(handler) => pressable(row, Ring::Outer, move || handler())
         .describe("state", "enabled")
         .hovered_style(Style::new().background(PaletteColor::AccentMuted))
         .into(),

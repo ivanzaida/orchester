@@ -34,7 +34,7 @@ use crate::{
     icon::Icon,
     message_text,
     notice::Notice,
-    pressable::keyboard_stop,
+    pressable::{Ring, keyboard_stop},
   },
   workspace::OpenProject,
 };
@@ -215,7 +215,7 @@ impl NewPipelineDialog {
     };
     let start = self.start.clone();
     // A button, so Tab reaches the option and Enter or Space chooses it.
-    keyboard_stop(Button::empty().button())
+    keyboard_stop(Button::empty().button(), Ring::Outer)
       .id(id)
       .align_items(Alignment::Start)
       .describe("selected", if selected { "true" } else { "false" })

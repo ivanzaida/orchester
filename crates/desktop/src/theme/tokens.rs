@@ -86,3 +86,10 @@ pub const WINDOW_CONTROL_WIDTH: f32 = 46.0;
 pub const POPOVER_SHADOW_Y: f32 = 8.0;
 pub const POPOVER_SHADOW_BLUR: f32 = 24.0;
 pub const POPOVER_SHADOW_COLOR: &str = "#00000066";
+
+/// Focus ring (`xURvJ`, anatomy `Oz9EN`): a 2px light ring behind a 2px dark gap, drawn as
+/// two spread box shadows (Pencil `focus-ring`, `focus-gap`, `focus-width`, `focus-extent`).
+pub const FOCUS_RING: &str = "#EEEEEE";
+pub const FOCUS_GAP: &str = "#101010";
+pub const FOCUS_WIDTH: f32 = 2.0;
+pub const FOCUS_EXTENT: f32 = 4.0;

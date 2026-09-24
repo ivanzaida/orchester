@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   components::{Column, Row, Stack, Text},
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -14,7 +14,7 @@ use lurq::{
 
 use super::{
   icon::{Icon, IconSize, icon},
-  pressable::{pressable, surface},
+  pressable::{Ring, pressable, surface},
 };
 use crate::theme::{ExtraColor, ExtraSpacing};
 
@@ -81,7 +81,12 @@ impl From<Tab> for Element {
       State::Available(_) => PaletteColor::TextSecondary,
       State::Unavailable => PaletteColor::TextMuted,
     };
-    let mut row = surface().id(tab.id).height(tab.height);
+    // Rounded top corners shape the inset focus ring; the underline keeps the bottom square.
+    let mut row = surface()
+      .id(tab.id)
+      .height(tab.height)
+      .corner_radius_top_left(RadiusSize::Sm)
+      .corner_radius_top_right(RadiusSize::Sm);
     if let Some(width) = tab.min_width {
       row = row.min_width(width);
     }
@@ -105,7 +110,7 @@ impl From<Tab> for Element {
         .describe("state", "selected")
         .border_bottom(Border::inside(BorderSize::Lg, PaletteColor::TextPrimary))
         .into(),
-      State::Available(handler) => pressable(row, move || handler())
+      State::Available(handler) => pressable(row, Ring::Inset, move || handler())
         .describe("state", "enabled")
         .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Lg, PaletteColor::Border)))
         .into(),

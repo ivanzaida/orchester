@@ -20,7 +20,7 @@ use crate::{
   ui::{
     button::ActionButton,
     icon::Icon,
-    pressable::{pressable, surface},
+    pressable::{Ring, pressable, surface},
   },
 };
 
@@ -116,7 +116,7 @@ fn item(ctx: &Ctx, agents: &ProjectAgents, entry: &ProfileEntry, selected: bool,
     return item.describe("state", "selected").into();
   }
   let (agent, id) = (nav.agent.clone(), entry.id);
-  pressable(item, move || agent.set(AgentSelection::Profile(id)))
+  pressable(item, Ring::Inset, move || agent.set(AgentSelection::Profile(id)))
     .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
     .into()
 }

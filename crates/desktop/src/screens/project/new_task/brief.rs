@@ -24,7 +24,7 @@ use crate::{
     field::{styled_input, text_input},
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::keyboard_stop,
+    pressable::{Ring, keyboard_stop},
   },
   workspace::OpenProject,
 };
@@ -173,7 +173,7 @@ fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
     .map(|criterion| criterion_row(ctx, &form.criteria, criterion, removable))
     .collect();
   let signal = form.criteria.clone();
-  let add = keyboard_stop(Button::empty().button())
+  let add = keyboard_stop(Button::empty().button(), Ring::Inset)
     .id("add-criterion")
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
@@ -224,7 +224,7 @@ fn criterion_row(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, criterion: &Crite
   let (criteria, id) = (criteria.clone(), criterion.id);
   row
     .child(
-      keyboard_stop(Button::empty().button())
+      keyboard_stop(Button::empty().button(), Ring::Inset)
         .id(Arc::<str>::from(format!("remove-criterion-{id}")))
         .align_items(Alignment::Start)
         .cursor(CursorIcon::Pointer)

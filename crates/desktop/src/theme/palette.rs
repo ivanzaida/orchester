@@ -4,7 +4,8 @@ use lurq::{
 };
 
 use super::tokens::{
-  ACCENT, BORDER, CANVAS, HAIRLINE, HOVER, INVERSE_TEXT, MUTED, RAISED, SCRIM, SIDEBAR, SUBTLE, SURFACE, TEXT,
+  ACCENT, BORDER, CANVAS, FOCUS_GAP, FOCUS_RING, HAIRLINE, HOVER, INVERSE_TEXT, MUTED, RAISED, SCRIM, SIDEBAR, SUBTLE,
+  SURFACE, TEXT,
 };
 
 /// Pencil colors without a built-in lurq role, registered as `PaletteColor::Extra`.
@@ -17,16 +18,28 @@ pub enum ExtraColor {
   Hairline,
   /// Dims the window behind a dialog (`a8U756`).
   Scrim,
+  /// The light ring of a focused control (Pencil `focus-ring`, `xURvJ`).
+  FocusRing,
+  /// The dark gap between a focused control and its ring (Pencil `focus-gap`, `xURvJ`).
+  FocusGap,
 }
 
 impl ExtraColor {
-  const ALL: [Self; 3] = [Self::Surface, Self::Hairline, Self::Scrim];
+  const ALL: [Self; 5] = [
+    Self::Surface,
+    Self::Hairline,
+    Self::Scrim,
+    Self::FocusRing,
+    Self::FocusGap,
+  ];
 
   fn name(self) -> &'static str {
     match self {
       Self::Surface => "surface",
       Self::Hairline => "hairline",
       Self::Scrim => "scrim",
+      Self::FocusRing => "focus-ring",
+      Self::FocusGap => "focus-gap",
     }
   }
 
@@ -35,6 +48,8 @@ impl ExtraColor {
       Self::Surface => SURFACE,
       Self::Hairline => HAIRLINE,
       Self::Scrim => SCRIM,
+      Self::FocusRing => FOCUS_RING,
+      Self::FocusGap => FOCUS_GAP,
     })
   }
 

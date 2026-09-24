@@ -207,3 +207,30 @@ fn popover_shadow_follows_pencil() {
     )]
   );
 }
+
+#[test]
+fn focus_ring_follows_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  // `xURvJ`: `focus-ring` #EEEEEE, `focus-gap` #101010, `focus-width` 2, `focus-extent` 4.
+  assert_eq!(
+    theme.palette_color(ExtraColor::FocusRing.role()),
+    Color::from_hex("#EEEEEE")
+  );
+  assert_eq!(
+    theme.palette_color(ExtraColor::FocusGap.role()),
+    Color::from_hex("#101010")
+  );
+  let ring = |spread: f32, color: ExtraColor| BoxShadow::new(0.0, 0.0, 0.0, color.role()).spread(spread);
+  assert_eq!(
+    &*theme.shadow_style(ExtraShadow::FocusRing.role()),
+    &[ring(2.0, ExtraColor::FocusGap), ring(4.0, ExtraColor::FocusRing)]
+  );
+  assert_eq!(
+    &*theme.shadow_style(ExtraShadow::FocusRingInset.role()),
+    &[
+      ring(2.0, ExtraColor::FocusRing).inset(),
+      ring(4.0, ExtraColor::FocusGap).inset()
+    ]
+  );
+}

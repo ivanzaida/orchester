@@ -97,7 +97,9 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `space-sm/md/lg` 8/16/24 | `SpacingSize::Sm/Md/Lg` |
 | stroke 1 / focus stroke 1.5 / selected tab underline 2 | `BorderSize::Sm` / `Md` / `Lg` |
 | form group gap 22 (`xT2ex`, `dCLMl`) | `ExtraSpacing::Form.role()` |
-| operations popover drop shadow 0 8 24 #00000066 (`E1msJS`), the design's only shadow | `ExtraShadow::Popover.role()` |
+| operations popover drop shadow 0 8 24 #00000066 (`E1msJS`) | `ExtraShadow::Popover.role()` |
+| `focus-ring` #EEEEEE / `focus-gap` #101010 (`xURvJ`) | `ExtraColor::FocusRing.role()` / `ExtraColor::FocusGap.role()` |
+| focus ring, outer / inset: spreads `focus-width` 2 and `focus-extent` 4 (`xURvJ`, `Oz9EN`) | `ExtraShadow::FocusRing.role()` / `FocusRingInset.role()`, applied only through `ui::pressable::Ring` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |

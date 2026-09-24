@@ -19,11 +19,11 @@ use crate::{
     describe::{step_count, task_count, version_state},
     library::{LibraryEntry, VersionState},
   },
-  theme::{ExtraColor, ExtraRadius},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing},
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{pressable, surface},
+    pressable::{Ring, pressable, surface},
     status_label::status_label,
   },
 };
@@ -52,6 +52,8 @@ pub fn column_headings(ctx: &Ctx) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEADINGS_HEIGHT))
+    // Inset like the rows, so the columns line up.
+    .padding_horizontal(ExtraSpacing::Stack.role())
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
@@ -126,6 +128,8 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
     .describe("pipeline", entry.name.to_string())
     .width(Dimension::Pct(100.0))
     .padding_vertical(SpacingSize::Md)
+    // A focusable row keeps its content clear of the inset focus ring (`xURvJ`).
+    .padding_horizontal(ExtraSpacing::Stack.role())
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
@@ -145,5 +149,5 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
     ))
     .child(cell(&published, PUBLISHED_WIDTH, PaletteColor::TextSecondary))
     .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
-  pressable(row, move || open.open(id)).into()
+  pressable(row, Ring::Inset, move || open.open(id)).into()
 }

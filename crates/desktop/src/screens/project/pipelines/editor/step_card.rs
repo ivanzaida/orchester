@@ -24,7 +24,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{pressable, surface},
+    pressable::{Ring, pressable, surface},
   },
 };
 
@@ -108,6 +108,6 @@ pub fn step_card(
     .border(Border::inside(stroke, outline))
     .rounded(RadiusSize::Lg)
     .child(content);
-  pressable(card, move || select.select(Selection::Step(key.clone())))
+  pressable(card, Ring::Outer, move || select.select(Selection::Step(key.clone())))
     .hovered_style(Style::new().border(Border::inside(stroke, PaletteColor::BorderStrong)))
 }

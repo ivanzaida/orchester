@@ -1,7 +1,5 @@
-//! Dialogs are modals, laid out by a headless pass. Enter and Escape work in them today; Tab
-//! does not: lurq 0.24.0 lays the window chrome's title bar out as a modal after every dialog,
-//! and that topmost modal, which has no stops, takes the Tab trap. The Tab tests are ignored
-//! until lurq fixes it.
+//! Dialogs are modals: Tab and Shift+Tab stay inside the open one, Enter submits its form only
+//! when it can be submitted, and Escape does what each dialog allows.
 
 use crate::harness::Desktop;
 
@@ -18,7 +16,6 @@ fn new_pipeline_dialog() -> Desktop {
   desktop.click("nav-pipelines");
   desktop.wait_for("pipelines-new");
   desktop.click("pipelines-new");
-  desktop.lay_out();
   desktop.wait_for(PIPELINE_NAME);
   desktop
 }
@@ -29,13 +26,11 @@ fn connection_dialog() -> Desktop {
   desktop.click("nav-connections");
   desktop.wait_for("add-connection");
   desktop.click("add-connection");
-  desktop.lay_out();
   desktop.wait_for(CONNECTION_DIALOG);
   desktop
 }
 
 fn shown(desktop: &mut Desktop, id: &str) -> bool {
-  desktop.lay_out();
   desktop.tree.get_element_by_id(id).is_some()
 }
 
@@ -76,7 +71,6 @@ fn new_pipeline_dialog_escape_closes_it() {
 }
 
 #[test]
-#[ignore = "lurq 0.24.0: the window chrome's modal traps Tab (see the module doc)"]
 fn new_pipeline_dialog_traps_tab() {
   let mut desktop = new_pipeline_dialog();
   // Create stays disabled without a name and is skipped.
@@ -114,7 +108,6 @@ fn connection_dialog_enter_saves_nothing_without_a_program() {
 }
 
 #[test]
-#[ignore = "lurq 0.24.0: the window chrome's modal traps Tab (see the module doc)"]
 fn connection_dialog_traps_tab() {
   let mut desktop = connection_dialog();
   // Selects have no id of their own and show up as unnamed stops.
