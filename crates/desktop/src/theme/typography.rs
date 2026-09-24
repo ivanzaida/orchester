@@ -90,14 +90,16 @@ pub enum ExtraTypography {
   VersionFigure,
   /// Explanation under an empty state title (`xIG73`).
   Summary,
-  /// Text of the compact status label in the pipeline topbar, e.g. "Draft v4" (`JuW4o` in `pLCWI`).
-  StatusLabelSmall,
   /// Empty state icon (`Ujxx0`), 22px.
   IconLarge,
+  /// Status label text in a list row (`JuW4o` in `v7McTX`).
+  CompactStatusLabel,
+  /// Title of an inspector panel, e.g. a connection's name (`kU9QO`).
+  InspectorTitle,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 41] = [
+  const ALL: [Self; 42] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -137,8 +139,9 @@ impl ExtraTypography {
     Self::Hint,
     Self::VersionFigure,
     Self::Summary,
-    Self::StatusLabelSmall,
     Self::IconLarge,
+    Self::CompactStatusLabel,
+    Self::InspectorTitle,
   ];
 
   fn name(self) -> &'static str {
@@ -182,8 +185,9 @@ impl ExtraTypography {
       Self::Hint => "hint",
       Self::VersionFigure => "version-figure",
       Self::Summary => "summary",
-      Self::StatusLabelSmall => "status-label-small",
       Self::IconLarge => "icon-large",
+      Self::CompactStatusLabel => "compact-status-label",
+      Self::InspectorTitle => "inspector-title",
     }
   }
 
@@ -293,8 +297,9 @@ impl ExtraTypography {
         line_height: 1.6,
         ..style(13.0, FontWeight::Normal, MUTED)
       },
-      Self::StatusLabelSmall => style(10.0, FontWeight::Medium, TEXT),
       Self::IconLarge => icon(22.0),
+      Self::CompactStatusLabel => style(10.0, FontWeight::Medium, TEXT),
+      Self::InspectorTitle => style(18.0, FontWeight::Medium, TEXT),
     }
   }
 }

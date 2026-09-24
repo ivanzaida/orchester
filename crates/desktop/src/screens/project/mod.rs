@@ -1,9 +1,13 @@
 //! Project shell: the sidebar (`zo9Py`) beside the open project screen — the overview
-//! (`Twtqc`), the task list (`J9467`) or the new task form (`l2YA4`). The shell reads the
-//! project's tasks once and hands them to the sidebar and the screen.
+//! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), agent profiles (`WPmtS`)
+//! or connections (`a4Lqb`). The shell reads the project's tasks once and hands them to the
+//! sidebar and the screen.
 
+mod agents;
+mod connections;
 mod new_task;
 mod overview;
+mod page;
 mod pipelines;
 mod runner;
 mod sidebar;
@@ -19,8 +23,11 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
+use orchester_core::id::ResourceId;
 
 use self::{
+  agents::AgentsScreen,
+  connections::ConnectionsScreen,
   new_task::{NewTaskForm, NewTaskProps},
   pipelines::PipelinesScreen,
   sidebar::sidebar,
@@ -41,20 +48,41 @@ pub enum Section {
   Tasks,
   NewTask,
   Pipelines,
+  Agents,
+  Connections,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Section {}
+
+/// The profile the Agents screen shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgentSelection {
+  /// The first profile, if there is one.
+  First,
+  Profile(ResourceId),
+  /// A profile being written that is not saved yet.
+  New,
+}
+
+impl lurq::app::component::DevtoolsInspectable for AgentSelection {}
 
 /// Provided by the shell: switching screens and announcing that tasks changed.
 #[derive(Clone)]
 pub struct ProjectNav {
   section: Signal<Section>,
   revision: Signal<u64>,
+  agent: Signal<AgentSelection>,
 }
 
 impl ProjectNav {
   pub fn show(&self, section: Section) {
     self.section.set(section);
+  }
+
+  /// Opens the Agents screen at `profile`, e.g. from a connection's "Used by" link.
+  pub fn show_profile(&self, profile: ResourceId) {
+    self.agent.set(AgentSelection::Profile(profile));
+    self.section.set(Section::Agents);
   }
 
   /// Tasks were saved; the shell reads them again.
@@ -95,6 +123,7 @@ impl Component for ProjectShell {
       nav: ProjectNav {
         section: ctx.signal(Section::Overview),
         revision: ctx.signal(0),
+        agent: ctx.signal(AgentSelection::First),
       },
     }
   }
@@ -131,6 +160,8 @@ impl Component for ProjectShell {
           pipelines: tasks.ready().map(|tasks| tasks.pipelines.clone()),
         },
       ),
+      Section::Agents => ctx.mount_keyed::<AgentsScreen>("agents", open.clone()),
+      Section::Connections => ctx.mount_keyed::<ConnectionsScreen>("connections", open.clone()),
     };
     Row::new()
       .width(Dimension::Pct(100.0))

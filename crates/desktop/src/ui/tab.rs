@@ -1,17 +1,18 @@
 //! Tab (`SOW6S`): a label with an optional count; the selected tab is underlined (`Iefue`).
 //! A tab without a data source yet is unavailable: muted, locked and without a count.
+//! [`tab_row`] lays tabs out over the hairline that ends their row.
 
 use std::sync::Arc;
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
-  components::{Row, Text},
+  components::{Column, Row, Stack, Text},
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
 
 use super::icon::{Icon, IconSize, icon};
-use crate::theme::ExtraSpacing;
+use crate::theme::{ExtraColor, ExtraSpacing};
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
@@ -113,4 +114,33 @@ impl From<Tab> for Element {
         .into(),
     }
   }
+}
+
+/// A row of tabs at `height`, `gap` apart and inset by `inset`, ended by a hairline (`XxplC`,
+/// `i2uFe`). The hairline is drawn below the tabs, so a selected tab's 2px underline covers
+/// it as in the design instead of being cut by it.
+pub fn tab_row(
+  height: Dimension,
+  gap: SpacingSize,
+  inset: Option<SpacingSize>,
+  tabs: impl IntoIterator<Item = Tab>,
+) -> Element {
+  let hairline = Column::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()));
+  let mut row = Row::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .spacing(gap)
+    .with_children(tabs);
+  if let Some(inset) = inset {
+    row = row.padding_horizontal(inset);
+  }
+  Stack::new()
+    .width(Dimension::Pct(100.0))
+    .height(height)
+    .child(hairline)
+    .child(row)
+    .into()
 }

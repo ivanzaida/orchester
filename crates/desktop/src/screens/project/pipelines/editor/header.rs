@@ -29,7 +29,7 @@ use crate::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     message_text,
-    status_label::compact_status_label,
+    status_label::topbar_status_label,
   },
 };
 
@@ -63,7 +63,7 @@ pub fn topbar(
     .on_click(move |_| back.library());
   let draft = state.draft_number().to_string();
   let label = match state.latest() {
-    Some(latest) if !state.has_changes() => compact_status_label(
+    Some(latest) if !state.has_changes() => topbar_status_label(
       Some(Icon::CircleCheck),
       &ctx.t_args(
         "pipelines.version.publishedLabel",
@@ -71,7 +71,7 @@ pub fn topbar(
       ),
       "pipeline-version",
     ),
-    _ => compact_status_label(
+    _ => topbar_status_label(
       None,
       &ctx.t_args("pipelines.version.draftLabel", [("draft", draft.as_str())]),
       "pipeline-version",

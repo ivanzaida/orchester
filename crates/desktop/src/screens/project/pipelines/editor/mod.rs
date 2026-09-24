@@ -48,7 +48,7 @@ use crate::{
   },
   screens::project::ProjectNav,
   theme::ExtraColor,
-  ui::{icon::Icon, message_text, panel::RecoveryPanel},
+  ui::{backdrop::backdrop, icon::Icon, message_text, panel::RecoveryPanel},
   workspace::OpenProject,
 };
 
@@ -332,7 +332,7 @@ impl PipelineEditor {
       action.is_pending(),
       action.error.clone().filter(|_| !action.is_pending()),
     );
-    Modal::new(super::on_backdrop(dialog))
+    Modal::new(backdrop(dialog))
       .target(ModalTarget::Root)
       .open(self.confirm_publish.clone())
       .into()

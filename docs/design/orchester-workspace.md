@@ -63,6 +63,13 @@ Canonical screens and states, in canvas order:
 | 02.H · Runner could not restart | `EFY7I` | [Preview](previews/EFY7I.png) |
 | Sidebar runner card states (compact) | `O5NoB1` | [Preview](previews/O5NoB1.png) |
 | 03.01 · Pipeline / Feature delivery | `Q21HOA` | [Preview](previews/Q21HOA.png) |
+| 03.02 · Publish v4 / Confirm | `zfjsK` | [Preview](previews/zfjsK.png) |
+| 03.03 · Published v4 | `yf6XH` | [Preview](previews/yf6XH.png) |
+| 03.04 · Pipelines library | `LRMQW` | [Preview](previews/LRMQW.png) |
+| 03.05 · New pipeline / Name and starting point | `c3jD7` | [Preview](previews/c3jD7.png) |
+| 03.06 · Empty pipeline / No steps yet | `angoF` | [Preview](previews/angoF.png) |
+| 03.A · No pipelines yet | `MqRT7` | [Preview](previews/MqRT7.png) |
+| 03.B · Draft has problems / Publish blocked | `UjHDL` | [Preview](previews/UjHDL.png) |
 | 04.01 · Project connections | `a4Lqb` | [Preview](previews/a4Lqb.png) |
 | 04.02 · Add agent provider | `h6CmJ` | [Preview](previews/h6CmJ.png) |
 | 04.03 · Agent profiles / Assign connection & model | `WPmtS` | [Preview](previews/WPmtS.png) |
@@ -88,11 +95,11 @@ Canonical screens and states, in canvas order:
 | 08.B · PR updated while composing (compact state) | `hfoDa` | [Preview](previews/hfoDa.png) |
 | 08.C · Agent request queued (compact state) | `uD6Ho` | [Preview](previews/uD6Ho.png) |
 
-There are 50 full screen frames; the previous 44 screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
+There are 57 full screen frames; earlier screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
 
 - Getting started: first launch → GitHub authorization → repository → runner/agents → ready. Setup blocking and compact empty-project feedback are below the main flow.
 - Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue. The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. Pause and retry are alternatives in `O4vgKt`; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Application lifecycle states (close with active work, runner connection, recovery on start) and the sidebar runner card states are in `Z7Fyr8`. Group positions are y 160 / 1376 / 3640 / 5904 / 7120 / 8216 respectively; the section height is 10832.
-- Pipelines: the visual editor is separate from task execution.
+- Pipelines: the visual editor is separate from task execution. `UJUi0` holds edit → publish confirmation → published. `t9zWUe` holds the library (the Pipelines navigation destination) → new pipeline → an empty pipeline in the editor. `rBy9L` holds the empty library and the publish-blocked editor. Group positions are y 160 / 1376 / 2592; the section height is 3808.
 - Agents & connections: connections → add provider → assign connection/model in the agent profile; expired-access recovery is below.
 - Instructions: rules → composed prompt → variable catalog; unavailable-variable state is below.
 - Tools & imports: library → configuration → access policy in the first group. Select → resolve dependencies → ready to import is a separate complete row in `TSGMX`. Success/failure panels remain in `tjNmM`.
@@ -103,7 +110,7 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 
 ## Components and tokens
 
-37 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
+40 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
 
 | Family | Node |
 | --- | --- |
@@ -142,6 +149,7 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 | Task queue row | `clVjO` |
 | Task execution mode | `lcwsy` |
 | Pull request list row | `QHBNZ` |
+| Pipelines library row | `hn8qO` |
 | Changed file | `j9NDM` |
 | Diff line | `vEZ42` |
 | Window title bar (Windows) | `QQmsI` |
@@ -175,6 +183,22 @@ screen frame and the bar with the platform component.
 The task creation fixture includes four acceptance criteria, including cancelled OAuth, and shows the six steps from published Feature delivery v3. Create & run leads to research and planning; it does not bypass plan approval. The plan screen exposes plan v1, scope and acceptance criteria, with Approve plan & continue and Request changes. Requested changes return to Planner; a revised plan requires a new decision.
 
 Pause first settles at a safe checkpoint and stops new scheduling/tool calls; only then may the UI claim Paused. Resume continues the same run and version snapshot. Cancel stops new scheduling and preserves work and artifacts; it does not undo completed external operations, and unresolved in-flight outcomes remain visible. Retry-limit recovery offers one explicitly authorized additional attempt within the remaining budget or revision of the task first. The exhausted example is an alternative Run 129 / Attempt 3; the normal Run 128 shows intermediate checkpoint `4b92ad0` and final reviewed revision `8f3a2c1`.
+
+## Pipelines library, creation and publishing
+
+Pipelines in the navigation opens the library (`LRMQW`), not an editor. It lists the project's pipelines with name, step summary, step count, version state, the number of tasks that use it and the last publish date. Version state is always a status label with an icon: *Published v1*, *v3 · Draft v4 saved* (a published version plus unpublished changes) or *Draft v1 · not published* (never published, so no task can select it). Selecting a row opens the editor (`Q21HOA`). *Import from project* opens the existing import flow (`W4zGKx`) and creates independent local copies. A side panel explains the version chain: Draft saved → Publish vN → Runs keep their version. The fixture has four pipelines (Deploy staging, Feature delivery, Investigate issue, Release notes); Deploy staging, Feature delivery and Investigate issue match the pipelines named on the Tools screen.
+
+*No pipelines yet* (`MqRT7`) explains in two sentences what a pipeline is and that a task can only run a published pipeline. It shows the starter Feature delivery with its six steps (Research → Plan (approval) → Implement → Run checks ∥ Review → Create pull request) using `XVkaB` rows. *Create from starter* creates draft v1 with those steps; *Start empty* creates draft v1 with no steps. Neither publishes nor starts a run. The starter refers to the project's own Explorer, Planner, Builder and Reviewer profiles and the Run test suite and Create pull request tools; missing ones are flagged in the editor and block publishing. The empty-library fixture hides the Tasks count, because tasks cannot exist without a pipeline.
+
+*New pipeline* (`c3jD7`) is a modal over the library (`#000000A6` backdrop, `$surface` panel, `$radius-panel`, hairline header and footer). It asks for a name and shows the generated slug (`dependency-updates`), which is unique in the project. Start from is a choice between the starter and an empty pipeline, and the starter's step chain is shown in the option. *Create draft* creates draft v1 once, then opens the editor; a retry must not create a second pipeline. A name that produces an existing slug must be rejected with the existing pipeline named (not drawn). Choosing the starter leads to the editor with the six steps as draft v1; choosing Empty leads to `angoF`.
+
+*Empty pipeline* (`angoF`) is the editor with no steps: a slot under ON TASK START invites *Add first step* (an agent profile or a tool), and a short explanation with *Add step* and *Use starter steps*. With no step selected, the inspector shows the pipeline itself: name, slug, optional description, trigger, *Published version: None yet*, *Used by: No tasks*, *Steps: 0*, and a notice that tasks can select the pipeline only after v1 is published. Run and Publish v1 are disabled; the toolbar says why ("Add a step before you can publish v1").
+
+*Publish blocked* (`UjHDL`) is draft v4 with two problems: the Review step has no agent profile, and Plan waits for Review, which closes the cycle Plan → Implement → Review → Plan. A strip under the toolbar says publishing is blocked by 2 problems and that published v3 still runs; each problem is a button that selects the step or edge. The cycle edge is drawn and labelled on the canvas, the Review card says "No agent profile", and the inspector marks the profile field as required with a sentence under it. Publish v4 is disabled; Run v3 stays available because it runs the published version. Problems are computed from the saved draft; the exact validation list (missing profiles, tools or credentials, cycles, unreachable steps, a join that can never complete) is implementation work.
+
+*Publish v4 / Confirm* (`zfjsK`) opens from Publish v4. It shows *Published now: v3* next to *After publishing: v4*, the changes from v3, and that runs already started or queued pinned v3 and keep it. *Publish v4* publishes once; a retry must not create v5. *Published v4* (`yf6XH`) shows the result: the version label becomes *Published v4*, the save status says there are no draft changes and that the next edit starts draft v5, Run becomes *Run v4*, Publish is replaced by *Version history*, and a notice repeats that in-progress and queued runs keep v3. Publishing never changes a run that already pinned a version; moving an active run to a newer version would be a separate explicit action and is not designed.
+
+The library row is a new reusable component, `hn8qO` (Pipelines / Library row), canonical inside `LRMQW`. The screens otherwise reuse the sidebar, button, status label, select field, key/value, summary step, pipeline step and inline notice components. Proposed copy namespace: `pipelines.library.*`, `pipelines.create.*`, `pipelines.empty.*`, `pipelines.validation.*`, `pipelines.publish.*`. Change counts, run counts, dates and the Dependency updates / Release notes pipelines are illustrative fixtures. Library filtering, version history, archive/delete, rename and slug collision states are not drawn.
 
 ## Task library, bulk creation and scheduling
 

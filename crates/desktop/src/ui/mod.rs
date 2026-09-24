@@ -1,5 +1,6 @@
 //! Shared components mirroring the design's Foundations masters.
 
+pub mod backdrop;
 pub mod brand;
 pub mod button;
 pub mod countdown;
@@ -8,6 +9,7 @@ pub mod icon;
 pub mod nav_item;
 pub mod notice;
 pub mod panel;
+pub mod property;
 pub mod status_label;
 pub mod summary_step;
 pub mod tab;

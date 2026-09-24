@@ -208,10 +208,16 @@ pub fn model(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields) -> Vec<Elem
     (ModelChoice(Some(model)), label)
   }));
   let used = model.as_ref().unwrap_or(&profile.model);
-  let effective_model = ctx.t_args(
-    "pipelines.inspector.effectiveModel",
-    [("profile", &*profile.name), ("model", used.as_str())],
-  );
+  let effective_model = match &profile.connection {
+    Some(connection) => ctx.t_args(
+      "pipelines.inspector.effectiveModel",
+      [("connection", &**connection), ("model", used.as_str())],
+    ),
+    None => ctx.t_args(
+      "pipelines.inspector.effectiveModelNoConnection",
+      [("model", used.as_str())],
+    ),
+  };
   vec![
     labelled(
       label(ctx, "pipelines.inspector.model"),

@@ -22,7 +22,7 @@ use super::{
   PipelineId, PipelinesNav,
   library_row::{column_headings, library_row},
   new_pipeline::{NewPipelineDialog, NewPipelineProps, create_error},
-  on_backdrop, starter_text,
+  starter_text,
 };
 use crate::{
   background,
@@ -33,6 +33,7 @@ use crate::{
   },
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
+    backdrop::backdrop,
     button::ActionButton,
     field::{ValueTone, field_error, value_box_sized},
     icon::{Icon, IconSize, icon},
@@ -302,7 +303,7 @@ impl Library {
       open: self.dialog_open.clone(),
     };
     let key = format!("new-pipeline-{}", self.dialog_opened.get());
-    Modal::new(on_backdrop(ctx.mount_keyed::<NewPipelineDialog>(&key, props)))
+    Modal::new(backdrop(ctx.mount_keyed::<NewPipelineDialog>(&key, props)))
       .target(ModalTarget::Root)
       .open(self.dialog_open.clone())
       .into()

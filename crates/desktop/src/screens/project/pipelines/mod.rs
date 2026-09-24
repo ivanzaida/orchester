@@ -8,10 +8,8 @@ mod new_pipeline;
 
 use lurq::{
   app::{component::Component, ctx::Ctx},
-  components::Column,
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::{
   id::ResourceId,
@@ -23,7 +21,7 @@ use self::{
   editor::{EditorProps, PipelineEditor},
   library::{Library, LibraryProps},
 };
-use crate::{pipelines::library::StarterText, theme::ExtraColor, workspace::OpenProject};
+use crate::{pipelines::library::StarterText, workspace::OpenProject};
 
 /// A pipeline to open, as signals and futures carry it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,18 +84,6 @@ impl Component for PipelinesScreen {
       }
     }
   }
-}
-
-/// A dialog centered on the backdrop that dims the window behind it (`a8U756`, `nqqYL`).
-fn on_backdrop(dialog: Element) -> Element {
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .background(ExtraColor::Scrim.role())
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .child(dialog)
-    .into()
 }
 
 /// The starter's step names and instructions and the profile and tool names it looks for,

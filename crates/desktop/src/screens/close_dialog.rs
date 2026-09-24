@@ -11,7 +11,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Modal, ModalTarget, Row, Spacer, Text},
-  layout::{Alignment, layout_kind::Justify},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 
@@ -20,6 +20,7 @@ use crate::{
   runner::ActiveWork,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
+    backdrop::backdrop,
     button::ActionButton,
     icon::{Icon, IconSize, icon},
   },
@@ -96,13 +97,7 @@ impl Component for CloseDialog {
       .child(header(ctx, props.stage))
       .child(body(ctx, props.stage, &props.work))
       .child(actions(ctx, props.stage, &props.actions));
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .background(ExtraColor::Scrim.role())
-      .align_items(Alignment::Center)
-      .justify(Justify::Center)
-      .child(dialog)
+    backdrop(dialog)
   }
 }
 

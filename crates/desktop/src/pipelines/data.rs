@@ -6,7 +6,7 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   id::ResourceId,
   resource::{AgentProfile, Draft, ModelId, Pipeline, ResourceKind, Tool, Version, VersionNumber},
-  store::{ResourceStore, TaskStore},
+  store::{ConnectionStore, ResourceStore, TaskStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -19,6 +19,8 @@ pub struct ProfileChoice {
   pub version: VersionNumber,
   /// The profile's model, which steps inherit unless they override it.
   pub model: ModelId,
+  /// Name of the connection that runs the profile; `None` if it was removed.
+  pub connection: Option<Arc<str>>,
 }
 
 /// A published tool a step can call.
@@ -37,11 +39,17 @@ pub struct Assignables {
 }
 
 impl Assignables {
-  pub fn load<S: ResourceStore>(store: &S) -> Result<Self, S::Error> {
+  pub fn load(store: &ProjectDb) -> Result<Self, StoreError> {
+    let connections = store.connections()?;
     let mut profiles = Vec::new();
     for resource in store.resources(ResourceKind::AgentProfile)? {
       if let Some(version) = store.latest_version::<AgentProfile>(resource.id())? {
+        let connection = connections
+          .iter()
+          .find(|connection| connection.id() == version.body().connection())
+          .map(|connection| connection.name().as_str().into());
         profiles.push(ProfileChoice {
+          connection,
           id: resource.id(),
           name: resource.name().as_str().into(),
           version: version.number(),

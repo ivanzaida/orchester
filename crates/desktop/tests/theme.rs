@@ -168,16 +168,24 @@ fn pipeline_editor_roles_follow_pencil() {
   );
   assert_eq!(theme.typography_style(ExtraTypography::Summary.role()).line_height, 1.6);
   assert_eq!(
-    theme
-      .typography_style(ExtraTypography::StatusLabelSmall.role())
-      .font_size,
-    10.0
-  );
-  assert_eq!(
     theme.typography_style(ExtraTypography::IconLarge.role()).font_size,
     22.0
   );
   assert_eq!(theme.spacing_value(ExtraSpacing::Field.role()), Dimension::Px(9.0));
   assert_eq!(theme.spacing_value(ExtraSpacing::Property.role()), Dimension::Px(15.0));
   assert_eq!(theme.spacing_value(ExtraSpacing::Divider.role()), Dimension::Px(18.0));
+}
+
+#[test]
+fn agents_and_connections_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  let inspector_title = theme.typography_style(ExtraTypography::InspectorTitle.role());
+  assert_eq!(
+    (inspector_title.font_size, inspector_title.weight),
+    (18.0, FontWeight::Medium)
+  );
+  let compact = theme.typography_style(ExtraTypography::CompactStatusLabel.role());
+  assert_eq!((compact.font_size, compact.weight), (10.0, FontWeight::Medium));
+  assert_eq!(theme.spacing_value(ExtraSpacing::Form.role()), Dimension::Px(22.0));
 }

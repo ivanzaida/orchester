@@ -69,6 +69,31 @@ impl Slug {
   pub fn as_str(&self) -> &str {
     &self.0
   }
+
+  /// A slug for a new resource called `name`, not among `taken`: the name's ASCII letters and
+  /// digits in lowercase with hyphens between words (`fallback` if there are none), and `-2`,
+  /// `-3`, … appended while the slug is taken.
+  pub fn unique_for(name: &Name, fallback: &Slug, taken: &[Slug]) -> Self {
+    let mut base = String::new();
+    for c in name.as_str().chars() {
+      if c.is_ascii_alphanumeric() {
+        base.push(c.to_ascii_lowercase());
+      } else if !base.is_empty() && !base.ends_with('-') {
+        base.push('-');
+      }
+    }
+    let base: String = base.chars().take(Self::MAX_CHARS).collect();
+    let base = Self::new(base.trim_end_matches('-')).unwrap_or_else(|_| fallback.clone());
+    let mut candidate = base.clone();
+    let mut suffix = 1_u32;
+    while taken.contains(&candidate) {
+      suffix += 1;
+      let tail = format!("-{suffix}");
+      let head: String = base.0.chars().take(Self::MAX_CHARS - tail.len()).collect();
+      candidate = Self(format!("{}{tail}", head.trim_end_matches('-')));
+    }
+    candidate
+  }
 }
 
 /// Published version number, starting at 1.

@@ -1,9 +1,11 @@
 //! Orchester desktop UI. `main.rs` only wires the window; everything else lives here so
 //! it can be tested from `tests/`.
 
+pub mod agents;
 pub mod app_paths;
 mod background;
 pub mod close;
+pub mod connections;
 pub mod display;
 pub mod i18n;
 pub mod messages;

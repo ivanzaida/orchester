@@ -60,6 +60,7 @@ pub const SPACE_STEP: f32 = 20.0;
 pub const SPACE_RAIL: f32 = 28.0;
 pub const SPACE_HEADING_TOP: f32 = 26.0;
 pub const SPACE_HEADING_BOTTOM: f32 = 22.0;
+pub const SPACE_FORM: f32 = 22.0;
 pub const SPACE_SECTION: f32 = 32.0;
 pub const SPACE_INDENT: f32 = 40.0;
 pub const SPACE_PAGE: f32 = 48.0;

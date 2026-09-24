@@ -15,9 +15,16 @@ pub fn executor_line(step: &Step, assignables: &Assignables) -> Message {
       model,
       ..
     } => match assignables.profile(*id) {
-      Some(profile) => Message::new("pipelines.step.profileModel")
-        .with("profile", profile.name.to_string())
-        .with("model", model.as_ref().unwrap_or(&profile.model).as_str().to_owned()),
+      Some(profile) => Message::new(match profile.connection {
+        Some(_) => "pipelines.step.profileConnectionModel",
+        None => "pipelines.step.profileModel",
+      })
+      .with("profile", profile.name.to_string())
+      .with(
+        "connection",
+        profile.connection.as_deref().unwrap_or_default().to_owned(),
+      )
+      .with("model", model.as_ref().unwrap_or(&profile.model).as_str().to_owned()),
       None => Message::new("pipelines.step.unpublishedProfile"),
     },
     StepKind::Tool { tool: Some(id) } => match assignables.tool(*id) {
