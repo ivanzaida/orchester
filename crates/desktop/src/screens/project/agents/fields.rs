@@ -29,7 +29,7 @@ use crate::{
   messages::Message,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, SELECT_CHEVRON_SIZE},
   ui::{
-    field::{FieldNote, ValueTone, field, select_trigger, styled_input, text_input, value_box},
+    field::{FieldNote, ValueTone, field, select_trigger, select_trigger_focused, styled_input, text_input, value_box},
     icon::{Icon, IconSize, icon},
     message_text,
     property::property,
@@ -334,6 +334,7 @@ where
     .style_with(|style| {
       style
         .trigger(select_trigger(ctx, FIELD_HEIGHT))
+        .trigger_focused(select_trigger_focused(ctx))
         .chevron_color(chevron)
         .chevron_size(SELECT_CHEVRON_SIZE)
     })

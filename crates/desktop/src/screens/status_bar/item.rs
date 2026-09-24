@@ -1,16 +1,21 @@
 //! Parts of the status bar items (`pmOpt`): a 22px item with 8px padding and a 6px gap,
-//! labels in Inter 11, values in Geist Mono 11, 12px icons and hairline separators.
+//! labels in Inter 11, values in Geist Mono 11, 12px icons and hairline separators. Items are
+//! buttons: one that opens something is a Tab stop pressed by Enter or Space, one that opens
+//! nothing never takes focus.
 
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::{Rect, Row, Text, TextOverflow},
+  components::{Button, Rect, Text, TextOverflow},
   layout::Alignment,
-  node::{CursorIcon, Element, Style, dimension::Dimension},
+  node::{Element, Style, dimension::Dimension},
 };
 
 use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::icon::{Icon, IconSize, icon},
+  ui::{
+    icon::{Icon, IconSize, icon},
+    pressable::{Ring, pressable, surface},
+  },
 };
 
 /// Item height and separator size (`N8rki`, `i36LJ`).
@@ -18,9 +23,9 @@ const ITEM_HEIGHT: f32 = 22.0;
 const SEPARATOR_WIDTH: f32 = 1.0;
 const SEPARATOR_HEIGHT: f32 = 12.0;
 
-/// An empty item row; `id` is for tooling (`lurq_read_tree`, `lurq_interact`).
-pub fn item(id: &'static str) -> Row {
-  Row::new()
+/// An empty item that opens nothing; `id` is for tooling (`lurq_read_tree`, `lurq_interact`).
+pub fn item(id: &'static str) -> Button {
+  surface()
     .id(id)
     .height(Dimension::Px(ITEM_HEIGHT))
     .padding_horizontal(SpacingSize::Sm)
@@ -30,12 +35,9 @@ pub fn item(id: &'static str) -> Row {
     .rounded(RadiusSize::Sm)
 }
 
-/// An item that opens something: pointer and the `$hover` fill.
-pub fn clickable(row: Row, open: impl Fn() + Send + Sync + 'static) -> Row {
-  row
-    .cursor(CursorIcon::Pointer)
-    .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-    .on_click(move |_| open())
+/// An item that opens something: pointer, the `$hover` fill and keyboard use.
+pub fn clickable(item: Button, open: impl Fn() + Send + Sync + 'static) -> Button {
+  pressable(item, Ring::Inset, open).hovered_style(Style::new().background(PaletteColor::AccentMuted))
 }
 
 pub fn glyph(glyph: Icon, color: PaletteColor) -> Element {
@@ -82,17 +84,14 @@ pub fn action(id: &'static str, text: &str, run: impl Fn() + Send + Sync + 'stat
 
 /// Dismiss control (`npzEn`).
 pub fn dismiss(id: &'static str, run: impl Fn() + Send + Sync + 'static) -> Element {
-  Row::new()
+  let button = surface()
     .id(id)
     .size(Dimension::Px(ITEM_HEIGHT), Dimension::Px(ITEM_HEIGHT))
     .align_items(Alignment::Center)
     .justify(lurq::layout::layout_kind::Justify::Center)
     .rounded(RadiusSize::Sm)
-    .cursor(CursorIcon::Pointer)
-    .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-    .on_click(move |_| run())
-    .child(glyph(Icon::X, PaletteColor::TextSecondary))
-    .into()
+    .child(glyph(Icon::X, PaletteColor::TextSecondary));
+  clickable(button, run).into()
 }
 
 /// Hairline separator between the runner and the activity, and before the version.

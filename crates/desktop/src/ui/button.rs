@@ -13,7 +13,10 @@ use lurq::{
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
 
-use super::icon::{Icon, IconSize, icon};
+use super::{
+  icon::{Icon, IconSize, icon},
+  pressable::{Ring, TAB_STOP},
+};
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
@@ -192,6 +195,8 @@ impl ActionButton {
   }
 }
 
+/// Pointer, hover and press fills, and keyboard use: a Tab stop outside forms too, with the
+/// outer focus ring while focused. Hover and press set no shadow, so the ring stays.
 fn with_interaction(button: Button, role: &FormButtonRole) -> Button {
   let state = |background, border| {
     Style::new()
@@ -200,6 +205,8 @@ fn with_interaction(button: Button, role: &FormButtonRole) -> Button {
   };
   button
     .cursor(CursorIcon::Pointer)
+    .tab_index(TAB_STOP)
+    .focused_style(Ring::Outer.focused())
     .hovered_style(state(role.background_hover.clone(), role.border_hover.clone()))
     .active_style(state(role.background_active.clone(), role.border_active.clone()))
 }

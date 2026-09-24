@@ -11,7 +11,7 @@ use lurq::{
   },
   components::{Row, Spacer, Text},
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, border::Border, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   name::Name,
@@ -33,6 +33,7 @@ use crate::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     message_text,
+    pressable::{Ring, pressable, surface},
     status_label::topbar_status_label,
   },
 };
@@ -60,11 +61,13 @@ pub fn topbar(
   publish: impl Fn() + Send + Sync + 'static,
 ) -> Element {
   let back = nav.clone();
-  let breadcrumb = Text::new(&ctx.t_args("pipelines.library.breadcrumb", [("project", project)]))
-    .variant(TypographyStyle::Description)
-    .id("pipeline-breadcrumb-library")
-    .cursor(CursorIcon::Pointer)
-    .on_click(move |_| back.library());
+  let breadcrumb = pressable(surface().id("pipeline-breadcrumb-library"), Ring::Outer, move || {
+    back.library()
+  })
+  .child(
+    Text::new(&ctx.t_args("pipelines.library.breadcrumb", [("project", project)]))
+      .variant(TypographyStyle::Description),
+  );
   let draft = state.draft_number().to_string();
   let label = match state.latest() {
     Some(latest) if !state.has_changes() => topbar_status_label(
@@ -286,6 +289,8 @@ pub fn problems_strip(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> 
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .justify(Justify::End)
+    // The focus rings of the first and last line reach into the strip's padding.
+    .overflow_visible()
     .with_children(views.iter().map(|view| problem_button(ctx, view, handle)));
   let strip = Row::new()
     .id("pipeline-problems")

@@ -80,3 +80,16 @@ pub const CONNECTOR_STROKE: f32 = 1.25;
 pub const TITLE_BAR_HEIGHT: f32 = 32.0;
 /// Width of each Windows window control (`QQmsI`).
 pub const WINDOW_CONTROL_WIDTH: f32 = 46.0;
+
+/// Drop shadow of the status bar operations popover (`E1msJS`): outer, x 0, y 8, blur 24,
+/// no spread. The only shadow in the design.
+pub const POPOVER_SHADOW_Y: f32 = 8.0;
+pub const POPOVER_SHADOW_BLUR: f32 = 24.0;
+pub const POPOVER_SHADOW_COLOR: &str = "#00000066";
+
+/// Focus ring (`xURvJ`, anatomy `Oz9EN`): a 2px light ring behind a 2px dark gap, drawn as
+/// two spread box shadows (Pencil `focus-ring`, `focus-gap`, `focus-width`, `focus-extent`).
+pub const FOCUS_RING: &str = "#EEEEEE";
+pub const FOCUS_GAP: &str = "#101010";
+pub const FOCUS_WIDTH: f32 = 2.0;
+pub const FOCUS_EXTENT: f32 = 4.0;

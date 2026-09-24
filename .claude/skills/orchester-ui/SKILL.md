@@ -71,7 +71,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 - `crates/desktop/src/theme/tokens.rs` — raw values from Pencil (`data/orchester.pen`,
   read via the `pencil` MCP `get_variables`, or node properties via `batch_get`). Private to
   the theme module.
-- `palette.rs`, `typography.rs`, `metrics.rs`, `form.rs` — fill lurq's roles from tokens.
+- `palette.rs`, `typography.rs`, `metrics.rs`, `shadow.rs`, `form.rs` — fill lurq's roles from tokens.
 - `theme::ExtraColor`, `theme::ExtraTypography` — design values without a built-in lurq role,
   registered as lurq `Extra` roles. Call sites use these enums, never raw extra names.
 - `tests/theme.rs` — asserts roles resolve to the Pencil values; update it when a mapping
@@ -97,6 +97,9 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `space-sm/md/lg` 8/16/24 | `SpacingSize::Sm/Md/Lg` |
 | stroke 1 / focus stroke 1.5 / selected tab underline 2 | `BorderSize::Sm` / `Md` / `Lg` |
 | form group gap 22 (`xT2ex`, `dCLMl`) | `ExtraSpacing::Form.role()` |
+| operations popover drop shadow 0 8 24 #00000066 (`E1msJS`) | `ExtraShadow::Popover.role()` |
+| `focus-ring` #EEEEEE / `focus-gap` #101010 (`xURvJ`) | `ExtraColor::FocusRing.role()` / `ExtraColor::FocusGap.role()` |
+| focus ring, outer / inset: spreads `focus-width` 2 and `focus-extent` 4 (`xURvJ`, `Oz9EN`) | `ExtraShadow::FocusRing.role()` / `FocusRingInset.role()`, applied only through `ui::pressable::Ring` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |

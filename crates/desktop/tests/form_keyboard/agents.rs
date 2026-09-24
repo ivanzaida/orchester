@@ -4,7 +4,13 @@ use orchester_core::{
   resource::ModelId,
   time::Timestamp,
 };
-use orchester_desktop::connections::data::{ConnectionDraft, save_in};
+use orchester_desktop::{
+  agents::{
+    data::{ProfileChange, ProjectAgents, apply_in},
+    form::{ModelSelection, ProfileForm},
+  },
+  connections::data::{ConnectionDraft, save_in},
+};
 
 use crate::harness::{Desktop, expected};
 
@@ -12,11 +18,12 @@ const ROLE: &str = "agent-role";
 const RESPONSIBILITY: &str = "agent-responsibility";
 const INSTRUCTIONS: &str = "agent-instructions";
 const STATUS: &str = "agent-save-status";
-const INPUTS: [&str; 3] = [ROLE, RESPONSIBILITY, INSTRUCTIONS];
+/// More than the window has stops on this screen.
+const MAX_STOPS: usize = 30;
 
-/// A new profile in a project with a checked Codex connection, whose model has efforts.
-fn new_profile() -> Desktop {
-  let mut desktop = Desktop::with_project();
+/// A project with a checked Codex connection, whose model has efforts.
+fn with_connection() -> Desktop {
+  let desktop = Desktop::with_project();
   let catalog = ModelCatalog::new(
     CatalogSource::Provider,
     vec![CatalogModel::new(
@@ -39,6 +46,12 @@ fn new_profile() -> Desktop {
     },
   };
   save_in(desktop.repo(), draft).expect("the connection is saved");
+  desktop
+}
+
+/// A new profile in a project with a checked Codex connection.
+fn new_profile() -> Desktop {
+  let mut desktop = with_connection();
   desktop.wait_for("nav-agents");
   desktop.click("nav-agents");
   desktop.wait_for("empty-new-agent");
@@ -55,42 +68,38 @@ fn status(desktop: &mut Desktop) -> String {
 #[test]
 fn agent_editor_tab_follows_the_fields_and_skips_disabled_actions() {
   let mut desktop = new_profile();
-  // In the order they appear: Save draft and Publish (skipped, they cannot be used yet), New
-  // agent in the list, Import (unavailable, skipped), then the fields; the connection, model
-  // and effort selects are stops.
+  desktop.tab_to("new-agent", MAX_STOPS);
+  // The new profile, selected in the list, then the form. Save draft and Publish (before New
+  // agent) and Import cannot be used yet and are skipped; the connection, model and effort
+  // selects are stops. After the form Tab moves on to the
+  // status bar.
   assert_eq!(
-    desktop.stops(8, false, &INPUTS),
+    desktop.stops(8, false),
     expected(&[
-      None,
+      Some("agent-new"),
       Some(ROLE),
       Some(RESPONSIBILITY),
       None,
       None,
       None,
       Some(INSTRUCTIONS),
-      None
+      Some("status-runner"),
     ])
   );
-  assert_eq!(
-    desktop.stops(3, true, &INPUTS),
-    expected(&[Some(INSTRUCTIONS), None, None])
-  );
+  assert_eq!(desktop.stops(3, true), expected(&[Some(INSTRUCTIONS), None, None]));
 }
 
 #[test]
 fn agent_editor_enter_saves_the_draft_once_it_is_valid() {
   let mut desktop = new_profile();
   let unsaved = status(&mut desktop);
-  assert_eq!(
-    desktop.stops(3, false, &INPUTS).last(),
-    Some(&Some(RESPONSIBILITY.to_owned()))
-  );
+  desktop.tab_to(RESPONSIBILITY, MAX_STOPS);
   desktop.type_text("Implement the plan");
   // The role is still missing: Enter saves nothing.
   desktop.enter();
   desktop.settle("the unsaved profile", |tree| tree.get_element_by_id(ROLE).is_some());
   assert_eq!(status(&mut desktop), unsaved);
-  assert_eq!(desktop.stops(1, true, &INPUTS), expected(&[Some(ROLE)]));
+  assert_eq!(desktop.stops(1, true), expected(&[Some(ROLE)]));
   desktop.type_text("Builder");
   desktop.enter();
   desktop.settle("the saved draft", |tree| {
@@ -99,4 +108,52 @@ fn agent_editor_enter_saves_the_draft_once_it_is_valid() {
       .and_then(|status| status.text_content())
       .is_some_and(|text| text != unsaved)
   });
+}
+
+/// Stores a profile for `role` on the project's connection and returns its list item id.
+fn stored_profile(desktop: &Desktop, role: &str) -> String {
+  let agents = ProjectAgents::load_in(desktop.repo()).expect("the project's agents load");
+  let model = ModelSelection::Listed(ModelId::new("gpt-5.5").expect("valid model id"));
+  let profile = ProfileForm {
+    role,
+    responsibilities: "Keep the change small",
+    instructions: "Work on {{task.title}}.",
+    connection: agents.connections.first(),
+    model: &model,
+    custom_model: "",
+    effort: None,
+  }
+  .profile()
+  .expect("a valid profile");
+  let id = apply_in(desktop.repo(), ProfileChange::Create(profile)).expect("the profile is stored");
+  format!("agent-{id}")
+}
+
+#[test]
+fn agent_list_keeps_the_focus_on_the_chosen_profile() {
+  let mut desktop = with_connection();
+  let planner = stored_profile(&desktop, "Planner");
+  let builder = stored_profile(&desktop, "Builder");
+  desktop.wait_for("nav-agents");
+  desktop.click("nav-agents");
+  desktop.wait_for(&builder);
+  // Choosing a profile opens a new editor; the focus stays on the chosen item.
+  desktop.tab_to(&builder, MAX_STOPS);
+  desktop.enter();
+  desktop.settle("the builder in the editor", |tree| {
+    tree
+      .get_element_by_id_mut(ROLE)
+      .and_then(|element| element.as_text_input())
+      .is_some_and(|input| input.value() == "Builder")
+  });
+  assert_eq!(desktop.focused().as_deref(), Some(builder.as_str()));
+  // A press moves the focus with the selection too.
+  desktop.press(&planner);
+  desktop.settle("the planner in the editor", |tree| {
+    tree
+      .get_element_by_id_mut(ROLE)
+      .and_then(|element| element.as_text_input())
+      .is_some_and(|input| input.value() == "Planner")
+  });
+  assert_eq!(desktop.focused().as_deref(), Some(planner.as_str()));
 }

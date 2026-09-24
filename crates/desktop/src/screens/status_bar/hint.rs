@@ -9,7 +9,7 @@ use lurq::{
     ctx::Placement,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Popup, Row, Text},
+  components::{Button, Column, Popup, Text},
   core::{ElementRef, Signal},
   node::{Element, HitTestBehavior, border::Border},
 };
@@ -70,11 +70,11 @@ impl Hints {
     }
   }
 
-  /// `row` shows `text` while the pointer is over it.
-  pub fn attach(&self, row: Row, anchor: HintAnchor, text: Arc<str>) -> Row {
+  /// `item` shows `text` while the pointer is over it.
+  pub fn attach(&self, item: Button, anchor: HintAnchor, text: Arc<str>) -> Button {
     let (enter, leave) = (self.shown.clone(), self.shown.clone());
     let hint = Hint { anchor, text };
-    row
+    item
       .ref_element(self.anchors.get(anchor).clone())
       .on_mouse_enter(move || enter.set(Some(hint.clone())))
       .on_mouse_leave(move || {

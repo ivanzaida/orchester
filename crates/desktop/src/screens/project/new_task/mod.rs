@@ -6,6 +6,10 @@
 mod brief;
 mod plan;
 
+/// Room the brief's scroll content keeps on its left for the outer focus rings of controls on
+/// its edge: the ring (`focus-extent`) and the padding of a link inside it.
+const FOCUS_ROOM: SpacingSize = SpacingSize::Sm;
+
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
@@ -17,7 +21,7 @@ use lurq::{
   components::{Column, Row, Spacer, Text},
   core::Signal,
   layout::Alignment,
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
@@ -39,6 +43,7 @@ use crate::{
   ui::{
     form::{Submit, form},
     icon::{Icon, IconSize, icon},
+    pressable::{Ring, pressable, surface},
   },
   workspace::OpenProject,
 };
@@ -131,11 +136,16 @@ impl Component for NewTaskForm {
     let submit = self
       .save_handler(&save, &props.project, state.ready.clone())
       .filter(|_| !state.saving);
+    // The brief's scroll viewport starts `FOCUS_ROOM` early and its content is padded by the
+    // same amount, so the content stays at the designed inset and keeps room for focus rings.
+    let brief_left = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0)
+      - ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .padding_top(SpacingSize::Sm)
-      .padding_horizontal(ExtraSpacing::Indent.role())
+      .padding_left(Dimension::Px(brief_left))
+      .padding_right(ExtraSpacing::Indent.role())
       .padding_bottom(SpacingSize::Section)
       .spacing(ExtraSpacing::Indent.role())
       .child(brief::brief_form(ctx, self, &props.project, &state))
@@ -232,13 +242,12 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
 /// until Save as draft, so the state says so rather than claiming a saved draft.
 fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, saving: bool) -> Element {
   let nav = nav.clone();
-  let back = Row::new()
-    .id("new-task-back")
-    .cursor(CursorIcon::Pointer)
-    .rounded(RadiusSize::Sm)
-    .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-    .on_click(move |_| nav.show(Section::Tasks))
-    .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));
+  let back = pressable(surface().id("new-task-back"), Ring::Outer, move || {
+    nav.show(Section::Tasks)
+  })
+  .rounded(RadiusSize::Sm)
+  .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+  .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));
   let state = if saving {
     ctx.t("tasks.new.saving")
   } else {
@@ -288,9 +297,10 @@ fn missing_note(ctx: &Ctx, state: &FormState, detail: MissingDetail) -> Option<E
   })
 }
 
-/// Why a value or the save was not accepted.
+/// Why a value or the save was not accepted; a long reason wraps within its column.
 fn error_note(text: &str) -> Element {
   Row::new()
+    .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
     .describe("role", "field-error")
@@ -298,7 +308,8 @@ fn error_note(text: &str) -> Element {
     .child(
       Text::new(text)
         .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::TextPrimary)
+        .flex(1.0),
     )
     .into()
 }

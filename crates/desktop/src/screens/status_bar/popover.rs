@@ -1,17 +1,20 @@
 //! Operations popover (`E1msJS`, anchored example `imT2E`): opens upward from the activity
 //! item, 6px above the bar, with the running operations and the session's RECENT events
-//! (unresolved failures pinned first). Escape or a click outside closes it.
+//! (unresolved failures pinned first). Escape or a click outside closes it. Rows that open
+//! something, the dismiss controls and Open runner log are Tab stops.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::{Ctx, Placement},
+    events::KeyboardEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Popup, Rect, Row, ScrollVertical, Text},
+  core::Signal,
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 
 use super::{
@@ -25,8 +28,12 @@ use super::{
 use crate::{
   activity::{ActivityLog, Event, Operation, OperationId, Outcome, Place, Target},
   display,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{icon::Icon, message_text},
+  theme::{ExtraColor, ExtraShadow, ExtraSpacing, ExtraTypography},
+  ui::{
+    icon::Icon,
+    message_text,
+    pressable::{Ring, pressable, surface},
+  },
 };
 
 /// Popover width (`E1msJS`). The recent list scrolls beyond this height; the design shows
@@ -38,7 +45,15 @@ const DIVIDER_HEIGHT: f32 = 1.0;
 /// row's time lines up.
 const CHEVRON_WIDTH: f32 = 12.0;
 
-pub fn popover(ctx: &mut Ctx, log: &ActivityLog, opener: &Opener, anchors: &Anchors) -> Element {
+/// `escaped` is set when Escape closes the popover, so the bar can give the focus back to the
+/// activity item it hangs from.
+pub fn popover(
+  ctx: &mut Ctx,
+  log: &ActivityLog,
+  opener: &Opener,
+  anchors: &Anchors,
+  escaped: &Signal<bool>,
+) -> Element {
   let running: Vec<&Operation> = log.running().collect();
   let recent = log.recent();
   let mut list = Column::new()
@@ -71,6 +86,15 @@ pub fn popover(ctx: &mut Ctx, log: &ActivityLog, opener: &Opener, anchors: &Anch
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
+    .box_shadow(ExtraShadow::Popover.role())
+    .on_key_down({
+      let escaped = escaped.clone();
+      move |event: KeyboardEvent| {
+        if event.key == "Escape" {
+          escaped.set(true);
+        }
+      }
+    })
     .child(header(ctx, running.len()))
     .child(
       ScrollVertical::new(list)
@@ -101,30 +125,41 @@ fn header(ctx: &Ctx, running: usize) -> Element {
 
 /// Retention note and "Open runner log" (`sQkff`).
 fn footer(ctx: &Ctx, opener: &Opener) -> Element {
-  let mut row = Row::new()
+  let retention = Text::new(&ctx.t("statusBar.operations.retention"))
+    .variant(TypographyStyle::Caption)
+    .color(PaletteColor::TextMuted);
+  let row = Row::new()
     .width(Dimension::Pct(100.0))
-    .padding_top(SpacingSize::Sm)
-    .padding_horizontal(SpacingSize::Sm)
-    .padding_bottom(SpacingSize::Xs)
+    .padding_left(SpacingSize::Sm)
     .justify(Justify::SpaceBetween)
     .align_items(Alignment::Center)
+    // Open runner log sits on the right edge; its focus ring reaches into the panel padding.
+    .overflow_visible()
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(
-      Text::new(&ctx.t("statusBar.operations.retention"))
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextMuted),
-    );
-  if opener.can_open(&Target::RunnerLog) {
-    let log = opener.clone();
-    row = row.child(
-      Row::new()
-        .id("status-operations-open-log")
-        .cursor(CursorIcon::Pointer)
-        .on_click(move |_| log.open_log())
-        .child(Text::new(&ctx.t("runner.connection.openLog")).variant(TypographyStyle::Link)),
-    );
+    .child(retention);
+  if !opener.can_open(&Target::RunnerLog) {
+    return row
+      .padding_top(SpacingSize::Sm)
+      .padding_right(SpacingSize::Sm)
+      .padding_bottom(SpacingSize::Xs)
+      .into();
   }
-  row.into()
+  // The link's own padding keeps the focus ring off its text; the row gives up the same
+  // amount, so the text stays where the design puts it (`sQkff`).
+  let log = opener.clone();
+  let link = pressable(surface().id("status-operations-open-log"), Ring::Outer, move || {
+    log.open_log()
+  })
+  .padding_horizontal(SpacingSize::Xs)
+  .padding_vertical(ExtraSpacing::Hair.role())
+  .rounded(RadiusSize::Sm)
+  .child(Text::new(&ctx.t("runner.connection.openLog")).variant(TypographyStyle::Link));
+  row
+    .padding_top(ExtraSpacing::Tight.role())
+    .padding_right(SpacingSize::Xs)
+    .padding_bottom(ExtraSpacing::Hair.role())
+    .child(link)
+    .into()
 }
 
 /// Loader, title, meta, elapsed time and the chevron when it opens something (`ZaltO`).
@@ -182,32 +217,52 @@ struct RowParts {
   time: Element,
 }
 
+/// A row; one that opens something is a button beside its dismiss control, so both are Tab
+/// stops (lurq never makes a button inside a button a stop of its own).
 fn row(parts: RowParts, target: &Target, failure: Option<OperationId>, opener: &Opener) -> Element {
-  let mut row = Row::new()
-    .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Sm)
-    .spacing(ExtraSpacing::Inline.role())
-    .rounded(RadiusSize::Md)
-    .child(parts.icon)
-    .child(parts.title)
-    .child(parts.time);
   let chevron = Row::new()
     .width(Dimension::Px(CHEVRON_WIDTH))
     .justify(Justify::Center)
     .flex_shrink(0.0);
-  if opener.can_open(target) {
-    let (target, open) = (target.clone(), opener.clone());
-    row = row
-      .child(chevron.child(glyph(Icon::ChevronRight, PaletteColor::TextMuted)))
-      .cursor(CursorIcon::Pointer)
-      .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-      .on_click(move |_| open.open(&target, failure));
+  let opens = opener.can_open(target);
+  let chevron = if opens {
+    chevron.child(glyph(Icon::ChevronRight, PaletteColor::TextMuted))
   } else {
-    row = row.child(chevron);
-  }
+    chevron
+  };
+  let content = [parts.icon, parts.title, parts.time, chevron.into()];
+  let mut row = Row::new().width(Dimension::Pct(100.0)).rounded(RadiusSize::Md);
+  row = if opens {
+    let (target, open) = (target.clone(), opener.clone());
+    let button = surface()
+      .flex(1.0)
+      .padding(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Inline.role())
+      .rounded(RadiusSize::Md)
+      .with_children(content);
+    row
+      .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+      .child(pressable(button, Ring::Inset, move || open.open(&target, failure)))
+  } else {
+    row
+      .padding(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Inline.role())
+      .with_children(content)
+  };
   if let Some(id) = failure {
     let dismissing = opener.clone();
-    row = row.child(dismiss("status-operation-dismiss", move || dismissing.dismiss(id)));
+    let dismiss = dismiss("status-operation-dismiss", move || dismissing.dismiss(id));
+    // Beside the button the dismiss control keeps its place inside the row's padding.
+    row = if opens {
+      row.child(
+        Row::new()
+          .padding_top(SpacingSize::Sm)
+          .padding_right(SpacingSize::Sm)
+          .child(dismiss),
+      )
+    } else {
+      row.child(dismiss)
+    };
   }
   row.into()
 }

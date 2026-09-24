@@ -10,7 +10,7 @@ use lurq::{
   },
   components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::connection::Connection;
 
@@ -19,6 +19,7 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
+    pressable::{Ring, hairline_row_focused, keyboard_stop, pressable, surface},
     status_label::compact_status_label as label,
   },
 };
@@ -77,7 +78,7 @@ pub fn connection_row(
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
     );
-  let row = Row::new()
+  let row = surface()
     .id(Arc::<str>::from(format!("connection-{}", connection.id())))
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ROW_HEIGHT))
@@ -100,12 +101,14 @@ pub fn connection_row(
     .child(label(status_icon, &ctx.t(status_key)))
     .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
   if state.selected {
-    return row.describe("state", "selected").into();
+    return keyboard_stop(row, Ring::Inset)
+      .focused_style(hairline_row_focused())
+      .describe("state", "selected")
+      .into();
   }
-  row
-    .cursor(CursorIcon::Pointer)
+  pressable(row, Ring::Inset, on_click)
+    .focused_style(hairline_row_focused())
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-    .on_click(move |_| on_click())
     .into()
 }
 

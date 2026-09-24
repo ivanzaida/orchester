@@ -1,17 +1,19 @@
 //! Orchester's lurq theme, built from the Pencil design variables.
 //!
 //! UI code styles through lurq roles (`PaletteColor`, `TypographyStyle`, `SpacingSize`,
-//! `RadiusSize`, `BorderSize`); design values live only in `tokens`.
+//! `RadiusSize`, `BorderSize`, `ShadowStyle`); design values live only in `tokens`.
 
 mod form;
 mod metrics;
 mod palette;
+mod shadow;
 mod tokens;
 mod typography;
 
 use lurq::app::App;
 pub use metrics::{ExtraRadius, ExtraSpacing};
 pub use palette::ExtraColor;
+pub use shadow::ExtraShadow;
 pub use typography::ExtraTypography;
 
 /// Height of the custom title bar drawn above every screen (`QQmsI`, `V70DN`).
@@ -44,6 +46,7 @@ pub fn install(app: &mut App) {
   theme.set_radii(metrics::radii());
   theme.set_spacing(metrics::spacing());
   theme.set_border_sizes(metrics::border_sizes());
+  theme.set_shadows(shadow::shadows());
   // Bind first: the guard returned by `form()` must be released before `set_form` locks.
   let current_form = theme.form().clone();
   theme.set_form(form::form(current_form));

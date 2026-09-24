@@ -29,7 +29,7 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography, SELECT_CHEVRON_SIZE},
   ui::{
     button::ActionButton,
-    field::{FieldNote, ValueTone, field, select_trigger, text_input, value_box},
+    field::{FieldNote, ValueTone, field, select_trigger, select_trigger_focused, text_input, value_box},
     icon::Icon,
     message_text,
     notice::Notice,
@@ -133,6 +133,7 @@ impl ConnectionDialog {
       .style_with(|style| {
         style
           .trigger(select_trigger(ctx, FIELD_HEIGHT))
+          .trigger_focused(select_trigger_focused(ctx))
           .chevron_color(chevron)
           .chevron_size(SELECT_CHEVRON_SIZE)
       });
@@ -219,6 +220,8 @@ impl ConnectionDialog {
     Row::new()
       .id("connection-verification")
       .width(Dimension::Pct(100.0))
+      // Recheck is as tall as the row; its focus ring reaches into the form's spacing.
+      .overflow_visible()
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .child(label(glyph, &ctx.t(status)))

@@ -1,6 +1,6 @@
 //! The whole desktop mounted headlessly on a temporary application database, driven by keys.
-//! Dialogs are modals, which lurq lays out only in a render pass that needs a window handle,
-//! so these tests reach page forms and inspectors, not dialogs.
+//! Every step runs a headless lurq pass (layout, modals included, without a window), so pages,
+//! inspectors and dialogs are all reachable, and the focus is read from the tree.
 
 use std::{
   fs,
@@ -9,7 +9,7 @@ use std::{
   time::Duration,
 };
 
-use lurq::app::{App, Tree};
+use lurq::app::{App, Tree, events::MouseButton};
 use orchester_desktop::{
   activity::Activity,
   close::Lifecycle,
@@ -25,11 +25,16 @@ use tokio::runtime::Runtime;
 
 const SETTLE_TRIES: usize = 400;
 const SETTLE_PAUSE: Duration = Duration::from_millis(5);
+/// The design's window size (`ZBoBm` and the other 1440 screens).
+const WIDTH: u32 = 1440;
+const HEIGHT: u32 = 960;
 
 pub struct Desktop {
   pub tree: Tree,
   pub repo: PathBuf,
-  _app: App,
+  /// The session's background operations, shown in the status bar.
+  pub activity: Activity,
+  app: App,
   _session: AppSession,
   _runtime: Runtime,
   _dir: TempDir,
@@ -75,14 +80,16 @@ impl Desktop {
     let startup = Startup::Ready {
       workspace: session.workspace().clone(),
       lifecycle: Lifecycle::new(runners, runtime.handle().clone()),
-      activity,
+      activity: activity.clone(),
     };
     let mut tree = Tree::new();
+    tree.resize(WIDTH, HEIGHT);
     tree.mount_root::<Root>(&mut app, startup);
     Self {
       tree,
       repo,
-      _app: app,
+      activity,
+      app,
       _session: session,
       _runtime: runtime,
       _dir: dir,
@@ -93,9 +100,9 @@ impl Desktop {
     &self.repo
   }
 
-  /// Presses Tab (or Shift+Tab) `count` times and reports, after each press, which of
-  /// `inputs` has the focus; `None` is a stop that is not one of them (a button or a select).
-  pub fn stops(&mut self, count: usize, reverse: bool, inputs: &[&str]) -> Vec<Option<String>> {
+  /// Presses Tab (or Shift+Tab) `count` times and reports, after each press, the focused
+  /// element (see [`Desktop::focused`]).
+  pub fn stops(&mut self, count: usize, reverse: bool) -> Vec<Option<String>> {
     (0..count)
       .map(|_| {
         if reverse {
@@ -103,16 +110,40 @@ impl Desktop {
         } else {
           self.tab();
         }
-        self.focused_input(inputs)
+        self.focused()
       })
       .collect()
+  }
+
+  /// The id of the focused element; `None` when nothing has the focus or it has no id.
+  pub fn focused(&self) -> Option<String> {
+    self
+      .tree
+      .focused_element()
+      .and_then(|element| element.id().map(str::to_owned))
+  }
+
+  /// Tabs until `id` has the focus, at most `limit` times.
+  pub fn tab_to(&mut self, id: &str, limit: usize) {
+    for _ in 0..limit {
+      self.tab();
+      if self.focused().as_deref() == Some(id) {
+        return;
+      }
+    }
+    panic!("Tab does not reach {id} in {limit} stops");
+  }
+
+  /// A headless pass: rebuilds what changed and lays out the window, modals included.
+  pub fn pass(&mut self) {
+    self.tree.pass_headless(&mut self.app);
   }
 
   /// Lets background work finish until `done` holds.
   pub fn settle(&mut self, what: &str, done: impl Fn(&mut Tree) -> bool) {
     for _ in 0..SETTLE_TRIES {
       self.tree.tick_futures();
-      self.tree.rebuild();
+      self.pass();
       if done(&mut self.tree) {
         return;
       }
@@ -127,10 +158,26 @@ impl Desktop {
 
   pub fn click(&mut self, id: &str) {
     self.tree.get_element_by_id_mut(id).expect(id).click();
+    self.pass();
   }
 
+  /// A pointer press and release in the middle of `id`, as a user clicks.
+  pub fn press(&mut self, id: &str) {
+    let bounds = self
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"));
+    let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+    self.tree.mouse_down(x, y, MouseButton::Left);
+    self.tree.mouse_up(x, y, MouseButton::Left);
+    self.pass();
+  }
+
+  /// A key press, then a pass so the next step sees what it changed.
   pub fn key(&mut self, key: &str, code: &str) {
     self.tree.key_down(key.into(), code.into(), false, false, false);
+    self.pass();
   }
 
   pub fn tab(&mut self) {
@@ -139,6 +186,7 @@ impl Desktop {
 
   pub fn shift_tab(&mut self) {
     self.tree.key_down("Tab".into(), "Tab".into(), true, false, false);
+    self.pass();
   }
 
   pub fn enter(&mut self) {
@@ -146,16 +194,12 @@ impl Desktop {
   }
 
   pub fn value(&mut self, id: &str) -> String {
-    self.shown_value(id).unwrap_or_else(|| panic!("text input {id}"))
-  }
-
-  /// The value of the text input `id`, if it is shown.
-  fn shown_value(&mut self, id: &str) -> Option<String> {
     self
       .tree
       .get_element_by_id_mut(id)
       .and_then(|element| element.as_text_input())
       .map(|input| input.value())
+      .unwrap_or_else(|| panic!("text input {id}"))
   }
 
   pub fn type_text(&mut self, text: &str) {
@@ -163,22 +207,6 @@ impl Desktop {
       let key = character.to_string();
       self.key(&key, &key);
     }
-  }
-
-  /// Which of `inputs` has the focus: the one that takes a typed character. The character is
-  /// removed again, so values stay as they were. Inputs that are not shown are ignored.
-  pub fn focused_input(&mut self, inputs: &[&str]) -> Option<String> {
-    let before: Vec<Option<String>> = inputs.iter().map(|id| self.shown_value(id)).collect();
-    self.key("~", "Backquote");
-    let changed = inputs
-      .iter()
-      .zip(&before)
-      .find(|(id, value)| self.shown_value(id) != **value)
-      .map(|(id, _)| (*id).to_owned());
-    if changed.is_some() {
-      self.key("Backspace", "Backspace");
-    }
-    changed
   }
 }
 

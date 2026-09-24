@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
-  components::Row,
+  components::Button,
   node::Element,
 };
 
@@ -158,13 +158,13 @@ fn latest(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Element {
   open_event(row, event, opener)
 }
 
-fn open_event(row: Row, event: &Event, opener: &Opener) -> Element {
+fn open_event(row: Button, event: &Event, opener: &Opener) -> Element {
   let failure = event.is_unresolved().then(|| event.id());
   open_or_popover(row, event.target().clone(), failure, opener)
 }
 
 /// Opens the object the item names; with nothing to open, the popover with the history.
-fn open_or_popover(row: Row, target: Target, failure: Option<OperationId>, opener: &Opener) -> Element {
+fn open_or_popover(row: Button, target: Target, failure: Option<OperationId>, opener: &Opener) -> Element {
   if opener.can_open(&target) {
     let opener = opener.clone();
     clickable(row, move || opener.open(&target, failure)).into()
@@ -174,7 +174,7 @@ fn open_or_popover(row: Row, target: Target, failure: Option<OperationId>, opene
 }
 
 /// An item that toggles the popover; it keeps the `$hover` fill while the popover is open.
-fn popover_toggle(row: Row, opener: &Opener) -> Element {
+fn popover_toggle(row: Button, opener: &Opener) -> Element {
   let row = if opener.popover_open() {
     row.background(PaletteColor::AccentMuted)
   } else {

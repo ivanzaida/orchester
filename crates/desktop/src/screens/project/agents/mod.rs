@@ -23,7 +23,7 @@ use orchester_core::id::ResourceId;
 
 use self::{
   editor::ProfileEditor,
-  list::{ListSelection, profile_list},
+  list::{ListFocus, ListSelection, profile_list},
 };
 use super::{AgentSelection, ProjectNav, Section, page};
 use crate::{
@@ -58,6 +58,7 @@ pub struct EditorContext {
   pub editing: Editing,
   pub change: ChangeAction,
   pub nav: ProjectNav,
+  pub list_focus: ListFocus,
 }
 
 /// Agents of the project, and the revision they were read at.
@@ -73,6 +74,7 @@ pub struct AgentsScreen {
   /// Bumped after a change, to read the profiles again.
   revision: Signal<u64>,
   nav: ProjectNav,
+  list_focus: ListFocus,
 }
 
 impl Component for AgentsScreen {
@@ -91,7 +93,11 @@ impl Component for AgentsScreen {
         reload.update(|revision| *revision += 1);
       }
     });
-    Self { revision, nav }
+    Self {
+      revision,
+      nav,
+      list_focus: ListFocus::new(ctx),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -143,6 +149,7 @@ impl AgentsScreen {
       editing,
       change,
       nav: self.nav.clone(),
+      list_focus: self.list_focus.clone(),
     });
     ctx.mount_keyed::<ProfileEditor>(&key, ())
   }
@@ -150,7 +157,7 @@ impl AgentsScreen {
   /// The page without an editor: loading, failed, or no profiles yet.
   fn page(&self, ctx: &Ctx, open: &OpenProject, agents: Option<&ProjectAgents>, content: Element) -> Element {
     let breadcrumb = ctx.t_args("agents.breadcrumb", [("project", open.project.name().as_str())]);
-    let list = agents.map(|agents| profile_list(ctx, agents, ListSelection::None, &self.nav));
+    let list = agents.map(|agents| profile_list(ctx, agents, ListSelection::None, &self.nav, &self.list_focus));
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))

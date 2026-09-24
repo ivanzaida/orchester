@@ -23,6 +23,7 @@ use crate::{
     icon::{Icon, IconSize, icon},
     message_text,
     panel::RecoveryPanel,
+    pressable::{Ring, pressable, surface},
     property::property,
     tab::{Tab, tab_row},
   },
@@ -198,13 +199,12 @@ fn list_footer(ctx: &Ctx, count: usize, nav: &ProjectNav) -> Element {
     .height(Dimension::Px(LIST_FOOTER_HEIGHT))
     .justify(Justify::SpaceBetween)
     .align_items(Alignment::Center)
+    // View all tasks sits on the right edge; its focus ring reaches past the row.
+    .overflow_visible()
     .child(Text::new(&ctx.t_args(count_key, [("count", count.to_string().as_str())])).variant(TypographyStyle::Caption))
     .child(
-      Row::new()
-        .id("view-all-tasks")
-        .cursor(CursorIcon::Pointer)
+      pressable(surface().id("view-all-tasks"), Ring::Outer, move || nav.show(Section::Tasks))
         .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-        .on_click(move |_| nav.show(Section::Tasks))
         .child(
           Text::new(&ctx.t("overview.viewAllTasks"))
             .variant(TypographyStyle::Caption)

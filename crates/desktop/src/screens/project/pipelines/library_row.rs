@@ -8,7 +8,7 @@ use lurq::{
   },
   components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::time::Timestamp;
 
@@ -19,10 +19,11 @@ use crate::{
     describe::{step_count, task_count, version_state},
     library::{LibraryEntry, VersionState},
   },
-  theme::{ExtraColor, ExtraRadius},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing},
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
+    pressable::{Ring, hairline_row_focused, pressable, surface},
     status_label::status_label,
   },
 };
@@ -51,6 +52,8 @@ pub fn column_headings(ctx: &Ctx) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEADINGS_HEIGHT))
+    // Inset like the rows, so the columns line up.
+    .padding_horizontal(ExtraSpacing::Stack.role())
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
@@ -120,17 +123,17 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
     |at| message_text(ctx, &display::elapsed(Timestamp::now(), at)).to_string(),
   );
   let (open, id) = (nav.clone(), entry.id);
-  Row::new()
+  let row = surface()
     .id("pipeline-row")
     .describe("pipeline", entry.name.to_string())
     .width(Dimension::Pct(100.0))
     .padding_vertical(SpacingSize::Md)
+    // A focusable row keeps its content clear of the inset focus ring (`xURvJ`).
+    .padding_horizontal(ExtraSpacing::Stack.role())
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .cursor(CursorIcon::Pointer)
     .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
-    .on_click(move |_| open.open(id))
     .child(icon_surface)
     .child(identity)
     .child(cell(
@@ -145,6 +148,8 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
       PaletteColor::TextSecondary,
     ))
     .child(cell(&published, PUBLISHED_WIDTH, PaletteColor::TextSecondary))
-    .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary))
+    .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
+  pressable(row, Ring::Inset, move || open.open(id))
+    .focused_style(hairline_row_focused())
     .into()
 }
