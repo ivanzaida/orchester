@@ -10775,6 +10775,10 @@
                                     "bottom": 1
                                   },
                                   "gap": 16,
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
                                   "alignItems": "center",
                                   "children": [
                                     {
@@ -81828,6 +81832,10 @@
                                     "bottom": 1
                                   },
                                   "gap": 16,
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
                                   "alignItems": "center",
                                   "children": [
                                     {
@@ -81919,7 +81927,7 @@
                                   "gap": 16,
                                   "padding": [
                                     16,
-                                    0
+                                    12
                                   ],
                                   "alignItems": "center",
                                   "children": [
@@ -82618,6 +82626,10 @@
                                     "bottom": 1
                                   },
                                   "gap": 16,
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
                                   "alignItems": "center",
                                   "children": [
                                     {
