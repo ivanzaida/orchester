@@ -55,6 +55,13 @@ Canonical screens and states, in canvas order:
 | 02.13 · Ready for review | `vpgrJ` | [Preview](previews/vpgrJ.png) |
 | 02.A · Paused / Resume from checkpoint | `Oqmog` | [Preview](previews/Oqmog.png) |
 | 02.B · Retry limit / Review recovery | `J3JZaT` | [Preview](previews/J3JZaT.png) |
+| 02.C · Close with active work / Confirm | `Xz30C` | [Preview](previews/Xz30C.png) |
+| 02.D · Close / Waiting for agents to save | `a0tTV` | [Preview](previews/a0tTV.png) |
+| 02.E · Next start / Session ended abnormally | `o8DCd` | [Preview](previews/o8DCd.png) |
+| 02.F · Runner stopped / Reconnecting | `MAn7V` | [Preview](previews/MAn7V.png) |
+| 02.G · Runner reconnected | `YHS1v` | [Preview](previews/YHS1v.png) |
+| 02.H · Runner could not restart | `EFY7I` | [Preview](previews/EFY7I.png) |
+| Sidebar runner card states (compact) | `O5NoB1` | [Preview](previews/O5NoB1.png) |
 | 03.01 · Pipeline / Feature delivery | `Q21HOA` | [Preview](previews/Q21HOA.png) |
 | 04.01 · Project connections | `a4Lqb` | [Preview](previews/a4Lqb.png) |
 | 04.02 · Add agent provider | `h6CmJ` | [Preview](previews/h6CmJ.png) |
@@ -81,10 +88,10 @@ Canonical screens and states, in canvas order:
 | 08.B · PR updated while composing (compact state) | `hfoDa` | [Preview](previews/hfoDa.png) |
 | 08.C · Agent request queued (compact state) | `uD6Ho` | [Preview](previews/uD6Ho.png) |
 
-There are 44 full screen frames; the previous 40 screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
+There are 50 full screen frames; the previous 44 screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
 
 - Getting started: first launch → GitHub authorization → repository → runner/agents → ready. Setup blocking and compact empty-project feedback are below the main flow.
-- Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue. The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. Pause and retry are alternatives in `O4vgKt`; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Group positions are y 160 / 1376 / 3640 / 5904 / 7120 respectively; the section height is 8216.
+- Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue. The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. Pause and retry are alternatives in `O4vgKt`; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Application lifecycle states (close with active work, runner connection, recovery on start) and the sidebar runner card states are in `Z7Fyr8`. Group positions are y 160 / 1376 / 3640 / 5904 / 7120 / 8216 respectively; the section height is 10832.
 - Pipelines: the visual editor is separate from task execution.
 - Agents & connections: connections → add provider → assign connection/model in the agent profile; expired-access recovery is below.
 - Instructions: rules → composed prompt → variable catalog; unavailable-variable state is below.
@@ -222,6 +229,30 @@ The task has a visible Conversation tab, an Open conversation entry on the revie
 Delivery states distinguish Queued, Delivered and Acknowledged. Acknowledgement does not prove the requested change was applied. Work-changing messages are delivered at the next checkpoint; Pause is the visible control for an urgent interruption. While paused, messages remain queued and are delivered before the next action on resume. Scope changes return to plan review rather than silently changing approved work.
 
 Proposed interaction contract: failed or pending sends retain the draft; retries deduplicate the message; Enter adds a newline and Ctrl/Cmd+Enter sends. Escape closes the recipient picker and restores focus. Keyboard, delivery and persistence behavior remains to be implemented and tested.
+
+## Application lifecycle and runner connection
+
+These states express the lifecycle in [storage.md › Lifecycle](../architecture/storage.md#lifecycle): closing the window closes the application, the runner and agents cannot outlive it, and nothing restarts automatically. They sit in section 02, group `Z7Fyr8` ("States · Application lifecycle"), over the project Overview (`Twtqc`) background. [Group overview](previews/organization/Z7Fyr8.png).
+
+**Close with active work (`Xz30C`).** The close request is vetoed and a modal opens. Title: *Close Orchester while agents are working?* Explanation: closing stops the runner and every agent; there is no background mode. It lists the tasks with an agent at work (task key, title, current step · agent role, Running status, provider · model), reusing `clVjO` Tasks / Queue row without its selection and open cells. Tasks that only wait for input are named in a note and are unaffected. A short block explains both exits:
+
+- *Wait for agents to save* (primary, right): no new steps or tool calls start; each agent continues to its next checkpoint, runs are marked paused, then Orchester closes. "This can take a few minutes."
+- *Quit now* (secondary, isolated on the left with a power icon): stops runner and agents immediately; work after each run's last checkpoint is not recorded as progress; uncommitted changes stay in the worktree and are shown on next start. It is grayscale; the distinction is wording, position and the explanation, not color.
+- *Cancel*: keeps the app open, nothing changes.
+
+**Waiting (`a0tTV`).** Same modal, title *Saving before closing*. Summary "1 of 2 runs saved"; each row's status moves from *Saving at next checkpoint…* (loader) to *Saved* (check) with "Paused at 9d07b3f". *Quit now* stays available; the primary becomes a non-interactive "Closes after 1 more run" indicator; Cancel is not offered once the runner has stopped scheduling (proposed; pending product confirmation, since cancelling here would leave the runs paused without closing).
+
+**Runner connection.** The runner can drop; the app reconnects automatically. Connection problems appear as an inline notice (`q5LzI`) at the top of the Overview body and in the sidebar runner card; interrupted runs show an *Interrupted* status (pause icon) with their last checkpoint in the task list, "Running now" drops to 00 with "2 runs interrupted", and the activity feed records the runner events.
+
+- *Reconnecting* (`MAn7V`): "Runner stopped unexpectedly — reconnecting (attempt 2 of 5)". "The 2 active runs were interrupted and keep their last checkpoint. New work won't start until the runner is back, and interrupted runs won't restart on their own." Trailing: "Next attempt in 8 s", *Open runner log*.
+- *Reconnected* (`YHS1v`): "Runner reconnected". "Interrupted runs kept their last checkpoint. Continue each one from its task when you're ready." Auto-dismisses ("Closes in 5 s", with a manual close). Interrupted runs stay interrupted until the user continues them.
+- *Could not restart* (`EFY7I`): "Could not restart the runner". "Tried 5 times since 14:02. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts." Actions *Open runner log* (opens `.orchester/logs/runner-<date>.log`) and *Restart runner* (primary). Persistent until resolved.
+
+Sidebar runner card (`O5NoB1`), always icon + label: *Starting local runner* / "Agents can start when it's ready" (loader); *Local runner online* / "2 of 4 agent slots in use" (existing dot); *Reconnecting to runner* / "Attempt 2 of 5 · runs interrupted" (refresh); *Runner offline* / "Could not restart · see runner log" (unplug). The card states are overrides of the existing sidebar card inside `zo9Py` instances; no new component was added.
+
+**Session ended abnormally (`o8DCd`).** On the next start after *Quit now* or a crash, a modal: "The last session ended before agents could save". "Orchester stopped unexpectedly on Sep 23 at 14:12 and three runs were interrupted. Nothing has been restarted. Choose what to continue: each run continues from its last checkpoint, and work after it is not counted as done." A table lists each interrupted run: task (key, title, project · run), *Interrupted during* (step, agent role · provider · model), *Reason*, *Last checkpoint* (commit, time saved), *Worktree* ("3 files not committed" with View changes, or "No uncommitted changes") and a per-run *Continue*. The runs may come from several open projects. A run stopped during an external tool call says "outcome unknown", and a notice asks the user to check the target before continuing, because continuing repeats the step from its checkpoint. Footer: *Open runner log*, *Decide later* (runs stay interrupted and listed on their task), *Continue all 3 from checkpoints* (primary). Uncommitted changes are never discarded silently. After *Wait for agents to save*, no dialog appears; runs are simply paused.
+
+Proposed copy namespaces: `lifecycle.close.*`, `lifecycle.recovery.*`, `runner.connection.*`, `runner.card.*`. Retry count (5), backoff and the auto-dismiss delay are illustrative values. All seven states were checked with full-size export review and depth-14 layout checks. The only remaining findings are disabled "open task" cells in the queue-row instances in the two close dialogs, which the checker reports at stale positions; they are not rendered.
 
 ## Pull request review and agent feedback
 
