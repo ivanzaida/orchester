@@ -5,8 +5,8 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
   resource::{
-    AgentProfile, EditProblem, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, StarterStep,
-    StarterStepText, StepKey, StepKind,
+    AgentProfile, DraftSaved, EditProblem, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug,
+    StarterStep, StarterStepText, StepKey, StepKind,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -16,7 +16,7 @@ use orchester_desktop::{
   pipelines::{
     data::{OpenedPipeline, publish_in, save_draft_in},
     editor::{EditorState, SaveState},
-    fields::{Executor, RouteChoice},
+    fields::{Executor, RouteChoice, unused_step_name},
     layout::layout,
     library::{CreateError, NewPipeline, StartFrom, StarterText, VersionState, create, library},
     problems::publish_error,
@@ -174,8 +174,9 @@ fn edits_save_as_the_draft_and_publish_as_the_next_version() {
   state.apply(|edit| edit.update(&added, |step| Executor::Profile(profile).apply(step)));
   assert_eq!(state.save_state(), SaveState::Pending);
   let (revision, draft) = state.draft_to_save(now()).expect("a valid edit is saved");
-  save_draft_in(repo.path(), id, &draft).expect("save");
-  state.saved(revision, now());
+  let outcome = save_draft_in(repo.path(), id, &draft).expect("save");
+  assert_eq!(outcome, DraftSaved::Stored);
+  state.saved(revision, now(), outcome);
   assert!(state.can_publish());
 
   let reopened = opened(repo.path(), id);
@@ -188,8 +189,24 @@ fn edits_save_as_the_draft_and_publish_as_the_next_version() {
   assert_eq!(state.save_state(), SaveState::Saved);
 
   state.apply(|edit| edit.update(&added, |step| step.approval_gate = true));
-  let (_, next) = state.draft_to_save(now()).expect("the next edit starts draft v2");
+  let (revision, next) = state.draft_to_save(now()).expect("the next edit starts draft v2");
   assert_eq!(next.based_on(), Some(version));
+  let outcome = save_draft_in(repo.path(), id, &next).expect("save v2 draft");
+  state.saved(revision, now(), outcome);
+  assert!(state.has_draft());
+
+  // Undoing the edit leaves nothing to publish: the draft is removed, not kept as v2.
+  state.apply(|edit| edit.update(&added, |step| step.approval_gate = false));
+  let (revision, back) = state.draft_to_save(now()).expect("the undo is saved");
+  let outcome = save_draft_in(repo.path(), id, &back).expect("save the undo");
+  assert_eq!(outcome, DraftSaved::Discarded);
+  state.saved(revision, now(), outcome);
+  assert!(!state.has_changes());
+  assert!(opened(repo.path(), id).draft_saved_at.is_none());
+  assert_eq!(
+    library(&db).expect("library")[0].state,
+    VersionState::Published(version)
+  );
 }
 
 #[test]
@@ -333,4 +350,15 @@ fn published_pipeline_reopens_without_a_draft() {
     library(&db).expect("library")[0].state,
     VersionState::Published(reopened.based_on.expect("v1"))
   );
+}
+
+#[test]
+fn added_steps_get_names_no_step_has() {
+  let mut steps = starter_text().pipeline(&Default::default()).into_steps();
+  let numbered = |number: usize| format!("New step {number}");
+  let first = unused_step_name(&steps, "New step", numbered);
+  assert_eq!(first.as_str(), "New step");
+  steps[0].name = first;
+  steps[1].name = name("New step 2");
+  assert_eq!(unused_step_name(&steps, "New step", numbered).as_str(), "New step 3");
 }

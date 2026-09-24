@@ -13,7 +13,10 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{name::Name, resource::EditProblem};
+use orchester_core::{
+  name::Name,
+  resource::{EditProblem, Step},
+};
 
 use super::{EditorHandle, Selection};
 use crate::{
@@ -21,6 +24,7 @@ use crate::{
   pipelines::{
     describe::step_count,
     editor::{EditorState, SaveState},
+    fields::unused_step_name,
     problems::{ProblemKind, ProblemView, problem_view},
   },
   screens::project::pipelines::PipelinesNav,
@@ -154,7 +158,7 @@ fn save_status(ctx: &Ctx, state: &EditorState, saving: &Saving) -> Arc<str> {
 /// Add step, Pipeline settings and what the draft's state means for publishing (`EbAzx`).
 pub fn toolbar(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> Element {
   let (add, settings) = (handle.clone(), handle.clone());
-  let new_step = Name::new(&ctx.t("pipelines.editor.newStep")).expect("the new step name in the locale is not blank");
+  let new_step = new_step_name(ctx, state.edit().steps());
   let small = |button: ActionButton| button.height(Dimension::Px(SMALL_BUTTON_HEIGHT)).render(ctx);
   let (glyph, color, summary) = toolbar_summary(ctx, state);
   Row::new()
@@ -185,6 +189,18 @@ pub fn toolbar(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> Element
         .id("pipeline-state"),
     )
     .into()
+}
+
+/// The name of a step added now, unique among `steps`.
+pub fn new_step_name(ctx: &Ctx, steps: &[Step]) -> Name {
+  unused_step_name(steps, &ctx.t("pipelines.editor.newStep"), |number| {
+    ctx
+      .t_args(
+        "pipelines.editor.newStepNumbered",
+        [("number", number.to_string().as_str())],
+      )
+      .to_string()
+  })
 }
 
 /// Adds a step after the selected one and selects it.

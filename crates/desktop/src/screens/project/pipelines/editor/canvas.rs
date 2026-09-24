@@ -12,21 +12,24 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollBoth, Spacer, Stack, Text},
-  layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  layout::{Alignment, StackAlignment, layout_kind::Justify},
+  node::{CursorIcon, Element, HitTestBehavior, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::{
-  name::Name,
-  resource::{Step, StepKey, VersionNumber},
-};
+use orchester_core::resource::{Step, StepKey, VersionNumber};
 
-use super::{EditorHandle, Selection, header::add_step, starter_edit, step_card::step_card};
+use super::{
+  EditorHandle, Selection,
+  header::{add_step, new_step_name},
+  starter_edit,
+  step_card::step_card,
+};
 use crate::{
   pipelines::{
     data::Assignables,
     editor::EditorState,
     layout::{
-      CARD_HEIGHT, CARD_WIDTH, CONTENT_MARGIN, Chevron, Direction, FIRST_ROW_Y, GraphLayout, ORIGIN_X, Segment, layout,
+      CARD_HEIGHT, CARD_WIDTH, CONTENT_MARGIN, Chevron, Direction, FIRST_ROW_Y, GraphLayout, NOTES_BELOW, ORIGIN_X,
+      Segment, layout,
     },
   },
   theme::{CONNECTOR_STROKE, ExtraSpacing, ExtraTypography},
@@ -38,7 +41,10 @@ use crate::{
 };
 
 /// Positions of the description, trigger label and empty-state explanation (`fSDu6`, `wRjZD`,
-/// `r8A5GG`) and the empty explanation's width.
+/// `r8A5GG`) and the empty explanation's width; the line pitch of the route notes, and the room
+/// the zoom controls take at the bottom (`iarCw`: 32 high, 24 from the edge).
+const NOTE_PITCH: f32 = 20.0;
+const OVERLAY_ROOM: f32 = 56.0;
 const DESCRIPTION_Y: f32 = 30.0;
 const TRIGGER_Y: f32 = 76.0;
 const EMPTY_EXPLANATION_Y: f32 = 252.0;
@@ -108,10 +114,13 @@ impl Component for Canvas {
     let graph = layout(&props.steps, props.closing());
     let notes = route_notes(ctx, &props.steps);
     let width = (graph.right + CONTENT_MARGIN).max(ORIGIN_X + EMPTY_EXPLANATION_WIDTH + CONTENT_MARGIN);
+    // The route notes sit under the graph (`pFKSd`) and the zoom controls float over the
+    // canvas's bottom-left corner (`iarCw`), so the content ends with room for them.
+    let notes_top = graph.bottom + NOTES_BELOW;
     let height = if props.steps.is_empty() {
       EMPTY_EXPLANATION_Y + CARD_HEIGHT + CONTENT_MARGIN
     } else {
-      graph.bottom + CONTENT_MARGIN
+      notes_top + NOTE_PITCH * notes.len() as f32 + OVERLAY_ROOM
     };
     let mut content = Stack::new()
       .width(Dimension::Px(width))
@@ -127,15 +136,28 @@ impl Component for Canvas {
         .child(self.first_step_slot(ctx))
         .child(self.empty_explanation(ctx))
     } else {
-      self.graph(ctx, content, &props, &graph)
+      let notes = notes.iter().enumerate().map(|(line, note)| {
+        Text::new(note)
+          .variant(TypographyStyle::Caption)
+          .nowrap()
+          .absolute_position(ORIGIN_X, notes_top + NOTE_PITCH * line as f32)
+      });
+      self.graph(ctx, content, &props, &graph).with_children(notes)
     };
-    Column::new()
-      .id("pipeline-canvas")
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .background(PaletteColor::SurfacePanel)
-      .child(ScrollBoth::new(content).width(Dimension::Pct(100.0)).flex(1.0))
-      .child(self.bottom_bar(ctx, &notes, props.just_published))
+    Stack::with(
+      StackAlignment::BottomStart,
+      [
+        ScrollBoth::new(content)
+          .width(Dimension::Pct(100.0))
+          .height(Dimension::Pct(100.0))
+          .into(),
+        self.overlay(ctx, props.just_published),
+      ],
+    )
+    .id("pipeline-canvas")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .background(PaletteColor::SurfacePanel)
   }
 }
 
@@ -208,7 +230,7 @@ impl Canvas {
   /// Add first step (`mYTsP`).
   fn first_step_slot(&self, ctx: &Ctx) -> Element {
     let handle = self.handle.clone();
-    let name = new_step_name(ctx);
+    let name = new_step_name(ctx, &[]);
     Column::new()
       .id("pipeline-add-first-step")
       .absolute(
@@ -234,7 +256,7 @@ impl Canvas {
   /// No steps yet (`r8A5GG`).
   fn empty_explanation(&self, ctx: &Ctx) -> Element {
     let (add, replace) = (self.handle.clone(), self.handle.clone());
-    let name = new_step_name(ctx);
+    let name = new_step_name(ctx, &[]);
     let starter = starter_edit(ctx, &self.handle);
     let actions = Row::new()
       .padding_top(SpacingSize::Xs)
@@ -271,12 +293,10 @@ impl Canvas {
       .into()
   }
 
-  /// The failure route notes (`pFKSd`) above the zoom controls (`iarCw`), both outside the
-  /// scrolled graph so they are always in view, and right after publishing the published
-  /// notice (`O8ivsy`).
-  /// Zooming is unavailable: lurq clips a transformed card's text against its unscaled
-  /// bounds, so a scaled graph loses its text. The controls show 100% with a lock.
-  fn bottom_bar(&self, ctx: &Ctx, notes: &[Arc<str>], published: Option<VersionNumber>) -> Element {
+  /// The zoom controls (`iarCw`) and, right after publishing, the published notice
+  /// (`O8ivsy`), over the canvas's bottom edge. The row itself lets clicks and scrolling
+  /// through to the canvas.
+  fn overlay(&self, ctx: &Ctx, published: Option<VersionNumber>) -> Element {
     let control = |glyph: Icon| icon(glyph, IconSize::Marker, PaletteColor::TextMuted);
     let controls = Row::new()
       .id("pipeline-zoom")
@@ -299,22 +319,14 @@ impl Canvas {
       )
       .child(control(Icon::Maximize))
       .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted));
-    let notes = Column::new().spacing(ExtraSpacing::Tight.role()).with_children(
-      notes
-        .iter()
-        .map(|note| Text::new(note).variant(TypographyStyle::Caption).nowrap()),
-    );
-    let left = Column::new()
-      .spacing(ExtraSpacing::Step.role())
-      .child(notes)
-      .child(controls);
     let mut bar = Row::new()
       .width(Dimension::Pct(100.0))
+      .hit_test(HitTestBehavior::ContentOnly)
       .padding_horizontal(ExtraSpacing::Indent.role())
       .padding_bottom(SpacingSize::Lg)
       .spacing(SpacingSize::Md)
       .align_items(Alignment::End)
-      .child(left)
+      .child(controls)
       .child(Spacer::new().flex(1.0));
     if let Some(version) = published {
       let version = version.to_string();
@@ -331,10 +343,6 @@ impl Canvas {
     }
     bar.into()
   }
-}
-
-fn new_step_name(ctx: &Ctx) -> Name {
-  Name::new(&ctx.t("pipelines.editor.newStep")).expect("the new step name in the locale is not blank")
 }
 
 fn description(ctx: &Ctx, text: &str) -> Element {
