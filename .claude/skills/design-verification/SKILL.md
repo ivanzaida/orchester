@@ -57,6 +57,14 @@ what is actually on screen.
 
 ## Rules for the verifier
 
+- Several agents may run Orchester at the same time, and every instance writes its MCP
+  discovery file to the same folder. Never pick "the newest" discovery file: take the pid of the
+  process you started, open `%LOCALAPPDATA%\lurq\mcp\<that pid>.json`, and before every
+  batch of actions confirm the connection still belongs to that pid (`lurq_windows` / the
+  discovery file's `pid`). If it does not, stop and reconnect — never act on another instance.
+- Run your own copy of the binaries in your own folder when another agent or the user may be
+  using the same `target/` directory, so each instance has its own `orchester.db` next to it.
+
 - Do not edit implementation code; report. (Fixing is the implementer's job, so the next
   comparison is independent again.)
 - Do not accept "lurq cannot do this" without evidence; name the missing capability so it can
