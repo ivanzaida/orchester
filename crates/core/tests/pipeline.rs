@@ -4,7 +4,10 @@ use orchester_core::{
   id::ResourceId,
   money::{Currency, Money},
   name::Name,
-  resource::{FailureRoute, ModelId, Pipeline, PipelineError, PromptText, RepositoryAccess, Step, StepKey, StepKind},
+  resource::{
+    FailureRoute, ModelId, Pipeline, PipelineError, PromptText, PublishError, RepositoryAccess, ResourceBody, Step,
+    StepKey, StepKind,
+  },
 };
 
 fn key(value: &str) -> StepKey {
@@ -83,8 +86,21 @@ fn pipeline_accepts_parallel_steps_gates_and_upstream_retries() {
 }
 
 #[test]
-fn pipeline_needs_steps() {
-  assert_eq!(Pipeline::new(Vec::new()), Err(PipelineError::NoSteps));
+fn pipeline_without_steps_is_a_draft_that_cannot_be_published() {
+  let empty = Pipeline::new(Vec::new()).expect("an empty draft is valid");
+  assert_eq!(empty.check_publishable(), Err(PublishError::NoSteps));
+}
+
+#[test]
+fn pipeline_description_survives_json() {
+  let pipeline = Pipeline::new(vec![step("build", &[])])
+    .expect("valid")
+    .with_description("From a brief to a pull request.".to_owned());
+  let json = serde_json::to_string(&pipeline).expect("serialize");
+  let read: Pipeline = serde_json::from_str(&json).expect("deserialize");
+  assert_eq!(read.description(), "From a brief to a pull request.");
+  let without: Pipeline = serde_json::from_str(r#"{"steps":[]}"#).expect("description is optional");
+  assert_eq!(without.description(), "");
 }
 
 #[test]

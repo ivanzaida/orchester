@@ -1,9 +1,13 @@
+use std::num::NonZeroU32;
+
 use orchester_core::{
   id::ResourceId,
+  money::{Currency, Money},
   name::Name,
   resource::{
-    Pipeline, PipelineEdit, PipelineError, PromptText, PublishError, RepositoryAccess, ResourceBody,
-    StarterAssignments, StarterStep, StarterStepText, StepKey, StepKind, feature_delivery,
+    EditProblem, FailureRoute, Pipeline, PipelineChange, PipelineEdit, PipelineError, PromptText, PublishError,
+    RepositoryAccess, ResourceBody, StarterAssignments, StarterStep, StarterStepText, StepChange, StepKey, StepKind,
+    changes, feature_delivery,
   },
 };
 
@@ -219,10 +223,85 @@ fn update_keeps_the_step_key() {
 }
 
 #[test]
-fn removing_every_step_leaves_nothing_to_save() {
+fn removing_every_step_leaves_a_draft_that_cannot_be_published() {
   let pipeline = Pipeline::new(feature_delivery(text, assigned()).steps()[..1].to_vec()).expect("one step");
   let mut edit = PipelineEdit::new(pipeline);
   assert!(edit.remove_step(&key("research")));
-  assert_eq!(edit.validate(), Err(PipelineError::NoSteps));
-  assert_eq!(edit.unassigned_steps().count(), 0);
+  let empty = edit.validate().expect("an empty draft can be saved");
+  assert_eq!(empty.check_publishable(), Err(PublishError::NoSteps));
+  assert_eq!(edit.problems(), [EditProblem::NoSteps]);
+}
+
+#[test]
+fn problems_name_the_cycle_and_every_step_without_a_profile() {
+  let mut edit = starter_edit();
+  edit.update(&key("review"), |step| {
+    step.kind = StepKind::Agent {
+      profile: None,
+      repository: RepositoryAccess::ReadOnly,
+      model: None,
+    };
+  });
+  assert!(edit.set_dependency(&key("plan"), &key("review"), true));
+  let problems = edit.problems();
+  assert_eq!(
+    problems,
+    [
+      EditProblem::Cycle(["plan", "implement", "review"].map(key).to_vec()),
+      EditProblem::Unassigned(key("review")),
+    ]
+  );
+  assert!(problems[0].blocks_saving());
+  assert!(!problems[1].blocks_saving());
+}
+
+#[test]
+fn description_is_kept_with_the_steps() {
+  let mut edit = starter_edit();
+  edit.set_description("From a clear brief to a reviewed pull request.");
+  let pipeline = edit.validate().expect("valid");
+  assert_eq!(pipeline.description(), "From a clear brief to a reviewed pull request.");
+  assert_eq!(PipelineEdit::new(pipeline).description(), edit.description());
+}
+
+#[test]
+fn changes_list_edited_added_and_removed_steps() {
+  let published = feature_delivery(text, assigned());
+  let mut edit = PipelineEdit::new(published.clone());
+  edit.update(&key("review"), |step| {
+    step.instructions = PromptText::new("Review the diff.").expect("valid prompt");
+    step.on_failure = step.on_failure.clone().map(|route| FailureRoute {
+      max_retries: NonZeroU32::new(3).expect("positive"),
+      ..route
+    });
+    step.budget = Some(Money::from_micros(1_500_000, Currency::USD));
+  });
+  edit.remove_step(&key("research"));
+  let added = edit.add_step(name("Audit"), Some(&key("review")));
+  let draft = edit.validate().expect("valid");
+  let listed: Vec<(String, StepChange)> = changes(&published, &draft)
+    .into_iter()
+    .map(|change| match change {
+      PipelineChange::Step { key, change, .. } => (key.as_str().to_owned(), change),
+      PipelineChange::Description => ("description".to_owned(), StepChange::Instructions),
+    })
+    .collect();
+  assert_eq!(
+    listed,
+    [
+      ("plan".to_owned(), StepChange::Dependencies),
+      ("review".to_owned(), StepChange::Instructions),
+      ("review".to_owned(), StepChange::MaxRetries { from: 2, to: 3 }),
+      (
+        "review".to_owned(),
+        StepChange::Budget {
+          from: None,
+          to: Some(Money::from_micros(1_500_000, Currency::USD))
+        }
+      ),
+      (added.as_str().to_owned(), StepChange::Added),
+      ("research".to_owned(), StepChange::Removed),
+    ]
+  );
+  assert!(changes(&published, &published).is_empty());
 }

@@ -13,16 +13,47 @@ const ADDED_KEY: &str = "step";
 /// Suffix of the key of a duplicated step: `review-copy`, `review-copy-2`, …
 const COPY_SUFFIX: &str = "copy";
 
+/// Something that keeps the edited steps from being published.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EditProblem {
+  NoSteps,
+  /// Steps waiting on each other in a circle, in flow order: the first step waits for the
+  /// last one, which closes the circle, e.g. `[plan, implement, review]` when Plan waits for
+  /// Review.
+  Cycle(Vec<StepKey>),
+  /// Any other pipeline rule the steps break.
+  Rule(PipelineError),
+  /// A step without an agent profile or tool.
+  Unassigned(StepKey),
+}
+
+impl EditProblem {
+  /// Whether the steps cannot even be kept as a draft while this problem lasts.
+  pub const fn blocks_saving(&self) -> bool {
+    matches!(self, Self::Cycle(_) | Self::Rule(_))
+  }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipelineEdit {
+  description: String,
   steps: Vec<Step>,
 }
 
 impl PipelineEdit {
   pub fn new(pipeline: Pipeline) -> Self {
     Self {
+      description: pipeline.description().to_owned(),
       steps: pipeline.into_steps(),
     }
+  }
+
+  pub fn description(&self) -> &str {
+    &self.description
+  }
+
+  pub fn set_description(&mut self, description: &str) {
+    description.clone_into(&mut self.description);
   }
 
   /// Steps in the order the user arranged them.
@@ -113,7 +144,63 @@ impl PipelineEdit {
 
   /// The edited steps as a pipeline, or the first rule they break.
   pub fn validate(&self) -> Result<Pipeline, PipelineError> {
-    Pipeline::new(self.steps.clone())
+    Ok(Pipeline::new(self.steps.clone())?.with_description(self.description.clone()))
+  }
+
+  /// Everything that keeps the steps from being published: no steps, the first rule they
+  /// break (a cycle with the steps around it) and every step without a profile or tool.
+  pub fn problems(&self) -> Vec<EditProblem> {
+    let mut problems = Vec::new();
+    if self.steps.is_empty() {
+      problems.push(EditProblem::NoSteps);
+    }
+    match self.validate() {
+      Ok(_) => {}
+      Err(PipelineError::Cycle(key)) => {
+        problems.push(EditProblem::Cycle(self.cycle().unwrap_or_else(|| vec![key])));
+      }
+      Err(error) => problems.push(EditProblem::Rule(error)),
+    }
+    problems.extend(self.unassigned_steps().cloned().map(EditProblem::Unassigned));
+    problems
+  }
+
+  /// A circle of steps waiting on each other, in the order of [`EditProblem::Cycle`]. The
+  /// search walks upstream from the last listed step, so the step that closes the circle is
+  /// the earliest one in the flow.
+  pub fn cycle(&self) -> Option<Vec<StepKey>> {
+    let mut done = BTreeSet::new();
+    for step in self.steps.iter().rev() {
+      let mut stack = Vec::new();
+      if let Some(cycle) = self.find_cycle(&step.key, &mut stack, &mut done) {
+        return Some(cycle);
+      }
+    }
+    None
+  }
+
+  fn find_cycle<'a>(
+    &'a self,
+    key: &'a StepKey,
+    stack: &mut Vec<&'a StepKey>,
+    done: &mut BTreeSet<&'a StepKey>,
+  ) -> Option<Vec<StepKey>> {
+    if done.contains(key) {
+      return None;
+    }
+    if let Some(start) = stack.iter().position(|entry| *entry == key) {
+      return Some(stack[start..].iter().rev().map(|&key| key.clone()).collect());
+    }
+    let step = self.step(key)?;
+    stack.push(key);
+    for dependency in &step.depends_on {
+      if let Some(cycle) = self.find_cycle(dependency, stack, done) {
+        return Some(cycle);
+      }
+    }
+    stack.pop();
+    done.insert(key);
+    None
   }
 
   /// Steps whose agent profile or tool is not chosen yet; they block publishing, not saving.

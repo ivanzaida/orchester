@@ -215,6 +215,9 @@ pub enum PublishError {
   },
   #[error("the resource has reached the maximum number of versions")]
   VersionLimit,
+  /// A pipeline without steps has nothing to run.
+  #[error("the pipeline has no steps")]
+  NoSteps,
   /// Pipeline steps without an agent profile or tool; a run could not execute them.
   #[error("steps {0:?} have no agent profile or tool")]
   UnassignedSteps(Vec<StepKey>),

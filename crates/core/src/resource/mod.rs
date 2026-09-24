@@ -21,8 +21,8 @@ pub use self::{
   instruction::{AgentTargets, InjectionEvent, Instruction, InstructionError, InstructionScope},
   lifecycle::{Draft, PublishError, Resource, ResourceKind, Slug, SlugError, Version, VersionNumber, publish},
   pipeline::{
-    FailureRoute, Pipeline, PipelineEdit, PipelineError, RepositoryAccess, StarterAssignments, StarterStep,
-    StarterStepText, Step, StepKey, StepKind, feature_delivery,
+    EditProblem, FailureRoute, Pipeline, PipelineChange, PipelineEdit, PipelineError, RepositoryAccess,
+    StarterAssignments, StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, changes, feature_delivery,
   },
   prompt::{PromptError, PromptText},
   tool::{
@@ -63,6 +63,9 @@ impl ResourceBody for Pipeline {
   const SCHEMA: u32 = 1;
 
   fn check_publishable(&self) -> Result<(), PublishError> {
+    if self.steps().is_empty() {
+      return Err(PublishError::NoSteps);
+    }
     let unassigned: Vec<StepKey> = self.unassigned_steps().cloned().collect();
     if unassigned.is_empty() {
       Ok(())
