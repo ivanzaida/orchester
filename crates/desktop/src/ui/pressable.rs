@@ -8,13 +8,12 @@
 //! selects keep their focused stroke (`o8Oug`) instead.
 
 use lurq::{
-  app::theme::BorderSize,
   components::Button,
   layout::Alignment,
-  node::{CursorIcon, Style, border::Border},
+  node::{CursorIcon, Style, border::Borders},
 };
 
-use crate::theme::{ExtraColor, ExtraShadow};
+use crate::theme::ExtraShadow;
 
 /// lurq's tab index for a control that Tab reaches in the order the window shows it.
 pub const TAB_STOP: i32 = 0;
@@ -39,12 +38,11 @@ impl Ring {
 }
 
 /// Focus style of a row stacked on others with a bottom hairline: the inset ring covers the
-/// whole row as in the design (`X9gPDr`). The hairline paints over inset shadows, so while
-/// focused it takes the ring colour and becomes the ring's bottom edge; nothing shows below.
+/// whole row as in the design (`X9gPDr`). lurq casts inset shadows inside an inside border and
+/// paints the border over them, so while focused the row drops its border; borders take no
+/// layout space, so nothing moves.
 pub fn hairline_row_focused() -> Style {
-  Ring::Inset
-    .focused()
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::FocusRing.role()))
+  Ring::Inset.focused().border_custom(Borders::default())
 }
 
 /// An empty button laid out like a `Row` (children start at the top), for a clickable surface.
