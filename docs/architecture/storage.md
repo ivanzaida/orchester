@@ -58,6 +58,11 @@ keeps work running is a possible later improvement, not part of this version.)
     all of them, from its last checkpoint. Nothing restarts automatically. Work after the
     checkpoint is not claimed as done; uncommitted worktree changes are kept and shown, never
     discarded silently.
+- **Runner drops while the application is open** → the desktop reconnects automatically with a
+  bounded backoff and tells the user (reconnecting, reconnected, or could not restart). Runs
+  interrupted by the drop continue automatically from their last checkpoint as soon as the runner
+  is back; nothing after the checkpoint is claimed as done. If the runner cannot be restarted, the
+  runs stay interrupted until it is.
 
 lurq already supports vetoable close requests whose decision can be held for an asynchronous
 dialog (`on_close_requested` / `CloseRequest`), which is what the wait path needs.
