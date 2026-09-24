@@ -724,7 +724,7 @@
       "publishedNow": "Published now",
       "afterPublishing": "After publishing",
       "versionValue": "{{version}}",
-      "since": "Since {{time}} · used by {{tasks}}",
+      "since": "Published {{time}} · {{tasks}}",
       "noneYet": "None yet",
       "noneYetDetail": "Never published",
       "fromDraft": "From draft v{{draft}}, saved {{time}}",
@@ -733,7 +733,8 @@
       "firstVersion": "This is the first version: every step is new.",
       "keepTitle": "Started runs keep {{version}}",
       "keepDetail": "Runs that already pinned {{version}} keep it until they finish. Publishing does not change them.",
-      "fromDraftJustNow": "From draft v{{draft}}, saved just now"
+      "fromDraftJustNow": "From draft v{{draft}}, saved just now",
+      "sinceJustNow": "Published just now · {{tasks}}"
     },
     "published": {
       "title": "Published {{version}} just now",

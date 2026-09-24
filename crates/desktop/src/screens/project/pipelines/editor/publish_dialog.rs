@@ -3,6 +3,8 @@
 //! Publish publishes once; while it runs the button is disabled, so a second click cannot
 //! publish the next version as well.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -100,13 +102,7 @@ fn transition(ctx: &Ctx, state: &EditorState, draft: &str) -> Element {
         "pipelines.publish.versionValue",
         [("version", latest.number.to_string().as_str())],
       ),
-      ctx.t_args(
-        "pipelines.publish.since",
-        [
-          ("time", &*message_text(ctx, &display::elapsed(now, latest.at))),
-          ("tasks", &*message_text(ctx, &describe::task_count(state.used_by()))),
-        ],
-      ),
+      since(ctx, &display::elapsed(now, latest.at), state.used_by()),
     ),
     None => (
       ctx.t("pipelines.publish.noneYet"),
@@ -147,6 +143,18 @@ fn transition(ctx: &Ctx, state: &EditorState, draft: &str) -> Element {
     .child(icon(Icon::ArrowRight, IconSize::Option, PaletteColor::TextSecondary))
     .child(card("pipelines.publish.afterPublishing", &after, &after_detail, true))
     .into()
+}
+
+/// "Published 3d ago · 6 tasks", or "just now" in the sentence's own casing.
+fn since(ctx: &Ctx, elapsed: &Message, used_by: usize) -> Arc<str> {
+  let tasks = message_text(ctx, &describe::task_count(used_by));
+  if elapsed.key == "time.justNow" {
+    return ctx.t_args("pipelines.publish.sinceJustNow", [("tasks", &*tasks)]);
+  }
+  ctx.t_args(
+    "pipelines.publish.since",
+    [("time", &*message_text(ctx, elapsed)), ("tasks", &*tasks)],
+  )
 }
 
 /// Changes from the published version (`LXUS6`), or that this is the first version.
