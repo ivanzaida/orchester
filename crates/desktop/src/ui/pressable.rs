@@ -39,12 +39,12 @@ impl Ring {
 }
 
 /// Focus style of a row stacked on others with a bottom hairline: the inset ring covers the
-/// whole row as in the design (`X9gPDr`). An inside border would keep the ring above it, so
-/// while focused the hairline is drawn just outside the row, under the next one.
+/// whole row as in the design (`X9gPDr`). The hairline paints over inset shadows, so while
+/// focused it takes the ring colour and becomes the ring's bottom edge; nothing shows below.
 pub fn hairline_row_focused() -> Style {
   Ring::Inset
     .focused()
-    .border_bottom(Border::outside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::FocusRing.role()))
 }
 
 /// An empty button laid out like a `Row` (children start at the top), for a clickable surface.
