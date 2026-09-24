@@ -30,21 +30,23 @@ pub fn field(label: &str, control: Element, note: FieldNote) -> Element {
     .child(control);
   match note {
     FieldNote::None => column.into(),
-    FieldNote::Error(error) => column
-      .child(
-        Row::new()
-          .spacing(SpacingSize::Xs)
-          .align_items(Alignment::Center)
-          .describe("role", "field-error")
-          .child(icon(Icon::AlertCircle, IconSize::Small, PaletteColor::TextPrimary))
-          .child(
-            Text::new(&error)
-              .variant(TypographyStyle::Caption)
-              .color(PaletteColor::TextPrimary),
-          ),
-      )
-      .into(),
+    FieldNote::Error(error) => column.child(field_error(&error)).into(),
   }
+}
+
+/// Why a value or an action was not accepted, under the field or action it is about.
+pub fn field_error(text: &str) -> Element {
+  Row::new()
+    .spacing(SpacingSize::Xs)
+    .align_items(Alignment::Center)
+    .describe("role", "field-error")
+    .child(icon(Icon::AlertCircle, IconSize::Small, PaletteColor::TextPrimary))
+    .child(
+      Text::new(text)
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::TextPrimary),
+    )
+    .into()
 }
 
 /// A single-line text input bound to `value` in `typography`; an `invalid` input gets a

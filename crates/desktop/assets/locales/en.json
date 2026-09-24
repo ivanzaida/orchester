@@ -266,5 +266,307 @@
     "timeLimitRequired": "Enter a time limit too, or clear the budget.",
     "timeLimitInvalid": "Enter whole minutes, such as 30.",
     "timeLimitZero": "The time limit must be at least one minute."
+  },
+  "money": {
+    "usd": "${{amount}}",
+    "other": "{{amount}} {{currency}}"
+  },
+  "pipelines": {
+    "flow": {
+      "then": "→",
+      "parallel": "∥"
+    },
+    "count": {
+      "step": {
+        "one": "1 step",
+        "other": "{{count}} steps"
+      },
+      "task": {
+        "none": "No tasks",
+        "one": "1 task",
+        "other": "{{count}} tasks"
+      }
+    },
+    "library": {
+      "breadcrumb": "{{project}}  /  Pipelines",
+      "title": "Pipelines",
+      "description": "The steps agents follow for a task in {{project}}. Tasks run a published version, never a draft.",
+      "import": "Import from project",
+      "newPipeline": "New pipeline",
+      "allPipelines": "All pipelines",
+      "counts": {
+        "one": "1 pipeline · {{drafts}} with unpublished drafts",
+        "other": "{{count}} pipelines · {{drafts}} with unpublished drafts"
+      },
+      "columns": {
+        "pipeline": "Pipeline",
+        "steps": "Steps",
+        "version": "Version",
+        "usedBy": "Used by",
+        "lastPublished": "Last published"
+      },
+      "noSteps": "No steps yet",
+      "never": "Never",
+      "ownership": "Pipelines belong to {{project}}. Steps use this project’s agent profiles, tools and instructions. Select a pipeline to open it in the editor.",
+      "loadFailed": "Pipelines could not be read"
+    },
+    "version": {
+      "published": "Published {{version}}",
+      "publishedWithDraft": "{{version}} · Draft v{{draft}} saved",
+      "draftOnly": "Draft v1 · not published",
+      "draftLabel": "Draft v{{draft}}",
+      "publishedLabel": "Published {{version}}",
+      "number": "v{{draft}}"
+    },
+    "versions": {
+      "title": "How versions work",
+      "draftTitle": "Draft saved",
+      "draftDetail": "Edits are saved as a draft. Tasks and runs never use a draft.",
+      "publishTitle": "Publish vN",
+      "publishDetail": "Publishing turns the draft into the next version. New runs use it.",
+      "keepTitle": "Runs keep their version",
+      "keepDetail": "A run keeps the version it started with, even after a newer one is published.",
+      "importHint": "Import from project creates an independent copy. Later edits in the source project do not reach it."
+    },
+    "empty": {
+      "title": "No pipelines in {{project}} yet",
+      "description": "A pipeline is the sequence of steps agents follow for a task: who researches, plans, implements and reviews, and where you approve. A task can only run a published pipeline.",
+      "starterTitle": "Starter · Feature delivery",
+      "steps": {
+        "research": "Explorer · repository context and risks",
+        "plan": "Planner · waits for your approval",
+        "implement": "Builder · code changes and tests",
+        "runChecks": "Tool · Run test suite · in parallel with Review",
+        "review": "Reviewer · in parallel with Run checks",
+        "createPullRequest": "Tool · waits for your review"
+      },
+      "starterResult": "Creates draft v1 with these steps. Review it and publish v1 before a task can use it. The steps use {{project}}’s Explorer, Planner, Builder and Reviewer profiles and the Run test suite and Create pull request tools; anything missing is flagged in the editor.",
+      "fromStarter": "Create from starter",
+      "startEmpty": "Start empty"
+    },
+    "create": {
+      "title": "New pipeline",
+      "explanation": "Creates draft v1 in {{project}}. Tasks can use it after you publish it.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Dependency updates",
+      "slug": "Slug",
+      "slugExplanation": "· from the name, unique in {{project}}",
+      "noSlug": "Use at least one letter or digit from A–Z or 0–9: the slug is made from them.",
+      "slugTaken": "The slug {{slug}} is already used by the pipeline {{pipeline}}. Choose another name.",
+      "startFrom": "Start from",
+      "starterTitle": "Starter · Feature delivery",
+      "starterDetail": "Six steps from a brief to a reviewed pull request. You approve the plan and review the pull request.",
+      "starterSteps": "Research → Plan (approval) → Implement → Run checks ∥ Review → Create pull request",
+      "emptyTitle": "Empty pipeline",
+      "emptyDetail": "No steps. Add them yourself in the editor.",
+      "usesProjectResources": "Uses {{project}}’s own profiles and tools",
+      "usesProjectResourcesDetail": "The starter steps use the Explorer, Planner, Builder and Reviewer profiles and the Run test suite and Create pull request tools. Anything missing is flagged in the editor and blocks publishing.",
+      "create": "Create draft"
+    },
+    "starter": {
+      "name": "Feature delivery",
+      "research": {
+        "name": "Research",
+        "uses": "Explorer",
+        "instructions": "Study the repository and the task brief. Report the code involved, the constraints and the risks, and anything the brief leaves open."
+      },
+      "plan": {
+        "name": "Plan",
+        "uses": "Planner",
+        "instructions": "Propose a plan for the task: the changes to make, their order and how each acceptance criterion will be checked. Wait for approval before anything is implemented."
+      },
+      "implement": {
+        "name": "Implement",
+        "uses": "Builder",
+        "instructions": "Implement the approved plan with tests. Keep changes within the task’s scope and explain anything that differs from the plan."
+      },
+      "runChecks": {
+        "name": "Run checks",
+        "uses": "Run test suite",
+        "instructions": "Run the project’s tests, linters and other checks against the implementation."
+      },
+      "review": {
+        "name": "Review",
+        "uses": "Reviewer",
+        "instructions": "Review the implementation against the task’s acceptance criteria. Check correctness, edge cases and maintainability, and link each finding to the relevant code."
+      },
+      "createPullRequest": {
+        "name": "Create pull request",
+        "uses": "Create pull request",
+        "instructions": "Open a pull request with a summary of the changes and the evidence that each acceptance criterion is met."
+      }
+    },
+    "editor": {
+      "breadcrumbSeparator": "/",
+      "run": "Run",
+      "runVersion": "Run {{version}}",
+      "publish": "Publish v{{draft}}",
+      "versionHistory": "Version history",
+      "addStep": "Add step",
+      "settings": "Pipeline settings",
+      "newStep": "New step",
+      "saving": "Saving draft…",
+      "notSaved": "Not saved · fix the problems to save the draft",
+      "saveFailed": "Draft not saved: {{reason}}",
+      "draftSaved": "Draft saved · Published {{version}}",
+      "draftSavedNeverPublished": "Draft saved · Not published yet",
+      "noDraftChanges": "No draft changes · Your next edit starts draft v{{draft}}",
+      "missing": "This pipeline no longer exists.",
+      "openFailed": "The pipeline could not be opened"
+    },
+    "toolbar": {
+      "valid": "{{steps}} · Valid draft · Publishing affects new runs",
+      "published": "{{steps}} · Published {{version}} · New runs use {{version}}",
+      "noSteps": "{{steps}} · Add a step before you can publish v{{draft}}",
+      "problems": {
+        "one": "{{steps}} · 1 problem · Publishing v{{draft}} is disabled until it is fixed",
+        "other": "{{steps}} · {{count}} problems · Publishing v{{draft}} is disabled until they are fixed"
+      }
+    },
+    "problems": {
+      "blocked": {
+        "one": "Publishing is blocked by 1 problem.",
+        "other": "Publishing is blocked by {{count}} problems.",
+        "oneRunning": "Publishing is blocked by 1 problem. Published {{version}} still runs.",
+        "otherRunning": "Publishing is blocked by {{count}} problems. Published {{version}} still runs."
+      },
+      "noSteps": "Add a step before you can publish",
+      "noProfile": "{{step}} has no agent profile",
+      "noTool": "{{step}} has no tool",
+      "cycle": "Cycle: {{path}}",
+      "cycleAt": "{{step}} waits for itself through the steps it runs after",
+      "duplicateStep": "Two steps use the key of {{step}}",
+      "unknownDependency": "{{step}} runs after a step that no longer exists",
+      "unknownRetryTarget": "{{step}} returns to a step that no longer exists",
+      "retryTargetNotUpstream": "{{step}} returns to {{target}}, which does not run before it",
+      "nonPositiveBudget": "The budget of {{step}} must be more than zero",
+      "staleDraft": "This draft started from {{basedOn}}, but {{latest}} was published since. Publishing it would discard the changes in {{latest}}.",
+      "notPublishable": "The draft has problems that block publishing.",
+      "versionLimit": "This pipeline has reached the highest version number.",
+      "noDraft": "There is no saved draft to publish.",
+      "unclosedPlaceholder": "A placeholder is opened with two braces but never closed.",
+      "unknownVariable": "{{name}} is not a variable in the catalog.",
+      "invalidBudget": "Enter an amount in US dollars, e.g. 1.50.",
+      "invalidRetries": "Enter a whole number of retries, at least 1."
+    },
+    "canvas": {
+      "trigger": "ON TASK START",
+      "parallel": "RUN IN PARALLEL",
+      "bothMustPass": "Both steps must pass",
+      "allMustPass": "All {{count}} steps must pass",
+      "cycle": "{{step}} WAITS FOR {{dependency}} · CYCLE",
+      "routeNote": "If {{step}} does not pass, return to {{target}}. Max {{count}} retries.",
+      "noDescription": "No description yet.",
+      "addFirstStep": "Add first step",
+      "addFirstStepDetail": "Agent profile or tool",
+      "noStepsTitle": "No steps yet",
+      "noStepsDetail": "A step runs one agent profile or one tool. Steps run in the order you connect them, and can run in parallel. You can publish v1 once the pipeline has at least one valid step.",
+      "useStarter": "Use starter steps",
+      "zoom": "{{percent}}%"
+    },
+    "step": {
+      "noProfile": "No agent profile",
+      "noTool": "No tool",
+      "chooseProfile": "Choose a profile before publishing",
+      "chooseTool": "Choose a tool before publishing",
+      "profileModel": "{{profile}} · {{model}}",
+      "tool": "Tool · {{tool}}",
+      "unpublishedProfile": "Profile not published",
+      "unpublishedTool": "Tool not published",
+      "waitsForApproval": "Waits for your approval",
+      "changesFiles": "Can change files",
+      "readsOnly": "Reads the repository",
+      "toolPolicy": "Under the tool’s access policy"
+    },
+    "inspector": {
+      "stepNumber": "STEP {{number}}",
+      "profile": "Project agent profile",
+      "tool": "Tool",
+      "chooseProfile": "Choose an agent profile",
+      "chooseTool": "Choose a tool",
+      "profileOption": "{{profile}} · published {{version}}",
+      "toolOption": "Tool · {{tool}}",
+      "unpublishedExecutor": "Not published",
+      "profileRequired": "Required. {{step}} cannot run or be published without a profile.",
+      "toolRequired": "Required. {{step}} cannot run or be published without a tool.",
+      "model": "Model for this step",
+      "noProfileSelected": "No profile selected",
+      "fromProfile": "From profile · {{model}}",
+      "effectiveModel": "{{profile}} → {{model}}",
+      "overrideHint": "Choose a model here to override only this step.",
+      "noModelYet": "No connection or model yet",
+      "noModelYetDetail": "The step uses the connection and model of the profile you choose.",
+      "editProfile": "Edit agent profile",
+      "openProfiles": "Open agent profiles",
+      "instructions": "Instructions",
+      "instructionsPlaceholder": "What this step should do. Variables from the catalog go in double braces.",
+      "runsAfter": "Runs after",
+      "route": "When changes are requested",
+      "routeFail": "Fail the run",
+      "routeReturn": "Return to {{step}}",
+      "maxRetries": "Maximum retries",
+      "budget": "Step budget (USD)",
+      "none": "None",
+      "repositoryAccess": "Repository access",
+      "readOnly": "Read-only",
+      "write": "Can write",
+      "approval": "Wait for your approval before the steps after this one start.",
+      "duplicate": "Duplicate step",
+      "remove": "Remove step",
+      "confirmRemove": "Remove {{step}}? Click again",
+      "pipeline": "Pipeline",
+      "draftTag": "DRAFT V{{draft}}",
+      "publishedTag": "PUBLISHED {{version}}",
+      "name": "Name",
+      "description": "Description",
+      "descriptionPlaceholder": "Optional. Shown in the pipeline library.",
+      "starts": "Starts",
+      "onTaskStart": "On task start",
+      "publishedVersion": "Published version",
+      "noneYet": "None yet",
+      "versionValue": "{{version}}",
+      "usedBy": "Used by",
+      "steps": "Steps",
+      "notAvailableTitle": "Not available to tasks yet",
+      "notAvailableDetail": "Tasks can select {{pipeline}} after you publish v1."
+    },
+    "publish": {
+      "title": "Publish {{pipeline}} v{{draft}}?",
+      "explanation": "Draft v{{draft}} becomes the published version. New runs use v{{draft}}. Runs that already started keep the version they pinned.",
+      "explanationFirst": "Draft v{{draft}} becomes the first published version. Tasks can select the pipeline after that.",
+      "publishedNow": "Published now",
+      "afterPublishing": "After publishing",
+      "versionValue": "{{version}}",
+      "since": "Since {{time}} · used by {{tasks}}",
+      "noneYet": "None yet",
+      "noneYetDetail": "Never published",
+      "fromDraft": "From draft v{{draft}}, saved {{time}}",
+      "changes": "Changes from {{version}}",
+      "noChanges": "No changes to the steps",
+      "firstVersion": "This is the first version: every step is new.",
+      "keepTitle": "Started runs keep {{version}}",
+      "keepDetail": "Runs that already pinned {{version}} keep it until they finish. Publishing does not change them.",
+      "fromDraftJustNow": "From draft v{{draft}}, saved just now"
+    },
+    "published": {
+      "title": "Published {{version}} just now",
+      "detail": "New runs use {{version}}. Runs that already started keep the version they pinned until they finish."
+    },
+    "changes": {
+      "description": "Pipeline · description edited",
+      "added": "{{step}} · added",
+      "removed": "{{step}} · removed",
+      "renamed": "{{step}} · renamed from {{from}}",
+      "executor": "{{step}} · agent profile or tool changed",
+      "model": "{{step}} · model changed",
+      "repositoryAccess": "{{step}} · repository access changed",
+      "instructions": "{{step}} · instructions edited",
+      "dependencies": "{{step}} · runs after different steps",
+      "approvalAdded": "{{step}} · now waits for approval",
+      "approvalRemoved": "{{step}} · no longer waits for approval",
+      "failureRoute": "{{step}} · when changes are requested changed",
+      "maxRetries": "{{step}} · maximum retries {{from}} → {{to}}",
+      "budget": "{{step}} · step budget {{from}} → {{to}}"
+    }
   }
 }

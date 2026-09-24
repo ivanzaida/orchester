@@ -121,6 +121,14 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::StatusLabel.role()` | 11/500 | status label text (`DeizF`) |
 | `ExtraTypography::NavCount.role()` | mono 11 muted | count beside a navigation item (`LTXft`) |
 | `ExtraTypography::Brief.role()` | 13, 1.7 | task brief text (`E9moJ`) |
+| `ExtraTypography::CanvasLabel.role()` | mono 9, spaced | pipeline canvas label ("ON TASK START", `wRjZD`) |
+| `ExtraTypography::MonoTag.role()` | mono 9 muted | tag beside an inspector title ("STEP 05", `kAJZA`) |
+| `ExtraTypography::MonoValue.role()` | mono 11 | key/value property value, slug (`yeeIR`, `cJsA7`) |
+| `ExtraTypography::Instructions.role()` | 12, 1.65 | step instructions (`v1Ky8`) |
+| `ExtraTypography::Hint.role()` | 10 muted, 1.5 | explanation under a field (`k66CB`) |
+| `ExtraTypography::VersionFigure.role()` | 18/500 | version in the publish confirmation (`p8L552`) |
+| `ExtraTypography::Summary.role()` | 13 muted, 1.6 | explanation under an empty state title (`xIG73`) |
+| `ExtraTypography::StatusLabelSmall.role()` | 10/500 | compact status label in the pipeline topbar (`pLCWI`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

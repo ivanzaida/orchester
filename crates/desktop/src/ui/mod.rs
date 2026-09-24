@@ -9,6 +9,7 @@ pub mod nav_item;
 pub mod notice;
 pub mod panel;
 pub mod status_label;
+pub mod summary_step;
 pub mod tab;
 
 use std::sync::Arc;

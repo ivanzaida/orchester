@@ -4,6 +4,7 @@
 
 mod new_task;
 mod overview;
+mod pipelines;
 mod runner;
 mod sidebar;
 mod task_rows;
@@ -21,6 +22,7 @@ use lurq::{
 
 use self::{
   new_task::{NewTaskForm, NewTaskProps},
+  pipelines::PipelinesScreen,
   sidebar::sidebar,
   tasks::{TasksProps, TasksScreen},
 };
@@ -38,6 +40,7 @@ pub enum Section {
   Overview,
   Tasks,
   NewTask,
+  Pipelines,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Section {}
@@ -120,6 +123,7 @@ impl Component for ProjectShell {
           tasks: tasks.clone(),
         },
       ),
+      Section::Pipelines => ctx.mount_keyed::<PipelinesScreen>("pipelines", open.clone()),
       Section::NewTask => ctx.mount_keyed::<NewTaskForm>(
         "new-task",
         NewTaskProps {

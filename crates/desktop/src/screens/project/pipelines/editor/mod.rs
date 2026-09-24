@@ -1,0 +1,431 @@
+//! Pipeline editor (03.01 `Q21HOA`): the step graph with the selected step's inspector, or the
+//! pipeline's own inspector when no step is selected (03.06 `angoF`). Edits are saved as the
+//! draft automatically while the draft rules allow it; Publish opens a confirmation (03.02
+//! `zfjsK`) and publishes the stored draft (03.03 `yf6XH`). What blocks publishing is listed
+//! under the toolbar (03.B `UjHDL`). Running a pipeline and its version history do not exist
+//! yet, so Run and Version history are unavailable.
+
+mod canvas;
+mod header;
+mod pipeline_inspector;
+mod publish_dialog;
+mod step_card;
+mod step_fields;
+mod step_inspector;
+
+use std::{path::PathBuf, sync::Arc};
+
+use lurq::{
+  app::{
+    component::Component,
+    ctx::{Ctx, FutureAction},
+    theme::{BorderSize, SpacingSize},
+  },
+  components::{Column, Modal, ModalTarget, Row},
+  core::Signal,
+  node::{Element, border::Border, dimension::Dimension},
+};
+use orchester_core::{
+  id::ResourceId,
+  resource::{Draft, Pipeline, PipelineEdit, StepKey, VersionNumber},
+  time::Timestamp,
+};
+
+use self::{
+  canvas::{Canvas, CanvasProps},
+  pipeline_inspector::{PipelineInspector, PipelineInspectorProps},
+  publish_dialog::publish_dialog,
+  step_inspector::{StepInspector, StepInspectorProps},
+};
+use super::PipelinesNav;
+use crate::{
+  background,
+  messages::{self, Message},
+  pipelines::{
+    data::{OpenError, OpenedPipeline, publish_in, save_draft_in},
+    editor::EditorState,
+    problems::publish_error,
+  },
+  screens::project::ProjectNav,
+  theme::ExtraColor,
+  ui::{icon::Icon, message_text, panel::RecoveryPanel},
+  workspace::OpenProject,
+};
+
+/// Inspector width (`yCO8P`).
+const INSPECTOR_WIDTH: f32 = 304.0;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct EditorProps {
+  pub project: OpenProject,
+  pub id: ResourceId,
+}
+
+impl lurq::app::component::DevtoolsInspectable for EditorProps {}
+
+/// What the inspector shows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Selection {
+  Pipeline,
+  Step(StepKey),
+}
+
+impl lurq::app::component::DevtoolsInspectable for Selection {}
+
+/// A draft revision stored at a time.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Saved {
+  revision: u64,
+  at: Timestamp,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Saved {}
+
+/// The version a publish created, and what it contains.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PublishedDraft {
+  number: VersionNumber,
+  at: Timestamp,
+  body: Pipeline,
+}
+
+impl lurq::app::component::DevtoolsInspectable for PublishedDraft {}
+
+type SaveArgs = (PathBuf, ResourceId, u64, Draft<Pipeline>);
+type SaveAction = FutureAction<SaveArgs, Saved, Message>;
+type PublishArgs = (PathBuf, ResourceId, Pipeline);
+type PublishAction = FutureAction<PublishArgs, PublishedDraft, Message>;
+
+struct Actions {
+  save: SaveAction,
+  publish: PublishAction,
+}
+
+/// The project repository, as a signal carries it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct RepoRoot(PathBuf);
+
+impl lurq::app::component::DevtoolsInspectable for RepoRoot {}
+
+/// The pipeline as it was read, as the load future carries it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Loaded(Arc<OpenedPipeline>);
+
+impl lurq::app::component::DevtoolsInspectable for Loaded {}
+
+/// Provided by the editor: its state and the edits children make to it.
+#[derive(Clone)]
+pub struct EditorHandle {
+  state: Signal<Option<EditorState>>,
+  selection: Signal<Selection>,
+  /// Changes when steps are replaced as a whole, so step inspectors start again from them.
+  epoch: Signal<u64>,
+  save: SaveAction,
+  /// Set by the editor's render: props are not available when the handle is created.
+  repo_root: Signal<RepoRoot>,
+}
+
+impl EditorHandle {
+  /// Applies `change` to the steps and saves the draft when it can be saved.
+  pub fn edit<R>(&self, change: impl FnOnce(&mut PipelineEdit) -> R) -> Option<R> {
+    let mut state = self.state.get();
+    let result = state.as_mut().map(|state| state.apply(change));
+    self.state.set(state);
+    self.flush();
+    result
+  }
+
+  /// Marks a field of `step` as holding text that cannot be used, or no longer.
+  pub fn set_field_invalid(&self, step: &StepKey, field: &'static str, invalid: bool) {
+    self.state.update(|state| {
+      if let Some(state) = state {
+        state.set_field_invalid(step, field, invalid);
+      }
+    });
+    self.flush();
+  }
+
+  pub fn select(&self, selection: Selection) {
+    if let Selection::Step(previous) = self.selection.get() {
+      self.state.update(|state| {
+        if let Some(state) = state {
+          state.clear_invalid_fields(&previous);
+        }
+      });
+    }
+    self.selection.set(selection);
+    self.flush();
+  }
+
+  /// Replaces every step, e.g. with the starter's; open inspectors start again.
+  pub fn replace(&self, change: impl FnOnce(&mut PipelineEdit)) {
+    self.edit(change);
+    self.epoch.update(|epoch| *epoch += 1);
+  }
+
+  /// Stores the current revision as the draft, unless a save is running (its completion
+  /// saves again) or there is nothing that can be saved.
+  fn flush(&self) {
+    if self.save.state().get().is_pending() {
+      return;
+    }
+    let Some(state) = self.state.get() else {
+      return;
+    };
+    if let Some((revision, draft)) = state.draft_to_save(Timestamp::now()) {
+      self.save.run((self.repo_root.get().0, state.id(), revision, draft));
+    }
+  }
+}
+
+pub struct PipelineEditor {
+  handle: EditorHandle,
+  confirm_publish: Signal<bool>,
+}
+
+impl Component for PipelineEditor {
+  type Props = EditorProps;
+
+  fn create(ctx: &mut Ctx) -> Self {
+    let save = save_action(ctx);
+    let publish = publish_action(ctx);
+    let handle = EditorHandle {
+      state: ctx.signal(None),
+      selection: ctx.signal(Selection::Pipeline),
+      epoch: ctx.signal(0),
+      save: save.clone(),
+      repo_root: ctx.signal(RepoRoot::default()),
+    };
+    let confirm_publish = ctx.signal(false);
+    watch_saves(ctx, &save, &handle);
+    watch_publishes(ctx, &publish, &handle, &confirm_publish);
+    Self {
+      handle,
+      confirm_publish,
+    }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<EditorProps>().clone();
+    let save = save_action(ctx);
+    let publish = publish_action(ctx);
+    let handle = self.handle.clone();
+    if handle.repo_root.get().0 != props.project.repo_root {
+      handle.repo_root.set(RepoRoot(props.project.repo_root.clone()));
+    }
+    ctx.provide(handle.clone());
+    let deps = (props.project.repo_root.clone(), props.id);
+    let load = ctx.future(deps, |(repo_root, id)| async move {
+      let opened = background::run(move || OpenedPipeline::load_in(&repo_root, id)).await?;
+      opened.map(|opened| Loaded(Arc::new(opened))).map_err(|error| {
+        tracing::error!(%error, "cannot open the pipeline");
+        match error {
+          OpenError::Missing => Message::new("pipelines.editor.missing"),
+          OpenError::Store(error) => messages::store_error(&error),
+        }
+      })
+    });
+    let loaded = load.state().get();
+    if let Some(error) = loaded.error {
+      return failed(ctx, &error);
+    }
+    let Some(Loaded(opened)) = loaded.data else {
+      return Column::new().into();
+    };
+    let state = match handle.state.get() {
+      Some(state) => state,
+      None => {
+        let state = EditorState::new(opened);
+        let first = state.edit().steps().first().map(|step| step.key.clone());
+        handle.selection.set(first.map_or(Selection::Pipeline, Selection::Step));
+        handle.state.set(Some(state.clone()));
+        state
+      }
+    };
+    self.editor(ctx, &props, &handle, &state, &Actions { save, publish })
+  }
+}
+
+impl PipelineEditor {
+  fn editor(
+    &self,
+    ctx: &mut Ctx,
+    props: &EditorProps,
+    handle: &EditorHandle,
+    state: &EditorState,
+    actions: &Actions,
+  ) -> Element {
+    let Actions { save, publish } = actions;
+    let nav = ctx
+      .use_context::<PipelinesNav>()
+      .expect("the pipelines screen provides PipelinesNav");
+    let saving = save.state().get();
+    let saving = header::Saving {
+      pending: saving.is_pending(),
+      error: saving.error.clone().filter(|_| !saving.is_pending()),
+    };
+    let project = props.project.project.name().as_str();
+    let selection = handle.selection.get();
+    let selected_step = match &selection {
+      Selection::Step(key) => state.edit().step(key).cloned(),
+      Selection::Pipeline => None,
+    };
+    let inspector = match selected_step {
+      Some(step) => {
+        let key = format!("step-inspector-{}-{}", step.key, handle.epoch.get());
+        ctx.mount_keyed::<StepInspector>(&key, StepInspectorProps::new(state, step))
+      }
+      None => ctx.mount_keyed::<PipelineInspector>(
+        &format!("pipeline-inspector-{}", handle.epoch.get()),
+        PipelineInspectorProps::new(state),
+      ),
+    };
+    let canvas = ctx.mount_keyed::<Canvas>("pipeline-canvas", CanvasProps::new(state, &selection));
+    let confirm = self.confirm_publish.clone();
+    let mut column = Column::new()
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .child(header::topbar(ctx, project, state, &nav, &saving, move || {
+        confirm.set(true)
+      }))
+      .child(header::toolbar(ctx, state, handle));
+    if let Some(strip) = header::problems_strip(ctx, state, handle) {
+      column = column.child(strip);
+    }
+    let inspector_panel = Column::new()
+      .width(Dimension::Px(INSPECTOR_WIDTH))
+      .height(Dimension::Pct(100.0))
+      .background(ExtraColor::Surface.role())
+      .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+      .child(inspector);
+    column
+      .child(
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(canvas))
+          .child(inspector_panel),
+      )
+      .child(self.publish_modal(ctx, state, publish, &props.project))
+      .into()
+  }
+
+  fn publish_modal(&self, ctx: &Ctx, state: &EditorState, publish: &PublishAction, project: &OpenProject) -> Element {
+    if !self.confirm_publish.get() {
+      return Column::new().into();
+    }
+    let action = publish.state().get();
+    let run = {
+      let (publish, repo_root, id) = (publish.clone(), project.repo_root.clone(), state.id());
+      let body = state.edit().validate().ok();
+      move || {
+        if let Some(body) = &body {
+          publish.run((repo_root.clone(), id, body.clone()));
+        }
+      }
+    };
+    let dialog = publish_dialog(
+      ctx,
+      state,
+      &self.confirm_publish,
+      run,
+      action.is_pending(),
+      action.error.clone().filter(|_| !action.is_pending()),
+    );
+    Modal::new(super::on_backdrop(dialog))
+      .target(ModalTarget::Root)
+      .open(self.confirm_publish.clone())
+      .into()
+  }
+}
+
+/// The starter's steps with the project's profiles and tools, for "Use starter steps".
+fn starter_edit(ctx: &Ctx, handle: &EditorHandle) -> PipelineEdit {
+  let assignables = handle
+    .state
+    .get()
+    .map(|state| state.assignables().clone())
+    .unwrap_or_default();
+  PipelineEdit::new(super::starter_text(ctx).pipeline(&assignables))
+}
+
+fn failed(ctx: &Ctx, error: &Message) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .padding(SpacingSize::Section)
+    .child(RecoveryPanel::new(
+      Icon::AlertCircle,
+      &ctx.t("pipelines.editor.openFailed"),
+      &message_text(ctx, error),
+    ))
+    .into()
+}
+
+fn save_action(ctx: &mut Ctx) -> SaveAction {
+  ctx.future_action(|(repo_root, id, revision, draft): SaveArgs| async move {
+    let at = draft.updated_at();
+    let saved = background::run(move || save_draft_in(&repo_root, id, &draft)).await?;
+    saved.map(|()| Saved { revision, at }).map_err(|error| {
+      tracing::error!(%error, "cannot save the pipeline draft");
+      messages::store_error(&error)
+    })
+  })
+}
+
+fn publish_action(ctx: &mut Ctx) -> PublishAction {
+  ctx.future_action(|(repo_root, id, body): PublishArgs| async move {
+    let published = background::run(move || publish_in(&repo_root, id)).await?;
+    published
+      .map(|(number, at)| PublishedDraft { number, at, body })
+      .map_err(|error| {
+        tracing::error!(%error, "cannot publish the pipeline");
+        publish_error(&error)
+      })
+  })
+}
+
+fn watch_saves(ctx: &mut Ctx, save: &SaveAction, handle: &EditorHandle) {
+  let handle = handle.clone();
+  ctx.watch(&save.state(), move |state| {
+    if state.is_pending() {
+      return;
+    }
+    if let Some(saved) = &state.data {
+      handle.state.update(|editor| {
+        if let Some(editor) = editor {
+          editor.saved(saved.revision, saved.at);
+        }
+      });
+    }
+    // A failed save waits for the next edit instead of retrying in a loop.
+    if state.error.is_none() {
+      handle.flush();
+    }
+  });
+}
+
+fn watch_publishes(ctx: &mut Ctx, publish: &PublishAction, handle: &EditorHandle, confirm: &Signal<bool>) {
+  let (state, confirm) = (handle.state.clone(), confirm.clone());
+  let pipelines = ctx
+    .use_context::<PipelinesNav>()
+    .expect("the pipelines screen provides PipelinesNav");
+  let project = ctx
+    .use_context::<ProjectNav>()
+    .expect("the project shell provides ProjectNav");
+  ctx.watch(&publish.state(), move |action| {
+    let Some(published) = action.data.clone().filter(|_| !action.is_pending()) else {
+      return;
+    };
+    state.update(|editor| {
+      if let Some(editor) = editor
+        && editor.latest().is_none_or(|latest| latest.number < published.number)
+      {
+        editor.published(published.number, published.at, published.body.clone());
+      }
+    });
+    confirm.set(false);
+    pipelines.changed();
+    project.tasks_changed();
+  });
+}

@@ -18,6 +18,8 @@ pub use typography::ExtraTypography;
 pub const TITLE_BAR_HEIGHT: f32 = tokens::TITLE_BAR_HEIGHT;
 /// Width of each Windows window control (`QQmsI`).
 pub const WINDOW_CONTROL_WIDTH: f32 = tokens::WINDOW_CONTROL_WIDTH;
+/// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
+pub const CONNECTOR_STROKE: f32 = tokens::CONNECTOR_STROKE;
 /// Size of the chevron lurq draws in a select, the field's disclosure icon (`eASPF` in `ZGwlv`).
 pub const SELECT_CHEVRON_SIZE: f32 = tokens::SELECT_CHEVRON_SIZE;
 

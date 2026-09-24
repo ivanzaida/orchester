@@ -67,6 +67,12 @@ pub const SPACE_HERO: f32 = 64.0;
 pub const SPACE_FOOTER: f32 = 72.0;
 pub const SPACE_COLUMNS: f32 = 112.0;
 pub const SPACE_MARGIN: f32 = 120.0;
+pub const SPACE_FIELD: f32 = 9.0;
+pub const SPACE_PROPERTY: f32 = 15.0;
+pub const SPACE_DIVIDER: f32 = 18.0;
+
+/// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
+pub const CONNECTOR_STROKE: f32 = 1.25;
 
 /// Custom window title bar height (`QQmsI`, `V70DN`).
 pub const TITLE_BAR_HEIGHT: f32 = 32.0;

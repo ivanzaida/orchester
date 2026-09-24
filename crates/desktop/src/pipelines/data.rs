@@ -1,0 +1,185 @@
+//! Reading, saving and publishing one pipeline through the project database, and what its steps
+//! can be assigned to. Every function blocks on SQLite; the UI calls them off the UI thread.
+
+use std::{path::Path, sync::Arc};
+
+use orchester_core::{
+  id::ResourceId,
+  resource::{AgentProfile, Draft, ModelId, Pipeline, ResourceKind, Tool, Version, VersionNumber},
+  store::{ResourceStore, TaskStore},
+  time::Timestamp,
+};
+use orchester_store::{ProjectDb, StoreError};
+
+/// A published agent profile a step can run.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfileChoice {
+  pub id: ResourceId,
+  pub name: Arc<str>,
+  pub version: VersionNumber,
+  /// The profile's model, which steps inherit unless they override it.
+  pub model: ModelId,
+}
+
+/// A published tool a step can call.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolChoice {
+  pub id: ResourceId,
+  pub name: Arc<str>,
+  pub version: VersionNumber,
+}
+
+/// What steps of the project's pipelines can be assigned to.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Assignables {
+  pub profiles: Vec<ProfileChoice>,
+  pub tools: Vec<ToolChoice>,
+}
+
+impl Assignables {
+  pub fn load<S: ResourceStore>(store: &S) -> Result<Self, S::Error> {
+    let mut profiles = Vec::new();
+    for resource in store.resources(ResourceKind::AgentProfile)? {
+      if let Some(version) = store.latest_version::<AgentProfile>(resource.id())? {
+        profiles.push(ProfileChoice {
+          id: resource.id(),
+          name: resource.name().as_str().into(),
+          version: version.number(),
+          model: version.body().model().clone(),
+        });
+      }
+    }
+    let mut tools = Vec::new();
+    for resource in store.resources(ResourceKind::Tool)? {
+      if let Some(version) = store.latest_version::<Tool>(resource.id())? {
+        tools.push(ToolChoice {
+          id: resource.id(),
+          name: resource.name().as_str().into(),
+          version: version.number(),
+        });
+      }
+    }
+    Ok(Self { profiles, tools })
+  }
+
+  pub fn profile(&self, id: ResourceId) -> Option<&ProfileChoice> {
+    self.profiles.iter().find(|profile| profile.id == id)
+  }
+
+  pub fn tool(&self, id: ResourceId) -> Option<&ToolChoice> {
+    self.tools.iter().find(|tool| tool.id == id)
+  }
+
+  /// The published profile named `name` (ignoring case), if exactly one has that name.
+  pub fn profile_named(&self, name: &str) -> Option<ResourceId> {
+    single(self.profiles.iter().map(|profile| (profile.id, &*profile.name)), name)
+  }
+
+  /// The published tool named `name` (ignoring case), if exactly one has that name.
+  pub fn tool_named(&self, name: &str) -> Option<ResourceId> {
+    single(self.tools.iter().map(|tool| (tool.id, &*tool.name)), name)
+  }
+}
+
+fn single<'a>(mut named: impl Iterator<Item = (ResourceId, &'a str)>, name: &str) -> Option<ResourceId> {
+  let wanted = name.trim().to_lowercase();
+  let found = named.find(|(_, candidate)| candidate.to_lowercase() == wanted)?;
+  named
+    .all(|(_, candidate)| candidate.to_lowercase() != wanted)
+    .then_some(found.0)
+}
+
+/// The latest published version of a pipeline, as far as the editor shows it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Published {
+  pub number: VersionNumber,
+  pub at: Timestamp,
+  pub body: Pipeline,
+}
+
+/// A pipeline as the editor opens it: the draft if there is one, otherwise the latest
+/// published version, which editing turns into a new draft.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OpenedPipeline {
+  pub id: ResourceId,
+  pub name: Arc<str>,
+  pub slug: Arc<str>,
+  pub body: Pipeline,
+  /// When the draft was last saved; `None` without a draft.
+  pub draft_saved_at: Option<Timestamp>,
+  /// The version the draft is based on, or the one a new draft would start from.
+  pub based_on: Option<VersionNumber>,
+  pub latest: Option<Published>,
+  /// Tasks that use the pipeline.
+  pub used_by: usize,
+  pub assignables: Arc<Assignables>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for OpenedPipeline {}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OpenError {
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  /// The pipeline was removed, or has neither a draft nor a version.
+  #[error("the pipeline does not exist")]
+  Missing,
+}
+
+impl OpenedPipeline {
+  pub fn load(db: &ProjectDb, id: ResourceId) -> Result<Self, OpenError> {
+    let resource = db.resource(id)?.ok_or(OpenError::Missing)?;
+    let latest = db
+      .latest_version::<Pipeline>(id)?
+      .map(|version: Version<Pipeline>| Published {
+        number: version.number(),
+        at: version.published_at(),
+        body: version.body().clone(),
+      });
+    let (body, draft_saved_at, based_on) = match db.draft::<Pipeline>(id)? {
+      Some(draft) => (draft.body().clone(), Some(draft.updated_at()), draft.based_on()),
+      None => {
+        let version = latest.as_ref().ok_or(OpenError::Missing)?;
+        (version.body.clone(), None, Some(version.number))
+      }
+    };
+    Ok(Self {
+      id,
+      name: resource.name().as_str().into(),
+      slug: resource.slug().as_str().into(),
+      body,
+      draft_saved_at,
+      based_on,
+      latest,
+      used_by: tasks_using(db, id)?,
+      assignables: Arc::new(Assignables::load(db)?),
+    })
+  }
+
+  /// [`Self::load`] from the project database of `repo_root`.
+  pub fn load_in(repo_root: &Path, id: ResourceId) -> Result<Self, OpenError> {
+    Self::load(&ProjectDb::open(repo_root)?, id)
+  }
+}
+
+/// Number of the project's tasks that use pipeline `id`.
+pub fn tasks_using<S: TaskStore>(store: &S, id: ResourceId) -> Result<usize, S::Error> {
+  Ok(
+    store
+      .tasks()?
+      .iter()
+      .filter(|task| task.details().pipeline == Some(id))
+      .count(),
+  )
+}
+
+/// Stores `body` as the pipeline's draft, based on `based_on`.
+pub fn save_draft_in(repo_root: &Path, id: ResourceId, draft: &Draft<Pipeline>) -> Result<(), StoreError> {
+  ProjectDb::open(repo_root)?.save_draft(id, draft)
+}
+
+/// Publishes the stored draft; the version it became.
+pub fn publish_in(repo_root: &Path, id: ResourceId) -> Result<(VersionNumber, Timestamp), StoreError> {
+  let version = ProjectDb::open(repo_root)?.publish_draft::<Pipeline>(id, Timestamp::now())?;
+  Ok((version.number(), version.published_at()))
+}
