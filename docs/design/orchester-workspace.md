@@ -110,7 +110,7 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 
 ## Components and tokens
 
-42 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
+43 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
 
 | Family | Node |
 | --- | --- |
@@ -156,8 +156,9 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 | Window title bar (macOS) | `V70DN` |
 | Window status bar | `pmOpt` |
 | Window status bar operations popover | `E1msJS` |
+| Focus ring overlay (design-only, see [Focus](#focus)) | `X9gPDr` |
 
-Colors: canvas `#101010`, sidebar `#141414`, surface `#1A1A1A`, raised `#222222`, hover/selection `#2C2C2C`, border `#363636`, hairline `#2B2B2B`, text `#EEEEEE`, muted `#A3A3A3`, subtle `#8F8F8F`, primary action `#E6E6E6` with `#181818` text. Variables also hold fonts, spacing and 7/12px control/panel radii. Status always includes text and an icon.
+Colors: canvas `#101010`, sidebar `#141414`, surface `#1A1A1A`, raised `#222222`, hover/selection `#2C2C2C`, border `#363636`, hairline `#2B2B2B`, text `#EEEEEE`, muted `#A3A3A3`, subtle `#8F8F8F`, primary action `#E6E6E6` with `#181818` text, focus ring `#EEEEEE` with a `#101010` gap (`focus-ring`, `focus-gap`). Variables also hold fonts, spacing and 7/12px control/panel radii. Status always includes text and an icon.
 
 ## Window chrome
 
@@ -262,6 +263,83 @@ activity text truncates with an ellipsis; its tooltip holds the full text.
 
 Proposed copy namespace: `statusBar.*` (`statusBar.runner.*`, `statusBar.activity.*`,
 `statusBar.operations.*`). Fixture values (times, counts, amounts, v0.1.0) are illustrative.
+
+## Focus
+
+Proposed 2026-09-24 for keyboard navigation (Tab / Shift+Tab across sidebar, page and status bar;
+dialogs trap Tab). lurq has one focused state for mouse and keyboard focus. A click focuses the
+control and shows the ring. A click on empty space clears focus. Canvas group `xURvJ`
+("Interaction · Focus") in Foundations, below the status bar group:
+
+| Node | Content |
+| --- | --- |
+| `Ayb2K` | Specimen board: each control in default / hover / focused / focused + hover / selected / focused + selected, with its rule |
+| `Oz9EN` | Anatomy at 4×, values and combination rules |
+| `X9gPDr` | `Focus / Ring`, the overlay that draws the ring in Pencil (gap child `N0nV4`). Design-only: implement it as box shadows, not as an element |
+| `ASfcG` | Example: sidebar navigation item focused (Pipelines focused, Tasks selected), from 02.03 |
+| `A6HO2F` | Example: tab focused (Queue focused, Drafts selected), from 02.03 |
+| `CfdDd` | Example: dialog primary button focused (Create draft), from 03.05. The name field is unfocused here |
+| `bISzE` | Example: status bar item focused (Needs you), state A |
+
+The examples are copies. The canonical screens are unchanged and show no focused control.
+
+**Rule.** Focus is a 2px light ring behind a 2px dark gap. It is paint-only (box shadows), so it
+never moves layout and never replaces a border. It is the only use of a box shadow on these
+controls. Hover, pressed and selected styles change fill, border and text. They never set a shadow,
+so they cannot remove the ring.
+
+| Variable | Value | Use |
+| --- | --- | --- |
+| `focus-ring` | `#EEEEEE` | ring colour |
+| `focus-gap` | `#101010` | gap colour (same as `canvas`). It separates the ring from light fills (primary `#E6E6E6`) and from selection strokes |
+| `focus-width` | `2` | ring and gap thickness; spread of the first shadow |
+| `focus-extent` | `4` | gap + ring; spread of the second shadow |
+
+- **Outer ring** (default): `0 0 0 2px $focus-gap, 0 0 0 4px $focus-ring`, first shadow on top,
+  blur 0, offset 0. The corners follow the control radius (r + 2, r + 4). It needs 4px of unclipped
+  room around the control.
+- **Inset ring** (where there is no room): `inset 0 0 0 2px $focus-ring, inset 0 0 0 4px $focus-gap`.
+  The ring sits on the control edge and the gap is inside it, at radius r and r − 2. It paints above
+  the fill and below border and content.
+
+| Control | Ring | Selected look (unchanged) |
+| --- | --- | --- |
+| Button primary / secondary (`u1XBP`), dialog buttons | outer, radius 11 | — |
+| Icon button (32 × 32, no fill) | outer, radius 11 | — |
+| Navigation item (`TSJpn`) | outer, radius 10 | `$hover` fill, `$text` label |
+| Pipeline step card (`ajikA`) | outer, radius 16 | 1.5 inside `$text` stroke |
+| Option card (new pipeline "Start from") | outer, radius 11 | 1.5 inside `$text` stroke + radio dot |
+| Tab (`SOW6S`) | inset, corners 6 6 0 0 | 2px `$text` bottom underline |
+| List row stacked edge to edge (e.g. `SGjO0`, `clVjO`, `QHBNZ`) | inset, square | — |
+| Popover row (`E1msJS`) | inset, radius 7 | — |
+| Status bar item (`pmOpt`) | inset, radius 5 | `$hover` fill while its popover is open |
+| Field / select (`ZGwlv`) | none: keeps `o8Oug` (1.5 inside `$text`) and the caret | — |
+
+Combinations:
+
+- Focused + hover: the hover look plus the ring.
+- Focused + pressed: the pressed look plus the ring.
+- Focused + selected: the selection look stays and the ring is added (outside it for outer
+  controls, on the edge for inset controls). A selected step card shows stroke, dark gap and ring,
+  so it no longer looks like plain selection.
+- On tabs, the selected or hover underline paints over the bottom edge of the inset ring. The ring
+  top corners are rounded (6) and the bottom stays square, so the underline stays straight.
+- Disabled controls are not focusable and show no ring.
+
+Containers: an outer ring must not be cut by a clipping ancestor. Scroll viewports and clipped
+panels that hold outer-ring controls keep at least 4px (`focus-extent`) of inner padding on
+their clipped edges. If they cannot, the control uses the inset ring. Do not add padding
+just for focus. A focusable row needs horizontal padding of at least 12px so the inset ring
+does not touch its content. `clVjO` and `QHBNZ` already have 12px. `zemhy`, `SGjO0`, `sFtAz`, `HfNoA` and `kOI6w` have none and need 12px if they
+become focusable.
+
+Implementation (lurq 0.24): `focused_style(Style::new().box_shadow([...]))` with two
+`BoxShadow::new(0.0, 0.0, 0.0, color).spread(n)` values (`.inset()` for the inset variant). The
+colours are two new `ExtraColor` roles (`FocusRing`, `FocusGap`). lurq merges state styles in the
+order focused → hovered → active, so hover and active styles must not set `box_shadow`. It replaces the
+field-style focused border (`Border::inside(BorderSize::Sm, border_focus)`) that buttons use today. Pencil cannot render a crisp spread shadow,
+so the design draws the ring with the `Focus / Ring` overlay (`X9gPDr`). Its geometry equals the
+shadow: control + 4px on each side for outer, the control bounds for inset.
 
 ## Core workflow
 
