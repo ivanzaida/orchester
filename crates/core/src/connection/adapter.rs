@@ -2,13 +2,12 @@
 //! from the CLIs' own `--help` are used: none starts a session, sends a prompt, or changes the
 //! CLI's configuration or login.
 //!
-//! - Codex CLI: `codex --version`, `codex login status` ("Show login status") and
-//!   `codex debug models --bundled` ("Render the raw model catalog as JSON", `--bundled`:
-//!   "Skip refresh and dump only the bundled catalog shipped with this binary", so no network
-//!   request and no cache write).
-//! - Claude Code CLI: `claude --version` and `claude auth status --json` ("Show
-//!   authentication status"). It has no model list; `claude --help` documents the `opus` and
-//!   `sonnet` aliases for `--model` and the effort levels of `--effort`.
+//! - Codex CLI: `codex --version`, `codex login status` ("Show login status") and `codex debug models --bundled`
+//!   ("Render the raw model catalog as JSON", `--bundled`: "Skip refresh and dump only the bundled catalog shipped with
+//!   this binary", so no network request and no cache write).
+//! - Claude Code CLI: `claude --version` and `claude auth status --json` ("Show authentication status"). It has no
+//!   model list; `claude --help` documents the `opus` and `sonnet` aliases for `--model` and the effort levels of
+//!   `--effort`.
 
 use std::{
   ffi::OsStr,
@@ -61,7 +60,12 @@ pub trait CommandRunner {
 }
 
 /// Checks the CLI at `executable`: its version, whether it is signed in and its models.
-pub fn check(provider: AgentProvider, executable: &Path, runner: &impl CommandRunner, now: Timestamp) -> ConnectionCheck {
+pub fn check(
+  provider: AgentProvider,
+  executable: &Path,
+  runner: &impl CommandRunner,
+  now: Timestamp,
+) -> ConnectionCheck {
   let result = match runner.run(executable, VERSION_ARGS) {
     Err(CommandError::NotFound) => CheckResult::ExecutableMissing,
     Err(CommandError::TimedOut | CommandError::Failed(_)) => CheckResult::CouldNotRun,

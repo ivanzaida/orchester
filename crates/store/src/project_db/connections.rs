@@ -18,8 +18,7 @@ use crate::{
   rows::{corrupt, decode_json, encode_json, parse, path_text},
 };
 
-const SELECT: &str =
-  "SELECT id, kind, provider, name, settings, checked_at, last_check, created_at FROM connections";
+const SELECT: &str = "SELECT id, kind, provider, name, settings, checked_at, last_check, created_at FROM connections";
 const AGENT_PROVIDER: &str = "agent_provider";
 const SETTINGS_SCHEMA: u32 = 1;
 const CHECK_SCHEMA: u32 = 1;
@@ -98,7 +97,9 @@ fn ensure_name_free(sqlite: &Sqlite, connection: &Connection) -> Result<(), Stor
     )
     .optional()?;
   match taken {
-    Some(_) => Err(StoreError::DuplicateConnectionName(connection.name().as_str().to_owned())),
+    Some(_) => Err(StoreError::DuplicateConnectionName(
+      connection.name().as_str().to_owned(),
+    )),
     None => Ok(()),
   }
 }
@@ -131,7 +132,9 @@ impl Columns {
 
 fn load(sqlite: &Sqlite, clause: &str, params: impl Params) -> Result<Vec<Connection>, StoreError> {
   let mut statement = sqlite.prepare(&format!("{SELECT} {clause}"))?;
-  let rows = statement.query_map(params, StoredRow::read)?.collect::<Result<Vec<_>, _>>()?;
+  let rows = statement
+    .query_map(params, StoredRow::read)?
+    .collect::<Result<Vec<_>, _>>()?;
   rows.into_iter().map(StoredRow::into_connection).collect()
 }
 

@@ -62,3 +62,24 @@ fn slug_accepts_kebab_case_only() {
     assert!(Slug::new(invalid).is_err(), "{invalid} should be rejected");
   }
 }
+
+#[test]
+fn unique_slug_follows_the_name_and_avoids_taken_ones() {
+  use orchester_core::{name::Name, resource::Slug};
+  let fallback = Slug::new("agent").expect("valid slug");
+  let name = |value: &str| Name::new(value).expect("valid name");
+  let slug = |value: &str| Slug::new(value).expect("valid slug");
+  assert_eq!(
+    Slug::unique_for(&name("Code Reviewer"), &fallback, &[]),
+    slug("code-reviewer")
+  );
+  assert_eq!(Slug::unique_for(&name("Ревьюер"), &fallback, &[]), fallback);
+  let taken = [slug("builder"), slug("builder-2")];
+  assert_eq!(
+    Slug::unique_for(&name("Builder!"), &fallback, &taken),
+    slug("builder-3")
+  );
+  let long = Slug::unique_for(&name(&"a".repeat(120)), &fallback, &[slug(&"a".repeat(64))]);
+  assert_eq!(long.as_str().len(), Slug::MAX_CHARS);
+  assert!(long.as_str().ends_with("-2"));
+}

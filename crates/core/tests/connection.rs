@@ -9,9 +9,9 @@ use std::{
 
 use orchester_core::{
   connection::{
-    AgentProvider, CatalogSource, CheckResult, CommandError, CommandOutput, CommandRunner, Connection,
-    ConnectionError, ConnectionStatus, ModelSupport, SignIn, check, executable_candidates,
-    parse_claude_auth_status, parse_codex_catalog, parse_codex_login_status, parse_version,
+    AgentProvider, CatalogSource, CheckResult, CommandError, CommandOutput, CommandRunner, Connection, ConnectionError,
+    ConnectionStatus, ModelSupport, SignIn, check, executable_candidates, parse_claude_auth_status,
+    parse_codex_catalog, parse_codex_login_status, parse_version,
   },
   id::ConnectionId,
   name::Name,
@@ -58,7 +58,12 @@ struct Replay(HashMap<String, Result<CommandOutput, CommandError>>);
 
 impl Replay {
   fn new(answers: impl IntoIterator<Item = (&'static str, Result<CommandOutput, CommandError>)>) -> Self {
-    Self(answers.into_iter().map(|(args, answer)| (args.to_owned(), answer)).collect())
+    Self(
+      answers
+        .into_iter()
+        .map(|(args, answer)| (args.to_owned(), answer))
+        .collect(),
+    )
   }
 }
 
@@ -91,21 +96,36 @@ fn version_parsing_recognizes_each_cli() {
     parse_version(AgentProvider::ClaudeCodeCli, &ok("2.1.89 (Claude Code)\n")).as_deref(),
     Some("2.1.89")
   );
-  assert_eq!(parse_version(AgentProvider::ClaudeCodeCli, &ok("codex-cli 0.139.0")), None);
-  assert_eq!(parse_version(AgentProvider::CodexCli, &failed("codex-cli 0.139.0", "")), None);
+  assert_eq!(
+    parse_version(AgentProvider::ClaudeCodeCli, &ok("codex-cli 0.139.0")),
+    None
+  );
+  assert_eq!(
+    parse_version(AgentProvider::CodexCli, &failed("codex-cli 0.139.0", "")),
+    None
+  );
 }
 
 #[test]
 fn codex_login_status_parsing() {
-  assert_eq!(parse_codex_login_status(&ok("Logged in using ChatGPT\n")), SignIn::SignedIn);
+  assert_eq!(
+    parse_codex_login_status(&ok("Logged in using ChatGPT\n")),
+    SignIn::SignedIn
+  );
   let on_stderr = CommandOutput {
     success: true,
     stdout: String::new(),
     stderr: "Logged in using an API key - sk-***\n".into(),
   };
   assert_eq!(parse_codex_login_status(&on_stderr), SignIn::SignedIn);
-  assert_eq!(parse_codex_login_status(&failed("", "Not logged in\n")), SignIn::SignedOut);
-  assert_eq!(parse_codex_login_status(&failed("", "error: unexpected\n")), SignIn::Unknown);
+  assert_eq!(
+    parse_codex_login_status(&failed("", "Not logged in\n")),
+    SignIn::SignedOut
+  );
+  assert_eq!(
+    parse_codex_login_status(&failed("", "error: unexpected\n")),
+    SignIn::Unknown
+  );
 }
 
 #[test]

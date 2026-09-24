@@ -72,6 +72,27 @@ pub enum CheckResult {
   CouldNotRun,
 }
 
+impl CheckResult {
+  /// The program is the expected CLI, so a connection to it may be saved. Signing in can
+  /// follow; the connection then shows that it needs it.
+  pub const fn is_verified(&self) -> bool {
+    matches!(self, Self::Available { .. })
+  }
+
+  pub const fn status(&self) -> ConnectionStatus {
+    match self {
+      Self::Available { sign_in, .. } => match sign_in {
+        SignIn::SignedIn => ConnectionStatus::Connected,
+        SignIn::SignedOut => ConnectionStatus::SignInRequired,
+        SignIn::Unknown => ConnectionStatus::SignInUnknown,
+      },
+      Self::ExecutableMissing => ConnectionStatus::ExecutableMissing,
+      Self::NotRecognized => ConnectionStatus::NotRecognized,
+      Self::CouldNotRun => ConnectionStatus::CouldNotRun,
+    }
+  }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConnectionCheck {
   pub at: Timestamp,
@@ -198,19 +219,10 @@ impl Connection {
   }
 
   pub fn status(&self) -> ConnectionStatus {
-    let Some(check) = &self.last_check else {
-      return ConnectionStatus::NotChecked;
-    };
-    match &check.result {
-      CheckResult::Available { sign_in, .. } => match sign_in {
-        SignIn::SignedIn => ConnectionStatus::Connected,
-        SignIn::SignedOut => ConnectionStatus::SignInRequired,
-        SignIn::Unknown => ConnectionStatus::SignInUnknown,
-      },
-      CheckResult::ExecutableMissing => ConnectionStatus::ExecutableMissing,
-      CheckResult::NotRecognized => ConnectionStatus::NotRecognized,
-      CheckResult::CouldNotRun => ConnectionStatus::CouldNotRun,
-    }
+    self
+      .last_check
+      .as_ref()
+      .map_or(ConnectionStatus::NotChecked, |check| check.result.status())
   }
 
   /// CLI version found by the last successful check.
