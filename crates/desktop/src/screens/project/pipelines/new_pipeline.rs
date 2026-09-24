@@ -10,8 +10,8 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
-  core::Signal,
+  components::{Button, Column, Row, Spacer, Text},
+  core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
@@ -29,6 +29,7 @@ use crate::{
   ui::{
     button::ActionButton,
     field::{field_error, text_input},
+    form::{Submit, form},
     icon::Icon,
     message_text,
     notice::Notice,
@@ -66,6 +67,8 @@ type CreateAction = FutureAction<CreateArgs, PipelineId, Message>;
 
 pub struct NewPipelineDialog {
   name: Signal<String>,
+  /// The name field, focused when the dialog opens as the design shows it (`Q85dSj`).
+  name_input: ElementRef,
   start: Signal<Option<StartFrom>>,
 }
 
@@ -82,8 +85,11 @@ impl Component for NewPipelineDialog {
         nav.open(id);
       }
     });
+    let name_input = ElementRef::new();
+    ctx.focus(&name_input);
     Self {
       name: ctx.signal(String::new()),
+      name_input,
       start: ctx.signal(None),
     }
   }
@@ -96,24 +102,24 @@ impl Component for NewPipelineDialog {
     let checked = check_name(&name, &props.taken);
     let state = create.state().get();
     let error = state.error.clone().filter(|_| !state.is_pending());
-    let submit = checked.as_ref().ok().map(|name| {
+    let submit: Submit = checked.as_ref().ok().filter(|_| !state.is_pending()).map(|name| {
       let (create, repo_root, text, name) = (
         create.clone(),
         props.project.repo_root.clone(),
         starter_text(ctx),
         name.clone(),
       );
-      move || {
+      Arc::new(move || {
         let new = NewPipeline {
           name: name.clone(),
           start,
           starter: text.clone(),
         };
         create.run((repo_root.clone(), new));
-      }
+      }) as Arc<dyn Fn() + Send + Sync>
     });
     let project = props.project.project.name().as_str();
-    Column::new()
+    let dialog = Column::new()
       .id("new-pipeline-dialog")
       .width(Dimension::Px(DIALOG_WIDTH))
       .background(ExtraColor::Surface.role())
@@ -121,7 +127,8 @@ impl Component for NewPipelineDialog {
       .rounded(RadiusSize::Lg)
       .child(header(ctx, project))
       .child(self.body(ctx, &name, &checked, start, project))
-      .child(actions(ctx, &props.open, submit, state.is_pending(), error))
+      .child(actions(ctx, &props.open, submit.clone(), error));
+    form(submit, dialog)
   }
 }
 
@@ -135,7 +142,8 @@ impl NewPipelineDialog {
       TypographyStyle::FieldLabel,
     )
     .height(Dimension::Px(NAME_HEIGHT))
-    .placeholder(&ctx.t("pipelines.create.namePlaceholder"));
+    .placeholder(&ctx.t("pipelines.create.namePlaceholder"))
+    .ref_element(self.name_input.clone());
     let mut name_field = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Field.role())
@@ -203,8 +211,11 @@ impl NewPipelineDialog {
       (PaletteColor::SurfacePanel, PaletteColor::Border, BorderSize::Sm)
     };
     let start = self.start.clone();
-    Row::new()
+    // A button, so Tab reaches the option and Enter or Space chooses it.
+    Button::empty()
+      .button()
       .id(id)
+      .align_items(Alignment::Start)
       .describe("selected", if selected { "true" } else { "false" })
       .width(Dimension::Pct(100.0))
       .padding(SpacingSize::Md)
@@ -322,13 +333,8 @@ fn header(ctx: &Ctx, project: &str) -> Element {
 }
 
 /// Cancel and Create draft (`HxwbS`), with why the create failed.
-fn actions(
-  ctx: &Ctx,
-  open: &Signal<bool>,
-  submit: Option<impl Fn() + Send + Sync + 'static>,
-  pending: bool,
-  error: Option<Message>,
-) -> Element {
+/// `submit` is `None` while the name is not accepted or the draft is being created.
+fn actions(ctx: &Ctx, open: &Signal<bool>, submit: Submit, error: Option<Message>) -> Element {
   let close = open.clone();
   let cancel = ActionButton::new(ctx.t("common.cancel"))
     .icon(Icon::X)
@@ -339,14 +345,10 @@ fn actions(
     .primary()
     .icon(Icon::Plus)
     .id("new-pipeline-create");
-  let ready = submit.is_some() && !pending;
-  let create = create
-    .on_click(move || {
-      if let Some(submit) = &submit {
-        submit();
-      }
-    })
-    .enabled(ready);
+  let create = match submit {
+    Some(submit) => create.on_click(move || submit()),
+    None => create.on_click(|| {}).enabled(false),
+  };
   let mut row = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ACTIONS_HEIGHT))

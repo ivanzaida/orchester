@@ -12,7 +12,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -32,7 +32,8 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     backdrop::backdrop,
-    button::ActionButton,
+    button::{ActionButton, SKIPPED_BY_TAB},
+    form::{Submit, form},
     icon::{Icon, IconSize, icon},
     message_text,
   },
@@ -113,6 +114,9 @@ pub struct ConnectionDialog {
   pub(super) picked: Signal<Picked>,
   /// Bumped by Recheck to run the check again for the same program.
   pub(super) attempt: Signal<u64>,
+  /// The dialog, focused when it opens so that Tab starts at its first control. The design
+  /// shows no field focused (`IAN4P`), so no field takes the focus.
+  frame: ElementRef,
 }
 
 impl Component for ConnectionDialog {
@@ -138,8 +142,10 @@ impl Component for ConnectionDialog {
       name: ctx.signal(name),
       picked: ctx.signal(Picked(picked)),
       attempt: ctx.signal(0),
+      frame: ElementRef::new(),
       context,
     };
+    ctx.focus(&dialog.frame);
     dialog.watch(ctx);
     dialog
   }
@@ -150,18 +156,22 @@ impl Component for ConnectionDialog {
     let pick = pick_action(ctx);
     let program = self.program(ctx);
     let draft = self.draft(&program);
-    let form = self.form(ctx, &program, &pick);
+    let submit = self.save(&save, draft.as_ref().ok());
+    let fields = self.form(ctx, &program, &pick);
     let dialog = Column::new()
       .id("connection-dialog")
+      .ref_element(self.frame.clone())
+      .focusable(true)
+      .tab_index(SKIPPED_BY_TAB)
       .width(Dimension::Px(DIALOG_WIDTH))
       .height(Dimension::Px(DIALOG_HEIGHT))
       .background(ExtraColor::Surface.role())
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .rounded(RadiusSize::Lg)
       .child(self.header(ctx))
-      .child(ScrollVertical::new(form).width(Dimension::Pct(100.0)).flex(1.0))
-      .child(self.actions(ctx, &save, draft));
-    backdrop(dialog)
+      .child(ScrollVertical::new(fields).width(Dimension::Pct(100.0)).flex(1.0))
+      .child(self.actions(ctx, &save, &draft, submit.clone()));
+    backdrop(form(submit, dialog))
   }
 }
 
@@ -301,11 +311,20 @@ impl ConnectionDialog {
       .into()
   }
 
+  /// Stores the draft; `None` until it can be saved, and while it is being saved.
+  fn save(&self, save: &SaveAction, draft: Option<&ConnectionDraft>) -> Submit {
+    if save.state().get_untracked().is_pending() {
+      return None;
+    }
+    let (save, repo_root, draft) = (save.clone(), self.context.project.repo_root.clone(), draft?.clone());
+    Some(Arc::new(move || save.run((repo_root.clone(), draft.clone()))))
+  }
+
   /// Cancel and Save connection (`InHni`), with why saving is not possible yet.
-  fn actions(&self, ctx: &Ctx, save: &SaveAction, draft: Result<ConnectionDraft, Message>) -> Element {
+  fn actions(&self, ctx: &Ctx, save: &SaveAction, draft: &Result<ConnectionDraft, Message>, submit: Submit) -> Element {
     let state = save.state().get();
     let saving = state.is_pending();
-    let reason = match (&draft, state.error.filter(|_| !saving)) {
+    let reason = match (draft, state.error.filter(|_| !saving)) {
       (_, Some(error)) => Some(error),
       (Err(reason), None) => Some(reason.clone()),
       (Ok(_), None) => None,
@@ -320,13 +339,10 @@ impl ConnectionDialog {
       .icon(Icon::Check)
       .id("connection-save")
       .height(Dimension::Px(BUTTON_HEIGHT));
-    let save_button = match draft {
-      Ok(draft) if !saving => {
-        let (save, repo_root) = (save.clone(), self.context.project.repo_root.clone());
-        save_button.on_click(move || save.run((repo_root.clone(), draft.clone())))
-      }
+    let save_button = match submit {
+      Some(submit) => save_button.on_click(move || submit()),
       // Enabled once the reason shown beside it is resolved.
-      _ => save_button.on_click(|| {}).enabled(false),
+      None => save_button.on_click(|| {}).enabled(false),
     };
     let close = self.context.close.clone();
     Row::new()

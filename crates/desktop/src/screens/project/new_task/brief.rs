@@ -8,7 +8,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text, TextOverflow},
+  components::{Button, Column, Row, ScrollVertical, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -172,7 +172,8 @@ fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
     .map(|criterion| criterion_row(ctx, &form.criteria, criterion, removable))
     .collect();
   let signal = form.criteria.clone();
-  let add = Row::new()
+  let add = Button::empty()
+    .button()
     .id("add-criterion")
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
@@ -223,8 +224,10 @@ fn criterion_row(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, criterion: &Crite
   let (criteria, id) = (criteria.clone(), criterion.id);
   row
     .child(
-      Row::new()
+      Button::empty()
+        .button()
         .id(Arc::<str>::from(format!("remove-criterion-{id}")))
+        .align_items(Alignment::Start)
         .cursor(CursorIcon::Pointer)
         .rounded(RadiusSize::Sm)
         .hovered_style(Style::new().background(PaletteColor::AccentMuted))

@@ -9,7 +9,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Select, Text},
+  components::{Button, Column, Row, Select, Text},
   core::{Signal, SignalValue},
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -300,7 +300,7 @@ pub fn runs_after(ctx: &Ctx, props: &StepInspectorProps, handle: &EditorHandle) 
   labelled(label(ctx, "pipelines.inspector.runsAfter"), list).into()
 }
 
-/// A checkbox-like row that toggles on click.
+/// A checkbox-like row that toggles on click, or with Enter or Space once Tab reaches it.
 fn toggle(text: &str, on: bool, flip: impl Fn() + Send + Sync + 'static) -> Element {
   let mark = if on { Icon::CircleCheck } else { Icon::Circle };
   let color = if on {
@@ -308,7 +308,8 @@ fn toggle(text: &str, on: bool, flip: impl Fn() + Send + Sync + 'static) -> Elem
   } else {
     PaletteColor::TextSecondary
   };
-  Row::new()
+  Button::empty()
+    .button()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
@@ -412,10 +413,12 @@ fn property_input(ctx: &Ctx, key: &str, id: &'static str, value: &Signal<String>
 }
 
 /// Whether a person approves the step's result before the steps after it start (`s6Bxnp`).
+/// A button, so Tab reaches it and Enter or Space switches it.
 pub fn approval(ctx: &Ctx, props: &StepInspectorProps, handle: &EditorHandle) -> Element {
   let on = props.step.approval_gate;
   let (handle, key) = (handle.clone(), props.step.key.clone());
-  Row::new()
+  Button::empty()
+    .button()
     .id("step-approval")
     .describe("checked", if on { "true" } else { "false" })
     .width(Dimension::Pct(100.0))

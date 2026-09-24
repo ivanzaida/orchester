@@ -17,6 +17,9 @@ use super::icon::{Icon, IconSize, icon};
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
+/// lurq's tab index for a control that Tab passes over.
+pub const SKIPPED_BY_TAB: i32 = -1;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
   Primary,
@@ -175,8 +178,15 @@ impl ActionButton {
       State::Enabled(handler) => with_interaction(button, &role)
         .describe("state", "enabled")
         .on_click(move |_| handler()),
-      State::Disabled => button.describe("state", "disabled").cursor(CursorIcon::NotAllowed),
-      State::Unavailable => button.describe("state", "unavailable").cursor(CursorIcon::NotAllowed),
+      // Tab skips a button that cannot be pressed.
+      State::Disabled => button
+        .describe("state", "disabled")
+        .cursor(CursorIcon::NotAllowed)
+        .tab_index(SKIPPED_BY_TAB),
+      State::Unavailable => button
+        .describe("state", "unavailable")
+        .cursor(CursorIcon::NotAllowed)
+        .tab_index(SKIPPED_BY_TAB),
     }
     .into()
   }

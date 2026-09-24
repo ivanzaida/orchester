@@ -25,6 +25,7 @@ use crate::{
   ui::{
     button::ActionButton,
     field::{FieldNote, ValueTone, field, text_input, value_box},
+    form::{Submit, form},
     icon::{Icon, IconSize, icon},
     message_text,
     notice::notice,
@@ -127,18 +128,24 @@ impl Component for ProjectForm {
           .render(ctx),
       )
       .child(ownership(ctx, shown_name));
+    let pending = create_state.is_pending();
+    let submit: Submit = draft.ok().filter(|_| !pending).map(|new| {
+      let create = create.clone();
+      Arc::new(move || create.run(new.clone())) as Arc<dyn Fn() + Send + Sync>
+    });
     let actions = Column::new()
       .width(Dimension::Pct(100.0))
       .padding_horizontal(ExtraSpacing::Page.role())
       .padding_bottom(SpacingSize::Section)
-      .child(actions(ctx, &create, create_state.is_pending(), form_error, draft.ok()));
-    Column::new()
+      .child(actions(ctx, pending, form_error, submit.clone()));
+    let page = Column::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
       .child(topbar(ctx, shown_name))
       .child(heading(ctx))
       .child(ScrollVertical::new(fields).width(Dimension::Pct(100.0)).flex(1.0))
-      .child(actions)
+      .child(actions);
+    form(submit, page)
   }
 }
 
@@ -161,13 +168,7 @@ impl ProjectForm {
 }
 
 /// Explanation or creation error, and Create, which stays disabled until the draft is valid.
-fn actions(
-  ctx: &Ctx,
-  create: &CreateAction,
-  pending: bool,
-  error: Option<Arc<str>>,
-  ready: Option<NewProject>,
-) -> Element {
+fn actions(ctx: &Ctx, pending: bool, error: Option<Arc<str>>, submit: Submit) -> Element {
   let status: Element = match error {
     Some(error) => inline_error(&error),
     None => Text::new(&ctx.t("setup.project.createExplanation"))
@@ -179,14 +180,13 @@ fn actions(
   } else {
     ctx.t("setup.project.create")
   };
-  let enabled = ready.is_some() && !pending;
-  let run = {
-    let create = create.clone();
-    move || {
-      if let Some(new) = ready.clone() {
-        create.run(new);
-      }
-    }
+  let create = ActionButton::new(label)
+    .primary()
+    .icon(Icon::ArrowRight)
+    .id("create-project");
+  let create = match submit {
+    Some(submit) => create.on_click(move || submit()),
+    None => create.on_click(|| {}).enabled(false),
   };
   Row::new()
     .width(Dimension::Pct(100.0))
@@ -194,15 +194,7 @@ fn actions(
     .align_items(Alignment::Center)
     .child(status)
     .child(Spacer::new().flex(1.0))
-    .child(
-      ActionButton::new(label)
-        .primary()
-        .icon(Icon::ArrowRight)
-        .id("create-project")
-        .on_click(run)
-        .enabled(enabled)
-        .render(ctx),
-    )
+    .child(create.render(ctx))
     .into()
 }
 

@@ -48,7 +48,7 @@ use crate::{
   },
   screens::project::ProjectNav,
   theme::ExtraColor,
-  ui::{backdrop::backdrop, icon::Icon, message_text, panel::RecoveryPanel},
+  ui::{backdrop::backdrop, form::form, icon::Icon, message_text, panel::RecoveryPanel},
   workspace::OpenProject,
 };
 
@@ -299,7 +299,7 @@ impl PipelineEditor {
       .background(ExtraColor::Surface.role())
       .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(inspector);
-    column
+    let column = column
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
@@ -307,8 +307,10 @@ impl PipelineEditor {
           .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(canvas))
           .child(inspector_panel),
       )
-      .child(self.publish_modal(ctx, state, publish, &props.project))
-      .into()
+      .child(self.publish_modal(ctx, state, publish, &props.project));
+    // One form for the whole editor, so Tab also leads from the toolbar into the inspector.
+    // Edits are saved as the draft as they are made: there is nothing for Enter to submit.
+    form(None, column)
   }
 
   fn publish_modal(&self, ctx: &Ctx, state: &EditorState, publish: &PublishAction, project: &OpenProject) -> Element {
