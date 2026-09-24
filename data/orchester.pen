@@ -8,7 +8,7 @@
       "y": 0,
       "name": "00 / Foundations",
       "width": 4896,
-      "height": 2316,
+      "height": 3500,
       "fill": "$canvas",
       "layout": "none",
       "children": [
@@ -3714,6 +3714,2583 @@
                   "height": "fill_container"
                 }
               ]
+            },
+            {
+              "type": "frame",
+              "id": "pmOpt",
+              "x": 48,
+              "y": 1500,
+              "name": "Window / Status bar",
+              "reusable": true,
+              "width": 1440,
+              "height": 28,
+              "fill": "$canvas",
+              "stroke": "$hairline",
+              "strokeWidth": {
+                "top": 1
+              },
+              "strokeAlignment": "inner",
+              "padding": [
+                0,
+                8
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "yrxTQ",
+                  "name": "Left",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "N8rki",
+                      "name": "Runner",
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "MAMTv",
+                          "name": "Runner icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "plug",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "lk109",
+                          "name": "Runner label",
+                          "fill": "$muted",
+                          "content": "Runner online",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "y5NHKO",
+                          "x": 0,
+                          "y": 0,
+                          "name": "Runner detail",
+                          "enabled": false,
+                          "fill": "$subtle",
+                          "content": "2 of 5",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "i36LJ",
+                      "name": "Separator",
+                      "fill": "$hairline",
+                      "width": 1,
+                      "height": 12
+                    },
+                    {
+                      "type": "frame",
+                      "id": "IRKYz",
+                      "name": "Activity",
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "vmXU0",
+                          "name": "Activity icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "XGzqw",
+                          "name": "Activity label",
+                          "fill": "$muted",
+                          "content": "Run #128 ready for review",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "w3dC6",
+                          "name": "Activity time",
+                          "fill": "$subtle",
+                          "content": "14:32",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "Yv6Zf",
+                          "x": 0,
+                          "y": 0,
+                          "name": "Activity chevron",
+                          "enabled": false,
+                          "width": 12,
+                          "height": 12,
+                          "icon": "chevron-up",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Ut1jT",
+                      "x": 0,
+                      "y": 0,
+                      "name": "Activity action",
+                      "enabled": false,
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "LPDZP",
+                          "name": "Activity action label",
+                          "fill": "$text",
+                          "content": "Open",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "v2E7F",
+                      "x": 0,
+                      "y": 0,
+                      "name": "Secondary action",
+                      "enabled": false,
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "l02Wx",
+                          "name": "Secondary action label",
+                          "fill": "$text",
+                          "content": "Open runner log",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "npzEn",
+                      "x": 0,
+                      "y": 0,
+                      "name": "Dismiss",
+                      "enabled": false,
+                      "width": 22,
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "pRaox",
+                          "name": "Dismiss icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "x",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "doeZn",
+                  "name": "Right",
+                  "height": "fill_container",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "u43cOV",
+                      "name": "Agents",
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "jPdLx",
+                          "name": "Agents icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "bot",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "AY6v9",
+                          "name": "Agents label",
+                          "fill": "$muted",
+                          "content": "Agents",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "F7mn6G",
+                          "name": "Agents value",
+                          "fill": "$text",
+                          "content": "2/4",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "amUFM",
+                      "name": "Queued",
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "XKTNN",
+                          "name": "Queued icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "clock-3",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "R1cas",
+                          "name": "Queued label",
+                          "fill": "$muted",
+                          "content": "Queued",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "O7DBvB",
+                          "name": "Queued value",
+                          "fill": "$text",
+                          "content": "2",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LAVEh",
+                      "name": "Needs you",
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "AcW1g",
+                          "name": "Needs you icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "message-circle",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "YBupF",
+                          "name": "Needs you label",
+                          "fill": "$muted",
+                          "content": "Needs you",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "w4CgvX",
+                          "name": "Needs you value",
+                          "fill": "$text",
+                          "content": "2",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Kzi83",
+                      "name": "Budget",
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "XTupG",
+                          "name": "Budget icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "wallet",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Q2C9T",
+                          "name": "Budget label",
+                          "fill": "$muted",
+                          "content": "Spent today",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "STSY1",
+                          "name": "Budget value",
+                          "fill": "$text",
+                          "content": "$3.84 / $20.00",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "x1MQW",
+                      "name": "Separator right",
+                      "fill": "$hairline",
+                      "width": 1,
+                      "height": 12
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jyUjc",
+                      "name": "Version",
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "e7Hry",
+                          "name": "Version value",
+                          "fill": "$subtle",
+                          "content": "v0.1.0",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Tg1WX",
+          "x": 0,
+          "y": 2260,
+          "name": "Window · Status bar",
+          "width": 4896,
+          "height": 1180,
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "Q4C2Nf",
+              "x": 48,
+              "y": 16,
+              "name": "Status bar section heading",
+              "fill": "$muted",
+              "content": "WINDOW · STATUS BAR",
+              "fontFamily": "$font",
+              "fontSize": 22,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "keJ9Z",
+              "x": 48,
+              "y": 100,
+              "name": "Status bar states",
+              "width": 1488,
+              "fill": "$surface",
+              "cornerRadius": 12,
+              "layout": "vertical",
+              "gap": 32,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "uADT8",
+                  "name": "State A · Idle",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "J9KwI",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "A · Idle",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "id": "MaU5z",
+                      "type": "ref",
+                      "ref": "pmOpt",
+                      "name": "Status bar · A · Idle",
+                      "descendants": {
+                        "F7mn6G": {
+                          "content": "0/4",
+                          "fill": "$subtle"
+                        },
+                        "O7DBvB": {
+                          "content": "0",
+                          "fill": "$subtle"
+                        },
+                        "w4CgvX": {
+                          "content": "1"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "i040y",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "All quiet. The activity slot keeps the latest finished event with its time until the next one; runner online; zero counts stay visible in subtle text so items never jump.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xlcKd",
+                  "name": "State B · Runner starting",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "MijGw",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "B · Runner starting",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "id": "ErAXe",
+                      "type": "ref",
+                      "ref": "pmOpt",
+                      "name": "Status bar · B · Runner starting",
+                      "descendants": {
+                        "MAMTv": {
+                          "icon": "loader"
+                        },
+                        "lk109": {
+                          "content": "Starting runner…"
+                        },
+                        "i36LJ": {
+                          "enabled": false
+                        },
+                        "IRKYz": {
+                          "enabled": false
+                        },
+                        "F7mn6G": {
+                          "content": "—",
+                          "fill": "$subtle"
+                        },
+                        "O7DBvB": {
+                          "content": "0",
+                          "fill": "$subtle"
+                        },
+                        "w4CgvX": {
+                          "content": "0",
+                          "fill": "$subtle"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "cbJSg",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Shown while the project's runner process starts. Agent slots are unknown until it reports ready, so the count is a dash, not 0.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "FFaPx",
+                  "name": "State C · One background operation",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Ej7wR",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "C · One background operation",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "id": "E4l3JI",
+                      "type": "ref",
+                      "ref": "pmOpt",
+                      "name": "Status bar · C · One background operation",
+                      "descendants": {
+                        "vmXU0": {
+                          "icon": "loader"
+                        },
+                        "XGzqw": {
+                          "content": "Creating worktree for ORC-129…"
+                        },
+                        "w3dC6": {
+                          "content": "4 s"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "nz6KP",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "A single operation in progress: spinner, what is happening, elapsed time (never a fake percentage). Click opens the object it works on.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Ma4OT",
+                  "name": "State D · Several operations (popover open)",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "JAB9z",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "D · Several operations (popover open)",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "id": "dALQq",
+                      "type": "ref",
+                      "ref": "pmOpt",
+                      "name": "Status bar · D · Several operations (popover open)",
+                      "descendants": {
+                        "IRKYz": {
+                          "fill": "$hover"
+                        },
+                        "vmXU0": {
+                          "icon": "loader",
+                          "fill": "$text"
+                        },
+                        "XGzqw": {
+                          "content": "3 operations · Publishing Feature delivery v4…",
+                          "fill": "$text"
+                        },
+                        "w3dC6": {
+                          "enabled": false
+                        },
+                        "Yv6Zf": {
+                          "enabled": true,
+                          "fill": "$text"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "eEn7G",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Two or more operations collapse into a count plus the newest one. Click opens the operations popover; the item stays highlighted while it is open.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "aAyy4",
+                  "name": "State E · Runner reconnecting",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "p0z8F",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "E · Runner reconnecting",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "id": "KJm82",
+                      "type": "ref",
+                      "ref": "pmOpt",
+                      "name": "Status bar · E · Runner reconnecting",
+                      "descendants": {
+                        "MAMTv": {
+                          "icon": "refresh-cw",
+                          "fill": "$text"
+                        },
+                        "lk109": {
+                          "content": "Reconnecting to runner",
+                          "fill": "$text"
+                        },
+                        "y5NHKO": {
+                          "enabled": true,
+                          "content": "attempt 2 of 5 · next in 8 s"
+                        },
+                        "vmXU0": {
+                          "icon": "pause"
+                        },
+                        "XGzqw": {
+                          "content": "2 runs interrupted · they continue from their last checkpoint"
+                        },
+                        "w3dC6": {
+                          "enabled": false
+                        },
+                        "F7mn6G": {
+                          "content": "—",
+                          "fill": "$subtle"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "Q8TQj",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Automatic reconnect with bounded backoff (02.F). Interrupted runs keep their checkpoint and continue once the runner is back. Replaces the top-of-content reconnecting notice.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ZwRvN",
+                  "name": "State F · Runner reconnected",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "jbtea",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "F · Runner reconnected",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "id": "pIqYc",
+                      "type": "ref",
+                      "ref": "pmOpt",
+                      "name": "Status bar · F · Runner reconnected",
+                      "descendants": {
+                        "vmXU0": {
+                          "icon": "check"
+                        },
+                        "XGzqw": {
+                          "content": "Runner reconnected · 2 interrupted runs continued"
+                        },
+                        "w3dC6": {
+                          "content": "14:08"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "ITVWi",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "The reconnect outcome becomes the latest event (02.G) instead of a banner; no auto-dismiss timer is needed because the next event replaces it.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "LlwoN",
+                  "name": "State G · Runner offline",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Vim59",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "G · Runner offline",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "id": "edu4I",
+                      "type": "ref",
+                      "ref": "pmOpt",
+                      "name": "Status bar · G · Runner offline",
+                      "descendants": {
+                        "MAMTv": {
+                          "icon": "unplug",
+                          "fill": "$text"
+                        },
+                        "lk109": {
+                          "content": "Runner offline",
+                          "fill": "$text"
+                        },
+                        "y5NHKO": {
+                          "enabled": true,
+                          "content": "5 attempts since 14:02"
+                        },
+                        "vmXU0": {
+                          "icon": "pause"
+                        },
+                        "XGzqw": {
+                          "content": "2 runs interrupted · nothing runs until the runner starts"
+                        },
+                        "w3dC6": {
+                          "enabled": false
+                        },
+                        "Ut1jT": {
+                          "enabled": true
+                        },
+                        "LPDZP": {
+                          "content": "Restart runner"
+                        },
+                        "v2E7F": {
+                          "enabled": true
+                        },
+                        "F7mn6G": {
+                          "content": "—",
+                          "fill": "$subtle"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "BVsrl",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Retries exhausted (02.H). Persistent until the runner starts. The blocking notice with Restart runner stays on the page; the status bar repeats the actions so they are reachable from every screen.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "H0jH1",
+                  "name": "State H · Failure (persists until opened or dismissed)",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "B8Rze",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "H · Failure (persists until opened or dismissed)",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "id": "G7eyN",
+                      "type": "ref",
+                      "ref": "pmOpt",
+                      "name": "Status bar · H · Failure (persists until opened or dismissed)",
+                      "descendants": {
+                        "IRKYz": {
+                          "fill": "$raised"
+                        },
+                        "vmXU0": {
+                          "icon": "circle-alert",
+                          "fill": "$text"
+                        },
+                        "XGzqw": {
+                          "content": "Could not create worktree for ORC-131 · branch orc-131 already exists",
+                          "fill": "$text"
+                        },
+                        "w3dC6": {
+                          "content": "14:41"
+                        },
+                        "Ut1jT": {
+                          "enabled": true
+                        },
+                        "LPDZP": {
+                          "content": "Open task"
+                        },
+                        "npzEn": {
+                          "enabled": true
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "zEDHC",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "A failed background operation stays in the activity slot on a raised fill until the user opens it or dismisses it; later events queue behind it in the popover. Never auto-dismissed.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "imT2E",
+              "x": 1616,
+              "y": 100,
+              "name": "Operations popover · anchored",
+              "clip": true,
+              "width": 1440,
+              "height": 520,
+              "fill": "$surface",
+              "cornerRadius": 12,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "J8wgC0",
+                  "x": 24,
+                  "y": 24,
+                  "name": "Demo caption",
+                  "fill": "$text",
+                  "content": "D · Operations popover — opens upward from the activity item, 6 px above the bar",
+                  "fontFamily": "$font",
+                  "fontSize": 13,
+                  "fontWeight": "500"
+                },
+                {
+                  "id": "vHWhR",
+                  "type": "ref",
+                  "ref": "pmOpt",
+                  "name": "Status bar · popover anchor",
+                  "x": 0,
+                  "y": 492,
+                  "descendants": {
+                    "IRKYz": {
+                      "fill": "$hover"
+                    },
+                    "vmXU0": {
+                      "icon": "loader",
+                      "fill": "$text"
+                    },
+                    "XGzqw": {
+                      "content": "3 operations · Publishing Feature delivery v4…",
+                      "fill": "$text"
+                    },
+                    "w3dC6": {
+                      "enabled": false
+                    },
+                    "Yv6Zf": {
+                      "enabled": true,
+                      "fill": "$text"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "E1msJS",
+                  "x": 115,
+                  "y": 90,
+                  "name": "Window / Status bar operations",
+                  "reusable": true,
+                  "width": 420,
+                  "fill": "$raised",
+                  "cornerRadius": "$radius-panel",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#00000066",
+                    "offset": {
+                      "x": 0,
+                      "y": 8
+                    },
+                    "blur": 24
+                  },
+                  "layout": "vertical",
+                  "gap": 2,
+                  "padding": 8,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "FSYIz",
+                      "name": "Header",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        6,
+                        8,
+                        8,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CArua",
+                          "name": "Header title",
+                          "fill": "$text",
+                          "content": "Background operations",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "i2sUug",
+                          "name": "Header count",
+                          "fill": "$subtle",
+                          "content": "3",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZaltO",
+                      "name": "Row · Publishing Feature delivery v4",
+                      "width": "fill_container",
+                      "cornerRadius": "$radius-control",
+                      "gap": 10,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "afzZm",
+                          "name": "Row icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "loader",
+                          "library": "lucide",
+                          "fill": "$text"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "tGNly",
+                          "name": "Row text",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "SdZwl",
+                              "name": "Row title",
+                              "fill": "$text",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Publishing Feature delivery v4",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "HR4nS",
+                              "name": "Row meta",
+                              "fill": "$subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kontur · Pipelines · opens the pipeline",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "Odh3s",
+                          "name": "Row time",
+                          "fill": "$subtle",
+                          "content": "2 s",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "UJ3bP",
+                          "name": "Row trailing",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$subtle"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "x8sFf0",
+                      "name": "Row · Creating worktree for ORC-129",
+                      "width": "fill_container",
+                      "cornerRadius": "$radius-control",
+                      "gap": 10,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "rES6o",
+                          "name": "Row icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "loader",
+                          "library": "lucide",
+                          "fill": "$text"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "BWeav",
+                          "name": "Row text",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "QQ5Xc",
+                              "name": "Row title",
+                              "fill": "$text",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Creating worktree for ORC-129",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "qOrIO",
+                              "name": "Row meta",
+                              "fill": "$subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kontur · Run #129 · opens the task",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "TIzlT",
+                          "name": "Row time",
+                          "fill": "$subtle",
+                          "content": "4 s",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "SCKqJ",
+                          "name": "Row trailing",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$subtle"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vftjj",
+                      "name": "Row · Checking Codex CLI",
+                      "width": "fill_container",
+                      "cornerRadius": "$radius-control",
+                      "gap": 10,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "MsH14",
+                          "name": "Row icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "loader",
+                          "library": "lucide",
+                          "fill": "$text"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "A1RAD4",
+                          "name": "Row text",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ptiaX",
+                              "name": "Row title",
+                              "fill": "$text",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Checking Codex CLI",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "cbhZY",
+                              "name": "Row meta",
+                              "fill": "$subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kontur · Codex · Kontur connection · opens Connections",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "aHtCe",
+                          "name": "Row time",
+                          "fill": "$subtle",
+                          "content": "12 s",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "eJKGN",
+                          "name": "Row trailing",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$subtle"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "n1urlp",
+                      "name": "Divider",
+                      "fill": "$hairline",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ojd2Z",
+                      "name": "Recent heading",
+                      "width": "fill_container",
+                      "padding": [
+                        10,
+                        8,
+                        4,
+                        8
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "P6qmo",
+                          "name": "Recent label",
+                          "fill": "$subtle",
+                          "content": "RECENT",
+                          "fontFamily": "$font",
+                          "fontSize": 9,
+                          "fontWeight": "600",
+                          "letterSpacing": 0.5
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "s7uHum",
+                      "name": "Row · Worktree created for ORC-130",
+                      "width": "fill_container",
+                      "fill": "#00000000",
+                      "cornerRadius": "$radius-control",
+                      "gap": 10,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "b6Nyn",
+                          "name": "Row icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "oS9Eo",
+                          "name": "Row text",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "i8TDHF",
+                              "name": "Row title",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Worktree created for ORC-130",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "we6Kd",
+                              "name": "Row meta",
+                              "fill": "$subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kontur · Run #130 · opens the task",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "aGVhh",
+                          "name": "Row time",
+                          "fill": "$subtle",
+                          "content": "14:40",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "Is5vq",
+                          "name": "Row trailing",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$subtle"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wCSic",
+                      "name": "Row · Run #128 ready for review",
+                      "width": "fill_container",
+                      "cornerRadius": "$radius-control",
+                      "gap": 10,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "gFEGg",
+                          "name": "Row icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "pdRTo",
+                          "name": "Row text",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "W9ono",
+                              "name": "Row title",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Run #128 ready for review",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "yFs7Y",
+                              "name": "Row meta",
+                              "fill": "$subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kontur · Add GitHub authentication",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "aAdnd",
+                          "name": "Row time",
+                          "fill": "$subtle",
+                          "content": "14:32",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "Mlmm6",
+                          "name": "Row trailing",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$subtle"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jmc1J",
+                      "name": "Row · Draft saved · Feature delivery v4",
+                      "width": "fill_container",
+                      "cornerRadius": "$radius-control",
+                      "gap": 10,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "K5vjuY",
+                          "name": "Row icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "NNEei",
+                          "name": "Row text",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "G22uh",
+                              "name": "Row title",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Draft saved · Feature delivery v4",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "UH1LH",
+                              "name": "Row meta",
+                              "fill": "$subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kontur · Pipelines",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "wfx3V",
+                          "name": "Row time",
+                          "fill": "$subtle",
+                          "content": "14:31",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "IJ5ly",
+                          "name": "Row trailing",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$subtle"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "sQkff",
+                      "name": "Footer",
+                      "width": "fill_container",
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "padding": [
+                        8,
+                        8,
+                        4,
+                        8
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FzzW2",
+                          "name": "Footer hint",
+                          "fill": "$subtle",
+                          "content": "Finished operations stay here until the app closes",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "iicau",
+                          "name": "Footer link",
+                          "fill": "$text",
+                          "content": "Open runner log",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "cpoal",
+              "x": 3136,
+              "y": 100,
+              "name": "Window composition · Overview",
+              "clip": true,
+              "width": 1440,
+              "fill": "$canvas",
+              "layout": "vertical",
+              "children": [
+                {
+                  "id": "vi6sj",
+                  "type": "ref",
+                  "ref": "QQmsI",
+                  "name": "Title bar"
+                },
+                {
+                  "type": "frame",
+                  "id": "awdFP",
+                  "name": "Screen · 02.08 Project overview",
+                  "clip": true,
+                  "width": 1440,
+                  "height": 960,
+                  "fill": "$surface",
+                  "children": [
+                    {
+                      "id": "qXsor",
+                      "type": "ref",
+                      "ref": "zo9Py",
+                      "name": "Sidebar / Overview",
+                      "height": "fill_container"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "h6Bou",
+                      "name": "Project content",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ar5EM",
+                          "name": "Project bar",
+                          "width": "fill_container",
+                          "height": 64,
+                          "stroke": "$hairline",
+                          "strokeWidth": {
+                            "bottom": 1
+                          },
+                          "gap": 10,
+                          "padding": [
+                            0,
+                            32
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "b6tAUW",
+                              "name": "Breadcrumb",
+                              "fill": "$muted",
+                              "content": "Kontur",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "FvCZF",
+                              "name": "Breadcrumb separator",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "chevron-right",
+                              "library": "lucide",
+                              "fill": "$subtle"
+                            },
+                            {
+                              "type": "text",
+                              "id": "GhYQF",
+                              "name": "Current page",
+                              "fill": "$text",
+                              "content": "Overview",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "BA6Gc",
+                              "name": "Toolbar spacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Qoo7l",
+                              "name": "Search",
+                              "width": 224,
+                              "height": 32,
+                              "fill": "$sidebar",
+                              "cornerRadius": 6,
+                              "stroke": "$hairline",
+                              "strokeWidth": 1,
+                              "gap": 8,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "bfId2",
+                                  "name": "Search icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "search",
+                                  "library": "lucide",
+                                  "fill": "$muted"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "tvScX",
+                                  "name": "Search placeholder",
+                                  "fill": "$muted",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Search anything...",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "TlDSl",
+                                  "name": "Search shortcut",
+                                  "fill": "$subtle",
+                                  "content": "Ctrl K",
+                                  "fontFamily": "$mono",
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "icon",
+                              "id": "ViZHZ",
+                              "name": "Notifications",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "bell",
+                              "library": "lucide",
+                              "fill": "$muted"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "JnCPf",
+                          "name": "Overview body",
+                          "width": "fill_container",
+                          "height": "fill_container",
+                          "layout": "vertical",
+                          "gap": 28,
+                          "padding": 32,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "o7pei",
+                              "name": "Overview heading",
+                              "width": "fill_container",
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "hyYrw",
+                                  "name": "Heading text",
+                                  "layout": "vertical",
+                                  "gap": 9,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "owsON",
+                                      "name": "Page title",
+                                      "fill": "$text",
+                                      "content": "Kontur",
+                                      "fontFamily": "$font",
+                                      "fontSize": 30,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "QjfgH",
+                                      "name": "Page description",
+                                      "fill": "$muted",
+                                      "content": "Everything moving in this project, and what needs you.",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "q3B3FK",
+                                  "type": "ref",
+                                  "ref": "u1XBP",
+                                  "name": "New task / Primary",
+                                  "height": 38,
+                                  "padding": [
+                                    0,
+                                    16
+                                  ],
+                                  "fill": "$accent",
+                                  "stroke": "$accent",
+                                  "descendants": {
+                                    "xfnek": {
+                                      "fill": "$inverse-text"
+                                    },
+                                    "Y7HQGw": {
+                                      "fill": "$inverse-text"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "AGI5b",
+                              "name": "Project pulse",
+                              "width": "fill_container",
+                              "height": 94,
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "top": 1,
+                                "bottom": 1
+                              },
+                              "gap": 32,
+                              "padding": [
+                                20,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "id": "Xmou1",
+                                  "type": "ref",
+                                  "ref": "dZ2Zt",
+                                  "name": "Running now",
+                                  "width": "fill_container"
+                                },
+                                {
+                                  "id": "HSEhX",
+                                  "type": "ref",
+                                  "ref": "dZ2Zt",
+                                  "name": "Need your input",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "PwPmH": {
+                                      "content": "02"
+                                    },
+                                    "n3SNM": {
+                                      "content": "Need your input"
+                                    },
+                                    "gGUCg": {
+                                      "content": "Review & decisions"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "PG1Ve",
+                                  "type": "ref",
+                                  "ref": "dZ2Zt",
+                                  "name": "Completed today",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "PwPmH": {
+                                      "content": "02"
+                                    },
+                                    "n3SNM": {
+                                      "content": "Completed today"
+                                    },
+                                    "gGUCg": {
+                                      "content": "2 completed pull requests"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "om4H6",
+                                  "type": "ref",
+                                  "ref": "dZ2Zt",
+                                  "name": "Spent today",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "PwPmH": {
+                                      "content": "$3.84"
+                                    },
+                                    "n3SNM": {
+                                      "content": "Spent today"
+                                    },
+                                    "gGUCg": {
+                                      "content": "$20.00 project daily budget"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "S86P5z",
+                              "name": "Tasks and attention",
+                              "width": "fill_container",
+                              "height": "fill_container",
+                              "gap": 32,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "gflN4",
+                                  "name": "Task list",
+                                  "width": "fill_container",
+                                  "height": "fill_container",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "xq6KS",
+                                      "name": "Task list heading",
+                                      "width": "fill_container",
+                                      "height": 34,
+                                      "justifyContent": "space_between",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "cOomj",
+                                          "name": "Task list title",
+                                          "fill": "$text",
+                                          "content": "Tasks",
+                                          "fontFamily": "$font",
+                                          "fontSize": 16,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "BLC2i",
+                                          "name": "Project filter",
+                                          "gap": 8,
+                                          "alignItems": "center",
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "vcoEq",
+                                              "name": "Filter value",
+                                              "fill": "$muted",
+                                              "content": "All pipelines",
+                                              "fontFamily": "$font",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "icon",
+                                              "id": "seWni",
+                                              "name": "Filter arrow",
+                                              "width": 13,
+                                              "height": 13,
+                                              "icon": "chevron-down",
+                                              "library": "lucide",
+                                              "fill": "$muted"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "k1tJt",
+                                      "name": "Task filters",
+                                      "width": "fill_container",
+                                      "height": 48,
+                                      "stroke": "$hairline",
+                                      "strokeWidth": {
+                                        "bottom": 1
+                                      },
+                                      "gap": 8,
+                                      "children": [
+                                        {
+                                          "id": "DcaVO",
+                                          "type": "ref",
+                                          "ref": "SOW6S",
+                                          "name": "All tasks tab",
+                                          "stroke": "$text",
+                                          "strokeWidth": {
+                                            "bottom": 2
+                                          },
+                                          "descendants": {
+                                            "v66T9G": {
+                                              "fill": "$text"
+                                            },
+                                            "tidLB": {
+                                              "enabled": true,
+                                              "content": "8"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "id": "kiDWz",
+                                          "type": "ref",
+                                          "ref": "SOW6S",
+                                          "name": "Running tab",
+                                          "descendants": {
+                                            "v66T9G": {
+                                              "content": "Running"
+                                            },
+                                            "tidLB": {
+                                              "enabled": true,
+                                              "content": "2"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "id": "xqEjV",
+                                          "type": "ref",
+                                          "ref": "SOW6S",
+                                          "name": "Needs you tab",
+                                          "descendants": {
+                                            "v66T9G": {
+                                              "content": "Needs you"
+                                            },
+                                            "tidLB": {
+                                              "enabled": true,
+                                              "content": "2"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "id": "suLQm",
+                                          "type": "ref",
+                                          "ref": "SOW6S",
+                                          "name": "Queued tab",
+                                          "descendants": {
+                                            "v66T9G": {
+                                              "content": "Queued"
+                                            },
+                                            "tidLB": {
+                                              "enabled": true,
+                                              "content": "2"
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "E0kKKY",
+                                      "type": "ref",
+                                      "ref": "zemhy",
+                                      "name": "Add GitHub authentication",
+                                      "width": "fill_container",
+                                      "height": 78,
+                                      "descendants": {
+                                        "UR2gw": {
+                                          "icon": "git-pull-request"
+                                        },
+                                        "KhX6a": {
+                                          "content": "Add GitHub authentication"
+                                        },
+                                        "b3TWwx": {
+                                          "content": "Feature delivery · Run #128"
+                                        },
+                                        "YIg8h/bhGXK": {
+                                          "icon": "git-pull-request"
+                                        },
+                                        "YIg8h/JuW4o": {
+                                          "content": "Ready for review"
+                                        },
+                                        "XY1PR": {
+                                          "content": "2m ago"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "T4PmEW",
+                                      "type": "ref",
+                                      "ref": "zemhy",
+                                      "name": "Fix canvas zoom on trackpad",
+                                      "width": "fill_container",
+                                      "height": 78,
+                                      "descendants": {
+                                        "UR2gw": {
+                                          "icon": "loader"
+                                        },
+                                        "KhX6a": {
+                                          "content": "Fix canvas zoom on trackpad"
+                                        },
+                                        "b3TWwx": {
+                                          "content": "Bug fix · Run #129"
+                                        },
+                                        "YIg8h/bhGXK": {
+                                          "icon": "loader"
+                                        },
+                                        "YIg8h/JuW4o": {
+                                          "content": "Running"
+                                        },
+                                        "XY1PR": {
+                                          "content": "Just now"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "Pq3ph",
+                                      "type": "ref",
+                                      "ref": "zemhy",
+                                      "name": "Add request rate limiting",
+                                      "width": "fill_container",
+                                      "height": 78,
+                                      "descendants": {
+                                        "UR2gw": {
+                                          "icon": "message-circle"
+                                        },
+                                        "KhX6a": {
+                                          "content": "Add request rate limiting"
+                                        },
+                                        "b3TWwx": {
+                                          "content": "Feature delivery · Waiting for your input"
+                                        },
+                                        "YIg8h/bhGXK": {
+                                          "icon": "message-circle"
+                                        },
+                                        "YIg8h/JuW4o": {
+                                          "content": "Needs input"
+                                        },
+                                        "XY1PR": {
+                                          "content": "8m ago"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "xRc3N",
+                                      "type": "ref",
+                                      "ref": "zemhy",
+                                      "name": "Improve mobile navigation",
+                                      "width": "fill_container",
+                                      "height": 78,
+                                      "descendants": {
+                                        "UR2gw": {
+                                          "icon": "loader"
+                                        },
+                                        "KhX6a": {
+                                          "content": "Improve mobile inspector"
+                                        },
+                                        "b3TWwx": {
+                                          "content": "Feature delivery · Run #127"
+                                        },
+                                        "YIg8h/bhGXK": {
+                                          "icon": "loader"
+                                        },
+                                        "YIg8h/JuW4o": {
+                                          "content": "Running"
+                                        },
+                                        "XY1PR": {
+                                          "content": "1m ago"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "HWHS7",
+                                      "type": "ref",
+                                      "ref": "zemhy",
+                                      "name": "Cover export edge cases",
+                                      "width": "fill_container",
+                                      "height": 78,
+                                      "descendants": {
+                                        "UR2gw": {
+                                          "icon": "clock-3"
+                                        },
+                                        "KhX6a": {
+                                          "content": "Cover export edge cases"
+                                        },
+                                        "b3TWwx": {
+                                          "content": "Test coverage · Queued"
+                                        },
+                                        "YIg8h/bhGXK": {
+                                          "icon": "clock-3"
+                                        },
+                                        "YIg8h/JuW4o": {
+                                          "content": "Queued"
+                                        },
+                                        "XY1PR": {
+                                          "content": "12m ago"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "ZlyGu",
+                                      "type": "ref",
+                                      "ref": "zemhy",
+                                      "name": "Update API documentation",
+                                      "width": "fill_container",
+                                      "height": 78,
+                                      "descendants": {
+                                        "UR2gw": {
+                                          "icon": "clock-3"
+                                        },
+                                        "KhX6a": {
+                                          "content": "Update API documentation"
+                                        },
+                                        "b3TWwx": {
+                                          "content": "Documentation · Queued"
+                                        },
+                                        "YIg8h/bhGXK": {
+                                          "icon": "clock-3"
+                                        },
+                                        "YIg8h/JuW4o": {
+                                          "content": "Queued"
+                                        },
+                                        "XY1PR": {
+                                          "content": "18m ago"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "eDknh",
+                                      "name": "Task list footer",
+                                      "width": "fill_container",
+                                      "height": 54,
+                                      "justifyContent": "space_between",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "z1CVq",
+                                          "name": "Visible task count",
+                                          "fill": "$muted",
+                                          "content": "6 active tasks · 2 completed",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "R34k2",
+                                          "name": "View completed",
+                                          "fill": "$text",
+                                          "content": "View completed  →",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "fzB8C",
+                                  "name": "Attention and activity",
+                                  "width": 288,
+                                  "height": "fill_container",
+                                  "stroke": "$hairline",
+                                  "strokeWidth": {
+                                    "left": 1
+                                  },
+                                  "layout": "vertical",
+                                  "gap": 24,
+                                  "padding": [
+                                    0,
+                                    0,
+                                    0,
+                                    24
+                                  ],
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "hkeHf",
+                                      "name": "Attention heading",
+                                      "width": "fill_container",
+                                      "height": 34,
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "IjOUN",
+                                          "name": "Attention icon",
+                                          "width": 16,
+                                          "height": 16,
+                                          "icon": "inbox",
+                                          "library": "lucide",
+                                          "fill": "$text"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "Z07MoB",
+                                          "name": "Attention title",
+                                          "fill": "$text",
+                                          "content": "Needs you",
+                                          "fontFamily": "$font",
+                                          "fontSize": 14,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "hJvWQ",
+                                          "name": "Heading spacer",
+                                          "width": "fill_container",
+                                          "height": 1
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "jDgdA",
+                                          "name": "Attention count",
+                                          "fill": "$muted",
+                                          "content": "02",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "jU5hb",
+                                      "name": "Review decision",
+                                      "width": "fill_container",
+                                      "layout": "vertical",
+                                      "gap": 12,
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "r6op6",
+                                          "name": "Decision type",
+                                          "fill": "$subtle",
+                                          "content": "REVIEW PULL REQUEST",
+                                          "fontFamily": "$font",
+                                          "fontSize": 9,
+                                          "fontWeight": "600"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "XHa19",
+                                          "name": "Decision title",
+                                          "fill": "$text",
+                                          "content": "GitHub sign-in is ready",
+                                          "fontFamily": "$font",
+                                          "fontSize": 13,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "UqktQ",
+                                          "name": "Decision summary",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": "fill_container",
+                                          "content": "All checks passed. Review the changes before merging PR #42.",
+                                          "lineHeight": 1.6,
+                                          "fontFamily": "$font",
+                                          "fontSize": 12,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "id": "WLUeY",
+                                          "type": "ref",
+                                          "ref": "u1XBP",
+                                          "name": "Review changes",
+                                          "width": "fill_container",
+                                          "descendants": {
+                                            "xfnek": {
+                                              "icon": "git-pull-request"
+                                            },
+                                            "Y7HQGw": {
+                                              "content": "Review changes"
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "MH7S6",
+                                      "name": "Open decision",
+                                      "width": "fill_container",
+                                      "stroke": "$hairline",
+                                      "strokeWidth": {
+                                        "top": 1,
+                                        "bottom": 1
+                                      },
+                                      "layout": "vertical",
+                                      "gap": 10,
+                                      "padding": [
+                                        20,
+                                        0,
+                                        24,
+                                        0
+                                      ],
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "nr6gf",
+                                          "name": "Decision category",
+                                          "fill": "$subtle",
+                                          "content": "CLARIFICATION",
+                                          "fontFamily": "$font",
+                                          "fontSize": 9,
+                                          "fontWeight": "600"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "sQ1yD",
+                                          "name": "Decision question",
+                                          "fill": "$text",
+                                          "content": "Choose a rate limit strategy",
+                                          "fontFamily": "$font",
+                                          "fontSize": 12,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "cxnIz",
+                                          "name": "Decision project",
+                                          "fill": "$muted",
+                                          "content": "Planner is waiting · Kontur",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "wZTOr",
+                                          "name": "Answer action",
+                                          "fill": "$text",
+                                          "content": "Answer question  →",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "frkc6",
+                                      "name": "Recent activity",
+                                      "width": "fill_container",
+                                      "layout": "vertical",
+                                      "gap": 18,
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "xiyUT",
+                                          "name": "Activity heading",
+                                          "fill": "$text",
+                                          "content": "Recent activity",
+                                          "fontFamily": "$font",
+                                          "fontSize": 13,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "id": "mHegn",
+                                          "type": "ref",
+                                          "ref": "mBkeJ",
+                                          "name": "Reviewer approved run #128",
+                                          "width": "fill_container",
+                                          "height": 54,
+                                          "descendants": {
+                                            "xQYdP": {
+                                              "icon": "circle-check"
+                                            },
+                                            "T7xzhd": {
+                                              "content": "Reviewer approved run #128",
+                                              "fontSize": 11
+                                            },
+                                            "mLcIg": {
+                                              "content": "Kontur · 2 minutes ago",
+                                              "fontSize": 10
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "id": "F2jGzl",
+                                          "type": "ref",
+                                          "ref": "mBkeJ",
+                                          "name": "Builder started implementation",
+                                          "width": "fill_container",
+                                          "height": 54,
+                                          "descendants": {
+                                            "xQYdP": {
+                                              "icon": "code"
+                                            },
+                                            "T7xzhd": {
+                                              "content": "Builder started implementation",
+                                              "fontSize": 11
+                                            },
+                                            "mLcIg": {
+                                              "content": "Kontur · 6 minutes ago",
+                                              "fontSize": 10
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "id": "yrqvs",
+                                          "type": "ref",
+                                          "ref": "mBkeJ",
+                                          "name": "Run #126 completed",
+                                          "width": "fill_container",
+                                          "height": 54,
+                                          "descendants": {
+                                            "xQYdP": {
+                                              "icon": "flag"
+                                            },
+                                            "T7xzhd": {
+                                              "content": "Run #126 completed",
+                                              "fontSize": 11
+                                            },
+                                            "mLcIg": {
+                                              "content": "Kontur · 24 minutes ago",
+                                              "fontSize": 10
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "VUAsI",
+                  "type": "ref",
+                  "ref": "pmOpt",
+                  "name": "Status bar",
+                  "descendants": {
+                    "vmXU0": {
+                      "icon": "loader"
+                    },
+                    "XGzqw": {
+                      "content": "Checking Codex CLI…"
+                    },
+                    "w3dC6": {
+                      "content": "12 s"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "BSxUP",
+              "x": 3136,
+              "y": 68,
+              "name": "Composition caption",
+              "fill": "$muted",
+              "content": "Window composition · Windows · 1440 × 1020 = 32 title bar + 960 screen + 28 status bar",
+              "fontFamily": "$font",
+              "fontSize": 13,
+              "fontWeight": "normal"
             }
           ]
         }

@@ -24,9 +24,10 @@ what is actually on screen.
    `.tmp/verify/<screen>/design.png`. Never Read or Grep the `.pen` file.
 2. **App screenshot in the same state.** Build and run the implementation with
    `cargo run -p orchester-desktop --features mcp`. Find the MCP discovery file of *your*
-   process (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`). Resize the window to 1440 × 992 logical
-   with `lurq_resize` (the 32px custom title bar from "Window chrome" in the design doc plus
-   the 1440 × 960 screen frame), drive the app into the designed state
+   process (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`). Resize the window to 1440 × 1020 logical
+   with `lurq_resize` (the 32px custom title bar from "Window chrome" in the design doc, the
+   1440 × 960 screen frame and the 28px status bar from "Status bar"; composition example
+   `cpoal`), drive the app into the designed state
    (`lurq_read_tree`, `lurq_interact`, `lurq_set_value`), wait for idle (`lurq_wait`),
    and capture `lurq_screenshot` to `.tmp/verify/<screen>/app.png`. Use fixture data that
    matches the design's content where the app allows it, so text lengths are comparable.
@@ -43,7 +44,8 @@ what is actually on screen.
    - copy: exact text of labels, titles and hints (translations aside);
    - states: disabled/unavailable, empty, error, focus.
 4. **Check the window chrome separately**: the top 32px against the platform title bar
-   component (`QQmsI` Windows, `V70DN` macOS), the rest against the screen frame. There must be
+   component (`QQmsI` Windows, `V70DN` macOS), the bottom 28px against the status bar
+   component (`pmOpt`, states in `keJ9Z`), the rest against the screen frame. There must be
    no native title bar or window border, and nothing else the OS or toolkit adds that the
    design does not show.
 5. **Report** a table per screen: region, design, app, severity (`blocking` = visibly a

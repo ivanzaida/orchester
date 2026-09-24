@@ -110,7 +110,7 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 
 ## Components and tokens
 
-40 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
+42 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
 
 | Family | Node |
 | --- | --- |
@@ -154,22 +154,114 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 | Diff line | `vEZ42` |
 | Window title bar (Windows) | `QQmsI` |
 | Window title bar (macOS) | `V70DN` |
+| Window status bar | `pmOpt` |
+| Window status bar operations popover | `E1msJS` |
 
 Colors: canvas `#101010`, sidebar `#141414`, surface `#1A1A1A`, raised `#222222`, hover/selection `#2C2C2C`, border `#363636`, hairline `#2B2B2B`, text `#EEEEEE`, muted `#A3A3A3`, subtle `#8F8F8F`, primary action `#E6E6E6` with `#181818` text. Variables also hold fonts, spacing and 7/12px control/panel radii. Status always includes text and an icon.
 
 ## Window chrome
 
 The application draws its own window chrome; the operating system's title bar and window border
-are not shown. A 32px title bar in `$canvas` sits above every 1440 × 960 screen frame, so the
-window is 1440 × 992. The empty part of the bar is the drag area (double-click maximizes).
+are not shown. A 32px title bar in `$canvas` sits above every 1440 × 960 screen frame and a 28px
+status bar (`pmOpt`, see [Status bar](#status-bar)) sits below it, so the window is
+1440 × 1020 (32 + 960 + 28). The empty part of the title bar is the drag area (double-click
+maximizes).
 
 - Windows (`QQmsI`): minimize, maximize/restore and close on the right, 46 × 32 each, lucide
   icons at 14px in `$muted`; hover fills the control with `$hover`.
 - macOS (`V70DN`): the three window buttons on the left, 12px, 8px apart, 12px from the edge,
   in the platform's standard colors — the only non-grayscale colors in the application.
 
-Screens do not include the bar; design verification compares the screen below the bar with the
-screen frame and the bar with the platform component.
+Screens include neither bar; design verification captures the app window at 1440 × 1020 and
+compares the title bar (top 32px) with the platform component, the screen area (next 960px) with
+the screen frame, and the status bar (bottom 28px) with the matching `pmOpt` state. A worked
+example is the window composition `cpoal` in Foundations.
+
+## Status bar
+
+Proposed 2026-09-24 in answer to the user's request for a bar at the bottom of the window that
+says what is happening. Canvas group `Tg1WX` ("Window · Status bar") in Foundations below the
+components: the states `keJ9Z`, the anchored operations popover `imT2E` and the window
+composition `cpoal`. Previews: [component](previews/pmOpt.png), [states](previews/keJ9Z.png),
+[popover](previews/imT2E.png), [window composition](previews/cpoal.png).
+
+**Placement and style.** `Window / Status bar` (`pmOpt`, next to the title bars in Foundations) is
+applied like the title bar: below every 1440 × 960 screen frame, which stays unchanged. Window:
+1440 × 1020. Height 28px, `$canvas` (the same frame colour as the title bar, so content sits
+between two chrome bands), hairline top border, 8px side padding. Every item is 22px high with 8px
+padding, 6px gap and a 5px hover radius (`$hover` fill); labels are Inter 11 `$muted`, counts,
+times, amounts and the version are Geist Mono 11 (`$text` for counts, `$subtle` for times and
+zeros). Icons are lucide 12px; status is always icon + label. It belongs to the selected project,
+like the rest of the window.
+
+**Content** (left to right). Every item maps to data the app has or will have; nothing is shown
+that is not measured.
+
+| Item | Copy (fixture) | Data source | Click target |
+| --- | --- | --- | --- |
+| Runner | plug · *Runner online* | runner connection state for the selected project (IPC) | Opens the runner log `.orchester/logs/runner-<date>.log` (the only runner surface that exists) |
+| Activity | check · *Run #128 ready for review* `14:32` | latest background operation or finished event (runner events, desktop jobs) | The object it names (task, pipeline, connection); with 2+ operations, the popover |
+| Agents | bot · *Agents* `2/4` | agent slots in use / configured (`settings`, runner) | Tasks › Queue (`Z22wg`) |
+| Queued | clock · *Queued* `2` | queued task runs in the project | Tasks › Queue (`Z22wg`) |
+| Needs you | message · *Needs you* `2` | plan approvals, questions, reviews (same count as the Overview metric) | Overview › Needs you panel |
+| Budget | wallet · *Spent today* `$3.84 / $20.00` | project usage vs. project daily budget | **Not built:** usage accounting and a usage screen do not exist; until then the item is non-interactive with a tooltip |
+| Version | `v0.1.0` | application version | Non-interactive; tooltip with build info |
+
+Not included on purpose: a notifications counter (the Overview top bar already has a bell, and a
+notification centre is not designed), the project name (the sidebar and breadcrumb show it), and
+per-run progress percentages (runs report steps, not percentages). Background operations that
+the activity item can name, each with a real start and end: creating a worktree, publishing a
+pipeline/profile/instruction/tool version, checking a connection or CLI (*Checking Codex CLI…*),
+importing resources, syncing pull requests, saving before close. Draft saves are local and fast;
+they appear only as finished events. Operations are listed across open projects in the popover,
+each labelled with its project.
+
+**Activity slot priority**: runner problem > unresolved failure > running operations (one: its
+description and elapsed time; two or more: *N operations · <newest>…* with a chevron) > latest
+finished event with its time. Elapsed time only — never a fake percentage.
+
+**States** (instances of `pmOpt` with overrides, in `keJ9Z`):
+
+- A · Idle: *Runner online* · check *Run #128 ready for review* `14:32` · Agents `0/4`, Queued `0`, Needs you `1`. Zero counts stay visible in `$subtle` so items never shift.
+- B · Runner starting: loader *Starting runner…*; the activity item is hidden; Agents `—` (unknown, not 0).
+- C · One operation: loader *Creating worktree for ORC-129…* `4 s`.
+- D · Several operations: loader *3 operations · Publishing Feature delivery v4…* with chevron-up; the item is highlighted (`$hover`) while the popover is open.
+- E · Reconnecting: refresh *Reconnecting to runner* `attempt 2 of 5 · next in 8 s` · pause *2 runs interrupted · they continue from their last checkpoint*; Agents `—`.
+- F · Reconnected: *Runner online* · check *Runner reconnected · 2 interrupted runs continued* `14:08`. It is the latest event until the next one replaces it; no timer.
+- G · Offline: unplug *Runner offline* `5 attempts since 14:02` · pause *2 runs interrupted · nothing runs until the runner starts* · actions *Restart runner*, *Open runner log*. Persistent.
+- H · Failure: circle-alert *Could not create worktree for ORC-131 · branch orc-131 already exists* `14:41` on a `$raised` fill · *Open task* · dismiss (x). Persists until opened or dismissed; never auto-dismissed. Newer events wait behind it in the popover.
+
+**Operations popover** (`E1msJS`, anchored example `imT2E`). Opens upward from the activity
+item, left-aligned with it, 6px above the bar; 420px wide, `$raised`, `$border`, 12px radius,
+soft shadow. Header *Background operations* with the count. Running rows: loader, title, meta
+line (project · object · what clicking opens), elapsed time, chevron. *RECENT* lists finished
+events newest first (unresolved failures are pinned at the top of this list with a dismiss x).
+Footer: *Finished operations stay here until the app closes* and *Open runner log*. Escape or a
+click outside closes it and returns focus to the activity item. Finished-event retention beyond
+the session is not designed.
+
+**Runner card and notices — recommendation for the product owner.**
+
+- Sidebar runner card (`O2Jjjf` in `zo9Py`, states `O5NoB1`): remove it once the status bar
+  ships. It repeats the runner state and slot count that the bar shows on every screen, and it
+  costs about 70px at the bottom of the navigation. The existing components are not edited by
+  this proposal.
+- Reconnecting notice (02.F `MAn7V`): drop the top-of-content notice; the bar (state E) carries
+  it. Reconnecting is automatic and needs no decision, and interrupted task rows still show
+  *Interrupted* in the lists.
+- Reconnected notice (02.G `YHS1v`): drop it; it becomes the latest event (state F).
+- Could not restart (02.H `EFY7I`): keep the inline notice on the page — it blocks all work and
+  needs a decision (*Restart runner*). The bar (state G) repeats the actions so they are reachable
+  from every screen, not only the Overview.
+
+Rule: the status bar is for ambient state; an inline notice is only for something that needs the
+user's decision.
+
+**Narrow windows.** Drop the version first, then the budget, then labels (icon + count only). The
+activity text truncates with an ellipsis; its tooltip holds the full text.
+
+Proposed copy namespace: `statusBar.*` (`statusBar.runner.*`, `statusBar.activity.*`,
+`statusBar.operations.*`). Fixture values (times, counts, amounts, v0.1.0) are illustrative.
 
 ## Core workflow
 
@@ -272,7 +364,7 @@ These states express the lifecycle in [storage.md › Lifecycle](../architecture
 - *Reconnected* (`YHS1v`): "Runner reconnected". "The 2 interrupted runs continued from their last checkpoint." Auto-dismisses ("Closes in 5 s", with a manual close). The task rows in this frame still show the interrupted state and need updating to running.
 - *Could not restart* (`EFY7I`): "Could not restart the runner". "Tried 5 times since 14:02. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts." Actions *Open runner log* (opens `.orchester/logs/runner-<date>.log`) and *Restart runner* (primary). Persistent until resolved.
 
-Sidebar runner card (`O5NoB1`), always icon + label: *Starting local runner* / "Agents can start when it's ready" (loader); *Local runner online* / "2 of 4 agent slots in use" (existing dot); *Reconnecting to runner* / "Attempt 2 of 5 · runs interrupted" (refresh); *Runner offline* / "Could not restart · see runner log" (unplug). The card states are overrides of the existing sidebar card inside `zo9Py` instances; no new component was added.
+Sidebar runner card (`O5NoB1`), always icon + label: *Starting local runner* / "Agents can start when it's ready" (loader); *Local runner online* / "2 of 4 agent slots in use" (existing dot); *Reconnecting to runner* / "Attempt 2 of 5 · runs interrupted" (refresh); *Runner offline* / "Could not restart · see runner log" (unplug). The card states are overrides of the existing sidebar card inside `zo9Py` instances; no new component was added. The [status bar](#status-bar) proposal recommends removing this card and the 02.F/02.G notices in favour of the bar, keeping only the 02.H notice (pending product-owner decision).
 
 **Session ended abnormally (`o8DCd`).** On the next start after *Quit now* or a crash, a modal: "The last session ended before agents could save". "Orchester stopped unexpectedly on Sep 23 at 14:12 and three runs were interrupted. Nothing has been restarted. Continue all of them from their last checkpoints, or none; work after a checkpoint is not counted as done." A table lists each interrupted run: task (key, title, project · run), *Interrupted during* (step, agent role · provider · model), *Reason*, *Last checkpoint* (commit, time saved), *Worktree* ("3 files not committed" with View changes, or "No uncommitted changes") — no per-run action. The runs may come from several open projects. A run stopped during an external tool call says "outcome unknown", and a notice asks the user to check the target before continuing, because continuing repeats the step from its checkpoint. Footer: *Open runner log*, *Don't continue* (runs stay interrupted and can each be continued later from their task conversation), *Continue all 3 from checkpoints* (primary). Uncommitted changes are never discarded silently. After *Wait for agents to save*, no dialog appears; runs are simply paused. User decision (2026-09-24): the modal is all or nothing — *Continue all N from checkpoints* or *Don't continue*; rows have no per-run action. Runs not continued stay interrupted and can each be continued later from their task conversation; that task-level action is not designed yet.
 
@@ -407,7 +499,7 @@ Audit records contain who/what requested access, capability, scope, run/step, de
 
 Proposed i18n namespaces: `nav.*`, `workspace.*`, `tasks.*`, `runs.status.*`, `runs.controls.*`, `planReview.*`, `conversation.*`, `pipelines.*`, `agents.*`, `connections.*`, `setup.*`, `resourceVersions.*`, `instructions.*`, `variables.*`, `tools.*`, `projectImport.*`, `secrets.*`, `access.*`, `recovery.*`. Examples: `instructions.publishVersion`, `instructions.previewEffective`, `variables.insert`, `variables.unavailableAtPhase`, `tools.credentials`, `tools.validateConfiguration`, `projectImport.resolveDependency`, `projectImport.independentCopies`, `secrets.usedBy`, `secrets.add`, `secrets.replaceValue`, `access.allowDeployment`, `access.deny`, `agents.inheritModel`, `connections.refreshModels`, `conversation.queuedAtCheckpoint`, `planReview.requestChanges`, `setup.resume`. Prompts, task descriptions, secret names and repository content are user-authored data.
 
-Desktop is verified visually at 1440 × 960. At narrower widths collapse navigation first, then open inspectors on demand; stack creation-form columns. Dialogs need viewport-constrained scrolling and focus trapping. Search, pagination, keyboard navigation, Escape, clipboard, screen-reader labels, loading, validation and persistence still need runtime implementation and testing. Native/web runtime choice and mobile editing are not established by these screens.
+Screens are designed at 1440 × 960; the app window is verified at 1440 × 1020 (title bar, screen and status bar, see [Window chrome](#window-chrome)). At narrower widths collapse navigation first, then open inspectors on demand; stack creation-form columns. Dialogs need viewport-constrained scrolling and focus trapping. Search, pagination, keyboard navigation, Escape, clipboard, screen-reader labels, loading, validation and persistence still need runtime implementation and testing. Native/web runtime choice and mobile editing are not established by these screens.
 
 Visual evidence: the original 13 screens and 20 additional screens were inspected through live Pencil nodes and screenshot/export review. The independent audit was repeated against the expanded 32-screen set; its remaining import/library fixture mismatch was corrected by adding the existing draft Deploy preview and updating the count. The subsequently requested first-launch screen received primary-agent layout and full-size visual review. Full-size export review caught and corrected a tool-list overlap and import-tab spacing that the structural check did not flag. Repeated controls use 30 linked component definitions. See the [audit and resolution record](../evidence/design-consistency-audit-2026-09-23.md).
 
