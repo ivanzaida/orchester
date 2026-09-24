@@ -4,6 +4,7 @@
 
 use std::{fmt, num::NonZeroU32};
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -54,7 +55,8 @@ impl Slug {
 }
 
 /// Published version number, starting at 1.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct VersionNumber(NonZeroU32);
 
 impl VersionNumber {

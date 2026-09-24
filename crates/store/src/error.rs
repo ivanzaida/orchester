@@ -1,8 +1,9 @@
 use std::{io, path::PathBuf};
 
 use orchester_core::{
-  id::{ResourceId, TaskId},
+  id::{ResourceId, RunId, TaskId},
   resource::{PublishError, ResourceKind},
+  run::RunError,
 };
 use thiserror::Error;
 
@@ -50,5 +51,28 @@ impl StoreError {
   pub(crate) fn io(path: impl Into<PathBuf>) -> impl FnOnce(io::Error) -> Self {
     let path = path.into();
     move |source| Self::Io { path, source }
+  }
+}
+
+/// Errors of the run store: storage failures plus the rules of appending to a run's log.
+#[derive(Debug, Error)]
+pub enum RunStoreError {
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  #[error(transparent)]
+  Run(#[from] RunError),
+  #[error("run {0} does not exist")]
+  RunNotFound(RunId),
+  /// Another writer appended to the run's log first; reload the run and retry the transition.
+  #[error("run {run} expected event {expected} next, got {found}")]
+  SequenceConflict { run: RunId, expected: u64, found: u64 },
+  /// The events handed to the store do not lead to the state being stored.
+  #[error("events do not match the run being stored: {0}")]
+  EventsMismatch(&'static str),
+}
+
+impl From<rusqlite::Error> for RunStoreError {
+  fn from(error: rusqlite::Error) -> Self {
+    Self::Store(StoreError::Sqlite(error))
   }
 }

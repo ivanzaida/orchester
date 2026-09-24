@@ -1,0 +1,139 @@
+//! Status and reason columns of the execution tables. Each enum maps to fixed column texts so
+//! the SQL `CHECK` constraints and queries by status stay meaningful.
+
+use orchester_core::{
+  resource::StepKey,
+  run::{AttemptReason, AttemptStatus, InterruptCause, RunFailure, RunStatus, StepStatus, WaitReason},
+};
+
+use crate::{StoreError, rows::corrupt};
+
+pub(super) const INTERRUPTED: &str = "interrupted";
+
+/// `status`, `status_reason` and `failed_step` of a run row.
+pub(super) fn run_status_columns(status: &RunStatus) -> (&'static str, Option<&'static str>, Option<&str>) {
+  match status {
+    RunStatus::Pending => ("pending", None, None),
+    RunStatus::Running => ("running", None, None),
+    RunStatus::Paused => ("paused", None, None),
+    RunStatus::Interrupted(cause) => (INTERRUPTED, Some(interrupt_cause_text(*cause)), None),
+    RunStatus::Succeeded => ("succeeded", None, None),
+    RunStatus::Failed(RunFailure::StepFailed(step)) => ("failed", Some("step_failed"), Some(step.as_str())),
+    RunStatus::Failed(RunFailure::RetriesExhausted(step)) => ("failed", Some("retries_exhausted"), Some(step.as_str())),
+    RunStatus::Cancelled => ("cancelled", None, None),
+  }
+}
+
+pub(super) fn parse_run_status(
+  status: &str,
+  reason: Option<&str>,
+  failed_step: Option<&str>,
+) -> Result<RunStatus, StoreError> {
+  const WHAT: &str = "run status";
+  Ok(match (status, reason, failed_step) {
+    ("pending", None, None) => RunStatus::Pending,
+    ("running", None, None) => RunStatus::Running,
+    ("paused", None, None) => RunStatus::Paused,
+    (INTERRUPTED, Some(cause), None) => RunStatus::Interrupted(parse_interrupt_cause(cause)?),
+    ("succeeded", None, None) => RunStatus::Succeeded,
+    ("failed", Some("step_failed"), Some(step)) => RunStatus::Failed(RunFailure::StepFailed(step_key(step)?)),
+    ("failed", Some("retries_exhausted"), Some(step)) => {
+      RunStatus::Failed(RunFailure::RetriesExhausted(step_key(step)?))
+    }
+    ("cancelled", None, None) => RunStatus::Cancelled,
+    _ => return Err(corrupt(WHAT, format!("{status} / {reason:?} / {failed_step:?}"))),
+  })
+}
+
+const fn interrupt_cause_text(cause: InterruptCause) -> &'static str {
+  match cause {
+    InterruptCause::RunnerLost => "runner_lost",
+    InterruptCause::QuitNow => "quit_now",
+    InterruptCause::Crashed => "crashed",
+  }
+}
+
+fn parse_interrupt_cause(value: &str) -> Result<InterruptCause, StoreError> {
+  match value {
+    "runner_lost" => Ok(InterruptCause::RunnerLost),
+    "quit_now" => Ok(InterruptCause::QuitNow),
+    "crashed" => Ok(InterruptCause::Crashed),
+    other => Err(corrupt("interrupt cause", other)),
+  }
+}
+
+/// `reason`, `failed_step` and `return_to` of an attempt row.
+pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> (&'static str, Option<&str>, Option<&str>) {
+  match reason {
+    AttemptReason::Initial => ("initial", None, None),
+    AttemptReason::Retry { failed_step, return_to } => ("retry", Some(failed_step.as_str()), Some(return_to.as_str())),
+  }
+}
+
+pub(super) fn parse_attempt_reason(
+  reason: &str,
+  failed_step: Option<&str>,
+  return_to: Option<&str>,
+) -> Result<AttemptReason, StoreError> {
+  match (reason, failed_step, return_to) {
+    ("initial", None, None) => Ok(AttemptReason::Initial),
+    ("retry", Some(failed_step), Some(return_to)) => Ok(AttemptReason::Retry {
+      failed_step: step_key(failed_step)?,
+      return_to: step_key(return_to)?,
+    }),
+    _ => Err(corrupt("attempt reason", reason)),
+  }
+}
+
+pub(super) const fn attempt_status_text(status: AttemptStatus) -> &'static str {
+  match status {
+    AttemptStatus::Active => "active",
+    AttemptStatus::RoutedBack => "routed_back",
+    AttemptStatus::Succeeded => "succeeded",
+    AttemptStatus::Failed => "failed",
+    AttemptStatus::Cancelled => "cancelled",
+  }
+}
+
+pub(super) fn parse_attempt_status(value: &str) -> Result<AttemptStatus, StoreError> {
+  match value {
+    "active" => Ok(AttemptStatus::Active),
+    "routed_back" => Ok(AttemptStatus::RoutedBack),
+    "succeeded" => Ok(AttemptStatus::Succeeded),
+    "failed" => Ok(AttemptStatus::Failed),
+    "cancelled" => Ok(AttemptStatus::Cancelled),
+    other => Err(corrupt("attempt status", other)),
+  }
+}
+
+/// `status` and `wait_reason` of a step execution row.
+pub(super) const fn step_status_columns(status: StepStatus) -> (&'static str, Option<&'static str>) {
+  match status {
+    StepStatus::Pending => ("pending", None),
+    StepStatus::Running => ("running", None),
+    StepStatus::Waiting(WaitReason::Approval) => ("waiting", Some("approval")),
+    StepStatus::Waiting(WaitReason::Plan) => ("waiting", Some("plan")),
+    StepStatus::Waiting(WaitReason::Message) => ("waiting", Some("message")),
+    StepStatus::Passed => ("passed", None),
+    StepStatus::Failed => ("failed", None),
+    StepStatus::Skipped => ("skipped", None),
+  }
+}
+
+pub(super) fn parse_step_status(status: &str, wait_reason: Option<&str>) -> Result<StepStatus, StoreError> {
+  Ok(match (status, wait_reason) {
+    ("pending", None) => StepStatus::Pending,
+    ("running", None) => StepStatus::Running,
+    ("waiting", Some("approval")) => StepStatus::Waiting(WaitReason::Approval),
+    ("waiting", Some("plan")) => StepStatus::Waiting(WaitReason::Plan),
+    ("waiting", Some("message")) => StepStatus::Waiting(WaitReason::Message),
+    ("passed", None) => StepStatus::Passed,
+    ("failed", None) => StepStatus::Failed,
+    ("skipped", None) => StepStatus::Skipped,
+    _ => return Err(corrupt("step status", format!("{status} / {wait_reason:?}"))),
+  })
+}
+
+pub(super) fn step_key(value: &str) -> Result<StepKey, StoreError> {
+  StepKey::new(value).map_err(|error| corrupt("step key", error))
+}
