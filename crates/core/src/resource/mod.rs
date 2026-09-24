@@ -19,7 +19,9 @@ use serde::{Serialize, de::DeserializeOwned};
 pub use self::{
   agent_profile::{AgentProfile, ModelId, ModelIdError, ProviderSettings, ProviderSettingsError},
   instruction::{AgentTargets, InjectionEvent, Instruction, InstructionError, InstructionScope},
-  lifecycle::{Draft, PublishError, Resource, ResourceKind, Slug, SlugError, Version, VersionNumber, publish},
+  lifecycle::{
+    Draft, DraftSaved, PublishError, Resource, ResourceKind, Slug, SlugError, Version, VersionNumber, publish,
+  },
   pipeline::{
     EditProblem, FailureRoute, Pipeline, PipelineChange, PipelineEdit, PipelineError, RepositoryAccess,
     StarterAssignments, StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, changes, feature_delivery,
@@ -35,7 +37,7 @@ pub use self::{
 
 /// Content of a versioned resource kind, stored as JSON. Deserializing re-runs the domain
 /// constructors, so a stored body that breaks a rule is rejected instead of loaded.
-pub trait ResourceBody: Serialize + DeserializeOwned {
+pub trait ResourceBody: Serialize + DeserializeOwned + PartialEq {
   const KIND: ResourceKind;
   /// Version of the stored JSON shape. Changing the shape requires a new number and a
   /// conversion from every older one.

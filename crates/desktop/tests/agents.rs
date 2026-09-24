@@ -215,10 +215,13 @@ fn stale_draft_is_refused_until_kept_over_the_latest_version() {
   let profile = form(&codex, &listed, None).profile().expect("valid form");
   let id = create_profile(&mut db, &profile, now()).expect("create");
   publish(&mut db, id, now()).expect("publish v1");
-  save_draft(&mut db, id, profile.clone(), now()).expect("draft from v1");
+  let mini = ModelSelection::Listed(model("gpt-5.4-mini"));
+  let edited = form(&codex, &mini, None).profile().expect("valid form");
+  save_draft(&mut db, id, edited, now()).expect("draft from v1");
   publish(&mut db, id, now()).expect("publish v2");
   // Another editor's draft still based on v1.
-  db.save_draft(id, &Draft::new(profile, Some(version(1)), now()))
+  let high = form(&codex, &listed, Some("high")).profile().expect("valid form");
+  db.save_draft(id, &Draft::new(high, Some(version(1)), now()))
     .expect("stale draft");
 
   let entry = ProjectAgents::load(&db)

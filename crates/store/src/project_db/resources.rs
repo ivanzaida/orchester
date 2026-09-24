@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use orchester_core::{
   id::ResourceId,
   name::Name,
-  resource::{Draft, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber, publish},
+  resource::{Draft, DraftSaved, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber, publish},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -70,10 +70,27 @@ impl ResourceStore for ProjectDb {
     load_resources(&self.connection, "WHERE kind = ?1 ORDER BY slug", [kind_text(kind)])
   }
 
-  fn save_draft<B: ResourceBody>(&mut self, resource: ResourceId, draft: &Draft<B>) -> Result<(), StoreError> {
+  fn save_draft<B: ResourceBody>(&mut self, resource: ResourceId, draft: &Draft<B>) -> Result<DraftSaved, StoreError> {
     let body = encode(draft.body())?;
     let transaction = self.connection.transaction()?;
     check_kind::<B>(&transaction, resource)?;
+    let base = match draft.based_on() {
+      Some(number) => load_versions::<B>(
+        &transaction,
+        "WHERE resource_id = ?1 AND number = ?2",
+        params![resource.to_string(), number.get()],
+      )?
+      .pop(),
+      None => None,
+    };
+    if base.is_some_and(|version| draft.repeats(&version)) {
+      transaction.execute(
+        "DELETE FROM resource_drafts WHERE resource_id = ?1",
+        [resource.to_string()],
+      )?;
+      transaction.commit()?;
+      return Ok(DraftSaved::Discarded);
+    }
     transaction.execute(
       "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, ?3, ?4) \
        ON CONFLICT (resource_id) DO UPDATE SET body = excluded.body, based_on = excluded.based_on, \
@@ -86,7 +103,7 @@ impl ResourceStore for ProjectDb {
       ],
     )?;
     transaction.commit()?;
-    Ok(())
+    Ok(DraftSaved::Stored)
   }
 
   fn draft<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Draft<B>>, StoreError> {

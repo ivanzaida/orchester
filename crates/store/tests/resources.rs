@@ -10,7 +10,7 @@ use orchester_core::{
   project::{Project, ProjectKey},
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, DeniedBehavior,
-    Draft, InjectionEvent, Instruction, InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings,
+    Draft, DraftSaved, InjectionEvent, Instruction, InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings,
     PublishError, RepositoryAccess, ResourceKind, Slug, Step, StepKey, StepKind, Tool, ToolAction, VersionNumber,
   },
   store::ResourceStore,
@@ -65,6 +65,17 @@ fn profile() -> AgentProfile {
     PromptText::new("Review {{run.revision}}.").expect("valid prompt"),
     ConnectionId::generate(),
     ModelId::new("model-a").expect("valid model"),
+    ProviderSettings::default(),
+  )
+}
+
+fn other_profile() -> AgentProfile {
+  AgentProfile::new(
+    name("Reviewer"),
+    "Reviews changes.".into(),
+    PromptText::new("").expect("valid prompt"),
+    ConnectionId::generate(),
+    ModelId::new("model-b").expect("valid model"),
     ProviderSettings::default(),
   )
 }
@@ -209,6 +220,34 @@ fn resources_keep_a_pipeline_draft_with_unassigned_steps_but_do_not_publish_it()
 }
 
 #[test]
+fn resources_discard_a_draft_that_repeats_its_version() {
+  let (_repo, mut db) = project_repo();
+  let id = db
+    .create_resource(slug("reviewer"), name("Reviewer"), &profile(), at(1))
+    .unwrap()
+    .id();
+  let v1 = db.publish_draft::<AgentProfile>(id, at(2)).unwrap();
+  assert_eq!(db.save_draft(id, &v1.to_draft(at(3))).unwrap(), DraftSaved::Discarded);
+  assert_eq!(db.draft::<AgentProfile>(id).unwrap(), None);
+
+  let mut edited = v1.to_draft(at(4));
+  edited.edit(other_profile(), at(4));
+  assert_eq!(db.save_draft(id, &edited).unwrap(), DraftSaved::Stored);
+  assert!(db.draft::<AgentProfile>(id).unwrap().is_some());
+  assert_eq!(db.save_draft(id, &v1.to_draft(at(5))).unwrap(), DraftSaved::Discarded);
+  assert_eq!(db.draft::<AgentProfile>(id).unwrap(), None);
+  // A new resource's first draft has no version to repeat.
+  let fresh = db
+    .create_resource(slug("planner"), name("Planner"), &profile(), at(6))
+    .unwrap()
+    .id();
+  assert_eq!(
+    db.save_draft(fresh, &Draft::new(profile(), None, at(7))).unwrap(),
+    DraftSaved::Stored
+  );
+}
+
+#[test]
 fn resources_reject_publishing_a_stale_draft() {
   let (_repo, mut db) = project_repo();
   let id = db
@@ -216,10 +255,22 @@ fn resources_reject_publishing_a_stale_draft() {
     .unwrap()
     .id();
   let v1 = db.publish_draft::<AgentProfile>(id, at(2)).unwrap();
-  db.save_draft(id, &v1.to_draft(at(3))).unwrap();
+  db.save_draft(id, &Draft::new(other_profile(), Some(v1.number()), at(3)))
+    .unwrap();
   let v2 = db.publish_draft::<AgentProfile>(id, at(4)).unwrap();
 
-  let stale = v1.to_draft(at(5));
+  let mut stale = v1.to_draft(at(5));
+  stale.edit(
+    AgentProfile::new(
+      name("Reviewer"),
+      "Reviews the diff.".into(),
+      PromptText::new("").expect("valid prompt"),
+      ConnectionId::generate(),
+      ModelId::new("model-c").expect("valid model"),
+      ProviderSettings::default(),
+    ),
+    at(5),
+  );
   db.save_draft(id, &stale).unwrap();
   assert!(matches!(
     db.publish_draft::<AgentProfile>(id, at(6)),
@@ -263,7 +314,8 @@ fn resources_persist_across_reopen() {
     .create_resource(slug("deploy"), name("Deploy preview"), &tool(), at(1))
     .unwrap();
   let v1 = db.publish_draft::<Tool>(resource.id(), at(2)).unwrap();
-  let draft = v1.to_draft(at(3));
+  // Not based on v1: a draft that repeats its version would not be kept.
+  let draft = Draft::new(tool(), None, at(3));
   db.save_draft(resource.id(), &draft).unwrap();
   drop(db);
 

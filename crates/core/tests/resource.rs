@@ -24,6 +24,16 @@ fn first_publish_creates_v1_and_later_drafts_continue_the_sequence() {
 }
 
 #[test]
+fn a_draft_repeats_only_the_version_it_is_based_on() {
+  let v1 = publish(Draft::new("first", None, at(1)), None, at(2)).unwrap();
+  assert!(v1.to_draft(at(3)).repeats(&v1));
+  let mut edited = v1.to_draft(at(3));
+  edited.edit("second", at(4));
+  assert!(!edited.repeats(&v1));
+  assert!(!Draft::new("first", None, at(5)).repeats(&v1));
+}
+
+#[test]
 fn publishing_a_stale_draft_is_rejected() {
   let v1 = VersionNumber::FIRST;
   let v2 = VersionNumber::new(NonZeroU32::new(2).unwrap());

@@ -5,7 +5,7 @@ use crate::{
   connection::Connection,
   id::{ConnectionId, IdempotencyKey, ResourceId, RunId, TaskId},
   name::Name,
-  resource::{Draft, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
+  resource::{Draft, DraftSaved, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   run::{Checkpoint, NewRun, Run, RunEvent},
   task::{Task, TaskDetails},
   time::Timestamp,
@@ -51,8 +51,9 @@ pub trait ResourceStore {
   /// Resources of one kind, ordered by slug.
   fn resources(&self, kind: ResourceKind) -> Result<Vec<Resource>, Self::Error>;
 
-  /// Stores `draft` as the resource's only draft, replacing an existing one.
-  fn save_draft<B: ResourceBody>(&mut self, resource: ResourceId, draft: &Draft<B>) -> Result<(), Self::Error>;
+  /// Stores `draft` as the resource's only draft, replacing an existing one. A draft that
+  /// repeats the version it is based on ([`Draft::repeats`]) removes the stored draft instead.
+  fn save_draft<B: ResourceBody>(&mut self, resource: ResourceId, draft: &Draft<B>) -> Result<DraftSaved, Self::Error>;
 
   fn draft<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Draft<B>>, Self::Error>;
 
