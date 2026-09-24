@@ -11,8 +11,7 @@ workspace = true
 
 [dependencies]
 serde.workspace = true
+# Reads the JSON the agent CLIs print (model catalog, sign-in status).
+serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
-
-[dev-dependencies]
-serde_json.workspace = true

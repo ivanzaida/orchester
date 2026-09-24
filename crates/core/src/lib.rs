@@ -3,6 +3,7 @@
 //! Must stay free of UI and transport dependencies: the desktop app uses it
 //! directly today, and a future server will share it.
 
+pub mod connection;
 pub mod id;
 pub mod money;
 pub mod name;
