@@ -22,7 +22,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{connection::Connection, id::ConnectionId};
+use orchester_core::{connection::Connection, id::ConnectionId, name::Name};
 
 use self::{
   dialog::ConnectionDialog,
@@ -83,6 +83,8 @@ impl lurq::app::component::DevtoolsInspectable for DialogMode {}
 pub struct DialogContext {
   pub project: OpenProject,
   pub mode: DialogMode,
+  /// Names of the project's other connections.
+  pub taken: Vec<Name>,
   pub close: Arc<dyn Fn() + Send + Sync>,
   pub saved: Arc<dyn Fn(ConnectionId) + Send + Sync>,
 }
@@ -165,7 +167,7 @@ impl Component for ConnectionsScreen {
       ))
       .child(self.tabs(ctx))
       .child(body)
-      .child(self.dialog(ctx, &open))
+      .child(self.dialog(ctx, &open, &loaded))
   }
 }
 
@@ -314,18 +316,32 @@ impl ConnectionsScreen {
   }
 
   /// The add or edit dialog (`IAN4P`), over a backdrop.
-  fn dialog(&self, ctx: &mut Ctx, open: &OpenProject) -> Element {
+  fn dialog(&self, ctx: &mut Ctx, open: &OpenProject, loaded: &Loaded) -> Element {
     let mode = self.dialog.get();
     let key = match &mode {
       DialogMode::Closed => return Modal::new(Column::new()).open_when(false).into(),
       DialogMode::Add => "connection-dialog-add".to_owned(),
       DialogMode::Edit(connection) => format!("connection-dialog-{}", connection.id()),
     };
+    let editing = match &mode {
+      DialogMode::Edit(connection) => Some(connection.id()),
+      DialogMode::Add | DialogMode::Closed => None,
+    };
+    let taken = match loaded {
+      Loaded::Ready(data) => data
+        .connections
+        .iter()
+        .filter(|connection| Some(connection.id()) != editing)
+        .map(|connection| connection.name().clone())
+        .collect(),
+      Loaded::Loading | Loaded::Failed(_) => Vec::new(),
+    };
     let (close, saved) = (self.dialog.clone(), self.dialog.clone());
     let (selected, revision) = (self.selected.clone(), self.revision.clone());
     ctx.provide(DialogContext {
       project: open.clone(),
       mode,
+      taken,
       close: Arc::new(move || close.set(DialogMode::Closed)),
       saved: Arc::new(move |id| {
         selected.set(Selected(Some(id)));

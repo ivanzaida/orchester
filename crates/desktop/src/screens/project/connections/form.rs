@@ -100,7 +100,7 @@ impl ConnectionDialog {
   }
 
   fn name_field(&self, ctx: &Ctx) -> Element {
-    let invalid = Name::new(&self.name.get()).err();
+    let invalid = connection_name(&self.name.get(), &self.context.taken).err();
     let input = text_input(
       ctx,
       "connection-name",
@@ -110,7 +110,7 @@ impl ConnectionDialog {
     )
     .height(Dimension::Px(FIELD_HEIGHT));
     let note = match invalid {
-      Some(error) => FieldNote::Error(message_text(ctx, &connection_name_error(&error))),
+      Some(error) => FieldNote::Error(message_text(ctx, &error)),
       None => FieldNote::None,
     };
     field(&ctx.t("connections.dialog.name"), input.into(), note)
@@ -247,7 +247,16 @@ fn check_detail(ctx: &Ctx, provider: AgentProvider, result: &CheckResult) -> Arc
   ctx.t_args(key, [("program", &*program), ("version", version.as_str())])
 }
 
-pub(super) fn connection_name_error(error: &NameError) -> Message {
+/// The entered name, if it is valid and no other connection of the project has it.
+pub(super) fn connection_name(value: &str, taken: &[Name]) -> Result<Name, Message> {
+  let name = Name::new(value).map_err(|error| connection_name_error(&error))?;
+  if taken.contains(&name) {
+    return Err(Message::new("errors.connectionNameTaken"));
+  }
+  Ok(name)
+}
+
+fn connection_name_error(error: &NameError) -> Message {
   match error {
     NameError::Blank => Message::new("errors.connectionNameRequired"),
     NameError::TooLong { .. } => messages::name_error(error),

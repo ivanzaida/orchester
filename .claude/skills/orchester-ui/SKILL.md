@@ -123,6 +123,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::NavCount.role()` | mono 11 muted | count beside a navigation item (`LTXft`) |
 | `ExtraTypography::Brief.role()` | 13, 1.7 | task brief text (`E9moJ`) |
 | `ExtraTypography::InspectorTitle.role()` | 18/500 | inspector panel title (connection name, `kU9QO`) |
+| `ExtraTypography::CompactStatusLabel.role()` | 10/500 | status label in a list row (`v7McTX`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

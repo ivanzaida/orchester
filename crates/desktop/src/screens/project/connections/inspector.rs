@@ -19,7 +19,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use super::status::{CHECKING, program_key, status_detail_key, status_label, vendor_key};
+use super::status::{CHECKING, status_detail_key, status_label, vendor_key};
 use crate::{
   connections::data::ProfileUse,
   display,
@@ -61,12 +61,7 @@ pub fn inspector(ctx: &Ctx, connection: &Connection, state: &InspectorState, act
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Text::new(connection.name().as_str()).variant(ExtraTypography::InspectorTitle.role()))
     .child(label(status_icon, &ctx.t(status_key)))
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Stack.role())
-        .with_children(properties(ctx, connection)),
-    )
+    .with_children(properties(ctx, connection))
     .child(models(ctx, connection))
     .child(button(
       ctx,
@@ -77,7 +72,6 @@ pub fn inspector(ctx: &Ctx, connection: &Connection, state: &InspectorState, act
     ))
     .child(used_by(ctx, &state.uses, &actions.show_profile))
     .child(Spacer::new().flex(1.0))
-    .child(status_detail(ctx, connection, status, state.check_error.as_ref()))
     .child(button(
       ctx,
       "test-connection",
@@ -92,25 +86,19 @@ pub fn inspector(ctx: &Ctx, connection: &Connection, state: &InspectorState, act
       Icon::Settings,
       Some(actions.edit.clone()),
     ))
+    .child(status_detail(ctx, connection, status, state.check_error.as_ref()))
     .into()
 }
 
+/// The design's properties (`CRVwa`…`X4Sz0`) plus the program file; the version is in the row.
 fn properties(ctx: &Ctx, connection: &Connection) -> Vec<Element> {
   let provider = connection.provider();
-  let program = match connection.version() {
-    Some(version) => ctx.t_args(
-      "connections.programVersion",
-      [("program", &*ctx.t(program_key(provider))), ("version", version)],
-    ),
-    None => ctx.t(program_key(provider)),
-  };
   let checked = connection.last_check().map_or_else(
     || ctx.t("connections.notCheckedYet"),
     |check| message_text(ctx, &display::elapsed(Timestamp::now(), check.at)),
   );
   vec![
     property(&ctx.t("connections.property.provider"), &ctx.t(vendor_key(provider))),
-    property(&ctx.t("connections.property.program"), &program),
     property(
       &ctx.t("connections.property.executable"),
       &display::shorten_path(connection.executable(), PATH_CHARS),

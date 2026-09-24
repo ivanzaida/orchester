@@ -24,8 +24,15 @@ use crate::{
 const LIST_WIDTH: f32 = 264.0;
 const ITEM_HEIGHT: f32 = 70.0;
 
-/// `selected` is the profile in the editor, if it is a stored one.
-pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selected: Option<ResourceId>, nav: &ProjectNav) -> Element {
+/// What the editor shows: a stored profile, a new one not saved yet, or nothing.
+#[derive(Clone, Copy)]
+pub enum ListSelection {
+  None,
+  Profile(ResourceId),
+  New,
+}
+
+pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selection: ListSelection, nav: &ProjectNav) -> Element {
   let new_agent = {
     let button = ActionButton::new(ctx.t("agents.new"))
       .icon(Icon::Plus)
@@ -40,10 +47,21 @@ pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selected: Option<Resource
       button.on_click(move || agent.set(AgentSelection::New))
     }
   };
-  let items = agents
+  let selected = match selection {
+    ListSelection::Profile(id) => Some(id),
+    ListSelection::None | ListSelection::New => None,
+  };
+  let mut items: Vec<Element> = agents
     .profiles
     .iter()
-    .map(|entry| item(ctx, agents, entry, Some(entry.id) == selected, nav));
+    .map(|entry| item(ctx, agents, entry, Some(entry.id) == selected, nav))
+    .collect();
+  if matches!(selection, ListSelection::New) {
+    let placeholder = frame(&ctx.t("agents.newTitle"), &ctx.t("agents.notSaved"), true)
+      .id("agent-new")
+      .describe("state", "selected");
+    items.push(placeholder.into());
+  }
   Column::new()
     .id("agent-profiles")
     .width(Dimension::Px(LIST_WIDTH))
@@ -89,8 +107,21 @@ fn item(ctx: &Ctx, agents: &ProjectAgents, entry: &ProfileEntry, selected: bool,
     "agents.assignment",
     [("connection", &*connection), ("model", profile.model().as_str())],
   );
-  let column = Column::new()
-    .id(Arc::<str>::from(format!("agent-{}", entry.id)))
+  let column = frame(profile.role().as_str(), &metadata, selected).id(Arc::<str>::from(format!("agent-{}", entry.id)));
+  if selected {
+    return column.describe("state", "selected").into();
+  }
+  let (agent, id) = (nav.agent.clone(), entry.id);
+  column
+    .cursor(CursorIcon::Pointer)
+    .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
+    .on_click(move |_| agent.set(AgentSelection::Profile(id)))
+    .into()
+}
+
+/// A list item (`jNTVN`): title over metadata.
+fn frame(title: &str, metadata: &str, selected: bool) -> Column {
+  Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ITEM_HEIGHT))
     .padding(ExtraSpacing::Stack.role())
@@ -101,24 +132,11 @@ fn item(ctx: &Ctx, agents: &ProjectAgents, entry: &ProfileEntry, selected: bool,
     } else {
       PaletteColor::SurfacePanel
     })
+    .child(Text::new(title).variant(ExtraTypography::FormLabel.role()).nowrap())
     .child(
-      Text::new(profile.role().as_str())
-        .variant(ExtraTypography::FormLabel.role())
-        .nowrap(),
-    )
-    .child(
-      Text::new(&metadata)
+      Text::new(metadata)
         .variant(ExtraTypography::Footnote.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
-    );
-  if selected {
-    return column.describe("state", "selected").into();
-  }
-  let (agent, id) = (nav.agent.clone(), entry.id);
-  column
-    .cursor(CursorIcon::Pointer)
-    .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
-    .on_click(move |_| agent.set(AgentSelection::Profile(id)))
-    .into()
+    )
 }

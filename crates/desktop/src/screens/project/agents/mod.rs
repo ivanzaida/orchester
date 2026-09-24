@@ -21,7 +21,10 @@ use lurq::{
 };
 use orchester_core::id::ResourceId;
 
-use self::{editor::ProfileEditor, list::profile_list};
+use self::{
+  editor::ProfileEditor,
+  list::{ListSelection, profile_list},
+};
 use super::{AgentSelection, ProjectNav, Section, page};
 use crate::{
   agents::data::{ProfileChange, ProfileEntry, ProjectAgents, apply_in},
@@ -146,7 +149,7 @@ impl AgentsScreen {
   /// The page without an editor: loading, failed, or no profiles yet.
   fn page(&self, ctx: &Ctx, open: &OpenProject, agents: Option<&ProjectAgents>, content: Element) -> Element {
     let breadcrumb = ctx.t_args("agents.breadcrumb", [("project", open.project.name().as_str())]);
-    let list = agents.map(|agents| profile_list(ctx, agents, None, &self.nav));
+    let list = agents.map(|agents| profile_list(ctx, agents, ListSelection::None, &self.nav));
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))

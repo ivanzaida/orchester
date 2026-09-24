@@ -155,5 +155,7 @@ fn agents_and_connections_roles_follow_pencil() {
     (inspector_title.font_size, inspector_title.weight),
     (18.0, FontWeight::Medium)
   );
+  let compact = theme.typography_style(ExtraTypography::CompactStatusLabel.role());
+  assert_eq!((compact.font_size, compact.weight), (10.0, FontWeight::Medium));
   assert_eq!(theme.spacing_value(ExtraSpacing::Form.role()), Dimension::Px(22.0));
 }

@@ -19,7 +19,7 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
-    status_label::status_label as label,
+    status_label::compact_status_label as label,
   },
 };
 

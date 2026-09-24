@@ -20,7 +20,10 @@ use orchester_core::{
   resource::{AgentProfile, VersionNumber},
 };
 
-use super::{Editing, EditorContext, list::profile_list};
+use super::{
+  Editing, EditorContext,
+  list::{ListSelection, profile_list},
+};
 use crate::{
   agents::{
     data::{ProfileChange, VersionState},
@@ -124,7 +127,7 @@ impl Component for ProfileEditor {
           .child(profile_list(
             ctx,
             &self.context.agents,
-            entry.map(|entry| entry.id),
+            entry.map_or(ListSelection::New, |entry| ListSelection::Profile(entry.id)),
             &self.context.nav,
           ))
           .child(

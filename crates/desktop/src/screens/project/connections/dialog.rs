@@ -13,13 +13,12 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   connection::{AgentProvider, ConnectionCheck},
   id::ConnectionId,
-  name::Name,
 };
 
 use super::{DialogContext, DialogMode, form, status::short_key};
@@ -32,6 +31,7 @@ use crate::{
   messages::Message,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
+    backdrop::backdrop,
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     message_text,
@@ -161,13 +161,7 @@ impl Component for ConnectionDialog {
       .child(self.header(ctx))
       .child(ScrollVertical::new(form).width(Dimension::Pct(100.0)).flex(1.0))
       .child(self.actions(ctx, &save, draft));
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .background(ExtraColor::Scrim.role())
-      .align_items(Alignment::Center)
-      .justify(Justify::Center)
-      .child(dialog)
+    backdrop(dialog)
   }
 }
 
@@ -252,7 +246,7 @@ impl ConnectionDialog {
 
   /// What Save connection stores, once the name is valid and the program is the expected CLI.
   fn draft(&self, program: &Program) -> Result<ConnectionDraft, Message> {
-    let name = Name::new(&self.name.get()).map_err(|error| form::connection_name_error(&error))?;
+    let name = form::connection_name(&self.name.get(), &self.context.taken)?;
     let (Some(executable), Verification::Done(check)) = (&program.executable, &program.verification) else {
       return Err(Message::new("connections.dialog.waitForCheck"));
     };
@@ -368,16 +362,32 @@ fn save_reason(ctx: &Ctx, reason: &Message) -> Element {
 }
 
 /// The provider and the project, e.g. "Codex · Kontur", as the design names connections.
+/// Numbered ("Codex · Kontur 2") when the plain name is taken.
 fn suggested_name(ctx: &Ctx, context: &DialogContext, provider: AgentProvider) -> String {
-  ctx
-    .t_args(
-      "connections.dialog.suggestedName",
-      [
-        ("provider", &*ctx.t(short_key(provider))),
-        ("project", context.project.project.name().as_str()),
-      ],
-    )
-    .to_string()
+  let (short, project) = (ctx.t(short_key(provider)), context.project.project.name().as_str());
+  let taken = |name: &str| context.taken.iter().any(|taken| taken.as_str() == name);
+  let plain = ctx.t_args(
+    "connections.dialog.suggestedName",
+    [("provider", &*short), ("project", project)],
+  );
+  if !taken(&plain) {
+    return plain.to_string();
+  }
+  (2_usize..)
+    .map(|number| {
+      ctx
+        .t_args(
+          "connections.dialog.suggestedNameNumbered",
+          [
+            ("provider", &*short),
+            ("project", project),
+            ("number", number.to_string().as_str()),
+          ],
+        )
+        .to_string()
+    })
+    .find(|name| !taken(name))
+    .expect("only finitely many connection names are taken")
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
