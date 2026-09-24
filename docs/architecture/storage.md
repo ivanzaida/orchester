@@ -56,9 +56,8 @@ keeps work running is a possible later improvement, not part of this version.)
     abnormally, lists the interrupted runs with the reason, the last persisted checkpoint of
     each and whether its worktree has uncommitted changes, and offers to continue each run, or
     all of them, from its last checkpoint. Nothing restarts automatically: the modal offers
-    continuing all of them or none, and each run can also be continued on its own, either from
-    its row in the modal or later from its task conversation after the modal is dismissed
-    (user decision, 2026-09-24). Work after the
+    only continuing all of them or none. Runs not continued there stay interrupted and each can
+    be continued on its own later from its task conversation (user decision, 2026-09-24). Work after the
     checkpoint is not claimed as done; uncommitted worktree changes are kept and shown, never
     discarded silently.
 - **Runner drops while the application is open** → the desktop reconnects automatically with a
