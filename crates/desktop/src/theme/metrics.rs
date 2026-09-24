@@ -4,10 +4,10 @@ use lurq::{
 };
 
 use super::tokens::{
-  FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, SPACE_COLUMNS, SPACE_FOOTER,
-  SPACE_FORM, SPACE_GROUP, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR,
-  SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_RAIL, SPACE_SECTION, SPACE_SM,
-  SPACE_STACK, SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
+  FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, SPACE_COLUMNS, SPACE_DIVIDER,
+  SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO,
+  SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE,
+  SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -49,10 +49,16 @@ pub enum ExtraSpacing {
   Columns,
   /// Horizontal margin of the welcome content (`Wl8bU`).
   Margin,
+  /// Field label to its control in the pipeline inspector and dialogs (`x9u2n`, `J4kw6q`).
+  Field,
+  /// Between key/value properties of the step inspector (`dSLqh`).
+  Property,
+  /// Above the properties after their divider (`dSLqh`).
+  Divider,
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 17] = [
+  const ALL: [Self; 20] = [
     Self::Mark,
     Self::Tight,
     Self::Indicator,
@@ -70,6 +76,9 @@ impl ExtraSpacing {
     Self::Footer,
     Self::Columns,
     Self::Margin,
+    Self::Field,
+    Self::Property,
+    Self::Divider,
   ];
 
   fn name(self) -> &'static str {
@@ -91,6 +100,9 @@ impl ExtraSpacing {
       Self::Footer => "footer",
       Self::Columns => "columns",
       Self::Margin => "margin",
+      Self::Field => "field",
+      Self::Property => "property",
+      Self::Divider => "divider",
     }
   }
 
@@ -113,6 +125,9 @@ impl ExtraSpacing {
       Self::Footer => SPACE_FOOTER,
       Self::Columns => SPACE_COLUMNS,
       Self::Margin => SPACE_MARGIN,
+      Self::Field => SPACE_FIELD,
+      Self::Property => SPACE_PROPERTY,
+      Self::Divider => SPACE_DIVIDER,
     }
   }
 

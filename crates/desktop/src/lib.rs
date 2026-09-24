@@ -10,6 +10,7 @@ pub mod display;
 pub mod i18n;
 pub mod messages;
 mod navigation;
+pub mod pipelines;
 pub mod project_setup;
 pub mod root;
 pub mod runner;

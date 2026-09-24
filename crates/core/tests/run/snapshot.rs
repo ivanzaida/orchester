@@ -111,7 +111,9 @@ fn run_snapshot_rejects_unpublished_profiles_and_tools() {
   );
   let missing_tool = ResourceId::generate();
   let tool_step = Step {
-    kind: StepKind::Tool { tool: missing_tool },
+    kind: StepKind::Tool {
+      tool: Some(missing_tool),
+    },
     ..agent_step("deploy", config.builder, &[])
   };
   let pipeline = Pipeline::new(vec![tool_step]).expect("valid");
@@ -121,6 +123,20 @@ fn run_snapshot_rejects_unpublished_profiles_and_tools() {
       step: key("deploy"),
       tool: missing_tool,
     })
+  );
+}
+
+#[test]
+fn run_snapshot_rejects_steps_without_a_profile_or_tool() {
+  let config = Config::feature_delivery();
+  let unassigned = Step {
+    kind: StepKind::Tool { tool: None },
+    ..agent_step("deploy", config.builder, &[])
+  };
+  let pipeline = Pipeline::new(vec![unassigned]).expect("valid");
+  assert_eq!(
+    build(&config, &pipeline, &BTreeMap::new()),
+    Err(SnapshotError::UnassignedStep(key("deploy")))
   );
 }
 
@@ -215,7 +231,7 @@ fn run_snapshot_pins_step_tools_and_tools_allowed_for_the_pipeline() {
   ]);
   let mut steps = config.pipeline_version.body().steps().to_vec();
   steps.push(Step {
-    kind: StepKind::Tool { tool: step_tool },
+    kind: StepKind::Tool { tool: Some(step_tool) },
     ..agent_step("deploy", config.builder, &["pr"])
   });
   let pipeline = Pipeline::new(steps).expect("valid pipeline");

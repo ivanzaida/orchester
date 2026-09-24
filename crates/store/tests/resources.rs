@@ -74,7 +74,7 @@ fn pipeline() -> Pipeline {
     key: StepKey::new(key).expect("valid key"),
     name: name(key),
     kind: StepKind::Agent {
-      profile: ResourceId::generate(),
+      profile: Some(ResourceId::generate()),
       repository: RepositoryAccess::Write,
       model: None,
     },
@@ -184,6 +184,28 @@ fn resources_publish_in_sequence_and_keep_old_versions() {
     db.version::<Pipeline>(id, v2.number()).unwrap().unwrap().body(),
     &single
   );
+}
+
+#[test]
+fn resources_keep_a_pipeline_draft_with_unassigned_steps_but_do_not_publish_it() {
+  let (_repo, mut db) = project_repo();
+  let mut steps = pipeline().into_steps();
+  steps[1].kind = StepKind::Tool { tool: None };
+  let unassigned = Pipeline::new(steps).expect("valid pipeline");
+  let id = db
+    .create_resource(slug("feature-delivery"), name("Feature delivery"), &unassigned, at(1))
+    .unwrap()
+    .id();
+  assert_eq!(
+    db.draft::<Pipeline>(id).unwrap().map(|draft| draft.body().clone()),
+    Some(unassigned)
+  );
+  assert!(matches!(
+    db.publish_draft::<Pipeline>(id, at(2)),
+    Err(StoreError::Publish(PublishError::UnassignedSteps(steps))) if steps == [StepKey::new("implement").unwrap()]
+  ));
+  assert_eq!(db.latest_version::<Pipeline>(id).unwrap(), None);
+  assert!(db.draft::<Pipeline>(id).unwrap().is_some());
 }
 
 #[test]

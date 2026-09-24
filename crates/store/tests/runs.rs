@@ -52,7 +52,7 @@ fn step(value: &str, profile: ResourceId, depends_on: &[&str]) -> Step {
     key: key(value),
     name: name(value),
     kind: StepKind::Agent {
-      profile,
+      profile: Some(profile),
       repository: RepositoryAccess::Write,
       model: None,
     },
@@ -124,7 +124,7 @@ impl Fixture {
       .expect("publish profile");
     let implement = Step {
       kind: StepKind::Agent {
-        profile: builder,
+        profile: Some(builder),
         repository: RepositoryAccess::Write,
         model: Some(ModelId::new("model-override").expect("valid model")),
       },

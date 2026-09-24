@@ -141,7 +141,12 @@ fn step_uses<S: ResourceStore>(store: &S) -> Result<Vec<StepUse>, S::Error> {
       continue;
     };
     for step in version.body().steps() {
-      if let StepKind::Agent { profile, model, .. } = &step.kind {
+      if let StepKind::Agent {
+        profile: Some(profile),
+        model,
+        ..
+      } = &step.kind
+      {
         uses.push(StepUse {
           profile: *profile,
           pipeline: resource.name().as_str().into(),

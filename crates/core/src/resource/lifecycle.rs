@@ -7,6 +7,7 @@ use std::{fmt, num::NonZeroU32};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use super::pipeline::StepKey;
 use crate::{
   id::{ResourceId, VersionId},
   name::Name,
@@ -47,6 +48,22 @@ impl Slug {
     } else {
       Err(SlugError::Invalid(value.to_owned()))
     }
+  }
+
+  /// The slug a name reads as: ASCII letters and digits lowercased, every other run of
+  /// characters a single hyphen, cut to [`Self::MAX_CHARS`]. `None` when the name has no ASCII
+  /// letter or digit, e.g. a name written only in another script.
+  pub fn from_name(name: &str) -> Option<Self> {
+    let mut slug = String::new();
+    for c in name.chars() {
+      if c.is_ascii_alphanumeric() {
+        slug.push(c.to_ascii_lowercase());
+      } else if !slug.is_empty() && !slug.ends_with('-') {
+        slug.push('-');
+      }
+    }
+    slug.truncate(Self::MAX_CHARS);
+    Self::new(slug.trim_end_matches('-')).ok()
   }
 
   pub fn as_str(&self) -> &str {
@@ -239,6 +256,12 @@ pub enum PublishError {
   },
   #[error("the resource has reached the maximum number of versions")]
   VersionLimit,
+  /// A pipeline without steps has nothing to run.
+  #[error("the pipeline has no steps")]
+  NoSteps,
+  /// Pipeline steps without an agent profile or tool; a run could not execute them.
+  #[error("steps {0:?} have no agent profile or tool")]
+  UnassignedSteps(Vec<StepKey>),
 }
 
 /// Publishes `draft` as the version after `latest`. The caller persists the version and

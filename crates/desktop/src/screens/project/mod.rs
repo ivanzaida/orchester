@@ -8,6 +8,7 @@ mod connections;
 mod new_task;
 mod overview;
 mod page;
+mod pipelines;
 mod runner;
 mod sidebar;
 mod task_rows;
@@ -28,6 +29,7 @@ use self::{
   agents::AgentsScreen,
   connections::ConnectionsScreen,
   new_task::{NewTaskForm, NewTaskProps},
+  pipelines::PipelinesScreen,
   sidebar::sidebar,
   tasks::{TasksProps, TasksScreen},
 };
@@ -45,6 +47,7 @@ pub enum Section {
   Overview,
   Tasks,
   NewTask,
+  Pipelines,
   Agents,
   Connections,
 }
@@ -149,6 +152,7 @@ impl Component for ProjectShell {
           tasks: tasks.clone(),
         },
       ),
+      Section::Pipelines => ctx.mount_keyed::<PipelinesScreen>("pipelines", open.clone()),
       Section::NewTask => ctx.mount_keyed::<NewTaskForm>(
         "new-task",
         NewTaskProps {

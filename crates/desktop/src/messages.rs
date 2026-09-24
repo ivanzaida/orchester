@@ -59,6 +59,9 @@ pub fn store_error(error: &StoreError) -> Message {
       latest.map_or_else(String::new, |version| version.to_string()),
     ),
     StoreError::Publish(PublishError::VersionLimit) => Message::new("errors.versionLimit"),
+    StoreError::Publish(PublishError::NoSteps | PublishError::UnassignedSteps(_)) => {
+      Message::new("pipelines.problems.notPublishable")
+    }
   }
 }
 

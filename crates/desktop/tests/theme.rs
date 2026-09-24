@@ -147,6 +147,36 @@ fn task_screen_roles_follow_pencil() {
 }
 
 #[test]
+fn pipeline_editor_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  let label = theme.typography_style(ExtraTypography::CanvasLabel.role());
+  assert_eq!((label.font_size, label.letter_spacing), (9.0, 1.0));
+  assert_eq!(&*label.font_family, "Geist Mono");
+  assert_eq!(
+    theme.typography_style(ExtraTypography::MonoValue.role()).font_size,
+    11.0
+  );
+  assert_eq!(
+    theme.typography_style(ExtraTypography::Instructions.role()).line_height,
+    1.65
+  );
+  assert_eq!(theme.typography_style(ExtraTypography::Hint.role()).font_size, 10.0);
+  assert_eq!(
+    theme.typography_style(ExtraTypography::VersionFigure.role()).font_size,
+    18.0
+  );
+  assert_eq!(theme.typography_style(ExtraTypography::Summary.role()).line_height, 1.6);
+  assert_eq!(
+    theme.typography_style(ExtraTypography::IconLarge.role()).font_size,
+    22.0
+  );
+  assert_eq!(theme.spacing_value(ExtraSpacing::Field.role()), Dimension::Px(9.0));
+  assert_eq!(theme.spacing_value(ExtraSpacing::Property.role()), Dimension::Px(15.0));
+  assert_eq!(theme.spacing_value(ExtraSpacing::Divider.role()), Dimension::Px(18.0));
+}
+
+#[test]
 fn agents_and_connections_roles_follow_pencil() {
   let app = themed_app();
   let theme = app.theme();

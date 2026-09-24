@@ -4,7 +4,10 @@ use orchester_core::{
   id::ResourceId,
   money::{Currency, Money},
   name::Name,
-  resource::{FailureRoute, ModelId, Pipeline, PipelineError, PromptText, RepositoryAccess, Step, StepKey, StepKind},
+  resource::{
+    FailureRoute, ModelId, Pipeline, PipelineError, PromptText, PublishError, RepositoryAccess, ResourceBody, Step,
+    StepKey, StepKind,
+  },
 };
 
 fn key(value: &str) -> StepKey {
@@ -16,7 +19,7 @@ fn step(value: &str, depends_on: &[&str]) -> Step {
     key: key(value),
     name: Name::new(value).expect("valid name"),
     kind: StepKind::Agent {
-      profile: ResourceId::generate(),
+      profile: Some(ResourceId::generate()),
       repository: RepositoryAccess::ReadOnly,
       model: None,
     },
@@ -43,7 +46,7 @@ fn feature_delivery() -> Vec<Step> {
   };
   let implement = Step {
     kind: StepKind::Agent {
-      profile: ResourceId::generate(),
+      profile: Some(ResourceId::generate()),
       repository: RepositoryAccess::Write,
       model: Some(ModelId::new("opus").expect("valid model")),
     },
@@ -53,7 +56,7 @@ fn feature_delivery() -> Vec<Step> {
   };
   let checks = Step {
     kind: StepKind::Tool {
-      tool: ResourceId::generate(),
+      tool: Some(ResourceId::generate()),
     },
     on_failure: retry("implement", 3),
     ..step("run-checks", &["implement"])
@@ -83,8 +86,21 @@ fn pipeline_accepts_parallel_steps_gates_and_upstream_retries() {
 }
 
 #[test]
-fn pipeline_needs_steps() {
-  assert_eq!(Pipeline::new(Vec::new()), Err(PipelineError::NoSteps));
+fn pipeline_without_steps_is_a_draft_that_cannot_be_published() {
+  let empty = Pipeline::new(Vec::new()).expect("an empty draft is valid");
+  assert_eq!(empty.check_publishable(), Err(PublishError::NoSteps));
+}
+
+#[test]
+fn pipeline_description_survives_json() {
+  let pipeline = Pipeline::new(vec![step("build", &[])])
+    .expect("valid")
+    .with_description("From a brief to a pull request.".to_owned());
+  let json = serde_json::to_string(&pipeline).expect("serialize");
+  let read: Pipeline = serde_json::from_str(&json).expect("deserialize");
+  assert_eq!(read.description(), "From a brief to a pull request.");
+  let without: Pipeline = serde_json::from_str(r#"{"steps":[]}"#).expect("description is optional");
+  assert_eq!(without.description(), "");
 }
 
 #[test]

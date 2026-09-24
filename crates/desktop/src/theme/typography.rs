@@ -76,6 +76,22 @@ pub enum ExtraTypography {
   IconPanel,
   /// Window control icons in the title bar (`QQmsI`), 14px.
   IconWindowControl,
+  /// Spaced mono label on the pipeline canvas, e.g. "ON TASK START" (`wRjZD`, `qwFek`, `RAoRx`).
+  CanvasLabel,
+  /// Small mono tag beside an inspector title, e.g. "STEP 05" (`kAJZA`, `N2NBl`).
+  MonoTag,
+  /// Mono value of a key/value property or a slug, e.g. "$1.50" (`yeeIR` in `BzWOd`, `cJsA7`).
+  MonoValue,
+  /// Step instructions as they are written (`v1Ky8`).
+  Instructions,
+  /// Short explanation under a field, e.g. "Choose a model here…" (`k66CB`, `Lwlf3`).
+  Hint,
+  /// Version figure in the publish confirmation, e.g. "v4" (`p8L552`).
+  VersionFigure,
+  /// Explanation under an empty state title (`xIG73`).
+  Summary,
+  /// Empty state icon (`Ujxx0`), 22px.
+  IconLarge,
   /// Status label text in a list row (`JuW4o` in `v7McTX`).
   CompactStatusLabel,
   /// Title of an inspector panel, e.g. a connection's name (`kU9QO`).
@@ -83,7 +99,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 34] = [
+  const ALL: [Self; 42] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -116,6 +132,14 @@ impl ExtraTypography {
     Self::IconFeature,
     Self::IconPanel,
     Self::IconWindowControl,
+    Self::CanvasLabel,
+    Self::MonoTag,
+    Self::MonoValue,
+    Self::Instructions,
+    Self::Hint,
+    Self::VersionFigure,
+    Self::Summary,
+    Self::IconLarge,
     Self::CompactStatusLabel,
     Self::InspectorTitle,
   ];
@@ -154,6 +178,14 @@ impl ExtraTypography {
       Self::IconFeature => "icon-feature",
       Self::IconPanel => "icon-panel",
       Self::IconWindowControl => "icon-window-control",
+      Self::CanvasLabel => "canvas-label",
+      Self::MonoTag => "mono-tag",
+      Self::MonoValue => "mono-value",
+      Self::Instructions => "instructions",
+      Self::Hint => "hint",
+      Self::VersionFigure => "version-figure",
+      Self::Summary => "summary",
+      Self::IconLarge => "icon-large",
       Self::CompactStatusLabel => "compact-status-label",
       Self::InspectorTitle => "inspector-title",
     }
@@ -246,6 +278,26 @@ impl ExtraTypography {
       Self::IconFeature => icon(19.0),
       Self::IconPanel => icon(24.0),
       Self::IconWindowControl => icon(14.0),
+      Self::CanvasLabel => TextStyle {
+        letter_spacing: 1.0,
+        ..mono(9.0, SUBTLE)
+      },
+      Self::MonoTag => mono(9.0, MUTED),
+      Self::MonoValue => mono(11.0, TEXT),
+      Self::Instructions => TextStyle {
+        line_height: 1.65,
+        ..style(12.0, FontWeight::Normal, TEXT)
+      },
+      Self::Hint => TextStyle {
+        line_height: 1.5,
+        ..style(10.0, FontWeight::Normal, MUTED)
+      },
+      Self::VersionFigure => style(18.0, FontWeight::Medium, TEXT),
+      Self::Summary => TextStyle {
+        line_height: 1.6,
+        ..style(13.0, FontWeight::Normal, MUTED)
+      },
+      Self::IconLarge => icon(22.0),
       Self::CompactStatusLabel => style(10.0, FontWeight::Medium, TEXT),
       Self::InspectorTitle => style(18.0, FontWeight::Medium, TEXT),
     }

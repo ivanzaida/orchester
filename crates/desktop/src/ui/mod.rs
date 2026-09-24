@@ -11,6 +11,7 @@ pub mod notice;
 pub mod panel;
 pub mod property;
 pub mod status_label;
+pub mod summary_step;
 pub mod tab;
 
 use std::sync::Arc;

@@ -14,6 +14,16 @@ use super::{
 };
 use crate::{id::ResourceId, money::Money, name::Name};
 
+mod changes;
+mod edit;
+mod starter;
+
+pub use self::{
+  changes::{PipelineChange, StepChange, changes},
+  edit::{EditProblem, PipelineEdit},
+  starter::{StarterAssignments, StarterStep, StarterStepText, feature_delivery},
+};
+
 /// Stable key of a step within its pipeline, e.g. `implement`. Kept across versions so
 /// instructions, tool access rules and failure routes can refer to a step.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -62,15 +72,27 @@ pub enum RepositoryAccess {
 #[serde(rename_all = "snake_case")]
 pub enum StepKind {
   /// Runs an agent of the selected profile, with the profile's model unless `model`
-  /// overrides it for this step.
+  /// overrides it for this step. A draft may leave the profile unset (`None`); publishing
+  /// requires it, see [`Pipeline::unassigned_steps`].
   Agent {
-    profile: ResourceId,
+    profile: Option<ResourceId>,
     repository: RepositoryAccess,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     model: Option<ModelId>,
   },
-  /// Calls a project tool under the tool's access policy.
-  Tool { tool: ResourceId },
+  /// Calls a project tool under the tool's access policy. Unset (`None`) like an agent step's
+  /// profile until a tool is chosen.
+  Tool { tool: Option<ResourceId> },
+}
+
+impl StepKind {
+  /// The agent profile or tool that executes the step, once chosen.
+  pub const fn executor(&self) -> Option<ResourceId> {
+    match self {
+      Self::Agent { profile, .. } => *profile,
+      Self::Tool { tool } => *tool,
+    }
+  }
 }
 
 /// When a step fails, the run returns to `return_to` (an upstream step) at most `max_retries`
@@ -98,10 +120,8 @@ pub struct Step {
   pub budget: Option<Money>,
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum PipelineError {
-  #[error("a pipeline needs at least one step")]
-  NoSteps,
   #[error("step key `{0}` is used more than once")]
   DuplicateStep(StepKey),
   #[error("step `{step}` depends on `{dependency}`, which is not a step of this pipeline")]
@@ -116,15 +136,21 @@ pub enum PipelineError {
   NonPositiveBudget(StepKey),
 }
 
-/// Ordered steps forming an acyclic dependency graph.
+/// Ordered steps forming an acyclic dependency graph. A draft may have no steps yet;
+/// publishing requires at least one (see [`crate::resource::ResourceBody::check_publishable`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "PipelineFields")]
 pub struct Pipeline {
+  /// What the pipeline is for, as the user wrote it; may be empty.
+  #[serde(default, skip_serializing_if = "String::is_empty")]
+  description: String,
   steps: Vec<Step>,
 }
 
 #[derive(Deserialize)]
 struct PipelineFields {
+  #[serde(default)]
+  description: String,
   steps: Vec<Step>,
 }
 
@@ -132,21 +158,31 @@ impl TryFrom<PipelineFields> for Pipeline {
   type Error = PipelineError;
 
   fn try_from(fields: PipelineFields) -> Result<Self, PipelineError> {
-    Self::new(fields.steps)
+    Ok(Self::new(fields.steps)?.with_description(fields.description))
   }
 }
 
 impl Pipeline {
   pub fn new(steps: Vec<Step>) -> Result<Self, PipelineError> {
-    if steps.is_empty() {
-      return Err(PipelineError::NoSteps);
-    }
     let graph = Graph::new(&steps)?;
     for step in &steps {
       check_budget(step)?;
       graph.check_route(step)?;
     }
-    Ok(Self { steps })
+    Ok(Self {
+      description: String::new(),
+      steps,
+    })
+  }
+
+  #[must_use]
+  pub fn with_description(mut self, description: String) -> Self {
+    self.description = description;
+    self
+  }
+
+  pub fn description(&self) -> &str {
+    &self.description
   }
 
   /// Steps in the order the user arranged them.
@@ -157,6 +193,23 @@ impl Pipeline {
   pub fn step(&self, key: &StepKey) -> Option<&Step> {
     self.steps.iter().find(|step| &step.key == key)
   }
+
+  /// Steps whose agent profile or tool is not chosen yet. Such a pipeline can be kept as a
+  /// draft but not published.
+  pub fn unassigned_steps(&self) -> impl Iterator<Item = &StepKey> {
+    unassigned(&self.steps)
+  }
+
+  pub fn into_steps(self) -> Vec<Step> {
+    self.steps
+  }
+}
+
+fn unassigned(steps: &[Step]) -> impl Iterator<Item = &StepKey> {
+  steps
+    .iter()
+    .filter(|step| step.kind.executor().is_none())
+    .map(|step| &step.key)
 }
 
 fn check_budget(step: &Step) -> Result<(), PipelineError> {
