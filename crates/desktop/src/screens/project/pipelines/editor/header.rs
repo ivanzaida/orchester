@@ -289,6 +289,8 @@ pub fn problems_strip(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> 
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .justify(Justify::End)
+    // The focus rings of the first and last line reach into the strip's padding.
+    .overflow_visible()
     .with_children(views.iter().map(|view| problem_button(ctx, view, handle)));
   let strip = Row::new()
     .id("pipeline-problems")

@@ -57,12 +57,14 @@ fn status(desktop: &mut Desktop) -> String {
 fn agent_editor_tab_follows_the_fields_and_skips_disabled_actions() {
   let mut desktop = new_profile();
   desktop.tab_to("new-agent", MAX_STOPS);
-  // Save draft and Publish (before New agent) and Import cannot be used yet and are skipped;
-  // the connection, model and effort selects are stops. After the form Tab moves on to the
+  // The new profile, selected in the list, then the form. Save draft and Publish (before New
+  // agent) and Import cannot be used yet and are skipped; the connection, model and effort
+  // selects are stops. After the form Tab moves on to the
   // status bar.
   assert_eq!(
-    desktop.stops(7, false),
+    desktop.stops(8, false),
     expected(&[
+      Some("agent-new"),
       Some(ROLE),
       Some(RESPONSIBILITY),
       None,

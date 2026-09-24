@@ -157,9 +157,11 @@ impl NewPipelineDialog {
       (Some(slug), _) => name_field.child(slug_line(ctx, slug.as_str(), project)),
       _ => name_field,
     };
+    // The option cards fill the column; their focus rings reach into the body's padding.
     let options = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Field.role())
+      .overflow_visible()
       .child(Text::new(&ctx.t("pipelines.create.startFrom")).variant(TypographyStyle::Caption))
       .child(self.option(ctx, StartFrom::Starter, start))
       .child(self.option(ctx, StartFrom::Empty, start));

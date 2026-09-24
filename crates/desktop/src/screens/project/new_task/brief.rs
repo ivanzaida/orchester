@@ -175,6 +175,11 @@ fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
   let signal = form.criteria.clone();
   let add = keyboard_stop(Button::empty().button(), Ring::Inset)
     .id("add-criterion")
+    // Room between the text and the inset focus ring; the ring is inset because the button
+    // sits on the edge of the form's scroll viewport.
+    .padding_horizontal(SpacingSize::Sm)
+    .padding_vertical(SpacingSize::Xs)
+    .rounded(RadiusSize::Sm)
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
     .cursor(CursorIcon::Pointer)

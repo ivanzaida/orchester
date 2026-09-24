@@ -1,19 +1,19 @@
 //! Navigation item (`TSJpn`): icon, label and an optional count. An item is the selected
 //! screen, a screen that can be opened, or visibly unavailable when the screen does not exist yet.
-//! Only an item that opens a screen takes focus; Tab reaches it and Enter or Space opens it.
+//! The selected item and the items that open a screen are Tab stops; Enter or Space opens one.
 
 use std::sync::Arc;
 
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, TypographyStyle},
-  components::Text,
+  components::{Row, Text},
   layout::Alignment,
   node::{CursorIcon, Element, Style, dimension::Dimension},
 };
 
 use super::{
   icon::{Icon, IconSize, icon},
-  pressable::{Ring, pressable, surface},
+  pressable::{Ring, keyboard_stop, pressable, surface},
 };
 use crate::theme::{ExtraSpacing, ExtraTypography};
 
@@ -36,7 +36,10 @@ enum Density {
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
 enum State {
-  Selected,
+  /// `navigable` when the item also has a click handler: it stays a Tab stop while selected.
+  Selected {
+    navigable: bool,
+  },
   Available(Handler),
   Unavailable,
 }
@@ -63,17 +66,19 @@ impl NavItem {
     }
   }
 
-  /// Opens the item's screen. A selected item stays inert.
+  /// Opens the item's screen. A selected item opens nothing but stays a Tab stop.
   pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    if !matches!(self.state, State::Selected) {
-      self.state = State::Available(Arc::new(handler));
-    }
+    self.state = match self.state {
+      State::Selected { .. } => State::Selected { navigable: true },
+      _ => State::Available(Arc::new(handler)),
+    };
     self
   }
 
   pub fn selected(mut self, selected: bool) -> Self {
     if selected {
-      self.state = State::Selected;
+      let navigable = matches!(self.state, State::Available(_));
+      self.state = State::Selected { navigable };
     }
     self
   }
@@ -103,7 +108,7 @@ impl NavItem {
 impl From<NavItem> for Element {
   fn from(item: NavItem) -> Self {
     let color = match item.state {
-      State::Selected => PaletteColor::TextPrimary,
+      State::Selected { .. } => PaletteColor::TextPrimary,
       State::Available(_) => PaletteColor::TextSecondary,
       State::Unavailable => PaletteColor::TextMuted,
     };
@@ -113,8 +118,7 @@ impl From<NavItem> for Element {
       Density::Secondary => (ITEM_HEIGHT, IconSize::Button, TypographyStyle::FieldLabel),
       Density::Compact => (COMPACT_HEIGHT, IconSize::Button, TypographyStyle::FieldLabel),
     };
-    let row = surface()
-      .id(item.id)
+    let row = Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(height))
       .padding_horizontal(ExtraSpacing::Stack.role())
@@ -134,16 +138,38 @@ impl From<NavItem> for Element {
           .count
           .map(|count| Text::new(&count.to_string()).variant(ExtraTypography::NavCount.role())),
       );
+    // The selected and the available item are buttons around the row, with the row's shape so
+    // the focus ring follows it; an unavailable item stays a plain row, so a press on it
+    // clears the focus instead of keeping it elsewhere.
+    let button = |row: Row| {
+      surface()
+        .id(item.id)
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(height))
+        .rounded(RadiusSize::Sm)
+        .child(row)
+    };
     match item.state {
-      State::Selected => row
+      State::Selected { navigable: true } => {
+        keyboard_stop(button(row.background(PaletteColor::AccentMuted)), Ring::Outer)
+          .describe("state", "selected")
+          .into()
+      }
+      // A selected setup step only shows progress; nothing opens from it.
+      State::Selected { navigable: false } => row
+        .id(item.id)
         .background(PaletteColor::AccentMuted)
         .describe("state", "selected")
         .into(),
-      State::Available(handler) => pressable(row, Ring::Outer, move || handler())
-        .describe("state", "enabled")
-        .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-        .into(),
+      State::Available(handler) => pressable(
+        button(row.hovered_style(Style::new().background(PaletteColor::AccentMuted))),
+        Ring::Outer,
+        move || handler(),
+      )
+      .describe("state", "enabled")
+      .into(),
       State::Unavailable => row
+        .id(item.id)
         .describe("state", "unavailable")
         .cursor(CursorIcon::NotAllowed)
         .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))

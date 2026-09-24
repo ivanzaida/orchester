@@ -56,6 +56,8 @@ pub fn execution_plan(
     .height(Dimension::Pct(100.0))
     .padding_left(ExtraSpacing::Rail.role())
     .spacing(SpacingSize::Md)
+    // The full-width actions at its edges keep their focus rings (`xURvJ`).
+    .overflow_visible()
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Text::new(&ctx.t("tasks.new.executionPlan")).variant(ExtraTypography::SectionHeading.role()))
     .child(pipeline_selector(ctx, &form.pipeline, pipelines))
@@ -254,6 +256,7 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
+    .overflow_visible()
     .child(
       ActionButton::new(ctx.t("tasks.new.createAndRun"))
         .primary()

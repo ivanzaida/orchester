@@ -310,7 +310,7 @@ so they cannot remove the ring.
 | Pipeline step card (`ajikA`) | outer, radius 16 | 1.5 inside `$text` stroke |
 | Option card (new pipeline "Start from") | outer, radius 11 | 1.5 inside `$text` stroke + radio dot |
 | Tab (`SOW6S`) | inset, corners 6 6 0 0 | 2px `$text` bottom underline |
-| List row stacked edge to edge (e.g. `SGjO0`, `clVjO`, `QHBNZ`) | inset, square | — |
+| List row stacked edge to edge (e.g. `SGjO0`, `clVjO`, `QHBNZ`, `hn8qO`) | inset, square | — |
 | Popover row (`E1msJS`) | inset, radius 7 | — |
 | Status bar item (`pmOpt`) | inset, radius 5 | `$hover` fill while its popover is open |
 | Field / select (`ZGwlv`) | none: keeps `o8Oug` (1.5 inside `$text`) and the caret | — |
@@ -330,7 +330,7 @@ Containers: an outer ring must not be cut by a clipping ancestor. Scroll viewpor
 panels that hold outer-ring controls keep at least 4px (`focus-extent`) of inner padding on
 their clipped edges. If they cannot, the control uses the inset ring. Do not add padding
 just for focus. A focusable row needs horizontal padding of at least 12px so the inset ring
-does not touch its content. `clVjO` and `QHBNZ` already have 12px. `zemhy`, `SGjO0`, `sFtAz`, `HfNoA` and `kOI6w` have none and need 12px if they
+does not touch its content. `clVjO` and `QHBNZ` already have 12px; the pipeline library row `hn8qO` and its column headings in `LRMQW` have 12px since they became focusable. `zemhy`, `SGjO0`, `sFtAz`, `HfNoA` and `kOI6w` have none and need 12px if they
 become focusable.
 
 Implementation (lurq 0.24): `focused_style(Style::new().box_shadow([...]))` with two

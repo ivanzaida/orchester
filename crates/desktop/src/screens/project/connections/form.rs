@@ -220,6 +220,8 @@ impl ConnectionDialog {
     Row::new()
       .id("connection-verification")
       .width(Dimension::Pct(100.0))
+      // Recheck is as tall as the row; its focus ring reaches into the form's spacing.
+      .overflow_visible()
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .child(label(glyph, &ctx.t(status)))

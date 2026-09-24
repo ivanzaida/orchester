@@ -23,13 +23,14 @@ fn new_task() -> Desktop {
 #[test]
 fn new_task_tab_passes_through_the_form_in_window_order() {
   let mut desktop = new_task();
-  // The sidebar (Tasks is selected and skipped), back, then the form. Attach context, the
+  // The sidebar (the selected Tasks included), back, then the form. Attach context, the
   // pipeline selector without pipelines, Create & run and Save as draft (no title yet) cannot
   // be used and are skipped. After the form Tab moves on to the status bar.
   assert_eq!(
     desktop.stops(12, false),
     expected(&[
       Some("nav-overview"),
+      Some("nav-tasks"),
       Some("nav-pipelines"),
       Some("nav-agents"),
       Some("nav-connections"),
@@ -40,9 +41,9 @@ fn new_task_tab_passes_through_the_form_in_window_order() {
       Some(ADD_CRITERION),
       Some(BUDGET),
       Some(TIME_LIMIT),
-      Some("status-runner"),
     ])
   );
+  assert_eq!(desktop.stops(1, false), expected(&[Some("status-runner")]));
   desktop.tab_to(TITLE, MAX_STOPS);
   assert_eq!(
     desktop.stops(2, true),

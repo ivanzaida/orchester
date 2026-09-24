@@ -9,7 +9,7 @@ use std::{
   time::Duration,
 };
 
-use lurq::app::{App, Tree};
+use lurq::app::{App, Tree, events::MouseButton};
 use orchester_desktop::{
   activity::Activity,
   close::Lifecycle,
@@ -155,6 +155,19 @@ impl Desktop {
 
   pub fn click(&mut self, id: &str) {
     self.tree.get_element_by_id_mut(id).expect(id).click();
+    self.pass();
+  }
+
+  /// A pointer press and release in the middle of `id`, as a user clicks.
+  pub fn press(&mut self, id: &str) {
+    let bounds = self
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"));
+    let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+    self.tree.mouse_down(x, y, MouseButton::Left);
+    self.tree.mouse_up(x, y, MouseButton::Left);
     self.pass();
   }
 

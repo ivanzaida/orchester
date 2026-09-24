@@ -20,7 +20,7 @@ use crate::{
   ui::{
     button::ActionButton,
     icon::Icon,
-    pressable::{Ring, pressable, surface},
+    pressable::{Ring, keyboard_stop, pressable, surface},
   },
 };
 
@@ -64,7 +64,7 @@ pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selection: ListSelection,
     let placeholder = frame(&ctx.t("agents.newTitle"), &ctx.t("agents.notSaved"), true)
       .id("agent-new")
       .describe("state", "selected");
-    items.push(placeholder.into());
+    items.push(keyboard_stop(placeholder, Ring::Inset).into());
   }
   Column::new()
     .id("agent-profiles")
@@ -113,7 +113,7 @@ fn item(ctx: &Ctx, agents: &ProjectAgents, entry: &ProfileEntry, selected: bool,
   );
   let item = frame(profile.role().as_str(), &metadata, selected).id(Arc::<str>::from(format!("agent-{}", entry.id)));
   if selected {
-    return item.describe("state", "selected").into();
+    return keyboard_stop(item, Ring::Inset).describe("state", "selected").into();
   }
   let (agent, id) = (nav.agent.clone(), entry.id);
   pressable(item, Ring::Inset, move || agent.set(AgentSelection::Profile(id)))

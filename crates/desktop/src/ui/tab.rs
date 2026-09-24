@@ -1,7 +1,7 @@
 //! Tab (`SOW6S`): a label with an optional count; the selected tab is underlined (`Iefue`).
 //! A tab without a data source yet is unavailable: muted, locked and without a count.
-//! [`tab_row`] lays tabs out over the hairline that ends their row. Only an available tab
-//! takes focus; Tab reaches it and Enter or Space selects it.
+//! [`tab_row`] lays tabs out over the hairline that ends their row. The selected and the
+//! available tabs are Tab stops; Enter or Space selects one.
 
 use std::sync::Arc;
 
@@ -14,14 +14,17 @@ use lurq::{
 
 use super::{
   icon::{Icon, IconSize, icon},
-  pressable::{Ring, pressable, surface},
+  pressable::{Ring, keyboard_stop, pressable, surface},
 };
 use crate::theme::{ExtraColor, ExtraSpacing};
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
 enum State {
-  Selected,
+  /// `navigable` when the item also has a click handler: it stays a Tab stop while selected.
+  Selected {
+    navigable: bool,
+  },
   Available(Handler),
   Unavailable,
 }
@@ -61,15 +64,17 @@ impl Tab {
 
   pub fn selected(mut self, selected: bool) -> Self {
     if selected {
-      self.state = State::Selected;
+      let navigable = matches!(self.state, State::Available(_));
+      self.state = State::Selected { navigable };
     }
     self
   }
 
   pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    if !matches!(self.state, State::Selected) {
-      self.state = State::Available(Arc::new(handler));
-    }
+    self.state = match self.state {
+      State::Selected { .. } => State::Selected { navigable: true },
+      _ => State::Available(Arc::new(handler)),
+    };
     self
   }
 }
@@ -77,16 +82,11 @@ impl Tab {
 impl From<Tab> for Element {
   fn from(tab: Tab) -> Self {
     let color = match tab.state {
-      State::Selected => PaletteColor::TextPrimary,
+      State::Selected { .. } => PaletteColor::TextPrimary,
       State::Available(_) => PaletteColor::TextSecondary,
       State::Unavailable => PaletteColor::TextMuted,
     };
-    // Rounded top corners shape the inset focus ring; the underline keeps the bottom square.
-    let mut row = surface()
-      .id(tab.id)
-      .height(tab.height)
-      .corner_radius_top_left(RadiusSize::Sm)
-      .corner_radius_top_right(RadiusSize::Sm);
+    let mut row = Row::new().height(Dimension::Pct(100.0));
     if let Some(width) = tab.min_width {
       row = row.min_width(width);
     }
@@ -105,16 +105,40 @@ impl From<Tab> for Element {
           .count
           .map(|count| Text::new(&count.to_string()).variant(TypographyStyle::Mono)),
       );
+    // The selected and the available tab are buttons around the row. The row's underline
+    // paints over the bottom edge of the button's inset focus ring, whose top corners are
+    // rounded; an unavailable tab stays a plain row, so a press on it clears the focus.
+    let button = |row: Row| {
+      surface()
+        .id(tab.id)
+        .height(tab.height)
+        .corner_radius_top_left(RadiusSize::Sm)
+        .corner_radius_top_right(RadiusSize::Sm)
+        .child(row)
+    };
     match tab.state {
-      State::Selected => row
-        .describe("state", "selected")
+      State::Selected { navigable: true } => keyboard_stop(
+        button(row.border_bottom(Border::inside(BorderSize::Lg, PaletteColor::TextPrimary))),
+        Ring::Inset,
+      )
+      .describe("state", "selected")
+      .into(),
+      State::Selected { navigable: false } => row
+        .id(tab.id)
+        .height(tab.height)
         .border_bottom(Border::inside(BorderSize::Lg, PaletteColor::TextPrimary))
+        .describe("state", "selected")
         .into(),
-      State::Available(handler) => pressable(row, Ring::Inset, move || handler())
-        .describe("state", "enabled")
-        .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Lg, PaletteColor::Border)))
-        .into(),
+      State::Available(handler) => pressable(
+        button(row.hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Lg, PaletteColor::Border)))),
+        Ring::Inset,
+        move || handler(),
+      )
+      .describe("state", "enabled")
+      .into(),
       State::Unavailable => row
+        .id(tab.id)
+        .height(tab.height)
         .describe("state", "unavailable")
         .cursor(CursorIcon::NotAllowed)
         .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))

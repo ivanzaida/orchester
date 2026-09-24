@@ -107,31 +107,41 @@ fn header(ctx: &Ctx, running: usize) -> Element {
 
 /// Retention note and "Open runner log" (`sQkff`).
 fn footer(ctx: &Ctx, opener: &Opener) -> Element {
-  let mut row = Row::new()
+  let retention = Text::new(&ctx.t("statusBar.operations.retention"))
+    .variant(TypographyStyle::Caption)
+    .color(PaletteColor::TextMuted);
+  let row = Row::new()
     .width(Dimension::Pct(100.0))
-    .padding_top(SpacingSize::Sm)
-    .padding_horizontal(SpacingSize::Sm)
-    .padding_bottom(SpacingSize::Xs)
+    .padding_left(SpacingSize::Sm)
     .justify(Justify::SpaceBetween)
     .align_items(Alignment::Center)
     // Open runner log sits on the right edge; its focus ring reaches into the panel padding.
     .overflow_visible()
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(
-      Text::new(&ctx.t("statusBar.operations.retention"))
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextMuted),
-    );
-  if opener.can_open(&Target::RunnerLog) {
-    let log = opener.clone();
-    row = row.child(
-      pressable(surface().id("status-operations-open-log"), Ring::Outer, move || {
-        log.open_log()
-      })
-      .child(Text::new(&ctx.t("runner.connection.openLog")).variant(TypographyStyle::Link)),
-    );
+    .child(retention);
+  if !opener.can_open(&Target::RunnerLog) {
+    return row
+      .padding_top(SpacingSize::Sm)
+      .padding_right(SpacingSize::Sm)
+      .padding_bottom(SpacingSize::Xs)
+      .into();
   }
-  row.into()
+  // The link's own padding keeps the focus ring off its text; the row gives up the same
+  // amount, so the text stays where the design puts it (`sQkff`).
+  let log = opener.clone();
+  let link = pressable(surface().id("status-operations-open-log"), Ring::Outer, move || {
+    log.open_log()
+  })
+  .padding_horizontal(SpacingSize::Xs)
+  .padding_vertical(ExtraSpacing::Hair.role())
+  .rounded(RadiusSize::Sm)
+  .child(Text::new(&ctx.t("runner.connection.openLog")).variant(TypographyStyle::Link));
+  row
+    .padding_top(ExtraSpacing::Tight.role())
+    .padding_right(SpacingSize::Xs)
+    .padding_bottom(ExtraSpacing::Hair.role())
+    .child(link)
+    .into()
 }
 
 /// Loader, title, meta, elapsed time and the chevron when it opens something (`ZaltO`).

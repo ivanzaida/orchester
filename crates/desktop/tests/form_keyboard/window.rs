@@ -12,12 +12,14 @@ fn overview() -> Desktop {
 #[test]
 fn overview_tab_reaches_sidebar_page_and_status_bar() {
   let mut desktop = overview();
-  // The selected Overview and the screens that do not exist yet are skipped. The status bar
-  // items that open something are stops: the runner (whose failure actions appear once the
-  // missing runner gives up), then the agents and the queue, the last stop before Tab wraps.
+  // The selected Overview stays a stop; the screens that do not exist yet are skipped. The
+  // status bar items that open something are stops: the runner (whose failure actions appear
+  // once the missing runner gives up), then the agents and the queue, the last stop before Tab
+  // wraps.
   assert_eq!(
-    desktop.stops(6, false),
+    desktop.stops(7, false),
     expected(&[
+      Some("nav-overview"),
       Some("nav-tasks"),
       Some("nav-pipelines"),
       Some("nav-agents"),
@@ -27,7 +29,7 @@ fn overview_tab_reaches_sidebar_page_and_status_bar() {
     ])
   );
   desktop.tab_to("status-queued", MAX_STOPS);
-  assert_eq!(desktop.stops(1, false), expected(&[Some("nav-tasks")]));
+  assert_eq!(desktop.stops(1, false), expected(&[Some("nav-overview")]));
   assert_eq!(desktop.stops(1, true), expected(&[Some("status-queued")]));
 }
 
@@ -37,6 +39,8 @@ fn sidebar_enter_opens_the_focused_screen() {
   desktop.tab_to("nav-pipelines", MAX_STOPS);
   desktop.enter();
   desktop.wait_for("pipelines-new");
+  // The opened screen's item is selected now and keeps the focus.
+  assert_eq!(desktop.focused().as_deref(), Some("nav-pipelines"));
   desktop.tab_to("nav-overview", MAX_STOPS);
   desktop.key(" ", "Space");
   desktop.wait_for("new-task");
@@ -47,11 +51,20 @@ fn tasks_tab_row_selects_from_the_keyboard() {
   let mut desktop = overview();
   desktop.click("nav-tasks");
   desktop.wait_for("tasks-new-task");
-  // All tasks is selected, so only Drafts is a stop in the tab row.
-  desktop.tab_to("tasks-tab-drafts", MAX_STOPS);
-  desktop.enter();
-  // Drafts is selected now and All tasks can be chosen instead; the empty Drafts list offers
-  // New task next.
+  // Both tabs are stops, the selected All tasks too.
   desktop.tab_to("tasks-tab-all", MAX_STOPS);
+  assert_eq!(desktop.stops(1, false), expected(&[Some("tasks-tab-drafts")]));
+  desktop.enter();
+  // Drafts is selected now and keeps the focus; the empty Drafts list offers New task next.
+  assert_eq!(desktop.focused().as_deref(), Some("tasks-tab-drafts"));
   assert_eq!(desktop.stops(1, false), expected(&[Some("empty-new-task")]));
+}
+
+#[test]
+fn pressing_an_unavailable_item_clears_the_focus() {
+  let mut desktop = overview();
+  desktop.tab_to("nav-tasks", MAX_STOPS);
+  // Tools does not exist yet: it cannot take the focus, so the press clears it.
+  desktop.press("nav-tools");
+  assert_eq!(desktop.focused(), None);
 }
