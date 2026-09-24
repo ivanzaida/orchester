@@ -41,8 +41,7 @@ const CYCLE_RIGHT: f32 = 32.0;
 const CYCLE_ABOVE: f32 = 20.0;
 const CYCLE_LABEL_ABOVE: f32 = 38.0;
 const CYCLE_LABEL_RIGHT: f32 = 152.0;
-/// Room under the graph before the failure route notes (`pFKSd`), and around the content.
-pub const NOTES_BELOW: f32 = 22.0;
+/// Room around the content.
 pub const CONTENT_MARGIN: f32 = 40.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]

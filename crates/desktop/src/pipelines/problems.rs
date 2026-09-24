@@ -23,7 +23,10 @@ pub enum ProblemKind {
   NoSteps,
   Cycle,
   Rule,
+  /// An agent step without a profile.
   Unassigned,
+  /// A tool step without a tool.
+  UnassignedTool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProblemView {}
@@ -60,15 +63,15 @@ pub fn problem_view(edit: &PipelineEdit, problem: &EditProblem, then: &str) -> P
     },
     EditProblem::Unassigned(key) => {
       let tool = matches!(edit.step(key).map(|step| &step.kind), Some(StepKind::Tool { .. }));
-      let text = if tool {
-        "pipelines.problems.noTool"
+      let (text, kind) = if tool {
+        ("pipelines.problems.noTool", ProblemKind::UnassignedTool)
       } else {
-        "pipelines.problems.noProfile"
+        ("pipelines.problems.noProfile", ProblemKind::Unassigned)
       };
       ProblemView {
         message: Message::new(text).with("step", step_name(edit, key)),
         step: Some(key.clone()),
-        kind: ProblemKind::Unassigned,
+        kind,
       }
     }
   }

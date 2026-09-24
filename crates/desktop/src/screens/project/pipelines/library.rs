@@ -411,15 +411,18 @@ fn ownership_note(ctx: &Ctx, project: &str) -> Element {
 
 /// How versions work (`Bm3H2`).
 fn versions_panel(ctx: &Ctx) -> Element {
+  // Pencil puts half of a paragraph's extra line height above and below it (`SBNAT`, 11px at
+  // 1.6); lurq applies line height between lines only, so the gaps around the detail add it.
   let item = |glyph: Icon, title: &str, detail: &str| {
     Row::new()
       .width(Dimension::Pct(100.0))
+      .padding_bottom(ExtraSpacing::Mark.role())
       .spacing(ExtraSpacing::Stack.role())
       .child(icon(glyph, IconSize::Option, PaletteColor::TextSecondary))
       .child(
         Column::new()
           .flex(1.0)
-          .spacing(ExtraSpacing::Tight.role())
+          .spacing(ExtraSpacing::Field.role())
           .child(
             Text::new(&ctx.t(title))
               .variant(TypographyStyle::FieldLabel)

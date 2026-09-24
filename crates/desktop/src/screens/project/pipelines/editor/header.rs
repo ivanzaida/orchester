@@ -10,7 +10,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Row, Spacer, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{name::Name, resource::EditProblem};
@@ -263,11 +263,20 @@ pub fn problems_strip(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> 
     (None, 1) => ctx.t("pipelines.problems.blocked.one"),
     (None, _) => ctx.t_args("pipelines.problems.blocked.other", [("count", count.as_str())]),
   };
-  let mut strip = Row::new()
+  // The problem buttons wrap onto more lines, so every problem stays visible and selectable.
+  let buttons = Row::new()
+    .flex(1.0)
+    .wrap()
+    .spacing(ExtraSpacing::Stack.role())
+    .align_items(Alignment::Center)
+    .justify(Justify::End)
+    .with_children(views.iter().map(|view| problem_button(ctx, view, handle)));
+  let strip = Row::new()
     .id("pipeline-problems")
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(STRIP_HEIGHT))
+    .min_height(Dimension::Px(STRIP_HEIGHT))
     .padding_horizontal(SpacingSize::Lg)
+    .padding_vertical(SpacingSize::Sm)
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .background(PaletteColor::SurfaceRaised)
@@ -276,18 +285,17 @@ pub fn problems_strip(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> 
     .child(
       Text::new(&summary)
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::TextPrimary)
+        .nowrap(),
     )
-    .child(Spacer::new().flex(1.0));
-  for view in views {
-    strip = strip.child(problem_button(ctx, &view, handle));
-  }
+    .child(buttons);
   Some(strip.into())
 }
 
 fn problem_button(ctx: &Ctx, view: &ProblemView, handle: &EditorHandle) -> Element {
   let glyph = match view.kind {
     ProblemKind::Unassigned => Icon::UserX,
+    ProblemKind::UnassignedTool => Icon::Wrench,
     ProblemKind::Cycle => Icon::Repeat,
     ProblemKind::NoSteps | ProblemKind::Rule => Icon::AlertCircle,
   };

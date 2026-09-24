@@ -26,8 +26,7 @@ use crate::{
     data::Assignables,
     editor::EditorState,
     layout::{
-      CARD_HEIGHT, CARD_WIDTH, CONTENT_MARGIN, Chevron, Direction, FIRST_ROW_Y, GraphLayout, NOTES_BELOW, ORIGIN_X,
-      Segment, layout,
+      CARD_HEIGHT, CARD_WIDTH, CONTENT_MARGIN, Chevron, Direction, FIRST_ROW_Y, GraphLayout, ORIGIN_X, Segment, layout,
     },
   },
   theme::{CONNECTOR_STROKE, ExtraSpacing, ExtraTypography},
@@ -39,12 +38,11 @@ use crate::{
 };
 
 /// Positions of the description, trigger label and empty-state explanation (`fSDu6`, `wRjZD`,
-/// `r8A5GG`), the empty explanation's width, and the line pitch of the route notes.
+/// `r8A5GG`) and the empty explanation's width.
 const DESCRIPTION_Y: f32 = 30.0;
 const TRIGGER_Y: f32 = 76.0;
 const EMPTY_EXPLANATION_Y: f32 = 252.0;
 const EMPTY_EXPLANATION_WIDTH: f32 = 460.0;
-const NOTE_PITCH: f32 = 20.0;
 /// Zoom controls (`iarCw`) and the published notice (`O8ivsy`).
 const ZOOM_WIDTH: f32 = 152.0;
 const ZOOM_HEIGHT: f32 = 32.0;
@@ -113,7 +111,7 @@ impl Component for Canvas {
     let height = if props.steps.is_empty() {
       EMPTY_EXPLANATION_Y + CARD_HEIGHT + CONTENT_MARGIN
     } else {
-      graph.bottom + NOTES_BELOW + NOTE_PITCH * notes.len() as f32 + CONTENT_MARGIN
+      graph.bottom + CONTENT_MARGIN
     };
     let mut content = Stack::new()
       .width(Dimension::Px(width))
@@ -129,7 +127,7 @@ impl Component for Canvas {
         .child(self.first_step_slot(ctx))
         .child(self.empty_explanation(ctx))
     } else {
-      self.graph(ctx, content, &props, &graph, &notes)
+      self.graph(ctx, content, &props, &graph)
     };
     Column::new()
       .id("pipeline-canvas")
@@ -137,19 +135,12 @@ impl Component for Canvas {
       .height(Dimension::Pct(100.0))
       .background(PaletteColor::SurfacePanel)
       .child(ScrollBoth::new(content).width(Dimension::Pct(100.0)).flex(1.0))
-      .child(self.bottom_bar(ctx, props.just_published))
+      .child(self.bottom_bar(ctx, &notes, props.just_published))
   }
 }
 
 impl Canvas {
-  fn graph(
-    &self,
-    ctx: &Ctx,
-    mut content: Stack,
-    props: &CanvasProps,
-    graph: &GraphLayout,
-    notes: &[Arc<str>],
-  ) -> Stack {
+  fn graph(&self, ctx: &Ctx, mut content: Stack, props: &CanvasProps, graph: &GraphLayout) -> Stack {
     let cycle_segments = graph.cycle.iter().flat_map(|cycle| cycle.segments.iter());
     for segment in &graph.segments {
       content = content.child(line(segment, PaletteColor::TextMuted));
@@ -209,15 +200,6 @@ impl Canvas {
           Dimension::Px(CARD_WIDTH),
           Dimension::Px(CARD_HEIGHT),
         ),
-      );
-    }
-    let notes_top = graph.bottom + NOTES_BELOW;
-    for (line, note) in notes.iter().enumerate() {
-      content = content.child(
-        Text::new(note)
-          .variant(TypographyStyle::Caption)
-          .nowrap()
-          .absolute_position(ORIGIN_X, notes_top + NOTE_PITCH * line as f32),
       );
     }
     content
@@ -289,10 +271,12 @@ impl Canvas {
       .into()
   }
 
-  /// Zoom controls (`iarCw`) and, right after publishing, the published notice (`O8ivsy`).
+  /// The failure route notes (`pFKSd`) above the zoom controls (`iarCw`), both outside the
+  /// scrolled graph so they are always in view, and right after publishing the published
+  /// notice (`O8ivsy`).
   /// Zooming is unavailable: lurq clips a transformed card's text against its unscaled
   /// bounds, so a scaled graph loses its text. The controls show 100% with a lock.
-  fn bottom_bar(&self, ctx: &Ctx, published: Option<VersionNumber>) -> Element {
+  fn bottom_bar(&self, ctx: &Ctx, notes: &[Arc<str>], published: Option<VersionNumber>) -> Element {
     let control = |glyph: Icon| icon(glyph, IconSize::Marker, PaletteColor::TextMuted);
     let controls = Row::new()
       .id("pipeline-zoom")
@@ -315,13 +299,22 @@ impl Canvas {
       )
       .child(control(Icon::Maximize))
       .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted));
+    let notes = Column::new().spacing(ExtraSpacing::Tight.role()).with_children(
+      notes
+        .iter()
+        .map(|note| Text::new(note).variant(TypographyStyle::Caption).nowrap()),
+    );
+    let left = Column::new()
+      .spacing(ExtraSpacing::Step.role())
+      .child(notes)
+      .child(controls);
     let mut bar = Row::new()
       .width(Dimension::Pct(100.0))
-      .padding_horizontal(SpacingSize::Section)
+      .padding_horizontal(ExtraSpacing::Indent.role())
       .padding_bottom(SpacingSize::Lg)
       .spacing(SpacingSize::Md)
       .align_items(Alignment::End)
-      .child(controls)
+      .child(left)
       .child(Spacer::new().flex(1.0));
     if let Some(version) = published {
       let version = version.to_string();
