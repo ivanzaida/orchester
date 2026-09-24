@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  windows:
+    name: Windows (check.ps1 + tests)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain.toml pins the stable toolchain; rustfmt.toml needs nightly options.
+      - run: rustup toolchain install nightly --profile minimal --component rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Quality gate
+        shell: pwsh
+        run: ./tools/check.ps1
+      - name: Tests
+        run: cargo test --workspace
+
+  macos:
+    name: macOS (clippy + tests)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Tests
+        run: cargo test --workspace
