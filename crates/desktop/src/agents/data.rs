@@ -190,7 +190,8 @@ pub fn save_draft<S: ResourceStore>(
       .latest_version::<AgentProfile>(id)?
       .map(|version| version.number()),
   };
-  store.save_draft(id, &Draft::new(profile, based_on, now))
+  // The profile is read again after every change, which shows whether a draft remains.
+  store.save_draft(id, &Draft::new(profile, based_on, now)).map(|_| ())
 }
 
 /// Publishes the saved draft as the next version.

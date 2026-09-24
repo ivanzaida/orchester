@@ -5,7 +5,7 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentProfile, Draft, ModelId, Pipeline, ResourceKind, Tool, Version, VersionNumber},
+  resource::{AgentProfile, Draft, DraftSaved, ModelId, Pipeline, ResourceKind, Tool, Version, VersionNumber},
   store::{ConnectionStore, ResourceStore, TaskStore},
   time::Timestamp,
 };
@@ -181,8 +181,8 @@ pub fn tasks_using<S: TaskStore>(store: &S, id: ResourceId) -> Result<usize, S::
   )
 }
 
-/// Stores `body` as the pipeline's draft, based on `based_on`.
-pub fn save_draft_in(repo_root: &Path, id: ResourceId, draft: &Draft<Pipeline>) -> Result<(), StoreError> {
+/// Stores `draft` as the pipeline's draft, or removes the draft when it repeats its version.
+pub fn save_draft_in(repo_root: &Path, id: ResourceId, draft: &Draft<Pipeline>) -> Result<DraftSaved, StoreError> {
   ProjectDb::open(repo_root)?.save_draft(id, draft)
 }
 

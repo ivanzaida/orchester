@@ -597,7 +597,8 @@
       "draftSavedNeverPublished": "Draft saved · Not published yet",
       "noDraftChanges": "No draft changes · Your next edit starts draft v{{draft}}",
       "missing": "This pipeline no longer exists.",
-      "openFailed": "The pipeline could not be opened"
+      "openFailed": "The pipeline could not be opened",
+      "newStepNumbered": "New step {{number}}"
     },
     "toolbar": {
       "valid": "{{steps}} · Valid draft · Publishing affects new runs",

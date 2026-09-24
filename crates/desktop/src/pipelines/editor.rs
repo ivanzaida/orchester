@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use orchester_core::{
   id::ResourceId,
-  resource::{Draft, EditProblem, Pipeline, PipelineEdit, StepKey, VersionNumber},
+  resource::{Draft, DraftSaved, EditProblem, Pipeline, PipelineEdit, StepKey, VersionNumber},
   time::Timestamp,
 };
 
@@ -157,10 +157,14 @@ impl EditorState {
     Some((self.revision, Draft::new(pipeline, self.based_on, now)))
   }
 
-  /// `revision` was stored as the draft at `at`.
-  pub fn saved(&mut self, revision: u64, at: Timestamp) {
+  /// `revision` was stored as the draft at `at`, or it repeated the published version and no
+  /// draft remains.
+  pub fn saved(&mut self, revision: u64, at: Timestamp, outcome: DraftSaved) {
     self.saved_revision = self.saved_revision.max(revision);
-    self.draft_saved_at = Some(at);
+    self.draft_saved_at = match outcome {
+      DraftSaved::Stored => Some(at),
+      DraftSaved::Discarded => None,
+    };
   }
 
   /// Whether the stored draft can be published now: every edit is saved and nothing blocks

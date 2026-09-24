@@ -202,6 +202,23 @@ impl<B> Draft<B> {
   }
 }
 
+impl<B: PartialEq> Draft<B> {
+  /// Whether the draft holds exactly `version`, the one it is based on: it changes nothing, so
+  /// it is no draft at all and is not kept.
+  pub fn repeats(&self, version: &Version<B>) -> bool {
+    self.based_on == Some(version.number) && self.body == version.body
+  }
+}
+
+/// What saving a draft did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DraftSaved {
+  /// The draft is stored as the resource's draft.
+  Stored,
+  /// The draft repeated the version it is based on (see [`Draft::repeats`]); no draft remains.
+  Discarded,
+}
+
 /// An immutable published version.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Version<B> {

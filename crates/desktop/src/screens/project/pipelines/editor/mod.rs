@@ -27,7 +27,7 @@ use lurq::{
 };
 use orchester_core::{
   id::ResourceId,
-  resource::{Draft, Pipeline, PipelineEdit, StepKey, VersionNumber},
+  resource::{Draft, DraftSaved, Pipeline, PipelineEdit, StepKey, VersionNumber},
   time::Timestamp,
 };
 
@@ -77,6 +77,7 @@ impl lurq::app::component::DevtoolsInspectable for Selection {}
 struct Saved {
   revision: u64,
   at: Timestamp,
+  outcome: DraftSaved,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Saved {}
@@ -366,7 +367,7 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
   ctx.future_action(|(repo_root, id, revision, draft): SaveArgs| async move {
     let at = draft.updated_at();
     let saved = background::run(move || save_draft_in(&repo_root, id, &draft)).await?;
-    saved.map(|()| Saved { revision, at }).map_err(|error| {
+    saved.map(|outcome| Saved { revision, at, outcome }).map_err(|error| {
       tracing::error!(%error, "cannot save the pipeline draft");
       messages::store_error(&error)
     })
@@ -394,7 +395,7 @@ fn watch_saves(ctx: &mut Ctx, save: &SaveAction, handle: &EditorHandle) {
     if let Some(saved) = &state.data {
       handle.state.update(|editor| {
         if let Some(editor) = editor {
-          editor.saved(saved.revision, saved.at);
+          editor.saved(saved.revision, saved.at, saved.outcome);
         }
       });
     }
