@@ -29,11 +29,17 @@ Workspace layout:
 - `crates/runner` (`orchester-runner`): one process per open project, started by the desktop from the desktop's
   own directory. Run the app with `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g.
   `--features mcp`); plain `cargo run -p orchester-desktop` does not build the runner, and the app then shows the
-  runner as unable to start. The desktop's runner integration is Windows-only for now.
+  runner as unable to start. The desktop's runner integration is Windows-only for now (see requirement 0).
 - Add a crate only when a real boundary exists (for example the server or a runner). No empty placeholder crates.
 
 Hard requirements:
 
+0. Orchester ships on Windows AND macOS. New code must build and behave on both: platform-specific code lives
+   behind `cfg(target_os = …)` in small, named modules with an equivalent implementation for the other platform (or
+   an explicit, visible "not supported on this platform yet" state — never a silent gap). Do not add Windows-only
+   dependencies without their macOS counterpart. Known gaps today: the runner IPC transport, process-tree kill,
+   pipe-owner check, CLI discovery (`.exe`/`.cmd`) and the application database location (next to the executable is
+   not writable inside a macOS `.app`).
 1. Before writing or reviewing Rust code, read `.claude/skills/rust-code-quality/SKILL.md` and follow it.
 2. Before touching the visual layer (screen, panel, row, field, dialog, control, interaction, user-facing text,
    layout/text/scroll defect), read `.claude/skills/lurq-ui/SKILL.md` with its `references/`, and
