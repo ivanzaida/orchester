@@ -14,6 +14,14 @@ use super::{
 };
 use crate::{id::ResourceId, money::Money, name::Name};
 
+mod edit;
+mod starter;
+
+pub use self::{
+  edit::PipelineEdit,
+  starter::{StarterAssignments, StarterStep, StarterStepText, feature_delivery},
+};
+
 /// Stable key of a step within its pipeline, e.g. `implement`. Kept across versions so
 /// instructions, tool access rules and failure routes can refer to a step.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -62,15 +70,27 @@ pub enum RepositoryAccess {
 #[serde(rename_all = "snake_case")]
 pub enum StepKind {
   /// Runs an agent of the selected profile, with the profile's model unless `model`
-  /// overrides it for this step.
+  /// overrides it for this step. A draft may leave the profile unset (`None`); publishing
+  /// requires it, see [`Pipeline::unassigned_steps`].
   Agent {
-    profile: ResourceId,
+    profile: Option<ResourceId>,
     repository: RepositoryAccess,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     model: Option<ModelId>,
   },
-  /// Calls a project tool under the tool's access policy.
-  Tool { tool: ResourceId },
+  /// Calls a project tool under the tool's access policy. Unset (`None`) like an agent step's
+  /// profile until a tool is chosen.
+  Tool { tool: Option<ResourceId> },
+}
+
+impl StepKind {
+  /// The agent profile or tool that executes the step, once chosen.
+  pub const fn executor(&self) -> Option<ResourceId> {
+    match self {
+      Self::Agent { profile, .. } => *profile,
+      Self::Tool { tool } => *tool,
+    }
+  }
 }
 
 /// When a step fails, the run returns to `return_to` (an upstream step) at most `max_retries`
@@ -157,6 +177,23 @@ impl Pipeline {
   pub fn step(&self, key: &StepKey) -> Option<&Step> {
     self.steps.iter().find(|step| &step.key == key)
   }
+
+  /// Steps whose agent profile or tool is not chosen yet. Such a pipeline can be kept as a
+  /// draft but not published.
+  pub fn unassigned_steps(&self) -> impl Iterator<Item = &StepKey> {
+    unassigned(&self.steps)
+  }
+
+  pub fn into_steps(self) -> Vec<Step> {
+    self.steps
+  }
+}
+
+fn unassigned(steps: &[Step]) -> impl Iterator<Item = &StepKey> {
+  steps
+    .iter()
+    .filter(|step| step.kind.executor().is_none())
+    .map(|step| &step.key)
 }
 
 fn check_budget(step: &Step) -> Result<(), PipelineError> {

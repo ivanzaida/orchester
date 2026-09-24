@@ -57,7 +57,7 @@ pub fn agent_step(value: &str, profile: ResourceId, depends_on: &[&str]) -> Step
     key: key(value),
     name: Name::new(value).expect("valid name"),
     kind: StepKind::Agent {
-      profile,
+      profile: Some(profile),
       repository: RepositoryAccess::Write,
       model: None,
     },

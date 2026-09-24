@@ -16,7 +16,7 @@ fn step(value: &str, depends_on: &[&str]) -> Step {
     key: key(value),
     name: Name::new(value).expect("valid name"),
     kind: StepKind::Agent {
-      profile: ResourceId::generate(),
+      profile: Some(ResourceId::generate()),
       repository: RepositoryAccess::ReadOnly,
       model: None,
     },
@@ -43,7 +43,7 @@ fn feature_delivery() -> Vec<Step> {
   };
   let implement = Step {
     kind: StepKind::Agent {
-      profile: ResourceId::generate(),
+      profile: Some(ResourceId::generate()),
       repository: RepositoryAccess::Write,
       model: Some(ModelId::new("opus").expect("valid model")),
     },
@@ -53,7 +53,7 @@ fn feature_delivery() -> Vec<Step> {
   };
   let checks = Step {
     kind: StepKind::Tool {
-      tool: ResourceId::generate(),
+      tool: Some(ResourceId::generate()),
     },
     on_failure: retry("implement", 3),
     ..step("run-checks", &["implement"])

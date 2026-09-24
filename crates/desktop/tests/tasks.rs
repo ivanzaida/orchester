@@ -166,7 +166,7 @@ fn research_step() -> Step {
     key: StepKey::new("research").expect("valid key"),
     name: Name::new("Research").expect("valid name"),
     kind: StepKind::Agent {
-      profile: ResourceId::generate(),
+      profile: Some(ResourceId::generate()),
       repository: RepositoryAccess::ReadOnly,
       model: None,
     },

@@ -56,7 +56,8 @@ pub trait ResourceStore {
   fn draft<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Draft<B>>, Self::Error>;
 
   /// Publishes the stored draft as the next version and removes the draft, atomically. A draft
-  /// not based on the latest version is rejected, see [`crate::resource::publish`].
+  /// not based on the latest version is rejected, see [`crate::resource::publish`], and so is
+  /// a body that fails [`ResourceBody::check_publishable`].
   fn publish_draft<B: ResourceBody>(&mut self, resource: ResourceId, now: Timestamp)
   -> Result<Version<B>, Self::Error>;
 

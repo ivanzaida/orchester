@@ -7,6 +7,7 @@ use std::{fmt, num::NonZeroU32};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use super::pipeline::StepKey;
 use crate::{
   id::{ResourceId, VersionId},
   name::Name,
@@ -214,6 +215,9 @@ pub enum PublishError {
   },
   #[error("the resource has reached the maximum number of versions")]
   VersionLimit,
+  /// Pipeline steps without an agent profile or tool; a run could not execute them.
+  #[error("steps {0:?} have no agent profile or tool")]
+  UnassignedSteps(Vec<StepKey>),
 }
 
 /// Publishes `draft` as the version after `latest`. The caller persists the version and

@@ -20,7 +20,10 @@ pub use self::{
   agent_profile::{AgentProfile, ModelId, ModelIdError, ProviderSettings, ProviderSettingsError},
   instruction::{AgentTargets, InjectionEvent, Instruction, InstructionError, InstructionScope},
   lifecycle::{Draft, PublishError, Resource, ResourceKind, Slug, SlugError, Version, VersionNumber, publish},
-  pipeline::{FailureRoute, Pipeline, PipelineError, RepositoryAccess, Step, StepKey, StepKind},
+  pipeline::{
+    FailureRoute, Pipeline, PipelineEdit, PipelineError, RepositoryAccess, StarterAssignments, StarterStep,
+    StarterStepText, Step, StepKey, StepKind, feature_delivery,
+  },
   prompt::{PromptError, PromptText},
   tool::{
     AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, DatabaseQuery,
@@ -37,6 +40,12 @@ pub trait ResourceBody: Serialize + DeserializeOwned {
   /// Version of the stored JSON shape. Changing the shape requires a new number and a
   /// conversion from every older one.
   const SCHEMA: u32;
+
+  /// Rules a body must meet to be published beyond those of a draft. Every
+  /// [`crate::store::ResourceStore::publish_draft`] implementation checks it before publishing.
+  fn check_publishable(&self) -> Result<(), PublishError> {
+    Ok(())
+  }
 }
 
 impl ResourceBody for AgentProfile {
@@ -52,6 +61,15 @@ impl ResourceBody for Instruction {
 impl ResourceBody for Pipeline {
   const KIND: ResourceKind = ResourceKind::Pipeline;
   const SCHEMA: u32 = 1;
+
+  fn check_publishable(&self) -> Result<(), PublishError> {
+    let unassigned: Vec<StepKey> = self.unassigned_steps().cloned().collect();
+    if unassigned.is_empty() {
+      Ok(())
+    } else {
+      Err(PublishError::UnassignedSteps(unassigned))
+    }
+  }
 }
 
 impl ResourceBody for Tool {

@@ -98,6 +98,7 @@ impl ResourceStore for ProjectDb {
     let transaction = self.connection.transaction()?;
     check_kind::<B>(&transaction, resource)?;
     let draft = load_draft::<B>(&transaction, resource)?.ok_or(StoreError::NoDraft(resource))?;
+    draft.body().check_publishable()?;
     let latest = load_versions::<B>(
       &transaction,
       "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",

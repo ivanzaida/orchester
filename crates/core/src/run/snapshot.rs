@@ -66,6 +66,9 @@ impl StepSnapshot {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum SnapshotError {
+  /// Publishing rejects such pipelines, so a published version never has one.
+  #[error("step `{0}` has no agent profile or tool")]
+  UnassignedStep(StepKey),
   #[error("step `{step}` uses agent profile {profile}, which has no published version")]
   UnpublishedProfile { step: StepKey, profile: ResourceId },
   #[error("step `{step}` calls tool {tool}, which has no published version")]
@@ -139,11 +142,11 @@ fn check_executor(step: &Step, pinned: &StepSnapshot) -> Result<(), SnapshotErro
         model_overridden,
       },
     ) => {
-      *profile == pinned_profile.resource
+      *profile == Some(pinned_profile.resource)
         && *model_overridden == model.is_some()
         && model.as_ref().is_none_or(|model| model == pinned_model)
     }
-    (StepKind::Tool { tool }, StepExecutor::Tool { tool: pinned_tool }) => *tool == pinned_tool.resource,
+    (StepKind::Tool { tool }, StepExecutor::Tool { tool: pinned_tool }) => *tool == Some(pinned_tool.resource),
     _ => false,
   };
   if matches {
@@ -228,8 +231,10 @@ impl RunSnapshot {
 }
 
 fn resolve_step(step: &Step, published: PublishedVersions<'_>) -> Result<StepSnapshot, SnapshotError> {
+  let unassigned = || SnapshotError::UnassignedStep(step.key.clone());
   let executor = match &step.kind {
     StepKind::Agent { profile, model, .. } => {
+      let profile = profile.as_ref().ok_or_else(unassigned)?;
       let version = published
         .profiles
         .get(profile)
@@ -244,6 +249,7 @@ fn resolve_step(step: &Step, published: PublishedVersions<'_>) -> Result<StepSna
       }
     }
     StepKind::Tool { tool } => {
+      let tool = tool.as_ref().ok_or_else(unassigned)?;
       let version = published
         .tools
         .get(tool)
@@ -267,9 +273,8 @@ fn applies(instruction: &Instruction, pipeline: ResourceId, body: &Pipeline, pub
   match instruction.scope() {
     InstructionScope::Project => true,
     InstructionScope::AgentRole { role } => body.steps().iter().any(|step| match &step.kind {
-      StepKind::Agent { profile, .. } => published
-        .profiles
-        .get(profile)
+      StepKind::Agent { profile, .. } => profile
+        .and_then(|profile| published.profiles.get(&profile))
         .is_some_and(|version| version.body().role() == role),
       StepKind::Tool { .. } => false,
     }),
