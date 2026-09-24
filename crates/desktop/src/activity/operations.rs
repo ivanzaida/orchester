@@ -192,16 +192,24 @@ pub fn connection_save(open: &OpenProject, name: &str) -> OperationSpec {
   .target(in_project(open, Place::Connections))
 }
 
-/// Checking a provider's CLI in the connection dialog; named by its program.
+/// Checking a provider's CLI in the connection dialog; named by the product, e.g. "Codex CLI".
 pub fn cli_check(open: &OpenProject, provider: AgentProvider) -> OperationSpec {
-  Wording {
-    running: "statusBar.operations.cliCheck.running",
-    done: "statusBar.operations.cliCheck.done",
-    failed: "statusBar.operations.cliCheck.failed",
-  }
-  .named(provider.program_name())
-  .project(open.project.name().as_str())
-  .target(in_project(open, Place::Connections))
+  let wording = match provider {
+    AgentProvider::CodexCli => Wording {
+      running: "statusBar.operations.cliCheck.codex.running",
+      done: "statusBar.operations.cliCheck.codex.done",
+      failed: "statusBar.operations.cliCheck.codex.failed",
+    },
+    AgentProvider::ClaudeCodeCli => Wording {
+      running: "statusBar.operations.cliCheck.claude.running",
+      done: "statusBar.operations.cliCheck.claude.done",
+      failed: "statusBar.operations.cliCheck.claude.failed",
+    },
+  };
+  wording
+    .unnamed()
+    .project(open.project.name().as_str())
+    .target(in_project(open, Place::Connections))
 }
 
 /// The native file dialog for a provider's program, while it is open.

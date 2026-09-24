@@ -837,9 +837,16 @@
         "failed": "Could not save connection {{name}}"
       },
       "cliCheck": {
-        "running": "Checking {{name}} CLI",
-        "done": "Checked {{name}} CLI",
-        "failed": "Could not check {{name}} CLI"
+        "codex": {
+          "running": "Checking Codex CLI",
+          "done": "Checked Codex CLI",
+          "failed": "Could not check Codex CLI"
+        },
+        "claude": {
+          "running": "Checking Claude Code CLI",
+          "done": "Checked Claude Code CLI",
+          "failed": "Could not check Claude Code CLI"
+        }
       },
       "programPick": {
         "running": "Choosing a program file",

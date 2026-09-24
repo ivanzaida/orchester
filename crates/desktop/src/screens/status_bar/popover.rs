@@ -34,6 +34,9 @@ use crate::{
 const WIDTH: f32 = 420.0;
 const LIST_MAX_HEIGHT: f32 = 360.0;
 const DIVIDER_HEIGHT: f32 = 1.0;
+/// Width of the chevron column (the 12px icon), kept empty on rows that open nothing so every
+/// row's time lines up.
+const CHEVRON_WIDTH: f32 = 12.0;
 
 pub fn popover(ctx: &mut Ctx, log: &ActivityLog, opener: &Opener, anchors: &Anchors) -> Element {
   let running: Vec<&Operation> = log.running().collect();
@@ -188,13 +191,19 @@ fn row(parts: RowParts, target: &Target, failure: Option<OperationId>, opener: &
     .child(parts.icon)
     .child(parts.title)
     .child(parts.time);
+  let chevron = Row::new()
+    .width(Dimension::Px(CHEVRON_WIDTH))
+    .justify(Justify::Center)
+    .flex_shrink(0.0);
   if opener.can_open(target) {
     let (target, open) = (target.clone(), opener.clone());
     row = row
-      .child(glyph(Icon::ChevronRight, PaletteColor::TextMuted))
+      .child(chevron.child(glyph(Icon::ChevronRight, PaletteColor::TextMuted)))
       .cursor(CursorIcon::Pointer)
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
       .on_click(move |_| open.open(&target, failure));
+  } else {
+    row = row.child(chevron);
   }
   if let Some(id) = failure {
     let dismissing = opener.clone();

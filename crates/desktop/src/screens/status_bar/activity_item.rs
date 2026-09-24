@@ -130,21 +130,16 @@ fn running(
   open_or_popover(row, newest.target().clone(), None, opener)
 }
 
-/// D: highlighted while the popover is open.
+/// D: the count and the newest operation, opening the popover.
 fn several(text: &Arc<str>, log: &ActivityLog, opener: &Opener, hints: &Hints) -> Element {
-  let open = opener.popover_open();
-  let mut row = item("status-activity")
+  let row = item("status-activity")
     .describe("state", "several")
     .describe("running", log.running().count().to_string())
     .child(glyph(Icon::Loader, PaletteColor::TextPrimary))
     .child(truncated_label(text, PaletteColor::TextPrimary))
     .child(glyph(Icon::ChevronUp, PaletteColor::TextPrimary));
-  if open {
-    row = row.background(PaletteColor::AccentMuted);
-  }
   let row = hints.attach(row, HintAnchor::Activity, text.clone());
-  let toggle = opener.clone();
-  clickable(row, move || toggle.toggle_popover()).into()
+  popover_toggle(row, opener)
 }
 
 /// A, F: the latest event with its time.
@@ -170,12 +165,23 @@ fn open_event(row: Row, event: &Event, opener: &Opener) -> Element {
 
 /// Opens the object the item names; with nothing to open, the popover with the history.
 fn open_or_popover(row: Row, target: Target, failure: Option<OperationId>, opener: &Opener) -> Element {
-  let opener = opener.clone();
   if opener.can_open(&target) {
+    let opener = opener.clone();
     clickable(row, move || opener.open(&target, failure)).into()
   } else {
-    clickable(row, move || opener.toggle_popover()).into()
+    popover_toggle(row, opener)
   }
+}
+
+/// An item that toggles the popover; it keeps the `$hover` fill while the popover is open.
+fn popover_toggle(row: Row, opener: &Opener) -> Element {
+  let row = if opener.popover_open() {
+    row.background(PaletteColor::AccentMuted)
+  } else {
+    row
+  };
+  let toggle = opener.clone();
+  clickable(row, move || toggle.toggle_popover()).into()
 }
 
 /// An event's text: its title, and the reason of a failure.
