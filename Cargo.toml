@@ -47,37 +47,8 @@ uuid = { version = "1", features = ["v7", "serde"] }
 win32job = "2"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes"] }
 
-# lurq's text shaping at opt-level 0 makes text-heavy screens crawl in dev builds.
-# These overrides must live in the consuming workspace; lurq's own do not apply here.
-[profile.dev.package.cosmic-text]
-opt-level = 2
-
-[profile.dev.package.swash]
-opt-level = 2
-
-[profile.dev.package.rustybuzz]
-opt-level = 2
-
-[profile.dev.package.ttf-parser]
-opt-level = 2
-
-[profile.dev.package.fontdb]
-opt-level = 2
-
-[profile.dev.package.unicode-bidi]
-opt-level = 2
-
-[profile.dev.package.unicode-linebreak]
-opt-level = 2
-
-[profile.dev.package.unicode-script]
-opt-level = 2
-
-[profile.dev.package.skrifa]
-opt-level = 2
-
-[profile.dev.package.read-fonts]
-opt-level = 2
-
-[profile.dev.package.font-types]
+# lurq's text stack at opt-level 0 makes text-heavy screens crawl in dev builds. Cargo reads
+# profiles only from this workspace, so lurq cannot set this itself. The wildcard covers every
+# dependency but not the workspace crates, which stay debuggable.
+[profile.dev.package."*"]
 opt-level = 2
