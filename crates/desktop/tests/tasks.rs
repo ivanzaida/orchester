@@ -295,3 +295,45 @@ fn elapsed_time_uses_the_largest_whole_unit() {
   assert_eq!(key(2 * 3_600_000).key, "time.hoursAgo");
   assert_eq!(key(3 * 86_400_000).key, "time.daysAgo");
 }
+
+#[test]
+fn form_names_one_problem_per_message_for_invalid_limits() {
+  let with_limits = |budget: &'static str, time_limit: &'static str| form("Task", &[], budget, time_limit);
+  let invalid = with_limits("five", "30");
+  let errors = invalid.details().expect_err("the budget is invalid");
+  assert!(!invalid.missing().contains(&MissingDetail::Limits));
+  assert_eq!(
+    errors
+      .save_reasons()
+      .iter()
+      .map(|reason| reason.key)
+      .collect::<Vec<_>>(),
+    ["tasks.new.limitsBlockSave"]
+  );
+  let half_entered = with_limits("5", "");
+  assert!(!half_entered.missing().contains(&MissingDetail::Limits));
+  assert!(with_limits("", "").missing().contains(&MissingDetail::Limits));
+
+  let blank_title = form(" ", &[], "5", "0")
+    .details()
+    .expect_err("title and time limit are invalid");
+  assert_eq!(
+    blank_title
+      .save_reasons()
+      .iter()
+      .map(|reason| reason.key)
+      .collect::<Vec<_>>(),
+    ["errors.titleRequired", "tasks.new.limitsBlockSave"]
+  );
+}
+
+#[test]
+fn task_list_keeps_task_order_and_overview_shows_newest_first() {
+  let tasks = stored_tasks();
+  let titles = |rows: Vec<list::TaskRow>| rows.iter().map(|row| row.title.to_string()).collect::<Vec<_>>();
+  assert_eq!(
+    titles(list::rows(&tasks, &[], TaskTab::All)),
+    ["Incomplete", "To queue"]
+  );
+  assert_eq!(titles(list::recent(&tasks, &[], 2)), ["To queue", "Incomplete"]);
+}

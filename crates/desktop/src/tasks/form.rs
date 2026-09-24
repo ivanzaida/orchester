@@ -40,6 +40,16 @@ pub struct FormErrors {
   pub time_limit: Option<Message>,
 }
 
+impl FormErrors {
+  /// Why Save as draft is unavailable, shown beside it: the title error itself, and one
+  /// reason for limits that are not valid (their fields say what is wrong with each).
+  pub fn save_reasons(&self) -> Vec<Message> {
+    let limits =
+      (self.budget.is_some() || self.time_limit.is_some()).then(|| Message::new("tasks.new.limitsBlockSave"));
+    self.title.iter().cloned().chain(limits).collect()
+  }
+}
+
 impl TaskForm<'_> {
   pub fn details(&self) -> Result<TaskDetails, FormErrors> {
     let title = Name::new(self.title).map_err(|error| title_error(&error));
@@ -70,21 +80,26 @@ impl TaskForm<'_> {
   }
 
   /// Details the task still needs before it can be queued, also while the title is not
-  /// valid yet. Limits that are not valid count as missing; their error is shown as well.
+  /// valid yet. Limits that are entered but not valid are not listed: their error already
+  /// says what is wrong, and one problem gets one message.
   pub fn missing(&self) -> Vec<MissingDetail> {
     let title = Name::new(self.title).unwrap_or_else(|_| {
       // `TaskDetails::missing` never looks at the title, so any valid name stands in for it.
       Name::new(UNTITLED).expect("the stand-in title is a valid name")
     });
+    let limits = self.limits();
+    let invalid_limits = limits.is_err();
     TaskDetails {
       title,
       brief: self.brief.to_owned(),
       acceptance_criteria: self.criteria.to_vec(),
       pipeline: self.pipeline,
-      // Invalid limits are missing for queueing; `details` reports why they are invalid.
-      limits: self.limits().ok().flatten(),
+      limits: limits.ok().flatten(),
     }
     .missing()
+    .into_iter()
+    .filter(|detail| !(invalid_limits && *detail == MissingDetail::Limits))
+    .collect()
   }
 
   /// Limits are a pair: both empty leaves them missing, one alone is an error on the other.

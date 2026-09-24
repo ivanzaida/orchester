@@ -102,7 +102,8 @@ impl TasksScreen {
   fn tabs(&self, ctx: &Ctx, tasks: Option<&ProjectTasks>) -> Element {
     let selected = self.tab.get();
     let tabs = TaskTab::ALL.into_iter().map(|tab| {
-      let item = Tab::new(tab_id(tab), ctx.t(tab.label_key()), Dimension::Px(TAB_ROW_HEIGHT));
+      let item = Tab::new(tab_id(tab), ctx.t(tab.label_key()), Dimension::Px(TAB_ROW_HEIGHT))
+        .min_width(Dimension::Px(tab_width(tab)));
       if !tab.is_available() {
         return item;
       }
@@ -120,6 +121,17 @@ impl TasksScreen {
       .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .with_children(tabs)
       .into()
+  }
+}
+
+/// Tab widths in the design (`Iefue`, `WGkQY`, `vfoPn`, `gDolJ`, `fwdrp` in `XxplC`).
+const fn tab_width(tab: TaskTab) -> f32 {
+  match tab {
+    TaskTab::All => 124.0,
+    TaskTab::Drafts => 110.0,
+    TaskTab::Queue => 106.0,
+    TaskTab::NeedsReview => 150.0,
+    TaskTab::Done => 102.0,
   }
 }
 

@@ -225,6 +225,7 @@
       "createAndRun": "Create & run",
       "runUnavailable": "Running tasks is not available in this version yet. Save the task as a draft for now.",
       "saveDraft": "Save as draft",
+      "limitsBlockSave": "Correct the run budget and time limit to save the draft.",
       "savingDraft": "Saving draft…"
     }
   },
