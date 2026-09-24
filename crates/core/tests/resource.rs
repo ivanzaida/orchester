@@ -56,6 +56,17 @@ fn version_numbers_have_an_upper_bound() {
 }
 
 #[test]
+fn slug_from_name_keeps_ascii_words() {
+  let slug = |name: &str| Slug::from_name(name).map(|slug| slug.as_str().to_owned());
+  assert_eq!(slug("Dependency updates").as_deref(), Some("dependency-updates"));
+  assert_eq!(slug("  Release notes: v2!  ").as_deref(), Some("release-notes-v2"));
+  assert_eq!(slug("Ð¡Ð±Ð¾Ñ€ÐºÐ°"), None);
+  let long = "a ".repeat(40);
+  let cut = slug(&long).expect("letters");
+  assert!(cut.len() <= Slug::MAX_CHARS && !cut.ends_with('-'));
+}
+
+#[test]
 fn slug_accepts_kebab_case_only() {
   assert_eq!(Slug::new("feature-delivery").unwrap().as_str(), "feature-delivery");
   for invalid in ["", "Feature", "feature_delivery", "-lead", "trail-", "double--hyphen"] {

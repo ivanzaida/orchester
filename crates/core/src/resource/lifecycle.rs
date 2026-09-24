@@ -50,6 +50,22 @@ impl Slug {
     }
   }
 
+  /// The slug a name reads as: ASCII letters and digits lowercased, every other run of
+  /// characters a single hyphen, cut to [`Self::MAX_CHARS`]. `None` when the name has no ASCII
+  /// letter or digit, e.g. a name written only in another script.
+  pub fn from_name(name: &str) -> Option<Self> {
+    let mut slug = String::new();
+    for c in name.chars() {
+      if c.is_ascii_alphanumeric() {
+        slug.push(c.to_ascii_lowercase());
+      } else if !slug.is_empty() && !slug.ends_with('-') {
+        slug.push('-');
+      }
+    }
+    slug.truncate(Self::MAX_CHARS);
+    Self::new(slug.trim_end_matches('-')).ok()
+  }
+
   pub fn as_str(&self) -> &str {
     &self.0
   }
