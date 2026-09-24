@@ -14,7 +14,10 @@ use lurq::{
   node::{CursorIcon, Element, SelectPartStyle, Style, border::Border, dimension::Dimension},
 };
 
-use super::icon::{Icon, IconSize, icon};
+use super::{
+  icon::{Icon, IconSize, icon},
+  pressable::TAB_STOP,
+};
 
 /// Below the control: nothing, or the error of the current value.
 pub enum FieldNote {
@@ -102,6 +105,11 @@ pub fn select_trigger(ctx: &Ctx, height: f32) -> SelectPartStyle {
     .text(input.text.resolve(&theme.typography(), &theme.palette()))
 }
 
+/// Focused trigger of a select: the focused field stroke (`o8Oug`).
+pub fn select_trigger_focused(ctx: &Ctx) -> SelectPartStyle {
+  SelectPartStyle::new().border_inside(BorderSize::Md, ctx.theme().form().input.border_focus.clone())
+}
+
 /// How a value box reads.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ValueTone {
@@ -129,8 +137,9 @@ pub fn value_box(
 }
 
 /// [`value_box`] at a height other than the standard field height, e.g. the 36px filters of
-/// the task list (`d5tAIZ`). A box with a chooser is a button: Tab reaches it, Enter or
-/// Space opens the chooser, and it shows the focused field stroke (`o8Oug`) while focused.
+/// the task list (`d5tAIZ`). A box with a chooser is a button: Tab reaches it, in a form or
+/// not, Enter or Space opens the chooser, and it shows the focused field stroke (`o8Oug`)
+/// while focused.
 pub fn value_box_sized(
   ctx: &Ctx,
   id: &'static str,
@@ -172,6 +181,7 @@ pub fn value_box_sized(
       .child(value)
       .child(icon(glyph, IconSize::Button, PaletteColor::TextSecondary))
       .cursor(CursorIcon::Pointer)
+      .tab_index(TAB_STOP)
       .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, input.border_focus.clone())))
       .focused_style(Style::new().border(Border::inside(BorderSize::Md, input.border_focus)))
       .on_click(move |_| on_click())

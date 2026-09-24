@@ -8,8 +8,8 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, ScrollVertical, Text, TextOverflow},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  components::{Button, Column, ScrollVertical, Text, TextOverflow},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::id::ResourceId;
 
@@ -17,7 +17,11 @@ use super::super::{AgentSelection, ProjectNav, page::TOPBAR_BUTTON_HEIGHT};
 use crate::{
   agents::data::{ProfileEntry, ProjectAgents},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{button::ActionButton, icon::Icon},
+  ui::{
+    button::ActionButton,
+    icon::Icon,
+    pressable::{pressable, surface},
+  },
 };
 
 /// List and item sizes (`ORWrW`, `mmKpE`).
@@ -107,36 +111,38 @@ fn item(ctx: &Ctx, agents: &ProjectAgents, entry: &ProfileEntry, selected: bool,
     "agents.assignment",
     [("connection", &*connection), ("model", profile.model().as_str())],
   );
-  let column = frame(profile.role().as_str(), &metadata, selected).id(Arc::<str>::from(format!("agent-{}", entry.id)));
+  let item = frame(profile.role().as_str(), &metadata, selected).id(Arc::<str>::from(format!("agent-{}", entry.id)));
   if selected {
-    return column.describe("state", "selected").into();
+    return item.describe("state", "selected").into();
   }
   let (agent, id) = (nav.agent.clone(), entry.id);
-  column
-    .cursor(CursorIcon::Pointer)
+  pressable(item, move || agent.set(AgentSelection::Profile(id)))
     .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
-    .on_click(move |_| agent.set(AgentSelection::Profile(id)))
     .into()
 }
 
-/// A list item (`jNTVN`): title over metadata.
-fn frame(title: &str, metadata: &str, selected: bool) -> Column {
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ITEM_HEIGHT))
-    .padding(ExtraSpacing::Stack.role())
+/// A list item (`jNTVN`): title over metadata. A button, so an item that can be selected is
+/// reached by Tab and selected by Enter or Space.
+fn frame(title: &str, metadata: &str, selected: bool) -> Button {
+  let text = Column::new()
+    .flex(1.0)
     .spacing(SpacingSize::Sm)
-    .rounded(RadiusSize::Md)
-    .background(if selected {
-      PaletteColor::AccentMuted
-    } else {
-      PaletteColor::SurfacePanel
-    })
     .child(Text::new(title).variant(ExtraTypography::FormLabel.role()).nowrap())
     .child(
       Text::new(metadata)
         .variant(ExtraTypography::Footnote.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
-    )
+    );
+  surface()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ITEM_HEIGHT))
+    .padding(ExtraSpacing::Stack.role())
+    .rounded(RadiusSize::Md)
+    .background(if selected {
+      PaletteColor::AccentMuted
+    } else {
+      PaletteColor::SurfacePanel
+    })
+    .child(text)
 }

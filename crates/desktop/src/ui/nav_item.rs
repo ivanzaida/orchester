@@ -1,16 +1,20 @@
 //! Navigation item (`TSJpn`): icon, label and an optional count. An item is the selected
 //! screen, a screen that can be opened, or visibly unavailable when the screen does not exist yet.
+//! Only an item that opens a screen takes focus; Tab reaches it and Enter or Space opens it.
 
 use std::sync::Arc;
 
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, TypographyStyle},
-  components::{Row, Text},
+  components::Text,
   layout::Alignment,
   node::{CursorIcon, Element, Style, dimension::Dimension},
 };
 
-use super::icon::{Icon, IconSize, icon};
+use super::{
+  icon::{Icon, IconSize, icon},
+  pressable::{pressable, surface},
+};
 use crate::theme::{ExtraSpacing, ExtraTypography};
 
 /// Item heights: primary navigation (`TSJpn`), setup steps (`aaeeO`), footer entries (`wqkkE`).
@@ -109,7 +113,7 @@ impl From<NavItem> for Element {
       Density::Secondary => (ITEM_HEIGHT, IconSize::Button, TypographyStyle::FieldLabel),
       Density::Compact => (COMPACT_HEIGHT, IconSize::Button, TypographyStyle::FieldLabel),
     };
-    let row = Row::new()
+    let row = surface()
       .id(item.id)
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(height))
@@ -135,11 +139,9 @@ impl From<NavItem> for Element {
         .background(PaletteColor::AccentMuted)
         .describe("state", "selected")
         .into(),
-      State::Available(handler) => row
+      State::Available(handler) => pressable(row, move || handler())
         .describe("state", "enabled")
-        .cursor(CursorIcon::Pointer)
         .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-        .on_click(move |_| handler())
         .into(),
       State::Unavailable => row
         .describe("state", "unavailable")

@@ -30,9 +30,12 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, SELECT_CHEVRON_SIZE},
   ui::{
     button::ActionButton,
-    field::{ValueTone, field_error, select_trigger, styled_input, text_input, value_box_sized},
+    field::{
+      ValueTone, field_error, select_trigger, select_trigger_focused, styled_input, text_input, value_box_sized,
+    },
     icon::{Icon, IconSize, icon},
     message_text,
+    pressable::keyboard_stop,
   },
 };
 
@@ -78,6 +81,7 @@ fn select<T: Clone + PartialEq + Send + Sync + SignalValue + 'static>(
         .style_with(|style| {
           style
             .trigger(trigger)
+            .trigger_focused(select_trigger_focused(ctx))
             .chevron_color(chevron)
             .chevron_size(SELECT_CHEVRON_SIZE)
         }),
@@ -308,8 +312,7 @@ fn toggle(text: &str, on: bool, flip: impl Fn() + Send + Sync + 'static) -> Elem
   } else {
     PaletteColor::TextSecondary
   };
-  Button::empty()
-    .button()
+  keyboard_stop(Button::empty().button())
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
@@ -417,8 +420,7 @@ fn property_input(ctx: &Ctx, key: &str, id: &'static str, value: &Signal<String>
 pub fn approval(ctx: &Ctx, props: &StepInspectorProps, handle: &EditorHandle) -> Element {
   let on = props.step.approval_gate;
   let (handle, key) = (handle.clone(), props.step.key.clone());
-  Button::empty()
-    .button()
+  keyboard_stop(Button::empty().button())
     .id("step-approval")
     .describe("checked", if on { "true" } else { "false" })
     .width(Dimension::Pct(100.0))

@@ -8,7 +8,7 @@ use lurq::{
   },
   components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::time::Timestamp;
 
@@ -23,6 +23,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
+    pressable::{pressable, surface},
     status_label::status_label,
   },
 };
@@ -120,7 +121,7 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
     |at| message_text(ctx, &display::elapsed(Timestamp::now(), at)).to_string(),
   );
   let (open, id) = (nav.clone(), entry.id);
-  Row::new()
+  let row = surface()
     .id("pipeline-row")
     .describe("pipeline", entry.name.to_string())
     .width(Dimension::Pct(100.0))
@@ -128,9 +129,7 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .cursor(CursorIcon::Pointer)
     .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
-    .on_click(move |_| open.open(id))
     .child(icon_surface)
     .child(identity)
     .child(cell(
@@ -145,6 +144,6 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
       PaletteColor::TextSecondary,
     ))
     .child(cell(&published, PUBLISHED_WIDTH, PaletteColor::TextSecondary))
-    .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary))
-    .into()
+    .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
+  pressable(row, move || open.open(id)).into()
 }

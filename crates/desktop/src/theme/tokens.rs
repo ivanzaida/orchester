@@ -80,3 +80,9 @@ pub const CONNECTOR_STROKE: f32 = 1.25;
 pub const TITLE_BAR_HEIGHT: f32 = 32.0;
 /// Width of each Windows window control (`QQmsI`).
 pub const WINDOW_CONTROL_WIDTH: f32 = 46.0;
+
+/// Drop shadow of the status bar operations popover (`E1msJS`): outer, x 0, y 8, blur 24,
+/// no spread. The only shadow in the design.
+pub const POPOVER_SHADOW_Y: f32 = 8.0;
+pub const POPOVER_SHADOW_BLUR: f32 = 24.0;
+pub const POPOVER_SHADOW_COLOR: &str = "#00000066";

@@ -4,9 +4,9 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   layout::text_style::FontWeight,
-  node::{color::Color, dimension::Dimension},
+  node::{BackgroundColor, BoxShadow, color::Color, dimension::Dimension},
 };
-use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography};
+use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography};
 
 fn themed_app() -> App {
   let mut app = App::new();
@@ -190,4 +190,20 @@ fn agents_and_connections_roles_follow_pencil() {
   let compact = theme.typography_style(ExtraTypography::CompactStatusLabel.role());
   assert_eq!((compact.font_size, compact.weight), (10.0, FontWeight::Medium));
   assert_eq!(theme.spacing_value(ExtraSpacing::Form.role()), Dimension::Px(22.0));
+}
+
+#[test]
+fn popover_shadow_follows_pencil() {
+  let app = themed_app();
+  let shadow = app.theme().shadow_style(ExtraShadow::Popover.role());
+  // `E1msJS`: outer, x 0, y 8, blur 24, no spread, #00000066.
+  assert_eq!(
+    &*shadow,
+    &[BoxShadow::new(
+      0.0,
+      8.0,
+      24.0,
+      BackgroundColor::from(Color::from_hex("#00000066"))
+    )]
+  );
 }

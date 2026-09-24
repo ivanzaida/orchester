@@ -1,15 +1,16 @@
 //! Pipeline step card (`ajikA`): the step's icon, name and number, who runs it and what it
 //! waits for. The selected card has a stronger outline; a step without a profile or tool says
-//! so in the text color (`ipfll` in `UjHDL`).
+//! so in the text color (`ipfll` in `UjHDL`). A card is a button: Tab reaches it and Enter or
+//! Space selects its step.
 
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextOverflow},
+  components::{Button, Column, Row, Text, TextOverflow},
   layout::Alignment,
-  node::{CursorIcon, Style, border::Border, dimension::Dimension},
+  node::{Style, border::Border, dimension::Dimension},
 };
 use orchester_core::resource::{RepositoryAccess, Step, StepKind};
 
@@ -23,6 +24,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
+    pressable::{pressable, surface},
   },
 };
 
@@ -50,7 +52,7 @@ pub fn step_card(
   selected: bool,
   assignables: &Assignables,
   handle: &EditorHandle,
-) -> Column {
+) -> Button {
   let unassigned = step.kind.executor().is_none();
   let header = Row::new()
     .width(Dimension::Pct(100.0))
@@ -80,17 +82,9 @@ pub fn step_card(
     (BorderSize::Sm, PaletteColor::Border)
   };
   let (select, key) = (handle.clone(), step.key.clone());
-  Column::new()
-    .id(format!("step-card-{}", step.key))
-    .describe("selected", if selected { "true" } else { "false" })
-    .padding(SpacingSize::Md)
+  let content = Column::new()
+    .flex(1.0)
     .spacing(ExtraSpacing::Stack.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(stroke, outline))
-    .rounded(RadiusSize::Lg)
-    .cursor(CursorIcon::Pointer)
-    .hovered_style(Style::new().border(Border::inside(stroke, PaletteColor::BorderStrong)))
-    .on_click(move |_| select.select(Selection::Step(key.clone())))
     .child(header)
     .child(
       Text::new(&message_text(ctx, &executor_line(step, assignables)))
@@ -105,5 +99,15 @@ pub fn step_card(
         .color(PaletteColor::TextMuted)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
-    )
+    );
+  let card = surface()
+    .id(format!("step-card-{}", step.key))
+    .describe("selected", if selected { "true" } else { "false" })
+    .padding(SpacingSize::Md)
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(stroke, outline))
+    .rounded(RadiusSize::Lg)
+    .child(content);
+  pressable(card, move || select.select(Selection::Step(key.clone())))
+    .hovered_style(Style::new().border(Border::inside(stroke, PaletteColor::BorderStrong)))
 }

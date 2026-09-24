@@ -22,10 +22,11 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, SELECT_CHEVRON_SIZE},
   ui::{
     button::{ActionButton, SKIPPED_BY_TAB},
-    field::{ValueTone, select_trigger, styled_input, value_box_sized},
+    field::{ValueTone, select_trigger, select_trigger_focused, styled_input, value_box_sized},
     form::Submit,
     icon::Icon,
     message_text,
+    pressable::keyboard_stop,
   },
 };
 
@@ -102,6 +103,7 @@ fn pipeline_select(ctx: &Ctx, selection: &Signal<PipelineSelection>, choices: &[
     .style_with(|style| {
       style
         .trigger(select_trigger(ctx, SELECTOR_HEIGHT))
+        .trigger_focused(select_trigger_focused(ctx))
         .chevron_color(chevron)
         .chevron_size(SELECT_CHEVRON_SIZE)
     })
@@ -207,6 +209,17 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit) -> Element {
     .save_error
     .as_ref()
     .map(|error| error_note(&message_text(ctx, error)));
+  // Full width, so a long reason wraps inside the panel instead of running past its edge.
+  let reasons: Vec<Text> = state
+    .errors
+    .save_reasons()
+    .iter()
+    .map(|reason| {
+      Text::new(&message_text(ctx, reason))
+        .variant(TypographyStyle::Caption)
+        .width(Dimension::Pct(100.0))
+    })
+    .collect();
   let enabled = save.is_some();
   let label = if state.saving {
     ctx.t("tasks.new.savingDraft")
@@ -228,7 +241,7 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit) -> Element {
     .rounded(RadiusSize::Sm)
     .child(text);
   let save_draft = match save {
-    Some(save) => save_draft
+    Some(save) => keyboard_stop(save_draft)
       .describe("state", "enabled")
       .cursor(CursorIcon::Pointer)
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
@@ -252,13 +265,7 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit) -> Element {
     )
     .child(Text::new(&ctx.t("tasks.new.runUnavailable")).variant(TypographyStyle::Caption))
     .with_children(status)
-    .with_children(
-      state
-        .errors
-        .save_reasons()
-        .iter()
-        .map(|reason| Text::new(&message_text(ctx, reason)).variant(TypographyStyle::Caption)),
-    )
+    .with_children(reasons)
     .child(save_draft)
     .into()
 }

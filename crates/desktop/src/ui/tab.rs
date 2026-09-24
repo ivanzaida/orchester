@@ -1,6 +1,7 @@
 //! Tab (`SOW6S`): a label with an optional count; the selected tab is underlined (`Iefue`).
 //! A tab without a data source yet is unavailable: muted, locked and without a count.
-//! [`tab_row`] lays tabs out over the hairline that ends their row.
+//! [`tab_row`] lays tabs out over the hairline that ends their row. Only an available tab
+//! takes focus; Tab reaches it and Enter or Space selects it.
 
 use std::sync::Arc;
 
@@ -11,7 +12,10 @@ use lurq::{
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
 
-use super::icon::{Icon, IconSize, icon};
+use super::{
+  icon::{Icon, IconSize, icon},
+  pressable::{pressable, surface},
+};
 use crate::theme::{ExtraColor, ExtraSpacing};
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
@@ -77,7 +81,7 @@ impl From<Tab> for Element {
       State::Available(_) => PaletteColor::TextSecondary,
       State::Unavailable => PaletteColor::TextMuted,
     };
-    let mut row = Row::new().id(tab.id).height(tab.height);
+    let mut row = surface().id(tab.id).height(tab.height);
     if let Some(width) = tab.min_width {
       row = row.min_width(width);
     }
@@ -101,11 +105,9 @@ impl From<Tab> for Element {
         .describe("state", "selected")
         .border_bottom(Border::inside(BorderSize::Lg, PaletteColor::TextPrimary))
         .into(),
-      State::Available(handler) => row
+      State::Available(handler) => pressable(row, move || handler())
         .describe("state", "enabled")
-        .cursor(CursorIcon::Pointer)
         .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Lg, PaletteColor::Border)))
-        .on_click(move |_| handler())
         .into(),
       State::Unavailable => row
         .describe("state", "unavailable")

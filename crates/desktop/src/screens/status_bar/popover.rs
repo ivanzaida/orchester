@@ -1,6 +1,7 @@
 //! Operations popover (`E1msJS`, anchored example `imT2E`): opens upward from the activity
 //! item, 6px above the bar, with the running operations and the session's RECENT events
-//! (unresolved failures pinned first). Escape or a click outside closes it.
+//! (unresolved failures pinned first). Escape or a click outside closes it. Rows that open
+//! something, the dismiss controls and Open runner log are Tab stops.
 
 use std::sync::Arc;
 
@@ -11,7 +12,7 @@ use lurq::{
   },
   components::{Column, Popup, Rect, Row, ScrollVertical, Text},
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 
 use super::{
@@ -25,8 +26,12 @@ use super::{
 use crate::{
   activity::{ActivityLog, Event, Operation, OperationId, Outcome, Place, Target},
   display,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{icon::Icon, message_text},
+  theme::{ExtraColor, ExtraShadow, ExtraSpacing, ExtraTypography},
+  ui::{
+    icon::Icon,
+    message_text,
+    pressable::{pressable, surface},
+  },
 };
 
 /// Popover width (`E1msJS`). The recent list scrolls beyond this height; the design shows
@@ -71,6 +76,7 @@ pub fn popover(ctx: &mut Ctx, log: &ActivityLog, opener: &Opener, anchors: &Anch
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
+    .box_shadow(ExtraShadow::Popover.role())
     .child(header(ctx, running.len()))
     .child(
       ScrollVertical::new(list)
@@ -117,10 +123,7 @@ fn footer(ctx: &Ctx, opener: &Opener) -> Element {
   if opener.can_open(&Target::RunnerLog) {
     let log = opener.clone();
     row = row.child(
-      Row::new()
-        .id("status-operations-open-log")
-        .cursor(CursorIcon::Pointer)
-        .on_click(move |_| log.open_log())
+      pressable(surface().id("status-operations-open-log"), move || log.open_log())
         .child(Text::new(&ctx.t("runner.connection.openLog")).variant(TypographyStyle::Link)),
     );
   }
@@ -182,32 +185,52 @@ struct RowParts {
   time: Element,
 }
 
+/// A row; one that opens something is a button beside its dismiss control, so both are Tab
+/// stops (lurq never makes a button inside a button a stop of its own).
 fn row(parts: RowParts, target: &Target, failure: Option<OperationId>, opener: &Opener) -> Element {
-  let mut row = Row::new()
-    .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Sm)
-    .spacing(ExtraSpacing::Inline.role())
-    .rounded(RadiusSize::Md)
-    .child(parts.icon)
-    .child(parts.title)
-    .child(parts.time);
   let chevron = Row::new()
     .width(Dimension::Px(CHEVRON_WIDTH))
     .justify(Justify::Center)
     .flex_shrink(0.0);
-  if opener.can_open(target) {
-    let (target, open) = (target.clone(), opener.clone());
-    row = row
-      .child(chevron.child(glyph(Icon::ChevronRight, PaletteColor::TextMuted)))
-      .cursor(CursorIcon::Pointer)
-      .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-      .on_click(move |_| open.open(&target, failure));
+  let opens = opener.can_open(target);
+  let chevron = if opens {
+    chevron.child(glyph(Icon::ChevronRight, PaletteColor::TextMuted))
   } else {
-    row = row.child(chevron);
-  }
+    chevron
+  };
+  let content = [parts.icon, parts.title, parts.time, chevron.into()];
+  let mut row = Row::new().width(Dimension::Pct(100.0)).rounded(RadiusSize::Md);
+  row = if opens {
+    let (target, open) = (target.clone(), opener.clone());
+    let button = surface()
+      .flex(1.0)
+      .padding(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Inline.role())
+      .rounded(RadiusSize::Md)
+      .with_children(content);
+    row
+      .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+      .child(pressable(button, move || open.open(&target, failure)))
+  } else {
+    row
+      .padding(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Inline.role())
+      .with_children(content)
+  };
   if let Some(id) = failure {
     let dismissing = opener.clone();
-    row = row.child(dismiss("status-operation-dismiss", move || dismissing.dismiss(id)));
+    let dismiss = dismiss("status-operation-dismiss", move || dismissing.dismiss(id));
+    // Beside the button the dismiss control keeps its place inside the row's padding.
+    row = if opens {
+      row.child(
+        Row::new()
+          .padding_top(SpacingSize::Sm)
+          .padding_right(SpacingSize::Sm)
+          .child(dismiss),
+      )
+    } else {
+      row.child(dismiss)
+    };
   }
   row.into()
 }

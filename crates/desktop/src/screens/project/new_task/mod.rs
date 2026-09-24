@@ -17,7 +17,7 @@ use lurq::{
   components::{Column, Row, Spacer, Text},
   core::Signal,
   layout::Alignment,
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
@@ -39,6 +39,7 @@ use crate::{
   ui::{
     form::{Submit, form},
     icon::{Icon, IconSize, icon},
+    pressable::{pressable, surface},
   },
   workspace::OpenProject,
 };
@@ -232,12 +233,9 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
 /// until Save as draft, so the state says so rather than claiming a saved draft.
 fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, saving: bool) -> Element {
   let nav = nav.clone();
-  let back = Row::new()
-    .id("new-task-back")
-    .cursor(CursorIcon::Pointer)
+  let back = pressable(surface().id("new-task-back"), move || nav.show(Section::Tasks))
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-    .on_click(move |_| nav.show(Section::Tasks))
     .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));
   let state = if saving {
     ctx.t("tasks.new.saving")
@@ -288,9 +286,10 @@ fn missing_note(ctx: &Ctx, state: &FormState, detail: MissingDetail) -> Option<E
   })
 }
 
-/// Why a value or the save was not accepted.
+/// Why a value or the save was not accepted; a long reason wraps within its column.
 fn error_note(text: &str) -> Element {
   Row::new()
+    .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
     .describe("role", "field-error")
@@ -298,7 +297,8 @@ fn error_note(text: &str) -> Element {
     .child(
       Text::new(text)
         .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::TextPrimary)
+        .flex(1.0),
     )
     .into()
 }

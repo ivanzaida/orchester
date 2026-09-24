@@ -4,7 +4,7 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
-  components::Row,
+  components::{Button, Row},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -48,7 +48,7 @@ pub fn counts(ctx: &Ctx, project: Option<&ProjectBar>, opener: &Opener, hints: &
 }
 
 /// Agents and Queued open the task list; its Queue tab does not exist yet.
-fn open_tasks(row: Row, opener: &Opener) -> Element {
+fn open_tasks(row: Button, opener: &Opener) -> Element {
   match opener.tasks() {
     Some(open) => clickable(row, open).into(),
     None => row.into(),

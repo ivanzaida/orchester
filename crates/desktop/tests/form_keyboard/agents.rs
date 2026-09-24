@@ -12,7 +12,8 @@ const ROLE: &str = "agent-role";
 const RESPONSIBILITY: &str = "agent-responsibility";
 const INSTRUCTIONS: &str = "agent-instructions";
 const STATUS: &str = "agent-save-status";
-const INPUTS: [&str; 3] = [ROLE, RESPONSIBILITY, INSTRUCTIONS];
+/// More than the window has stops on this screen.
+const MAX_STOPS: usize = 30;
 
 /// A new profile in a project with a checked Codex connection, whose model has efforts.
 fn new_profile() -> Desktop {
@@ -55,42 +56,36 @@ fn status(desktop: &mut Desktop) -> String {
 #[test]
 fn agent_editor_tab_follows_the_fields_and_skips_disabled_actions() {
   let mut desktop = new_profile();
-  // In the order they appear: Save draft and Publish (skipped, they cannot be used yet), New
-  // agent in the list, Import (unavailable, skipped), then the fields; the connection, model
-  // and effort selects are stops.
+  desktop.tab_to("new-agent", MAX_STOPS);
+  // Save draft and Publish (before New agent) and Import cannot be used yet and are skipped;
+  // the connection, model and effort selects are stops. After the form Tab moves on to the
+  // status bar.
   assert_eq!(
-    desktop.stops(8, false, &INPUTS),
+    desktop.stops(7, false),
     expected(&[
-      None,
       Some(ROLE),
       Some(RESPONSIBILITY),
       None,
       None,
       None,
       Some(INSTRUCTIONS),
-      None
+      Some("status-runner"),
     ])
   );
-  assert_eq!(
-    desktop.stops(3, true, &INPUTS),
-    expected(&[Some(INSTRUCTIONS), None, None])
-  );
+  assert_eq!(desktop.stops(3, true), expected(&[Some(INSTRUCTIONS), None, None]));
 }
 
 #[test]
 fn agent_editor_enter_saves_the_draft_once_it_is_valid() {
   let mut desktop = new_profile();
   let unsaved = status(&mut desktop);
-  assert_eq!(
-    desktop.stops(3, false, &INPUTS).last(),
-    Some(&Some(RESPONSIBILITY.to_owned()))
-  );
+  desktop.tab_to(RESPONSIBILITY, MAX_STOPS);
   desktop.type_text("Implement the plan");
   // The role is still missing: Enter saves nothing.
   desktop.enter();
   desktop.settle("the unsaved profile", |tree| tree.get_element_by_id(ROLE).is_some());
   assert_eq!(status(&mut desktop), unsaved);
-  assert_eq!(desktop.stops(1, true, &INPUTS), expected(&[Some(ROLE)]));
+  assert_eq!(desktop.stops(1, true), expected(&[Some(ROLE)]));
   desktop.type_text("Builder");
   desktop.enter();
   desktop.settle("the saved draft", |tree| {

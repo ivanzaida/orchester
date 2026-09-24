@@ -37,6 +37,7 @@ use crate::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     notice::Notice,
+    pressable::{pressable, surface},
   },
 };
 
@@ -231,7 +232,14 @@ impl Canvas {
   fn first_step_slot(&self, ctx: &Ctx) -> Element {
     let handle = self.handle.clone();
     let name = new_step_name(ctx, &[]);
-    Column::new()
+    let content = Column::new()
+      .flex(1.0)
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(icon(Icon::Plus, IconSize::Notice, PaletteColor::TextPrimary))
+      .child(Text::new(&ctx.t("pipelines.canvas.addFirstStep")).variant(TypographyStyle::Label))
+      .child(Text::new(&ctx.t("pipelines.canvas.addFirstStepDetail")).variant(TypographyStyle::Caption));
+    let slot = surface()
       .id("pipeline-add-first-step")
       .absolute(
         ORIGIN_X,
@@ -239,17 +247,12 @@ impl Canvas {
         Dimension::Px(CARD_WIDTH),
         Dimension::Px(CARD_HEIGHT),
       )
-      .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .justify(Justify::Center)
       .border(Border::inside(BorderSize::Sm, PaletteColor::TextSecondary))
       .rounded(RadiusSize::Lg)
-      .cursor(CursorIcon::Pointer)
+      .child(content);
+    pressable(slot, move || add_step(&handle, name.clone()))
       .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
-      .on_click(move |_| add_step(&handle, name.clone()))
-      .child(icon(Icon::Plus, IconSize::Notice, PaletteColor::TextPrimary))
-      .child(Text::new(&ctx.t("pipelines.canvas.addFirstStep")).variant(TypographyStyle::Label))
-      .child(Text::new(&ctx.t("pipelines.canvas.addFirstStepDetail")).variant(TypographyStyle::Caption))
       .into()
   }
 
