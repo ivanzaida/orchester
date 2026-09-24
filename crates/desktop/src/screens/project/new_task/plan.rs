@@ -248,9 +248,9 @@ fn actions(ctx: &Ctx, state: &FormState, save: Option<Box<dyn Fn() + Send + Sync
     .with_children(
       state
         .errors
-        .title
-        .as_ref()
-        .map(|error| Text::new(&message_text(ctx, error)).variant(TypographyStyle::Caption)),
+        .save_reasons()
+        .iter()
+        .map(|reason| Text::new(&message_text(ctx, reason)).variant(TypographyStyle::Caption)),
     )
     .child(save_draft)
     .into()

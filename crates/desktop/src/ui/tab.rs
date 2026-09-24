@@ -27,6 +27,7 @@ pub struct Tab {
   count: Option<usize>,
   state: State,
   height: Dimension,
+  min_width: Option<Dimension>,
 }
 
 impl Tab {
@@ -38,7 +39,14 @@ impl Tab {
       count: None,
       state: State::Unavailable,
       height,
+      min_width: None,
     }
+  }
+
+  /// The design's width for this tab; a longer label still widens it.
+  pub fn min_width(mut self, width: Dimension) -> Self {
+    self.min_width = Some(width);
+    self
   }
 
   pub fn count(mut self, count: Option<usize>) -> Self {
@@ -68,9 +76,11 @@ impl From<Tab> for Element {
       State::Available(_) => PaletteColor::TextSecondary,
       State::Unavailable => PaletteColor::TextMuted,
     };
-    let row = Row::new()
-      .id(tab.id)
-      .height(tab.height)
+    let mut row = Row::new().id(tab.id).height(tab.height);
+    if let Some(width) = tab.min_width {
+      row = row.min_width(width);
+    }
+    let row = row
       .padding_horizontal(ExtraSpacing::Stack.role())
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
