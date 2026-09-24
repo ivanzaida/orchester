@@ -39,6 +39,7 @@ use self::{
 };
 use super::PipelinesNav;
 use crate::{
+  activity::{Activity, OperationSpec, operations},
   background,
   messages::{self, Message},
   pipelines::{
@@ -92,9 +93,9 @@ struct PublishedDraft {
 
 impl lurq::app::component::DevtoolsInspectable for PublishedDraft {}
 
-type SaveArgs = (PathBuf, ResourceId, u64, Draft<Pipeline>);
+type SaveArgs = (PathBuf, ResourceId, u64, Draft<Pipeline>, OperationSpec);
 type SaveAction = FutureAction<SaveArgs, Saved, Message>;
-type PublishArgs = (PathBuf, ResourceId, Pipeline);
+type PublishArgs = (PathBuf, ResourceId, Pipeline, OperationSpec);
 type PublishAction = FutureAction<PublishArgs, PublishedDraft, Message>;
 
 struct Actions {
@@ -102,11 +103,11 @@ struct Actions {
   publish: PublishAction,
 }
 
-/// The project repository, as a signal carries it.
+/// The open project, as a signal carries it; `None` until the first render.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-struct RepoRoot(PathBuf);
+struct Project(Option<OpenProject>);
 
-impl lurq::app::component::DevtoolsInspectable for RepoRoot {}
+impl lurq::app::component::DevtoolsInspectable for Project {}
 
 /// The pipeline as it was read, as the load future carries it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -123,7 +124,7 @@ pub struct EditorHandle {
   epoch: Signal<u64>,
   save: SaveAction,
   /// Set by the editor's render: props are not available when the handle is created.
-  repo_root: Signal<RepoRoot>,
+  project: Signal<Project>,
 }
 
 impl EditorHandle {
@@ -173,8 +174,12 @@ impl EditorHandle {
     let Some(state) = self.state.get() else {
       return;
     };
+    let Project(Some(project)) = self.project.get() else {
+      return;
+    };
     if let Some((revision, draft)) = state.draft_to_save(Timestamp::now()) {
-      self.save.run((self.repo_root.get().0, state.id(), revision, draft));
+      let spec = operations::pipeline_draft(&project, state.id(), state.name());
+      self.save.run((project.repo_root, state.id(), revision, draft, spec));
     }
   }
 }
@@ -195,7 +200,7 @@ impl Component for PipelineEditor {
       selection: ctx.signal(Selection::Pipeline),
       epoch: ctx.signal(0),
       save: save.clone(),
-      repo_root: ctx.signal(RepoRoot::default()),
+      project: ctx.signal(Project::default()),
     };
     let confirm_publish = ctx.signal(false);
     watch_saves(ctx, &save, &handle);
@@ -211,8 +216,8 @@ impl Component for PipelineEditor {
     let save = save_action(ctx);
     let publish = publish_action(ctx);
     let handle = self.handle.clone();
-    if handle.repo_root.get().0 != props.project.repo_root {
-      handle.repo_root.set(RepoRoot(props.project.repo_root.clone()));
+    if handle.project.get().0.as_ref() != Some(&props.project) {
+      handle.project.set(Project(Some(props.project.clone())));
     }
     ctx.provide(handle.clone());
     let deps = (props.project.repo_root.clone(), props.id);
@@ -318,10 +323,11 @@ impl PipelineEditor {
     let action = publish.state().get();
     let run = {
       let (publish, repo_root, id) = (publish.clone(), project.repo_root.clone(), state.id());
+      let spec = operations::pipeline_publish(project, id, state.name(), state.draft_number());
       let body = state.edit().validate().ok();
       move || {
         if let Some(body) = &body {
-          publish.run((repo_root.clone(), id, body.clone()));
+          publish.run((repo_root.clone(), id, body.clone(), spec.clone()));
         }
       }
     };
@@ -364,25 +370,39 @@ fn failed(ctx: &Ctx, error: &Message) -> Element {
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  ctx.future_action(|(repo_root, id, revision, draft): SaveArgs| async move {
-    let at = draft.updated_at();
-    let saved = background::run(move || save_draft_in(&repo_root, id, &draft)).await?;
-    saved.map(|outcome| Saved { revision, at, outcome }).map_err(|error| {
-      tracing::error!(%error, "cannot save the pipeline draft");
-      messages::store_error(&error)
-    })
+  let activity = Activity::of(ctx);
+  ctx.future_action(move |(repo_root, id, revision, draft, spec): SaveArgs| {
+    let activity = activity.clone();
+    async move {
+      let save = async move {
+        let at = draft.updated_at();
+        let saved = background::run(move || save_draft_in(&repo_root, id, &draft)).await?;
+        saved.map(|outcome| Saved { revision, at, outcome }).map_err(|error| {
+          tracing::error!(%error, "cannot save the pipeline draft");
+          messages::store_error(&error)
+        })
+      };
+      activity.track(spec, save).await
+    }
   })
 }
 
 fn publish_action(ctx: &mut Ctx) -> PublishAction {
-  ctx.future_action(|(repo_root, id, body): PublishArgs| async move {
-    let published = background::run(move || publish_in(&repo_root, id)).await?;
-    published
-      .map(|(number, at)| PublishedDraft { number, at, body })
-      .map_err(|error| {
-        tracing::error!(%error, "cannot publish the pipeline");
-        publish_error(&error)
-      })
+  let activity = Activity::of(ctx);
+  ctx.future_action(move |(repo_root, id, body, spec): PublishArgs| {
+    let activity = activity.clone();
+    async move {
+      let publish = async move {
+        let published = background::run(move || publish_in(&repo_root, id)).await?;
+        published
+          .map(|(number, at)| PublishedDraft { number, at, body })
+          .map_err(|error| {
+            tracing::error!(%error, "cannot publish the pipeline");
+            publish_error(&error)
+          })
+      };
+      activity.track(spec, publish).await
+    }
   })
 }
 

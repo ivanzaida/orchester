@@ -5,7 +5,7 @@ use lurq::{
 
 use super::tokens::{
   FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, SPACE_COLUMNS, SPACE_DIVIDER,
-  SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO,
+  SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO,
   SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE,
   SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
@@ -14,7 +14,10 @@ use super::tokens::{
 /// `SpacingSize::Section` is Pencil's 32 (topbar and overview padding, `CsB3h`, `FMRs3`).
 #[derive(Clone, Copy)]
 pub enum ExtraSpacing {
-  /// Gap between the bars of the Orchester mark (`DIMZ6`).
+  /// Between the rows of the status bar operations popover (`E1msJS`).
+  Hair,
+  /// Gap between the bars of the Orchester mark (`DIMZ6`); an operation's title to its meta
+  /// line in the status bar popover (`tGNly`).
   Mark,
   /// Notice heading to its detail (`w8Szl`).
   Tight,
@@ -58,7 +61,8 @@ pub enum ExtraSpacing {
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 20] = [
+  const ALL: [Self; 21] = [
+    Self::Hair,
     Self::Mark,
     Self::Tight,
     Self::Indicator,
@@ -83,6 +87,7 @@ impl ExtraSpacing {
 
   fn name(self) -> &'static str {
     match self {
+      Self::Hair => "hair",
       Self::Mark => "mark",
       Self::Tight => "tight",
       Self::Indicator => "indicator",
@@ -108,6 +113,7 @@ impl ExtraSpacing {
 
   fn value(self) -> f32 {
     match self {
+      Self::Hair => SPACE_HAIR,
       Self::Mark => SPACE_MARK,
       Self::Tight => SPACE_TIGHT,
       Self::Indicator => SPACE_INDICATOR,

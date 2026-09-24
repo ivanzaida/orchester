@@ -3,7 +3,7 @@
 //! drops and stopped when the project or the application closes.
 //!
 //! Windows only for now: the IPC client (`orchester_ipc::RunnerClient`, a named pipe and a job
-//! object) and opening the runner log through Explorer exist only on Windows.
+//! object) exists only on Windows.
 
 mod connection;
 mod report;
@@ -24,6 +24,7 @@ use tokio::{runtime::Handle, sync::watch};
 
 pub use self::report::RunnerStatus;
 use self::{connection::Connection, report::Reporter, state::RunnerEvent};
+use crate::activity::Activity;
 
 /// How long a close without active work waits for the runner to stop and exit before
 /// terminating it.
@@ -112,6 +113,8 @@ struct Inner {
   runner_exe: PathBuf,
   runtime: Handle,
   status: watch::Sender<RunnerStatus>,
+  /// Where the runner's events (a reconnect) are recorded for the status bar.
+  activity: Activity,
   current: Mutex<Option<Connection>>,
   /// Set once the application closes; no runner starts after that.
   closing: AtomicBool,
@@ -126,12 +129,13 @@ impl PartialEq for Runners {
 impl lurq::app::component::DevtoolsInspectable for Runners {}
 
 impl Runners {
-  pub fn new(runner_exe: PathBuf, runtime: Handle) -> Self {
+  pub fn new(runner_exe: PathBuf, runtime: Handle, activity: Activity) -> Self {
     Self {
       inner: Arc::new(Inner {
         runner_exe,
         runtime,
         status: watch::Sender::new(RunnerStatus::none(0)),
+        activity,
         current: Mutex::new(None),
         closing: AtomicBool::new(false),
       }),
@@ -193,17 +197,9 @@ impl Runners {
       &self.inner.runtime,
       self.inner.runner_exe.clone(),
       project.to_path_buf(),
-      Reporter::new(generation, self.inner.status.clone()),
+      Reporter::new(generation, self.inner.status.clone(), self.inner.activity.clone()),
       previous,
     )
-  }
-
-  /// Closes the "runner reconnected" notice before it closes on its own.
-  pub fn dismiss_reconnected_notice(&self) {
-    self
-      .inner
-      .status
-      .send_if_modified(|status| status.apply(RunnerEvent::ReconnectNoticeExpired));
   }
 
   /// Opens today's runner log of the open project with its default program, or the logs
@@ -258,10 +254,22 @@ fn open_log(project: &Path) -> io::Result<()> {
   } else {
     orchester_ipc::runner_log_dir(project)
   };
-  // Explorer hands a path to its default program and exits; its exit code does not report
-  // whether that worked, so only a failure to start it is an error.
-  std::process::Command::new("explorer.exe")
-    .arg(target)
-    .status()
-    .map(drop)
+  open_with_default_program(&target)
+}
+
+/// Hands `path` to the platform's default program (Explorer, `open`). The launcher exits once
+/// it has passed the path on and its exit code does not report whether that worked, so only a
+/// failure to start it is an error.
+#[cfg(any(windows, target_os = "macos"))]
+fn open_with_default_program(path: &Path) -> io::Result<()> {
+  let launcher = if cfg!(windows) { "explorer.exe" } else { "open" };
+  std::process::Command::new(launcher).arg(path).status().map(drop)
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn open_with_default_program(path: &Path) -> io::Result<()> {
+  Err(io::Error::new(
+    io::ErrorKind::Unsupported,
+    format!("no default program launcher for {} on this platform", path.display()),
+  ))
 }

@@ -27,6 +27,7 @@ use self::{
 };
 use super::{AgentSelection, ProjectNav, Section, page};
 use crate::{
+  activity::{Activity, operations},
   agents::data::{ProfileChange, ProfileEntry, ProjectAgents, apply_in},
   background,
   messages::{self, Message},
@@ -208,11 +209,21 @@ fn empty(ctx: &Ctx, agents: &ProjectAgents, nav: &ProjectNav) -> Element {
 }
 
 fn change_action(ctx: &mut Ctx) -> ChangeAction {
-  ctx.future_action(|(repo_root, change): (PathBuf, ProfileChange)| async move {
-    let applied = background::run(move || apply_in(&repo_root, change)).await?;
-    applied.map(Changed).map_err(|error| {
-      tracing::error!(%error, "cannot save the agent profile");
-      messages::store_error(&error)
-    })
+  let activity = Activity::of(ctx);
+  let open = ctx.props::<OpenProject>().clone();
+  ctx.future_action(move |(repo_root, change): (PathBuf, ProfileChange)| {
+    let (activity, spec) = (activity.clone(), operations::profile_change(&open, &change));
+    async move {
+      let root = repo_root.clone();
+      let apply = async move {
+        let applied = background::run(move || apply_in(&repo_root, change)).await?;
+        applied.map(Changed).map_err(|error| {
+          tracing::error!(%error, "cannot save the agent profile");
+          messages::store_error(&error)
+        })
+      };
+      let target = |changed: &Changed| Some(operations::profile(&root, changed.0));
+      activity.track_to(spec, apply, target).await
+    }
   })
 }

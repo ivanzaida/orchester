@@ -23,6 +23,7 @@ use orchester_core::{
 
 use super::{DialogContext, DialogMode, form, status::short_key};
 use crate::{
+  activity::{Activity, operations},
   background,
   connections::{
     data::{ConnectionDraft, save_in},
@@ -209,19 +210,23 @@ impl ConnectionDialog {
     let found = detected.data.clone().unwrap_or_default().0;
     let executable = self.picked.get().0.or_else(|| found.first().cloned());
     let deps = (provider, executable.clone(), self.attempt.get());
-    let check = ctx.future(deps, |(provider, executable, _)| async move {
-      let Some(executable) = executable else {
-        return Ok(None);
-      };
-      background::run(move || {
-        let check = probe::check(provider, &executable);
-        Some(Checked {
-          provider,
-          executable,
-          check,
-        })
-      })
-      .await
+    let (activity, project) = (Activity::of(ctx), self.context.project.clone());
+    let check = ctx.future(deps, move |(provider, executable, _)| {
+      let (activity, spec) = (activity.clone(), operations::cli_check(&project, provider));
+      async move {
+        let Some(executable) = executable else {
+          return Ok(None);
+        };
+        let check = background::run(move || {
+          let check = probe::check(provider, &executable);
+          Some(Checked {
+            provider,
+            executable,
+            check,
+          })
+        });
+        activity.track(spec, check).await
+      }
     });
     let checked = check.state().get();
     let pending = checked.is_pending();
@@ -391,17 +396,39 @@ fn suggested_name(ctx: &Ctx, context: &DialogContext, provider: AgentProvider) -
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  ctx.future_action(|(repo_root, draft): (PathBuf, ConnectionDraft)| async move {
-    let saved = background::run(move || save_in(&repo_root, draft)).await?;
-    saved.map(Saved).map_err(|error| {
-      tracing::error!(%error, "cannot save the connection");
-      error.message()
-    })
+  let activity = Activity::of(ctx);
+  let project = ctx
+    .use_context::<DialogContext>()
+    .expect("the connections screen provides the dialog context")
+    .project;
+  ctx.future_action(move |(repo_root, draft): (PathBuf, ConnectionDraft)| {
+    let spec = operations::connection_save(&project, draft.name.as_str());
+    let activity = activity.clone();
+    async move {
+      let save = async move {
+        let saved = background::run(move || save_in(&repo_root, draft)).await?;
+        saved.map(Saved).map_err(|error| {
+          tracing::error!(%error, "cannot save the connection");
+          error.message()
+        })
+      };
+      activity.track(spec, save).await
+    }
   })
 }
 
 pub(super) fn pick_action(ctx: &mut Ctx) -> PickAction {
-  ctx.future_action(|title: Arc<str>| async move {
-    background::run(move || PickedFile(rfd::FileDialog::new().set_title(&*title).pick_file())).await
+  let activity = Activity::of(ctx);
+  ctx.future_action(move |title: Arc<str>| {
+    let activity = activity.clone();
+    async move {
+      // Listed while the dialog is open; closing it without a file leaves no event.
+      let running = activity.start(operations::program_pick());
+      let picked = background::run(move || PickedFile(rfd::FileDialog::new().set_title(&*title).pick_file())).await?;
+      if picked.0.is_some() {
+        running.finish();
+      }
+      Ok(picked)
+    }
   })
 }

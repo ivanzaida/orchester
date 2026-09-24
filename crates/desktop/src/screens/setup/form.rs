@@ -17,6 +17,7 @@ use lurq::{
 
 use super::page::{heading, ownership, topbar};
 use crate::{
+  activity::{Activity, operations},
   background, display,
   messages::Message,
   navigation::{Navigation, Screen},
@@ -213,24 +214,42 @@ fn navigation(ctx: &mut Ctx) -> Navigation {
 }
 
 fn pick_action(ctx: &mut Ctx) -> PickAction {
-  ctx.future_action(|(title, current): PickArgs| async move {
-    let picked = background::run(move || rfd::FileDialog::new().set_title(&*title).pick_folder()).await?;
-    Ok(picked.map(Folder).or(current))
+  let activity = Activity::of(ctx);
+  ctx.future_action(move |(title, current): PickArgs| {
+    let activity = activity.clone();
+    async move {
+      // Listed while the dialog is open; closing it without a folder leaves no event.
+      let running = activity.start(operations::repository_pick());
+      let picked = background::run(move || rfd::FileDialog::new().set_title(&*title).pick_folder()).await?;
+      if picked.is_some() {
+        running.finish();
+      }
+      Ok(picked.map(Folder).or(current))
+    }
   })
 }
 
 fn create_action(ctx: &mut Ctx, workspace: Workspace) -> CreateAction {
+  let activity = Activity::of(ctx);
   ctx.future_action(move |new: NewProject| {
-    let workspace = workspace.clone();
+    let (workspace, activity) = (workspace.clone(), activity.clone());
     async move {
       let attempted = new.clone();
+      let running = activity.start(operations::project_create(new.project.name().as_str(), &new.repo_root));
       let created = background::run(move || workspace.create(new))
         .await
-        .map_err(|message| CreateFailure::new(&attempted, message, ErrorPlace::Form))?;
-      created.map_err(|error| {
-        tracing::error!(%error, "cannot create the project");
-        CreateFailure::from_store(&attempted, &error)
-      })
+        .map_err(|message| CreateFailure::new(&attempted, message, ErrorPlace::Form))
+        .and_then(|created| {
+          created.map_err(|error| {
+            tracing::error!(%error, "cannot create the project");
+            CreateFailure::from_store(&attempted, &error)
+          })
+        });
+      match &created {
+        Ok(_) => running.finish(),
+        Err(failure) => running.fail(failure.message.clone()),
+      }
+      created
     }
   })
 }

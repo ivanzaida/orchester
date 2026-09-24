@@ -34,6 +34,7 @@ use super::{
   page::{self, TOPBAR_BUTTON_HEIGHT},
 };
 use crate::{
+  activity::{Activity, OperationSpec, operations},
   background,
   connections::data::{ProjectConnections, recheck_in},
   messages::{self, Message},
@@ -95,7 +96,7 @@ struct Rechecked(ConnectionId);
 
 impl lurq::app::component::DevtoolsInspectable for Rechecked {}
 
-type RecheckAction = FutureAction<(PathBuf, ConnectionId), Rechecked, Message>;
+type RecheckAction = FutureAction<(PathBuf, ConnectionId, OperationSpec), Rechecked, Message>;
 
 enum Loaded {
   Loading,
@@ -300,10 +301,11 @@ impl ConnectionsScreen {
   ) -> InspectorActions {
     let check = (!checking).then(|| {
       let (recheck, repo_root, id) = (recheck.clone(), open.repo_root.clone(), connection.id());
+      let spec = operations::connection_check(open, connection.name().as_str());
       let checking = self.checking.clone();
       Arc::new(move || {
         checking.set(Selected(Some(id)));
-        recheck.run((repo_root.clone(), id));
+        recheck.run((repo_root.clone(), id, spec.clone()));
       }) as Arc<dyn Fn() + Send + Sync>
     });
     let (dialog, editing) = (self.dialog.clone(), connection.clone());
@@ -407,11 +409,18 @@ fn centered(content: Element) -> Element {
 }
 
 fn recheck_action(ctx: &mut Ctx) -> RecheckAction {
-  ctx.future_action(|(repo_root, id): (PathBuf, ConnectionId)| async move {
-    let checked = background::run(move || recheck_in(&repo_root, id)).await?;
-    checked.map(|()| Rechecked(id)).map_err(|error| {
-      tracing::error!(%error, "cannot store the connection check");
-      messages::store_error(&error)
-    })
+  let activity = Activity::of(ctx);
+  ctx.future_action(move |(repo_root, id, spec): (PathBuf, ConnectionId, OperationSpec)| {
+    let activity = activity.clone();
+    async move {
+      let check = async move {
+        let checked = background::run(move || recheck_in(&repo_root, id)).await?;
+        checked.map(|()| Rechecked(id)).map_err(|error| {
+          tracing::error!(%error, "cannot store the connection check");
+          messages::store_error(&error)
+        })
+      };
+      activity.track(spec, check).await
+    }
   })
 }

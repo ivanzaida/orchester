@@ -25,6 +25,7 @@ use super::{
   starter_text,
 };
 use crate::{
+  activity::{Activity, OperationSpec, operations},
   background,
   messages::{self, Message},
   pipelines::{
@@ -62,7 +63,7 @@ pub struct LibraryProps {
 
 impl lurq::app::component::DevtoolsInspectable for LibraryProps {}
 
-type CreateArgs = (PathBuf, Name, StarterText);
+type CreateArgs = (PathBuf, Name, StarterText, OperationSpec);
 type CreateAction = FutureAction<CreateArgs, PipelineId, Message>;
 
 pub struct Library {
@@ -252,12 +253,13 @@ impl Library {
     let name =
       Name::new(&ctx.t("pipelines.starter.name")).expect("the starter's name in the locale files is not blank");
     let run = create.clone();
+    let spec = operations::pipeline_create(open, name.as_str());
     let from_starter = ActionButton::new(ctx.t("pipelines.empty.fromStarter"))
       .primary()
       .icon(Icon::LayoutTemplate)
       .id("pipelines-create-starter")
       .enabled(!action.is_pending())
-      .on_click(move || run.run((repo_root.clone(), name.clone(), text.clone())))
+      .on_click(move || run.run((repo_root.clone(), name.clone(), text.clone(), spec.clone())))
       .render(ctx);
     let empty = ActionButton::new(ctx.t("pipelines.empty.startEmpty"))
       .icon(Icon::Plus)
@@ -311,17 +313,26 @@ impl Library {
 }
 
 fn create_starter_action(ctx: &mut Ctx) -> CreateAction {
-  ctx.future_action(|(repo_root, name, starter): CreateArgs| async move {
-    let new = NewPipeline {
-      name,
-      start: StartFrom::Starter,
-      starter,
-    };
-    let created = background::run(move || create_in(&repo_root, new)).await?;
-    created.map(PipelineId).map_err(|error| {
-      tracing::error!(%error, "cannot create the starter pipeline");
-      create_error(&error)
-    })
+  let activity = Activity::of(ctx);
+  ctx.future_action(move |(repo_root, name, starter, spec): CreateArgs| {
+    let activity = activity.clone();
+    async move {
+      let new = NewPipeline {
+        name,
+        start: StartFrom::Starter,
+        starter,
+      };
+      let root = repo_root.clone();
+      let create = async move {
+        let created = background::run(move || create_in(&repo_root, new)).await?;
+        created.map(PipelineId).map_err(|error| {
+          tracing::error!(%error, "cannot create the starter pipeline");
+          create_error(&error)
+        })
+      };
+      let target = |created: &PipelineId| Some(operations::pipeline(&root, created.0));
+      activity.track_to(spec, create, target).await
+    }
   })
 }
 

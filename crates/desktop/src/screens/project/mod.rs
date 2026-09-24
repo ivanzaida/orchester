@@ -1,7 +1,7 @@
 //! Project shell: the sidebar (`zo9Py`) beside the open project screen — the overview
 //! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), agent profiles (`WPmtS`)
-//! or connections (`a4Lqb`). The shell reads the project's tasks once and hands them to the
-//! sidebar and the screen.
+//! or connections (`a4Lqb`), above the status bar (`pmOpt`). The shell reads the project's
+//! tasks once and hands them to the sidebar, the screen and the status bar.
 
 mod agents;
 mod connections;
@@ -29,15 +29,16 @@ use self::{
   agents::AgentsScreen,
   connections::ConnectionsScreen,
   new_task::{NewTaskForm, NewTaskProps},
-  pipelines::PipelinesScreen,
+  pipelines::{PipelinesProps, PipelinesScreen},
   sidebar::sidebar,
   tasks::{TasksProps, TasksScreen},
 };
+use super::status_bar::{ProjectBar, StatusBar, StatusBarProps};
 use crate::{
   background,
   messages::{self, Message},
   runner::{RunnerStatus, Runners},
-  tasks::data::ProjectTasks,
+  tasks::{data::ProjectTasks, list},
   workspace::OpenProject,
 };
 
@@ -66,17 +67,38 @@ pub enum AgentSelection {
 
 impl lurq::app::component::DevtoolsInspectable for AgentSelection {}
 
+/// A pipeline to open when the Pipelines screen next mounts. `revision` changes with every
+/// request, so a request remounts the screen even while it is shown.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct PipelineRequest {
+  revision: u64,
+  id: Option<ResourceId>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for PipelineRequest {}
+
 /// Provided by the shell: switching screens and announcing that tasks changed.
 #[derive(Clone)]
 pub struct ProjectNav {
   section: Signal<Section>,
   revision: Signal<u64>,
   agent: Signal<AgentSelection>,
+  pipeline: Signal<PipelineRequest>,
 }
 
 impl ProjectNav {
   pub fn show(&self, section: Section) {
+    self.pipeline.update(|request| request.id = None);
     self.section.set(section);
+  }
+
+  /// Opens a pipeline in its editor, e.g. from an operation in the status bar.
+  pub fn show_pipeline(&self, pipeline: ResourceId) {
+    self.pipeline.update(|request| {
+      request.revision += 1;
+      request.id = Some(pipeline);
+    });
+    self.section.set(Section::Pipelines);
   }
 
   /// Opens the Agents screen at `profile`, e.g. from a connection's "Used by" link.
@@ -124,6 +146,7 @@ impl Component for ProjectShell {
         section: ctx.signal(Section::Overview),
         revision: ctx.signal(0),
         agent: ctx.signal(AgentSelection::First),
+        pipeline: ctx.signal(PipelineRequest::default()),
       },
     }
   }
@@ -142,7 +165,7 @@ impl Component for ProjectShell {
     let section = self.nav.section.get();
     let content = match section {
       Section::Overview => {
-        let notice = runner::connection_notice(ctx, &status, &runner, &runners);
+        let notice = runner::connection_notice(ctx, &runner, &runners);
         overview::overview(ctx, &open, notice, &tasks, &self.nav)
       }
       Section::Tasks => ctx.mount_keyed::<TasksScreen>(
@@ -152,7 +175,16 @@ impl Component for ProjectShell {
           tasks: tasks.clone(),
         },
       ),
-      Section::Pipelines => ctx.mount_keyed::<PipelinesScreen>("pipelines", open.clone()),
+      Section::Pipelines => {
+        let request = self.nav.pipeline.get();
+        ctx.mount_keyed::<PipelinesScreen>(
+          &format!("pipelines-{}", request.revision),
+          PipelinesProps {
+            project: open.clone(),
+            open: request.id,
+          },
+        )
+      }
       Section::NewTask => ctx.mount_keyed::<NewTaskForm>(
         "new-task",
         NewTaskProps {
@@ -163,11 +195,24 @@ impl Component for ProjectShell {
       Section::Agents => ctx.mount_keyed::<AgentsScreen>("agents", open.clone()),
       Section::Connections => ctx.mount_keyed::<ConnectionsScreen>("connections", open.clone()),
     };
-    Row::new()
+    let bar = StatusBarProps {
+      project: Some(ProjectBar {
+        repo_root: open.repo_root.clone(),
+        runner: status,
+        queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks)),
+      }),
+    };
+    Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(sidebar(ctx, &open, &runner, section, &tasks, &self.nav))
-      .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(content))
+      .child(
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .child(sidebar(ctx, &open, section, &tasks, &self.nav))
+          .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(content)),
+      )
+      .child(ctx.mount_keyed::<StatusBar>("status-bar", bar))
   }
 }
 

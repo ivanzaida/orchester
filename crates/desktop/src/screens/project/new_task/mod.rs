@@ -27,6 +27,7 @@ use orchester_core::{
 use self::brief::Criterion;
 use super::{ProjectNav, Section};
 use crate::{
+  activity::{Activity, operations},
   background, messages,
   messages::Message,
   tasks::{
@@ -208,14 +209,22 @@ impl NewTaskForm {
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  ctx.future_action(|(repo_root, batch, details): SaveArgs| async move {
-    let saved = background::run(move || save_draft_in(&repo_root, batch, details)).await?;
-    saved
-      .map(|task| SavedTask(task.key().to_string().into()))
-      .map_err(|error| {
-        tracing::error!(%error, "cannot save the task draft");
-        messages::store_error(&error)
-      })
+  let activity = Activity::of(ctx);
+  let open = ctx.props::<NewTaskProps>().project.clone();
+  ctx.future_action(move |(repo_root, batch, details): SaveArgs| {
+    let (activity, spec) = (activity.clone(), operations::task_draft(&open, details.title.as_str()));
+    async move {
+      let save = async move {
+        let saved = background::run(move || save_draft_in(&repo_root, batch, details)).await?;
+        saved
+          .map(|task| SavedTask(task.key().to_string().into()))
+          .map_err(|error| {
+            tracing::error!(%error, "cannot save the task draft");
+            messages::store_error(&error)
+          })
+      };
+      activity.track(spec, save).await
+    }
   })
 }
 

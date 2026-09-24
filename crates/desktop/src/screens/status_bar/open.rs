@@ -1,0 +1,107 @@
+//! What clicking a status bar item or popover row opens: a place in the open project, the
+//! runner log, or the operations popover.
+
+use std::path::PathBuf;
+
+use lurq::{app::ctx::Ctx, core::Signal};
+
+use super::ProjectBar;
+use crate::{
+  activity::{Activity, OperationId, Place, Target},
+  runner::Runners,
+  screens::project::{ProjectNav, Section},
+};
+
+#[derive(Clone)]
+pub struct Opener {
+  activity: Activity,
+  /// Present inside the project shell.
+  nav: Option<ProjectNav>,
+  runners: Option<Runners>,
+  repo_root: Option<PathBuf>,
+  popover: Signal<bool>,
+}
+
+impl Opener {
+  pub fn new(ctx: &mut Ctx, activity: &Activity, project: Option<&ProjectBar>, popover: &Signal<bool>) -> Self {
+    Self {
+      activity: activity.clone(),
+      nav: ctx.use_context::<ProjectNav>(),
+      runners: project.and(ctx.use_context::<Runners>()),
+      repo_root: project.map(|project| project.repo_root.clone()),
+      popover: popover.clone(),
+    }
+  }
+
+  /// Whether `target` can be opened from here: places of another project cannot.
+  pub fn can_open(&self, target: &Target) -> bool {
+    match target {
+      Target::Nothing => false,
+      Target::RunnerLog => self.runners.is_some(),
+      Target::Project { repo_root, .. } => self.nav.is_some() && self.repo_root.as_ref() == Some(repo_root),
+    }
+  }
+
+  /// Opens `target`; a failure (`failure`) counts as opened and leaves the slot.
+  pub fn open(&self, target: &Target, failure: Option<OperationId>) {
+    if !self.can_open(target) {
+      return;
+    }
+    if let Some(failure) = failure {
+      self.activity.resolve(failure);
+    }
+    self.popover.set(false);
+    match target {
+      Target::Nothing => {}
+      Target::RunnerLog => self.open_log(),
+      Target::Project { place, .. } => self.show(*place),
+    }
+  }
+
+  fn show(&self, place: Place) {
+    let Some(nav) = &self.nav else {
+      return;
+    };
+    match place {
+      Place::Overview => nav.show(Section::Overview),
+      Place::Tasks => nav.show(Section::Tasks),
+      Place::Pipeline(id) => nav.show_pipeline(id),
+      Place::AgentProfile(id) => nav.show_profile(id),
+      Place::Connections => nav.show(Section::Connections),
+    }
+  }
+
+  /// Opens the Tasks screen, the target of the Agents and Queued items.
+  pub fn tasks(&self) -> Option<impl Fn() + Send + Sync + 'static> {
+    let nav = self.nav.clone()?;
+    Some(move || nav.show(Section::Tasks))
+  }
+
+  pub fn open_log(&self) {
+    if let Some(runners) = &self.runners {
+      runners.open_log();
+    }
+  }
+
+  pub fn restart(&self) {
+    if let Some(runners) = &self.runners {
+      runners.restart();
+    }
+  }
+
+  pub fn dismiss(&self, failure: OperationId) {
+    self.activity.resolve(failure);
+  }
+
+  pub fn toggle_popover(&self) {
+    self.popover.update(|open| *open = !*open);
+  }
+
+  pub fn popover_open(&self) -> bool {
+    self.popover.get()
+  }
+
+  pub fn popover(&self) -> &Signal<bool> {
+    &self.popover
+  }
+}

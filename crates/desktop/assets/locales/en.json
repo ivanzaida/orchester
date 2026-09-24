@@ -75,29 +75,7 @@
     "projectSettings": "Project settings"
   },
   "runner": {
-    "card": {
-      "starting": "Starting local runner",
-      "startingDetail": "Agents can start when it’s ready",
-      "online": "Local runner online",
-      "onlineDetail": "No agents running",
-      "reconnecting": "Reconnecting to runner",
-      "reconnectingDetail": "Attempt {{attempt}} of {{limit}}",
-      "stopping": "Stopping local runner",
-      "stoppingDetail": "Letting it finish cleanly",
-      "offline": "Runner offline",
-      "stoppedDetail": "Stopped",
-      "notStartedDetail": "Could not start · see runner log",
-      "notRestartedDetail": "Could not restart · see runner log"
-    },
     "connection": {
-      "reconnectingTitle": "Runner stopped unexpectedly — reconnecting (attempt {{attempt}} of {{limit}})",
-      "reconnectingDetail": "New work won’t start until the runner is back.",
-      "nextAttempt": "Next attempt in {{seconds}} s",
-      "attempting": "Reconnecting now…",
-      "reconnectedTitle": "Runner reconnected",
-      "reconnectedDetail": "The local runner is back online.",
-      "closesIn": "Closes in {{seconds}} s",
-      "closing": "Closing…",
       "notStartedTitle": "Could not start the runner",
       "notRestartedTitle": "Could not restart the runner",
       "notRestartedDetail": "Tried {{attempts}} times. Nothing runs until the runner starts.",
@@ -406,7 +384,9 @@
     "justNow": "Just now",
     "minutesAgo": "{{count}}m ago",
     "hoursAgo": "{{count}}h ago",
-    "daysAgo": "{{count}}d ago"
+    "daysAgo": "{{count}}d ago",
+    "seconds": "{{count}} s",
+    "minutes": "{{count}} min"
   },
   "recovery": {
     "startupFailed": {
@@ -756,6 +736,131 @@
       "failureRoute": "{{step}} · when changes are requested changed",
       "maxRetries": "{{step}} · maximum retries {{from}} → {{to}}",
       "budget": "{{step}} · step budget {{from}} → {{to}}"
+    }
+  },
+  "statusBar": {
+    "runner": {
+      "starting": "Starting runner…",
+      "online": "Runner online",
+      "reconnecting": "Reconnecting to runner",
+      "nextAttempt": "attempt {{attempt}} of {{limit}} · next in {{seconds}} s",
+      "attempting": "attempt {{attempt}} of {{limit}} · connecting…",
+      "stopping": "Stopping runner…",
+      "stopped": "Runner stopped",
+      "offline": "Runner offline",
+      "attemptsSince": "{{attempts}} attempts since {{time}}",
+      "attempts": "{{attempts}} attempts",
+      "notStarted": "did not start"
+    },
+    "activity": {
+      "running": "{{title}}…",
+      "several": "{{count}} operations · {{title}}…",
+      "failure": "{{title}} · {{reason}}",
+      "runnerReconnected": "Runner reconnected"
+    },
+    "counts": {
+      "agents": "Agents",
+      "queued": "Queued",
+      "needsYou": "Needs you",
+      "unknown": "—"
+    },
+    "hints": {
+      "agents": "Agent slots are not reported by the runner yet",
+      "needsYou": "Not available yet: plan approvals, questions and reviews do not exist in this version",
+      "debugBuild": "Orchester {{version}} · development build",
+      "releaseBuild": "Orchester {{version}} · release build"
+    },
+    "version": "v{{version}}",
+    "operations": {
+      "title": "Background operations",
+      "recent": "RECENT",
+      "retention": "Finished operations stay here until the app closes",
+      "meta": "{{project}} · {{opens}}",
+      "pipelineDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "pipelinePublish": {
+        "running": "Publishing {{name}} v{{version}}",
+        "done": "Published {{name}} v{{version}}",
+        "failed": "Could not publish {{name}} v{{version}}"
+      },
+      "pipelineCreate": {
+        "running": "Creating pipeline {{name}}",
+        "done": "Pipeline created · {{name}}",
+        "failed": "Could not create pipeline {{name}}"
+      },
+      "projectCreate": {
+        "running": "Creating project {{name}}",
+        "done": "Project created · {{name}}",
+        "failed": "Could not create project {{name}}"
+      },
+      "repositoryPick": {
+        "running": "Choosing a repository folder",
+        "done": "Repository folder chosen",
+        "failed": "Could not choose a repository folder"
+      },
+      "taskDraft": {
+        "running": "Saving task {{name}}",
+        "done": "Task saved · {{name}}",
+        "failed": "Could not save task {{name}}"
+      },
+      "profileCreate": {
+        "running": "Creating agent profile {{name}}",
+        "done": "Agent profile created · {{name}}",
+        "failed": "Could not create agent profile {{name}}"
+      },
+      "profileDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "profilePublish": {
+        "running": "Publishing agent profile",
+        "done": "Agent profile published",
+        "failed": "Could not publish agent profile"
+      },
+      "profileKeepDraft": {
+        "running": "Keeping agent profile draft",
+        "done": "Agent profile draft kept",
+        "failed": "Could not keep agent profile draft"
+      },
+      "connectionCheck": {
+        "running": "Checking {{name}}",
+        "done": "Checked {{name}}",
+        "failed": "Could not check {{name}}"
+      },
+      "connectionSave": {
+        "running": "Saving connection {{name}}",
+        "done": "Connection saved · {{name}}",
+        "failed": "Could not save connection {{name}}"
+      },
+      "cliCheck": {
+        "running": "Checking {{name}} CLI",
+        "done": "Checked {{name}} CLI",
+        "failed": "Could not check {{name}} CLI"
+      },
+      "programPick": {
+        "running": "Choosing a program file",
+        "done": "Program file chosen",
+        "failed": "Could not choose a program file"
+      }
+    },
+    "opens": {
+      "overview": "opens the overview",
+      "tasks": "opens the task list",
+      "pipeline": "opens the pipeline",
+      "agentProfile": "opens the agent profile",
+      "connections": "opens Connections",
+      "runnerLog": "opens the runner log"
+    },
+    "open": {
+      "overview": "Open overview",
+      "tasks": "Open tasks",
+      "pipeline": "Open pipeline",
+      "agentProfile": "Open profile",
+      "connections": "Open connections"
     }
   }
 }

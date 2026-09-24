@@ -1,5 +1,6 @@
 //! Shell sidebar (`zo9Py`). Overview, Tasks, Pipelines, Agents and Connections open their
-//! screens; every other entry is shown but unavailable. The runner card shows the open project's runner.
+//! screens; every other entry is shown but unavailable. The runner card (`O2Jjjf`) is not
+//! shown: the status bar reports the runner on every screen.
 
 use lurq::{
   app::{
@@ -13,7 +14,6 @@ use lurq::{
 
 use super::{ProjectNav, Section, TasksState};
 use crate::{
-  runner::state::RunnerState,
   theme::{ExtraColor, ExtraSpacing},
   ui::{brand::brand, icon::Icon, nav_item::NavItem},
   workspace::OpenProject,
@@ -26,14 +26,7 @@ const CURRENT_PROJECT_HEIGHT: f32 = 70.0;
 const SELECTOR_HEIGHT: f32 = 42.0;
 const AVATAR_SIZE: f32 = 24.0;
 
-pub fn sidebar(
-  ctx: &Ctx,
-  open: &OpenProject,
-  runner: &RunnerState,
-  section: Section,
-  tasks: &TasksState,
-  nav: &ProjectNav,
-) -> Element {
+pub fn sidebar(ctx: &Ctx, open: &OpenProject, section: Section, tasks: &TasksState, nav: &ProjectNav) -> Element {
   Column::new()
     .width(Dimension::Px(SIDEBAR_WIDTH))
     .height(Dimension::Pct(100.0))
@@ -52,7 +45,7 @@ pub fn sidebar(
         .child(NavItem::new("nav-import", Icon::Download, ctx.t("nav.importResources")).secondary()),
     )
     .child(Spacer::new().flex(1.0))
-    .child(footer(ctx, runner))
+    .child(footer(ctx))
     .into()
 }
 
@@ -127,14 +120,12 @@ fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &Pro
     .into()
 }
 
-fn footer(ctx: &Ctx, runner: &RunnerState) -> Element {
+fn footer(ctx: &Ctx) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(ExtraSpacing::Stack.role())
     .padding_horizontal(SpacingSize::Md)
     .padding_bottom(ExtraSpacing::Step.role())
-    .spacing(ExtraSpacing::Group.role())
-    .child(super::runner::card(ctx, runner))
     .child(NavItem::new("nav-settings", Icon::Settings, ctx.t("nav.projectSettings")).compact())
     .into()
 }
