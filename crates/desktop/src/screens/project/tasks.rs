@@ -32,7 +32,7 @@ use crate::{
     icon::{Icon, IconSize, icon},
     message_text,
     panel::RecoveryPanel,
-    tab::Tab,
+    tab::{Tab, tab_row},
   },
 };
 
@@ -113,14 +113,12 @@ impl TasksScreen {
         .selected(tab == selected)
         .on_click(move || signal.set(tab))
     });
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(TAB_ROW_HEIGHT))
-      .padding_horizontal(SpacingSize::Section)
-      .spacing(SpacingSize::Sm)
-      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .with_children(tabs)
-      .into()
+    tab_row(
+      Dimension::Px(TAB_ROW_HEIGHT),
+      SpacingSize::Sm,
+      Some(SpacingSize::Section),
+      tabs,
+    )
   }
 }
 

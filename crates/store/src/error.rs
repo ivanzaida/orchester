@@ -1,7 +1,7 @@
 use std::{io, path::PathBuf};
 
 use orchester_core::{
-  id::{ResourceId, RunId, TaskId},
+  id::{ConnectionId, ResourceId, RunId, TaskId},
   resource::{PublishError, ResourceKind},
   run::RunError,
 };
@@ -45,6 +45,10 @@ pub enum StoreError {
   NoDraft(ResourceId),
   #[error(transparent)]
   Publish(#[from] PublishError),
+  #[error("a connection named `{0}` already exists")]
+  DuplicateConnectionName(String),
+  #[error("connection {0} does not exist")]
+  ConnectionNotFound(ConnectionId),
 }
 
 impl StoreError {

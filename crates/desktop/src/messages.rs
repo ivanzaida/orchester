@@ -1,7 +1,10 @@
 //! User-facing messages for errors from core and store: an i18n key plus its placeholder
 //! values. Errors are mapped here, at the UI boundary; their `Display` text is for logs only.
 
-use orchester_core::name::{Name, NameError};
+use orchester_core::{
+  name::{Name, NameError},
+  resource::PublishError,
+};
 use orchester_store::StoreError;
 
 use crate::runner::state::RunnerFailure;
@@ -40,6 +43,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::NotInitialized(_) => Message::new("errors.projectMissing"),
     StoreError::SchemaTooNew { .. } => Message::new("errors.newerSchema"),
     StoreError::Unrepresentable(_) => Message::new("errors.unsupportedPath"),
+    StoreError::DuplicateConnectionName(_) => Message::new("errors.connectionNameTaken"),
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }
@@ -49,7 +53,12 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::ResourceKindMismatch { .. }
     | StoreError::DuplicateSlug { .. }
     | StoreError::NoDraft(_)
-    | StoreError::Publish(_) => Message::new("errors.storage"),
+    | StoreError::ConnectionNotFound(_) => Message::new("errors.storage"),
+    StoreError::Publish(PublishError::StaleDraft { latest, .. }) => Message::new("errors.staleDraft").with(
+      "version",
+      latest.map_or_else(String::new, |version| version.to_string()),
+    ),
+    StoreError::Publish(PublishError::VersionLimit) => Message::new("errors.versionLimit"),
   }
 }
 

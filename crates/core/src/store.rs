@@ -2,7 +2,8 @@
 //! will implement the same traits later, so domain code depends only on these.
 
 use crate::{
-  id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  connection::Connection,
+  id::{ConnectionId, IdempotencyKey, ResourceId, RunId, TaskId},
   name::Name,
   resource::{Draft, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   run::{Checkpoint, NewRun, Run, RunEvent},
@@ -67,6 +68,22 @@ pub trait ResourceStore {
     resource: ResourceId,
     number: VersionNumber,
   ) -> Result<Option<Version<B>>, Self::Error>;
+}
+
+/// Project connections. Written by the desktop; the runner only reads them.
+pub trait ConnectionStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Stores a new connection. Names are unique within the project.
+  fn create_connection(&mut self, connection: &Connection) -> Result<(), Self::Error>;
+
+  /// Stores the current name, executable and last check of an existing connection.
+  fn save_connection(&mut self, connection: &Connection) -> Result<(), Self::Error>;
+
+  fn connection(&self, id: ConnectionId) -> Result<Option<Connection>, Self::Error>;
+
+  /// All connections of the project, ordered by name.
+  fn connections(&self) -> Result<Vec<Connection>, Self::Error>;
 }
 
 /// Execution data, written by the runner. A run changes only by appending the events a

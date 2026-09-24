@@ -1,0 +1,230 @@
+//! Reading and saving agent profiles through the project database. Each profile follows the
+//! shared lifecycle: Draft saved → Publish vN → Published vN (`docs/design/orchester-workspace.md`,
+//! "Core workflow"). Every function blocks on SQLite; the UI calls them off the UI thread.
+
+use std::{path::Path, sync::Arc};
+
+use orchester_core::{
+  connection::Connection,
+  id::ResourceId,
+  resource::{AgentProfile, Draft, ModelId, Pipeline, ResourceKind, Slug, StepKind, Version, VersionNumber},
+  store::{ConnectionStore, ResourceStore},
+  time::Timestamp,
+};
+use orchester_store::{ProjectDb, StoreError};
+
+/// Slug of a profile whose role has no ASCII letters or digits.
+const FALLBACK_SLUG: &str = "agent";
+
+/// Where a profile stands in the lifecycle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VersionState {
+  /// A draft based on the latest version (or on none, before the first publish).
+  Draft { published: Option<VersionNumber> },
+  /// A draft started from an older version than the latest: publishing it is refused.
+  StaleDraft {
+    based_on: Option<VersionNumber>,
+    published: Option<VersionNumber>,
+  },
+  /// No draft: the latest version is current.
+  Published(VersionNumber),
+}
+
+impl VersionState {
+  pub const fn published(self) -> Option<VersionNumber> {
+    match self {
+      Self::Draft { published } | Self::StaleDraft { published, .. } => published,
+      Self::Published(version) => Some(version),
+    }
+  }
+
+  pub const fn has_draft(self) -> bool {
+    !matches!(self, Self::Published(_))
+  }
+}
+
+/// A profile as the editor shows it: the draft if there is one, otherwise the latest version.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfileEntry {
+  pub id: ResourceId,
+  pub profile: AgentProfile,
+  pub state: VersionState,
+}
+
+impl ProfileEntry {
+  /// `None` for a resource with neither a draft nor a version, which the store never creates.
+  pub fn new(
+    id: ResourceId,
+    draft: Option<Draft<AgentProfile>>,
+    latest: Option<&Version<AgentProfile>>,
+  ) -> Option<Self> {
+    let published = latest.map(Version::number);
+    let (profile, state) = match (draft, latest) {
+      (Some(draft), _) => {
+        let state = if draft.based_on() == published {
+          VersionState::Draft { published }
+        } else {
+          VersionState::StaleDraft {
+            based_on: draft.based_on(),
+            published,
+          }
+        };
+        (draft.body().clone(), state)
+      }
+      (None, Some(latest)) => (latest.body().clone(), VersionState::Published(latest.number())),
+      (None, None) => return None,
+    };
+    Some(Self { id, profile, state })
+  }
+}
+
+/// A published pipeline step that runs a profile.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StepUse {
+  pub profile: ResourceId,
+  pub pipeline: Arc<str>,
+  pub step: Arc<str>,
+  /// The step's own model instead of the profile's.
+  pub model_override: Option<ModelId>,
+}
+
+/// Everything the agents screen shows, read together.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ProjectAgents {
+  pub profiles: Arc<Vec<ProfileEntry>>,
+  pub connections: Arc<Vec<Connection>>,
+  pub steps: Arc<Vec<StepUse>>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for ProjectAgents {}
+
+impl ProjectAgents {
+  pub fn load<S>(store: &S) -> Result<Self, StoreError>
+  where
+    S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError>,
+  {
+    Ok(Self {
+      profiles: Arc::new(profiles(store)?),
+      connections: Arc::new(store.connections()?),
+      steps: Arc::new(step_uses(store)?),
+    })
+  }
+
+  pub fn load_in(repo_root: &Path) -> Result<Self, StoreError> {
+    Self::load(&ProjectDb::open(repo_root)?)
+  }
+
+  pub fn profile(&self, id: ResourceId) -> Option<&ProfileEntry> {
+    self.profiles.iter().find(|entry| entry.id == id)
+  }
+}
+
+/// The project's agent profiles, ordered by slug.
+pub fn profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Error> {
+  let mut entries = Vec::new();
+  for resource in store.resources(ResourceKind::AgentProfile)? {
+    let latest = store.latest_version(resource.id())?;
+    match ProfileEntry::new(resource.id(), store.draft(resource.id())?, latest.as_ref()) {
+      Some(entry) => entries.push(entry),
+      // Nothing to show or edit; listing it would need content that does not exist.
+      None => tracing::error!(resource = %resource.id(), "agent profile has neither a draft nor a version"),
+    }
+  }
+  Ok(entries)
+}
+
+/// Steps of the latest published pipeline versions that run a profile.
+fn step_uses<S: ResourceStore>(store: &S) -> Result<Vec<StepUse>, S::Error> {
+  let mut uses = Vec::new();
+  for resource in store.resources(ResourceKind::Pipeline)? {
+    let Some(version) = store.latest_version::<Pipeline>(resource.id())? else {
+      continue;
+    };
+    for step in version.body().steps() {
+      if let StepKind::Agent { profile, model, .. } = &step.kind {
+        uses.push(StepUse {
+          profile: *profile,
+          pipeline: resource.name().as_str().into(),
+          step: step.name.as_str().into(),
+          model_override: model.clone(),
+        });
+      }
+    }
+  }
+  Ok(uses)
+}
+
+/// Creates a profile whose first draft is `profile`, under a slug made from its role.
+pub fn create_profile<S: ResourceStore>(
+  store: &mut S,
+  profile: &AgentProfile,
+  now: Timestamp,
+) -> Result<ResourceId, S::Error> {
+  let taken: Vec<Slug> = store
+    .resources(ResourceKind::AgentProfile)?
+    .iter()
+    .map(|resource| resource.slug().clone())
+    .collect();
+  let fallback = Slug::new(FALLBACK_SLUG).expect("the fallback slug is valid");
+  let slug = Slug::unique_for(profile.role(), &fallback, &taken);
+  let resource = store.create_resource(slug, profile.role().clone(), profile, now)?;
+  Ok(resource.id())
+}
+
+/// Saves `profile` as the draft. An existing draft keeps the version it was started from; a
+/// new draft starts from the latest published version.
+pub fn save_draft<S: ResourceStore>(
+  store: &mut S,
+  id: ResourceId,
+  profile: AgentProfile,
+  now: Timestamp,
+) -> Result<(), S::Error> {
+  let based_on = match store.draft::<AgentProfile>(id)? {
+    Some(draft) => draft.based_on(),
+    None => store
+      .latest_version::<AgentProfile>(id)?
+      .map(|version| version.number()),
+  };
+  store.save_draft(id, &Draft::new(profile, based_on, now))
+}
+
+/// Publishes the saved draft as the next version.
+pub fn publish<S: ResourceStore>(store: &mut S, id: ResourceId, now: Timestamp) -> Result<VersionNumber, S::Error> {
+  Ok(store.publish_draft::<AgentProfile>(id, now)?.number())
+}
+
+/// The user chose to publish a stale draft anyway: it is based on the latest version from now
+/// on, so its content replaces what that version changed.
+pub fn keep_draft_over_latest<S: ResourceStore>(store: &mut S, id: ResourceId, now: Timestamp) -> Result<(), S::Error> {
+  let latest = store
+    .latest_version::<AgentProfile>(id)?
+    .map(|version| version.number());
+  // Without a draft there is nothing to keep; reading the profile again shows its state.
+  if let Some(draft) = store.draft::<AgentProfile>(id)? {
+    store.save_draft(id, &Draft::new(draft.body().clone(), latest, now))?;
+  }
+  Ok(())
+}
+
+/// A change to one profile, applied in the project database.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ProfileChange {
+  Create(AgentProfile),
+  SaveDraft(ResourceId, AgentProfile),
+  Publish(ResourceId),
+  KeepDraft(ResourceId),
+}
+
+impl lurq::app::component::DevtoolsInspectable for ProfileChange {}
+
+/// Applies `change` in the project database of `repo_root` and returns the profile it touched.
+pub fn apply_in(repo_root: &Path, change: ProfileChange) -> Result<ResourceId, StoreError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  let now = Timestamp::now();
+  match change {
+    ProfileChange::Create(profile) => create_profile(&mut db, &profile, now),
+    ProfileChange::SaveDraft(id, profile) => save_draft(&mut db, id, profile, now).map(|()| id),
+    ProfileChange::Publish(id) => publish(&mut db, id, now).map(|_| id),
+    ProfileChange::KeepDraft(id) => keep_draft_over_latest(&mut db, id, now).map(|()| id),
+  }
+}

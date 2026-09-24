@@ -96,6 +96,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `radius-control` 7 / `radius-panel` 12 / nav item 6 | `RadiusSize::Md` / `Lg` / `Sm` |
 | `space-sm/md/lg` 8/16/24 | `SpacingSize::Sm/Md/Lg` |
 | stroke 1 / focus stroke 1.5 / selected tab underline 2 | `BorderSize::Sm` / `Md` / `Lg` |
+| form group gap 22 (`xT2ex`, `dCLMl`) | `ExtraSpacing::Form.role()` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |
@@ -121,6 +122,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::StatusLabel.role()` | 11/500 | status label text (`DeizF`) |
 | `ExtraTypography::NavCount.role()` | mono 11 muted | count beside a navigation item (`LTXft`) |
 | `ExtraTypography::Brief.role()` | 13, 1.7 | task brief text (`E9moJ`) |
+| `ExtraTypography::InspectorTitle.role()` | 18/500 | inspector panel title (connection name, `kU9QO`) |
+| `ExtraTypography::CompactStatusLabel.role()` | 10/500 | status label in a list row (`v7McTX`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

@@ -76,10 +76,14 @@ pub enum ExtraTypography {
   IconPanel,
   /// Window control icons in the title bar (`QQmsI`), 14px.
   IconWindowControl,
+  /// Status label text in a list row (`JuW4o` in `v7McTX`).
+  CompactStatusLabel,
+  /// Title of an inspector panel, e.g. a connection's name (`kU9QO`).
+  InspectorTitle,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 32] = [
+  const ALL: [Self; 34] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -112,6 +116,8 @@ impl ExtraTypography {
     Self::IconFeature,
     Self::IconPanel,
     Self::IconWindowControl,
+    Self::CompactStatusLabel,
+    Self::InspectorTitle,
   ];
 
   fn name(self) -> &'static str {
@@ -148,6 +154,8 @@ impl ExtraTypography {
       Self::IconFeature => "icon-feature",
       Self::IconPanel => "icon-panel",
       Self::IconWindowControl => "icon-window-control",
+      Self::CompactStatusLabel => "compact-status-label",
+      Self::InspectorTitle => "inspector-title",
     }
   }
 
@@ -238,6 +246,8 @@ impl ExtraTypography {
       Self::IconFeature => icon(19.0),
       Self::IconPanel => icon(24.0),
       Self::IconWindowControl => icon(14.0),
+      Self::CompactStatusLabel => style(10.0, FontWeight::Medium, TEXT),
+      Self::InspectorTitle => style(18.0, FontWeight::Medium, TEXT),
     }
   }
 }

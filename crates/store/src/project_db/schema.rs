@@ -146,4 +146,18 @@ BEGIN SELECT RAISE(ABORT, 'run events are append-only'); END;
 CREATE TRIGGER run_events_no_delete BEFORE DELETE ON run_events
 BEGIN SELECT RAISE(ABORT, 'run events are append-only'); END;
 ",
+  r"
+CREATE TABLE connections (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  name TEXT NOT NULL UNIQUE,
+  settings TEXT NOT NULL,
+  status TEXT NOT NULL,
+  checked_at INTEGER,
+  last_check TEXT,
+  created_at INTEGER NOT NULL,
+  CHECK ((checked_at IS NULL) = (last_check IS NULL))
+) STRICT;
+",
 ];

@@ -145,3 +145,17 @@ fn task_screen_roles_follow_pencil() {
   );
   assert_eq!(theme.border_size_value(BorderSize::Lg), 2.0);
 }
+
+#[test]
+fn agents_and_connections_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  let inspector_title = theme.typography_style(ExtraTypography::InspectorTitle.role());
+  assert_eq!(
+    (inspector_title.font_size, inspector_title.weight),
+    (18.0, FontWeight::Medium)
+  );
+  let compact = theme.typography_style(ExtraTypography::CompactStatusLabel.role());
+  assert_eq!((compact.font_size, compact.weight), (10.0, FontWeight::Medium));
+  assert_eq!(theme.spacing_value(ExtraSpacing::Form.role()), Dimension::Px(22.0));
+}

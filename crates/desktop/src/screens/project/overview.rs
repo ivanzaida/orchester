@@ -23,7 +23,8 @@ use crate::{
     icon::{Icon, IconSize, icon},
     message_text,
     panel::RecoveryPanel,
-    tab::Tab,
+    property::property,
+    tab::{Tab, tab_row},
   },
   workspace::OpenProject,
 };
@@ -140,31 +141,31 @@ fn task_list(ctx: &Ctx, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
     .cursor(CursorIcon::NotAllowed)
     .child(Text::new(&ctx.t("tasks.filters.allPipelines")).variant(TypographyStyle::Caption))
     .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted));
-  let tabs = Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(TAB_ROW_HEIGHT))
-    .spacing(SpacingSize::Sm)
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(
+  let tabs = tab_row(
+    Dimension::Px(TAB_ROW_HEIGHT),
+    SpacingSize::Sm,
+    None,
+    [
       Tab::new("overview-tab-all", ctx.t("tasks.tabs.all"), Dimension::Px(TAB_HEIGHT))
         .count(Some(tasks.tasks.len()))
         .selected(true),
-    )
-    .child(Tab::new(
-      "overview-tab-running",
-      ctx.t("overview.tabs.running"),
-      Dimension::Px(TAB_HEIGHT),
-    ))
-    .child(Tab::new(
-      "overview-tab-needs-you",
-      ctx.t("overview.tabs.needsYou"),
-      Dimension::Px(TAB_HEIGHT),
-    ))
-    .child(Tab::new(
-      "overview-tab-queued",
-      ctx.t("overview.tabs.queued"),
-      Dimension::Px(TAB_HEIGHT),
-    ));
+      Tab::new(
+        "overview-tab-running",
+        ctx.t("overview.tabs.running"),
+        Dimension::Px(TAB_HEIGHT),
+      ),
+      Tab::new(
+        "overview-tab-needs-you",
+        ctx.t("overview.tabs.needsYou"),
+        Dimension::Px(TAB_HEIGHT),
+      ),
+      Tab::new(
+        "overview-tab-queued",
+        ctx.t("overview.tabs.queued"),
+        Dimension::Px(TAB_HEIGHT),
+      ),
+    ],
+  );
   Column::new()
     .id("overview-tasks")
     .width(Dimension::Pct(100.0))
@@ -226,20 +227,4 @@ fn empty_overview(ctx: &Ctx, open: &OpenProject) -> Element {
     &display::shorten_path(&open.repo_root, PATH_CHARS),
   ))
   .into()
-}
-
-/// Key/value property (`tfGRt`).
-fn property(label: &str, value: &str) -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .justify(Justify::SpaceBetween)
-    .child(Text::new(label).variant(TypographyStyle::Caption).nowrap())
-    .child(
-      Text::new(value)
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary)
-        .selectable(true),
-    )
-    .into()
 }

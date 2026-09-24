@@ -14,6 +14,15 @@ use crate::theme::{ExtraSpacing, ExtraTypography};
 const LABEL_HEIGHT: f32 = 26.0;
 
 pub fn status_label(glyph: Icon, label: &str) -> Element {
+  labelled(glyph, label, ExtraTypography::StatusLabel)
+}
+
+/// The label as list rows use it, with smaller text (`v7McTX` in `d9bo3`).
+pub fn compact_status_label(glyph: Icon, label: &str) -> Element {
+  labelled(glyph, label, ExtraTypography::CompactStatusLabel)
+}
+
+fn labelled(glyph: Icon, label: &str, typography: ExtraTypography) -> Element {
   Row::new()
     .height(Dimension::Px(LABEL_HEIGHT))
     .padding_horizontal(SpacingSize::Sm)
@@ -22,6 +31,6 @@ pub fn status_label(glyph: Icon, label: &str) -> Element {
     .background(PaletteColor::AccentMuted)
     .rounded(RadiusSize::Sm)
     .child(icon(glyph, IconSize::Small, PaletteColor::TextPrimary))
-    .child(Text::new(label).variant(ExtraTypography::StatusLabel.role()).nowrap())
+    .child(Text::new(label).variant(typography.role()).nowrap())
     .into()
 }

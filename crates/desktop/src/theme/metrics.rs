@@ -5,9 +5,9 @@ use lurq::{
 
 use super::tokens::{
   FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, SPACE_COLUMNS, SPACE_FOOTER,
-  SPACE_GROUP, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE,
-  SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_RAIL, SPACE_SECTION, SPACE_SM, SPACE_STACK,
-  SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
+  SPACE_FORM, SPACE_GROUP, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR,
+  SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_RAIL, SPACE_SECTION, SPACE_SM,
+  SPACE_STACK, SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -34,6 +34,8 @@ pub enum ExtraSpacing {
   HeadingTop,
   /// Bottom padding of a project screen heading; brief to its hint (`LIfyO`, `bGakk`).
   HeadingBottom,
+  /// Gap between the groups of a configuration form (`xT2ex`, `dCLMl`).
+  Form,
   /// Left indent of the getting started steps after their divider; horizontal padding and
   /// column gap of the new task form (`ZZqwk`, `hkWbp`, `uZeUx`).
   Indent,
@@ -50,7 +52,7 @@ pub enum ExtraSpacing {
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 16] = [
+  const ALL: [Self; 17] = [
     Self::Mark,
     Self::Tight,
     Self::Indicator,
@@ -61,6 +63,7 @@ impl ExtraSpacing {
     Self::Rail,
     Self::HeadingTop,
     Self::HeadingBottom,
+    Self::Form,
     Self::Indent,
     Self::Page,
     Self::Hero,
@@ -81,6 +84,7 @@ impl ExtraSpacing {
       Self::Rail => "rail",
       Self::HeadingTop => "heading-top",
       Self::HeadingBottom => "heading-bottom",
+      Self::Form => "form",
       Self::Indent => "indent",
       Self::Page => "page",
       Self::Hero => "hero",
@@ -102,6 +106,7 @@ impl ExtraSpacing {
       Self::Rail => SPACE_RAIL,
       Self::HeadingTop => SPACE_HEADING_TOP,
       Self::HeadingBottom => SPACE_HEADING_BOTTOM,
+      Self::Form => SPACE_FORM,
       Self::Indent => SPACE_INDENT,
       Self::Page => SPACE_PAGE,
       Self::Hero => SPACE_HERO,
