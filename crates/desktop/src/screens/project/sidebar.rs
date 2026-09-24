@@ -1,5 +1,5 @@
-//! Shell sidebar (`zo9Py`). Overview and Tasks open their screens; every other entry is shown
-//! but unavailable. The runner card shows the open project's runner.
+//! Shell sidebar (`zo9Py`). Overview, Tasks, Agents and Connections open their screens; every
+//! other entry is shown but unavailable. The runner card shows the open project's runner.
 
 use lurq::{
   app::{
@@ -108,10 +108,14 @@ fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &Pro
     NavItem::new("nav-pull-requests", Icon::GitPullRequest, ctx.t("nav.pullRequests")),
     NavItem::new("nav-pipelines", Icon::Workflow, ctx.t("nav.pipelines")),
     NavItem::new("nav-instructions", Icon::BookOpen, ctx.t("nav.instructions")),
-    NavItem::new("nav-agents", Icon::Bot, ctx.t("nav.agents")),
+    NavItem::new("nav-agents", Icon::Bot, ctx.t("nav.agents"))
+      .selected(section == Section::Agents)
+      .on_click(open(Section::Agents)),
     NavItem::new("nav-tools", Icon::Wrench, ctx.t("nav.tools")),
     NavItem::new("nav-secrets", Icon::KeyRound, ctx.t("nav.secrets")),
-    NavItem::new("nav-connections", Icon::Plug, ctx.t("nav.connections")),
+    NavItem::new("nav-connections", Icon::Plug, ctx.t("nav.connections"))
+      .selected(section == Section::Connections)
+      .on_click(open(Section::Connections)),
   ];
   Column::new()
     .width(Dimension::Pct(100.0))

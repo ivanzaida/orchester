@@ -8,6 +8,7 @@ pub mod icon;
 pub mod nav_item;
 pub mod notice;
 pub mod panel;
+pub mod property;
 pub mod status_label;
 pub mod tab;
 

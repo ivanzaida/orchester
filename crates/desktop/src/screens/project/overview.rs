@@ -23,6 +23,7 @@ use crate::{
     icon::{Icon, IconSize, icon},
     message_text,
     panel::RecoveryPanel,
+    property::property,
     tab::{Tab, tab_row},
   },
   workspace::OpenProject,
@@ -226,20 +227,4 @@ fn empty_overview(ctx: &Ctx, open: &OpenProject) -> Element {
     &display::shorten_path(&open.repo_root, PATH_CHARS),
   ))
   .into()
-}
-
-/// Key/value property (`tfGRt`).
-fn property(label: &str, value: &str) -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .justify(Justify::SpaceBetween)
-    .child(Text::new(label).variant(TypographyStyle::Caption).nowrap())
-    .child(
-      Text::new(value)
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary)
-        .selectable(true),
-    )
-    .into()
 }
