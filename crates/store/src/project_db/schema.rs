@@ -211,4 +211,28 @@ CREATE TABLE pull_requests (
   FOREIGN KEY (host, owner, name) REFERENCES pull_request_syncs (host, owner, name) ON DELETE CASCADE
 ) STRICT;
 ",
+  r"
+-- Content-addressed blobs: zstd files at blobs/<aa>/<sha256>, never deleted.
+CREATE TABLE blobs (
+  sha256 TEXT PRIMARY KEY,
+  size INTEGER NOT NULL CHECK (size >= 0),
+  stored_size INTEGER NOT NULL CHECK (stored_size >= 0),
+  media_type TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+) STRICT;
+
+-- A pull request's diff per head revision, read from GitHub (a cache, desktop-written).
+CREATE TABLE pr_revisions (
+  host TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  name TEXT NOT NULL,
+  number INTEGER NOT NULL CHECK (number > 0),
+  head_sha TEXT NOT NULL,
+  base_sha TEXT NOT NULL,
+  diff_blob TEXT NOT NULL REFERENCES blobs (sha256),
+  synced_at INTEGER NOT NULL,
+  PRIMARY KEY (host, owner, name, number, head_sha)
+) STRICT;
+CREATE INDEX pr_revisions_by_sync ON pr_revisions (host, owner, name, number, synced_at);
+",
 ];

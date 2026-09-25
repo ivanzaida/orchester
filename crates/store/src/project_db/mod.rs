@@ -1,4 +1,6 @@
+mod blobs;
 mod connections;
+mod pull_request_diffs;
 mod pull_requests;
 mod repository;
 mod resources;
@@ -30,6 +32,8 @@ const EXCLUDE_PATTERN: &str = "/.orchester/";
 pub struct ProjectDb {
   connection: Connection,
   project: Project,
+  /// `<repo>/.orchester`, where the database and the blob files live.
+  directory: PathBuf,
 }
 
 impl ProjectDb {
@@ -51,7 +55,11 @@ impl ProjectDb {
         project.name().as_str()
       ],
     )?;
-    Ok(Self { connection, project })
+    Ok(Self {
+      connection,
+      project,
+      directory,
+    })
   }
 
   /// Opens an initialized repository, applying pending migrations.
@@ -62,7 +70,11 @@ impl ProjectDb {
     }
     let connection = migrate::open(&database, schema::MIGRATIONS)?;
     let project = load_project(&connection)?;
-    Ok(Self { connection, project })
+    Ok(Self {
+      connection,
+      project,
+      directory: repo_root.join(DIRECTORY),
+    })
   }
 
   pub const fn project(&self) -> &Project {
