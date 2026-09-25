@@ -3,7 +3,7 @@ use lurq::{
     App,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  layout::text_style::FontWeight,
+  layout::text_style::{FontFeature, FontFeatures, FontWeight},
   node::{BackgroundColor, BoxShadow, color::Color, dimension::Dimension},
 };
 use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography};
@@ -119,6 +119,19 @@ fn mono_text_uses_bundled_geist_mono() {
     &*app.theme().typography_style(ExtraTypography::Metric.role()).font_family,
     "Geist Mono"
   );
+}
+
+#[test]
+fn mono_text_keeps_the_space_before_double_hyphens() {
+  let app = themed_app();
+  let off = FontFeatures::from([FontFeature::disable(*b"liga"), FontFeature::disable(*b"calt")]);
+  for role in [
+    TypographyStyle::Mono,
+    ExtraTypography::MonoValue.role(),
+    ExtraTypography::Metric.role(),
+  ] {
+    assert_eq!(app.theme().typography_style(role).font_features, off);
+  }
 }
 
 #[test]
