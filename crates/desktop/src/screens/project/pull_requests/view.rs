@@ -66,8 +66,16 @@ impl SyncLine {
   }
 
   fn after(inbox: &LinkedInbox) -> Self {
-    let last = inbox.synced.as_ref().map(|synced| synced.synced_at);
-    match &inbox.failure {
+    Self::after_read(
+      inbox.synced.as_ref().map(|synced| synced.synced_at),
+      inbox.failure.as_ref(),
+    )
+  }
+
+  /// After a sync or refresh that failed with `failure`, if it did; `last` is when what is shown
+  /// was read.
+  pub fn after_read(last: Option<Timestamp>, failure: Option<&SyncFailure>) -> Self {
+    match failure {
       None => last.map_or(Self::Syncing, Self::Synced),
       Some(SyncFailure::RateLimited { resets_at }) => Self::RateLimited { resets_at: *resets_at },
       Some(SyncFailure::Account(GitHubState::WrongAccount { active, .. })) => Self::Paused { active: active.clone() },

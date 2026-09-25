@@ -7,6 +7,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
+    events::mouse_event::MouseEvent,
     theme::{BorderSize, FormButtonRole, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, Text},
@@ -198,9 +199,13 @@ impl ActionButton {
       }
     };
     match self.state {
+      // A press is the button's own: it does not also press a clickable row around it.
       State::Enabled(handler) => with_interaction(focus(button, TAB_STOP), &role, in_form)
         .describe("state", "enabled")
-        .on_click(move |_| handler()),
+        .on_click(move |event: MouseEvent| {
+          event.stop_propagation();
+          handler();
+        }),
       // Tab skips a button that cannot be pressed.
       State::Disabled => focus(button, SKIPPED_BY_TAB)
         .describe("state", "disabled")

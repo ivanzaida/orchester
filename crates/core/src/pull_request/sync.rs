@@ -6,7 +6,7 @@ use super::PullRequest;
 use crate::{
   connection::{GitHubCheck, GitHubState},
   github::GitHub,
-  repository::{RepositoryError, RepositoryLink},
+  repository::{GitHubRepo, RepositoryError, RepositoryLink},
   time::Timestamp,
 };
 
@@ -65,11 +65,19 @@ pub fn sync_pull_requests(github: &impl GitHub, link: &RepositoryLink, now: Time
       super::sort_by_update(&mut pull_requests);
       Ok(pull_requests)
     }
-    Err(RepositoryError::RateLimited) => Err(SyncFailure::RateLimited {
-      // Without the reset time the list still says it is rate limited.
-      resets_at: github.rate_limit_reset(link.repo()).ok(),
-    }),
-    Err(error) => Err(SyncFailure::Repository(error)),
+    Err(error) => Err(sync_failure(github, link.repo(), error)),
   };
   SyncResult { check, outcome }
+}
+
+/// What `error`, from a request about `repo`, means for syncing; a rate limit asks `github` when
+/// it resets.
+pub(super) fn sync_failure(github: &impl GitHub, repo: &GitHubRepo, error: RepositoryError) -> SyncFailure {
+  match error {
+    RepositoryError::RateLimited => SyncFailure::RateLimited {
+      // Without the reset time the screen still says it is rate limited.
+      resets_at: github.rate_limit_reset(repo).ok(),
+    },
+    error => SyncFailure::Repository(error),
+  }
 }

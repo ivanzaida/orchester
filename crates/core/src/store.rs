@@ -5,9 +5,10 @@ use crate::{
   connection::Connection,
   id::{ConnectionId, IdempotencyKey, ResourceId, RunId, TaskId},
   name::Name,
-  pull_request::{PullRequest, SyncedPullRequests},
+  pull_request::{PullRequest, RevisionDiff, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
   resource::{Draft, DraftSaved, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
+  revision::Revision,
   run::{Checkpoint, NewRun, Run, RunEvent},
   task::{Task, TaskDetails},
   time::Timestamp,
@@ -122,6 +123,27 @@ pub trait PullRequestStore {
   /// The pull requests of `repo` as last read, most recently updated first; `None` before the
   /// first sync of `repo`.
   fn pull_requests(&self, repo: &GitHubRepo) -> Result<Option<SyncedPullRequests>, Self::Error>;
+}
+
+/// Pull request diffs, one per head revision (`pr_revisions` with content-addressed blobs). GitHub
+/// is the source; this is a cache that is never pruned. Written by the desktop.
+pub trait PullRequestDiffStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Stores `diff` as the diff of pull request `number` of `repo` at `diff.head`, replacing the
+  /// one stored for that head. The text is stored once however many heads share it.
+  fn save_pull_request_diff(&mut self, repo: &GitHubRepo, number: u64, diff: &RevisionDiff) -> Result<(), Self::Error>;
+
+  /// The stored diff of pull request `number` of `repo` at `head`.
+  fn pull_request_diff(
+    &self,
+    repo: &GitHubRepo,
+    number: u64,
+    head: &Revision,
+  ) -> Result<Option<RevisionDiff>, Self::Error>;
+
+  /// The most recently synced diff of pull request `number` of `repo`, whatever its head.
+  fn latest_pull_request_diff(&self, repo: &GitHubRepo, number: u64) -> Result<Option<RevisionDiff>, Self::Error>;
 }
 
 /// Execution data, written by the runner. A run changes only by appending the events a

@@ -320,6 +320,84 @@
       "missingScopeNoList": "gh is signed in as {{account}} without the {{scope}} scope, so Orchester can’t read or create pull requests. Add the scope in a terminal, then check again.",
       "notSignedInTitle": "gh is not signed in to {{host}}",
       "actionFailed": "Pull requests could not be synced"
+    },
+    "detail": {
+      "breadcrumb": "{{project}}  /  Pull requests  /  #{{number}}",
+      "untitled": "Pull request #{{number}}",
+      "context": "PR #{{number}} · {{head}} → {{base}} · Head {{revision}} · {{sync}}",
+      "contextUnknown": "PR #{{number}} · {{sync}}",
+      "tabs": {
+        "files": "Files changed",
+        "feedback": "Agent feedback",
+        "checks": "Agent checks",
+        "overview": "Overview"
+      },
+      "loadFailed": "The pull request could not be read",
+      "actionFailed": "The pull request could not be refreshed",
+      "diffUnreadable": "The diff is not in a format Orchester can read. Open the pull request in GitHub; the log has the details.",
+      "loading": {
+        "title": "Reading the pull request",
+        "detail": "Orchester reads the pull request and its diff from GitHub through gh."
+      },
+      "tooLarge": {
+        "title": "Too large to show here",
+        "detail": "This pull request changes {{files}} files, +{{additions}} / −{{deletions}}. Orchester shows diffs of up to {{maxFiles}} files and {{maxLines}} changed lines; review this one in GitHub.",
+        "limits": "Orchester shows diffs of up to {{maxFiles}} files and {{maxLines}} changed lines; review this one in GitHub."
+      },
+      "empty": {
+        "title": "No changes",
+        "detail": "The head revision has no changes against the base branch."
+      },
+      "failure": {
+        "notRead": "Pull request #{{number}} could not be read",
+        "unreachableTitle": "Couldn’t reach GitHub",
+        "unreachable": "The pull request may have changed since it was last read. Refresh tries again.",
+        "rateLimited": "gh reports no requests left for {{account}}; the limit resets in {{minutes}} min. Refresh is available again after the reset.",
+        "account": "gh can’t read pull requests as {{account}} right now. The Pull requests screen shows what to do; Orchester never signs in or switches gh accounts.",
+        "notFoundTitle": "Pull request #{{number}} was not found",
+        "notFound": "GitHub has no pull request #{{number}} in {{owner}} / {{name}} that {{account}} can see.",
+        "diffNotFoundTitle": "The diff could not be read",
+        "diffNotFound": "GitHub has no diff between these revisions; the branch may have been force-pushed. Refresh reads the current head.",
+        "failed": "GitHub did not return the pull request. Refresh tries again; the log has the details."
+      }
+    },
+    "files": {
+      "heading": "FILES  {{count}}",
+      "search": "Find a file…",
+      "noMatch": "No changed file matches.",
+      "summary": "{{status}} · +{{additions}} / −{{deletions}}",
+      "summaryBinary": "{{status}} · binary",
+      "status": {
+        "added": "A",
+        "deleted": "D",
+        "modified": "M",
+        "renamed": "R",
+        "copied": "C"
+      }
+    },
+    "diff": {
+      "range": "Full PR · {{base}} → {{revision}}",
+      "rangeHead": "Full PR · {{revision}}",
+      "unified": "Unified",
+      "viewed": "Viewed",
+      "meta": {
+        "modified": "Modified · +{{additions}} / −{{deletions}}",
+        "added": "Added · +{{additions}} / −{{deletions}}",
+        "deleted": "Deleted · +{{additions}} / −{{deletions}}",
+        "renamed": "Renamed from {{from}} · +{{additions}} / −{{deletions}}",
+        "copied": "Copied from {{from}} · +{{additions}} / −{{deletions}}"
+      },
+      "hunk": "@@ −{{old}} +{{new}} @@",
+      "hunkSection": "@@ −{{old}} +{{new}} @@ {{section}}",
+      "markAdded": "+",
+      "markRemoved": "−",
+      "lineCut": "Line shortened",
+      "noNewline": "No newline at end of file",
+      "binary": "Binary file: its changes are not shown",
+      "mode": "File mode changed from {{old}} to {{new}}",
+      "unchanged": "The content did not change",
+      "empty": "The file is empty",
+      "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the pull request in GitHub to see them."
     }
   },
   "agents": {
@@ -1214,6 +1292,12 @@
         "done": "Pull requests synced",
         "failed": "Could not sync pull requests",
         "notSynced": "Pull requests not synced"
+      },
+      "pullRequestRefresh": {
+        "running": "Reading pull request #{{name}}",
+        "done": "Read pull request #{{name}}",
+        "failed": "Could not read pull request #{{name}}",
+        "notRead": "Pull request #{{name}} not read"
       },
       "pullRequestOpen": {
         "running": "Opening pull request #{{name}} in the browser",

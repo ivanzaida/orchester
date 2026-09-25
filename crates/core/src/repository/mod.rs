@@ -229,6 +229,10 @@ pub enum RepositoryError {
   NotFound(GitHubRepo),
   #[error("the signed-in account has no access to {0}")]
   NoAccess(GitHubRepo),
+  #[error("{repo} has no pull request #{number} the signed-in account can see")]
+  PullRequestNotFound { repo: GitHubRepo, number: u64 },
+  #[error("{0} has no diff between the pull request's revisions")]
+  DiffNotFound(GitHubRepo),
   #[error("{0} has no default branch yet")]
   NoDefaultBranch(GitHubRepo),
   #[error("the GitHub API rate limit is exhausted")]

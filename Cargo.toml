@@ -40,6 +40,12 @@ rfd = "0.15"
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Content addresses of project blobs (`docs/architecture/storage.md`, "Blobs"); pure Rust.
+sha2 = "0.11"
+# Pull request syntax highlighting with Sublime grammars. Without default features and with
+# `regex-fancy` it needs no C regex library (onig), so it builds the same on Windows and macOS;
+# `default-syntaxes` bundles the grammars, and no themes or HTML output are compiled in.
+syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy"] }
 tempfile = "3"
 thiserror = "2"
 # The desktop also runs blocking work (database, native dialogs) off the UI thread through lurq futures.
@@ -49,6 +55,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 win32job = "2"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes"] }
+# Compression of project blob files, as `docs/architecture/storage.md` specifies. The C library is
+# built by `cc` like SQLite already is (rusqlite `bundled`), on Windows and macOS alike.
+zstd = { version = "0.13", default-features = false }
 
 # lurq's text stack at opt-level 0 makes text-heavy screens crawl in dev builds. Cargo reads
 # profiles only from this workspace, so lurq cannot set this itself. The wildcard covers every

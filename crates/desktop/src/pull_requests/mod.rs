@@ -3,6 +3,9 @@
 //! through the linked GitHub connection. Every function blocks on SQLite or `gh`; the UI calls
 //! them off the UI thread. Only read-only `gh` commands run.
 
+pub mod detail;
+pub mod highlight;
+
 use std::path::Path;
 
 use orchester_core::{
@@ -133,7 +136,7 @@ pub fn use_active_account_in(repo_root: &Path, programs: &Programs) -> Result<In
   sync_in(repo_root, programs)
 }
 
-fn github_connection(db: &ProjectDb, id: ConnectionId) -> Result<GitHubConnection, InboxError> {
+pub(crate) fn github_connection(db: &ProjectDb, id: ConnectionId) -> Result<GitHubConnection, InboxError> {
   let stored = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
   Ok(GitHubConnection::try_from(stored)?)
 }

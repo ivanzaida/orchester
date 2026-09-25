@@ -2,6 +2,8 @@
 //! (`docs/design/orchester-workspace.md`, "Pull requests" and "GitHub"). Orchester only reads
 //! them; a pull request's GitHub state is kept apart from agent readiness, which comes with runs.
 
+mod detail;
+pub mod diff;
 mod gh;
 mod sync;
 
@@ -9,6 +11,11 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  detail::{
+    DetailRefresh, DiffRead, MAX_DIFF_FILES, MAX_DIFF_LINES, PullRequestHead, RefreshedDetail, RevisionDiff,
+    gh_compare_diff_command, gh_pr_view_command, is_too_large, parse_gh_compare_diff, parse_gh_pr_view,
+    refresh_pull_request,
+  },
   gh::{PR_LIST_FIELDS, gh_pr_list_command, gh_rate_limit_command, parse_gh_pr_list, parse_gh_rate_limit},
   sync::{SYNC_LIMIT, SyncFailure, SyncResult, sync_pull_requests},
 };

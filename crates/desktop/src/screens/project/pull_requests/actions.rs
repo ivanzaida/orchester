@@ -121,7 +121,7 @@ fn inbox_action(ctx: &mut Ctx, open: &OpenProject, work: Work) -> InboxAction {
   })
 }
 
-fn open_action(ctx: &mut Ctx, open: &OpenProject) -> OpenAction {
+pub fn open_action(ctx: &mut Ctx, open: &OpenProject) -> OpenAction {
   let activity = Activity::of(ctx);
   let open = open.clone();
   ctx.future_action(move |(number, url): (u64, Arc<str>)| {

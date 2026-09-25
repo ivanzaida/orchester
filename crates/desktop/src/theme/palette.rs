@@ -4,8 +4,9 @@ use lurq::{
 };
 
 use super::tokens::{
-  ACCENT, BORDER, CANVAS, FOCUS_GAP, FOCUS_RING, HAIRLINE, HOVER, INVERSE_TEXT, MUTED, RAISED, SCRIM, SIDEBAR, SUBTLE,
-  SURFACE, TEXT,
+  ACCENT, BORDER, CANVAS, CODE_BG, CODE_COMMENT, CODE_CONSTANT, CODE_FUNCTION, CODE_KEYWORD, CODE_STRING, CODE_TEXT,
+  CODE_VARIABLE, DIFF_ADD_BG, DIFF_ADD_TEXT, DIFF_REMOVE_BG, DIFF_REMOVE_TEXT, FOCUS_GAP, FOCUS_RING, HAIRLINE, HOVER,
+  INVERSE_TEXT, MUTED, RAISED, SCRIM, SIDEBAR, SUBTLE, SURFACE, TEXT,
 };
 
 /// Pencil colors without a built-in lurq role, registered as `PaletteColor::Extra`.
@@ -22,15 +23,51 @@ pub enum ExtraColor {
   FocusRing,
   /// The dark gap between a focused control and its ring (Pencil `focus-gap`, `xURvJ`).
   FocusGap,
+  /// Unchanged diff lines (Pencil `code-bg`, `vEZ42`).
+  CodeBackground,
+  /// Code without a more specific role, and punctuation (Pencil `code-text`).
+  CodeText,
+  /// Keywords, storage and operators (Pencil `code-keyword`).
+  CodeKeyword,
+  /// Strings (Pencil `code-string`).
+  CodeString,
+  /// Function names (Pencil `code-function`).
+  CodeFunction,
+  /// Declared names: types, variables (Pencil `code-variable`).
+  CodeVariable,
+  /// Numbers, constants and built-ins (Pencil `code-constant`).
+  CodeConstant,
+  /// Comments, and the line numbers of a diff (Pencil `code-comment`).
+  CodeComment,
+  /// Added diff lines (Pencil `diff-add-bg`).
+  DiffAddedBackground,
+  /// The `+` of an added line (Pencil `diff-add-text`).
+  DiffAddedMark,
+  /// Removed diff lines (Pencil `diff-remove-bg`).
+  DiffRemovedBackground,
+  /// The `−` of a removed line (Pencil `diff-remove-text`).
+  DiffRemovedMark,
 }
 
 impl ExtraColor {
-  const ALL: [Self; 5] = [
+  const ALL: [Self; 17] = [
     Self::Surface,
     Self::Hairline,
     Self::Scrim,
     Self::FocusRing,
     Self::FocusGap,
+    Self::CodeBackground,
+    Self::CodeText,
+    Self::CodeKeyword,
+    Self::CodeString,
+    Self::CodeFunction,
+    Self::CodeVariable,
+    Self::CodeConstant,
+    Self::CodeComment,
+    Self::DiffAddedBackground,
+    Self::DiffAddedMark,
+    Self::DiffRemovedBackground,
+    Self::DiffRemovedMark,
   ];
 
   fn name(self) -> &'static str {
@@ -40,6 +77,18 @@ impl ExtraColor {
       Self::Scrim => "scrim",
       Self::FocusRing => "focus-ring",
       Self::FocusGap => "focus-gap",
+      Self::CodeBackground => "code-bg",
+      Self::CodeText => "code-text",
+      Self::CodeKeyword => "code-keyword",
+      Self::CodeString => "code-string",
+      Self::CodeFunction => "code-function",
+      Self::CodeVariable => "code-variable",
+      Self::CodeConstant => "code-constant",
+      Self::CodeComment => "code-comment",
+      Self::DiffAddedBackground => "diff-add-bg",
+      Self::DiffAddedMark => "diff-add-text",
+      Self::DiffRemovedBackground => "diff-remove-bg",
+      Self::DiffRemovedMark => "diff-remove-text",
     }
   }
 
@@ -50,6 +99,18 @@ impl ExtraColor {
       Self::Scrim => SCRIM,
       Self::FocusRing => FOCUS_RING,
       Self::FocusGap => FOCUS_GAP,
+      Self::CodeBackground => CODE_BG,
+      Self::CodeText => CODE_TEXT,
+      Self::CodeKeyword => CODE_KEYWORD,
+      Self::CodeString => CODE_STRING,
+      Self::CodeFunction => CODE_FUNCTION,
+      Self::CodeVariable => CODE_VARIABLE,
+      Self::CodeConstant => CODE_CONSTANT,
+      Self::CodeComment => CODE_COMMENT,
+      Self::DiffAddedBackground => DIFF_ADD_BG,
+      Self::DiffAddedMark => DIFF_ADD_TEXT,
+      Self::DiffRemovedBackground => DIFF_REMOVE_BG,
+      Self::DiffRemovedMark => DIFF_REMOVE_TEXT,
     })
   }
 
