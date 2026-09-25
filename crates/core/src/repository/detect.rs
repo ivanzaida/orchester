@@ -270,6 +270,8 @@ fn view_failure(error: &RepositoryError, account: GitHubLogin) -> DetectionState
     | RepositoryError::OtherHost { .. }
     | RepositoryError::GitHubUnavailable(_)
     | RepositoryError::AccountMismatch { .. }
+    | RepositoryError::PullRequestNotFound { .. }
+    | RepositoryError::DiffNotFound(_)
     | RepositoryError::Unrecognized { .. } => DetectionState::Unrecognized,
   }
 }

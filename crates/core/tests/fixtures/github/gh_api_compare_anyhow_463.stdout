@@ -1,0 +1,48 @@
+diff --git a/src/error.rs b/src/error.rs
+index d97df8c5..b9fc0e75 100644
+--- a/src/error.rs
++++ b/src/error.rs
+@@ -35,6 +35,21 @@ impl Error {
+         Error::construct_from_std(error, backtrace)
+     }
+ 
++    /// Create a new error object from any error type and a backtrace.
++    ///
++    /// The error type must be threadsafe and `'static`, so that the `Error`
++    /// will be as well. This is useful when the backtrace was captured before
++    /// the error was constructed.
++    #[cfg(feature = "std")]
++    #[cold]
++    #[must_use]
++    pub fn new_with_backtrace<E>(error: E, backtrace: Backtrace) -> Self
++    where
++        E: StdError + Send + Sync + 'static,
++    {
++        Error::construct_from_std(error, Some(backtrace))
++    }
++
+     /// Create a new error object from a printable error message.
+     ///
+     /// If the argument implements std::error::Error, prefer `Error::new`
+diff --git a/tests/test_backtrace.rs b/tests/test_backtrace.rs
+index 938c1c24..a5373425 100644
+--- a/tests/test_backtrace.rs
++++ b/tests/test_backtrace.rs
+@@ -13,3 +13,17 @@ fn test_backtrace() {
+     let error = anyhow!("oh no!");
+     let _ = error.backtrace();
+ }
++
++#[cfg(feature = "std")]
++#[test]
++fn test_new_with_backtrace() {
++    use anyhow::Error;
++    use std::backtrace::Backtrace;
++    use std::io;
++
++    let backtrace = Backtrace::force_capture();
++    let expected = format!("{:?}", backtrace);
++    let error =
++        Error::new_with_backtrace(io::Error::new(io::ErrorKind::Other, "oh no!"), backtrace);
++    assert_eq!(expected, format!("{:?}", error.backtrace()));
++}

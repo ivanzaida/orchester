@@ -1,0 +1,89 @@
+diff --git a/moved.txt b/dir/moved.txt
+similarity index 100%
+rename from moved.txt
+rename to dir/moved.txt
+diff --git a/dos.txt b/dos.txt
+index a4b32e8..bdc5601 100644
+--- a/dos.txt
++++ b/dos.txt
+@@ -1,2 +1,2 @@
+ crlf one
+-crlf two
++crlf 2
+diff --git a/gone.txt b/gone.txt
+deleted file mode 100644
+index 37b0e86..0000000
+--- a/gone.txt
++++ /dev/null
+@@ -1,2 +0,0 @@
+-to be removed
+-second
+diff --git a/image.png b/image.png
+new file mode 100644
+index 0000000..029ace0
+Binary files /dev/null and b/image.png differ
+diff --git a/main.rs b/main.rs
+index 7527576..1767109 100644
+--- a/main.rs
++++ b/main.rs
+@@ -1,3 +1,4 @@
+ fn main() {
+-    println!("hello");
++    let name = "world";
++    println!("hello {name}");
+ }
+diff --git "a/na\303\257ve.txt" "b/na\303\257ve.txt"
+new file mode 100644
+index 0000000..4de4f93
+--- /dev/null
++++ "b/na\303\257ve.txt"
+@@ -0,0 +1 @@
++unicode
+diff --git a/old_name.md b/new_name.md
+similarity index 86%
+rename from old_name.md
+rename to new_name.md
+index 1e395f2..01567d3 100644
+--- a/old_name.md
++++ b/new_name.md
+@@ -1,6 +1,6 @@
+ alpha
+ beta
+-gamma
++GAMMA
+ delta
+ epsilon
+ zeta
+diff --git a/notes.txt b/notes.txt
+index eb863b6..292b421 100644
+--- a/notes.txt
++++ b/notes.txt
+@@ -1,6 +1,7 @@
+ line one
+-line two
++line 2
+ line three
+ line four
+ line five
+ line six
++line seven
+\ No newline at end of file
+diff --git a/run.sh b/run.sh
+old mode 100644
+new mode 100755
+diff --git a/tail.txt b/tail.txt
+index 2802503..07f9d55 100644
+--- a/tail.txt
++++ b/tail.txt
+@@ -1 +1,2 @@
+-no newline at end
+\ No newline at end of file
++no newline at end
++now it has one
+diff --git a/with space.txt b/with space.txt
+new file mode 100644
+index 0000000..cc6e400
+--- /dev/null
++++ b/with space.txt	
+@@ -0,0 +1 @@
++with space

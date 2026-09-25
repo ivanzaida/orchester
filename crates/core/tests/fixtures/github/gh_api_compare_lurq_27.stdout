@@ -1,0 +1,1927 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index b2f4b39..d790b1a 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,15 @@
+ # Changelog
+ 
++## Unreleased
++
++- Fix main-thread stack overflows in debug builds (lurq#25, lurq#26). An unoptimized build gives every temporary its own stack slot, and lurq rebuilds dirty components inside the input event, so a whole-window rebuild ran on the event's stack with several copies of every element per component level. Kontur's desktop overflowed the 1 MiB Windows main-thread stack on its first click on 0.22.1 (1,006,584 bytes on a path that took 767,336 on 0.20.0). The new `stack_depth` regression test (an editor-sized screen under `WindowChrome`, ten nested component levels, laid out, painted and re-rendered from a key event on a 1 MiB thread) needed 1104 KiB on 0.22.1 and needs 208 KiB now; the build and rebuild part alone needs 144 KiB. `scripts/stack-depth-probe.py` measures the smallest stack it passes on.
++  - `Element` holds its root node on the heap and is now 8 bytes instead of 3616. Component builders already boxed their node, so converting one into an `Element` moves a pointer. `WindowChrome` shrinks from 19,112 to 872 bytes and `ChromeTitleBar` from 15,368 to 760; `Modal` and `Overlay` also box their content.
++  - A node's hover, active and focus styles and its event handlers are allocated on first use. A node is 1240 bytes with default features (was 3640) and 1552 with all features.
++  - `Ctx::mount`, dirty-subtree refresh, retained-node cloning, overlay indexing and quad collection keep node-sized temporaries out of their recursive frames. Quad collection used 20.8 KB of stack per tree level and now uses 2 KB.
++  - A size-budget test (`src/size_budget.rs`) fails the test build when the role enums, `Element`, `Node`, `WindowChrome` or `ChromeTitleBar` outgrow their budgets.
++- Shrink `SpacingSize`, `RadiusSize`, `BorderSize` and `TypographyStyle` from 24 to 8 bytes (lurq#26). Their `Extra` variants carry a `RoleName`, a 4-byte handle to the interned name, instead of a `&'static str`. `RoleName` dereferences to `str`, compares equal to `&str`, prints as the name, and converts from `&str`, `String` and `Arc<str>`. `extra(name)`, the `From<&str>`/`From<Arc<str>>` conversions, the theme tables and the `Theme` setters are unchanged.
++- Breaking: `SpacingSize::Extra("name")` (and the same for the other three roles) no longer compiles; use `SpacingSize::extra("name")` or `Extra(RoleName::new("name"))`. A matched `Extra(name)` binds a `RoleName`; call `name.as_str()` where a `&'static str` is needed. `as_str()` on these four roles is no longer `const fn`.
++
+ ## 0.22.2 — 2026-09-24
+ 
+ - Fix contexts provided in `create` disappearing when an ancestor re-rendered. Reusing a child replaced its whole context map with the parent's, dropping the values the child had provided, so descendants got `None` from `use_context` and lost `consume_context` subscriptions. A component's `create`-time values now persist for its lifetime, layered over the inherited contexts whenever those change. A value provided during `render` belongs to that render: it is dropped when a later render does not provide it again (it used to linger until the parent re-rendered). Providers whose inherited contexts did not change are no longer re-rendered, with their subtree, on every parent re-render. The `QueryClient`-only workaround for this is removed. The Ctx and Reactivity guides describe the lifetime rules.
+diff --git a/crates/lurq/src/app/ctx.rs b/crates/lurq/src/app/ctx.rs
+index 7b4f39c..b15318b 100644
+--- a/crates/lurq/src/app/ctx.rs
++++ b/crates/lurq/src/app/ctx.rs
+@@ -52,14 +52,14 @@ fn set_component_debug_metadata(node: &mut Node, ctx: &Ctx) {
+ }
+ 
+ fn attach_component_metadata(
+-  mut node: Node,
++  mut node: Box<Node>,
+   tag_name: Arc<str>,
+   slot_id: u64,
+   key: Option<&str>,
+   #[cfg(feature = "devtools")] ctx: &Ctx,
+-) -> Node {
++) -> Box<Node> {
+   if node.component_slot_id().is_some() {
+-    node = Node::logical().child(node);
++    node = Box::new(Node::logical().child(*node));
+   }
+ 
+   node.set_tag_name(tag_name);
+@@ -243,7 +243,7 @@ impl OverlaySpec {
+ }
+ 
+ pub struct Modal {
+-  node: Node,
++  node: Box<Node>,
+   open: OpenState,
+   target: ModalTarget,
+   dismiss_on_escape: bool,
+@@ -286,7 +286,7 @@ impl Modal {
+ 
+     Some(ModalSpec {
+       target: self.target,
+-      node: self.node,
++      node: *self.node,
+       open_signal: self.open.signal(),
+       dismiss_on_escape: self.dismiss_on_escape,
+     })
+@@ -306,7 +306,7 @@ impl From<Modal> for Element {
+ 
+ pub struct Overlay {
+   anchor: Option<ElementRef>,
+-  node: Node,
++  node: Box<Node>,
+   open: OpenState,
+   placement: Placement,
+   offset_x: f32,
+@@ -395,7 +395,7 @@ impl Overlay {
+ 
+     Some(OverlaySpec {
+       anchor: self.anchor?,
+-      node: self.node,
++      node: *self.node,
+       placement: self.placement,
+       offset_x: self.offset_x,
+       offset_y: self.offset_y,
+@@ -1358,7 +1358,7 @@ struct ChildSlot {
+   key: Option<String>,
+   component: Box<dyn AnyComponent>,
+   ctx: Ctx,
+-  rendered: Option<Node>,
++  rendered: Option<Box<Node>>,
+   mounted: bool,
+   offstage: bool,
+   offstage_dirty: bool,
+@@ -2536,10 +2536,10 @@ impl Ctx {
+         if let Some(previous) = previous.as_ref() {
+           element.node.preserve_runtime_state_from(previous);
+         }
+-        slot.rendered = Some(element.node.clone_for_reuse());
++        slot.rendered = Some(element.node.clone_boxed());
+         return element;
+       }
+-      return Element::from_node(slot.rendered.as_ref().unwrap().clone_for_reuse());
++      return Element::from_boxed_node(slot.rendered.as_ref().unwrap().clone_boxed());
+     }
+ 
+     let slot_id = next_component_slot_id();
+@@ -2583,7 +2583,7 @@ impl Ctx {
+         #[cfg(feature = "devtools")]
+         &child_ctx,
+       );
+-      Some(element.node.clone_for_reuse())
++      Some(element.node.clone_boxed())
+     } else {
+       child_ctx.clear_dirty();
+       None
+@@ -2720,7 +2720,7 @@ impl Ctx {
+         #[cfg(feature = "devtools")]
+         &slot.ctx,
+       );
+-      slot.rendered = Some(element.node.clone_for_reuse());
++      slot.rendered = Some(element.node.clone_boxed());
+       return element;
+     }
+ 
+@@ -2765,7 +2765,7 @@ impl Ctx {
+       key: Some(key),
+       component: Box::new(ForEachSlot),
+       ctx: child_ctx,
+-      rendered: Some(element.node.clone_for_reuse()),
++      rendered: Some(element.node.clone_boxed()),
+       mounted: false,
+       offstage: false,
+       offstage_dirty: false,
+@@ -2975,7 +2975,7 @@ impl Ctx {
+     completed
+   }
+ 
+-  pub(crate) fn refresh_dirty_subtrees(&mut self) -> Vec<(u64, Node)> {
++  pub(crate) fn refresh_dirty_subtrees(&mut self) -> Vec<(u64, Box<Node>)> {
+     let mut replacements = Vec::new();
+     let dirty_child_slot_ids = self.take_dirty_child_slot_ids();
+ 
+@@ -3010,7 +3010,7 @@ impl Ctx {
+         if let Some(old) = old_rendered.as_ref() {
+           element.node.preserve_runtime_state_from(old);
+         }
+-        slot.rendered = Some(element.node.clone_for_reuse());
++        slot.rendered = Some(element.node.clone_boxed());
+         replacements.push((slot.id, element.node));
+         if needs_followup_refresh {
+           Self::mark_dirty_child_slot(&self.dirty_child_slots, dirty_slot_id);
+@@ -3020,7 +3020,7 @@ impl Ctx {
+         let nested_replacements = slot.ctx.refresh_dirty_subtrees();
+         if let Some(rendered) = &mut slot.rendered {
+           for (slot_id, replacement) in nested_replacements {
+-            let mut cached_replacement = Some(replacement.clone_for_reuse());
++            let mut cached_replacement = Some(replacement.clone_boxed());
+             let _ = rendered.replace_component_slot_in(slot_id, &mut cached_replacement);
+             replacements.push((slot_id, replacement));
+           }
+diff --git a/crates/lurq/src/app/runtime.rs b/crates/lurq/src/app/runtime.rs
+index 944092e..b39a0d1 100644
+--- a/crates/lurq/src/app/runtime.rs
++++ b/crates/lurq/src/app/runtime.rs
+@@ -1743,7 +1743,7 @@ impl Tree {
+     #[cfg(feature = "devtools")]
+     set_component_debug_metadata(&mut node, &ctx);
+     wrapper.on_mounted();
+-    self.root = Some(node);
++    self.root = Some(*node);
+     if let Some(root) = &mut self.root {
+       root.assign_ids(&self.id_gen);
+     }
+@@ -1795,8 +1795,8 @@ impl Tree {
+         node.preserve_ids_from(&mut parts.base);
+       }
+       self.root = Some(match old_parts {
+-        Some(parts) => root_with_preserved_overlay_parts(node, parts, &self.id_gen),
+-        None => node,
++        Some(parts) => root_with_preserved_overlay_parts(*node, parts, &self.id_gen),
++        None => *node,
+       });
+       if let Some(root) = &mut self.root {
+         root.assign_ids(&self.id_gen);
+@@ -1821,7 +1821,7 @@ impl Tree {
+       reset_element_ref_flags_recursive(old);
+     }
+     self.clear_animation_runtime_state();
+-    let mut node = element.into().node;
++    let mut node = element.into().into_node();
+     let old_parts = old_root.map(overlay_host_parts);
+     if let Some(mut parts) = old_parts {
+       node.preserve_runtime_state_from(&mut parts.base);
+diff --git a/crates/lurq/src/app/theme/border.rs b/crates/lurq/src/app/theme/border.rs
+index 23e3b0b..0e0f5cd 100644
+--- a/crates/lurq/src/app/theme/border.rs
++++ b/crates/lurq/src/app/theme/border.rs
+@@ -1,6 +1,6 @@
+ use std::{collections::HashMap, sync::Arc};
+ 
+-use super::role_name::intern;
++use super::role_name::RoleName;
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+ pub enum BorderSize {
+@@ -8,21 +8,21 @@ pub enum BorderSize {
+   Md,
+   Lg,
+   /// An application-defined border width stored in [`ThemeBorderSizes::extra`].
+-  Extra(&'static str),
++  Extra(RoleName),
+ }
+ 
+ impl BorderSize {
+   /// An application-defined border width. The name is interned (see [`BorderSize::Extra`]).
+   pub fn extra(name: impl AsRef<str>) -> Self {
+-    Self::Extra(intern(name.as_ref()))
++    Self::Extra(RoleName::new(name))
+   }
+ 
+-  pub const fn as_str(self) -> &'static str {
++  pub fn as_str(self) -> &'static str {
+     match self {
+       Self::Sm => "sm",
+       Self::Md => "md",
+       Self::Lg => "lg",
+-      Self::Extra(name) => name,
++      Self::Extra(name) => name.as_str(),
+     }
+   }
+ }
+@@ -65,7 +65,7 @@ impl ThemeBorderSizes {
+       BorderSize::Sm => Some(self.sm),
+       BorderSize::Md => Some(self.md),
+       BorderSize::Lg => Some(self.lg),
+-      BorderSize::Extra(name) => self.extra.get(name).copied(),
++      BorderSize::Extra(name) => self.extra.get(name.as_str()).copied(),
+     }
+   }
+ 
+@@ -75,7 +75,7 @@ impl ThemeBorderSizes {
+       BorderSize::Md => self.md = value,
+       BorderSize::Lg => self.lg = value,
+       BorderSize::Extra(name) => {
+-        self.extra.insert(Arc::from(name), value);
++        self.extra.insert(Arc::from(name.as_str()), value);
+       }
+     }
+   }
+diff --git a/crates/lurq/src/app/theme/mod.rs b/crates/lurq/src/app/theme/mod.rs
+index decab2c..0b45758 100644
+--- a/crates/lurq/src/app/theme/mod.rs
++++ b/crates/lurq/src/app/theme/mod.rs
+@@ -34,6 +34,7 @@ pub use form::{
+ pub use markdown::{MarkdownBlockStyle, MarkdownInlineStyle, MarkdownTextStyle, ThemeMarkdown};
+ pub use palette::{PaletteColor, ThemePalette};
+ pub use radius::{RadiusSize, ThemeRadii};
++pub use role_name::RoleName;
+ pub use spacing::{SpacingSize, ThemeSpacing};
+ pub use typography::{ThemeFonts, ThemeTypography, TypographyStyle};
+ 
+diff --git a/crates/lurq/src/app/theme/radius.rs b/crates/lurq/src/app/theme/radius.rs
+index c36a5ed..5ebce22 100644
+--- a/crates/lurq/src/app/theme/radius.rs
++++ b/crates/lurq/src/app/theme/radius.rs
+@@ -1,6 +1,6 @@
+ use std::{collections::HashMap, sync::Arc};
+ 
+-use super::role_name::intern;
++use super::role_name::RoleName;
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+ pub enum RadiusSize {
+@@ -8,21 +8,21 @@ pub enum RadiusSize {
+   Md,
+   Lg,
+   /// An application-defined radius stored in [`ThemeRadii::extra`].
+-  Extra(&'static str),
++  Extra(RoleName),
+ }
+ 
+ impl RadiusSize {
+   /// An application-defined radius. The name is interned (see [`RadiusSize::Extra`]).
+   pub fn extra(name: impl AsRef<str>) -> Self {
+-    Self::Extra(intern(name.as_ref()))
++    Self::Extra(RoleName::new(name))
+   }
+ 
+-  pub const fn as_str(self) -> &'static str {
++  pub fn as_str(self) -> &'static str {
+     match self {
+       Self::Sm => "sm",
+       Self::Md => "md",
+       Self::Lg => "lg",
+-      Self::Extra(name) => name,
++      Self::Extra(name) => name.as_str(),
+     }
+   }
+ }
+@@ -65,7 +65,7 @@ impl ThemeRadii {
+       RadiusSize::Sm => Some(self.sm),
+       RadiusSize::Md => Some(self.md),
+       RadiusSize::Lg => Some(self.lg),
+-      RadiusSize::Extra(name) => self.extra.get(name).copied(),
++      RadiusSize::Extra(name) => self.extra.get(name.as_str()).copied(),
+     }
+   }
+ 
+@@ -75,7 +75,7 @@ impl ThemeRadii {
+       RadiusSize::Md => self.md = value,
+       RadiusSize::Lg => self.lg = value,
+       RadiusSize::Extra(name) => {
+-        self.extra.insert(Arc::from(name), value);
++        self.extra.insert(Arc::from(name.as_str()), value);
+       }
+     }
+   }
+diff --git a/crates/lurq/src/app/theme/role_name.rs b/crates/lurq/src/app/theme/role_name.rs
+index 5647c14..bb6ecef 100644
+--- a/crates/lurq/src/app/theme/role_name.rs
++++ b/crates/lurq/src/app/theme/role_name.rs
+@@ -1,20 +1,146 @@
+ use std::{
+-  collections::HashSet,
+-  sync::{LazyLock, Mutex},
++  collections::HashMap,
++  fmt,
++  ops::Deref,
++  sync::{Arc, LazyLock},
+ };
+ 
+-static NAMES: LazyLock<Mutex<HashSet<&'static str>>> = LazyLock::new(Default::default);
++use parking_lot::RwLock;
+ 
+-/// Interns an extra role name for the life of the process. Size and typography
+-/// roles are `Copy` and nest in `Copy` values such as `Padding`, so they carry a
+-/// `&'static str` rather than an `Arc<str>`. Each distinct name is stored once;
+-/// role names are expected to be a small, fixed vocabulary.
+-pub(super) fn intern(name: &str) -> &'static str {
+-  let mut names = NAMES.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+-  if let Some(interned) = names.get(name) {
+-    return interned;
++#[derive(Default)]
++struct Names {
++  ids: HashMap<&'static str, u32>,
++  names: Vec<&'static str>,
++}
++
++static NAMES: LazyLock<RwLock<Names>> = LazyLock::new(Default::default);
++
++/// The interned name of an application-defined theme role, carried by the
++/// `Extra` variants of [`SpacingSize`](super::SpacingSize),
++/// [`RadiusSize`](super::RadiusSize), [`BorderSize`](super::BorderSize) and
++/// [`TypographyStyle`](super::TypographyStyle).
++///
++/// Those roles are `Copy`, nest in `Copy` values such as `Padding`, and are
++/// stored many times in every element, so the name is a 4-byte handle into a
++/// process-wide table rather than a string: each distinct name is stored once
++/// for the life of the process. Role names are expected to be a small, fixed
++/// vocabulary, not per-item data.
++///
++/// A `RoleName` dereferences to `str` and compares equal to a `&str`.
++#[derive(Clone, Copy, PartialEq, Eq, Hash)]
++pub struct RoleName(u32);
++
++impl RoleName {
++  /// Interns `name`; the same name always gives the same handle.
++  pub fn new(name: impl AsRef<str>) -> Self {
++    let name = name.as_ref();
++    if let Some(&id) = NAMES.read().ids.get(name) {
++      return Self(id);
++    }
++    let mut names = NAMES.write();
++    if let Some(&id) = names.ids.get(name) {
++      return Self(id);
++    }
++    let id = u32::try_from(names.names.len()).expect("too many interned theme role names");
++    let interned: &'static str = Box::leak(name.into());
++    names.names.push(interned);
++    names.ids.insert(interned, id);
++    Self(id)
++  }
++
++  pub fn as_str(self) -> &'static str {
++    NAMES.read().names[self.0 as usize]
++  }
++}
++
++impl Deref for RoleName {
++  type Target = str;
++
++  fn deref(&self) -> &str {
++    self.as_str()
++  }
++}
++
++impl AsRef<str> for RoleName {
++  fn as_ref(&self) -> &str {
++    self.as_str()
++  }
++}
++
++impl fmt::Debug for RoleName {
++  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++    fmt::Debug::fmt(self.as_str(), f)
++  }
++}
++
++impl fmt::Display for RoleName {
++  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++    f.write_str(self.as_str())
++  }
++}
++
++impl PartialEq<str> for RoleName {
++  fn eq(&self, other: &str) -> bool {
++    self.as_str() == other
++  }
++}
++
++impl PartialEq<&str> for RoleName {
++  fn eq(&self, other: &&str) -> bool {
++    self.as_str() == *other
++  }
++}
++
++impl PartialEq<RoleName> for str {
++  fn eq(&self, other: &RoleName) -> bool {
++    self == other.as_str()
++  }
++}
++
++impl PartialEq<RoleName> for &str {
++  fn eq(&self, other: &RoleName) -> bool {
++    *self == other.as_str()
++  }
++}
++
++impl From<&str> for RoleName {
++  fn from(name: &str) -> Self {
++    Self::new(name)
++  }
++}
++
++impl From<String> for RoleName {
++  fn from(name: String) -> Self {
++    Self::new(name)
++  }
++}
++
++impl From<Arc<str>> for RoleName {
++  fn from(name: Arc<str>) -> Self {
++    Self::new(name)
++  }
++}
++
++impl From<RoleName> for Arc<str> {
++  fn from(name: RoleName) -> Self {
++    Arc::from(name.as_str())
++  }
++}
++
++#[cfg(test)]
++mod tests {
++  use super::RoleName;
++
++  #[test]
++  fn interning_gives_one_handle_per_name() {
++    let card = RoleName::new("role-name-test-card");
++    assert_eq!(card, RoleName::new(String::from("role-name-test-card")));
++    assert_ne!(card, RoleName::new("role-name-test-panel"));
++    assert_eq!(card.as_str(), "role-name-test-card");
++    assert_eq!(card, "role-name-test-card");
++    assert_eq!(
++      format!("{card:?} {card}"),
++      "\"role-name-test-card\" role-name-test-card"
++    );
+   }
+-  let interned: &'static str = Box::leak(name.into());
+-  names.insert(interned);
+-  interned
+ }
+diff --git a/crates/lurq/src/app/theme/spacing.rs b/crates/lurq/src/app/theme/spacing.rs
+index 9b56335..c3b6a25 100644
+--- a/crates/lurq/src/app/theme/spacing.rs
++++ b/crates/lurq/src/app/theme/spacing.rs
+@@ -1,6 +1,6 @@
+ use std::{collections::HashMap, sync::Arc};
+ 
+-use super::role_name::intern;
++use super::role_name::RoleName;
+ use crate::node::dimension::Dimension;
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+@@ -12,16 +12,16 @@ pub enum SpacingSize {
+   Xl,
+   Section,
+   /// An application-defined spacing stored in [`ThemeSpacing::extra`].
+-  Extra(&'static str),
++  Extra(RoleName),
+ }
+ 
+ impl SpacingSize {
+   /// An application-defined spacing. The name is interned (see [`SpacingSize::Extra`]).
+   pub fn extra(name: impl AsRef<str>) -> Self {
+-    Self::Extra(intern(name.as_ref()))
++    Self::Extra(RoleName::new(name))
+   }
+ 
+-  pub const fn as_str(self) -> &'static str {
++  pub fn as_str(self) -> &'static str {
+     match self {
+       Self::Xs => "xs",
+       Self::Sm => "sm",
+@@ -29,7 +29,7 @@ impl SpacingSize {
+       Self::Lg => "lg",
+       Self::Xl => "xl",
+       Self::Section => "section",
+-      Self::Extra(name) => name,
++      Self::Extra(name) => name.as_str(),
+     }
+   }
+ }
+@@ -78,7 +78,7 @@ impl ThemeSpacing {
+       SpacingSize::Lg => Some(self.lg),
+       SpacingSize::Xl => Some(self.xl),
+       SpacingSize::Section => Some(self.section),
+-      SpacingSize::Extra(name) => self.extra.get(name).copied(),
++      SpacingSize::Extra(name) => self.extra.get(name.as_str()).copied(),
+     }
+   }
+ 
+@@ -91,7 +91,7 @@ impl ThemeSpacing {
+       SpacingSize::Xl => self.xl = value.into(),
+       SpacingSize::Section => self.section = value.into(),
+       SpacingSize::Extra(name) => {
+-        self.extra.insert(Arc::from(name), value.into());
++        self.extra.insert(Arc::from(name.as_str()), value.into());
+       }
+     }
+   }
+diff --git a/crates/lurq/src/app/theme/typography.rs b/crates/lurq/src/app/theme/typography.rs
+index eb2b38a..0582734 100644
+--- a/crates/lurq/src/app/theme/typography.rs
++++ b/crates/lurq/src/app/theme/typography.rs
+@@ -1,6 +1,6 @@
+ use std::{collections::HashMap, sync::Arc};
+ 
+-use super::role_name::intern;
++use super::role_name::RoleName;
+ use crate::layout::text_style::{FontWeight, TextStyle};
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+@@ -16,16 +16,16 @@ pub enum TypographyStyle {
+   Link,
+   Mono,
+   /// An application-defined style stored in [`ThemeTypography::extra`].
+-  Extra(&'static str),
++  Extra(RoleName),
+ }
+ 
+ impl TypographyStyle {
+   /// An application-defined style. The name is interned (see [`TypographyStyle::Extra`]).
+   pub fn extra(name: impl AsRef<str>) -> Self {
+-    Self::Extra(intern(name.as_ref()))
++    Self::Extra(RoleName::new(name))
+   }
+ 
+-  pub const fn as_str(self) -> &'static str {
++  pub fn as_str(self) -> &'static str {
+     match self {
+       Self::Heading => "heading",
+       Self::Title => "title",
+@@ -37,7 +37,7 @@ impl TypographyStyle {
+       Self::Button => "button",
+       Self::Link => "link",
+       Self::Mono => "mono",
+-      Self::Extra(name) => name,
++      Self::Extra(name) => name.as_str(),
+     }
+   }
+ }
+@@ -94,7 +94,7 @@ impl ThemeTypography {
+       TypographyStyle::Button => &self.button,
+       TypographyStyle::Link => &self.link,
+       TypographyStyle::Mono => &self.mono,
+-      TypographyStyle::Extra(name) => self.extra.get(name)?,
++      TypographyStyle::Extra(name) => self.extra.get(name.as_str())?,
+     };
+     Some(style.clone())
+   }
+@@ -112,7 +112,7 @@ impl ThemeTypography {
+       TypographyStyle::Link => self.link = value,
+       TypographyStyle::Mono => self.mono = value,
+       TypographyStyle::Extra(name) => {
+-        self.extra.insert(Arc::from(name), value);
++        self.extra.insert(Arc::from(name.as_str()), value);
+       }
+     }
+   }
+diff --git a/crates/lurq/src/components/button.rs b/crates/lurq/src/components/button.rs
+index b9e86a8..f7eb149 100644
+--- a/crates/lurq/src/components/button.rs
++++ b/crates/lurq/src/components/button.rs
+@@ -19,13 +19,13 @@ impl Button {
+   }
+ 
+   pub fn child(mut self, child: impl Into<Element>) -> Self {
+-    self.update_node(|node| crate::node::NodeUpdate::child(node, child.into().node));
++    self.update_node(|node| crate::node::NodeUpdate::child(node, child.into().into_node()));
+     self
+   }
+ 
+   pub fn with_children(mut self, children: impl IntoIterator<Item = impl Into<Element>>) -> Self {
+     self.update_node(|node| {
+-      crate::node::NodeUpdate::with_children(node, children.into_iter().map(|child| child.into().node))
++      crate::node::NodeUpdate::with_children(node, children.into_iter().map(|child| child.into().into_node()))
+     });
+     self
+   }
+diff --git a/crates/lurq/src/components/column.rs b/crates/lurq/src/components/column.rs
+index 4bfc107..515f167 100644
+--- a/crates/lurq/src/components/column.rs
++++ b/crates/lurq/src/components/column.rs
+@@ -16,13 +16,13 @@ impl Column {
+   }
+ 
+   pub fn child(mut self, child: impl Into<Element>) -> Self {
+-    self.update_node(|node| crate::node::NodeUpdate::child(node, child.into().node));
++    self.update_node(|node| crate::node::NodeUpdate::child(node, child.into().into_node()));
+     self
+   }
+ 
+   pub fn with_children(mut self, children: impl IntoIterator<Item = impl Into<Element>>) -> Self {
+     self.update_node(|node| {
+-      crate::node::NodeUpdate::with_children(node, children.into_iter().map(|child| child.into().node))
++      crate::node::NodeUpdate::with_children(node, children.into_iter().map(|child| child.into().into_node()))
+     });
+     self
+   }
+diff --git a/crates/lurq/src/components/draggable.rs b/crates/lurq/src/components/draggable.rs
+index 10e8d4b..ddad828 100644
+--- a/crates/lurq/src/components/draggable.rs
++++ b/crates/lurq/src/components/draggable.rs
+@@ -202,72 +202,74 @@ impl Component for Draggable {
+     let start_bounds = Arc::new(Mutex::new(Vec::<(ElementRefMut, ElementRect)>::new()));
+     let mut child = explicit_child(ctx, &props);
+ 
+-    child.node = child
+-      .node
+-      .ref_element(element_ref.clone())
+-      .start_drag_buttons(props.start_drag_buttons)
+-      .on_drag_start({
+-        let on_drag_start = props.on_drag_start.clone();
+-        let element_ref = element_ref.clone();
+-        let followers = followers.clone();
+-        let start_bounds = start_bounds.clone();
+-        move |event| {
+-          let mut starts = start_bounds.lock().unwrap();
+-          starts.clear();
+-          starts.push((element_ref.clone(), element_ref.bounds()));
+-          for follower in attached(&followers) {
+-            starts.push((follower.clone(), follower.bounds()));
+-          }
+-          drop(starts);
+-          if let Some(on_drag_start) = &on_drag_start {
+-            on_drag_start(&event);
+-          }
+-        }
+-      })
+-      .on_drag_move({
+-        let element_ref = element_ref.clone();
+-        let followers = followers.clone();
+-        let on_drag_move = props.on_drag_move.clone();
+-        move |event: DragEvent| {
+-          if movement == DragMovement::Automatic {
+-            move_element(&element_ref, event.delta_x, event.delta_y);
++    child = child.map_node(|node| {
++      node
++        .ref_element(element_ref.clone())
++        .start_drag_buttons(props.start_drag_buttons)
++        .on_drag_start({
++          let on_drag_start = props.on_drag_start.clone();
++          let element_ref = element_ref.clone();
++          let followers = followers.clone();
++          let start_bounds = start_bounds.clone();
++          move |event| {
++            let mut starts = start_bounds.lock().unwrap();
++            starts.clear();
++            starts.push((element_ref.clone(), element_ref.bounds()));
+             for follower in attached(&followers) {
+-              move_element(follower, event.delta_x, event.delta_y);
++              starts.push((follower.clone(), follower.bounds()));
+             }
+-          }
+-          if let Some(on_drag_move) = &on_drag_move {
+-            on_drag_move(&event);
+-          }
+-        }
+-      })
+-      .on_drag_end({
+-        let on_drag_end = props.on_drag_end.clone();
+-        let element_ref = element_ref.clone();
+-        let followers = followers.clone();
+-        let start_bounds = start_bounds.clone();
+-        let drop_miss_behavior = props.drop_miss_behavior;
+-        let override_policy = props.override_policy;
+-        move |event: DragEvent| {
+-          if drop_miss_behavior == DropMissBehavior::RevertToDragStart && event.drop_result == Some(DropResult::Missed)
+-          {
+-            for (dragged, bounds) in start_bounds.lock().unwrap().drain(..) {
+-              dragged.set_bounds(bounds);
++            drop(starts);
++            if let Some(on_drag_start) = &on_drag_start {
++              on_drag_start(&event);
+             }
+           }
+-          if override_policy == DragOverridePolicy::Clear {
+-            element_ref.clear_bounds_override();
+-            for follower in followers.iter() {
+-              follower.clear_bounds_override();
++        })
++        .on_drag_move({
++          let element_ref = element_ref.clone();
++          let followers = followers.clone();
++          let on_drag_move = props.on_drag_move.clone();
++          move |event: DragEvent| {
++            if movement == DragMovement::Automatic {
++              move_element(&element_ref, event.delta_x, event.delta_y);
++              for follower in attached(&followers) {
++                move_element(follower, event.delta_x, event.delta_y);
++              }
++            }
++            if let Some(on_drag_move) = &on_drag_move {
++              on_drag_move(&event);
+             }
+           }
+-          if let Some(on_drag_end) = &on_drag_end {
+-            on_drag_end(&event);
++        })
++        .on_drag_end({
++          let on_drag_end = props.on_drag_end.clone();
++          let element_ref = element_ref.clone();
++          let followers = followers.clone();
++          let start_bounds = start_bounds.clone();
++          let drop_miss_behavior = props.drop_miss_behavior;
++          let override_policy = props.override_policy;
++          move |event: DragEvent| {
++            if drop_miss_behavior == DropMissBehavior::RevertToDragStart
++              && event.drop_result == Some(DropResult::Missed)
++            {
++              for (dragged, bounds) in start_bounds.lock().unwrap().drain(..) {
++                dragged.set_bounds(bounds);
++              }
++            }
++            if override_policy == DragOverridePolicy::Clear {
++              element_ref.clear_bounds_override();
++              for follower in followers.iter() {
++                follower.clear_bounds_override();
++              }
++            }
++            if let Some(on_drag_end) = &on_drag_end {
++              on_drag_end(&event);
++            }
+           }
+-        }
+-      });
++        })
++    });
+ 
+     if let Some(payload) = props.payload.clone() {
+-      child.node = child.node.drag_payload(payload);
++      child = child.map_node(|node| node.drag_payload(payload));
+     }
+ 
+     child
+diff --git a/crates/lurq/src/components/drop_zone.rs b/crates/lurq/src/components/drop_zone.rs
+index a4820e0..8e5156c 100644
+--- a/crates/lurq/src/components/drop_zone.rs
++++ b/crates/lurq/src/components/drop_zone.rs
+@@ -68,7 +68,7 @@ impl Component for DropZone {
+     let mut child = explicit_child(ctx, &props);
+ 
+     if let Some(on_drop) = props.on_drop {
+-      child.node = child.node.on_drop(move |event| on_drop(&event));
++      child = child.map_node(|node| node.on_drop(move |event| on_drop(&event)));
+     }
+ 
+     child
+diff --git a/crates/lurq/src/components/form/component.rs b/crates/lurq/src/components/form/component.rs
+index 2f1eb32..3dfa435 100644
+--- a/crates/lurq/src/components/form/component.rs
++++ b/crates/lurq/src/components/form/component.rs
+@@ -104,7 +104,7 @@ fn form_node(props: FormProps, child: Element) -> Element {
+     node = node.form(move |data| form.submit(data));
+   }
+ 
+-  Element::from_node(node.child(child.node))
++  Element::from_node(node.child(child.into_node()))
+ }
+ 
+ fn form_child(ctx: &Ctx, props: &FormProps) -> Element {
+diff --git a/crates/lurq/src/components/link.rs b/crates/lurq/src/components/link.rs
+index 6b54341..e17c88d 100644
+--- a/crates/lurq/src/components/link.rs
++++ b/crates/lurq/src/components/link.rs
+@@ -40,7 +40,7 @@ impl Link {
+   }
+ 
+   pub fn child(mut self, child: impl Into<Element>) -> Self {
+-    self.update_node(|node| crate::node::NodeUpdate::child(node, child.into().node));
++    self.update_node(|node| crate::node::NodeUpdate::child(node, child.into().into_node()));
+     self
+   }
+ }
+diff --git a/crates/lurq/src/components/markdown.rs b/crates/lurq/src/components/markdown.rs
+index d0a9589..2fae364 100644
+--- a/crates/lurq/src/components/markdown.rs
++++ b/crates/lurq/src/components/markdown.rs
+@@ -170,7 +170,7 @@ impl Component for Markdown {
+     let mut element = render_document(&document, &props.style, &theme, &render_ctx);
+ 
+     if let Some(width) = props.width {
+-      element.node = element.node.width(width);
++      element = element.map_node(|node| node.width(width));
+     }
+     if props.selectable {
+       element.node.selectable_recursive(true);
+@@ -808,11 +808,11 @@ fn render_table_cell(
+   if box_style.background.is_some() && style.color == base_style.color {
+     style.color = Color::from_hex("#0f172a");
+   }
+-  let mut element = render_inline_block(cell, style, theme, render_ctx);
+-  element.node = apply_node_box(element.node, box_style)
+-    .min_width(theme.table_cell_min_width)
+-    .flex(1.0);
+-  element
++  render_inline_block(cell, style, theme, render_ctx).map_node(|node| {
++    apply_node_box(node, box_style)
++      .min_width(theme.table_cell_min_width)
++      .flex(1.0)
++  })
+ }
+ 
+ fn table_text_align(alignment: MarkdownTableAlignment) -> TextAlign {
+diff --git a/crates/lurq/src/components/mod.rs b/crates/lurq/src/components/mod.rs
+index 99412ca..88bf8a0 100644
+--- a/crates/lurq/src/components/mod.rs
++++ b/crates/lurq/src/components/mod.rs
+@@ -781,7 +781,7 @@ macro_rules! impl_into_node {
+ 
+     impl From<$struct_name> for $crate::node::Element {
+       fn from(component: $struct_name) -> Self {
+-        $crate::node::Element::from_node(*component.node)
++        $crate::node::Element::from_boxed_node(component.node)
+       }
+     }
+   };
+diff --git a/crates/lurq/src/components/outlet.rs b/crates/lurq/src/components/outlet.rs
+index 92a6d65..93c3357 100644
+--- a/crates/lurq/src/components/outlet.rs
++++ b/crates/lurq/src/components/outlet.rs
+@@ -37,7 +37,7 @@ impl Component for Outlet {
+     {
+       node = node.debug_attr("path", child_match.path.clone());
+     }
+-    Element::from_node(node.child(render_route_match(ctx, child_match).node))
++    Element::from_node(node.child(render_route_match(ctx, child_match).into_node()))
+   }
+ }
+ 
+diff --git a/crates/lurq/src/components/row.rs b/crates/lurq/src/components/row.rs
+index d6927e6..cd7cd46 100644
+--- a/crates/lurq/src/components/row.rs
++++ b/crates/lurq/src/components/row.rs
+@@ -16,13 +16,13 @@ impl Row {
+   }
+ 
+   pub fn child(mut self, child: impl Into<Element>) -> Self {
+-    self.update_node(|node| crate::node::NodeUpdate::child(node, child.into().node));
++    self.update_node(|node| crate::node::NodeUpdate::child(node, child.into().into_node()));
+     self
+   }
+ 
+   pub fn with_children(mut self, children: impl IntoIterator<Item = impl Into<Element>>) -> Self {
+     self.update_node(|node| {
+-      crate::node::NodeUpdate::with_children(node, children.into_iter().map(|child| child.into().node))
++      crate::node::NodeUpdate::with_children(node, children.into_iter().map(|child| child.into().into_node()))
+     });
+     self
+   }
+diff --git a/crates/lurq/src/components/scroll.rs b/crates/lurq/src/components/scroll.rs
+index ba26a7f..8ad3845 100644
+--- a/crates/lurq/src/components/scroll.rs
++++ b/crates/lurq/src/components/scroll.rs
+@@ -6,7 +6,7 @@ impl_into_node!(ScrollBoth);
+ 
+ impl ScrollVertical {
+   pub fn new(child: impl Into<Element>) -> Self {
+-    Self::from_node(crate::node::dsl::scroll_vertical(child.into().node))
++    Self::from_node(crate::node::dsl::scroll_vertical(child.into().into_node()))
+   }
+ 
+   pub fn with_scroll_state(mut self, existing: ScrollState) -> Self {
+@@ -28,7 +28,7 @@ impl Default for ScrollVertical {
+ 
+ impl ScrollHorizontal {
+   pub fn new(child: impl Into<Element>) -> Self {
+-    Self::from_node(crate::node::dsl::scroll_horizontal(child.into().node))
++    Self::from_node(crate::node::dsl::scroll_horizontal(child.into().into_node()))
+   }
+ 
+   pub fn with_scroll_state(mut self, existing: ScrollState) -> Self {
+@@ -50,7 +50,7 @@ impl Default for ScrollHorizontal {
+ 
+ impl ScrollBoth {
+   pub fn new(child: impl Into<Element>) -> Self {
+-    Self::from_node(crate::node::dsl::scroll_both(child.into().node))
++    Self::from_node(crate::node::dsl::scroll_both(child.into().into_node()))
+   }
+ 
+   pub fn with_scroll_state(mut self, existing: ScrollState) -> Self {
+diff --git a/crates/lurq/src/components/select.rs b/crates/lurq/src/components/select.rs
+index fbbeef8..a7a48b1 100644
+--- a/crates/lurq/src/components/select.rs
++++ b/crates/lurq/src/components/select.rs
+@@ -189,7 +189,7 @@ where
+     };
+     let trigger = self
+       .trigger
+-      .map(|render| render(trigger_state.clone()).node)
++      .map(|render| render(trigger_state.clone()).into_node())
+       .unwrap_or_else(|| default_trigger(trigger_state, &self.style));
+ 
+     (*self.node)
+diff --git a/crates/lurq/src/components/stack.rs b/crates/lurq/src/components/stack.rs
+index fe3d43f..bcc148c 100644
+--- a/crates/lurq/src/components/stack.rs
++++ b/crates/lurq/src/components/stack.rs
+@@ -12,13 +12,13 @@ impl Stack {
+   }
+ 
+   pub fn child(mut self, child: impl Into<Element>) -> Self {
+-    self.update_node(|node| crate::node::NodeUpdate::child(node, child.into().node));
++    self.update_node(|node| crate::node::NodeUpdate::child(node, child.into().into_node()));
+     self
+   }
+ 
+   pub fn with_children(mut self, children: impl IntoIterator<Item = impl Into<Element>>) -> Self {
+     self.update_node(|node| {
+-      crate::node::NodeUpdate::with_children(node, children.into_iter().map(|child| child.into().node))
++      crate::node::NodeUpdate::with_children(node, children.into_iter().map(|child| child.into().into_node()))
+     });
+     self
+   }
+diff --git a/crates/lurq/src/layout/layout_engine.rs b/crates/lurq/src/layout/layout_engine.rs
+index cef9cf7..7bfe5d9 100644
+--- a/crates/lurq/src/layout/layout_engine.rs
++++ b/crates/lurq/src/layout/layout_engine.rs
+@@ -568,6 +568,31 @@ impl LayoutEngine {
+       height: layout.size.height,
+     };
+ 
++    Self::index_node_layout(node, rect, index);
++
++    for (child_layout, child) in layout.children.iter().zip(node.children()) {
++      if child.modal_declaration().is_some() {
++        Self::index_child_modal(child, rect, index);
++      }
++
++      Self::collect_overlay_index_recursive(
++        child,
++        &child_layout.result,
++        abs_x + child_layout.offset.x,
++        abs_y + child_layout.offset.y,
++        abs_x,
++        abs_y,
++        index,
++      );
++    }
++  }
++
++  /// Records a node's element ref, open select menu and overlay. Split from
++  /// the recursion in [`Self::collect_overlay_index_recursive`] so that the
++  /// records, which carry whole nodes, are not held in every level's frame
++  /// in an unoptimized build (lurq#25).
++  #[inline(never)]
++  fn index_node_layout(node: &Node, rect: ElementRect, index: &mut OverlayLayoutIndex) {
+     if let Some(element_ref) = node.element_ref.as_ref() {
+       index.elements.push(ElementLayoutRecord {
+         element_ref: element_ref.clone(),
+@@ -597,28 +622,19 @@ impl LayoutEngine {
+         spec: spec.clone_for_reuse(),
+       });
+     }
++  }
+ 
+-    for (child_layout, child) in layout.children.iter().zip(node.children()) {
+-      if let Some(spec) = child.modal_declaration() {
+-        index.overlays.push(OverlayLayoutRecord::Modal {
+-          reuse_key: spec
+-            .node
+-            .component_key()
+-            .map(|key| Arc::<str>::from(format!("modal:{key}"))),
+-          spec: spec.clone_for_reuse(),
+-          parent: rect,
+-        });
+-      }
+-
+-      Self::collect_overlay_index_recursive(
+-        child,
+-        &child_layout.result,
+-        abs_x + child_layout.offset.x,
+-        abs_y + child_layout.offset.y,
+-        abs_x,
+-        abs_y,
+-        index,
+-      );
++  #[inline(never)]
++  fn index_child_modal(child: &Node, parent: ElementRect, index: &mut OverlayLayoutIndex) {
++    if let Some(spec) = child.modal_declaration() {
++      index.overlays.push(OverlayLayoutRecord::Modal {
++        reuse_key: spec
++          .node
++          .component_key()
++          .map(|key| Arc::<str>::from(format!("modal:{key}"))),
++        spec: spec.clone_for_reuse(),
++        parent,
++      });
+     }
+   }
+ 
+@@ -845,6 +861,86 @@ impl LayoutEngine {
+       return;
+     }
+ 
++    let frame = self.push_node_quads(
++      node,
++      result,
++      abs_x,
++      abs_y,
++      parent_x,
++      parent_y,
++      inherited_transform,
++      inherited_opacity,
++      clip,
++      cull_clip,
++      culling_enabled,
++      quads,
++    );
++    let NodeQuadFrame {
++      transform,
++      opacity,
++      child_clip,
++      child_cull_clip,
++      child_culling_enabled,
++      ..
++    } = frame;
++
++    for (child_layout, child_node) in result.children.iter().zip(node.children().iter()) {
++      let child_abs_x = abs_x + child_layout.offset.x;
++      let child_abs_y = abs_y + child_layout.offset.y;
++      if child_culling_enabled
++        && clipped_subtree_is_hidden(
++          child_node,
++          &child_layout.result,
++          child_abs_x,
++          child_abs_y,
++          transform,
++          child_cull_clip,
++        )
++      {
++        continue;
++      }
++
++      self.collect_quads(
++        child_node,
++        &child_layout.result,
++        child_abs_x,
++        child_abs_y,
++        abs_x,
++        abs_y,
++        transform,
++        opacity,
++        child_clip,
++        child_cull_clip,
++        child_culling_enabled,
++        quads,
++      );
++    }
++
++    self.push_node_overlay_quads(node, result, abs_x, abs_y, &frame, clip, quads);
++  }
++
++  /// The quads a node paints under its children, and what its children
++  /// inherit. Split from [`Self::collect_quads`], which recurses once per tree
++  /// level: an unoptimized build gives every temporary of this body its own
++  /// stack slot, and keeping them out of the recursive frame keeps deep trees
++  /// within the main thread's stack (lurq#25).
++  #[inline(never)]
++  #[allow(clippy::too_many_arguments)]
++  fn push_node_quads(
++    &self,
++    node: &Node,
++    result: &LayoutResult,
++    abs_x: f32,
++    abs_y: f32,
++    parent_x: f32,
++    parent_y: f32,
++    inherited_transform: Transform2D,
++    inherited_opacity: f32,
++    clip: ClipRect,
++    cull_clip: ClipRect,
++    culling_enabled: bool,
++    quads: &mut Vec<Quad>,
++  ) -> NodeQuadFrame {
+     if let Some(ref element_ref) = node.element_ref {
+       element_ref.update(
+         abs_x,
+@@ -1546,39 +1642,36 @@ impl LayoutEngine {
+         (clip, cull_clip, culling_enabled)
+       };
+ 
+-    for (child_layout, child_node) in result.children.iter().zip(node.children().iter()) {
+-      let child_abs_x = abs_x + child_layout.offset.x;
+-      let child_abs_y = abs_y + child_layout.offset.y;
+-      if child_culling_enabled
+-        && clipped_subtree_is_hidden(
+-          child_node,
+-          &child_layout.result,
+-          child_abs_x,
+-          child_abs_y,
+-          transform,
+-          child_cull_clip,
+-        )
+-      {
+-        continue;
+-      }
+-
+-      self.collect_quads(
+-        child_node,
+-        &child_layout.result,
+-        child_abs_x,
+-        child_abs_y,
+-        abs_x,
+-        abs_y,
+-        transform,
+-        opacity,
+-        child_clip,
+-        child_cull_clip,
+-        child_culling_enabled,
+-        quads,
+-      );
++    NodeQuadFrame {
++      transform,
++      opacity,
++      child_clip,
++      child_cull_clip,
++      child_culling_enabled,
++      deferred_border: resolved_border.filter(|_| defer_border_to_overlay),
+     }
++  }
+ 
+-    if defer_border_to_overlay {
++  /// The quads a node paints over its children: a border deferred past them
++  /// and scrollbars. See [`Self::push_node_quads`].
++  #[inline(never)]
++  fn push_node_overlay_quads(
++    &self,
++    node: &Node,
++    result: &LayoutResult,
++    abs_x: f32,
++    abs_y: f32,
++    frame: &NodeQuadFrame,
++    clip: ClipRect,
++    quads: &mut Vec<Quad>,
++  ) {
++    let NodeQuadFrame {
++      transform,
++      opacity,
++      deferred_border,
++      ..
++    } = *frame;
++    if deferred_border.is_some() {
+       let (border_x, border_y, border_transform, border_transform_origin) =
+         transformed_quad_frame(abs_x, abs_y, transform);
+       quads.push(Quad {
+@@ -1594,7 +1687,7 @@ impl LayoutEngine {
+           gradient: None,
+         },
+         border_radius: node.get_border_radius(&self.radii.borrow()),
+-        border: resolved_border,
++        border: deferred_border,
+         clip,
+       });
+     }
+@@ -3616,6 +3709,19 @@ fn same_clip_rect(clip: ClipRect, x1: f32, y1: f32, x2: f32, y2: f32) -> bool {
+     && (clip.y + clip.height - y2).abs() <= EPSILON
+ }
+ 
++/// What [`LayoutEngine::push_node_quads`] hands back to the recursion in
++/// `collect_quads`: the transform, opacity and clips a node's children inherit,
++/// and a border to paint after them.
++#[derive(Clone, Copy)]
++struct NodeQuadFrame {
++  transform: Transform2D,
++  opacity: f32,
++  child_clip: ClipRect,
++  child_cull_clip: ClipRect,
++  child_culling_enabled: bool,
++  deferred_border: Option<ResolvedBorders>,
++}
++
+ fn inset_clip_for_border(clip: ClipRect, border: Option<ResolvedBorders>) -> ClipRect {
+   if !clip.active {
+     return clip;
+@@ -3898,11 +4004,11 @@ mod tests {
+       )
+     };
+ 
+-    let old: Node = crate::node::Element::from(crate::components::Spacer::new().height(2000.0)).node;
++    let old: Node = crate::node::Element::from(crate::components::Spacer::new().height(2000.0)).into_node();
+     let laid = compute(&engine, &mut glyph_engine, &old);
+     assert_eq!(laid.size.height, 2000.0);
+ 
+-    let mut new: Node = crate::node::Element::from(crate::components::Spacer::new().height(3000.0)).node;
++    let mut new: Node = crate::node::Element::from(crate::components::Spacer::new().height(3000.0)).into_node();
+     // The transplant: previously laid cache adopted across a frame change,
+     // flags cleared (what `preserve_from` does). Guards are cleared like the
+     // retained diff does for unchanged content.
+@@ -3952,7 +4058,7 @@ mod tests {
+           .child(crate::components::Spacer::new().height(spacer_height))
+           .child(crate::components::Spacer::new().height(50.0)),
+       )
+-      .node
++      .into_node()
+     };
+ 
+     let old = column(2000.0);
+@@ -3988,7 +4094,8 @@ mod tests {
+     let constraints = Constraints::loose(Size::new(400.0, 400.0));
+ 
+     let mut root: Node =
+-      crate::node::Element::from(crate::components::Row::new().child(crate::components::Rect::new(40.0, 40.0))).node;
++      crate::node::Element::from(crate::components::Row::new().child(crate::components::Rect::new(40.0, 40.0)))
++        .into_node();
+     let mut anchor = Node::logical();
+     anchor.set_layout_neutral(true);
+     root.children.push(anchor);
+@@ -4121,7 +4228,7 @@ mod tests {
+           .size(400.0, 300.0)
+           .child(crate::components::Rect::new(50.0, 50.0).absolute_position(x, y)),
+       )
+-      .node
++      .into_node()
+     };
+ 
+     let old = stack(10.0, 20.0);
+diff --git a/crates/lurq/src/lib.rs b/crates/lurq/src/lib.rs
+index 2344121..8c79675 100644
+--- a/crates/lurq/src/lib.rs
++++ b/crates/lurq/src/lib.rs
+@@ -27,6 +27,8 @@ pub mod query;
+ #[cfg(feature = "render")]
+ pub(crate) mod render;
+ pub mod responsive;
++#[cfg(test)]
++mod size_budget;
+ #[cfg(feature = "svg")]
+ pub mod svg;
+ 
+diff --git a/crates/lurq/src/node/dsl.rs b/crates/lurq/src/node/dsl.rs
+index 5c200d7..62c1d7f 100644
+--- a/crates/lurq/src/node/dsl.rs
++++ b/crates/lurq/src/node/dsl.rs
+@@ -6,7 +6,7 @@ use crate::{
+   },
+   node::{
+     dimension::Dimension,
+-    node::{EventHandlers, Node},
++    node::Node,
+     node_kind::{NodeKind, TextOverflow},
+     padding::Padding,
+     spacing_value::SpacingValue,
+@@ -84,7 +84,7 @@ fn make_scroll(child: Node, direction: ScrollDirection) -> Node {
+     #[cfg(feature = "form")]
+     form_name: None,
+     style_state: crate::node::interaction_state::InteractionState::new(),
+-    state_styles: crate::node::style::StateStyles::default(),
++    state_styles: crate::node::lazy_box::LazyBox::new(),
+     opacity: DEFAULT_SCROLL_OPACITY,
+     transform: crate::node::transform::Transform2D::IDENTITY,
+     animation_overrides: Vec::new(),
+@@ -92,7 +92,7 @@ fn make_scroll(child: Node, direction: ScrollDirection) -> Node {
+     animation: None,
+     layout_cache: Default::default(),
+     children: vec![child],
+-    events: EventHandlers::default(),
++    events: crate::node::lazy_box::LazyBox::new(),
+   }
+ }
+ 
+diff --git a/crates/lurq/src/node/element.rs b/crates/lurq/src/node/element.rs
+index 61b8fcf..364bbfc 100644
+--- a/crates/lurq/src/node/element.rs
++++ b/crates/lurq/src/node/element.rs
+@@ -4,8 +4,11 @@ use crate::app::ctx::{
+ };
+ use crate::node::{color::Color, node::Node};
+ 
++/// A built element tree. The root node lives on the heap, so an `Element` is
++/// one pointer wide: render functions and the structs that hold elements
++/// (window chrome, title bars, modals) move pointers, not nodes (lurq#25).
+ pub struct Element {
+-  pub(crate) node: Node,
++  pub(crate) node: Box<Node>,
+ }
+ 
+ impl Clone for Element {
+@@ -29,11 +32,25 @@ pub struct ElementIter<'a> {
+ 
+ impl Element {
+   pub(crate) fn from_node(node: Node) -> Self {
++    Self { node: Box::new(node) }
++  }
++
++  pub(crate) fn from_boxed_node(node: Box<Node>) -> Self {
+     Self { node }
+   }
+ 
++  /// Rebuilds the root node with a by-value `Node` builder chain.
++  pub(crate) fn map_node(self, f: impl FnOnce(Node) -> Node) -> Self {
++    Self::from_node(f(self.into_node()))
++  }
++
++  /// Moves the root node out of its box, for storing it among a parent's children.
++  pub(crate) fn into_node(self) -> Node {
++    *self.node
++  }
++
+   pub fn new() -> Self {
+-    Self { node: Node::new() }
++    Self::from_node(Node::new())
+   }
+ 
+   pub fn node_id(&self) -> crate::core::NodeId {
+@@ -50,20 +67,20 @@ impl Element {
+   /// Also participates in retained-node identity across sibling changes.
+   /// Keep IDs stable; changing one can reset the node's runtime state.
+   pub fn id(mut self, id: impl Into<std::sync::Arc<str>>) -> Self {
+-    crate::node::NodeUpdate::id(&mut self.node, id);
++    crate::node::NodeUpdate::id(&mut *self.node, id);
+     self
+   }
+ 
+   /// Appends an HTML-like class for `Tree::get_elements_by_class_name`
+   /// lookup. Classes do not affect reconciliation or styling.
+   pub fn class(mut self, class: impl Into<std::sync::Arc<str>>) -> Self {
+-    crate::node::NodeUpdate::class(&mut self.node, class);
++    crate::node::NodeUpdate::class(&mut *self.node, class);
+     self
+   }
+ 
+   /// Appends several classes at once; see [`Element::class`].
+   pub fn classes<C: Into<std::sync::Arc<str>>>(mut self, classes: impl IntoIterator<Item = C>) -> Self {
+-    crate::node::NodeUpdate::classes(&mut self.node, classes);
++    crate::node::NodeUpdate::classes(&mut *self.node, classes);
+     self
+   }
+ }
+diff --git a/crates/lurq/src/node/lazy_box.rs b/crates/lurq/src/node/lazy_box.rs
+new file mode 100644
+index 0000000..94639ce
+--- /dev/null
++++ b/crates/lurq/src/node/lazy_box.rs
+@@ -0,0 +1,64 @@
++use std::ops::{Deref, DerefMut};
++
++/// A rarely-set part of a [`Node`](super::Node), kept on the heap and allocated
++/// on first write.
++///
++/// Nodes are built by value in component render functions and moved through
++/// `Ctx::mount`, and an unoptimized build gives every such temporary its own
++/// stack slot, so a large inline field grows every frame on the render path
++/// (lurq#25). Until it is written, a `LazyBox` is one null pointer and reads
++/// through [`EmptyDefault::empty`].
++pub(crate) struct LazyBox<T>(Option<Box<T>>);
++
++/// A shared, immutable empty value read through an unset [`LazyBox`].
++pub(crate) trait EmptyDefault: Default + 'static {
++  fn empty() -> &'static Self;
++}
++
++impl<T> LazyBox<T> {
++  pub(crate) const fn new() -> Self {
++    Self(None)
++  }
++}
++
++impl<T> Default for LazyBox<T> {
++  fn default() -> Self {
++    Self::new()
++  }
++}
++
++impl<T: Clone> Clone for LazyBox<T> {
++  fn clone(&self) -> Self {
++    Self(self.0.clone())
++  }
++}
++
++impl<T: EmptyDefault> Deref for LazyBox<T> {
++  type Target = T;
++
++  fn deref(&self) -> &T {
++    match &self.0 {
++      Some(value) => value,
++      None => T::empty(),
++    }
++  }
++}
++
++impl<T: EmptyDefault> DerefMut for LazyBox<T> {
++  fn deref_mut(&mut self) -> &mut T {
++    self.0.get_or_insert_with(Default::default)
++  }
++}
++
++/// Implements [`EmptyDefault`] with a lazily built process-wide default.
++macro_rules! empty_default {
++  ($ty:ty) => {
++    impl $crate::node::lazy_box::EmptyDefault for $ty {
++      fn empty() -> &'static Self {
++        static EMPTY: std::sync::LazyLock<$ty> = std::sync::LazyLock::new(<$ty>::default);
++        &EMPTY
++      }
++    }
++  };
++}
++pub(crate) use empty_default;
+diff --git a/crates/lurq/src/node/mod.rs b/crates/lurq/src/node/mod.rs
+index c8a2eff..c9eb173 100644
+--- a/crates/lurq/src/node/mod.rs
++++ b/crates/lurq/src/node/mod.rs
+@@ -10,6 +10,7 @@ pub mod element;
+ pub mod gradient;
+ pub mod interaction_state;
+ pub(crate) mod layout_cache;
++pub(crate) mod lazy_box;
+ mod letter_spacing;
+ pub(crate) mod node;
+ pub(crate) mod node_kind;
+diff --git a/crates/lurq/src/node/node.rs b/crates/lurq/src/node/node.rs
+index fd3b0c0..09e08e9 100644
+--- a/crates/lurq/src/node/node.rs
++++ b/crates/lurq/src/node/node.rs
+@@ -32,6 +32,7 @@ use crate::{
+     dimension::Dimension,
+     gradient::Gradient,
+     interaction_state::InteractionState,
++    lazy_box::{LazyBox, empty_default},
+     node_kind::{
+       CheckboxState, NodeKind, SelectChangeCallback, SelectState, SliderState, TextInputState, TextOverflow, TextState,
+       TextStyleSource,
+@@ -549,6 +550,9 @@ pub struct EventHandlers {
+   pub on_scroll_reach_bottom: Vec<Callback<ScrollEvent>>,
+ }
+ 
++empty_default!(EventHandlers);
++empty_default!(StateStyles);
++
+ pub(crate) struct Node {
+   pub(crate) node_id: NodeId,
+   pub(crate) tag_name: Arc<str>,
+@@ -613,7 +617,7 @@ pub(crate) struct Node {
+   #[cfg(feature = "form")]
+   pub(crate) form_name: Option<Arc<str>>,
+   pub(crate) style_state: InteractionState,
+-  pub(crate) state_styles: StateStyles,
++  pub(crate) state_styles: LazyBox<StateStyles>,
+   pub(crate) opacity: f32,
+   pub(crate) transform: Transform2D,
+   pub(crate) animation_overrides: Vec<(crate::animation::AnimatableProperty, crate::animation::AnimatableValue)>,
+@@ -621,7 +625,7 @@ pub(crate) struct Node {
+   pub(crate) animation: Option<Animation>,
+   pub(crate) layout_cache: crate::node::layout_cache::LayoutCache,
+   pub(crate) children: Vec<Node>,
+-  pub(crate) events: EventHandlers,
++  pub(crate) events: LazyBox<EventHandlers>,
+ }
+ 
+ impl Default for Node {
+@@ -1626,7 +1630,7 @@ impl Node {
+       #[cfg(feature = "form")]
+       form_name: None,
+       style_state: InteractionState::new(),
+-      state_styles: StateStyles::default(),
++      state_styles: LazyBox::new(),
+       opacity: DEFAULT_OPACITY,
+       transform: Transform2D::IDENTITY,
+       animation_overrides: Vec::new(),
+@@ -1634,7 +1638,7 @@ impl Node {
+       animation: None,
+       layout_cache: Default::default(),
+       children,
+-      events: EventHandlers::default(),
++      events: LazyBox::new(),
+     }
+   }
+ 
+@@ -3880,6 +3884,17 @@ impl Node {
+     self.has_stable_identity() && old.has_stable_identity() && self.can_reuse_id_from(old)
+   }
+ 
++  /// A plain loop rather than `iter().map(..).collect()`: in an unoptimized
++  /// build every iterator adapter between the recursive calls would add a
++  /// frame holding a `Node` for each tree level.
++  fn clone_children_for_reuse(&self) -> Vec<Node> {
++    let mut children = Vec::with_capacity(self.children.len());
++    for child in &self.children {
++      children.push(child.clone_for_reuse());
++    }
++    children
++  }
++
+   pub(crate) fn clone_for_reuse(&self) -> Self {
+     Self {
+       node_id: NodeId::UNASSIGNED,
+@@ -3969,21 +3984,37 @@ impl Node {
+       transitions: self.transitions.clone(),
+       animation: self.animation.clone(),
+       layout_cache: Default::default(),
+-      children: self.children.iter().map(Node::clone_for_reuse).collect(),
++      children: self.clone_children_for_reuse(),
+       events: self.events.clone(),
+     }
+   }
+ 
+-  pub(crate) fn replace_component_slot(&mut self, slot_id: u64, replacement: Node) -> bool {
++  /// [`Self::clone_for_reuse`] onto the heap. The clone is built in this
++  /// frame, so callers on the component render path (which recurses once per
++  /// component level) never hold a `Node` temporary in their own frames.
++  pub(crate) fn clone_boxed(&self) -> Box<Node> {
++    Box::new(self.clone_for_reuse())
++  }
++
++  /// Moves `replacement` into `self`. Kept out of the recursive
++  /// [`Self::replace_component_slot_in`] so that its frame holds no `Node`.
++  #[inline(never)]
++  fn replace_with(&mut self, replacement: Box<Node>) {
++    *self = *replacement;
++  }
++
++  pub(crate) fn replace_component_slot(&mut self, slot_id: u64, replacement: Box<Node>) -> bool {
+     let mut replacement = Some(replacement);
+     self.replace_component_slot_in(slot_id, &mut replacement)
+   }
+ 
+-  pub(crate) fn replace_component_slot_in(&mut self, slot_id: u64, replacement: &mut Option<Node>) -> bool {
++  pub(crate) fn replace_component_slot_in(&mut self, slot_id: u64, replacement: &mut Option<Box<Node>>) -> bool {
+     if self.component_slot_id == Some(slot_id) {
+-      *self = replacement
+-        .take()
+-        .expect("component replacement should be available when matching slot is found");
++      self.replace_with(
++        replacement
++          .take()
++          .expect("component replacement should be available when matching slot is found"),
++      );
+       return true;
+     }
+ 
+diff --git a/crates/lurq/src/size_budget.rs b/crates/lurq/src/size_budget.rs
+new file mode 100644
+index 0000000..60f7b3a
+--- /dev/null
++++ b/crates/lurq/src/size_budget.rs
+@@ -0,0 +1,35 @@
++//! Size budgets for the values that render functions build and move by value.
++//!
++//! An unoptimized build gives every temporary its own stack slot, so the size
++//! of these types multiplies into the stack depth of every render, rebuild and
++//! layout recursion. 0.21 grew the theme role enums from 1 to 24 bytes and
++//! `Element` from 2816 to 3616 bytes, and applications that fit the 1 MiB
++//! Windows main-thread stack in debug builds on 0.20 overflowed on 0.22
++//! (lurq#25, lurq#26). These checks fail the test build when a type outgrows
++//! its budget; raise a budget only together with a stack measurement
++//! (`scripts/stack-depth-probe.py`).
++//!
++//! Measured on x86_64 with every feature enabled: role enums 8, `Element` 8,
++//! `Node` 1552, `WindowChrome` 872, `ChromeTitleBar` 760.
++
++use std::mem::size_of;
++
++use crate::{
++  app::theme::{BorderSize, RadiusSize, RoleName, SpacingSize, TypographyStyle},
++  components::{ChromeTitleBar, WindowChrome},
++  node::{Element, Node, SpacingValue, padding::Padding},
++};
++
++const _: () = assert!(size_of::<RoleName>() <= 4);
++const _: () = assert!(size_of::<SpacingSize>() <= 8);
++const _: () = assert!(size_of::<RadiusSize>() <= 8);
++const _: () = assert!(size_of::<BorderSize>() <= 8);
++const _: () = assert!(size_of::<TypographyStyle>() <= 8);
++const _: () = assert!(size_of::<SpacingValue>() <= 12);
++const _: () = assert!(size_of::<Padding>() <= 48);
++
++// An element is a pointer to its heap-allocated root node.
++const _: () = assert!(size_of::<Element>() <= size_of::<usize>());
++const _: () = assert!(size_of::<Node>() <= 1664);
++const _: () = assert!(size_of::<WindowChrome>() <= 1024);
++const _: () = assert!(size_of::<ChromeTitleBar>() <= 1024);
+diff --git a/crates/lurq/tests/runtime/mod.rs b/crates/lurq/tests/runtime/mod.rs
+index 4a2155d..082d71c 100644
+--- a/crates/lurq/tests/runtime/mod.rs
++++ b/crates/lurq/tests/runtime/mod.rs
+@@ -31,6 +31,7 @@ mod perf_overlay;
+ #[cfg(feature = "image")]
+ mod render_order;
+ mod scroll_state;
++mod stack_depth;
+ mod text_reflow;
+ mod text_scale_wrap;
+ mod text_shadow;
+diff --git a/crates/lurq/tests/runtime/stack_depth.rs b/crates/lurq/tests/runtime/stack_depth.rs
+new file mode 100644
+index 0000000..42810d9
+--- /dev/null
++++ b/crates/lurq/tests/runtime/stack_depth.rs
+@@ -0,0 +1,191 @@
++// Stack depth regression (lurq#25, lurq#26).
++//
++// A debug build of an application runs its input events, and the component
++// rebuild those events trigger, on the main thread; on Windows that thread has
++// a 1 MiB stack. Every level of component nesting costs the frames of
++// `Ctx::mount`, the component's `render` and the builders it calls, and in an
++// unoptimized build each `Element`/`Node` temporary in those frames has its own
++// stack slot. This test mounts an editor-sized screen (a window chrome with a
++// title bar, then nested panels, toolbars and rows of labels), lays it out,
++// and then re-renders every component from a key event, all on a thread with a
++// 1 MiB stack. A stack overflow aborts the test binary.
++//
++// `LURQ_STACK_TEST_BYTES` overrides the thread's stack size so the smallest
++// stack that passes can be measured, e.g. with `scripts/stack-depth-probe.py`.
++
++use lurq::{
++  app::{
++    App, Tree,
++    component::Component,
++    ctx::Ctx,
++    theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
++  },
++  components::{Button, ChromeTitleBar, Column, Rect, Row, Spacer, Stack, Text, WindowChrome, WindowChromeMode},
++  core::Signal,
++  layout::Alignment,
++  node::Element,
++};
++
++use crate::support::render_pass_with_app;
++
++/// Nested component levels under the root, like router outlet, route view,
++/// screen, workspace, panel and section in an editor.
++const DEPTH: u32 = 10;
++const DEFAULT_STACK_BYTES: usize = 1024 * 1024;
++
++#[derive(Clone, Debug, PartialEq, lurq::DevtoolsInspectable)]
++struct LevelProps {
++  depth: u32,
++  tick: u32,
++}
++
++struct Level {
++  hovered: Signal<bool>,
++}
++
++impl Component for Level {
++  type Props = LevelProps;
++
++  fn create(ctx: &mut Ctx) -> Self {
++    Self {
++      hovered: ctx.signal(false),
++    }
++  }
++
++  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
++    let props = ctx.props::<LevelProps>().clone();
++    let hovered = self.hovered.clone();
++    let header = Row::new()
++      .id(format!("header-{}", props.depth))
++      .height(30.0)
++      .spacing(SpacingSize::Sm)
++      .align_items(Alignment::Center)
++      .padding_horizontal(SpacingSize::Md)
++      .background(PaletteColor::SurfacePanel)
++      .child(Rect::new(12.0, 12.0).corner_radius(RadiusSize::Sm))
++      .child(
++        Text::new(&format!(
++          "Level {} of an editor-sized screen, tick {}",
++          props.depth, props.tick
++        ))
++        .variant(TypographyStyle::Caption)
++        .color(PaletteColor::TextMuted)
++        .nowrap(),
++      )
++      .child(Spacer::new().flex(1.0))
++      .child(
++        Button::new("Action")
++          .padding_horizontal(SpacingSize::Sm)
++          .corner_radius(RadiusSize::Md)
++          .hovered(|style| style.background(PaletteColor::SurfaceInput))
++          .on_mouse_enter(move || hovered.set(true)),
++      );
++    let panels = Row::new()
++      .spacing(SpacingSize::Md)
++      .with_children((0..4).map(|panel| panel_column(props.depth, panel)));
++    let mut body = Column::new()
++      .flex(1.0)
++      .spacing(SpacingSize::Xs)
++      .padding(SpacingSize::Sm)
++      .corner_radius(RadiusSize::Lg)
++      .child(header)
++      .child(panels);
++    if props.depth > 0 {
++      body = body.child(ctx.mount::<Level>(LevelProps {
++        depth: props.depth - 1,
++        tick: props.tick,
++      }));
++    }
++    Stack::new().child(body)
++  }
++}
++
++fn panel_column(depth: u32, panel: u32) -> Element {
++  Column::new()
++    .spacing(SpacingSize::Xs)
++    .padding(SpacingSize::Sm)
++    .corner_radius(RadiusSize::Sm)
++    .background(PaletteColor::SurfaceRaised)
++    .with_children((0..3).map(|row| {
++      Row::new()
++        .spacing(SpacingSize::Xs)
++        .align_items(Alignment::Center)
++        .child(Rect::new(8.0, 8.0).corner_radius(RadiusSize::Sm))
++        .child(Text::new(&format!("{depth}.{panel}.{row}")).variant(TypographyStyle::Label))
++    }))
++    .into()
++}
++
++struct Screen {
++  tick: Signal<u32>,
++}
++
++impl Component for Screen {
++  type Props = ();
++
++  fn create(ctx: &mut Ctx) -> Self {
++    Self { tick: ctx.signal(0) }
++  }
++
++  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
++    let tick = self.tick.get();
++    let update = self.tick.clone();
++    let title_bar = ChromeTitleBar::new()
++      .leading(
++        Row::new()
++          .spacing(SpacingSize::Sm)
++          .child(Rect::new(16.0, 16.0))
++          .child(Button::new("File"))
++          .child(Button::new("Edit")),
++      )
++      .title(Text::new("Stack depth").variant(TypographyStyle::Label))
++      .trailing(Row::new().child(Button::new("Share")));
++    let content = Column::new()
++      .flex(1.0)
++      .child(ctx.mount::<Level>(LevelProps { depth: DEPTH, tick }));
++    Column::new()
++      .on_key_down(move |_| update.update(|tick| *tick += 1))
++      .child(
++        WindowChrome::new()
++          .mode(WindowChromeMode::AlwaysCustom)
++          .title_bar(title_bar)
++          .content(content)
++          .mount(ctx),
++      )
++  }
++}
++
++fn stack_bytes() -> usize {
++  std::env::var("LURQ_STACK_TEST_BYTES")
++    .ok()
++    .and_then(|value| value.parse().ok())
++    .unwrap_or(DEFAULT_STACK_BYTES)
++}
++
++#[test]
++fn editor_sized_rebuild_from_an_input_event_fits_a_one_mebibyte_stack() {
++  let texts = std::thread::Builder::new()
++    .name("stack-depth".into())
++    .stack_size(stack_bytes())
++    .spawn(|| {
++      let mut app = App::new();
++      let mut tree = Tree::new();
++      tree.resize(1440, 900);
++      tree.mount_root::<Screen>(&mut app, ());
++      render_pass_with_app(&mut tree, &mut app);
++      tree.key_down("a".into(), "KeyA".into(), false, false, false);
++      render_pass_with_app(&mut tree, &mut app);
++      tree.key_down("a".into(), "KeyA".into(), false, false, false);
++      render_pass_with_app(&mut tree, &mut app);
++      tree.get_element_by_id("header-0").and_then(|header| {
++        header
++          .children()
++          .iter()
++          .find_map(|child| child.text_content().map(str::to_owned))
++      })
++    })
++    .expect("spawn the stack-depth thread")
++    .join()
++    .expect("the stack-depth thread finished");
++  assert_eq!(texts.as_deref(), Some("Level 0 of an editor-sized screen, tick 2"));
++}
+diff --git a/crates/lurq/tests/theme/extras/tables.rs b/crates/lurq/tests/theme/extras/tables.rs
+index 19004b5..1c20d78 100644
+--- a/crates/lurq/tests/theme/extras/tables.rs
++++ b/crates/lurq/tests/theme/extras/tables.rs
+@@ -99,7 +99,7 @@ fn extra_roles_stay_copy_and_compare_by_name() {
+   let radius = RadiusSize::from(owned.as_str());
+   let copy = radius;
+   assert_eq!(radius, copy);
+-  assert_eq!(radius, RadiusSize::Extra("card"));
++  assert_eq!(radius, RadiusSize::extra("card"));
+   assert_eq!(radius, RadiusSize::from(Arc::<str>::from("card")));
+   assert_eq!(radius.as_str(), "card");
+   assert_ne!(radius, RadiusSize::extra("panel"));
+diff --git a/docs/src/content/docs/theme.md b/docs/src/content/docs/theme.md
+index d095e77..c634c94 100644
+--- a/docs/src/content/docs/theme.md
++++ b/docs/src/content/docs/theme.md
+@@ -336,10 +336,10 @@ Every role enum except `Breakpoint` has an `Extra` variant for roles the built-i
+ | Role | Extra variant | Storage |
+ | --- | --- | --- |
+ | `PaletteColor` | `Extra(Arc<str>)` | `ThemePalette::extra: HashMap<Arc<str>, Color>` |
+-| `TypographyStyle` | `Extra(&'static str)` | `ThemeTypography::extra: HashMap<Arc<str>, TextStyle>` |
+-| `RadiusSize` | `Extra(&'static str)` | `ThemeRadii::extra: HashMap<Arc<str>, f32>` |
+-| `SpacingSize` | `Extra(&'static str)` | `ThemeSpacing::extra: HashMap<Arc<str>, Dimension>` |
+-| `BorderSize` | `Extra(&'static str)` | `ThemeBorderSizes::extra: HashMap<Arc<str>, f32>` |
++| `TypographyStyle` | `Extra(RoleName)` | `ThemeTypography::extra: HashMap<Arc<str>, TextStyle>` |
++| `RadiusSize` | `Extra(RoleName)` | `ThemeRadii::extra: HashMap<Arc<str>, f32>` |
++| `SpacingSize` | `Extra(RoleName)` | `ThemeSpacing::extra: HashMap<Arc<str>, Dimension>` |
++| `BorderSize` | `Extra(RoleName)` | `ThemeBorderSizes::extra: HashMap<Arc<str>, f32>` |
+ 
+ Build a role with `extra(name)`, or convert a `&str` or `Arc<str>`. The theme setters therefore take names directly:
+ 
+@@ -365,7 +365,7 @@ Column::new()
+   .child(Rect::new(200.0, 120.0).rounded(RadiusSize::extra("card")));
+ ```
+ 
+-Radius, spacing, border-size, and typography roles are `Copy` and nest in `Copy` values such as `Padding`, so their names are interned: each distinct name is stored once for the life of the process. Use a fixed vocabulary of role names, not per-item data.
++Radius, spacing, border-size, and typography roles are `Copy`, nest in `Copy` values such as `Padding`, and are stored many times in every element, so their names are interned: `RoleName` is a 4-byte handle to a name stored once for the life of the process, and each of these roles is 8 bytes. `RoleName` dereferences to `str` and compares equal to a `&str`; `as_str()` returns the name. Use a fixed vocabulary of role names, not per-item data.
+ 
+ A missing extra name follows the palette:
+ 
+diff --git a/scripts/stack-depth-probe.py b/scripts/stack-depth-probe.py
+new file mode 100644
+index 0000000..c918ccc
+--- /dev/null
++++ b/scripts/stack-depth-probe.py
+@@ -0,0 +1,64 @@
++"""Find the smallest thread stack the stack-depth regression test passes on.
++
++Builds the `runtime_tests` test binary (debug unless --release) and bisects
++`LURQ_STACK_TEST_BYTES` for
++`runtime::stack_depth::editor_sized_rebuild_from_an_input_event_fits_a_one_mebibyte_stack`.
++A stack overflow aborts the binary, so every probe runs in its own process.
++
++    python scripts/stack-depth-probe.py [--features a,b] [--step 16384]
++"""
++
++import argparse
++import json
++import os
++import subprocess
++import sys
++
++TEST = "runtime::stack_depth::editor_sized_rebuild_from_an_input_event_fits_a_one_mebibyte_stack"
++
++
++def build(features, release):
++    command = ["cargo", "test", "-p", "lurq", "--test", "runtime_tests", "--no-run", "--message-format=json"]
++    if features:
++        command += ["--features", features]
++    if release:
++        command.append("--release")
++    output = subprocess.run(command, check=True, capture_output=True, text=True).stdout
++    for line in output.splitlines():
++        message = json.loads(line)
++        if message.get("reason") == "compiler-artifact" and message.get("executable") and message["target"]["name"] == "runtime_tests":
++            return message["executable"]
++    sys.exit("runtime_tests executable not found")
++
++
++def passes(executable, stack):
++    env = dict(os.environ, LURQ_STACK_TEST_BYTES=str(stack))
++    result = subprocess.run([executable, "--exact", TEST, "--test-threads=1"], env=env, capture_output=True, text=True)
++    return result.returncode == 0
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--features", default="")
++    parser.add_argument("--release", action="store_true")
++    parser.add_argument("--step", type=int, default=16 * 1024)
++    parser.add_argument("--max", type=int, default=64 * 1024 * 1024)
++    args = parser.parse_args()
++
++    executable = build(args.features, args.release)
++    low, high = 0, args.max
++    if not passes(executable, high):
++        sys.exit(f"fails even with {high} bytes")
++    while high - low > args.step:
++        middle = (low + high) // 2 // args.step * args.step
++        if middle <= low:
++            break
++        if passes(executable, middle):
++            high = middle
++        else:
++            low = middle
++    print(f"smallest passing stack: {high} bytes ({high / 1024:.0f} KiB); fails at {low} bytes")
++
++
++if __name__ == "__main__":
++    main()

@@ -44,8 +44,8 @@ pub fn gh_rate_limit_command(executable: &Path, host: &GitHubHost) -> Command {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Listed {
-  number: u64,
+pub(super) struct Listed {
+  pub(super) number: u64,
   title: String,
   url: String,
   state: String,
@@ -85,7 +85,7 @@ pub fn parse_gh_pr_list(repo: &GitHubRepo, output: &CommandOutput) -> Result<Vec
   listed.into_iter().map(|listed| pull_request(repo, listed)).collect()
 }
 
-fn pull_request(repo: &GitHubRepo, listed: Listed) -> Result<PullRequest, RepositoryError> {
+pub(super) fn pull_request(repo: &GitHubRepo, listed: Listed) -> Result<PullRequest, RepositoryError> {
   let state = match (listed.state.as_str(), listed.is_draft) {
     ("OPEN", true) => PullRequestState::Draft,
     ("OPEN", false) => PullRequestState::Open,

@@ -6,8 +6,12 @@ use std::path::PathBuf;
 use crate::{
   command::{Command, CommandOutput, CommandRunner},
   connection::{GitHubCheck, GitHubConnection, GitHubHost, check_github},
-  pull_request::{PullRequest, gh_pr_list_command, gh_rate_limit_command, parse_gh_pr_list, parse_gh_rate_limit},
+  pull_request::{
+    PullRequest, PullRequestHead, gh_compare_diff_command, gh_pr_list_command, gh_pr_view_command,
+    gh_rate_limit_command, parse_gh_compare_diff, parse_gh_pr_list, parse_gh_pr_view, parse_gh_rate_limit,
+  },
   repository::{GitHubRepo, RepositoryError, RepositoryView, gh_repo_view_command, parse_gh_repo_view},
+  revision::Revision,
   time::Timestamp,
 };
 
@@ -24,6 +28,12 @@ pub trait GitHub {
 
   /// When the rate limit that stopped a request about `repo` resets.
   fn rate_limit_reset(&self, repo: &GitHubRepo) -> Result<Timestamp, RepositoryError>;
+
+  /// Pull request `number` of `repo` now, with its base revision.
+  fn pull_request(&self, repo: &GitHubRepo, number: u64) -> Result<PullRequestHead, RepositoryError>;
+
+  /// The unified diff of `repo` from the merge base of `base` and `head` to `head`.
+  fn compare_diff(&self, repo: &GitHubRepo, base: &Revision, head: &Revision) -> Result<String, RepositoryError>;
 }
 
 /// GitHub through the `gh` program of a GitHub connection, run with `runner`.
@@ -66,6 +76,16 @@ impl<R: CommandRunner> GitHub for GhCli<R> {
   fn rate_limit_reset(&self, repo: &GitHubRepo) -> Result<Timestamp, RepositoryError> {
     let output = self.run_for(repo, &gh_rate_limit_command(&self.executable, repo.host()))?;
     parse_gh_rate_limit(repo, &output)
+  }
+
+  fn pull_request(&self, repo: &GitHubRepo, number: u64) -> Result<PullRequestHead, RepositoryError> {
+    let output = self.run_for(repo, &gh_pr_view_command(&self.executable, repo, number))?;
+    parse_gh_pr_view(repo, number, &output)
+  }
+
+  fn compare_diff(&self, repo: &GitHubRepo, base: &Revision, head: &Revision) -> Result<String, RepositoryError> {
+    let output = self.run_for(repo, &gh_compare_diff_command(&self.executable, repo, base, head))?;
+    parse_gh_compare_diff(repo, &output)
   }
 }
 
