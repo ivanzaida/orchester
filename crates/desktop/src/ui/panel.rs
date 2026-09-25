@@ -19,6 +19,7 @@ pub struct RecoveryPanel {
   explanation: String,
   details: Vec<Element>,
   action: Option<Element>,
+  width: f32,
 }
 
 impl RecoveryPanel {
@@ -29,12 +30,19 @@ impl RecoveryPanel {
       explanation: explanation.to_owned(),
       details: Vec::new(),
       action: None,
+      width: PANEL_WIDTH,
     }
   }
 
   /// Extra content under the explanation, such as the path involved.
   pub fn detail(mut self, detail: impl Into<Element>) -> Self {
     self.details.push(detail.into());
+    self
+  }
+
+  /// A panel wider than the component's 416, as a screen places it (e.g. 520 in 08.D `MBmo4`).
+  pub fn width(mut self, width: f32) -> Self {
+    self.width = width;
     self
   }
 
@@ -47,7 +55,7 @@ impl RecoveryPanel {
 impl From<RecoveryPanel> for Element {
   fn from(panel: RecoveryPanel) -> Self {
     let mut column = Column::new()
-      .width(Dimension::Px(PANEL_WIDTH))
+      .width(Dimension::Px(panel.width))
       .padding(SpacingSize::Lg)
       .spacing(ExtraSpacing::Group.role())
       .background(ExtraColor::Surface.role())

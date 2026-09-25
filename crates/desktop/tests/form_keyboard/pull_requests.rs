@@ -9,6 +9,7 @@ use std::{
   time::{Duration, Instant},
 };
 
+use lurq::app::events::ScrollPhase;
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   id::ConnectionId,
@@ -298,4 +299,71 @@ fn pull_requests_sync_every_minute_only_while_shown() {
     desktop.pass();
   }
   assert_eq!(gh.lists(), 2, "no sync once another screen is shown");
+}
+
+/// `count` open pull requests shaped like the synthetic ones, numbered from 1.
+fn many_pull_requests(count: u64) -> String {
+  let items: Vec<String> = (1..=count)
+    .map(|number| {
+      format!(
+        r#"{{"additions":1,"author":{{"login":"ivanzaida"}},"baseRefName":"main","changedFiles":1,"deletions":0,"headRefName":"orc/change-{number}","headRefOid":"{number:0>40}","isDraft":false,"number":{number},"reviewDecision":"","state":"OPEN","statusCheckRollup":[],"title":"Change {number}","updatedAt":"2026-09-25T10:00:00Z","url":"https://github.com/ivanzaida/kontur/pull/{number}"}}"#
+      )
+    })
+    .collect();
+  format!("[{}]", items.join(","))
+}
+
+fn assert_near(found: f32, expected: f32) {
+  assert!((found - expected).abs() < 0.5, "{found} is not {expected}");
+}
+
+fn bounds(desktop: &mut Desktop, id: &str) -> (f32, f32) {
+  let bounds = desktop
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  (bounds.y, bounds.y + bounds.height)
+}
+
+#[test]
+fn pull_requests_footer_follows_the_rows_or_the_scrolled_list() {
+  let gh = FakeGh::signed_in(SIGNED_IN, Ok(ok(OPEN_PULL_REQUESTS)));
+  let (mut desktop, _) = linked(&gh, "ivanzaida");
+  open_pull_requests(&mut desktop);
+  settle_on(&mut desktop, LIST_ID, "3 open pull requests");
+  // Headings, rows and footer are 20 apart; three rows fit, so the footer follows the last.
+  let (_, headings_bottom) = bounds(&mut desktop, "pull-requests-headings");
+  let (rows_top, rows_bottom) = bounds(&mut desktop, "pull-requests-rows");
+  let (footer_top, _) = bounds(&mut desktop, "pull-requests-footer");
+  assert_near(rows_top - headings_bottom, 20.0);
+  assert_near(rows_bottom - rows_top, 300.0);
+  assert_near(footer_top - rows_bottom, 20.0);
+
+  gh.answer(LIST, Ok(ok(&many_pull_requests(12))));
+  desktop.click("pull-requests-refresh");
+  settle_on(&mut desktop, LIST_ID, "12 open pull requests");
+  let (list_top, list_bottom) = bounds(&mut desktop, LIST_ID);
+  let (rows_top, rows_bottom) = bounds(&mut desktop, "pull-requests-rows");
+  let (footer_top, footer_bottom) = bounds(&mut desktop, "pull-requests-footer");
+  // Twelve rows do not fit: the rows scroll and the footer stays inside the screen, 20 below.
+  assert!(rows_bottom - rows_top < 1200.0 && rows_top > list_top);
+  assert_near(footer_top - rows_bottom, 20.0);
+  assert!(footer_bottom <= list_bottom);
+  // Scrolled to the end, the last row ends at the bottom of the scroll area, above the footer.
+  desktop
+    .tree
+    .scroll(700.0, (rows_top + rows_bottom) / 2.0, 0.0, -5000.0, ScrollPhase::Scroll);
+  desktop.pass();
+  let (_, stack_bottom) = bounds(&mut desktop, "pull-requests-row-stack");
+  assert_near(stack_bottom, rows_bottom);
+
+  desktop.press("pull-requests-search");
+  desktop.type_text("Change 1");
+  // "Change 1", "Change 10", "Change 11", "Change 12".
+  assert!(shows(
+    &mut desktop,
+    "pull-requests-footer",
+    "4 of 12 open pull requests"
+  ));
 }

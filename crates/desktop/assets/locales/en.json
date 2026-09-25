@@ -267,7 +267,8 @@
       "other": "{{count}} open pull requests",
       "limited": "The {{count}} most recently updated open pull requests",
       "scope": "From this project’s repository",
-      "noMatch": "No open pull request matches “{{query}}”."
+      "noMatch": "No open pull request matches “{{query}}”.",
+      "filtered": "{{shown}} of {{count}} open pull requests"
     },
     "age": {
       "justNow": "just now",
@@ -1211,7 +1212,8 @@
       "pullRequestSync": {
         "running": "Syncing pull requests",
         "done": "Pull requests synced",
-        "failed": "Could not sync pull requests"
+        "failed": "Could not sync pull requests",
+        "notSynced": "Pull requests not synced"
       },
       "pullRequestOpen": {
         "running": "Opening pull request #{{name}} in the browser",

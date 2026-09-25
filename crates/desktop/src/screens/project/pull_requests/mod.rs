@@ -48,6 +48,8 @@ use crate::{
 const SYNC_INTERVAL: Duration = Duration::from_secs(60);
 /// Tab row (`DF8II`).
 const TAB_ROW_HEIGHT: f32 = 42.0;
+/// Width of the unavailable panel (`MBmo4` in 08.D).
+const UNAVAILABLE_WIDTH: f32 = 520.0;
 
 pub struct PullRequestsScreen {
   /// What the latest sync or *Use this account* returned; before it, the stored list is shown.
@@ -116,6 +118,8 @@ impl Component for PullRequestsScreen {
     let breadcrumb = ctx.t_args("pullRequests.breadcrumb", [("project", open.project.name().as_str())]);
     let refresh = self.refresh(ctx, &actions, inbox.as_ref(), &open);
     let status = ctx.mount_keyed::<SyncStatus>("sync-status", SyncStatusProps { line });
+    // Without a linked repository there is nothing to filter: 08.D has no tab row.
+    let tabs = (!matches!(inbox, Some(Inbox::Unlinked))).then(|| tabs(ctx, count));
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
@@ -124,7 +128,7 @@ impl Component for PullRequestsScreen {
         &ctx.t("pullRequests.title"),
         &ctx.t("pullRequests.description"),
       ))
-      .child(tabs(ctx, count))
+      .with_children(tabs)
       .child(body)
   }
 }
@@ -179,6 +183,7 @@ impl PullRequestsScreen {
           [("project", open.project.name().as_str())],
         ),
       )
+      .width(UNAVAILABLE_WIDTH)
       .action(action),
     );
     centered(panel.into())

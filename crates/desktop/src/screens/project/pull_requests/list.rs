@@ -10,9 +10,9 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text, VirtualizedList},
+  components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -22,7 +22,7 @@ use orchester_core::{
 
 use super::{
   notice::{NoticeActions, failure_notice},
-  row::{PullRequestRow, RowProps, column_headings},
+  row::{PullRequestRow, ROW_HEIGHT, RowProps, column_headings},
 };
 use crate::{
   messages::Message,
@@ -117,7 +117,7 @@ impl Component for PullRequestList {
       None => column,
       Some(synced) => column
         .child(self.controls(ctx, &props.inbox))
-        .child(self.rows(ctx, synced, &props)),
+        .with_children(self.rows(ctx, synced, &props)),
     }
   }
 }
@@ -189,47 +189,67 @@ impl PullRequestList {
       .into()
   }
 
-  /// Headings, rows and the footer; the empty states when nothing is open or nothing matches.
-  fn rows(&self, ctx: &mut Ctx, synced: &SyncedPullRequests, props: &ListProps) -> Element {
-    if synced.pull_requests.is_empty() {
+  /// Headings, rows and the footer (`Qcgjy`, `j27hk2`, `v2SMO`), 20px apart. The rows scroll only
+  /// when they do not fit; otherwise the footer follows the last row. Nothing open: the empty
+  /// panel, centred like 08.D.
+  fn rows(&self, ctx: &mut Ctx, synced: &SyncedPullRequests, props: &ListProps) -> Vec<Element> {
+    let total = synced.pull_requests.len();
+    if total == 0 {
       let repo = &props.inbox.repo;
-      return RecoveryPanel::new(
+      let panel = RecoveryPanel::new(
         Icon::GitPullRequest,
         &ctx.t("pullRequests.empty.title"),
         &ctx.t_args(
           "pullRequests.empty.detail",
           [("owner", repo.owner()), ("name", repo.name())],
         ),
-      )
-      .into();
+      );
+      let empty = Column::new()
+        .id("pull-requests-empty")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .align_items(Alignment::Center)
+        .justify(Justify::Center)
+        .child(panel);
+      return vec![empty.into()];
     }
     let query = self.query.get();
     let open = props.open.clone();
-    let rows: Vec<RowProps> = synced
+    let rows: Vec<Element> = synced
       .pull_requests
       .iter()
       .filter(|pull_request| pull_request.matches(&query))
-      .map(|pull_request| row_props(pull_request, &open))
+      .map(|pull_request| {
+        ctx.mount_keyed::<PullRequestRow>(&pull_request.number().to_string(), row_props(pull_request, &open))
+      })
       .collect();
+    let shown = rows.len();
     let table: Element = if rows.is_empty() {
       Text::new(&ctx.t_args("pullRequests.footer.noMatch", [("query", query.trim())]))
         .variant(TypographyStyle::Caption)
         .into()
     } else {
-      VirtualizedList::new_shared(ctx, Arc::new(rows))
-        .list_key("pull-request-rows")
+      // At most `SYNC_LIMIT` rows of a fixed height: laid out in full, drawn only where visible.
+      ScrollVertical::new(
+        Column::new()
+          .id("pull-requests-row-stack")
+          .width(Dimension::Pct(100.0))
+          .with_children(rows),
+      )
+        .id("pull-requests-rows")
+        .culling(true)
         .width(Dimension::Pct(100.0))
+        // Takes the free height, but never more than the rows need, so the footer follows the
+        // last row when they fit and the rows scroll when they do not.
         .flex(1.0)
-        .mount_keyed::<PullRequestRow, _, _, _>(|row| row.pull_request.number(), Clone::clone)
+        .max_height(Dimension::Px(ROW_HEIGHT * shown as f32))
+        .into()
     };
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .spacing(SpacingSize::Sm)
-      .child(column_headings(ctx))
-      .child(table)
-      .child(footer(ctx, synced.pull_requests.len()))
-      .into()
+    vec![
+      column_headings(ctx),
+      table,
+      footer(ctx, shown, total, !query.trim().is_empty()),
+    ]
   }
 }
 
@@ -245,17 +265,24 @@ fn row_props(pull_request: &PullRequest, open: &Arc<dyn Fn(u64, Arc<str>) + Send
   }
 }
 
-/// How many are open, and where they come from (`FAPiA`, `sHUhq`).
-fn footer(ctx: &Ctx, count: usize) -> Element {
-  let count_text = count.to_string();
-  let text = if count >= SYNC_LIMIT as usize {
-    ctx.t_args("pullRequests.footer.limited", [("count", count_text.as_str())])
-  } else if count == 1 {
+/// How many are open (of them, how many the search shows), and where they come from (`FAPiA`,
+/// `sHUhq`).
+fn footer(ctx: &Ctx, shown: usize, total: usize, searching: bool) -> Element {
+  let (shown_text, total_text) = (shown.to_string(), total.to_string());
+  let text = if searching {
+    ctx.t_args(
+      "pullRequests.footer.filtered",
+      [("shown", shown_text.as_str()), ("count", total_text.as_str())],
+    )
+  } else if total >= SYNC_LIMIT as usize {
+    ctx.t_args("pullRequests.footer.limited", [("count", total_text.as_str())])
+  } else if total == 1 {
     ctx.t("pullRequests.footer.one")
   } else {
-    ctx.t_args("pullRequests.footer.other", [("count", count_text.as_str())])
+    ctx.t_args("pullRequests.footer.other", [("count", total_text.as_str())])
   };
   Row::new()
+    .id("pull-requests-footer")
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Stack.role())
     .child(Text::new(&text).variant(TypographyStyle::Caption))

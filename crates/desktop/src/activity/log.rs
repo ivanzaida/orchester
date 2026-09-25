@@ -220,6 +220,17 @@ impl ActivityLog {
   /// Finishes with `target` instead of the one given at the start, for work whose object
   /// exists only once it finished (a created pipeline).
   pub fn finish_at(&mut self, id: OperationId, target: Option<Target>, at: SystemTime) {
+    self.finish_event(id, None, target, at);
+  }
+
+  /// Finishes with `title` instead of the spec's done title, for work that ended without doing
+  /// what it set out to and says so without a failure the user must dismiss (a pull request sync
+  /// GitHub refused, repeated every minute while the screen is open).
+  pub fn finish_as(&mut self, id: OperationId, title: Message, at: SystemTime) {
+    self.finish_event(id, Some(title), None, at);
+  }
+
+  fn finish_event(&mut self, id: OperationId, title: Option<Message>, target: Option<Target>, at: SystemTime) {
     if let Some(operation) = self.take(id) {
       let OperationSpec {
         project,
@@ -231,7 +242,7 @@ impl ActivityLog {
       self.push(Event {
         id,
         project,
-        title: done,
+        title: title.unwrap_or(done),
         target,
         at,
         outcome: Outcome::Finished,

@@ -34,7 +34,7 @@ use crate::{
 };
 
 /// Row height and the state and checks columns (`QHBNZ`, `ruZbF`, `ZWzfm`, `tPwvi`).
-const ROW_HEIGHT: f32 = 100.0;
+pub const ROW_HEIGHT: f32 = 100.0;
 const STATE_WIDTH: f32 = 180.0;
 const CHECKS_WIDTH: f32 = 150.0;
 /// Open in GitHub, fixed so the column headings line up with the rows, and the lock after it.
@@ -54,6 +54,7 @@ pub fn column_headings(ctx: &Ctx) -> Element {
       .nowrap()
   };
   Row::new()
+    .id("pull-requests-headings")
     .width(Dimension::Pct(100.0))
     .padding_horizontal(ExtraSpacing::Stack.role())
     .spacing(SpacingSize::Md)

@@ -124,6 +124,16 @@ impl Running {
     }
   }
 
+  /// Ends the operation as finished under `title`; see [`ActivityLog::finish_as`].
+  pub fn finish_as(mut self, title: Message) {
+    if let Some(id) = self.id.take() {
+      self
+        .activity
+        .log
+        .send_modify(|log| log.finish_as(id, title, SystemTime::now()));
+    }
+  }
+
   pub fn fail(mut self, reason: Message) {
     if let Some(id) = self.id.take() {
       self
