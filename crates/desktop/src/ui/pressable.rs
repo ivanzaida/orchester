@@ -5,7 +5,8 @@
 //!
 //! A focused control shows the focus ring (`xURvJ`): box shadows only, so it never moves
 //! layout. Hover and press styles must not set a shadow, or they would hide the ring. Fields and
-//! selects keep their focused stroke (`o8Oug`) instead.
+//! selects keep their focused stroke (`o8Oug`) instead. A control whose selected state is the
+//! selection stroke hides the ring while selected (see [`stroke_selection_ring`]).
 
 use lurq::{
   components::Button,
@@ -19,7 +20,7 @@ use crate::theme::ExtraShadow;
 pub const TAB_STOP: i32 = 0;
 
 /// Where the focus ring is drawn.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Ring {
   /// Around the control, 4px out (buttons, navigation items, cards). Needs unclipped room.
   Outer,
@@ -43,6 +44,19 @@ impl Ring {
 /// layout space, so nothing moves.
 pub fn hairline_row_focused() -> Style {
   Ring::Inset.focused().border_custom(Borders::default())
+}
+
+/// The ring of a control whose selected state is the 1.5px selection stroke (step card `ajikA`,
+/// new pipeline option card): none while selected, since stroke, gap and ring read as a double
+/// border and the stroke already marks the control; `ring` otherwise.
+pub fn stroke_selection_ring(ring: Ring, selected: bool) -> Option<Ring> {
+  (!selected).then_some(ring)
+}
+
+/// Focus style of a control whose selection is a stroke; see [`stroke_selection_ring`]. Without a
+/// ring, focus leaves the control's look unchanged.
+pub fn stroke_selected_focused(ring: Ring, selected: bool) -> Style {
+  stroke_selection_ring(ring, selected).map_or_else(Style::new, Ring::focused)
 }
 
 /// An empty button laid out like a `Row` (children start at the top), for a clickable surface.
