@@ -96,10 +96,26 @@ pub(crate) fn classify_failure(requested: &GitHubRepo, stderr: &str) -> Reposito
     "connection refused",
     "tls handshake",
   ];
+  /// A 504 reads "We couldn't respond to your request in time"; a 502 answer without a body
+  /// leaves `gh` with "unexpected end of JSON input".
+  const SERVER: [&str; 5] = [
+    "gateway",
+    "server error",
+    "service unavailable",
+    "couldn't respond to your request in time",
+    "unexpected end of json input",
+  ];
   let message = stderr.to_ascii_lowercase();
   let mentions = |patterns: &[&str]| patterns.iter().any(|pattern| message.contains(pattern));
+  let status = server_status(&message);
   if message.contains("rate limit") {
     RepositoryError::RateLimited
+  } else if status.is_some() || mentions(&SERVER) {
+    RepositoryError::ServerError {
+      host: requested.host().clone(),
+      status,
+      detail: redact_userinfo(stderr.trim()),
+    }
   } else if mentions(&NOT_SIGNED_IN) {
     RepositoryError::NotSignedIn(requested.host().clone())
   } else if mentions(&NOT_FOUND) {
@@ -114,4 +130,14 @@ pub(crate) fn classify_failure(requested: &GitHubRepo, stderr: &str) -> Reposito
   } else {
     unrecognized(stderr)
   }
+}
+
+/// The HTTP 5xx status `gh` names in `message` (lower case), as in `HTTP 504: We couldn't
+/// respond to your request in time`.
+fn server_status(message: &str) -> Option<u16> {
+  message.match_indices("http 5").find_map(|(at, _)| {
+    let digits = message.get(at + "http ".len()..at + "http ".len() + 3)?;
+    let status: u16 = digits.parse().ok()?;
+    (500..600).contains(&status).then_some(status)
+  })
 }

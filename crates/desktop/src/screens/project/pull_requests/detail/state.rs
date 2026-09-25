@@ -13,7 +13,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use super::super::view::minutes_until;
+use super::super::{notice::server_error, view::minutes_until};
 use crate::{
   display,
   pull_requests::detail::LinkedDetail,
@@ -142,6 +142,18 @@ fn repository(ctx: &Ctx, detail: &LinkedDetail, error: &RepositoryError) -> Fail
       Icon::CloudOff,
       ctx.t("pullRequests.detail.failure.unreachableTitle"),
       ctx.t("pullRequests.detail.failure.unreachable"),
+    ),
+    RepositoryError::ServerError { status, .. } => (
+      Icon::CloudOff,
+      ctx.t("pullRequests.detail.failure.troubledTitle"),
+      server_error(
+        ctx,
+        *status,
+        [
+          "pullRequests.detail.failure.troubled",
+          "pullRequests.detail.failure.troubledUnknown",
+        ],
+      ),
     ),
     RepositoryError::PullRequestNotFound { .. } => (
       Icon::FileSearch,

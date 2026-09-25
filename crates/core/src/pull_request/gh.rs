@@ -16,9 +16,11 @@ use crate::{
   time::Timestamp,
 };
 
-/// The fields `gh pr list --json` is asked for.
+/// The fields `gh pr list --json` is asked for. Not `statusCheckRollup`: every check of every
+/// pull request makes GitHub time out on large repositories; the checks are counted in a second
+/// request (`checks`).
 pub const PR_LIST_FIELDS: &str = "number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,\
-                                  additions,deletions,changedFiles,updatedAt,reviewDecision,statusCheckRollup";
+                                  additions,deletions,changedFiles,updatedAt,reviewDecision";
 
 /// Lists at most `limit` open pull requests of `repo`.
 pub fn gh_pr_list_command(executable: &Path, repo: &GitHubRepo, limit: u32) -> Command {
@@ -76,6 +78,8 @@ enum Check {
 }
 
 /// Reads `gh pr list` output for `repo`. A failed run is classified from `gh`'s error message.
+/// Without `statusCheckRollup` in the output a pull request has no checks until
+/// [`PullRequest::with_checks`] gives it the counted ones.
 pub fn parse_gh_pr_list(repo: &GitHubRepo, output: &CommandOutput) -> Result<Vec<PullRequest>, RepositoryError> {
   if !output.success {
     return Err(classify_failure(repo, &output.stderr));

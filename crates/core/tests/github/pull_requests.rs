@@ -1,7 +1,11 @@
 //! The pull request list: `gh pr list` output captured from gh 2.97.0 against `ivanzaida/
 //! orchester` (no open pull requests) and `ivanzaida/lurq` (`--state all`, merged pull requests
 //! with passing checks), a synthetic list for open, draft, failing, pending and skipped checks
-//! and review decisions, and one sync as the expected account.
+//! and review decisions, and one sync as the expected account. `microsoft/vscode`'s 50 most
+//! recent open pull requests and the check counts of their heads (captured 2026-09-25) show the
+//! two requests a sync makes; asking `gh pr list` for 100 with their checks timed out (HTTP 504).
+
+use std::sync::OnceLock;
 
 use orchester_core::{
   command::CommandError,
@@ -10,7 +14,8 @@ use orchester_core::{
   id::ConnectionId,
   pull_request::{
     Changes, CheckRollup, PullRequest, PullRequestError, PullRequestParts, PullRequestState, ReviewDecision,
-    SyncFailure, gh_pr_list_command, parse_gh_pr_list, parse_gh_rate_limit, sort_by_update, sync_pull_requests,
+    SYNC_LIMIT, SyncFailure, gh_check_rollups_command, gh_pr_list_command, parse_gh_check_rollups, parse_gh_pr_list,
+    parse_gh_rate_limit, sort_by_update, sync_pull_requests,
   },
   repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryError, RepositoryLink, RepositoryView},
   revision::Revision,
@@ -25,9 +30,9 @@ use crate::{
 
 const VERSION: &str = "--version";
 const AUTH_STATUS: &str = "auth status --hostname github.com --json hosts";
-const LIST_KONTUR: &str = "pr list -R github.com/ivanzaida/kontur --state open --limit 100 --json \
+const LIST_KONTUR: &str = "pr list -R github.com/ivanzaida/kontur --state open --limit 50 --json \
                            number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,additions,\
-                           deletions,changedFiles,updatedAt,reviewDecision,statusCheckRollup";
+                           deletions,changedFiles,updatedAt,reviewDecision";
 const RATE_LIMIT: &str = "api --hostname github.com rate_limit";
 
 fn repo(owner: &str, name: &str) -> GitHubRepo {
@@ -63,7 +68,7 @@ fn synthetic() -> Vec<PullRequest> {
 
 #[test]
 fn pr_list_asks_for_open_pull_requests_of_one_repository() {
-  let command = gh_pr_list_command(&gh(), &repo("ivanzaida", "kontur"), 100);
+  let command = gh_pr_list_command(&gh(), &repo("ivanzaida", "kontur"), SYNC_LIMIT);
   assert_eq!(command.args().join(" "), LIST_KONTUR);
   assert!(
     command
@@ -282,14 +287,153 @@ fn signed_in() -> Vec<(
   ]
 }
 
+/// GitHub's answer counting checks of the synthetic list's heads: one failed check run and two
+/// successful commit statuses on the first, nothing known for the second, no checks on the third
+/// (shaped like the captured answer).
+const SYNTHETIC_CHECKS: &str = r#"{"data":{"repository":{"c0":{"oid":"HEAD0","statusCheckRollup":{"contexts":{"checkRunCountsByState":[{"state":"FAILURE","count":1},{"state":"SUCCESS","count":0}],"statusContextCountsByState":[{"state":"SUCCESS","count":2}]}}},"c1":null,"c2":{"oid":"HEAD2","statusCheckRollup":null}}}}"#;
+
+fn heads(listed: &[PullRequest]) -> Vec<Revision> {
+  listed
+    .iter()
+    .map(|pull_request| pull_request.head_sha().clone())
+    .collect()
+}
+
+/// The check counts request for the synthetic list's heads.
+fn checks_kontur() -> &'static str {
+  static ARGS: OnceLock<String> = OnceLock::new();
+  ARGS.get_or_init(|| {
+    gh_check_rollups_command(&gh(), &repo("ivanzaida", "kontur"), &heads(&synthetic()))
+      .args()
+      .join(" ")
+  })
+}
+
+fn synthetic_checks() -> String {
+  let listed = synthetic();
+  SYNTHETIC_CHECKS
+    .replace("HEAD0", listed[0].head_sha().as_str())
+    .replace("HEAD2", listed[2].head_sha().as_str())
+}
+
 #[test]
 fn sync_reads_the_list_as_the_expected_account() {
   let mut answers = signed_in();
   answers.push((LIST_KONTUR, Ok(ok(fixture!("gh_pr_list_synthetic_open.stdout")))));
-  let (_, result) = sync_with(answers, "ivanzaida");
+  answers.push((checks_kontur(), Ok(ok(&synthetic_checks()))));
+  let (runner, result) = sync_with(answers, "ivanzaida");
   let listed = result.outcome.expect("the list");
   assert_eq!(listed.len(), 3);
   assert_eq!(result.check.result.signed_in_account(), Some(&login("ivanzaida")));
+  // The checks are the counted ones, on each head.
+  let first = synthetic()[0].number();
+  let counted = listed
+    .iter()
+    .find(|pull_request| pull_request.number() == first)
+    .expect("the first");
+  let checks = counted.checks();
+  assert_eq!((checks.passed, checks.failed, checks.total()), (2, 1, 3));
+  let others = listed.iter().filter(|pull_request| pull_request.number() != first);
+  assert!(others.map(PullRequest::checks).all(|checks| checks.total() == 0));
+  assert_eq!(
+    runner.ran().len(),
+    4,
+    "gh --version, auth status, the list and the checks"
+  );
+}
+
+#[test]
+fn check_rollups_ask_for_counts_of_exact_head_commits() {
+  let heads = heads(&synthetic());
+  let command = gh_check_rollups_command(&gh(), &repo("ivanzaida", "kontur"), &heads);
+  let args = command.args();
+  assert_eq!(&args[..4], ["api", "graphql", "--hostname", "github.com"]);
+  assert_eq!(&args[6..], ["-f", "owner=ivanzaida", "-f", "name=kontur"]);
+  for (index, head) in heads.iter().enumerate() {
+    assert!(args[5].contains(&format!("c{index}:object(oid:\"{head}\")")));
+  }
+  assert!(args[5].contains("checkRunCountsByState") && args[5].contains("statusContextCountsByState"));
+}
+
+#[test]
+fn check_rollups_of_a_large_repository_are_counted_by_state() {
+  let vscode = repo("microsoft", "vscode");
+  let listed = parse_gh_pr_list(&vscode, &ok(fixture!("gh_pr_list_vscode_open_50.stdout"))).expect("a readable list");
+  assert_eq!(listed.len(), 50);
+  let heads = heads(&listed);
+  let answer = ok(fixture!("gh_api_graphql_checks_vscode_50.stdout"));
+  let rollups = parse_gh_check_rollups(&vscode, &heads, &answer).expect("readable counts");
+  assert_eq!(rollups.len(), 50);
+  assert!(rollups.iter().zip(&heads).all(|(rollup, head)| &rollup.on == head));
+  // #338037: two successful check runs and one in progress.
+  assert_eq!(listed[0].number(), 338_037);
+  assert_eq!((rollups[0].passed, rollups[0].pending, rollups[0].total()), (2, 1, 3));
+  // #338031: 26 passed, 6 failed, 2 running.
+  assert_eq!((rollups[3].passed, rollups[3].failed, rollups[3].pending), (26, 6, 2));
+  let first = listed.into_iter().next().expect("a pull request");
+  let with_checks = first.with_checks(rollups[0].clone()).expect("checks of its head");
+  assert_eq!(with_checks.checks().total(), 3);
+  assert_eq!(
+    with_checks.with_checks(rollups[1].clone()),
+    Err(PullRequestError::ChecksNotOnHead)
+  );
+}
+
+#[test]
+fn check_rollups_reject_unknown_states_and_other_commits() {
+  let kontur = repo("ivanzaida", "kontur");
+  let heads = heads(&synthetic());
+  let unknown = synthetic_checks().replace("\"FAILURE\"", "\"SOMETHING_NEW\"");
+  assert!(matches!(
+    parse_gh_check_rollups(&kontur, &heads, &ok(&unknown)),
+    Err(RepositoryError::Unrecognized { .. })
+  ));
+  let moved = synthetic_checks().replace(heads[0].as_str(), &"0".repeat(40));
+  assert!(matches!(
+    parse_gh_check_rollups(&kontur, &heads, &ok(&moved)),
+    Err(RepositoryError::Unrecognized { .. })
+  ));
+}
+
+#[test]
+fn github_server_errors_are_not_unrecognized_output() {
+  let vscode = repo("microsoft", "vscode");
+  let server = |stderr: &str| parse_gh_pr_list(&vscode, &failed(stderr));
+  assert!(matches!(
+    server(fixture!("gh_pr_list_vscode_gateway_timeout.stderr")),
+    Err(RepositoryError::ServerError { status: Some(504), .. })
+  ));
+  assert!(matches!(
+    server(fixture!("gh_pr_list_bat_cut_off.stderr")),
+    Err(RepositoryError::ServerError { status: None, .. })
+  ));
+  // Synthetic: the shape gh prints for a 502.
+  assert!(matches!(
+    server("HTTP 502: Bad Gateway (https://api.github.com/graphql)\n"),
+    Err(RepositoryError::ServerError { status: Some(502), .. })
+  ));
+  // A client error stays what it was.
+  assert!(matches!(
+    server("HTTP 401: Bad credentials (https://api.github.com/graphql)\n"),
+    Err(RepositoryError::NotSignedIn(_))
+  ));
+}
+
+#[test]
+fn sync_keeps_server_errors_typed() {
+  let mut answers = signed_in();
+  answers.push((
+    LIST_KONTUR,
+    Ok(failed(fixture!("gh_pr_list_vscode_gateway_timeout.stderr"))),
+  ));
+  let (_, result) = sync_with(answers, "ivanzaida");
+  assert!(matches!(
+    result.outcome,
+    Err(SyncFailure::Repository(RepositoryError::ServerError {
+      status: Some(504),
+      ..
+    }))
+  ));
 }
 
 #[test]

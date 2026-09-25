@@ -10,8 +10,9 @@ use crate::{
   time::Timestamp,
 };
 
-/// Most open pull requests one sync reads.
-pub const SYNC_LIMIT: u32 = 100;
+/// Most open pull requests one sync reads: 100 in one request makes GitHub time out on large
+/// repositories (microsoft/vscode, sharkdp/bat, BurntSushi/ripgrep), 50 answer in a few seconds.
+pub const SYNC_LIMIT: u32 = 50;
 
 /// Why a sync did not read the list.
 #[derive(Clone, Debug, PartialEq, Eq)]
