@@ -5,6 +5,7 @@ use crate::{
   connection::Connection,
   id::{ConnectionId, IdempotencyKey, ResourceId, RunId, TaskId},
   name::Name,
+  repository::RepositoryLink,
   resource::{Draft, DraftSaved, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   run::{Checkpoint, NewRun, Run, RunEvent},
   task::{Task, TaskDetails},
@@ -86,6 +87,21 @@ pub trait ConnectionStore {
 
   /// All connections of the project, ordered by name.
   fn connections(&self) -> Result<Vec<Connection>, Self::Error>;
+}
+
+/// The project's link to its GitHub repository; a project has at most one. Written by the
+/// desktop.
+pub trait RepositoryStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  fn repository_link(&self) -> Result<Option<RepositoryLink>, Self::Error>;
+
+  /// Stores `link` as the project's link, replacing an existing one. Its connection must be a
+  /// GitHub connection of the project.
+  fn save_repository_link(&mut self, link: &RepositoryLink) -> Result<(), Self::Error>;
+
+  /// Unlinks the project from GitHub; nothing happens if it is not linked.
+  fn remove_repository_link(&mut self) -> Result<(), Self::Error>;
 }
 
 /// Execution data, written by the runner. A run changes only by appending the events a

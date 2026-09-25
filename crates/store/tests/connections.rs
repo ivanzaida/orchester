@@ -2,8 +2,8 @@ use std::{fs, path::PathBuf};
 
 use orchester_core::{
   connection::{
-    AgentProvider, CatalogModel, CatalogSource, CheckResult, Connection, ConnectionCheck, ConnectionStatus,
-    ModelCatalog, SignIn,
+    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ConnectionStatus,
+    GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin, ModelCatalog, SignIn,
   },
   id::{ConnectionId, ProjectId},
   name::Name,
@@ -32,8 +32,8 @@ fn executable(repo: &TempDir, file: &str) -> PathBuf {
   repo.path().join("bin").join(file)
 }
 
-fn connection(repo: &TempDir, name: &str, provider: AgentProvider) -> Connection {
-  Connection::new(
+fn connection(repo: &TempDir, name: &str, provider: AgentProvider) -> AgentConnection {
+  AgentConnection::new(
     ConnectionId::generate(),
     Name::new(name).expect("valid name"),
     provider,
@@ -63,18 +63,19 @@ fn connection_round_trip_keeps_the_check() {
   let (repo, mut db) = project_repo();
   let mut codex = connection(&repo, "Codex", AgentProvider::CodexCli);
   db.create_connection(&codex).expect("create");
-  assert_eq!(db.connection(codex.id()).expect("read"), Some(codex.clone()));
+  assert_eq!(db.connection(codex.id()).expect("read").as_ref(), Some(&*codex));
 
   codex.record_check(available());
   codex.rename(Name::new("Codex · Kontur").expect("valid name"));
   db.save_connection(&codex).expect("save");
   let stored = db.connection(codex.id()).expect("read").expect("exists");
+  let stored = AgentConnection::try_from(stored).expect("an agent connection");
   assert_eq!(stored, codex);
   assert_eq!(stored.status(), ConnectionStatus::Connected);
   assert_eq!(stored.models()[0].efforts(), ["low", "high"]);
 
   let reopened = ProjectDb::open(repo.path()).expect("reopen");
-  assert_eq!(reopened.connections().expect("list"), [codex]);
+  assert_eq!(reopened.connections().expect("list"), [codex.into_connection()]);
 }
 
 #[test]
@@ -147,6 +148,83 @@ fn damaged_connection_rows_are_reported() {
     db.connections(),
     Err(StoreError::Corrupt {
       what: "connection provider",
+      ..
+    })
+  ));
+}
+
+fn github(repo: &TempDir) -> GitHubConnection {
+  GitHubConnection::new(
+    ConnectionId::generate(),
+    Name::new("GitHub").expect("valid name"),
+    GitHubHost::github_com(),
+    executable(repo, "gh.exe"),
+    Timestamp::from_unix_millis(1_000),
+  )
+  .expect("absolute executable")
+}
+
+#[test]
+fn github_connection_round_trip_keeps_host_and_check() {
+  let (repo, mut db) = project_repo();
+  let mut github = github(&repo);
+  db.create_connection(&github).expect("create");
+  github.record_check(GitHubCheck {
+    at: Timestamp::from_unix_millis(2_000),
+    result: GitHubCheckResult::Available {
+      version: "2.97.0".into(),
+      account: Some(GitHubLogin::new("ivanzaida").expect("valid login")),
+      scopes: vec!["repo".into(), "workflow".into()],
+      sign_in: SignIn::SignedIn,
+    },
+  });
+  db.save_connection(&github).expect("save");
+
+  let reopened = ProjectDb::open(repo.path()).expect("reopen");
+  let stored = reopened.connection(github.id()).expect("read").expect("exists");
+  let stored = GitHubConnection::try_from(stored).expect("a GitHub connection");
+  assert_eq!(stored, github);
+  assert_eq!(stored.host().as_str(), "github.com");
+  assert_eq!(stored.status(), ConnectionStatus::Connected);
+  assert!(AgentConnection::try_from(stored.into_connection()).is_err());
+}
+
+#[test]
+fn github_connection_rows_hold_executable_and_host_only() {
+  let (repo, mut db) = project_repo();
+  db.create_connection(&github(&repo)).expect("create");
+  let raw = Sqlite::open(repo.path().join(".orchester/orchester.db")).expect("open raw database");
+  let (kind, provider, status, settings): (String, String, String, String) = raw
+    .query_row("SELECT kind, provider, status, settings FROM connections", [], |row| {
+      Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+    })
+    .expect("row");
+  assert_eq!(
+    (kind.as_str(), provider.as_str(), status.as_str()),
+    ("github", "gh_cli", "not_checked")
+  );
+  let settings: serde_json::Value = serde_json::from_str(&settings).expect("JSON settings");
+  assert_eq!(settings["body"]["host"], "github.com");
+  let mut keys: Vec<&String> = settings["body"].as_object().expect("settings body").keys().collect();
+  keys.sort();
+  assert_eq!(keys, ["executable", "host"]);
+}
+
+#[test]
+fn damaged_github_host_is_reported() {
+  let (repo, mut db) = project_repo();
+  db.create_connection(&github(&repo)).expect("create");
+  let raw = Sqlite::open(repo.path().join(".orchester/orchester.db")).expect("open raw database");
+  raw
+    .execute(
+      "UPDATE connections SET settings = json_set(settings, '$.body.host', 'https://github.com')",
+      [],
+    )
+    .expect("damage the row");
+  assert!(matches!(
+    db.connections(),
+    Err(StoreError::Corrupt {
+      what: "connection settings",
       ..
     })
   ));

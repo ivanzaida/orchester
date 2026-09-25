@@ -53,7 +53,8 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::ResourceKindMismatch { .. }
     | StoreError::DuplicateSlug { .. }
     | StoreError::NoDraft(_)
-    | StoreError::ConnectionNotFound(_) => Message::new("errors.storage"),
+    | StoreError::ConnectionNotFound(_)
+    | StoreError::NotAGitHubConnection(_) => Message::new("errors.storage"),
     StoreError::Publish(PublishError::StaleDraft { latest, .. }) => Message::new("errors.staleDraft").with(
       "version",
       latest.map_or_else(String::new, |version| version.to_string()),

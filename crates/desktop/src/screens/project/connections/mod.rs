@@ -22,7 +22,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{connection::Connection, id::ConnectionId, name::Name};
+use orchester_core::{connection::AgentConnection, id::ConnectionId, name::Name};
 
 use self::{
   dialog::ConnectionDialog,
@@ -74,7 +74,7 @@ impl lurq::app::component::DevtoolsInspectable for Selected {}
 pub enum DialogMode {
   Closed,
   Add,
-  Edit(Connection),
+  Edit(AgentConnection),
 }
 
 impl lurq::app::component::DevtoolsInspectable for DialogMode {}
@@ -295,7 +295,7 @@ impl ConnectionsScreen {
   fn actions(
     &self,
     open: &OpenProject,
-    connection: &Connection,
+    connection: &AgentConnection,
     recheck: &RecheckAction,
     checking: bool,
   ) -> InspectorActions {

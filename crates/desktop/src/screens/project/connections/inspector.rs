@@ -14,7 +14,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{CatalogModel, CatalogSource, Connection, ConnectionStatus},
+  connection::{AgentConnection, CatalogModel, CatalogSource, ConnectionStatus},
   id::ResourceId,
   time::Timestamp,
 };
@@ -48,7 +48,12 @@ pub struct InspectorState<'a> {
   pub check_error: Option<Message>,
 }
 
-pub fn inspector(ctx: &Ctx, connection: &Connection, state: &InspectorState, actions: &InspectorActions) -> Element {
+pub fn inspector(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  state: &InspectorState,
+  actions: &InspectorActions,
+) -> Element {
   let status = connection.status();
   let (status_icon, status_key) = if state.checking { CHECKING } else { status_label(status) };
   Column::new()
@@ -91,7 +96,7 @@ pub fn inspector(ctx: &Ctx, connection: &Connection, state: &InspectorState, act
 }
 
 /// The design's properties (`CRVwa`…`X4Sz0`) plus the program file; the version is in the row.
-fn properties(ctx: &Ctx, connection: &Connection) -> Vec<Element> {
+fn properties(ctx: &Ctx, connection: &AgentConnection) -> Vec<Element> {
   let provider = connection.provider();
   let checked = connection.last_check().map_or_else(
     || ctx.t("connections.notCheckedYet"),
@@ -116,7 +121,7 @@ fn properties(ctx: &Ctx, connection: &Connection) -> Vec<Element> {
 }
 
 /// Models of the last check (`o5BqGF`, `JoYhX`) and where the list comes from.
-fn models(ctx: &Ctx, connection: &Connection) -> Element {
+fn models(ctx: &Ctx, connection: &AgentConnection) -> Element {
   let column = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Stack.role())
@@ -182,7 +187,12 @@ fn used_by(ctx: &Ctx, uses: &[&ProfileUse], show: &Arc<dyn Fn(ResourceId) + Send
 }
 
 /// What the status means (`Hzhjb`, `FhYJH`): how to sign in, or why the program did not answer.
-fn status_detail(ctx: &Ctx, connection: &Connection, status: ConnectionStatus, error: Option<&Message>) -> Element {
+fn status_detail(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  status: ConnectionStatus,
+  error: Option<&Message>,
+) -> Element {
   let detail = match error {
     Some(error) => message_text(ctx, error),
     None => ctx.t(status_detail_key(status, connection.provider())),

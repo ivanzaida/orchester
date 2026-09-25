@@ -1,0 +1,17 @@
+[package]
+name = "orchester-exec"
+description = "Runs programs for Orchester: the process side of core's CommandRunner, shared by the desktop and the runner."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+orchester-core.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

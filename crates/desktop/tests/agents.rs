@@ -5,8 +5,8 @@ use std::{fs, num::NonZeroU32};
 
 use orchester_core::{
   connection::{
-    AgentProvider, CatalogModel, CatalogSource, CheckResult, Connection, ConnectionCheck, ModelCatalog, ModelSupport,
-    REASONING_EFFORT, SignIn,
+    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog,
+    ModelSupport, REASONING_EFFORT, SignIn,
   },
   id::{ConnectionId, ProjectId},
   name::Name,
@@ -47,8 +47,8 @@ fn version(number: u32) -> VersionNumber {
 }
 
 /// A checked Codex connection whose catalog lists two models.
-fn codex(repo: &TempDir) -> Connection {
-  let mut connection = Connection::new(
+fn codex(repo: &TempDir) -> AgentConnection {
+  let mut connection = AgentConnection::new(
     ConnectionId::generate(),
     Name::new("Codex").expect("valid name"),
     AgentProvider::CodexCli,
@@ -74,7 +74,11 @@ fn codex(repo: &TempDir) -> Connection {
   connection
 }
 
-fn form<'a>(connection: &'a Connection, selection: &'a ModelSelection, effort: Option<&'a str>) -> ProfileForm<'a> {
+fn form<'a>(
+  connection: &'a AgentConnection,
+  selection: &'a ModelSelection,
+  effort: Option<&'a str>,
+) -> ProfileForm<'a> {
   ProfileForm {
     role: " Builder ",
     responsibilities: "Implement the approved plan",
