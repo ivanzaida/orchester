@@ -151547,7 +151547,7 @@
                               "content": "Pull requests are unavailable"
                             },
                             "VSkhh": {
-                              "content": "Kontur has no GitHub connection for github.com. Pull requests come from the repository detected in the project folder’s origin remote, read through the GitHub CLI (gh). Tasks and runs keep working locally."
+                              "content": "Kontur isn’t linked to a GitHub repository. Pull requests come from the repository detected in the project folder’s origin remote, read through the GitHub CLI (gh). Tasks and runs keep working locally."
                             },
                             "HW5DV/xfnek": {
                               "icon": "plug"
