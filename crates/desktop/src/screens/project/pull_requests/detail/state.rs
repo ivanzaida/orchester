@@ -13,8 +13,9 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use super::super::view::minutes_until;
+use super::super::{notice::server_error, view::minutes_until};
 use crate::{
+  display,
   pull_requests::detail::LinkedDetail,
   screens::github::status::status_label,
   ui::{icon::Icon, notice::Notice, panel::RecoveryPanel},
@@ -27,9 +28,10 @@ pub struct FailureText {
   pub detail: Arc<str>,
 }
 
-/// The notice above a stored diff when the latest refresh failed.
+/// The notice above a stored diff when the latest refresh did not read the pull request or its
+/// diff.
 pub fn failure_notice(ctx: &Ctx, detail: &LinkedDetail, now: Timestamp) -> Option<Element> {
-  let failure = detail.failure.as_ref()?;
+  let failure = detail.latest_failure()?;
   let text = failure_text(ctx, detail, failure, now);
   Some(
     Notice::new(text.icon, text.heading, text.detail)
@@ -53,27 +55,32 @@ pub fn loading_panel(ctx: &Ctx) -> RecoveryPanel {
   )
 }
 
-/// A pull request larger than Orchester reads (`is_too_large`).
+/// A pull request larger than Orchester reads (`is_too_large`), its sizes grouped as the locale
+/// writes numbers ("20,000").
 pub fn too_large_panel(ctx: &Ctx, pull_request: Option<&PullRequest>) -> RecoveryPanel {
-  let limits = [
-    ("maxFiles", MAX_DIFF_FILES.to_string()),
-    ("maxLines", MAX_DIFF_LINES.to_string()),
-  ];
+  let separator = ctx.t("number.groupSeparator");
+  let number = |value: u32| display::grouped(u64::from(value), &separator);
+  let (max_files, max_lines) = (number(MAX_DIFF_FILES), number(MAX_DIFF_LINES));
+  let limits = [("maxFiles", max_files.as_str()), ("maxLines", max_lines.as_str())];
   let detail = match pull_request.map(PullRequest::changes) {
-    Some(changes) => ctx.t_args(
-      "pullRequests.detail.tooLarge.detail",
-      [
-        ("files", changes.files.to_string().as_str()),
-        ("additions", changes.additions.to_string().as_str()),
-        ("deletions", changes.deletions.to_string().as_str()),
-        (limits[0].0, limits[0].1.as_str()),
-        (limits[1].0, limits[1].1.as_str()),
-      ],
-    ),
-    None => ctx.t_args(
-      "pullRequests.detail.tooLarge.limits",
-      [(limits[0].0, limits[0].1.as_str()), (limits[1].0, limits[1].1.as_str())],
-    ),
+    Some(changes) => {
+      let sizes = [
+        number(changes.files),
+        number(changes.additions),
+        number(changes.deletions),
+      ];
+      ctx.t_args(
+        "pullRequests.detail.tooLarge.detail",
+        [
+          ("files", sizes[0].as_str()),
+          ("additions", sizes[1].as_str()),
+          ("deletions", sizes[2].as_str()),
+          limits[0],
+          limits[1],
+        ],
+      )
+    }
+    None => ctx.t_args("pullRequests.detail.tooLarge.limits", limits),
   };
   RecoveryPanel::new(Icon::FileText, &ctx.t("pullRequests.detail.tooLarge.title"), &detail)
 }
@@ -135,6 +142,18 @@ fn repository(ctx: &Ctx, detail: &LinkedDetail, error: &RepositoryError) -> Fail
       Icon::CloudOff,
       ctx.t("pullRequests.detail.failure.unreachableTitle"),
       ctx.t("pullRequests.detail.failure.unreachable"),
+    ),
+    RepositoryError::ServerError { status, .. } => (
+      Icon::CloudOff,
+      ctx.t("pullRequests.detail.failure.troubledTitle"),
+      server_error(
+        ctx,
+        *status,
+        [
+          "pullRequests.detail.failure.troubled",
+          "pullRequests.detail.failure.troubledUnknown",
+        ],
+      ),
     ),
     RepositoryError::PullRequestNotFound { .. } => (
       Icon::FileSearch,

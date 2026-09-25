@@ -7,10 +7,11 @@ use crate::{
   command::{Command, CommandOutput, CommandRunner},
   connection::{GitHubCheck, GitHubConnection, GitHubHost, check_github},
   pull_request::{
-    PullRequest, PullRequestHead, gh_compare_diff_command, gh_pr_list_command, gh_pr_view_command,
-    gh_rate_limit_command, parse_gh_compare_diff, parse_gh_pr_list, parse_gh_pr_view, parse_gh_rate_limit,
+    PullRequest, PullRequestHead, gh_check_rollups_command, gh_compare_diff_command, gh_pr_list_command,
+    gh_pr_view_command, gh_rate_limit_command, parse_gh_check_rollups, parse_gh_compare_diff, parse_gh_pr_list,
+    parse_gh_pr_view, parse_gh_rate_limit,
   },
-  repository::{GitHubRepo, RepositoryError, RepositoryView, gh_repo_view_command, parse_gh_repo_view},
+  repository::{GitHubRepo, RepositoryError, RepositoryView, gh_repo_view_command, parse_gh_repo_view, unrecognized},
   revision::Revision,
   time::Timestamp,
 };
@@ -23,7 +24,8 @@ pub trait GitHub {
   /// `repo` as the account sees it. `repo` must be on the provider's host.
   fn repository(&self, repo: &GitHubRepo) -> Result<RepositoryView, RepositoryError>;
 
-  /// At most `limit` open pull requests of `repo`, which must be on the provider's host.
+  /// At most `limit` open pull requests of `repo`, which must be on the provider's host, with the
+  /// checks of their heads.
   fn list_pull_requests(&self, repo: &GitHubRepo, limit: u32) -> Result<Vec<PullRequest>, RepositoryError>;
 
   /// When the rate limit that stopped a request about `repo` resets.
@@ -70,7 +72,25 @@ impl<R: CommandRunner> GitHub for GhCli<R> {
 
   fn list_pull_requests(&self, repo: &GitHubRepo, limit: u32) -> Result<Vec<PullRequest>, RepositoryError> {
     let output = self.run_for(repo, &gh_pr_list_command(&self.executable, repo, limit))?;
-    parse_gh_pr_list(repo, &output)
+    let listed = parse_gh_pr_list(repo, &output)?;
+    if listed.is_empty() {
+      return Ok(listed);
+    }
+    let heads: Vec<Revision> = listed
+      .iter()
+      .map(|pull_request| pull_request.head_sha().clone())
+      .collect();
+    let output = self.run_for(repo, &gh_check_rollups_command(&self.executable, repo, &heads))?;
+    let checks = parse_gh_check_rollups(repo, &heads, &output)?;
+    listed
+      .into_iter()
+      .zip(checks)
+      .map(|(pull_request, checks)| {
+        pull_request
+          .with_checks(checks)
+          .map_err(|error| unrecognized(&error.to_string()))
+      })
+      .collect()
   }
 
   fn rate_limit_reset(&self, repo: &GitHubRepo) -> Result<Timestamp, RepositoryError> {

@@ -36,6 +36,10 @@ pub enum SyncLine {
   Unreachable {
     last: Option<Timestamp>,
   },
+  /// GitHub was reached but failed to answer (a server error).
+  Troubled {
+    last: Option<Timestamp>,
+  },
   /// GitHub was reached but gave no list.
   Failed {
     last: Option<Timestamp>,
@@ -81,6 +85,7 @@ impl SyncLine {
       Some(SyncFailure::Account(GitHubState::WrongAccount { active, .. })) => Self::Paused { active: active.clone() },
       Some(SyncFailure::Account(state)) => Self::Account(state.clone()),
       Some(SyncFailure::Repository(RepositoryError::Network { .. })) => Self::Unreachable { last },
+      Some(SyncFailure::Repository(RepositoryError::ServerError { .. })) => Self::Troubled { last },
       Some(SyncFailure::Repository(_)) => Self::Failed { last },
     }
   }
@@ -100,6 +105,7 @@ impl SyncLine {
         "pullRequests.sync.neverUnreachable",
         last,
       ),
+      Self::Troubled { last } => since("pullRequests.sync.troubled", "pullRequests.sync.neverTroubled", last),
       Self::Failed { last } => since("pullRequests.sync.failed", "pullRequests.sync.neverFailed", last),
       Self::RateLimited { resets_at: Some(at) } => ctx.t_args(
         "pullRequests.sync.rateLimited",

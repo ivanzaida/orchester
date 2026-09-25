@@ -239,6 +239,14 @@ pub enum RepositoryError {
   RateLimited,
   #[error("cannot reach {host}: {detail}")]
   Network { host: GitHubHost, detail: String },
+  /// GitHub was reached but failed to answer: a server error (HTTP 5xx, `status` when `gh`
+  /// named it), a request it gave up on, or an answer cut off.
+  #[error("{host} failed to answer (HTTP {status:?}): {detail}")]
+  ServerError {
+    host: GitHubHost,
+    status: Option<u16>,
+    detail: String,
+  },
   #[error("unexpected answer from {program}: {detail}")]
   Unrecognized { program: &'static str, detail: String },
   #[error("cannot run {program}: {source}")]

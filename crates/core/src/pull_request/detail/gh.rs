@@ -23,7 +23,8 @@ use crate::{
 /// The media type that makes GitHub answer a compare with a unified diff.
 const DIFF_MEDIA_TYPE: &str = "Accept: application/vnd.github.diff";
 
-/// Reads pull request `number` of `repo` with the fields of the list plus its base revision.
+/// Reads pull request `number` of `repo` with the fields of the list plus its checks (one pull
+/// request's are few enough) and its base revision.
 pub fn gh_pr_view_command(executable: &Path, repo: &GitHubRepo, number: u64) -> Command {
   let args = [
     "pr".to_owned(),
@@ -32,7 +33,7 @@ pub fn gh_pr_view_command(executable: &Path, repo: &GitHubRepo, number: u64) -> 
     "-R".to_owned(),
     repo.to_string(),
     "--json".to_owned(),
-    format!("{PR_LIST_FIELDS},baseRefOid"),
+    format!("{PR_LIST_FIELDS},statusCheckRollup,baseRefOid"),
   ];
   gh_command(executable, args.to_vec())
 }

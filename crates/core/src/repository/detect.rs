@@ -260,7 +260,7 @@ fn view_failure(error: &RepositoryError, account: GitHubLogin) -> DetectionState
     RepositoryError::NotFound(_) | RepositoryError::NoAccess(_) => DetectionState::NoAccess { account },
     RepositoryError::NotSignedIn(_) => DetectionState::NotSignedIn,
     RepositoryError::RateLimited => DetectionState::RateLimited,
-    RepositoryError::Network { .. } => DetectionState::Unreachable,
+    RepositoryError::Network { .. } | RepositoryError::ServerError { .. } => DetectionState::Unreachable,
     RepositoryError::NoDefaultBranch(_) => DetectionState::NoDefaultBranch,
     RepositoryError::Run { .. } => DetectionState::CouldNotRun,
     RepositoryError::NotAGitRepository

@@ -22,6 +22,7 @@ const COMPARE: &str = "api --allow-escape-sequences --hostname github.com -H Acc
                        8f3a2c1d4e5f60718293a4b5c6d7e8f901234567";
 const DIFF: &str = include_str!("../../../core/tests/fixtures/github/git_diff_synthetic.stdout");
 const NOT_FOUND: &str = include_str!("../../../core/tests/fixtures/github/gh_pr_view_not_found.stderr");
+const COMPARE_NOT_FOUND: &str = include_str!("../../../core/tests/fixtures/github/gh_api_compare_not_found.stderr");
 const CONTEXT: &str = "pull-request-context";
 
 /// `gh pr view 42` of the synthetic #42 of the list: the list entry with its base revision.
@@ -185,7 +186,27 @@ fn pull_request_too_large_is_not_fetched() {
     "pull-request",
     "This pull request changes 301 files"
   ));
+  // Numbers as the locale groups them, and the tab still counts the files GitHub reported.
+  assert!(shows(
+    &mut desktop,
+    "pull-request",
+    "up to 300 files and 20,000 changed lines"
+  ));
+  assert!(shows(&mut desktop, "pull-request-tab-files", "301"));
   assert_eq!(compares(&gh), 0);
+}
+
+#[test]
+fn pull_request_read_without_its_diff_is_synced_and_says_why() {
+  let gh = signed_in_with_detail();
+  gh.answer(COMPARE, Ok(failed(COMPARE_NOT_FOUND)));
+  let mut desktop = open_detail(&gh);
+  settle_on(&mut desktop, "pull-request", "The diff could not be read");
+  assert!(shows(
+    &mut desktop,
+    CONTEXT,
+    "PR #42 · orc/github-auth → main · Head 8f3a2c1 · Synced just now"
+  ));
 }
 
 #[test]

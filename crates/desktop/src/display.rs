@@ -51,6 +51,20 @@ pub fn remote_address(url: &str) -> &str {
   address.strip_suffix(".git").unwrap_or(address)
 }
 
+/// `value` with its digits grouped by thousands with `separator`, the locale's
+/// `number.groupSeparator`: `20,000` in English.
+pub fn grouped(value: u64, separator: &str) -> String {
+  let digits = value.to_string();
+  let mut grouped = String::with_capacity(digits.len() + digits.len() / 3 * separator.len());
+  for (position, digit) in digits.chars().enumerate() {
+    if position > 0 && (digits.len() - position).is_multiple_of(3) {
+      grouped.push_str(separator);
+    }
+    grouped.push(digit);
+  }
+  grouped
+}
+
 /// `amount` as a decimal with at least two places, e.g. `1.50`, `0.125`; a currency sign is
 /// added by the message that shows it ([`money`]).
 pub fn amount(amount: Money) -> String {

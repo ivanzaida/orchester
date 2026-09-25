@@ -2,6 +2,7 @@
 //! (`docs/design/orchester-workspace.md`, "Pull requests" and "GitHub"). Orchester only reads
 //! them; a pull request's GitHub state is kept apart from agent readiness, which comes with runs.
 
+mod checks;
 mod detail;
 pub mod diff;
 mod gh;
@@ -11,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  checks::{gh_check_rollups_command, parse_gh_check_rollups},
   detail::{
     DetailRefresh, DiffRead, MAX_DIFF_FILES, MAX_DIFF_LINES, PullRequestHead, RefreshedDetail, RevisionDiff,
     gh_compare_diff_command, gh_pr_view_command, is_too_large, parse_gh_compare_diff, parse_gh_pr_view,
@@ -217,6 +219,15 @@ impl PullRequest {
 
   pub const fn checks(&self) -> &CheckRollup {
     &self.parts.checks
+  }
+
+  /// The pull request with `checks`, which must be of its head revision.
+  pub fn with_checks(mut self, checks: CheckRollup) -> Result<Self, PullRequestError> {
+    if checks.on != self.parts.head_sha {
+      return Err(PullRequestError::ChecksNotOnHead);
+    }
+    self.parts.checks = checks;
+    Ok(self)
   }
 
   pub const fn review_decision(&self) -> Option<ReviewDecision> {

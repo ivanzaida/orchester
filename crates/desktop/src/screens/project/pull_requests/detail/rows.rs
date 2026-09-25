@@ -22,12 +22,16 @@ pub enum DiffRow {
     index: usize,
     note: FileNote,
   },
+  /// Room under the last row for the horizontal scrollbar, so it does not cover that row.
+  ScrollbarGap {
+    index: usize,
+  },
 }
 
 impl DiffRow {
   pub const fn index(&self) -> usize {
     match self {
-      Self::Hunk { index, .. } | Self::Note { index, .. } => *index,
+      Self::Hunk { index, .. } | Self::Note { index, .. } | Self::ScrollbarGap { index } => *index,
       Self::Line(line) => line.index,
     }
   }

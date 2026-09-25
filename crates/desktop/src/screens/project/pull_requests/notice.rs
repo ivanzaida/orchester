@@ -1,5 +1,5 @@
 //! Why the latest sync did not read the list, above the list it keeps (`docs/design/
-//! orchester-workspace.md`, "GitHub", rule 9): GitHub unreachable (08.E `FYQMv`), rate limited
+//! orchester-workspace.md`, "GitHub", rule 9): GitHub unreachable or failing (08.E `FYQMv`), rate limited
 //! (08.F `P1tSu`), another account (08.G `E9ZThy`), a missing scope (08.H `tu1fW`), and the
 //! states the design has no Pull requests frame for, worded like the GitHub connection's.
 
@@ -205,6 +205,22 @@ fn repository(
       };
       (Notice::new(Icon::CloudOff, title(), ctx.t(key)), None, Buttons::None)
     }
+    RepositoryError::ServerError { status, .. } => (
+      Notice::new(
+        Icon::CloudOff,
+        title(),
+        server_error(
+          ctx,
+          *status,
+          [
+            "pullRequests.notice.serverError",
+            "pullRequests.notice.serverErrorUnknown",
+          ],
+        ),
+      ),
+      None,
+      Buttons::None,
+    ),
     RepositoryError::NotFound(_) | RepositoryError::NoAccess(_) => {
       let repo = &inbox.repo;
       let heading = ctx.t_args(
@@ -234,6 +250,15 @@ fn repository(
       None,
       Buttons::None,
     ),
+  }
+}
+
+/// That GitHub failed to answer: the first of `keys` with the HTTP status when `gh` named it, the
+/// second without. What was read before stays, as when GitHub is unreachable (08.E `FYQMv`).
+pub fn server_error(ctx: &Ctx, status: Option<u16>, keys: [&str; 2]) -> Arc<str> {
+  match status {
+    Some(status) => ctx.t_args(keys[0], [("status", status.to_string().as_str())]),
+    None => ctx.t(keys[1]),
   }
 }
 

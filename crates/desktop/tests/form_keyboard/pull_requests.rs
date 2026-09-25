@@ -23,23 +23,42 @@ use crate::{
 };
 
 pub(crate) const AUTH_STATUS: &str = "auth status --hostname github.com --json hosts";
-pub(crate) const LIST: &str = "pr list -R github.com/ivanzaida/kontur --state open --limit 100 --json \
+pub(crate) const LIST: &str = "pr list -R github.com/ivanzaida/kontur --state open --limit 50 --json \
                     number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,additions,deletions,\
-                    changedFiles,updatedAt,reviewDecision,statusCheckRollup";
+                    changedFiles,updatedAt,reviewDecision";
+/// The check counts request of a sync; the fake answers it from `FakeGh::checks`.
+const CHECKS: &str = "api graphql --hostname github.com -f query=";
+/// The synthetic list's checks, counted by state: #42 three passed (a success, a neutral check
+/// run, a successful commit status), #43 one failed, one running, one skipped and one pending
+/// status; #44 has none.
+const SYNTHETIC_CHECKS: [(&str, &str); 2] = [
+  (
+    "8f3a2c1d4e5f60718293a4b5c6d7e8f901234567",
+    r#"{"checkRunCountsByState":[{"state":"SUCCESS","count":1},{"state":"NEUTRAL","count":1}],"statusContextCountsByState":[{"state":"SUCCESS","count":1}]}"#,
+  ),
+  (
+    "93d412f0a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    r#"{"checkRunCountsByState":[{"state":"FAILURE","count":1},{"state":"IN_PROGRESS","count":1},{"state":"SKIPPED","count":1}],"statusContextCountsByState":[{"state":"PENDING","count":1}]}"#,
+  ),
+];
 const RATE_LIMIT: &str = "api --hostname github.com rate_limit";
 pub(crate) const OPEN_PULL_REQUESTS: &str =
   include_str!("../../../core/tests/fixtures/github/gh_pr_list_synthetic_open.stdout");
 const NO_PULL_REQUESTS: &str = include_str!("../../../core/tests/fixtures/github/gh_pr_list_orchester_open.stdout");
 pub(crate) const NETWORK: &str = include_str!("../../../core/tests/fixtures/github/gh_repo_view_network.stderr");
+const GATEWAY_TIMEOUT: &str =
+  include_str!("../../../core/tests/fixtures/github/gh_pr_list_vscode_gateway_timeout.stderr");
 const RATE_LIMITED: &str = include_str!("../../../core/tests/fixtures/github/gh_repo_view_rate_limited.stderr");
 /// Signed in as ivanzaida without the `repo` scope; shaped like the captured output.
 const NO_REPO_SCOPE: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","tokenSource":"keyring","scopes":"read:org","gitProtocol":"https"}]}}"#;
 const LIST_ID: &str = "pull-requests-list";
 const STATUS: &str = "pull-requests-sync-status";
 
-/// `gh` answering read-only commands from a table that tests change between syncs.
+/// `gh` answering read-only commands from a table that tests change between syncs, and check
+/// counts from the checks of the heads it knows (none for the others).
 pub(crate) struct FakeGh {
   answers: Mutex<HashMap<&'static str, Result<CommandOutput, CommandError>>>,
+  checks: HashMap<&'static str, &'static str>,
   pub(crate) ran: Mutex<Vec<String>>,
 }
 
@@ -51,12 +70,28 @@ impl FakeGh {
         (AUTH_STATUS, Ok(ok(auth))),
         (LIST, list),
       ])),
+      checks: HashMap::from(SYNTHETIC_CHECKS),
       ran: Mutex::new(Vec::new()),
     })
   }
 
   pub(crate) fn answer(&self, args: &'static str, output: Result<CommandOutput, CommandError>) {
     self.answers.lock().insert(args, output);
+  }
+
+  /// GitHub's answer to a check counts request: `c<n>` for the n-th commit asked about.
+  fn count_checks(&self, request: &str) -> String {
+    let commits: Vec<String> = request
+      .split("object(oid:\"")
+      .skip(1)
+      .filter_map(|rest| rest.split_once('"').map(|(head, _)| head))
+      .enumerate()
+      .map(|(index, head)| match self.checks.get(head) {
+        Some(contexts) => format!(r#""c{index}":{{"oid":"{head}","statusCheckRollup":{{"contexts":{contexts}}}}}"#),
+        None => format!(r#""c{index}":{{"oid":"{head}","statusCheckRollup":null}}"#),
+      })
+      .collect();
+    format!(r#"{{"data":{{"repository":{{{}}}}}}}"#, commits.join(","))
   }
 
   fn lists(&self) -> usize {
@@ -68,6 +103,9 @@ impl CommandRunner for FakeGh {
   fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
     let key = command.args().join(" ");
     self.ran.lock().push(key.clone());
+    if key.starts_with(CHECKS) {
+      return Ok(ok(&self.count_checks(&key)));
+    }
     self
       .answers
       .lock()
@@ -204,6 +242,24 @@ fn pull_requests_keep_the_list_when_github_is_unreachable() {
 }
 
 #[test]
+fn pull_requests_keep_the_list_when_github_fails_to_answer() {
+  let gh = FakeGh::signed_in(SIGNED_IN, Ok(ok(OPEN_PULL_REQUESTS)));
+  let (mut desktop, _) = linked(&gh, "ivanzaida");
+  open_pull_requests(&mut desktop);
+  settle_on(&mut desktop, STATUS, "Synced just now");
+  gh.answer(LIST, Ok(failed(GATEWAY_TIMEOUT)));
+  desktop.click("pull-requests-refresh");
+  settle_on(&mut desktop, STATUS, "Last synced just now · GitHub is having trouble");
+  assert!(shows(
+    &mut desktop,
+    "pull-requests-notice",
+    "GitHub is having trouble (504). Try again in a moment"
+  ));
+  assert!(!shows(&mut desktop, "pull-requests-notice", "Update gh"));
+  assert!(shows(&mut desktop, LIST_ID, "Add GitHub authentication"));
+}
+
+#[test]
 fn pull_requests_rate_limit_shows_the_reset_and_pauses_sync() {
   let gh = FakeGh::signed_in(SIGNED_IN, Ok(failed(RATE_LIMITED)));
   // Synthetic `gh api rate_limit` answer: the GraphQL limit resets in 12 minutes.
@@ -318,6 +374,21 @@ fn assert_near(found: f32, expected: f32) {
   assert!((found - expected).abs() < 0.5, "{found} is not {expected}");
 }
 
+/// Bounds of the first mounted row, or of the one titled `title`.
+fn row_bounds(desktop: &mut Desktop, title: Option<&'static str>) -> lurq::core::ElementRect {
+  desktop
+    .tree
+    .find_element(move |element| {
+      element.id() == Some("pull-request-row") && title.is_none_or(|title| holds_text(element, title))
+    })
+    .unwrap_or_else(|| panic!("a row titled {title:?} is mounted"))
+    .bounds()
+}
+
+fn holds_text(element: lurq::node::ElementRef<'_>, text: &str) -> bool {
+  element.text_content() == Some(text) || element.children().iter().any(|child| holds_text(child, text))
+}
+
 fn bounds(desktop: &mut Desktop, id: &str) -> (f32, f32) {
   let bounds = desktop
     .tree
@@ -335,29 +406,31 @@ fn pull_requests_footer_follows_the_rows_or_the_scrolled_list() {
   settle_on(&mut desktop, LIST_ID, "3 open pull requests");
   // Headings, rows and footer are 20 apart; three rows fit, so the footer follows the last.
   let (_, headings_bottom) = bounds(&mut desktop, "pull-requests-headings");
-  let (rows_top, rows_bottom) = bounds(&mut desktop, "pull-requests-rows");
   let (footer_top, _) = bounds(&mut desktop, "pull-requests-footer");
-  assert_near(rows_top - headings_bottom, 20.0);
-  assert_near(rows_bottom - rows_top, 300.0);
-  assert_near(footer_top - rows_bottom, 20.0);
+  assert_near(footer_top - headings_bottom, 20.0 + 300.0 + 20.0);
+  let first = row_bounds(&mut desktop, None);
+  assert_near(first.y - headings_bottom, 20.0);
 
   gh.answer(LIST, Ok(ok(&many_pull_requests(12))));
   desktop.click("pull-requests-refresh");
   settle_on(&mut desktop, LIST_ID, "12 open pull requests");
-  let (list_top, list_bottom) = bounds(&mut desktop, LIST_ID);
-  let (rows_top, rows_bottom) = bounds(&mut desktop, "pull-requests-rows");
+  let (_, list_bottom) = bounds(&mut desktop, LIST_ID);
+  let (_, headings_bottom) = bounds(&mut desktop, "pull-requests-headings");
   let (footer_top, footer_bottom) = bounds(&mut desktop, "pull-requests-footer");
-  // Twelve rows do not fit: the rows scroll and the footer stays inside the screen, 20 below.
-  assert!(rows_bottom - rows_top < 1200.0 && rows_top > list_top);
-  assert_near(footer_top - rows_bottom, 20.0);
+  // Twelve rows do not fit: the rows scroll and the footer stays inside the screen.
+  assert!(footer_top - headings_bottom < 20.0 + 1200.0 + 20.0);
   assert!(footer_bottom <= list_bottom);
-  // Scrolled to the end, the last row ends at the bottom of the scroll area, above the footer.
-  desktop
-    .tree
-    .scroll(700.0, (rows_top + rows_bottom) / 2.0, 0.0, -5000.0, ScrollPhase::Scroll);
+  // Newest first: scrolled to the end, the last row (#1) ends 20 above the footer, not cut by it.
+  desktop.tree.scroll(
+    700.0,
+    (headings_bottom + footer_top) / 2.0,
+    0.0,
+    -5000.0,
+    ScrollPhase::Scroll,
+  );
   desktop.pass();
-  let (_, stack_bottom) = bounds(&mut desktop, "pull-requests-row-stack");
-  assert_near(stack_bottom, rows_bottom);
+  let last = row_bounds(&mut desktop, Some("Change 1"));
+  assert_near(footer_top - (last.y + last.height), 20.0);
 
   desktop.press("pull-requests-search");
   desktop.type_text("Change 1");

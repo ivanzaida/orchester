@@ -10,7 +10,7 @@ mod shadow;
 mod tokens;
 mod typography;
 
-pub use form::select_menu_scrollbar;
+pub use form::{gutter_scrollbar, select_menu_scrollbar};
 use lurq::app::App;
 pub use metrics::{ExtraRadius, ExtraSpacing};
 pub use palette::ExtraColor;

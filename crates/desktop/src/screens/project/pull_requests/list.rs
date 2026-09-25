@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
+  components::{Column, Row, Spacer, Text, VirtualizedList},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
@@ -217,16 +217,11 @@ impl PullRequestList {
     }
     let query = self.query.get();
     let (open, show) = (props.open.clone(), props.show.clone());
-    let rows: Vec<Element> = synced
+    let rows: Vec<RowProps> = synced
       .pull_requests
       .iter()
       .filter(|pull_request| pull_request.matches(&query))
-      .map(|pull_request| {
-        ctx.mount_keyed::<PullRequestRow>(
-          &pull_request.number().to_string(),
-          row_props(pull_request, &open, &show),
-        )
-      })
+      .map(|pull_request| row_props(pull_request, &open, &show))
       .collect();
     let shown = rows.len();
     let table: Element = if rows.is_empty() {
@@ -234,21 +229,14 @@ impl PullRequestList {
         .variant(TypographyStyle::Caption)
         .into()
     } else {
-      // At most `SYNC_LIMIT` rows of a fixed height: laid out in full, drawn only where visible.
-      ScrollVertical::new(
-        Column::new()
-          .id("pull-requests-row-stack")
-          .width(Dimension::Pct(100.0))
-          .with_children(rows),
-      )
-        .id("pull-requests-rows")
-        .culling(true)
+      // Takes the free height, capped at the rows' own height: the footer follows the last row
+      // when they fit, and the rows scroll when they do not.
+      VirtualizedList::new_shared(ctx, Arc::new(rows))
+        .list_key("pull-request-rows")
         .width(Dimension::Pct(100.0))
-        // Takes the free height, but never more than the rows need, so the footer follows the
-        // last row when they fit and the rows scroll when they do not.
         .flex(1.0)
         .max_height(Dimension::Px(ROW_HEIGHT * shown as f32))
-        .into()
+        .mount_keyed::<PullRequestRow, _, _, _>(|row| row.pull_request.number(), Clone::clone)
     };
     vec![
       column_headings(ctx),
