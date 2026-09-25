@@ -4193,7 +4193,7 @@
                   "fill": "$text",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "1 400 000",
+                  "content": "1,400,000",
                   "fontFamily": "$font",
                   "fontSize": 12,
                   "fontWeight": "normal"
@@ -5033,6 +5033,73 @@
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
                       "content": "A failed background operation stays in the activity slot on a raised fill until the user opens it or dismisses it; later events queue behind it in the popover. Never auto-dismissed.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "OwnMs",
+                  "name": "State I · Permission request waiting",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "EVixB",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "I · Permission request waiting (later milestone)",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "id": "bpHwE",
+                      "type": "ref",
+                      "ref": "pmOpt",
+                      "name": "Status bar · H · Failure (persists until opened or dismissed)",
+                      "descendants": {
+                        "IRKYz": {
+                          "fill": "$raised"
+                        },
+                        "vmXU0": {
+                          "fill": "$text",
+                          "icon": "hand"
+                        },
+                        "XGzqw": {
+                          "content": "Builder needs permission · ORC-128 · pnpm add @octokit/auth-oauth-app",
+                          "fill": "$text"
+                        },
+                        "w3dC6": {
+                          "content": "9:42 left"
+                        },
+                        "Ut1jT": {
+                          "enabled": true
+                        },
+                        "LPDZP": {
+                          "content": "Open request"
+                        },
+                        "npzEn": {
+                          "enabled": false
+                        },
+                        "w4CgvX": {
+                          "content": "3"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "dsmsr",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "A permission request (02.K) counts in Needs you and takes the activity slot with its countdown until it is answered or times out after 10 minutes; on timeout the slot shows “Request denied · no answer” as the latest event. Open request goes to the task.",
                       "lineHeight": 1.5,
                       "fontFamily": "$font",
                       "fontSize": 11,
@@ -17000,7 +17067,7 @@
                                   "content": "Run limits"
                                 },
                                 "yeeIR": {
-                                  "content": "1.4M tokens · 30 minutes · 2 automatic retries"
+                                  "content": "1.4M tokens · 30 min active time · 2 automatic retries"
                                 }
                               }
                             },
@@ -17580,7 +17647,7 @@
                                   "content": "Run limits"
                                 },
                                 "yeeIR": {
-                                  "content": "1.4M tokens · 30 minutes · 2 automatic retries"
+                                  "content": "1.4M tokens · 30 min active time · 2 automatic retries"
                                 }
                               }
                             },
@@ -17727,7 +17794,7 @@
       "y": 0,
       "name": "02 / Tasks & runs",
       "width": 4896,
-      "height": 13096,
+      "height": 14144,
       "fill": "$canvas",
       "layout": "none",
       "children": [
@@ -20883,7 +20950,7 @@
                                       "height": 38,
                                       "descendants": {
                                         "ObbY7": {
-                                          "content": "1.4M tokens · 30 minutes",
+                                          "content": "1.4M tokens · 30 min active time",
                                           "fontSize": 12
                                         }
                                       }
@@ -21917,7 +21984,7 @@
                                       "height": 38,
                                       "descendants": {
                                         "w1g9B": {
-                                          "content": "14 000 000"
+                                          "content": "14,000,000"
                                         }
                                       }
                                     },
@@ -21960,7 +22027,7 @@
                                       "height": 38,
                                       "descendants": {
                                         "w1g9B": {
-                                          "content": "1 400 000"
+                                          "content": "1,400,000"
                                         }
                                       }
                                     },
@@ -21990,7 +22057,7 @@
                                   "content": "Time limit / task"
                                 },
                                 "yeeIR": {
-                                  "content": "30 minutes"
+                                  "content": "30 min active agent time"
                                 }
                               }
                             },
@@ -23023,7 +23090,7 @@
                                       "height": 38,
                                       "descendants": {
                                         "w1g9B": {
-                                          "content": "14 000 000"
+                                          "content": "14,000,000"
                                         }
                                       }
                                     },
@@ -23066,7 +23133,7 @@
                                       "height": 38,
                                       "descendants": {
                                         "w1g9B": {
-                                          "content": "1 400 000"
+                                          "content": "1,400,000"
                                         }
                                       }
                                     },
@@ -23096,7 +23163,7 @@
                                   "content": "Time limit / task"
                                 },
                                 "yeeIR": {
-                                  "content": "30 minutes"
+                                  "content": "30 min active agent time"
                                 }
                               }
                             },
@@ -25895,7 +25962,7 @@
                                       "height": 32,
                                       "descendants": {
                                         "w1g9B": {
-                                          "content": "1 400 000",
+                                          "content": "1,400,000",
                                           "fontSize": 11
                                         },
                                         "y8ez5": {
@@ -25917,7 +25984,7 @@
                                       "id": "AZhHx",
                                       "name": "Read-back",
                                       "fill": "$subtle",
-                                      "content": "= 1.4M tokens · input + output",
+                                      "content": "= 1.4M tokens · input + output · max 10M per run",
                                       "fontFamily": "$font",
                                       "fontSize": 10,
                                       "fontWeight": "normal"
@@ -25964,6 +26031,25 @@
                                           "height": 0
                                         }
                                       }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "d6zYDZ",
+                                  "name": "Time limit read-back",
+                                  "width": "fill_container",
+                                  "justifyContent": "end",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "CiYRb",
+                                      "name": "Read-back",
+                                      "fill": "$subtle",
+                                      "content": "Active agent time · pauses and waiting for you don’t count",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
                                     }
                                   ]
                                 }
@@ -26588,7 +26674,7 @@
                                   "content": "Time limit"
                                 },
                                 "yeeIR": {
-                                  "content": "30 minutes"
+                                  "content": "30 min active agent time"
                                 }
                               }
                             },
@@ -38283,7 +38369,7 @@
           "y": 10832,
           "name": "States · Agent execution",
           "width": 4896,
-          "height": 2168,
+          "height": 3216,
           "layout": "none",
           "children": [
             {
@@ -39779,7 +39865,7 @@
                   "id": "NNRH8",
                   "layoutPosition": "absolute",
                   "x": 508,
-                  "y": 378,
+                  "y": 342,
                   "name": "Run permissions popover",
                   "width": 460,
                   "fill": "$raised",
@@ -39876,7 +39962,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Changes apply from the next agent invocation. The invocation running now keeps the permissions it started with.",
+                          "content": "Apply from next invocation: the invocation running now keeps its permissions. Apply now: Builder stops at its next checkpoint and Implement restarts from it with the new permissions. Both change Run 128 only.",
                           "lineHeight": 1.6,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -40252,16 +40338,6 @@
                       "alignItems": "center",
                       "children": [
                         {
-                          "type": "text",
-                          "id": "Q7LtId",
-                          "name": "Scope note",
-                          "fill": "$subtle",
-                          "content": "Run 128 only",
-                          "fontFamily": "$font",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        },
-                        {
                           "type": "frame",
                           "id": "utITF",
                           "name": "Footer space",
@@ -40285,10 +40361,29 @@
                           }
                         },
                         {
+                          "id": "v2ssd",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Apply now",
+                          "height": 30,
+                          "descendants": {
+                            "xfnek": {
+                              "enabled": true,
+                              "icon": "refresh-cw",
+                              "width": 12,
+                              "height": 12
+                            },
+                            "Y7HQGw": {
+                              "content": "Apply now",
+                              "fontSize": 11
+                            }
+                          }
+                        },
+                        {
                           "id": "JOLcW",
                           "type": "ref",
                           "ref": "u1XBP",
-                          "name": "Apply to this run",
+                          "name": "Apply from next invocation",
                           "height": 30,
                           "fill": "$accent",
                           "stroke": "$accent",
@@ -40300,7 +40395,7 @@
                               "fill": "$inverse-text"
                             },
                             "Y7HQGw": {
-                              "content": "Apply to this run",
+                              "content": "Apply from next invocation",
                               "fontSize": 11,
                               "fill": "$inverse-text"
                             }
@@ -40702,6 +40797,16 @@
                                   "fontWeight": "normal"
                                 },
                                 {
+                                  "type": "text",
+                                  "id": "hBn2V",
+                                  "name": "Request wait",
+                                  "fill": "$text",
+                                  "content": "Builder is waiting on this command · denied automatically in 9:42 (at 12:18) if you don’t answer.",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
                                   "type": "frame",
                                   "id": "Uz06y",
                                   "name": "Request actions",
@@ -40709,16 +40814,6 @@
                                   "gap": 8,
                                   "alignItems": "center",
                                   "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "hBn2V",
-                                      "name": "Request wait",
-                                      "fill": "$subtle",
-                                      "content": "Builder is paused on this command. No answer in 10 min denies it.",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    },
                                     {
                                       "type": "frame",
                                       "id": "KevIt",
@@ -41272,7 +41367,7 @@
                                           "strokeWidth": 1.5,
                                           "descendants": {
                                             "w1g9B": {
-                                              "content": "2 000 000"
+                                              "content": "2,000,000"
                                             }
                                           }
                                         },
@@ -41320,7 +41415,7 @@
                                           "id": "eQQjW",
                                           "name": "Limit current",
                                           "fill": "$muted",
-                                          "content": "Used 24 of 30 minutes",
+                                          "content": "Used 24 of 30 min of active agent time",
                                           "fontFamily": "$font",
                                           "fontSize": 11,
                                           "fontWeight": "normal"
@@ -41353,7 +41448,7 @@
                                           "id": "e2BGi",
                                           "name": "Read-back",
                                           "fill": "$subtle",
-                                          "content": "6 minutes left",
+                                          "content": "6 min left · pauses don’t count",
                                           "fontFamily": "$font",
                                           "fontSize": 10,
                                           "fontWeight": "normal"
@@ -41580,7 +41675,7 @@
                       "fill": "$muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Type or paste a whole number. Digits are grouped with spaces as you type; spaces, commas and underscores in pasted text are removed. The read-back under the field shows the compact value.",
+                      "content": "Type or paste a whole number. Digits are grouped with the locale’s thousands separator as you type (en: 1,400,000). Group separators, spaces and underscores in pasted text are removed; a decimal separator or a unit letter makes the value invalid. The read-back under the field shows the compact value.",
                       "lineHeight": 1.6,
                       "fontFamily": "$font",
                       "fontSize": 12,
@@ -41613,7 +41708,7 @@
                           "height": 38,
                           "descendants": {
                             "w1g9B": {
-                              "content": "1 400 000",
+                              "content": "1,400,000",
                               "fill": "$text"
                             }
                           }
@@ -41760,7 +41855,7 @@
                               "id": "rHJWF",
                               "name": "Message",
                               "fill": "$text",
-                              "content": "Use digits only, for example 1400000.",
+                              "content": "Use digits only, for example 1,400,000.",
                               "fontFamily": "$font",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -41863,7 +41958,7 @@
                           "strokeWidth": 1.5,
                           "descendants": {
                             "w1g9B": {
-                              "content": "250 000 000",
+                              "content": "12,000,000",
                               "fill": "$text"
                             }
                           }
@@ -41890,7 +41985,7 @@
                               "id": "tcMlX",
                               "name": "Message",
                               "fill": "$text",
-                              "content": "A run budget can be at most 100M tokens.",
+                              "content": "A run budget can be at most 10M tokens (project setting).",
                               "fontFamily": "$font",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -41926,7 +42021,7 @@
                       "fill": "$muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Below 1 000: the exact number. From 1 000: k; from 1 000 000: M; from 1 000 000 000: B. One decimal while the scaled value is below 100, none from 100 up; a trailing .0 is dropped. Round half up; a value that rounds to 1 000 of a unit moves to the next unit. Add “tokens” wherever the unit is not obvious from the label. Tooltips show the exact count.",
+                      "content": "Below 1,000: the exact number. From 1,000: k; from 1,000,000: M; from 1,000,000,000: B. One decimal while the scaled value is below 100, none from 100 up; a trailing .0 is dropped. Round half up; a value that rounds to 1,000 of a unit moves to the next unit. Add “tokens” wherever the unit is not obvious from the label. Tooltips show the exact count, grouped for the locale.",
                       "lineHeight": 1.6,
                       "fontFamily": "$font",
                       "fontSize": 12,
@@ -42033,7 +42128,7 @@
                               "id": "r4sq1",
                               "name": "Why",
                               "fill": "$subtle",
-                              "content": "below 1 000: exact",
+                              "content": "below 1,000: exact",
                               "fontFamily": "$font",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -42060,7 +42155,7 @@
                               "fill": "$muted",
                               "textGrowth": "fixed-width",
                               "width": 140,
-                              "content": "12 480",
+                              "content": "12,480",
                               "fontFamily": "$mono",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -42109,7 +42204,7 @@
                               "fill": "$muted",
                               "textGrowth": "fixed-width",
                               "width": 140,
-                              "content": "18 000",
+                              "content": "18,000",
                               "fontFamily": "$mono",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -42158,7 +42253,7 @@
                               "fill": "$muted",
                               "textGrowth": "fixed-width",
                               "width": 140,
-                              "content": "250 000",
+                              "content": "250,000",
                               "fontFamily": "$mono",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -42207,7 +42302,7 @@
                               "fill": "$muted",
                               "textGrowth": "fixed-width",
                               "width": 140,
-                              "content": "412 345",
+                              "content": "412,345",
                               "fontFamily": "$mono",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -42229,7 +42324,7 @@
                               "id": "IkWnk",
                               "name": "Why",
                               "fill": "$subtle",
-                              "content": "rounded; tooltip 412 345 tokens",
+                              "content": "rounded; tooltip 412,345 tokens",
                               "fontFamily": "$font",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -42256,7 +42351,7 @@
                               "fill": "$muted",
                               "textGrowth": "fixed-width",
                               "width": 140,
-                              "content": "999 960",
+                              "content": "999,960",
                               "fontFamily": "$mono",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -42278,7 +42373,7 @@
                               "id": "ujoGb",
                               "name": "Why",
                               "fill": "$subtle",
-                              "content": "rounds to 1 000k → next unit",
+                              "content": "rounds to 1,000k → next unit",
                               "fontFamily": "$font",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -42305,7 +42400,7 @@
                               "fill": "$muted",
                               "textGrowth": "fixed-width",
                               "width": 140,
-                              "content": "1 400 000",
+                              "content": "1,400,000",
                               "fontFamily": "$mono",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -42354,7 +42449,7 @@
                               "fill": "$muted",
                               "textGrowth": "fixed-width",
                               "width": 140,
-                              "content": "20 000 000",
+                              "content": "20,000,000",
                               "fontFamily": "$mono",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -42884,6 +42979,822 @@
                           ]
                         }
                       ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "e8FlRa",
+              "x": 48,
+              "y": 2164,
+              "name": "02.M · Project settings / Limits label",
+              "fill": "$muted",
+              "content": "02.M · Project settings / Limits",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "c7e729",
+              "x": 48,
+              "y": 2196,
+              "name": "02.M · Project settings / Limits",
+              "clip": true,
+              "width": 1440,
+              "height": 960,
+              "fill": "$surface",
+              "children": [
+                {
+                  "id": "djrg9",
+                  "type": "ref",
+                  "ref": "zo9Py",
+                  "name": "Sidebar",
+                  "height": "fill_container",
+                  "descendants": {
+                    "JI3gd": {
+                      "fill": "$sidebar"
+                    },
+                    "JI3gd/sQnmq": {
+                      "fill": "$muted"
+                    },
+                    "JI3gd/YWsP0": {
+                      "fill": "$muted"
+                    },
+                    "A028bq": {
+                      "fill": "$sidebar"
+                    },
+                    "A028bq/sQnmq": {
+                      "fill": "$muted"
+                    },
+                    "A028bq/YWsP0": {
+                      "fill": "$muted"
+                    },
+                    "wqkkE": {
+                      "fill": "$hover"
+                    },
+                    "wqkkE/sQnmq": {
+                      "fill": "$text"
+                    },
+                    "wqkkE/YWsP0": {
+                      "fill": "$text"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "Ismhu",
+                  "name": "Workspace",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "kKjGJ",
+                      "name": "Topbar",
+                      "width": "fill_container",
+                      "height": 64,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 12,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "y5LCrA",
+                          "name": "Breadcrumb",
+                          "fill": "$muted",
+                          "content": "Kontur / Project settings / Limits",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "BqbFw",
+                          "name": "Topbar space",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "ZtaAU",
+                          "name": "Save status",
+                          "fill": "$muted",
+                          "content": "All changes saved",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "xpsLC",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "enabled": false,
+                          "name": "Publish v3",
+                          "height": 36,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "check",
+                              "fill": "$inverse-text"
+                            },
+                            "Y7HQGw": {
+                              "content": "Publish v3",
+                              "fill": "$inverse-text"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "icf3O",
+                      "name": "Page heading",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": [
+                        28,
+                        32,
+                        24,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "yiCcU",
+                          "name": "Page title",
+                          "fill": "$text",
+                          "content": "Project settings",
+                          "fontFamily": "$font",
+                          "fontSize": 27,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "cuVbr",
+                          "name": "Page description",
+                          "fill": "$muted",
+                          "content": "Defaults and limits for Kontur. They apply to new tasks and runs in this project.",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QLTRa",
+                      "name": "Settings body",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "e8yAA",
+                          "name": "Settings tabs",
+                          "width": "fill_container",
+                          "height": 42,
+                          "stroke": "$hairline",
+                          "strokeWidth": {
+                            "bottom": 1
+                          },
+                          "gap": 20,
+                          "padding": [
+                            0,
+                            32
+                          ],
+                          "children": [
+                            {
+                              "id": "TBCzO",
+                              "type": "ref",
+                              "ref": "SOW6S",
+                              "name": "General tab",
+                              "height": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": 0,
+                              "descendants": {
+                                "v66T9G": {
+                                  "content": "General",
+                                  "fill": "$muted"
+                                }
+                              }
+                            },
+                            {
+                              "id": "Xakyu",
+                              "type": "ref",
+                              "ref": "SOW6S",
+                              "name": "Limits tab",
+                              "height": "fill_container",
+                              "stroke": "$text",
+                              "strokeWidth": {
+                                "bottom": 2
+                              },
+                              "descendants": {
+                                "v66T9G": {
+                                  "content": "Limits",
+                                  "fill": "$text"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "No5lw",
+                          "name": "Limits content",
+                          "width": 760,
+                          "layout": "vertical",
+                          "gap": 8,
+                          "padding": [
+                            24,
+                            32
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "q9xVp",
+                              "name": "Token budgets heading",
+                              "fill": "$text",
+                              "content": "Token budgets",
+                              "fontFamily": "$font",
+                              "fontSize": 15,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Ml60C",
+                              "name": "Maximum run budget",
+                              "width": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 32,
+                              "padding": [
+                                18,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "mNmVP",
+                                  "name": "Maximum run budget text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "IIDIH",
+                                      "name": "Setting name",
+                                      "fill": "$text",
+                                      "content": "Maximum run budget",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "L29QuD",
+                                      "name": "Setting description",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "The largest token budget a task, a run or a raised limit may have. Budget fields reject larger values and name this maximum. There is no minimum beyond more than 0.",
+                                      "lineHeight": 1.6,
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "MusI9",
+                                  "name": "Maximum run budget input",
+                                  "width": 240,
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "id": "la8Zc",
+                                      "type": "ref",
+                                      "ref": "sN3du",
+                                      "name": "Token field",
+                                      "width": "fill_container",
+                                      "height": 36,
+                                      "descendants": {
+                                        "w1g9B": {
+                                          "content": "10,000,000"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "SkKCa",
+                                      "name": "Read-back",
+                                      "fill": "$subtle",
+                                      "content": "= 10M tokens · default",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "y7xpzT",
+                              "name": "Default run budget",
+                              "width": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 32,
+                              "padding": [
+                                18,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "hVq6m",
+                                  "name": "Default run budget text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "EaxqR",
+                                      "name": "Setting name",
+                                      "fill": "$text",
+                                      "content": "Default run budget",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "q3bPAu",
+                                      "name": "Setting description",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Prefilled in New task and bulk creation. Must not exceed the maximum.",
+                                      "lineHeight": 1.6,
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "W471BS",
+                                  "name": "Default run budget input",
+                                  "width": 240,
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "id": "Pkkk2",
+                                      "type": "ref",
+                                      "ref": "sN3du",
+                                      "name": "Token field",
+                                      "width": "fill_container",
+                                      "height": 36,
+                                      "descendants": {
+                                        "w1g9B": {
+                                          "content": "1,400,000"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "Skfrf",
+                                      "name": "Read-back",
+                                      "fill": "$subtle",
+                                      "content": "= 1.4M tokens",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "XpyYy",
+                              "name": "Daily project budget",
+                              "width": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 32,
+                              "padding": [
+                                18,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "aHZQo",
+                                  "name": "Daily project budget text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "TPoMR",
+                                      "name": "Setting name",
+                                      "fill": "$text",
+                                      "content": "Daily project budget",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "UZ9Oa",
+                                      "name": "Setting description",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Tokens all runs in Kontur may use per day. Shown in the status bar and Overview; new work waits once it is used up.",
+                                      "lineHeight": 1.6,
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "b8rFkk",
+                                  "name": "Daily project budget input",
+                                  "width": 240,
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "id": "s1UZsV",
+                                      "type": "ref",
+                                      "ref": "sN3du",
+                                      "name": "Token field",
+                                      "width": "fill_container",
+                                      "height": 36,
+                                      "descendants": {
+                                        "w1g9B": {
+                                          "content": "20,000,000"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "LwyUd",
+                                      "name": "Read-back",
+                                      "fill": "$subtle",
+                                      "content": "= 20M tokens",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "Lj3gl",
+                              "name": "Time heading",
+                              "fill": "$text",
+                              "content": "Time",
+                              "fontFamily": "$font",
+                              "fontSize": 15,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "F8BPR",
+                              "name": "Default time limit",
+                              "width": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 32,
+                              "padding": [
+                                18,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "ypwNR",
+                                  "name": "Default time limit text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "ECQSm",
+                                      "name": "Setting name",
+                                      "fill": "$text",
+                                      "content": "Default time limit",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "IMWOt",
+                                      "name": "Setting description",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Counts active agent time only. Time paused or waiting for you (plan approval, questions, permission requests) doesn’t count.",
+                                      "lineHeight": 1.6,
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "mMBsY",
+                                  "name": "Default time limit input",
+                                  "width": 240,
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "id": "bPPG9",
+                                      "type": "ref",
+                                      "ref": "ZGwlv",
+                                      "name": "Time select",
+                                      "width": "fill_container",
+                                      "height": 36,
+                                      "descendants": {
+                                        "ObbY7": {
+                                          "content": "30 minutes"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "XHqT2",
+                                      "name": "Read-back",
+                                      "fill": "$subtle",
+                                      "content": "active agent time",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "id": "r8sFT",
+                              "type": "ref",
+                              "ref": "q5LzI",
+                              "name": "Limit changes notice",
+                              "width": "fill_container",
+                              "descendants": {
+                                "GkfFF": {
+                                  "icon": "history"
+                                },
+                                "CoAOk": {
+                                  "content": "Changes apply to new runs"
+                                },
+                                "szYuk": {
+                                  "content": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum."
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "fTkf0",
+              "x": 1568,
+              "y": 2164,
+              "name": "Apply now states label",
+              "fill": "$muted",
+              "content": "02.J states · Apply now pending → applied (compact)",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "LJmTH",
+              "x": 1568,
+              "y": 2196,
+              "name": "Apply now states",
+              "width": 1440,
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "W1IafF",
+                  "name": "Pending",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "cornerRadius": 12,
+                  "stroke": "$hairline",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 24,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "WHR9R",
+                      "name": "State caption",
+                      "fill": "$subtle",
+                      "content": "APPLY NOW · PENDING",
+                      "fontFamily": "$font",
+                      "fontSize": 10,
+                      "fontWeight": "600",
+                      "letterSpacing": 0.5
+                    },
+                    {
+                      "id": "Ytmjg",
+                      "type": "ref",
+                      "ref": "q5LzI",
+                      "name": "Applying notice",
+                      "width": "fill_container",
+                      "descendants": {
+                        "GkfFF": {
+                          "icon": "loader"
+                        },
+                        "CoAOk": {
+                          "content": "Applying new permissions at the next checkpoint…"
+                        },
+                        "szYuk": {
+                          "content": "Builder finishes the command it is running (pnpm test src/auth), then stops. Its changes are committed as a checkpoint and Implement restarts from it with the new permissions. Nothing in the worktree is lost; the agent’s unsaved reasoning since its last turn is not carried over unless the CLI can resume its session."
+                        }
+                      }
+                    },
+                    {
+                      "id": "v16vrg",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Permissions",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Permissions"
+                        },
+                        "yeeIR": {
+                          "content": "Applying at next checkpoint… · pnpm build added"
+                        }
+                      }
+                    },
+                    {
+                      "id": "FuF8f",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Last checkpoint",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Last checkpoint"
+                        },
+                        "yeeIR": {
+                          "content": "4b92ad0 · 12:06"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "o9ljZ1",
+                      "name": "Pending actions",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "end",
+                      "children": [
+                        {
+                          "id": "RL7CZ",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Cancel apply",
+                          "height": 30,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "undo-2",
+                              "width": 12,
+                              "height": 12
+                            },
+                            "Y7HQGw": {
+                              "content": "Keep for next invocation instead",
+                              "fontSize": 11
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qDNB4",
+                  "name": "Applied",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "cornerRadius": 12,
+                  "stroke": "$hairline",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 24,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "LgCxu",
+                      "name": "State caption",
+                      "fill": "$subtle",
+                      "content": "APPLIED · NEW INVOCATION",
+                      "fontFamily": "$font",
+                      "fontSize": 10,
+                      "fontWeight": "600",
+                      "letterSpacing": 0.5
+                    },
+                    {
+                      "id": "t9a6w",
+                      "type": "ref",
+                      "ref": "q5LzI",
+                      "name": "Applied notice",
+                      "width": "fill_container",
+                      "descendants": {
+                        "GkfFF": {
+                          "icon": "check"
+                        },
+                        "CoAOk": {
+                          "content": "New permissions active since 12:09"
+                        },
+                        "szYuk": {
+                          "content": "Builder restarted Implement from checkpoint 9d07b3f (invocation 2). The first invocation’s transcript stays in Activity."
+                        }
+                      }
+                    },
+                    {
+                      "id": "e5ah4",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Permissions",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Permissions"
+                        },
+                        "yeeIR": {
+                          "content": "Builder · Edit files · 4 commands · Network off · change ↗"
+                        }
+                      }
+                    },
+                    {
+                      "id": "k9AaPl",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Last checkpoint",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Last checkpoint"
+                        },
+                        "yeeIR": {
+                          "content": "9d07b3f · 12:09 · saved to apply permissions"
+                        }
+                      }
                     }
                   ]
                 }
@@ -121765,50 +122676,50 @@
               "y": 68,
               "name": "04.B · Connection cannot enforce a permission label",
               "fill": "$muted",
-              "content": "04.B · Connection cannot enforce a permission (compact, Explorer on Claude)",
+              "content": "04.B · Options the connection can’t enforce are disabled (compact, Explorer on Claude)",
               "fontFamily": "$font",
               "fontSize": 14,
               "fontWeight": "normal"
             },
             {
               "type": "frame",
-              "id": "G5oNzl",
+              "id": "W0Owo",
               "x": 1568,
               "y": 100,
-              "name": "04.B · Enforcement gap · Explorer on Claude",
-              "width": 420,
+              "name": "04.B · Connection cannot enforce · Explorer on Claude",
+              "width": 460,
               "fill": "$sidebar",
               "cornerRadius": "$radius-panel",
               "stroke": "$hairline",
               "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 14,
+              "gap": 16,
               "padding": 20,
               "children": [
                 {
                   "type": "frame",
-                  "id": "oCE6j",
-                  "name": "Enforcement heading",
+                  "id": "LBaFk",
+                  "name": "Heading",
                   "width": "fill_container",
                   "layout": "vertical",
                   "gap": 4,
                   "children": [
                     {
                       "type": "text",
-                      "id": "Toa1f",
-                      "name": "Enforcement title",
+                      "id": "P6tBz",
+                      "name": "Title",
                       "fill": "$text",
-                      "content": "Enforced by Claude Code",
+                      "content": "Explorer · permissions",
                       "fontFamily": "$font",
                       "fontSize": 13,
                       "fontWeight": "500"
                     },
                     {
                       "type": "text",
-                      "id": "fM2e5",
-                      "name": "Enforcement connection",
+                      "id": "wIzCc",
+                      "name": "Subtitle",
                       "fill": "$muted",
-                      "content": "Explorer · Claude · Kontur · checked 14:02",
+                      "content": "Claude · Kontur · only options Claude Code can enforce · checked 14:02",
                       "fontFamily": "$font",
                       "fontSize": 11,
                       "fontWeight": "normal"
@@ -121817,231 +122728,362 @@
                 },
                 {
                   "type": "frame",
-                  "id": "e7ROfK",
-                  "name": "Read-only · enforced",
+                  "id": "i8oozH",
+                  "name": "Repository access group",
                   "width": "fill_container",
-                  "gap": 10,
-                  "children": [
-                    {
-                      "type": "icon",
-                      "id": "BI4BX",
-                      "name": "Enforcement icon",
-                      "width": 14,
-                      "height": 14,
-                      "icon": "circle-check",
-                      "library": "lucide",
-                      "fill": "$text"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "u3saJ",
-                      "name": "Enforcement text",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "gap": 4,
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "xghAJ",
-                          "name": "Setting",
-                          "fill": "$text",
-                          "content": "Read-only · enforced",
-                          "fontFamily": "$font",
-                          "fontSize": 12,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "gB1fj",
-                          "name": "Mechanism",
-                          "fill": "$muted",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "denied tools · Edit, Write, NotebookEdit",
-                          "lineHeight": 1.5,
-                          "fontFamily": "$mono",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "qFDim",
-                  "name": "Allowed commands · enforced",
-                  "width": "fill_container",
-                  "gap": 10,
-                  "children": [
-                    {
-                      "type": "icon",
-                      "id": "wzjrr",
-                      "name": "Enforcement icon",
-                      "width": 14,
-                      "height": 14,
-                      "icon": "circle-check",
-                      "library": "lucide",
-                      "fill": "$text"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "LgryX",
-                      "name": "Enforcement text",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "gap": 4,
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "pcETz",
-                          "name": "Setting",
-                          "fill": "$text",
-                          "content": "Allowed commands · enforced",
-                          "fontFamily": "$font",
-                          "fontSize": 12,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "Fc17W",
-                          "name": "Mechanism",
-                          "fill": "$muted",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "allowed tools · Bash(git:*), Bash(rg:*)",
-                          "lineHeight": 1.5,
-                          "fontFamily": "$mono",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "PW7V8",
-                  "name": "Network off · not enforced for commands",
-                  "width": "fill_container",
-                  "gap": 10,
-                  "children": [
-                    {
-                      "type": "icon",
-                      "id": "r42Xs",
-                      "name": "Enforcement icon",
-                      "width": 14,
-                      "height": 14,
-                      "icon": "circle-alert",
-                      "library": "lucide",
-                      "fill": "$text"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "sAq0Q",
-                      "name": "Enforcement text",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "gap": 4,
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "tSd1i",
-                          "name": "Setting",
-                          "fill": "$text",
-                          "content": "Network off · not enforced for commands",
-                          "fontFamily": "$font",
-                          "fontSize": 12,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "PdOCv",
-                          "name": "Mechanism",
-                          "fill": "$muted",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "denied tools · WebFetch, WebSearch",
-                          "lineHeight": 1.5,
-                          "fontFamily": "$mono",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "id": "jGifX",
-                  "type": "ref",
-                  "ref": "q5LzI",
-                  "name": "Network gap notice",
-                  "width": "fill_container",
-                  "descendants": {
-                    "GkfFF": {
-                      "icon": "triangle-alert"
-                    },
-                    "CoAOk": {
-                      "content": "Allowed commands can still reach the network"
-                    },
-                    "szYuk": {
-                      "content": "Claude Code blocks its web tools, but a command such as git fetch runs with the network available. Remove such commands, or turn network access on so the profile says what actually happens."
-                    }
-                  }
-                },
-                {
-                  "type": "frame",
-                  "id": "det5y",
-                  "name": "Gap actions",
-                  "width": "fill_container",
+                  "layout": "vertical",
                   "gap": 8,
                   "children": [
                     {
-                      "id": "L9WaEC",
-                      "type": "ref",
-                      "ref": "u1XBP",
-                      "name": "Edit allowed commands",
-                      "height": 30,
-                      "descendants": {
-                        "xfnek": {
-                          "icon": "list",
-                          "width": 12,
-                          "height": 12
-                        },
-                        "Y7HQGw": {
-                          "content": "Edit allowed commands",
-                          "fontSize": 11
-                        }
-                      }
+                      "type": "text",
+                      "id": "oPIXG",
+                      "name": "Repository access label",
+                      "fill": "$muted",
+                      "content": "Repository access",
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
                     },
                     {
-                      "id": "gtVrk",
-                      "type": "ref",
-                      "ref": "u1XBP",
-                      "name": "Turn network on",
-                      "height": 30,
-                      "descendants": {
-                        "xfnek": {
-                          "icon": "globe",
-                          "width": 12,
-                          "height": 12
+                      "type": "frame",
+                      "id": "F5dak",
+                      "name": "Options",
+                      "gap": 20,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "s68kA",
+                          "name": "Read-only option",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "CwQtf",
+                              "name": "Radio",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "circle-dot",
+                              "library": "lucide",
+                              "fill": "$text"
+                            },
+                            {
+                              "type": "text",
+                              "id": "q54Rf",
+                              "name": "Option label",
+                              "fill": "$text",
+                              "content": "Read-only",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
                         },
-                        "Y7HQGw": {
-                          "content": "Turn network on",
-                          "fontSize": 11
+                        {
+                          "type": "frame",
+                          "id": "d5oNbl",
+                          "name": "Edit files in the task worktree option",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "n0Nk3",
+                              "name": "Radio",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "circle",
+                              "library": "lucide",
+                              "fill": "$muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "U2U2y",
+                              "name": "Option label",
+                              "fill": "$muted",
+                              "content": "Edit files in the task worktree",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
                         }
-                      }
+                      ]
                     }
                   ]
                 },
                 {
+                  "type": "frame",
+                  "id": "qdMjN",
+                  "name": "Commands group",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "PqMXb",
+                      "name": "Commands label",
+                      "fill": "$muted",
+                      "content": "Commands",
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "R4tgL",
+                      "name": "Allowed commands option",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "i6O8Iq",
+                          "name": "Radio",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "circle-dot",
+                          "library": "lucide",
+                          "fill": "$text"
+                        },
+                        {
+                          "type": "text",
+                          "id": "pytC6",
+                          "name": "Option label",
+                          "fill": "$text",
+                          "content": "Allowed commands",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "iyxKv",
+                      "name": "Entries",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        22
+                      ],
+                      "children": [
+                        {
+                          "id": "i4vVp",
+                          "type": "ref",
+                          "ref": "bpmzN",
+                          "name": "Command git log",
+                          "descendants": {
+                            "XCM24": {
+                              "content": "git log"
+                            }
+                          }
+                        },
+                        {
+                          "id": "qF1si",
+                          "type": "ref",
+                          "ref": "bpmzN",
+                          "name": "Command git diff",
+                          "descendants": {
+                            "XCM24": {
+                              "content": "git diff"
+                            }
+                          }
+                        },
+                        {
+                          "id": "f9ENo",
+                          "type": "ref",
+                          "ref": "bpmzN",
+                          "name": "Command rg",
+                          "descendants": {
+                            "XCM24": {
+                              "content": "rg"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "r4p5rI",
+                      "name": "Any command in the worktree option",
+                      "opacity": 0.45,
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "LWeiA",
+                          "name": "Radio",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "circle",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "nf1zp",
+                          "name": "Option label",
+                          "fill": "$muted",
+                          "content": "Any command in the worktree",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "J5RohL",
+                      "name": "Disabled reason",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        22
+                      ],
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "OoLYh",
+                          "name": "Lock",
+                          "width": 11,
+                          "height": 11,
+                          "icon": "lock",
+                          "library": "lucide",
+                          "fill": "$subtle"
+                        },
+                        {
+                          "type": "text",
+                          "id": "NtPye",
+                          "name": "Reason",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Unavailable on this connection: Claude Code can’t confine commands to the worktree.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "G03i9",
+                  "name": "Network group",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Q7qYD",
+                      "name": "Network label",
+                      "fill": "$muted",
+                      "content": "Network",
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "lW7Sp",
+                      "name": "Network row",
+                      "opacity": 0.45,
+                      "gap": 10,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "E1Y9KK",
+                          "type": "ref",
+                          "ref": "K8ItM",
+                          "name": "Network switch (on, locked)",
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "justifyContent": "end",
+                          "descendants": {
+                            "Y0aZS": {
+                              "fill": "$inverse-text"
+                            }
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "id": "q43RMP",
+                          "name": "Network state",
+                          "fill": "$text",
+                          "content": "On",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "L1B0m",
+                      "name": "Disabled reason",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        22
+                      ],
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "RuJto",
+                          "name": "Lock",
+                          "width": 11,
+                          "height": 11,
+                          "icon": "lock",
+                          "library": "lucide",
+                          "fill": "$subtle"
+                        },
+                        {
+                          "type": "text",
+                          "id": "cOfD0",
+                          "name": "Reason",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Off is unavailable on this connection: Claude Code can block its web tools but not network use by commands, so network stays on. The run summary says so.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "Lf6FG",
+                  "name": "Divider",
+                  "fill": "$hairline",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
                   "type": "text",
-                  "id": "O2XQlW",
-                  "name": "Gap consequence",
+                  "id": "a2H5ma",
+                  "name": "Rule",
                   "fill": "$subtle",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Publishing is not blocked. Runs of this profile list the gap in their permission summary.",
+                  "content": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font",
                   "fontSize": 10,
