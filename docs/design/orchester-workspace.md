@@ -752,7 +752,7 @@ Connection states (compact inspector heads in `DLRW5`): not signed in `Cr0P2` (c
 
 ### Pull requests states
 
-08.D `dmib5` unavailable (no GitHub connection), 08.E `FYQMv` stale, 08.F `P1tSu` rate limited (relative reset, tooltip `Wn3fn` with local time), 08.G `E9ZThy` wrong account (sync status *Paused · gh signed in as ivan-work*, the last list kept, command `gh auth switch -h github.com -u ivanzaida`, *Check again*, *Use this account (ivan-work)*), 08.H `tu1fW` missing scope (command `gh auth refresh -h github.com -s repo`, *Check again*). 08.G and 08.H are at x 48 / 1072, y 1200 in `u77pi` (now 1680 high; section `McWTM` 3152).
+08.D `dmib5` unavailable (no linked GitHub repository: *Kontur isn’t linked to a GitHub repository. Pull requests come from the repository detected in the project folder’s origin remote, read through the GitHub CLI (gh). Tasks and runs keep working locally.*, *Open Connections*, no tab row; panel 520 wide), 08.E `FYQMv` stale, 08.F `P1tSu` rate limited (relative reset, tooltip `Wn3fn` with local time), 08.G `E9ZThy` wrong account (sync status *Paused · gh signed in as ivan-work*, the last list kept, command `gh auth switch -h github.com -u ivanzaida`, *Check again*, *Use this account (ivan-work)*), 08.H `tu1fW` missing scope (command `gh auth refresh -h github.com -s repo`, *Check again*). While a search filters the list, the footer counts both: *4 of 8 open pull requests*. The footer follows the last row 20px below it; rows scroll only when they don't fit. 08.G and 08.H are at x 48 / 1072, y 1200 in `u77pi` (now 1680 high; section `McWTM` 3152).
 
 ### Project settings / General
 

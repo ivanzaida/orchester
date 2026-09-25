@@ -100,10 +100,14 @@ pub enum ExtraTypography {
   CompactStatusLabel,
   /// Title of an inspector panel, e.g. a connection's name (`kU9QO`).
   InspectorTitle,
+  /// Title of a pull request list row (`G2kdX` in `QHBNZ`).
+  RowTitle,
+  /// Leading icon of a pull request list row (`r0ZlXX` in `QHBNZ`), 20px.
+  IconRow,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 44] = [
+  const ALL: [Self; 46] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -148,6 +152,8 @@ impl ExtraTypography {
     Self::IconLarge,
     Self::CompactStatusLabel,
     Self::InspectorTitle,
+    Self::RowTitle,
+    Self::IconRow,
   ];
 
   fn name(self) -> &'static str {
@@ -196,6 +202,8 @@ impl ExtraTypography {
       Self::IconLarge => "icon-large",
       Self::CompactStatusLabel => "compact-status-label",
       Self::InspectorTitle => "inspector-title",
+      Self::RowTitle => "row-title",
+      Self::IconRow => "icon-row",
     }
   }
 
@@ -224,6 +232,11 @@ fn mono(font_size: f32, color: &str) -> TextStyle {
   }
 }
 
+/// `base` with `line_height` between wrapped lines.
+fn leading(line_height: f32, base: TextStyle) -> TextStyle {
+  TextStyle { line_height, ..base }
+}
+
 fn icon(font_size: f32) -> TextStyle {
   TextStyle {
     font_family: ICON_FONT.into(),
@@ -249,10 +262,7 @@ impl ExtraTypography {
         line_height: 1.18,
         ..style(44.0, FontWeight::Medium, TEXT)
       },
-      Self::Lead => TextStyle {
-        line_height: 1.65,
-        ..style(16.0, FontWeight::Normal, MUTED)
-      },
+      Self::Lead => leading(1.65, style(16.0, FontWeight::Normal, MUTED)),
       Self::Eyebrow => TextStyle {
         letter_spacing: 1.6,
         ..style(10.0, FontWeight::Normal, MUTED)
@@ -260,25 +270,16 @@ impl ExtraTypography {
       Self::Subheading => style(17.0, FontWeight::Medium, TEXT),
       Self::StepNumber => mono(12.0, SUBTLE),
       Self::PageTitle => style(27.0, FontWeight::Medium, TEXT),
-      Self::Detail => TextStyle {
-        line_height: 1.6,
-        ..style(11.0, FontWeight::Normal, MUTED)
-      },
+      Self::Detail => leading(1.6, style(11.0, FontWeight::Normal, MUTED)),
       Self::Footnote => style(10.0, FontWeight::Normal, MUTED),
       Self::NoticeHeading => style(12.0, FontWeight::Medium, TEXT),
       Self::ScreenTitle => style(28.0, FontWeight::Medium, TEXT),
       Self::FormLabel => style(12.0, FontWeight::Medium, TEXT),
       Self::StatusLabel => style(11.0, FontWeight::Medium, TEXT),
       Self::NavCount => mono(11.0, MUTED),
-      Self::Brief => TextStyle {
-        line_height: 1.7,
-        ..style(13.0, FontWeight::Normal, TEXT)
-      },
+      Self::Brief => leading(1.7, style(13.0, FontWeight::Normal, TEXT)),
       Self::DialogTitle => style(20.0, FontWeight::Medium, TEXT),
-      Self::Explanation => TextStyle {
-        line_height: 1.6,
-        ..style(12.0, FontWeight::Normal, MUTED)
-      },
+      Self::Explanation => leading(1.6, style(12.0, FontWeight::Normal, MUTED)),
       Self::IconSmall => icon(12.0),
       Self::IconMarker => icon(13.0),
       Self::IconButton => icon(15.0),
@@ -297,22 +298,15 @@ impl ExtraTypography {
       Self::MonoTag => mono(9.0, MUTED),
       Self::MonoValue => mono(11.0, TEXT),
       Self::MonoField => mono(12.0, TEXT),
-      Self::Instructions => TextStyle {
-        line_height: 1.65,
-        ..style(12.0, FontWeight::Normal, TEXT)
-      },
-      Self::Hint => TextStyle {
-        line_height: 1.5,
-        ..style(10.0, FontWeight::Normal, MUTED)
-      },
+      Self::Instructions => leading(1.65, style(12.0, FontWeight::Normal, TEXT)),
+      Self::Hint => leading(1.5, style(10.0, FontWeight::Normal, MUTED)),
       Self::VersionFigure => style(18.0, FontWeight::Medium, TEXT),
-      Self::Summary => TextStyle {
-        line_height: 1.6,
-        ..style(13.0, FontWeight::Normal, MUTED)
-      },
+      Self::Summary => leading(1.6, style(13.0, FontWeight::Normal, MUTED)),
       Self::IconLarge => icon(22.0),
       Self::CompactStatusLabel => style(10.0, FontWeight::Medium, TEXT),
       Self::InspectorTitle => style(18.0, FontWeight::Medium, TEXT),
+      Self::RowTitle => style(15.0, FontWeight::Medium, TEXT),
+      Self::IconRow => icon(20.0),
     }
   }
 }

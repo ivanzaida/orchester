@@ -138,6 +138,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::InspectorTitle.role()` | 18/500 | inspector panel title (connection name, `kU9QO`) |
 | `ExtraTypography::CompactStatusLabel.role()` | 10/500 | status label in a list row (`v7McTX`) |
 | `ExtraTypography::IconSelect.role()` | lucide 14 | select chevron and option check (`eASPF`, `ClxwV`) |
+| `ExtraTypography::RowTitle.role()` | 15/500 | pull request list row title (`G2kdX` in `QHBNZ`) |
+| `ExtraTypography::IconRow.role()` | lucide 20 | leading icon of a pull request list row (`r0ZlXX`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

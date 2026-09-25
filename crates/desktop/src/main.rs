@@ -5,6 +5,7 @@ use orchester_desktop::{
   close::{CloseKind, Lifecycle, session_end},
   i18n,
   messages::Message,
+  programs::Programs,
   root::{self, Startup},
   runner::{QUIET_STOP_TIMEOUT, Runners},
   session::{AppSession, StartupError},
@@ -91,6 +92,7 @@ fn startup(session: &Result<AppSession, StartupError>, runtime: &Runtime) -> Sta
         workspace: session.workspace().clone(),
         lifecycle: Lifecycle::new(runners, runtime.handle().clone()),
         activity,
+        programs: Programs::processes(),
       }
     }
     Err(error) => {

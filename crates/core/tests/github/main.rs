@@ -6,6 +6,7 @@
 mod connection;
 mod detect;
 mod link;
+mod pull_requests;
 mod remote;
 mod replay;
 mod state;

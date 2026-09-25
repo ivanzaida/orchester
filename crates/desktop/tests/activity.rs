@@ -217,3 +217,19 @@ fn runner_online_or_absent_leaves_the_slot_to_the_activity() {
     ));
   }
 }
+
+#[test]
+fn activity_work_that_did_not_happen_replaces_its_success_without_a_failure() {
+  let mut log = ActivityLog::default();
+  let synced = log.start(spec("synced").quiet(), Instant::now());
+  log.finish(synced, at(1));
+  for second in [2, 3] {
+    let refused = log.start(spec("synced").quiet(), Instant::now());
+    log.finish_as(refused, Message::new("notSynced"), at(second));
+  }
+  // The latest event says the sync did not happen; nothing is pinned, and repeats merge.
+  assert_eq!(title(&log.slot()), "notSynced");
+  assert!(matches!(log.slot(), Slot::Latest(_)));
+  let recent: Vec<&str> = log.recent().iter().map(|event| event.title().key).collect();
+  assert_eq!(recent, ["notSynced", "synced"]);
+}

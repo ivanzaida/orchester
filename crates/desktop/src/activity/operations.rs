@@ -38,6 +38,32 @@ fn in_project(open: &OpenProject, place: Place) -> Target {
   }
 }
 
+/// Syncing the open pull requests of the project's repository with GitHub. Quiet: the Pull
+/// requests screen syncs every 60 s while it is shown, so only the outcome is listed.
+pub fn pull_request_sync(open: &OpenProject) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.pullRequestSync.running",
+    done: "statusBar.operations.pullRequestSync.done",
+    failed: "statusBar.operations.pullRequestSync.failed",
+  }
+  .unnamed()
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::PullRequests))
+  .quiet()
+}
+
+/// Handing a pull request's address to the default browser.
+pub fn pull_request_open(open: &OpenProject, number: u64) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.pullRequestOpen.running",
+    done: "statusBar.operations.pullRequestOpen.done",
+    failed: "statusBar.operations.pullRequestOpen.failed",
+  }
+  .named(&number.to_string())
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::PullRequests))
+}
+
 /// Autosave of a pipeline draft; only its outcome is listed.
 pub fn pipeline_draft(open: &OpenProject, id: ResourceId, name: &str) -> OperationSpec {
   Wording {

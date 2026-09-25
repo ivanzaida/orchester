@@ -254,22 +254,5 @@ fn open_log(project: &Path) -> io::Result<()> {
   } else {
     orchester_ipc::runner_log_dir(project)
   };
-  open_with_default_program(&target)
-}
-
-/// Hands `path` to the platform's default program (Explorer, `open`). The launcher exits once
-/// it has passed the path on and its exit code does not report whether that worked, so only a
-/// failure to start it is an error.
-#[cfg(any(windows, target_os = "macos"))]
-fn open_with_default_program(path: &Path) -> io::Result<()> {
-  let launcher = if cfg!(windows) { "explorer.exe" } else { "open" };
-  std::process::Command::new(launcher).arg(path).status().map(drop)
-}
-
-#[cfg(not(any(windows, target_os = "macos")))]
-fn open_with_default_program(path: &Path) -> io::Result<()> {
-  Err(io::Error::new(
-    io::ErrorKind::Unsupported,
-    format!("no default program launcher for {} on this platform", path.display()),
-  ))
+  crate::external::open_path(&target)
 }

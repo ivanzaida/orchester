@@ -1,5 +1,5 @@
 //! Project shell: the sidebar (`zo9Py`) beside the open project screen — the overview
-//! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), agent profiles (`WPmtS`),
+//! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), pull requests (`wGtxT`), agent profiles (`WPmtS`),
 //! connections (`a4Lqb`) or Project settings (`QV1af`), above the status bar (`pmOpt`). The shell reads the project's
 //! tasks once and hands them to the sidebar, the screen and the status bar.
 
@@ -9,6 +9,7 @@ mod new_task;
 mod overview;
 mod page;
 mod pipelines;
+mod pull_requests;
 mod runner;
 mod settings;
 mod sidebar;
@@ -31,6 +32,7 @@ use self::{
   connections::ConnectionsScreen,
   new_task::{NewTaskForm, NewTaskProps},
   pipelines::{PipelinesProps, PipelinesScreen},
+  pull_requests::PullRequestsScreen,
   settings::SettingsScreen,
   sidebar::sidebar,
   tasks::{TasksProps, TasksScreen},
@@ -50,6 +52,7 @@ pub enum Section {
   Overview,
   Tasks,
   NewTask,
+  PullRequests,
   Pipelines,
   Agents,
   Connections,
@@ -213,6 +216,7 @@ impl Component for ProjectShell {
           pipelines: tasks.ready().map(|tasks| tasks.pipelines.clone()),
         },
       ),
+      Section::PullRequests => ctx.mount_keyed::<PullRequestsScreen>("pull-requests", open.clone()),
       Section::Agents => ctx.mount_keyed::<AgentsScreen>("agents", open.clone()),
       Section::Connections => ctx.mount_keyed::<ConnectionsScreen>("connections", open.clone()),
       Section::Settings => ctx.mount_keyed::<SettingsScreen>("settings", open.clone()),

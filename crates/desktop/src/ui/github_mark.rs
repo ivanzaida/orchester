@@ -14,6 +14,8 @@ const GITHUB_SVG: &str = include_str!("../../assets/icons/github.svg");
 const MARK_SIZE: f32 = 18.0;
 /// Icon size in the heading of the detected repository block (`s2kOs`).
 const SMALL_MARK_SIZE: f32 = 16.0;
+/// Icon size beside the linked repository of the pull request list (`G7DquP` in `rQjxm`).
+const REPOSITORY_MARK_SIZE: f32 = 14.0;
 
 pub fn github_mark(ctx: &Ctx, color: PaletteColor) -> Element {
   mark(ctx, color, MARK_SIZE)
@@ -22,6 +24,11 @@ pub fn github_mark(ctx: &Ctx, color: PaletteColor) -> Element {
 /// The mark beside a block heading.
 pub fn small_github_mark(ctx: &Ctx, color: PaletteColor) -> Element {
   mark(ctx, color, SMALL_MARK_SIZE)
+}
+
+/// The mark beside the linked repository's name.
+pub fn repository_mark(ctx: &Ctx, color: PaletteColor) -> Element {
+  mark(ctx, color, REPOSITORY_MARK_SIZE)
 }
 
 fn mark(ctx: &Ctx, color: PaletteColor, size: f32) -> Element {

@@ -75,7 +75,7 @@ pub fn parse_gh_repo_view(requested: &GitHubRepo, output: &CommandOutput) -> Res
   })
 }
 
-fn unrecognized(detail: &str) -> RepositoryError {
+pub(crate) fn unrecognized(detail: &str) -> RepositoryError {
   RepositoryError::Unrecognized {
     program: GH,
     detail: redact_userinfo(detail.trim()),
@@ -84,7 +84,7 @@ fn unrecognized(detail: &str) -> RepositoryError {
 
 /// Maps `gh`'s error message to what went wrong, e.g. `GraphQL: Could not resolve to a
 /// Repository with the name 'owner/name'. (repository)` or `HTTP 401: Bad credentials`.
-fn classify_failure(requested: &GitHubRepo, stderr: &str) -> RepositoryError {
+pub(crate) fn classify_failure(requested: &GitHubRepo, stderr: &str) -> RepositoryError {
   const NOT_SIGNED_IN: [&str; 3] = ["gh auth login", "http 401", "bad credentials"];
   const NOT_FOUND: [&str; 1] = ["could not resolve to a repository"];
   const NO_ACCESS: [&str; 3] = ["http 403", "resource not accessible", "saml"];
