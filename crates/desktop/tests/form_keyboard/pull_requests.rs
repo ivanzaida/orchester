@@ -318,6 +318,21 @@ fn assert_near(found: f32, expected: f32) {
   assert!((found - expected).abs() < 0.5, "{found} is not {expected}");
 }
 
+/// Bounds of the first mounted row, or of the one titled `title`.
+fn row_bounds(desktop: &mut Desktop, title: Option<&'static str>) -> lurq::core::ElementRect {
+  desktop
+    .tree
+    .find_element(move |element| {
+      element.id() == Some("pull-request-row") && title.is_none_or(|title| holds_text(element, title))
+    })
+    .unwrap_or_else(|| panic!("a row titled {title:?} is mounted"))
+    .bounds()
+}
+
+fn holds_text(element: lurq::node::ElementRef<'_>, text: &str) -> bool {
+  element.text_content() == Some(text) || element.children().iter().any(|child| holds_text(child, text))
+}
+
 fn bounds(desktop: &mut Desktop, id: &str) -> (f32, f32) {
   let bounds = desktop
     .tree
@@ -335,29 +350,31 @@ fn pull_requests_footer_follows_the_rows_or_the_scrolled_list() {
   settle_on(&mut desktop, LIST_ID, "3 open pull requests");
   // Headings, rows and footer are 20 apart; three rows fit, so the footer follows the last.
   let (_, headings_bottom) = bounds(&mut desktop, "pull-requests-headings");
-  let (rows_top, rows_bottom) = bounds(&mut desktop, "pull-requests-rows");
   let (footer_top, _) = bounds(&mut desktop, "pull-requests-footer");
-  assert_near(rows_top - headings_bottom, 20.0);
-  assert_near(rows_bottom - rows_top, 300.0);
-  assert_near(footer_top - rows_bottom, 20.0);
+  assert_near(footer_top - headings_bottom, 20.0 + 300.0 + 20.0);
+  let first = row_bounds(&mut desktop, None);
+  assert_near(first.y - headings_bottom, 20.0);
 
   gh.answer(LIST, Ok(ok(&many_pull_requests(12))));
   desktop.click("pull-requests-refresh");
   settle_on(&mut desktop, LIST_ID, "12 open pull requests");
-  let (list_top, list_bottom) = bounds(&mut desktop, LIST_ID);
-  let (rows_top, rows_bottom) = bounds(&mut desktop, "pull-requests-rows");
+  let (_, list_bottom) = bounds(&mut desktop, LIST_ID);
+  let (_, headings_bottom) = bounds(&mut desktop, "pull-requests-headings");
   let (footer_top, footer_bottom) = bounds(&mut desktop, "pull-requests-footer");
-  // Twelve rows do not fit: the rows scroll and the footer stays inside the screen, 20 below.
-  assert!(rows_bottom - rows_top < 1200.0 && rows_top > list_top);
-  assert_near(footer_top - rows_bottom, 20.0);
+  // Twelve rows do not fit: the rows scroll and the footer stays inside the screen.
+  assert!(footer_top - headings_bottom < 20.0 + 1200.0 + 20.0);
   assert!(footer_bottom <= list_bottom);
-  // Scrolled to the end, the last row ends at the bottom of the scroll area, above the footer.
-  desktop
-    .tree
-    .scroll(700.0, (rows_top + rows_bottom) / 2.0, 0.0, -5000.0, ScrollPhase::Scroll);
+  // Newest first: scrolled to the end, the last row (#1) ends 20 above the footer, not cut by it.
+  desktop.tree.scroll(
+    700.0,
+    (headings_bottom + footer_top) / 2.0,
+    0.0,
+    -5000.0,
+    ScrollPhase::Scroll,
+  );
   desktop.pass();
-  let (_, stack_bottom) = bounds(&mut desktop, "pull-requests-row-stack");
-  assert_near(stack_bottom, rows_bottom);
+  let last = row_bounds(&mut desktop, Some("Change 1"));
+  assert_near(footer_top - (last.y + last.height), 20.0);
 
   desktop.press("pull-requests-search");
   desktop.type_text("Change 1");
