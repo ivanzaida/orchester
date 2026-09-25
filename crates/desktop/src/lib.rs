@@ -21,4 +21,5 @@ pub mod session;
 pub mod tasks;
 pub mod theme;
 mod ui;
+pub use ui::pressable;
 pub mod workspace;

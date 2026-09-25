@@ -34,7 +34,7 @@ use crate::{
     icon::Icon,
     message_text,
     notice::Notice,
-    pressable::{Ring, keyboard_stop},
+    pressable::{Ring, keyboard_stop, stroke_selected_focused},
   },
   workspace::OpenProject,
 };
@@ -216,8 +216,10 @@ impl NewPipelineDialog {
       (PaletteColor::SurfacePanel, PaletteColor::Border, BorderSize::Sm)
     };
     let start = self.start.clone();
-    // A button, so Tab reaches the option and Enter or Space chooses it.
+    // A button, so Tab reaches the option and Enter or Space chooses it. The chosen one shows
+    // no focus ring, only its outline.
     keyboard_stop(Button::empty().button(), Ring::Outer)
+      .focused_style(stroke_selected_focused(Ring::Outer, selected))
       .id(id)
       .align_items(Alignment::Start)
       .describe("selected", if selected { "true" } else { "false" })

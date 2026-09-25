@@ -10,4 +10,5 @@ mod harness;
 mod new_task;
 mod pipeline_editor;
 mod project_setup;
+mod selection_focus;
 mod window;

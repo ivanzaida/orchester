@@ -340,8 +340,8 @@ so they cannot remove the ring.
 | Button primary / secondary (`u1XBP`), dialog buttons | outer, radius 11 | — |
 | Icon button (32 × 32, no fill) | outer, radius 11 | — |
 | Navigation item (`TSJpn`) | outer, radius 10 | `$hover` fill, `$text` label |
-| Pipeline step card (`ajikA`) | outer, radius 16 | 1.5 inside `$text` stroke |
-| Option card (new pipeline "Start from") | outer, radius 11 | 1.5 inside `$text` stroke + radio dot |
+| Pipeline step card (`ajikA`) | outer, radius 16; none while selected | 1.5 inside `$text` stroke |
+| Option card (new pipeline "Start from") | outer, radius 11; none while selected | 1.5 inside `$text` stroke + radio dot |
 | Tab (`SOW6S`) | inset, corners 6 6 0 0 | 2px `$text` bottom underline |
 | List row stacked edge to edge (e.g. `SGjO0`, `clVjO`, `QHBNZ`, `hn8qO`) | inset, square | — |
 | Popover row (`E1msJS`) | inset, radius 7 | — |
@@ -354,8 +354,12 @@ Combinations:
 - Focused + hover: the hover look plus the ring.
 - Focused + pressed: the pressed look plus the ring.
 - Focused + selected: the selection look stays and the ring is added (outside it for outer
-  controls, on the edge for inset controls). A selected step card shows stroke, dark gap and ring,
-  so it no longer looks like plain selection.
+  controls, on the edge for inset controls) when the selection is a fill or an underline
+  (navigation item, tab, list row).
+- Selection drawn as a stroke hides the focus ring (decided 2026-09-25). A selected step card or
+  option card shows only its 1.5 `$text` stroke, focused or not: stroke, dark gap and ring read
+  as a double border. It stays a Tab stop, and shows the ring when focused while not selected.
+  No other control draws its selection as a stroke today.
 - On tabs, the selected or hover underline paints over the bottom edge of the inset ring. The ring
   top corners are rounded (6) and the bottom stays square, so the underline stays straight.
 - Disabled controls are not focusable and show no ring.
