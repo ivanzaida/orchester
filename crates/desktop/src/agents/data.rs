@@ -5,13 +5,15 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::Connection,
+  connection::AgentConnection,
   id::ResourceId,
   resource::{AgentProfile, Draft, ModelId, Pipeline, ResourceKind, Slug, StepKind, Version, VersionNumber},
   store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
+
+use crate::connections::data::agent_connections;
 
 /// Slug of a profile whose role has no ASCII letters or digits.
 const FALLBACK_SLUG: &str = "agent";
@@ -92,7 +94,8 @@ pub struct StepUse {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectAgents {
   pub profiles: Arc<Vec<ProfileEntry>>,
-  pub connections: Arc<Vec<Connection>>,
+  /// Agent provider connections: the only kind a profile can run on.
+  pub connections: Arc<Vec<AgentConnection>>,
   pub steps: Arc<Vec<StepUse>>,
 }
 
@@ -105,7 +108,7 @@ impl ProjectAgents {
   {
     Ok(Self {
       profiles: Arc::new(profiles(store)?),
-      connections: Arc::new(store.connections()?),
+      connections: Arc::new(agent_connections(store.connections()?)),
       steps: Arc::new(step_uses(store)?),
     })
   }

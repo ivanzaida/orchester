@@ -1,16 +1,20 @@
-//! The `connections` table. No credentials are stored: the agent CLIs keep their own login.
+//! The `connections` table. No credentials are stored: the agent CLIs and the GitHub CLI keep
+//! their own login.
 
 use std::path::PathBuf;
 
 use orchester_core::{
-  connection::{AgentProvider, CheckResult, Connection, ConnectionCheck},
+  connection::{
+    AgentProvider, CheckResult, Connection, ConnectionCheck, ConnectionKind, GitHubCheck, GitHubCheckResult,
+    GitHubHost, LastCheck,
+  },
   id::ConnectionId,
   name::Name,
   store::ConnectionStore,
   time::Timestamp,
 };
 use rusqlite::{Connection as Sqlite, OptionalExtension, Params, Row, params};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use super::ProjectDb;
 use crate::{
@@ -20,6 +24,9 @@ use crate::{
 
 const SELECT: &str = "SELECT id, kind, provider, name, settings, checked_at, last_check, created_at FROM connections";
 const AGENT_PROVIDER: &str = "agent_provider";
+const GITHUB: &str = "github";
+/// The `provider` of a GitHub connection: the GitHub CLI is the only way to reach GitHub.
+const GH_CLI: &str = "gh_cli";
 const SETTINGS_SCHEMA: u32 = 1;
 const CHECK_SCHEMA: u32 = 1;
 
@@ -27,6 +34,13 @@ const CHECK_SCHEMA: u32 = 1;
 #[derive(Serialize, Deserialize)]
 struct ProviderSettings {
   executable: String,
+}
+
+/// Settings of a GitHub connection.
+#[derive(Serialize, Deserialize)]
+struct GitHubSettings {
+  executable: String,
+  host: GitHubHost,
 }
 
 impl ConnectionStore for ProjectDb {
@@ -41,7 +55,7 @@ impl ConnectionStore for ProjectDb {
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
       params![
         connection.id().to_string(),
-        AGENT_PROVIDER,
+        columns.kind,
         columns.provider,
         connection.name().as_str(),
         columns.settings,
@@ -106,6 +120,7 @@ fn ensure_name_free(sqlite: &Sqlite, connection: &Connection) -> Result<(), Stor
 
 /// Encoded columns of a connection.
 struct Columns {
+  kind: &'static str,
   provider: &'static str,
   settings: String,
   checked_at: Option<i64>,
@@ -114,17 +129,37 @@ struct Columns {
 
 impl Columns {
   fn of(connection: &Connection) -> Result<Self, StoreError> {
-    let settings = ProviderSettings {
-      executable: path_text("connection executable", connection.executable())?.to_owned(),
+    let executable = path_text("connection executable", connection.executable())?.to_owned();
+    let (kind, provider, settings) = match connection.kind() {
+      ConnectionKind::Agent(provider) => (
+        AGENT_PROVIDER,
+        provider_text(*provider),
+        encode_json("connection settings", SETTINGS_SCHEMA, &ProviderSettings { executable })?,
+      ),
+      ConnectionKind::GitHub { host } => {
+        let settings = GitHubSettings {
+          executable,
+          host: host.clone(),
+        };
+        (
+          GITHUB,
+          GH_CLI,
+          encode_json("connection settings", SETTINGS_SCHEMA, &settings)?,
+        )
+      }
     };
     let last_check = connection
       .last_check()
-      .map(|check| encode_json("connection check", CHECK_SCHEMA, &check.result))
+      .map(|check| match check {
+        LastCheck::Agent(check) => encode_json("connection check", CHECK_SCHEMA, &check.result),
+        LastCheck::GitHub(check) => encode_json("connection check", CHECK_SCHEMA, &check.result),
+      })
       .transpose()?;
     Ok(Self {
-      provider: provider_text(connection.provider()),
-      settings: encode_json("connection settings", SETTINGS_SCHEMA, &settings)?,
-      checked_at: connection.last_check().map(|check| check.at.unix_millis()),
+      kind,
+      provider,
+      settings,
+      checked_at: connection.last_check().map(|check| check.at().unix_millis()),
       last_check,
     })
   }
@@ -164,28 +199,56 @@ impl StoredRow {
   }
 
   fn into_connection(self) -> Result<Connection, StoreError> {
-    if self.kind != AGENT_PROVIDER {
-      return Err(corrupt("connection kind", self.kind));
-    }
-    let settings: ProviderSettings = decode_json("connection settings", SETTINGS_SCHEMA, &self.settings)?;
-    let last_check = match (self.checked_at, self.last_check) {
-      (Some(at), Some(result)) => Some(ConnectionCheck {
-        at: Timestamp::from_unix_millis(at),
-        result: decode_json::<CheckResult>("connection check", CHECK_SCHEMA, &result)?,
-      }),
-      _ => None,
+    let (kind, executable, last_check) = match self.kind.as_str() {
+      AGENT_PROVIDER => self.agent_parts()?,
+      GITHUB => self.github_parts()?,
+      other => return Err(corrupt("connection kind", other)),
     };
     Connection::from_stored(
       parse("connection id", &self.id)?,
       Name::new(&self.name).map_err(|error| corrupt("connection name", error))?,
-      parse_provider(&self.provider)?,
-      PathBuf::from(settings.executable),
+      kind,
+      PathBuf::from(executable),
       last_check,
       Timestamp::from_unix_millis(self.created_at),
     )
-    .map_err(|error| corrupt("connection executable", error))
+    .map_err(|error| corrupt("connection", error))
+  }
+
+  fn agent_parts(&self) -> Result<Parts, StoreError> {
+    let settings: ProviderSettings = decode_json("connection settings", SETTINGS_SCHEMA, &self.settings)?;
+    let last_check = self
+      .check::<CheckResult>()?
+      .map(|(at, result)| LastCheck::Agent(ConnectionCheck { at, result }));
+    let kind = ConnectionKind::Agent(parse_provider(&self.provider)?);
+    Ok((kind, settings.executable, last_check))
+  }
+
+  fn github_parts(&self) -> Result<Parts, StoreError> {
+    if self.provider != GH_CLI {
+      return Err(corrupt("connection provider", &self.provider));
+    }
+    let settings: GitHubSettings = decode_json("connection settings", SETTINGS_SCHEMA, &self.settings)?;
+    let last_check = self
+      .check::<GitHubCheckResult>()?
+      .map(|(at, result)| LastCheck::GitHub(GitHubCheck { at, result }));
+    let kind = ConnectionKind::GitHub { host: settings.host };
+    Ok((kind, settings.executable, last_check))
+  }
+
+  fn check<T: DeserializeOwned>(&self) -> Result<Option<(Timestamp, T)>, StoreError> {
+    match (self.checked_at, &self.last_check) {
+      (Some(at), Some(result)) => Ok(Some((
+        Timestamp::from_unix_millis(at),
+        decode_json("connection check", CHECK_SCHEMA, result)?,
+      ))),
+      _ => Ok(None),
+    }
   }
 }
+
+/// Kind, executable and last check of a stored connection.
+type Parts = (ConnectionKind, String, Option<LastCheck>);
 
 const fn provider_text(provider: AgentProvider) -> &'static str {
   match provider {

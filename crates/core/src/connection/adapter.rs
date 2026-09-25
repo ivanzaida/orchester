@@ -15,13 +15,16 @@ use std::{
 };
 
 use serde::Deserialize;
-use thiserror::Error;
 
 use super::{
   AgentProvider, CheckResult, ConnectionCheck, SignIn,
   catalog::{CatalogModel, CatalogSource, ModelCatalog},
 };
-use crate::{resource::ModelId, time::Timestamp};
+use crate::{
+  command::{Command, CommandError, CommandOutput, CommandRunner},
+  resource::ModelId,
+  time::Timestamp,
+};
 
 const VERSION_ARGS: &[&str] = &["--version"];
 const CODEX_SIGN_IN_ARGS: &[&str] = &["login", "status"];
@@ -34,31 +37,6 @@ const CLAUDE_EFFORTS: [&str; 4] = ["low", "medium", "high", "max"];
 /// Codex lists models meant for people with this visibility; others are internal.
 const CODEX_LISTED: &str = "list";
 
-/// Output of a finished command.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CommandOutput {
-  /// The command exited with status 0.
-  pub success: bool,
-  pub stdout: String,
-  pub stderr: String,
-}
-
-#[derive(Clone, Debug, Error, PartialEq, Eq)]
-pub enum CommandError {
-  #[error("the program does not exist")]
-  NotFound,
-  #[error("the program did not finish in time")]
-  TimedOut,
-  #[error("the program could not be run: {0}")]
-  Failed(String),
-}
-
-/// Runs a program to completion. The process boundary: the desktop runs real programs, tests
-/// replay captured output.
-pub trait CommandRunner {
-  fn run(&self, program: &Path, args: &[&str]) -> Result<CommandOutput, CommandError>;
-}
-
 /// Checks the CLI at `executable`: its version, whether it is signed in and its models.
 pub fn check(
   provider: AgentProvider,
@@ -66,7 +44,7 @@ pub fn check(
   runner: &impl CommandRunner,
   now: Timestamp,
 ) -> ConnectionCheck {
-  let result = match runner.run(executable, VERSION_ARGS) {
+  let result = match runner.run(&Command::new(executable, VERSION_ARGS.iter().copied())) {
     Err(CommandError::NotFound) => CheckResult::ExecutableMissing,
     Err(CommandError::TimedOut | CommandError::Failed(_)) => CheckResult::CouldNotRun,
     Ok(output) => match parse_version(provider, &output) {
@@ -104,7 +82,7 @@ fn sign_in(provider: AgentProvider, executable: &Path, runner: &impl CommandRunn
     AgentProvider::ClaudeCodeCli => CLAUDE_SIGN_IN_ARGS,
   };
   // A status command that cannot run leaves the sign-in unknown, not signed out.
-  let Ok(output) = runner.run(executable, args) else {
+  let Ok(output) = runner.run(&Command::new(executable, args.iter().copied())) else {
     return SignIn::Unknown;
   };
   match provider {
@@ -146,7 +124,7 @@ fn catalog(provider: AgentProvider, executable: &Path, runner: &impl CommandRunn
       // Without a readable catalog the list stays empty: models can still be entered by hand
       // and are marked as not verified.
       let models = runner
-        .run(executable, CODEX_CATALOG_ARGS)
+        .run(&Command::new(executable, CODEX_CATALOG_ARGS.iter().copied()))
         .ok()
         .filter(|output| output.success)
         .and_then(|output| parse_codex_catalog(&output.stdout))
@@ -203,13 +181,13 @@ fn claude_aliases() -> Vec<CatalogModel> {
     .collect()
 }
 
-/// Where the provider's program would be found on `path` (the `PATH` variable), in search
-/// order. The caller keeps the ones that exist.
-pub fn executable_candidates(provider: AgentProvider, path: Option<&OsStr>) -> Vec<PathBuf> {
+/// Where `program` (see [`super::ConnectionKind::program_name`]) would be found on `path` (the
+/// `PATH` variable), in search order. The caller keeps the ones that exist.
+pub fn executable_candidates(program: &str, path: Option<&OsStr>) -> Vec<PathBuf> {
   let Some(path) = path else {
     return Vec::new();
   };
-  let names = program_files(provider.program_name());
+  let names = program_files(program);
   std::env::split_paths(path)
     .filter(|directory| !directory.as_os_str().is_empty())
     .flat_map(|directory| names.iter().map(move |name| directory.join(name)))

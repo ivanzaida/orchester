@@ -7,7 +7,7 @@ use std::{
 };
 
 use orchester_core::{
-  connection::{AgentProvider, Connection, ConnectionCheck, ConnectionError},
+  connection::{AgentConnection, AgentProvider, Connection, ConnectionCheck, ConnectionError},
   id::{ConnectionId, ResourceId},
   name::Name,
   store::{ConnectionStore, ResourceStore},
@@ -31,10 +31,10 @@ pub struct ProfileUse {
   pub model: Arc<str>,
 }
 
-/// The project's connections and the profiles that use them, read together.
+/// The project's agent provider connections and the profiles that use them, read together.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectConnections {
-  pub connections: Arc<Vec<Connection>>,
+  pub connections: Arc<Vec<AgentConnection>>,
   pub uses: Arc<Vec<ProfileUse>>,
 }
 
@@ -56,7 +56,7 @@ impl ProjectConnections {
       })
       .collect();
     Ok(Self {
-      connections: Arc::new(store.connections()?),
+      connections: Arc::new(agent_connections(store.connections()?)),
       uses: Arc::new(uses),
     })
   }
@@ -65,7 +65,7 @@ impl ProjectConnections {
     Self::load(&ProjectDb::open(repo_root)?)
   }
 
-  pub fn connection(&self, id: ConnectionId) -> Option<&Connection> {
+  pub fn connection(&self, id: ConnectionId) -> Option<&AgentConnection> {
     self.connections.iter().find(|connection| connection.id() == id)
   }
 
@@ -73,6 +73,16 @@ impl ProjectConnections {
   pub fn used_by(&self, id: ConnectionId) -> impl Iterator<Item = &ProfileUse> {
     self.uses.iter().filter(move |used| used.connection == id)
   }
+}
+
+/// The agent provider connections among `connections`, in their order.
+pub fn agent_connections(connections: Vec<Connection>) -> Vec<AgentConnection> {
+  connections
+    .into_iter()
+    // Other kinds are not agent providers; dropping the conversion error is how they are
+    // filtered out.
+    .filter_map(|connection| AgentConnection::try_from(connection).ok())
+    .collect()
 }
 
 /// A connection as the add or edit dialog saves it, with the check the dialog ran.
@@ -104,6 +114,11 @@ impl SaveError {
     match self {
       Self::Store(error) => messages::store_error(error),
       Self::Connection(ConnectionError::RelativeExecutable(_)) => Message::new("errors.executableNotAbsolute"),
+      // The dialog edits agent connections only; a stored connection of another kind under
+      // the edited id means the stored data does not match what was shown.
+      Self::Connection(
+        ConnectionError::NotAgent(_) | ConnectionError::NotGitHub(_) | ConnectionError::CheckKindMismatch(_),
+      ) => Message::new("errors.storage"),
       Self::NotVerified => Message::new("errors.connectionNotVerified"),
     }
   }
@@ -118,7 +133,7 @@ where
     return Err(SaveError::NotVerified);
   }
   let Some(id) = draft.id else {
-    let mut connection = Connection::new(
+    let mut connection = AgentConnection::new(
       ConnectionId::generate(),
       draft.name,
       draft.provider,
@@ -129,7 +144,8 @@ where
     store.create_connection(&connection)?;
     return Ok(connection.id());
   };
-  let mut connection = store.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
+  let stored = store.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
+  let mut connection = AgentConnection::try_from(stored)?;
   connection.rename(draft.name);
   connection.set_executable(draft.executable)?;
   connection.record_check(draft.check);
@@ -145,6 +161,8 @@ pub fn save_in(repo_root: &Path, draft: ConnectionDraft) -> Result<ConnectionId,
 pub fn recheck_in(repo_root: &Path, id: ConnectionId) -> Result<(), StoreError> {
   let mut db = ProjectDb::open(repo_root)?;
   let mut connection = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
-  connection.record_check(probe::check(connection.provider(), connection.executable()));
+  connection
+    .record_check(probe::recheck(&connection))
+    .expect("the check was made for the connection's own kind");
   db.save_connection(&connection)
 }

@@ -2401,6 +2401,7 @@ dependencies = [
  "chrono",
  "lurq",
  "orchester-core",
+ "orchester-exec",
  "orchester-ipc",
  "orchester-store",
  "parking_lot",
@@ -2411,6 +2412,15 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "orchester-exec"
+version = "0.1.0"
+dependencies = [
+ "orchester-core",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

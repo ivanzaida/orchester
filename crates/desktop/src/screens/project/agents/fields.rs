@@ -16,7 +16,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{CatalogSource, Connection, ModelSupport},
+  connection::{AgentConnection, CatalogSource, ModelSupport},
   resource::PromptText,
 };
 
@@ -125,7 +125,7 @@ impl ProfileEditor {
 
   /// The connection's models, the stored model if the catalog does not list it (marked not
   /// verified), and a typed model id.
-  fn model_field(&self, ctx: &Ctx, connection: Option<&Connection>, error: Option<&Message>) -> Element {
+  fn model_field(&self, ctx: &Ctx, connection: Option<&AgentConnection>, error: Option<&Message>) -> Element {
     let label = ctx.t("agents.model");
     let Some(connection) = connection else {
       let control = value_box(
@@ -178,7 +178,7 @@ impl ProfileEditor {
   }
 
   /// What the connection runs and where its models come from (`kwRad`).
-  fn explanation(&self, ctx: &Ctx, connection: Option<&Connection>) -> Arc<str> {
+  fn explanation(&self, ctx: &Ctx, connection: Option<&AgentConnection>) -> Arc<str> {
     let Some(connection) = connection else {
       return ctx.t("agents.noConnectionChosen");
     };
@@ -195,7 +195,7 @@ impl ProfileEditor {
   }
 
   /// Reasoning effort (`LugPH`), only for a model whose catalog entry lists efforts.
-  fn effort_field(&self, ctx: &Ctx, connection: Option<&Connection>) -> Option<Element> {
+  fn effort_field(&self, ctx: &Ctx, connection: Option<&AgentConnection>) -> Option<Element> {
     let ModelSelection::Listed(model) = self.model.get() else {
       return None;
     };

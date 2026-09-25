@@ -12,7 +12,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::connection::Connection;
+use orchester_core::connection::AgentConnection;
 
 use super::status::{CHECKING, program_key, status_label, vendor_key};
 use crate::{
@@ -38,7 +38,7 @@ pub struct RowState {
 
 pub fn connection_row(
   ctx: &Ctx,
-  connection: &Connection,
+  connection: &AgentConnection,
   state: &RowState,
   on_click: impl Fn() + Send + Sync + 'static,
 ) -> Element {

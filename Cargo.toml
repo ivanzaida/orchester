@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/desktop", "crates/ipc", "crates/runner", "crates/store"]
+members = ["crates/core", "crates/desktop", "crates/exec", "crates/ipc", "crates/runner", "crates/store"]
 
 [workspace.package]
 version = "0.1.0"
@@ -28,6 +28,7 @@ redundant_clone = "warn"
 
 [workspace.dependencies]
 orchester-core = { path = "crates/core" }
+orchester-exec = { path = "crates/exec" }
 orchester-ipc = { path = "crates/ipc" }
 orchester-store = { path = "crates/store" }
 # Local wall-clock time of status bar events (the OS time zone); std has no local time.

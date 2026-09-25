@@ -1,17 +1,14 @@
 //! Connection checks against output captured from the real CLIs (codex-cli 0.139.0, Claude Code
 //! 2.1.89), replayed through a fake command runner so the CLIs are not needed.
 
-use std::{
-  collections::HashMap,
-  ffi::OsString,
-  path::{Path, PathBuf},
-};
+use std::{collections::HashMap, ffi::OsString, path::PathBuf};
 
 use orchester_core::{
+  command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{
-    AgentProvider, CatalogSource, CheckResult, CommandError, CommandOutput, CommandRunner, Connection, ConnectionError,
-    ConnectionStatus, ModelSupport, SignIn, check, executable_candidates, parse_claude_auth_status,
-    parse_codex_catalog, parse_codex_login_status, parse_version,
+    AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionError, ConnectionStatus, ModelSupport,
+    SignIn, check, executable_candidates, parse_claude_auth_status, parse_codex_catalog, parse_codex_login_status,
+    parse_version,
   },
   id::ConnectionId,
   name::Name,
@@ -68,8 +65,8 @@ impl Replay {
 }
 
 impl CommandRunner for Replay {
-  fn run(&self, _program: &Path, args: &[&str]) -> Result<CommandOutput, CommandError> {
-    let key = args.join(" ");
+  fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
+    let key = command.args().join(" ");
     self
       .0
       .get(&key)
@@ -226,8 +223,8 @@ fn sign_in_status_that_cannot_run_is_unknown() {
   assert!(connection.models().is_empty());
 }
 
-fn connection(provider: AgentProvider) -> Connection {
-  Connection::new(
+fn connection(provider: AgentProvider) -> AgentConnection {
+  AgentConnection::new(
     ConnectionId::generate(),
     Name::new("Codex").expect("valid name"),
     provider,
@@ -258,7 +255,7 @@ fn candidates_follow_the_path_order() {
   let first = std::env::current_dir().expect("current directory").join("a");
   let second = std::env::current_dir().expect("current directory").join("b");
   let path: OsString = std::env::join_paths([&first, &second]).expect("joinable paths");
-  let candidates = executable_candidates(AgentProvider::ClaudeCodeCli, Some(&path));
+  let candidates = executable_candidates(AgentProvider::ClaudeCodeCli.program_name(), Some(&path));
   assert!(candidates[0].starts_with(&first));
   assert!(candidates.last().expect("candidates").starts_with(&second));
   assert!(
@@ -266,5 +263,5 @@ fn candidates_follow_the_path_order() {
       .iter()
       .all(|candidate| candidate.file_stem().is_some_and(|stem| stem == "claude"))
   );
-  assert!(executable_candidates(AgentProvider::CodexCli, None).is_empty());
+  assert!(executable_candidates(AgentProvider::CodexCli.program_name(), None).is_empty());
 }

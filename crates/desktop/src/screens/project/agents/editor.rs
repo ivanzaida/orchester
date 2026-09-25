@@ -15,7 +15,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::Connection,
+  connection::AgentConnection,
   id::ConnectionId,
   resource::{AgentProfile, VersionNumber},
 };
@@ -175,7 +175,7 @@ impl ProfileEditor {
       role: ctx.signal(String::new()),
       responsibilities: ctx.signal(String::new()),
       instructions: ctx.signal(String::new()),
-      connection: ctx.signal(ConnectionChoice(connection.map(Connection::id))),
+      connection: ctx.signal(ConnectionChoice(connection.map(|connection| connection.id()))),
       model: ctx.signal(first_model(connection)),
       custom_model: ctx.signal(String::new()),
       effort: ctx.signal(EffortChoice(None)),
@@ -183,7 +183,7 @@ impl ProfileEditor {
     }
   }
 
-  pub(super) fn selected_connection(&self) -> Option<&Connection> {
+  pub(super) fn selected_connection(&self) -> Option<&AgentConnection> {
     let id = self.connection.get().0?;
     self
       .context
@@ -376,7 +376,7 @@ fn version_text(ctx: &Ctx, version: Option<VersionNumber>) -> Arc<str> {
 }
 
 /// The first model the connection lists, or a typed one when it lists none.
-fn first_model(connection: Option<&Connection>) -> ModelSelection {
+fn first_model(connection: Option<&AgentConnection>) -> ModelSelection {
   match connection {
     None => ModelSelection::None,
     Some(connection) => connection.models().first().map_or(ModelSelection::Custom, |model| {

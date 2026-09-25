@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  connection::{Connection, ModelSupport, REASONING_EFFORT},
+  connection::{AgentConnection, ModelSupport, REASONING_EFFORT},
   name::{Name, NameError},
   resource::{AgentProfile, ModelId, PromptError, PromptText, ProviderSettings},
 };
@@ -30,7 +30,7 @@ pub struct ModelOption {
 
 /// The connection's catalog models, then `current` if the catalog does not list it (a model
 /// that was typed in, or one the CLI no longer lists), marked as not verified.
-pub fn model_options(connection: &Connection, current: Option<&ModelId>) -> Vec<ModelOption> {
+pub fn model_options(connection: &AgentConnection, current: Option<&ModelId>) -> Vec<ModelOption> {
   let mut options: Vec<ModelOption> = connection
     .models()
     .iter()
@@ -52,7 +52,7 @@ pub fn model_options(connection: &Connection, current: Option<&ModelId>) -> Vec<
 
 /// Reasoning efforts the connection's catalog lists for `model`; none for a model it does not
 /// list, whose efforts are unknown.
-pub fn effort_options<'a>(connection: &'a Connection, model: &ModelId) -> &'a [String] {
+pub fn effort_options<'a>(connection: &'a AgentConnection, model: &ModelId) -> &'a [String] {
   connection
     .catalog()
     .and_then(|catalog| catalog.model(model))
@@ -64,7 +64,7 @@ pub struct ProfileForm<'a> {
   pub role: &'a str,
   pub responsibilities: &'a str,
   pub instructions: &'a str,
-  pub connection: Option<&'a Connection>,
+  pub connection: Option<&'a AgentConnection>,
   pub model: &'a ModelSelection,
   /// The typed model id, used when `model` is [`ModelSelection::Custom`].
   pub custom_model: &'a str,
@@ -119,7 +119,7 @@ impl ProfileForm<'_> {
 
   /// The effort, if the model offers the chosen one. Settings the model does not offer are
   /// dropped rather than saved for the CLI to reject later.
-  fn settings(&self, connection: &Connection, model: &ModelId) -> ProviderSettings {
+  fn settings(&self, connection: &AgentConnection, model: &ModelId) -> ProviderSettings {
     let effort = self.effort.filter(|effort| {
       effort_options(connection, model)
         .iter()
