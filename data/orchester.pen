@@ -6769,7 +6769,7 @@
                       "id": "Lzdsn",
                       "name": "Board title",
                       "fill": "$text",
-                      "content": "Focus · one state for mouse and keyboard",
+                      "content": "Focus · form controls only, one state for mouse and keyboard",
                       "fontFamily": "$font",
                       "fontSize": 15,
                       "fontWeight": "500"
@@ -6779,7 +6779,7 @@
                       "id": "GpB1e",
                       "name": "Board description",
                       "fill": "$muted",
-                      "content": "A 2 px $focus-ring ring behind a 2 px $focus-gap gap. Paint-only (box shadow): it never moves layout. Outer where the control has 4 px of room, inset where it does not.",
+                      "content": "Only form and dialog controls take focus; everything outside forms is pointer-only. A 2 px $focus-ring ring behind a 2 px $focus-gap gap. Paint-only (box shadow): it never moves layout. Outer where the control has 4 px of room, inset where it does not.",
                       "fontFamily": "$font",
                       "fontSize": 12,
                       "fontWeight": "normal"
@@ -7228,7 +7228,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Outer ring. The dark gap keeps the light ring apart from the light fill. Hover lightens the fill to $text; the ring stays.",
+                          "content": "Outer ring, only in forms and dialogs. Outside forms (toolbars, page actions) buttons are pointer-only and take no focus. The dark gap keeps the light ring apart from the light fill.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -7508,7 +7508,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Outer ring. Hover changes fill and border underneath; the ring is a shadow, so hover never removes it.",
+                          "content": "Outer ring, only in forms and dialogs; toolbar and page buttons take no focus. Hover changes fill and border underneath; the ring is a shadow, so hover never removes it.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -7814,7 +7814,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Outer ring around the whole hit area, radius 11. Hover fill $hover.",
+                          "content": "Outer ring around the whole hit area, radius 11, only in forms and dialogs. Hover fill $hover.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -7856,7 +7856,7 @@
                           "fill": "$subtle",
                           "textGrowth": "fixed-width",
                           "width": 200,
-                          "content": "TSJpn · sidebar · outer ring",
+                          "content": "TSJpn · sidebar · pointer-only",
                           "fontFamily": "$font",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -7937,20 +7937,22 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "MztKb",
-                          "name": "Focused wrapper",
+                          "id": "Ly5Hr",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "z3ZPIt",
+                              "id": "G69kci",
                               "type": "ref",
                               "ref": "TSJpn",
                               "name": "Navigation item",
                               "width": 192,
                               "descendants": {
                                 "sQnmq": {
-                                  "icon": "workflow",
-                                  "fill": "$muted"
+                                  "fill": "$muted",
+                                  "icon": "workflow"
                                 },
                                 "YWsP0": {
                                   "content": "Pipelines",
@@ -7959,21 +7961,14 @@
                               }
                             },
                             {
-                              "id": "kKKYa",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · outer",
-                              "layoutPosition": "absolute",
-                              "x": -4,
-                              "y": -4,
-                              "width": 200,
-                              "height": 46,
-                              "cornerRadius": 10,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 8
-                                }
-                              }
+                              "type": "text",
+                              "id": "L1dNju",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -7992,12 +7987,14 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "a439uS",
-                          "name": "Focused wrapper",
+                          "id": "xA5Vo",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "AUifi",
+                              "id": "K6uiqu",
                               "type": "ref",
                               "ref": "TSJpn",
                               "name": "Navigation item",
@@ -8005,8 +8002,8 @@
                               "fill": "$hover",
                               "descendants": {
                                 "sQnmq": {
-                                  "icon": "workflow",
-                                  "fill": "$muted"
+                                  "fill": "$muted",
+                                  "icon": "workflow"
                                 },
                                 "YWsP0": {
                                   "content": "Pipelines",
@@ -8015,21 +8012,14 @@
                               }
                             },
                             {
-                              "id": "lXONQ",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · outer",
-                              "layoutPosition": "absolute",
-                              "x": -4,
-                              "y": -4,
-                              "width": 200,
-                              "height": 46,
-                              "cornerRadius": 10,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 8
-                                }
-                              }
+                              "type": "text",
+                              "id": "W3rWv",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -8079,12 +8069,14 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "iV2nv",
-                          "name": "Focused wrapper",
+                          "id": "H725A",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "guJW9",
+                              "id": "EaGkO",
                               "type": "ref",
                               "ref": "TSJpn",
                               "name": "Navigation item",
@@ -8092,8 +8084,8 @@
                               "fill": "$hover",
                               "descendants": {
                                 "sQnmq": {
-                                  "icon": "workflow",
-                                  "fill": "$text"
+                                  "fill": "$text",
+                                  "icon": "workflow"
                                 },
                                 "YWsP0": {
                                   "content": "Pipelines",
@@ -8102,21 +8094,14 @@
                               }
                             },
                             {
-                              "id": "qg1sz",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · outer",
-                              "layoutPosition": "absolute",
-                              "x": -4,
-                              "y": -4,
-                              "width": 200,
-                              "height": 46,
-                              "cornerRadius": 10,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 8
-                                }
-                              }
+                              "type": "text",
+                              "id": "aIQHS",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -8141,7 +8126,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Outer ring, radius 10. Selected is the $hover fill with $text; focus adds the ring, so the current page and the focused item never look alike.",
+                          "content": "Not focusable: navigation never takes focus. Not a Tab stop, no ring, and a click navigates without taking focus. Hover $hover fill; selected is the $hover fill with $text.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -8183,7 +8168,7 @@
                           "fill": "$subtle",
                           "textGrowth": "fixed-width",
                           "width": 200,
-                          "content": "SOW6S · inset ring",
+                          "content": "SOW6S · pointer-only",
                           "fontFamily": "$font",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -8271,17 +8256,19 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "Cvb29",
-                          "name": "Focused wrapper",
+                          "id": "A5wLdC",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "xnIjy",
+                              "id": "hijf0",
                               "type": "ref",
                               "ref": "SOW6S",
                               "name": "Tab",
-                              "width": 110,
                               "height": 42,
+                              "width": 110,
                               "stroke": "$border",
                               "strokeWidth": 0,
                               "descendants": {
@@ -8296,31 +8283,14 @@
                               }
                             },
                             {
-                              "id": "ERMFk",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 110,
-                              "height": 42,
-                              "cornerRadius": [
-                                6,
-                                6,
-                                0,
-                                0
-                              ],
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": [
-                                    4,
-                                    4,
-                                    0,
-                                    0
-                                  ]
-                                }
-                              }
+                              "type": "text",
+                              "id": "IqMmS",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -8339,17 +8309,19 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "AlQY2",
-                          "name": "Focused wrapper",
+                          "id": "idiP8",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "V4CGoR",
+                              "id": "E4hlv",
                               "type": "ref",
                               "ref": "SOW6S",
                               "name": "Tab",
-                              "width": 110,
                               "height": 42,
+                              "width": 110,
                               "stroke": "$border",
                               "strokeWidth": {
                                 "bottom": 2
@@ -8366,31 +8338,14 @@
                               }
                             },
                             {
-                              "id": "E6cyBC",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 110,
-                              "height": 42,
-                              "cornerRadius": [
-                                6,
-                                6,
-                                0,
-                                0
-                              ],
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": [
-                                    4,
-                                    4,
-                                    0,
-                                    0
-                                  ]
-                                }
-                              }
+                              "type": "text",
+                              "id": "u0vVTP",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -8444,17 +8399,19 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "AARcv",
-                          "name": "Focused wrapper",
+                          "id": "R6333i",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "NPws2",
+                              "id": "U1QhL",
                               "type": "ref",
                               "ref": "SOW6S",
                               "name": "Tab",
-                              "width": 110,
                               "height": 42,
+                              "width": 110,
                               "stroke": "$text",
                               "strokeWidth": {
                                 "bottom": 2
@@ -8471,31 +8428,14 @@
                               }
                             },
                             {
-                              "id": "mD6mf",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 110,
-                              "height": 42,
-                              "cornerRadius": [
-                                6,
-                                6,
-                                0,
-                                0
-                              ],
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": [
-                                    4,
-                                    4,
-                                    0,
-                                    0
-                                  ]
-                                }
-                              }
+                              "type": "text",
+                              "id": "M5J4c",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -8520,7 +8460,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Inset ring, top corners 6, bottom square. The tab fills the strip height. The hover or selected underline paints over the ring's bottom edge.",
+                          "content": "Not focusable (outside forms): no Tab stop, no ring. Hover shows the $border underline; selected the 2 px $text underline.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -8562,7 +8502,7 @@
                           "fill": "$subtle",
                           "textGrowth": "fixed-width",
                           "width": 200,
-                          "content": "ajikA · outer ring",
+                          "content": "ajikA · canvas · pointer-only",
                           "fontFamily": "$font",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -8624,12 +8564,14 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "CWGjv",
-                          "name": "Focused wrapper",
+                          "id": "QkkEA",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "WpwhD",
+                              "id": "u714Gs",
                               "type": "ref",
                               "ref": "ajikA",
                               "name": "Pipeline step",
@@ -8637,21 +8579,14 @@
                               "strokeWidth": 1
                             },
                             {
-                              "id": "By3My",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · outer",
-                              "layoutPosition": "absolute",
-                              "x": -4,
-                              "y": -4,
-                              "width": 232,
-                              "height": 124,
-                              "cornerRadius": 16,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 14
-                                }
-                              }
+                              "type": "text",
+                              "id": "AV8g0",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -8670,12 +8605,14 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "yHVLT",
-                          "name": "Focused wrapper",
+                          "id": "kApLN",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "Pg3e8",
+                              "id": "ldPSc",
                               "type": "ref",
                               "ref": "ajikA",
                               "name": "Pipeline step",
@@ -8683,21 +8620,14 @@
                               "strokeWidth": 1
                             },
                             {
-                              "id": "J7etZo",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · outer",
-                              "layoutPosition": "absolute",
-                              "x": -4,
-                              "y": -4,
-                              "width": 232,
-                              "height": 124,
-                              "cornerRadius": 16,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 14
-                                }
-                              }
+                              "type": "text",
+                              "id": "Cf5gc",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -8737,17 +8667,29 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "bcFAM",
-                          "name": "Focused wrapper",
+                          "id": "c9zaSC",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "L4ctgD",
+                              "id": "biJZy",
                               "type": "ref",
                               "ref": "ajikA",
                               "name": "Pipeline step",
                               "stroke": "$text",
                               "strokeWidth": 1.5
+                            },
+                            {
+                              "type": "text",
+                              "id": "VxhZp",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -8772,7 +8714,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Outer ring, radius 16, while not selected. Selection keeps its 1.5 inside $text stroke. Selection drawn as a stroke hides the focus ring: focused + selected shows only the stroke (no double border). Still a Tab stop.",
+                          "content": "Not focusable (outside forms): the canvas is pointer-only; a click selects the step. Selection is the 1.5 inside $text stroke.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -9398,7 +9340,7 @@
                           "fill": "$subtle",
                           "textGrowth": "fixed-width",
                           "width": 200,
-                          "content": "SGjO0 · stacked rows · inset ring",
+                          "content": "SGjO0 · stacked rows · pointer-only",
                           "fontFamily": "$font",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -9477,20 +9419,22 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "Q88D1",
-                          "name": "Focused wrapper",
+                          "id": "upRJo",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "J3DLHO",
+                              "id": "TmA61",
                               "type": "ref",
                               "ref": "SGjO0",
                               "name": "List row",
-                              "width": 248,
                               "padding": [
                                 0,
                                 12
                               ],
+                              "width": 248,
                               "descendants": {
                                 "se7Iy": {
                                   "content": "Add repository switcher"
@@ -9498,21 +9442,14 @@
                               }
                             },
                             {
-                              "id": "YWMLJ",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 248,
-                              "height": 44,
-                              "cornerRadius": 0,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 0
-                                }
-                              }
+                              "type": "text",
+                              "id": "q4kQNY",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -9531,20 +9468,22 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "RVvNI",
-                          "name": "Focused wrapper",
+                          "id": "ecHNt",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "id": "vpbvF",
+                              "id": "o0G41",
                               "type": "ref",
                               "ref": "SGjO0",
                               "name": "List row",
-                              "width": 248,
                               "padding": [
                                 0,
                                 12
                               ],
+                              "width": 248,
                               "fill": "$raised",
                               "descendants": {
                                 "se7Iy": {
@@ -9553,21 +9492,14 @@
                               }
                             },
                             {
-                              "id": "N53nLg",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 248,
-                              "height": 44,
-                              "cornerRadius": 0,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 0
-                                }
-                              }
+                              "type": "text",
+                              "id": "xnhob",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -9638,7 +9570,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Inset ring, square. Rows stack edge to edge inside a clipped list, so the ring stays inside. A focusable row has 12 px side padding.",
+                          "content": "Not focusable (outside forms): lists are pointer-only. No Tab stop, no ring; a click selects or opens the row.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -9680,7 +9612,7 @@
                           "fill": "$subtle",
                           "textGrowth": "fixed-width",
                           "width": 200,
-                          "content": "E1msJS rows · inset ring",
+                          "content": "E1msJS rows · pointer-only",
                           "fontFamily": "$font",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -9879,13 +9811,15 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "CQRrC",
-                          "name": "Focused wrapper",
+                          "id": "GL6Zf",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
                               "type": "frame",
-                              "id": "Ftf6F",
+                              "id": "xd4Rr",
                               "name": "Popover row",
                               "width": 240,
                               "height": 48,
@@ -9895,7 +9829,7 @@
                               "children": [
                                 {
                                   "type": "icon",
-                                  "id": "F1SObd",
+                                  "id": "rcSeD",
                                   "name": "Row icon",
                                   "width": 12,
                                   "height": 12,
@@ -9905,7 +9839,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "mYAo4",
+                                  "id": "vl38o",
                                   "name": "Row text",
                                   "width": "fill_container",
                                   "layout": "vertical",
@@ -9913,7 +9847,7 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "Ac85W",
+                                      "id": "lGxaB",
                                       "name": "Row title",
                                       "fill": "$text",
                                       "textGrowth": "fixed-width",
@@ -9925,7 +9859,7 @@
                                     },
                                     {
                                       "type": "text",
-                                      "id": "o7xrTQ",
+                                      "id": "YBjiW",
                                       "name": "Row meta",
                                       "fill": "$subtle",
                                       "textGrowth": "fixed-width",
@@ -9939,7 +9873,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "IsQWy",
+                                  "id": "fGZol",
                                   "name": "Row time",
                                   "fill": "$subtle",
                                   "content": "4 s",
@@ -9949,7 +9883,7 @@
                                 },
                                 {
                                   "type": "icon",
-                                  "id": "Rpxex",
+                                  "id": "VQjph",
                                   "name": "Row trailing",
                                   "width": 12,
                                   "height": 12,
@@ -9960,21 +9894,14 @@
                               ]
                             },
                             {
-                              "id": "m4peSD",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 240,
-                              "height": 48,
-                              "cornerRadius": 7,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 5
-                                }
-                              }
+                              "type": "text",
+                              "id": "XOmit",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -9993,13 +9920,15 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "aziPe",
-                          "name": "Focused wrapper",
+                          "id": "LRtBh",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
                               "type": "frame",
-                              "id": "SKnET",
+                              "id": "CJBEM",
                               "name": "Popover row",
                               "width": 240,
                               "height": 48,
@@ -10010,7 +9939,7 @@
                               "children": [
                                 {
                                   "type": "icon",
-                                  "id": "xDFrB",
+                                  "id": "dJJLe",
                                   "name": "Row icon",
                                   "width": 12,
                                   "height": 12,
@@ -10020,7 +9949,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "V2CkGh",
+                                  "id": "CCuCt",
                                   "name": "Row text",
                                   "width": "fill_container",
                                   "layout": "vertical",
@@ -10028,7 +9957,7 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "Z4sy9",
+                                      "id": "nZFmu",
                                       "name": "Row title",
                                       "fill": "$text",
                                       "textGrowth": "fixed-width",
@@ -10040,7 +9969,7 @@
                                     },
                                     {
                                       "type": "text",
-                                      "id": "hHx5H",
+                                      "id": "q60yN0",
                                       "name": "Row meta",
                                       "fill": "$subtle",
                                       "textGrowth": "fixed-width",
@@ -10054,7 +9983,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "adYSd",
+                                  "id": "UWBRv",
                                   "name": "Row time",
                                   "fill": "$subtle",
                                   "content": "4 s",
@@ -10064,7 +9993,7 @@
                                 },
                                 {
                                   "type": "icon",
-                                  "id": "F7eTP",
+                                  "id": "kr9ax",
                                   "name": "Row trailing",
                                   "width": 12,
                                   "height": 12,
@@ -10075,21 +10004,14 @@
                               ]
                             },
                             {
-                              "id": "P92cMy",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 240,
-                              "height": 48,
-                              "cornerRadius": 7,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 5
-                                }
-                              }
+                              "type": "text",
+                              "id": "gYTXH",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -10160,7 +10082,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Inset ring, radius 7. Rows sit 2 px apart inside the clipped popover; no room outside.",
+                          "content": "Not focusable (outside forms): popover rows, dismiss and Open runner log are pointer-only. Escape still closes the popover.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -10202,7 +10124,7 @@
                           "fill": "$subtle",
                           "textGrowth": "fixed-width",
                           "width": 200,
-                          "content": "pmOpt items · inset ring",
+                          "content": "pmOpt items · pointer-only",
                           "fontFamily": "$font",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -10341,13 +10263,15 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "r98G0j",
-                          "name": "Focused wrapper",
+                          "id": "KwaZm",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
                               "type": "frame",
-                              "id": "q8tPDS",
+                              "id": "x7ZfKj",
                               "name": "Status bar item",
                               "width": 88,
                               "height": 22,
@@ -10361,7 +10285,7 @@
                               "children": [
                                 {
                                   "type": "icon",
-                                  "id": "Pft24",
+                                  "id": "ik9Y7",
                                   "name": "Queued icon",
                                   "width": 12,
                                   "height": 12,
@@ -10371,7 +10295,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "mqOfd",
+                                  "id": "H8JoH",
                                   "name": "Queued label",
                                   "fill": "$muted",
                                   "content": "Queued",
@@ -10381,7 +10305,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "RhtKa",
+                                  "id": "aBI02",
                                   "name": "Queued value",
                                   "fill": "$text",
                                   "content": "2",
@@ -10392,21 +10316,14 @@
                               ]
                             },
                             {
-                              "id": "tuZaJ",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 88,
-                              "height": 22,
-                              "cornerRadius": 5,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 3
-                                }
-                              }
+                              "type": "text",
+                              "id": "VHQnN",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -10425,13 +10342,15 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "hfmmA",
-                          "name": "Focused wrapper",
+                          "id": "QrUwa",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
                               "type": "frame",
-                              "id": "S4k90",
+                              "id": "NTHqG",
                               "name": "Status bar item",
                               "width": 88,
                               "height": 22,
@@ -10446,7 +10365,7 @@
                               "children": [
                                 {
                                   "type": "icon",
-                                  "id": "X246Vi",
+                                  "id": "eLgvJ",
                                   "name": "Queued icon",
                                   "width": 12,
                                   "height": 12,
@@ -10456,7 +10375,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "f9sOs",
+                                  "id": "FBtsK",
                                   "name": "Queued label",
                                   "fill": "$muted",
                                   "content": "Queued",
@@ -10466,7 +10385,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "PvQzp",
+                                  "id": "zij3O",
                                   "name": "Queued value",
                                   "fill": "$text",
                                   "content": "2",
@@ -10477,21 +10396,14 @@
                               ]
                             },
                             {
-                              "id": "SFJHf",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 88,
-                              "height": 22,
-                              "cornerRadius": 5,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 3
-                                }
-                              }
+                              "type": "text",
+                              "id": "p5sLrY",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -10570,13 +10482,15 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "D6yDHZ",
-                          "name": "Focused wrapper",
+                          "id": "z43kSW",
+                          "name": "Not focusable",
                           "layout": "vertical",
+                          "gap": 6,
+                          "alignItems": "center",
                           "children": [
                             {
                               "type": "frame",
-                              "id": "ppBAY",
+                              "id": "Nk5wQ",
                               "name": "Status bar item",
                               "width": 88,
                               "height": 22,
@@ -10591,7 +10505,7 @@
                               "children": [
                                 {
                                   "type": "icon",
-                                  "id": "i1ZqR",
+                                  "id": "fz7h8",
                                   "name": "Queued icon",
                                   "width": 12,
                                   "height": 12,
@@ -10601,7 +10515,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "WFlss",
+                                  "id": "D5eSJZ",
                                   "name": "Queued label",
                                   "fill": "$muted",
                                   "content": "Queued",
@@ -10611,7 +10525,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "MJuRw",
+                                  "id": "BmKEl",
                                   "name": "Queued value",
                                   "fill": "$text",
                                   "content": "2",
@@ -10622,21 +10536,14 @@
                               ]
                             },
                             {
-                              "id": "EUBSA",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 88,
-                              "height": 22,
-                              "cornerRadius": 5,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 3
-                                }
-                              }
+                              "type": "text",
+                              "id": "t1ZNj",
+                              "name": "Not focusable",
+                              "fill": "$subtle",
+                              "content": "Not focusable",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -10661,7 +10568,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Inset ring, radius 5. The 22 px item has 3 px of bar above and below. Selected = popover open ($hover fill).",
+                          "content": "Not focusable (outside forms): the status bar is pointer-only. Selected = popover open ($hover fill).",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -12095,1949 +12002,6 @@
             },
             {
               "type": "frame",
-              "id": "ASfcG",
-              "x": 48,
-              "y": 1780,
-              "name": "Focus example · Sidebar navigation item",
-              "clip": true,
-              "width": 1440,
-              "height": 960,
-              "fill": "$surface",
-              "children": [
-                {
-                  "id": "xqr7K",
-                  "type": "ref",
-                  "ref": "zo9Py",
-                  "name": "Sidebar / Tasks",
-                  "height": "fill_container",
-                  "descendants": {
-                    "JI3gd": {
-                      "fill": "$sidebar"
-                    },
-                    "JI3gd/sQnmq": {
-                      "fill": "$muted"
-                    },
-                    "JI3gd/YWsP0": {
-                      "fill": "$muted"
-                    },
-                    "KYnRz": {
-                      "fill": "$hover"
-                    },
-                    "KYnRz/sQnmq": {
-                      "fill": "$text"
-                    },
-                    "KYnRz/YWsP0": {
-                      "fill": "$text"
-                    },
-                    "KYnRz/LTXft": {
-                      "content": "10"
-                    },
-                    "H50o2": {
-                      "type": "frame",
-                      "id": "z4hjln",
-                      "name": "Pipelines · focused",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "children": [
-                        {
-                          "id": "Z4D9Qz",
-                          "type": "ref",
-                          "ref": "TSJpn",
-                          "name": "Pipelines",
-                          "width": "fill_container",
-                          "descendants": {
-                            "sQnmq": {
-                              "icon": "workflow"
-                            },
-                            "YWsP0": {
-                              "content": "Pipelines"
-                            }
-                          }
-                        },
-                        {
-                          "id": "pQH4g",
-                          "type": "ref",
-                          "ref": "X9gPDr",
-                          "name": "Focus ring · outer",
-                          "layoutPosition": "absolute",
-                          "x": -4,
-                          "y": -4,
-                          "width": 200,
-                          "height": 46,
-                          "cornerRadius": 10,
-                          "descendants": {
-                            "N0nV4": {
-                              "cornerRadius": 8
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    "tGGua": {
-                      "content": "0 of 4 agent slots in use"
-                    }
-                  }
-                },
-                {
-                  "type": "frame",
-                  "id": "V6gFN",
-                  "name": "Task workspace",
-                  "width": "fill_container",
-                  "height": "fill_container",
-                  "layout": "vertical",
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "F4yskc",
-                      "name": "Topbar",
-                      "width": "fill_container",
-                      "height": 64,
-                      "stroke": "$hairline",
-                      "strokeWidth": {
-                        "bottom": 1
-                      },
-                      "gap": 12,
-                      "padding": [
-                        0,
-                        32
-                      ],
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "sJfmP",
-                          "name": "Breadcrumb",
-                          "fill": "$muted",
-                          "content": "Kontur / Tasks",
-                          "fontFamily": "$font",
-                          "fontSize": 12,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "frame",
-                          "id": "QIxAT",
-                          "name": "Topbar space",
-                          "width": "fill_container",
-                          "height": 1
-                        },
-                        {
-                          "id": "rGToH",
-                          "type": "ref",
-                          "ref": "u1XBP",
-                          "name": "Create multiple",
-                          "height": 36,
-                          "width": 142,
-                          "descendants": {
-                            "xfnek": {
-                              "icon": "list-plus"
-                            },
-                            "Y7HQGw": {
-                              "content": "Create multiple"
-                            }
-                          }
-                        },
-                        {
-                          "id": "L13jt",
-                          "type": "ref",
-                          "ref": "u1XBP",
-                          "name": "New task",
-                          "height": 36,
-                          "fill": "$accent",
-                          "stroke": "$accent",
-                          "width": 116,
-                          "descendants": {
-                            "xfnek": {
-                              "icon": "plus",
-                              "fill": "$inverse-text"
-                            },
-                            "Y7HQGw": {
-                              "content": "New task",
-                              "fill": "$inverse-text"
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "LJJRH",
-                      "name": "Page heading",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "gap": 10,
-                      "padding": [
-                        26,
-                        32,
-                        22,
-                        32
-                      ],
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "t56WO",
-                          "name": "Page title",
-                          "fill": "$text",
-                          "content": "Tasks",
-                          "fontFamily": "$font",
-                          "fontSize": 28,
-                          "fontWeight": "500"
-                        },
-                        {
-                          "type": "text",
-                          "id": "xWUFu",
-                          "name": "Page description",
-                          "fill": "$muted",
-                          "content": "Prepare your backlog, then choose what agents should work on.",
-                          "fontFamily": "$font",
-                          "fontSize": 12,
-                          "fontWeight": "normal"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "g60afe",
-                      "name": "Task tabs",
-                      "width": "fill_container",
-                      "height": 42,
-                      "stroke": "$hairline",
-                      "strokeWidth": {
-                        "bottom": 1
-                      },
-                      "gap": 8,
-                      "padding": [
-                        0,
-                        32
-                      ],
-                      "children": [
-                        {
-                          "id": "zpXy9",
-                          "type": "ref",
-                          "ref": "SOW6S",
-                          "name": "All tasks tab",
-                          "width": 124,
-                          "height": 42,
-                          "stroke": "$text",
-                          "strokeWidth": 0,
-                          "descendants": {
-                            "v66T9G": {
-                              "content": "All tasks",
-                              "fill": "$muted"
-                            },
-                            "tidLB": {
-                              "content": "10",
-                              "enabled": true
-                            }
-                          }
-                        },
-                        {
-                          "id": "E2v3Gd",
-                          "type": "ref",
-                          "ref": "SOW6S",
-                          "name": "Drafts tab",
-                          "width": 110,
-                          "height": 42,
-                          "stroke": "$text",
-                          "strokeWidth": {
-                            "bottom": 2
-                          },
-                          "descendants": {
-                            "v66T9G": {
-                              "content": "Drafts",
-                              "fill": "$text"
-                            },
-                            "tidLB": {
-                              "content": "10",
-                              "enabled": true
-                            }
-                          }
-                        },
-                        {
-                          "id": "rA3BU",
-                          "type": "ref",
-                          "ref": "SOW6S",
-                          "name": "Queue tab",
-                          "width": 106,
-                          "height": 42,
-                          "stroke": "$text",
-                          "strokeWidth": 0,
-                          "descendants": {
-                            "v66T9G": {
-                              "content": "Queue",
-                              "fill": "$muted"
-                            },
-                            "tidLB": {
-                              "content": "0",
-                              "enabled": true
-                            }
-                          }
-                        },
-                        {
-                          "id": "fQ1qu",
-                          "type": "ref",
-                          "ref": "SOW6S",
-                          "name": "Needs review tab",
-                          "width": 150,
-                          "height": 42,
-                          "stroke": "$text",
-                          "strokeWidth": 0,
-                          "descendants": {
-                            "v66T9G": {
-                              "content": "Needs review",
-                              "fill": "$muted"
-                            },
-                            "tidLB": {
-                              "content": "0",
-                              "enabled": true
-                            }
-                          }
-                        },
-                        {
-                          "id": "B8uXz",
-                          "type": "ref",
-                          "ref": "SOW6S",
-                          "name": "Done tab",
-                          "width": 102,
-                          "height": 42,
-                          "stroke": "$text",
-                          "strokeWidth": 0,
-                          "descendants": {
-                            "v66T9G": {
-                              "content": "Done",
-                              "fill": "$muted"
-                            },
-                            "tidLB": {
-                              "content": "0",
-                              "enabled": true
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "XXCzy",
-                      "name": "Task selection and library",
-                      "width": "fill_container",
-                      "height": "fill_container",
-                      "layout": "vertical",
-                      "gap": 12,
-                      "padding": [
-                        20,
-                        32
-                      ],
-                      "children": [
-                        {
-                          "type": "frame",
-                          "id": "liihV",
-                          "name": "Task filters",
-                          "width": "fill_container",
-                          "height": 36,
-                          "gap": 12,
-                          "children": [
-                            {
-                              "id": "ALXuu",
-                              "type": "ref",
-                              "ref": "ZGwlv",
-                              "name": "Search tasks",
-                              "width": "fill_container",
-                              "height": 36,
-                              "descendants": {
-                                "ObbY7": {
-                                  "content": "Search tasks…"
-                                },
-                                "eASPF": {
-                                  "icon": "search"
-                                }
-                              }
-                            },
-                            {
-                              "id": "Ig8i6",
-                              "type": "ref",
-                              "ref": "ZGwlv",
-                              "name": "Filter pipeline",
-                              "width": 184,
-                              "height": 36,
-                              "descendants": {
-                                "ObbY7": {
-                                  "content": "All pipelines",
-                                  "fontSize": 12
-                                }
-                              }
-                            },
-                            {
-                              "id": "d3n6i",
-                              "type": "ref",
-                              "ref": "ZGwlv",
-                              "name": "Task sort",
-                              "width": 164,
-                              "height": 36,
-                              "descendants": {
-                                "ObbY7": {
-                                  "content": "Manual order",
-                                  "fontSize": 12
-                                }
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "Q3zjWo",
-                          "name": "Selected task actions",
-                          "width": "fill_container",
-                          "height": 44,
-                          "fill": "$raised",
-                          "cornerRadius": 6,
-                          "gap": 14,
-                          "padding": [
-                            4,
-                            12
-                          ],
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "icon",
-                              "id": "Rhs3B",
-                              "name": "Select all tasks",
-                              "width": 16,
-                              "height": 16,
-                              "icon": "square-check",
-                              "library": "lucide",
-                              "fill": "$text"
-                            },
-                            {
-                              "type": "text",
-                              "id": "J6dP5",
-                              "name": "Selected task count",
-                              "fill": "$text",
-                              "content": "10 selected",
-                              "fontFamily": "$font",
-                              "fontSize": 12,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "ECb3f",
-                              "name": "Selection readiness",
-                              "fill": "$muted",
-                              "content": "10 briefs ready · 1 task has a dependency",
-                              "fontFamily": "$font",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "frame",
-                              "id": "SIvqe",
-                              "name": "Selection action space",
-                              "width": "fill_container",
-                              "height": 1
-                            },
-                            {
-                              "id": "iAVIc",
-                              "type": "ref",
-                              "ref": "u1XBP",
-                              "name": "Set pipeline",
-                              "height": 32,
-                              "descendants": {
-                                "xfnek": {
-                                  "icon": "workflow"
-                                },
-                                "Y7HQGw": {
-                                  "content": "Set pipeline"
-                                }
-                              }
-                            },
-                            {
-                              "id": "k6SekH",
-                              "type": "ref",
-                              "ref": "u1XBP",
-                              "name": "Run selected · 10",
-                              "height": 32,
-                              "fill": "$accent",
-                              "stroke": "$accent",
-                              "width": 158,
-                              "descendants": {
-                                "xfnek": {
-                                  "icon": "play",
-                                  "fill": "$inverse-text"
-                                },
-                                "Y7HQGw": {
-                                  "content": "Run selected · 10",
-                                  "fill": "$inverse-text"
-                                }
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "JAiRv",
-                          "name": "Project task table",
-                          "width": "fill_container",
-                          "layout": "vertical",
-                          "children": [
-                            {
-                              "type": "frame",
-                              "id": "YvaOM",
-                              "name": "Task table heading",
-                              "width": "fill_container",
-                              "height": 28,
-                              "gap": 16,
-                              "padding": [
-                                0,
-                                12
-                              ],
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "r3YB8",
-                                  "name": " header cell",
-                                  "width": 18,
-                                  "height": 20,
-                                  "alignItems": "center"
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "m4bbS",
-                                  "name": "ID header cell",
-                                  "width": 72,
-                                  "height": 20,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "Pb6Fz",
-                                      "name": "ID column label",
-                                      "fill": "$muted",
-                                      "content": "ID",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "V0y1O",
-                                  "name": "Task header cell",
-                                  "width": "fill_container",
-                                  "height": 20,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "nP3lt",
-                                      "name": "Task column label",
-                                      "fill": "$muted",
-                                      "content": "Task",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "VbRsr",
-                                  "name": "Pipeline header cell",
-                                  "width": 136,
-                                  "height": 20,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "Lg5ct",
-                                      "name": "Pipeline column label",
-                                      "fill": "$muted",
-                                      "content": "Pipeline",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "YvRke",
-                                  "name": "Status header cell",
-                                  "width": 112,
-                                  "height": 20,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "nlFC7",
-                                      "name": "Status column label",
-                                      "fill": "$muted",
-                                      "content": "Status",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "Ay5Cj",
-                                  "name": "Dependency / readiness header cell",
-                                  "width": 146,
-                                  "height": 20,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "k2OkVO",
-                                      "name": "Dependency / readiness column label",
-                                      "fill": "$muted",
-                                      "content": "Dependency / readiness",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "oZoqi",
-                                  "name": " header cell",
-                                  "width": 14,
-                                  "height": 20,
-                                  "alignItems": "center"
-                                }
-                              ]
-                            },
-                            {
-                              "id": "R9RIfJ",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-129 Add repository switcher",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-129"
-                                },
-                                "vKxgR": {
-                                  "content": "Add repository switcher"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "g9uTP",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-130 Add task search",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-130"
-                                },
-                                "vKxgR": {
-                                  "content": "Add task search"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "vYPvu",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-131 Add switcher keyboard shortcuts",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-131"
-                                },
-                                "vKxgR": {
-                                  "content": "Add switcher keyboard shortcuts"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "After ORC-129 merge"
-                                }
-                              }
-                            },
-                            {
-                              "id": "h3KL7p",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-132 Add empty states",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-132"
-                                },
-                                "vKxgR": {
-                                  "content": "Add empty states"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "KT4rC",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-133 Add runner status badge",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-133"
-                                },
-                                "vKxgR": {
-                                  "content": "Add runner status badge"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "xMW7s",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-134 Add task activity filters",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-134"
-                                },
-                                "vKxgR": {
-                                  "content": "Add task activity filters"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "vswyI",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-135 Add task token breakdown",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-135"
-                                },
-                                "vKxgR": {
-                                  "content": "Add task token breakdown"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "dZoAU",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-136 Add context attachments",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-136"
-                                },
-                                "vKxgR": {
-                                  "content": "Add context attachments"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "Qktz6",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-137 Add notification preferences",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-137"
-                                },
-                                "vKxgR": {
-                                  "content": "Add notification preferences"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "Srzon",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-138 Add setup resumption",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-138"
-                                },
-                                "vKxgR": {
-                                  "content": "Add setup resumption"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "bFEpX",
-                          "name": "Draft status",
-                          "width": "fill_container",
-                          "height": 30,
-                          "gap": 16,
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "Z545U",
-                              "name": "Task count",
-                              "fill": "$muted",
-                              "content": "10 tasks · no runs started",
-                              "fontFamily": "$font",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "frame",
-                              "id": "TXnjB",
-                              "name": "Draft status space",
-                              "width": "fill_container",
-                              "height": 1
-                            },
-                            {
-                              "type": "text",
-                              "id": "a1YDy",
-                              "name": "Row editing hint",
-                              "fill": "$muted",
-                              "content": "Open a task to edit its brief, criteria or dependencies.",
-                              "fontFamily": "$font",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "type": "frame",
-              "id": "A6HO2F",
-              "x": 1568,
-              "y": 1780,
-              "name": "Focus example · Tab",
-              "clip": true,
-              "width": 1440,
-              "height": 960,
-              "fill": "$surface",
-              "children": [
-                {
-                  "id": "qRg5C",
-                  "type": "ref",
-                  "ref": "zo9Py",
-                  "name": "Sidebar / Tasks",
-                  "height": "fill_container",
-                  "descendants": {
-                    "JI3gd": {
-                      "fill": "$sidebar"
-                    },
-                    "JI3gd/sQnmq": {
-                      "fill": "$muted"
-                    },
-                    "JI3gd/YWsP0": {
-                      "fill": "$muted"
-                    },
-                    "KYnRz": {
-                      "fill": "$hover"
-                    },
-                    "KYnRz/sQnmq": {
-                      "fill": "$text"
-                    },
-                    "KYnRz/YWsP0": {
-                      "fill": "$text"
-                    },
-                    "KYnRz/LTXft": {
-                      "content": "10"
-                    },
-                    "tGGua": {
-                      "content": "0 of 4 agent slots in use"
-                    }
-                  }
-                },
-                {
-                  "type": "frame",
-                  "id": "k4MMk3",
-                  "name": "Task workspace",
-                  "width": "fill_container",
-                  "height": "fill_container",
-                  "layout": "vertical",
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "yiJ2z",
-                      "name": "Topbar",
-                      "width": "fill_container",
-                      "height": 64,
-                      "stroke": "$hairline",
-                      "strokeWidth": {
-                        "bottom": 1
-                      },
-                      "gap": 12,
-                      "padding": [
-                        0,
-                        32
-                      ],
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "dr0TU",
-                          "name": "Breadcrumb",
-                          "fill": "$muted",
-                          "content": "Kontur / Tasks",
-                          "fontFamily": "$font",
-                          "fontSize": 12,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "frame",
-                          "id": "grMMu",
-                          "name": "Topbar space",
-                          "width": "fill_container",
-                          "height": 1
-                        },
-                        {
-                          "id": "LFhxm",
-                          "type": "ref",
-                          "ref": "u1XBP",
-                          "name": "Create multiple",
-                          "height": 36,
-                          "width": 142,
-                          "descendants": {
-                            "xfnek": {
-                              "icon": "list-plus"
-                            },
-                            "Y7HQGw": {
-                              "content": "Create multiple"
-                            }
-                          }
-                        },
-                        {
-                          "id": "ErX81",
-                          "type": "ref",
-                          "ref": "u1XBP",
-                          "name": "New task",
-                          "height": 36,
-                          "fill": "$accent",
-                          "stroke": "$accent",
-                          "width": 116,
-                          "descendants": {
-                            "xfnek": {
-                              "icon": "plus",
-                              "fill": "$inverse-text"
-                            },
-                            "Y7HQGw": {
-                              "content": "New task",
-                              "fill": "$inverse-text"
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "ugYte",
-                      "name": "Page heading",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "gap": 10,
-                      "padding": [
-                        26,
-                        32,
-                        22,
-                        32
-                      ],
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "R3qjjC",
-                          "name": "Page title",
-                          "fill": "$text",
-                          "content": "Tasks",
-                          "fontFamily": "$font",
-                          "fontSize": 28,
-                          "fontWeight": "500"
-                        },
-                        {
-                          "type": "text",
-                          "id": "vQ4t2",
-                          "name": "Page description",
-                          "fill": "$muted",
-                          "content": "Prepare your backlog, then choose what agents should work on.",
-                          "fontFamily": "$font",
-                          "fontSize": 12,
-                          "fontWeight": "normal"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "L40IEj",
-                      "name": "Task tabs",
-                      "width": "fill_container",
-                      "height": 42,
-                      "stroke": "$hairline",
-                      "strokeWidth": {
-                        "bottom": 1
-                      },
-                      "gap": 8,
-                      "padding": [
-                        0,
-                        32
-                      ],
-                      "children": [
-                        {
-                          "id": "XdfA6",
-                          "type": "ref",
-                          "ref": "SOW6S",
-                          "name": "All tasks tab",
-                          "width": 124,
-                          "height": 42,
-                          "stroke": "$text",
-                          "strokeWidth": 0,
-                          "descendants": {
-                            "v66T9G": {
-                              "content": "All tasks",
-                              "fill": "$muted"
-                            },
-                            "tidLB": {
-                              "content": "10",
-                              "enabled": true
-                            }
-                          }
-                        },
-                        {
-                          "id": "w9UHxs",
-                          "type": "ref",
-                          "ref": "SOW6S",
-                          "name": "Drafts tab",
-                          "width": 110,
-                          "height": 42,
-                          "stroke": "$text",
-                          "strokeWidth": {
-                            "bottom": 2
-                          },
-                          "descendants": {
-                            "v66T9G": {
-                              "content": "Drafts",
-                              "fill": "$text"
-                            },
-                            "tidLB": {
-                              "content": "10",
-                              "enabled": true
-                            }
-                          }
-                        },
-                        {
-                          "type": "frame",
-                          "id": "T9IeR",
-                          "name": "Queue tab · focused",
-                          "layout": "vertical",
-                          "children": [
-                            {
-                              "id": "hipjJ",
-                              "type": "ref",
-                              "ref": "SOW6S",
-                              "name": "Queue tab",
-                              "width": 106,
-                              "height": 42,
-                              "strokeWidth": 0,
-                              "descendants": {
-                                "v66T9G": {
-                                  "content": "Queue",
-                                  "fill": "$muted"
-                                },
-                                "tidLB": {
-                                  "content": "0",
-                                  "enabled": true
-                                }
-                              }
-                            },
-                            {
-                              "id": "isOLP",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · inset",
-                              "layoutPosition": "absolute",
-                              "x": 0,
-                              "y": 0,
-                              "width": 106,
-                              "height": 42,
-                              "cornerRadius": [
-                                6,
-                                6,
-                                0,
-                                0
-                              ],
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": [
-                                    4,
-                                    4,
-                                    0,
-                                    0
-                                  ]
-                                }
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "id": "CyZzj",
-                          "type": "ref",
-                          "ref": "SOW6S",
-                          "name": "Needs review tab",
-                          "width": 150,
-                          "height": 42,
-                          "stroke": "$text",
-                          "strokeWidth": 0,
-                          "descendants": {
-                            "v66T9G": {
-                              "content": "Needs review",
-                              "fill": "$muted"
-                            },
-                            "tidLB": {
-                              "content": "0",
-                              "enabled": true
-                            }
-                          }
-                        },
-                        {
-                          "id": "k8t2s",
-                          "type": "ref",
-                          "ref": "SOW6S",
-                          "name": "Done tab",
-                          "width": 102,
-                          "height": 42,
-                          "stroke": "$text",
-                          "strokeWidth": 0,
-                          "descendants": {
-                            "v66T9G": {
-                              "content": "Done",
-                              "fill": "$muted"
-                            },
-                            "tidLB": {
-                              "content": "0",
-                              "enabled": true
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "JkgV5",
-                      "name": "Task selection and library",
-                      "width": "fill_container",
-                      "height": "fill_container",
-                      "layout": "vertical",
-                      "gap": 12,
-                      "padding": [
-                        20,
-                        32
-                      ],
-                      "children": [
-                        {
-                          "type": "frame",
-                          "id": "UDXNK",
-                          "name": "Task filters",
-                          "width": "fill_container",
-                          "height": 36,
-                          "gap": 12,
-                          "children": [
-                            {
-                              "id": "pD5Ap",
-                              "type": "ref",
-                              "ref": "ZGwlv",
-                              "name": "Search tasks",
-                              "width": "fill_container",
-                              "height": 36,
-                              "descendants": {
-                                "ObbY7": {
-                                  "content": "Search tasks…"
-                                },
-                                "eASPF": {
-                                  "icon": "search"
-                                }
-                              }
-                            },
-                            {
-                              "id": "nxLkD",
-                              "type": "ref",
-                              "ref": "ZGwlv",
-                              "name": "Filter pipeline",
-                              "width": 184,
-                              "height": 36,
-                              "descendants": {
-                                "ObbY7": {
-                                  "content": "All pipelines",
-                                  "fontSize": 12
-                                }
-                              }
-                            },
-                            {
-                              "id": "WmTHD",
-                              "type": "ref",
-                              "ref": "ZGwlv",
-                              "name": "Task sort",
-                              "width": 164,
-                              "height": 36,
-                              "descendants": {
-                                "ObbY7": {
-                                  "content": "Manual order",
-                                  "fontSize": 12
-                                }
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "PdZDn",
-                          "name": "Selected task actions",
-                          "width": "fill_container",
-                          "height": 44,
-                          "fill": "$raised",
-                          "cornerRadius": 6,
-                          "gap": 14,
-                          "padding": [
-                            4,
-                            12
-                          ],
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "icon",
-                              "id": "u7zVKK",
-                              "name": "Select all tasks",
-                              "width": 16,
-                              "height": 16,
-                              "icon": "square-check",
-                              "library": "lucide",
-                              "fill": "$text"
-                            },
-                            {
-                              "type": "text",
-                              "id": "j2DNK6",
-                              "name": "Selected task count",
-                              "fill": "$text",
-                              "content": "10 selected",
-                              "fontFamily": "$font",
-                              "fontSize": 12,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "d7ekx",
-                              "name": "Selection readiness",
-                              "fill": "$muted",
-                              "content": "10 briefs ready · 1 task has a dependency",
-                              "fontFamily": "$font",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "frame",
-                              "id": "gl7i8",
-                              "name": "Selection action space",
-                              "width": "fill_container",
-                              "height": 1
-                            },
-                            {
-                              "id": "T66pwt",
-                              "type": "ref",
-                              "ref": "u1XBP",
-                              "name": "Set pipeline",
-                              "height": 32,
-                              "descendants": {
-                                "xfnek": {
-                                  "icon": "workflow"
-                                },
-                                "Y7HQGw": {
-                                  "content": "Set pipeline"
-                                }
-                              }
-                            },
-                            {
-                              "id": "w7uUF",
-                              "type": "ref",
-                              "ref": "u1XBP",
-                              "name": "Run selected · 10",
-                              "height": 32,
-                              "fill": "$accent",
-                              "stroke": "$accent",
-                              "width": 158,
-                              "descendants": {
-                                "xfnek": {
-                                  "icon": "play",
-                                  "fill": "$inverse-text"
-                                },
-                                "Y7HQGw": {
-                                  "content": "Run selected · 10",
-                                  "fill": "$inverse-text"
-                                }
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "v4XCg",
-                          "name": "Project task table",
-                          "width": "fill_container",
-                          "layout": "vertical",
-                          "children": [
-                            {
-                              "type": "frame",
-                              "id": "daSme",
-                              "name": "Task table heading",
-                              "width": "fill_container",
-                              "height": 28,
-                              "gap": 16,
-                              "padding": [
-                                0,
-                                12
-                              ],
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "Y4K3Ra",
-                                  "name": " header cell",
-                                  "width": 18,
-                                  "height": 20,
-                                  "alignItems": "center"
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "dYLpC",
-                                  "name": "ID header cell",
-                                  "width": 72,
-                                  "height": 20,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "lk2Pe",
-                                      "name": "ID column label",
-                                      "fill": "$muted",
-                                      "content": "ID",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "s8owA",
-                                  "name": "Task header cell",
-                                  "width": "fill_container",
-                                  "height": 20,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "F0bJd",
-                                      "name": "Task column label",
-                                      "fill": "$muted",
-                                      "content": "Task",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "drr5S",
-                                  "name": "Pipeline header cell",
-                                  "width": 136,
-                                  "height": 20,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "ftpXm",
-                                      "name": "Pipeline column label",
-                                      "fill": "$muted",
-                                      "content": "Pipeline",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "lXGSw",
-                                  "name": "Status header cell",
-                                  "width": 112,
-                                  "height": 20,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "lr0a0",
-                                      "name": "Status column label",
-                                      "fill": "$muted",
-                                      "content": "Status",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "N5nWj",
-                                  "name": "Dependency / readiness header cell",
-                                  "width": 146,
-                                  "height": 20,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "cIKwF",
-                                      "name": "Dependency / readiness column label",
-                                      "fill": "$muted",
-                                      "content": "Dependency / readiness",
-                                      "fontFamily": "$font",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "R4jfya",
-                                  "name": " header cell",
-                                  "width": 14,
-                                  "height": 20,
-                                  "alignItems": "center"
-                                }
-                              ]
-                            },
-                            {
-                              "id": "J6eti3",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-129 Add repository switcher",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-129"
-                                },
-                                "vKxgR": {
-                                  "content": "Add repository switcher"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "am7pu",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-130 Add task search",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-130"
-                                },
-                                "vKxgR": {
-                                  "content": "Add task search"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "Z13YBa",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-131 Add switcher keyboard shortcuts",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-131"
-                                },
-                                "vKxgR": {
-                                  "content": "Add switcher keyboard shortcuts"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "After ORC-129 merge"
-                                }
-                              }
-                            },
-                            {
-                              "id": "jIDvC",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-132 Add empty states",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-132"
-                                },
-                                "vKxgR": {
-                                  "content": "Add empty states"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "uQIRf",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-133 Add runner status badge",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-133"
-                                },
-                                "vKxgR": {
-                                  "content": "Add runner status badge"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "JvNs6",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-134 Add task activity filters",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-134"
-                                },
-                                "vKxgR": {
-                                  "content": "Add task activity filters"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "J25uR",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-135 Add task token breakdown",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-135"
-                                },
-                                "vKxgR": {
-                                  "content": "Add task token breakdown"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "MaKlV",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-136 Add context attachments",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-136"
-                                },
-                                "vKxgR": {
-                                  "content": "Add context attachments"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "rphEm",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-137 Add notification preferences",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-137"
-                                },
-                                "vKxgR": {
-                                  "content": "Add notification preferences"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            },
-                            {
-                              "id": "exkOj",
-                              "type": "ref",
-                              "ref": "clVjO",
-                              "name": "ORC-138 Add setup resumption",
-                              "width": "fill_container",
-                              "descendants": {
-                                "R7idX": {
-                                  "icon": "square-check"
-                                },
-                                "nK730": {
-                                  "content": "ORC-138"
-                                },
-                                "vKxgR": {
-                                  "content": "Add setup resumption"
-                                },
-                                "JIbWj/bhGXK": {
-                                  "icon": "pencil"
-                                },
-                                "JIbWj/JuW4o": {
-                                  "content": "Draft"
-                                },
-                                "idhE5": {
-                                  "content": "Ready to queue"
-                                }
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "L9kDAL",
-                          "name": "Draft status",
-                          "width": "fill_container",
-                          "height": 30,
-                          "gap": 16,
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "H1PTm",
-                              "name": "Task count",
-                              "fill": "$muted",
-                              "content": "10 tasks · no runs started",
-                              "fontFamily": "$font",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "frame",
-                              "id": "w7gjX",
-                              "name": "Draft status space",
-                              "width": "fill_container",
-                              "height": 1
-                            },
-                            {
-                              "type": "text",
-                              "id": "C3X5pg",
-                              "name": "Row editing hint",
-                              "fill": "$muted",
-                              "content": "Open a task to edit its brief, criteria or dependencies.",
-                              "fontFamily": "$font",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "id": "bISzE",
-              "type": "ref",
-              "ref": "pmOpt",
-              "name": "Focus example · Status bar item",
-              "x": 48,
-              "y": 2840,
-              "descendants": {
-                "F7mn6G": {
-                  "content": "0/4",
-                  "fill": "$subtle"
-                },
-                "O7DBvB": {
-                  "content": "0",
-                  "fill": "$subtle"
-                },
-                "LAVEh": {
-                  "type": "frame",
-                  "id": "W9mSeo",
-                  "name": "Needs you · focused",
-                  "layout": "vertical",
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "B2dtBL",
-                      "name": "Needs you",
-                      "height": 22,
-                      "cornerRadius": 5,
-                      "gap": 6,
-                      "padding": [
-                        0,
-                        8
-                      ],
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "icon",
-                          "id": "VDCxC",
-                          "name": "Needs you icon",
-                          "width": 12,
-                          "height": 12,
-                          "icon": "message-circle",
-                          "library": "lucide",
-                          "fill": "$muted"
-                        },
-                        {
-                          "type": "text",
-                          "id": "n5Z64",
-                          "name": "Needs you label",
-                          "fill": "$muted",
-                          "content": "Needs you",
-                          "fontFamily": "$font",
-                          "fontSize": 11,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "WgPzd",
-                          "name": "Needs you value",
-                          "fill": "$text",
-                          "content": "1",
-                          "fontFamily": "$mono",
-                          "fontSize": 11,
-                          "fontWeight": "normal"
-                        }
-                      ]
-                    },
-                    {
-                      "id": "IIEGD",
-                      "type": "ref",
-                      "ref": "X9gPDr",
-                      "name": "Focus ring · inset",
-                      "layoutPosition": "absolute",
-                      "x": 0,
-                      "y": 0,
-                      "width": 103,
-                      "height": 22,
-                      "cornerRadius": 5,
-                      "descendants": {
-                        "N0nV4": {
-                          "cornerRadius": 3
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              "type": "frame",
               "id": "Oz9EN",
               "x": 2316,
               "y": 220,
@@ -14513,7 +12477,7 @@
                       "fill": "$muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Mouse and keyboard focus look the same. A click on empty space clears focus. Disabled controls are not focusable and never show a ring. Only one control is focused at a time.",
+                      "content": "Only form and dialog controls take focus. Everything outside forms (navigation, tabs, lists, canvas cards, toolbars, page actions, status bar, popover rows) is pointer-only: no Tab stop, no ring, and a click on it leaves focus where it is. Mouse and keyboard focus look the same. A click on empty space clears focus. Disabled controls are not focusable. Only one control is focused at a time.",
                       "lineHeight": 1.6,
                       "fontFamily": "$font",
                       "fontSize": 12,
@@ -14526,7 +12490,7 @@
                       "fill": "$muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Outer ring needs 4 px of unclipped room around the control. Where a clipping container or a neighbour sits closer (status bar items, tabs, stacked list rows, popover rows), use the inset ring instead of padding the container.",
+                      "content": "Outer ring needs 4 px of unclipped room around the control. Where a clipping container or a neighbour sits closer (stacked rows, toggles in a tight row), use the inset ring instead of padding the container.",
                       "lineHeight": 1.6,
                       "fontFamily": "$font",
                       "fontSize": 12,
@@ -14563,48 +12527,12 @@
             },
             {
               "type": "text",
-              "id": "Qp62T",
-              "x": 48,
-              "y": 1748,
-              "name": "Example caption · Sidebar",
-              "fill": "$muted",
-              "content": "Focus example · Sidebar navigation item (Pipelines focused, Tasks selected) · outer ring",
-              "fontFamily": "$font",
-              "fontSize": 13,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "text",
-              "id": "ysGOD",
-              "x": 1568,
-              "y": 1748,
-              "name": "Example caption · Tab",
-              "fill": "$muted",
-              "content": "Focus example · Tab (Queue focused, Drafts selected) · inset ring",
-              "fontFamily": "$font",
-              "fontSize": 13,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "text",
               "id": "m2T2e",
               "x": 3088,
               "y": 1748,
               "name": "Example caption · Dialog",
               "fill": "$muted",
               "content": "Focus example · Dialog primary button (Create draft focused) · outer ring",
-              "fontFamily": "$font",
-              "fontSize": 13,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "text",
-              "id": "SfZCs",
-              "x": 48,
-              "y": 2808,
-              "name": "Example caption · Status bar",
-              "fill": "$muted",
-              "content": "Focus example · Status bar item (Needs you focused) · inset ring",
               "fontFamily": "$font",
               "fontSize": 13,
               "fontWeight": "normal"
