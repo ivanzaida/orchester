@@ -8748,23 +8748,6 @@
                               "name": "Pipeline step",
                               "stroke": "$text",
                               "strokeWidth": 1.5
-                            },
-                            {
-                              "id": "o6cwm",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · outer",
-                              "layoutPosition": "absolute",
-                              "x": -4,
-                              "y": -4,
-                              "width": 232,
-                              "height": 124,
-                              "cornerRadius": 16,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 14
-                                }
-                              }
                             }
                           ]
                         }
@@ -8789,7 +8772,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Outer ring, radius 16. Selection keeps its 1.5 inside $text stroke; focus is always outside, behind a dark gap.",
+                          "content": "Outer ring, radius 16, while not selected. Selection keeps its 1.5 inside $text stroke. Selection drawn as a stroke hides the focus ring: focused + selected shows only the stroke (no double border). Still a Tab stop.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -9349,23 +9332,6 @@
                                   ]
                                 }
                               ]
-                            },
-                            {
-                              "id": "Q57s3",
-                              "type": "ref",
-                              "ref": "X9gPDr",
-                              "name": "Focus ring · outer",
-                              "layoutPosition": "absolute",
-                              "x": -4,
-                              "y": -4,
-                              "width": 232,
-                              "height": 80,
-                              "cornerRadius": 11,
-                              "descendants": {
-                                "N0nV4": {
-                                  "cornerRadius": 9
-                                }
-                              }
                             }
                           ]
                         }
@@ -9390,7 +9356,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Outer ring, radius 11. Selection stays the 1.5 stroke plus the filled radio.",
+                          "content": "Outer ring, radius 11, while not selected. Selection stays the 1.5 stroke plus the filled radio. Selection drawn as a stroke hides the focus ring: focused + selected shows only the selection.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -14534,7 +14500,7 @@
                       "fill": "$muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Focused + selected: the selection look (1.5 inside stroke, $hover fill or underline) stays; the ring sits outside it behind the dark gap, or inside for inset controls.",
+                      "content": "Focused + selected: a selection drawn as a fill or underline ($hover fill, tab underline) stays and the ring is added, outside it behind the dark gap or inside for inset controls. Selection drawn as a stroke (1.5 inside $text: step card, option card) hides the focus ring: only the stroke shows.",
                       "lineHeight": 1.6,
                       "fontFamily": "$font",
                       "fontSize": 12,
@@ -15953,12 +15919,12 @@
                                       "cornerRadius": 2,
                                       "id": "YD8PV",
                                       "layoutPosition": "absolute",
-                                      "x": 251,
-                                      "y": 4,
+                                      "x": 253,
+                                      "y": 11,
                                       "name": "Scroll thumb",
                                       "fill": "$border",
                                       "width": 4,
-                                      "height": 170
+                                      "height": 163
                                     }
                                   ]
                                 }
@@ -16129,7 +16095,7 @@
                           "fill": "$text",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "8 options = 266 px with border; longer lists scroll; overlay thumb 4 px $border radius 2",
+                          "content": "8 options = 266 px with border; longer lists scroll; overlay thumb, no track: width 4 · radius 2 · $border · right edge 3 px from the menu edge (2 px clear of the border) · 11 px from the top and bottom menu edges (= corner radius, straight edge only) · length = track × visible / total, min 24 · track = menu height − 22",
                           "lineHeight": 1.5,
                           "fontFamily": "$mono",
                           "fontSize": 11,

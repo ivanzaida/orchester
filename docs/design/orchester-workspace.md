@@ -388,7 +388,8 @@ show the menu open with the pointer (`w0KYb`) and with the keyboard (`MUhOt`); w
 | Menu (`u0ByM`) | `$raised` fill, 1px `$border`, radius 11 (option radius 7 + padding 4), padding 4, no gap between options, clipped |
 | Menu shadow | `0 8 24 #00000066`, the same elevation shadow as the operations popover `E1msJS`. Only floating layers (popover, select menu) carry it; controls never do (the focus ring is their only shadow) |
 | Placement | 4px below the trigger, same width as the trigger; flips above when there is no room below; stays inside the window, above dialogs (not clipped by the dialog) |
-| Max height | 8 options: 266px including the border. Longer lists scroll inside the menu with an overlay thumb (4px, `$border`, radius 2, 1px from the border); the highlight is scrolled into view |
+| Max height | 8 options: 266px including the border. Longer lists scroll inside the menu with an overlay thumb and no track; the highlight is scrolled into view |
+| Scroll thumb (`YD8PV`) | 4px wide, radius 2, `$border`, drawn over the options. Its right edge is 3px from the menu's outer edge (2px clear of the 1px border). It runs only along the straight part of the edge: 11px from the top and bottom outer edges (the corner radius), so it never touches the border or the rounded corners. Track = menu height − 22; length = track × visible / total, at least 24px. Example: 12 options in 266px give a 163px thumb at y 11 |
 | Option (`L20XvS`) | 32px high, padding 0 8, gap 8, radius 7 (`$radius-control`). Label Inter 12 `$text`, the field text; with the menu padding its text lines up with the trigger text 12px from the edge |
 | Check | lucide `check` 14 `$text` in a trailing slot that is always reserved (labels never shift). It sits exactly under the trigger chevron |
 | Hovered | `$hover` fill (pointer only) |
