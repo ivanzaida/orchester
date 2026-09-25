@@ -103,13 +103,14 @@ pub enum GhAdvice {
 }
 
 impl GhAdvice {
-  /// The command line for `host`, e.g. `gh auth login --hostname github.com`.
+  /// The command line for `host`, e.g. `gh auth login --hostname github.com`. Flags are written
+  /// as in the design: long for login, short for switch and refresh so they fit one line.
   pub fn command(&self, host: &GitHubHost) -> String {
     match self {
       Self::Login => format!("gh auth login --hostname {host}"),
       Self::Switch(login) => {
         let login = login.as_ref().map_or(ANY_LOGIN, GitHubLogin::as_str);
-        format!("gh auth switch --hostname {host} --user {login}")
+        format!("gh auth switch -h {host} -u {login}")
       }
       Self::Refresh => format!("gh auth refresh -h {host} -s {REQUIRED_SCOPE}"),
     }

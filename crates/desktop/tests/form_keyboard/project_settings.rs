@@ -3,7 +3,7 @@
 //! `git` are not pressed: the tests never run the real programs.
 
 use crate::{
-  github::{ReplayGh, SIGNED_IN, VERSION, github_connection, link, shows},
+  github::{ReplayGh, SIGNED_IN, VERSION, contains_text, github_connection, link, shows},
   harness::{Desktop, expected},
 };
 
@@ -58,6 +58,8 @@ fn project_settings_offer_use_signed_in_only_for_another_account() {
   settings(&mut desktop);
   assert!(shows(&mut desktop, "settings-general", "gh is signed in as ivanzaida"));
   assert!(desktop.tree.get_element_by_id(USE_SIGNED_IN).is_none());
+  // The notice explains Use signed-in account and goes with it.
+  assert!(desktop.tree.get_element_by_id("settings-expected-notice").is_none());
   assert_eq!(desktop.stops(2, false), expected(&[Some(CHECK), Some(CHECK)]));
 }
 
@@ -77,6 +79,8 @@ fn project_settings_limits_are_unavailable() {
   settings(&mut desktop);
   desktop.click("settings-tab-limits");
   desktop.wait_for("settings-limits-unavailable");
+  let description = "Defaults and limits for Kontur. They apply to new tasks and runs in this project.";
+  assert!(desktop.tree.root().is_some_and(|root| contains_text(root, description)));
   assert!(shows(
     &mut desktop,
     "settings-limits-unavailable",

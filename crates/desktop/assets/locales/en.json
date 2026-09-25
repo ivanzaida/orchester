@@ -57,7 +57,7 @@
       "ownershipTitle": "A home for this project’s work",
       "ownershipDetail": "Tasks, agent profiles, instructions, tools, secrets and connections stay in this project. You can import independent copies from another project later.",
       "ownershipDetailNamed": "Tasks, agent profiles, instructions, tools, secrets and connections stay in {{name}}. You can import independent copies from another project later.",
-      "createExplanation": "Creates the project in the repository’s .orchester folder.",
+      "createExplanation": "Creates the project in the repository’s .orchester folder and opens it.",
       "chooseFolderToContinue": "Choose the project folder to continue.",
       "needsRepository": "The project folder must be a git repository to continue.",
       "create": "Create project & continue",
@@ -571,6 +571,7 @@
       "limits": "Limits"
     },
     "limits": {
+      "description": "Defaults and limits for {{project}}. They apply to new tasks and runs in this project.",
       "unavailable": "Limits arrive with task runs",
       "unavailableDetail": "Run and daily token budgets are set here once tasks can run."
     },

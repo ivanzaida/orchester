@@ -84,6 +84,8 @@ pub enum ExtraTypography {
   MonoTag,
   /// Mono value of a key/value property or a slug, e.g. "$1.50" (`yeeIR` in `BzWOd`, `cJsA7`).
   MonoValue,
+  /// A path in a field, e.g. the project folder (`ObbY7` in `xZAZc`, `F5KwDR`).
+  MonoField,
   /// Step instructions as they are written (`v1Ky8`).
   Instructions,
   /// Short explanation under a field, e.g. "Choose a model here…" (`k66CB`, `Lwlf3`).
@@ -101,7 +103,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 43] = [
+  const ALL: [Self; 44] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -138,6 +140,7 @@ impl ExtraTypography {
     Self::CanvasLabel,
     Self::MonoTag,
     Self::MonoValue,
+    Self::MonoField,
     Self::Instructions,
     Self::Hint,
     Self::VersionFigure,
@@ -185,6 +188,7 @@ impl ExtraTypography {
       Self::CanvasLabel => "canvas-label",
       Self::MonoTag => "mono-tag",
       Self::MonoValue => "mono-value",
+      Self::MonoField => "mono-field",
       Self::Instructions => "instructions",
       Self::Hint => "hint",
       Self::VersionFigure => "version-figure",
@@ -292,6 +296,7 @@ impl ExtraTypography {
       },
       Self::MonoTag => mono(9.0, MUTED),
       Self::MonoValue => mono(11.0, TEXT),
+      Self::MonoField => mono(12.0, TEXT),
       Self::Instructions => TextStyle {
         line_height: 1.65,
         ..style(12.0, FontWeight::Normal, TEXT)

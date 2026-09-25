@@ -91,6 +91,8 @@ pub fn folder_field(ctx: &Ctx, pick: &PickAction, folder: Option<&PathBuf>, erro
   };
   let column = Column::new()
     .width(Dimension::Pct(100.0))
+    // Choose folder ends at the column's right edge; its focus ring reaches past it.
+    .overflow_visible()
     .spacing(ExtraSpacing::Field.role())
     .child(Text::new(&ctx.t("setup.project.repository")).variant(TypographyStyle::Caption))
     .child(

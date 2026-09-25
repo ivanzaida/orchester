@@ -193,6 +193,8 @@ impl Component for ProjectForm {
     };
     let footer = Column::new()
       .width(Dimension::Pct(100.0))
+      // Create's focus ring reaches above the footer, into the fields' bottom padding.
+      .overflow_visible()
       .padding_horizontal(ExtraSpacing::Page.role())
       .padding_bottom(SpacingSize::Section)
       .child(actions_row(ctx, pending, form_error, &status, submit.clone()));
@@ -269,6 +271,8 @@ fn actions_row(ctx: &Ctx, pending: bool, error: Option<Arc<str>>, status: &str, 
   };
   Row::new()
     .width(Dimension::Pct(100.0))
+    // Create is as tall as the row; its focus ring reaches past it.
+    .overflow_visible()
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .child(status)
