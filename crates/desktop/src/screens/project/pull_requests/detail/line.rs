@@ -67,6 +67,15 @@ impl Component for DiffRowView {
       DiffRow::Hunk { old, new, section, .. } => hunk(ctx, &old, &new, &section, width),
       DiffRow::Line(line) => line_row(ctx, &line, width),
       DiffRow::Note { note, .. } => note_row(ctx, &note, width),
+      DiffRow::ScrollbarGap { .. } => {
+        let scrollbar = ctx.theme().scrollbar().clone();
+        let height = scrollbar.width + 2.0 * scrollbar.resolved_edge_inset();
+        Row::new()
+          .id("pull-request-scrollbar-gap")
+          .width(width)
+          .height(Dimension::Px(height))
+          .into()
+      }
     }
   }
 }
@@ -93,7 +102,7 @@ fn row_width(row: &DiffRow) -> f32 {
         + chars as f32 * CODE_CHAR_WIDTH
         + marker
     }
-    DiffRow::Note { .. } => 0.0,
+    DiffRow::Note { .. } | DiffRow::ScrollbarGap { .. } => 0.0,
   }
 }
 

@@ -20,7 +20,7 @@ use lurq::{
 use orchester_core::pull_request::diff::{FileChange, FileDiff};
 
 use crate::{
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     field::styled_input,
     icon::{Icon, IconSize, icon},
@@ -117,10 +117,12 @@ impl Component for FileList {
         .variant(TypographyStyle::Caption)
         .into()
     } else {
+      let scrollbar = gutter_scrollbar(&ctx.theme().scrollbar());
       VirtualizedList::new_shared(ctx, items)
         .list_key("pull-request-files")
         .width(Dimension::Pct(100.0))
         .flex(1.0)
+        .scrollbar(scrollbar)
         .mount_keyed::<FileRow, _, _, _>(FileItem::key, move |item| FileRowProps {
           item: item.clone(),
           select: select.clone(),
@@ -131,16 +133,23 @@ impl Component for FileList {
       .width(Dimension::Px(LIST_WIDTH))
       .height(Dimension::Pct(100.0))
       .padding_vertical(ExtraSpacing::Step.role())
-      .padding_horizontal(ExtraSpacing::Stack.role())
+      // The right side's padding is the list's scrollbar gutter; the heading and search keep it.
+      .padding_left(ExtraSpacing::Stack.role())
       .spacing(SpacingSize::Sm)
       .background(PaletteColor::SurfacePanel)
       .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(
-        Text::new(&ctx.t_args("pullRequests.files.heading", [("count", count.as_str())]))
-          .variant(ExtraTypography::FileListHeading.role())
-          .nowrap(),
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding_right(ExtraSpacing::Stack.role())
+          .spacing(SpacingSize::Sm)
+          .child(
+            Text::new(&ctx.t_args("pullRequests.files.heading", [("count", count.as_str())]))
+              .variant(ExtraTypography::FileListHeading.role())
+              .nowrap(),
+          )
+          .child(self.search(ctx)),
       )
-      .child(self.search(ctx))
       .child(list)
   }
 }

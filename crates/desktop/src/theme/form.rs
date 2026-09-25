@@ -1,12 +1,12 @@
 use lurq::{
   app::theme::{FormTextRole, FormTheme, PaletteColor, RadiusSize, TypographyStyle},
-  layout::scrollbar::ScrollBarStyle,
+  layout::scrollbar::{ScrollBarPlacement, ScrollBarStyle},
   node::{color::Color, dimension::Dimension, padding::Padding},
 };
 
 use super::tokens::{
   BORDER, BUTTON_HEIGHT, CONTROL_PADDING_X, FIELD_HEIGHT, NO_TRACK, SELECT_SCROLLBAR_EDGE_INSET,
-  SELECT_SCROLLBAR_END_INSET, SELECT_SCROLLBAR_MIN_THUMB, SELECT_SCROLLBAR_RADIUS, SELECT_SCROLLBAR_WIDTH,
+  SELECT_SCROLLBAR_END_INSET, SELECT_SCROLLBAR_MIN_THUMB, SELECT_SCROLLBAR_RADIUS, SELECT_SCROLLBAR_WIDTH, SPACE_STACK,
 };
 
 /// Field (`ZGwlv`) and button (`u1XBP`) roles for lurq's compound form controls.
@@ -63,4 +63,15 @@ pub fn select_menu_scrollbar() -> ScrollBarStyle {
     ..ScrollBarStyle::default()
   }
   .insets(SELECT_SCROLLBAR_EDGE_INSET, SELECT_SCROLLBAR_END_INSET)
+}
+
+/// `base` in a gutter of its own as wide as a list's side padding (`space-stack`), so the bar
+/// never covers a row or its selection (changed file list `h8PZJa`).
+pub fn gutter_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
+  let edge_inset = ((SPACE_STACK - base.width) / 2.0).max(0.0);
+  ScrollBarStyle {
+    placement: ScrollBarPlacement::Reserved,
+    edge_inset: Some(edge_inset),
+    ..base.clone()
+  }
 }

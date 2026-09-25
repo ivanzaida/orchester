@@ -60,7 +60,7 @@ impl Actions {
   /// Whether a refresh may start at `now`: none runs and no rate limit holds it back.
   pub fn may_refresh(&self, detail: Option<&Detail>, now: Timestamp) -> bool {
     let paused = match detail {
-      Some(Detail::Linked(linked)) => linked.failure.as_ref().is_some_and(|failure| failure.is_paused(now)),
+      Some(Detail::Linked(linked)) => linked.latest_failure().is_some_and(|failure| failure.is_paused(now)),
       Some(Detail::Unlinked) | None => false,
     };
     !self.refresh.state().get_untracked().is_pending() && !paused

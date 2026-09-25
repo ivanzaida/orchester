@@ -52,6 +52,8 @@ pub enum DiffRead {
   Read(RevisionDiff),
   /// The pull request changes more than [`is_too_large`] allows; nothing was fetched.
   TooLarge,
+  /// The pull request was read, but GitHub gave no diff of its head.
+  Failed(SyncFailure),
 }
 
 /// The pull request and its diff as one refresh read them.
@@ -71,7 +73,8 @@ pub struct DetailRefresh {
 /// Reads pull request `number` of the linked repository through `github`, if `gh` acts as the
 /// account the link expects, and makes sure `store` holds the diff of its current head: a stored
 /// diff of that head is reused (and marked synced at `now`), otherwise it is fetched and stored.
-/// Only storage failures are errors; what GitHub refused is the refresh's outcome.
+/// Only storage failures are errors; what GitHub refused is the refresh's outcome, and a diff it
+/// refused after reading the pull request is [`DiffRead::Failed`].
 pub fn refresh_pull_request<S: PullRequestDiffStore>(
   github: &impl GitHub,
   store: &mut S,
@@ -112,10 +115,11 @@ pub fn refresh_pull_request<S: PullRequestDiffStore>(
     None => match github.compare_diff(repo, &base, &head_sha) {
       Ok(text) => (base, text),
       Err(error) => {
-        return Ok(DetailRefresh {
-          check,
-          outcome: Err(sync_failure(github, repo, error)),
+        let outcome = Ok(RefreshedDetail {
+          pull_request,
+          diff: DiffRead::Failed(sync_failure(github, repo, error)),
         });
+        return Ok(DetailRefresh { check, outcome });
       }
     },
   };

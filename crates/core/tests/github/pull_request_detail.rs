@@ -301,3 +301,31 @@ fn refresh_of_a_missing_pull_request_says_so() {
   );
   assert!(!ran_compare(&runner));
 }
+
+#[test]
+fn refresh_keeps_the_pull_request_when_github_has_no_diff_of_its_head() {
+  let runner = signed_in(vec![
+    (VIEW_463, ok(fixture!("gh_pr_view_anyhow_463.stdout"))),
+    (COMPARE_463, failed(fixture!("gh_api_compare_not_found.stderr"))),
+  ]);
+  let mut store = Diffs::default();
+  let connection = github_connection();
+  let refresh = refresh_pull_request(
+    &GhCli::new(&runner, &connection),
+    &mut store,
+    &anyhow_link("ivanzaida"),
+    463,
+    now(),
+  )
+  .expect("infallible store");
+  let detail = refresh.outcome.expect("the pull request was read");
+  assert_eq!(detail.pull_request.number(), 463);
+  assert_eq!(
+    detail.diff,
+    DiffRead::Failed(SyncFailure::Repository(RepositoryError::DiffNotFound(repo(
+      "dtolnay", "anyhow"
+    ))))
+  );
+  let latest = store.latest_pull_request_diff(&repo("dtolnay", "anyhow"), 463);
+  assert_eq!(latest.expect("infallible store"), None);
+}

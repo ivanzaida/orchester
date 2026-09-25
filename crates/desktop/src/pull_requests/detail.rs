@@ -48,6 +48,16 @@ pub struct LinkedDetail {
   pub synced_at: Option<Timestamp>,
   /// Why the latest refresh did not read the pull request; `None` when it did or before it ran.
   pub failure: Option<SyncFailure>,
+  /// Why the latest refresh read the pull request but not the diff of its head; the diff shown,
+  /// if any, is the one stored last.
+  pub diff_failure: Option<SyncFailure>,
+}
+
+impl LinkedDetail {
+  /// What the latest refresh could not read, the pull request or else its diff.
+  pub fn latest_failure(&self) -> Option<&SyncFailure> {
+    self.failure.as_ref().or(self.diff_failure.as_ref())
+  }
 }
 
 /// The diff the screen can show.
@@ -125,27 +135,31 @@ pub fn refresh_detail_in(repo_root: &Path, number: u64, programs: &Programs) -> 
   let refresh = refresh_pull_request(&github, &mut db, &link, number, now)?;
   connection.record_check(refresh.check);
   db.save_connection(&connection)?;
-  match refresh.outcome {
-    Ok(read) => {
-      let diff = match read.diff {
-        DiffRead::Read(diff) => DiffState::Read(Arc::new(ReadDiff::parse(diff)?)),
-        DiffRead::TooLarge => DiffState::TooLarge,
-      };
-      Ok(Detail::Linked(Box::new(LinkedDetail {
-        repo: link.repo().clone(),
-        number,
-        expected: link.expected_login().clone(),
-        pull_request: Some(read.pull_request),
-        diff,
-        synced_at: Some(now),
-        failure: None,
-      })))
-    }
+  let read = match refresh.outcome {
+    Ok(read) => read,
     Err(failure) => {
       tracing::info!(repository = %link.repo(), number, ?failure, "the pull request was not refreshed");
-      stored(&db, &link, number, Some(failure))
+      return stored(&db, &link, number, Some(failure));
     }
-  }
+  };
+  let (diff, diff_failure) = match read.diff {
+    DiffRead::Read(diff) => (DiffState::Read(Arc::new(ReadDiff::parse(diff)?)), None),
+    DiffRead::TooLarge => (DiffState::TooLarge, None),
+    DiffRead::Failed(failure) => {
+      tracing::info!(repository = %link.repo(), number, ?failure, "the diff of the pull request was not read");
+      (stored_diff(&db, &link, number)?, Some(failure))
+    }
+  };
+  Ok(Detail::Linked(Box::new(LinkedDetail {
+    repo: link.repo().clone(),
+    number,
+    expected: link.expected_login().clone(),
+    pull_request: Some(read.pull_request),
+    diff,
+    synced_at: Some(now),
+    failure: None,
+    diff_failure,
+  })))
 }
 
 /// What storage knows about pull request `number`, and why the latest refresh failed.
@@ -162,10 +176,7 @@ fn stored(
       .into_iter()
       .find(|pull_request| pull_request.number() == number)
   });
-  let diff = match db.latest_pull_request_diff(repo, number)? {
-    Some(stored) => DiffState::Read(Arc::new(ReadDiff::parse(stored)?)),
-    None => DiffState::Unknown,
-  };
+  let diff = stored_diff(db, link, number)?;
   let synced_at = match &diff {
     DiffState::Read(read) => Some(read.synced_at),
     DiffState::Unknown | DiffState::TooLarge => None,
@@ -178,5 +189,14 @@ fn stored(
     diff,
     synced_at,
     failure,
+    diff_failure: None,
   })))
+}
+
+/// The diff last stored for pull request `number`.
+fn stored_diff(db: &ProjectDb, link: &RepositoryLink, number: u64) -> Result<DiffState, DetailError> {
+  Ok(match db.latest_pull_request_diff(link.repo(), number)? {
+    Some(stored) => DiffState::Read(Arc::new(ReadDiff::parse(stored)?)),
+    None => DiffState::Unknown,
+  })
 }

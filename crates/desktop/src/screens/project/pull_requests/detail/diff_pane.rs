@@ -53,8 +53,9 @@ const VIEWED_HEIGHT: f32 = 30.0;
 /// Width changes below this are layout noise, not a resize.
 const WIDTH_EPSILON: f32 = 0.5;
 
-/// The rows of one file of one head: plain, or highlighted.
-type RowsKey = (Revision, usize, bool);
+/// The rows of one file of one head: plain, or highlighted; with room for a horizontal
+/// scrollbar under them, or not.
+type RowsKey = (Revision, usize, bool, bool);
 /// A file of one head, and its tokens; `None` when no grammar knows the file.
 type Highlighted = HashMap<(Revision, usize), Option<Arc<FileTokens>>>;
 
@@ -111,8 +112,16 @@ impl Component for DiffPane {
       return Column::new().flex(1.0);
     };
     let tokens = self.tokens(ctx, &props);
-    let rows = self.rows(&props, file, tokens.as_deref());
-    let width = content_width(&rows).max(self.width.get());
+    let rows = self.rows(&props, file, tokens.as_deref(), false);
+    let pane_width = self.width.get();
+    let content = content_width(&rows);
+    // Wider than the pane: the horizontal scrollbar shows, below the last row.
+    let rows = if content > pane_width {
+      self.rows(&props, file, tokens.as_deref(), true)
+    } else {
+      rows
+    };
+    let width = content.max(pane_width);
     let list: Element = VirtualizedList::new_shared(ctx, rows)
       .list_key(format!("pull-request-diff-{}", props.index))
       .width(Dimension::Pct(100.0))
@@ -163,15 +172,22 @@ impl DiffPane {
     }
   }
 
-  /// The rows of `file`, the same list for the same file and tokens, so the virtualised list
-  /// sees an unchanged list between renders.
-  fn rows(&self, props: &DiffPaneProps, file: &FileDiff, tokens: Option<&FileTokens>) -> Arc<Vec<DiffRow>> {
-    let key = (props.diff.head.clone(), props.index, tokens.is_some());
+  /// The rows of `file`, with a `gap` for the horizontal scrollbar after them: the same list for
+  /// the same file, tokens and gap, so the virtualised list sees an unchanged list between
+  /// renders.
+  fn rows(&self, props: &DiffPaneProps, file: &FileDiff, tokens: Option<&FileTokens>, gap: bool) -> Arc<Vec<DiffRow>> {
+    let key = (props.diff.head.clone(), props.index, tokens.is_some(), gap);
     self
       .rows
       .lock()
       .entry(key)
-      .or_insert_with(|| Arc::new(rows(file, tokens)))
+      .or_insert_with(|| {
+        let mut rows = rows(file, tokens);
+        if gap {
+          rows.push(DiffRow::ScrollbarGap { index: rows.len() });
+        }
+        Arc::new(rows)
+      })
       .clone()
   }
 }

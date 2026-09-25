@@ -846,6 +846,9 @@
     "repositoryNotLinkable": "The detected repository can’t be linked. Check again first.",
     "openInBrowser": "The address could not be handed to the browser. The log has the details."
   },
+  "number": {
+    "groupSeparator": ","
+  },
   "money": {
     "usd": "${{amount}}",
     "other": "{{amount}} {{currency}}"
