@@ -19,11 +19,11 @@ use super::{
   dialog::PickAction,
   form::{connection_name, pair, select_field, type_field},
   github_dialog::{GhProgram, GhVerification, GitHubDialog, HostChoice},
-  github_status::status_label,
   status::CHECKING,
 };
 use crate::{
   display,
+  screens::github::status::status_label,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -60,14 +60,35 @@ impl GitHubDialog {
       ))
       .child(self.verification_row(ctx, program))
       .child(Text::new(self.context.project.project.name().as_str()).variant(ExtraTypography::CardTitle.role()))
-      .child(
-        Text::new(&ctx.t_args(
-          "github.dialog.nextStep",
-          [("project", self.context.project.project.name().as_str())],
-        ))
-        .variant(ExtraTypography::Explanation.role()),
-      )
+      .child(Text::new(&self.next_step(ctx)).variant(ExtraTypography::Explanation.role()))
       .into()
+  }
+
+  /// What saving means for the project (`z6Awn`): with its repository linked on this host, the
+  /// account it expects and the repository pull request steps use.
+  fn next_step(&self, ctx: &Ctx) -> Arc<str> {
+    let project = self.context.project.project.name().as_str();
+    let host = self.chosen_host().ok();
+    match self
+      .context
+      .link
+      .as_deref()
+      .filter(|link| Some(link.repo().host()) == host.as_ref())
+    {
+      Some(link) => {
+        let repository = format!("{}/{}", link.repo().owner(), link.repo().name());
+        ctx.t_args(
+          "github.dialog.nextStepLinked",
+          [
+            ("project", project),
+            ("account", link.expected_login().as_str()),
+            ("repository", repository.as_str()),
+            ("remote", link.remote().as_str()),
+          ],
+        )
+      }
+      None => ctx.t_args("github.dialog.nextStep", [("project", project)]),
+    }
   }
 
   fn name_field(&self, ctx: &Ctx) -> Element {

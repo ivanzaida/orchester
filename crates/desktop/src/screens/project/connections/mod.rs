@@ -4,7 +4,6 @@
 //! (01.D `hNPA1`), and checking a connection again when it needs attention (04.A `RZUKo`).
 //! MCP servers and the search are not available yet.
 
-mod account_panel;
 mod actions;
 mod dialog;
 mod dialog_frame;
@@ -12,7 +11,6 @@ mod form;
 mod github_dialog;
 mod github_form;
 mod github_inspector;
-mod github_status;
 mod inspector;
 mod library;
 mod list;
@@ -35,15 +33,16 @@ use orchester_core::{
   connection::{AgentConnection, GitHubConnection},
   id::ConnectionId,
   name::Name,
+  repository::RepositoryLink,
 };
 
 use self::{
-  account_panel::{AccountPanel, AccountPanelProps},
   actions::{Work, WorkAction, work_action},
   dialog::{ConnectionDialog, PickedFile, pick_action},
   github_dialog::GitHubDialog,
 };
 use super::{
+  super::github::account_panel::{AccountPanel, AccountPanelProps},
   ProjectNav,
   page::{self, TOPBAR_BUTTON_HEIGHT},
 };
@@ -112,6 +111,8 @@ pub struct DialogContext {
   pub mode: DialogMode,
   /// Names of the project's other connections.
   pub taken: Vec<Name>,
+  /// The project's repository link, if it has one.
+  pub link: Option<Arc<RepositoryLink>>,
   pub close: Arc<dyn Fn() + Send + Sync>,
   pub saved: Arc<dyn Fn(ConnectionId) + Send + Sync>,
   /// Switches a new connection to the other type's dialog.
@@ -164,17 +165,23 @@ impl Component for ConnectionsScreen {
         reload.update(|revision| *revision += 1);
       }
     });
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav");
+    let dialog = if nav.take_add_github() {
+      DialogMode::AddGitHub
+    } else {
+      DialogMode::Closed
+    };
     let screen = Self {
       tab: ctx.signal(ConnectionTab::All),
       selected: ctx.signal(Selected(None)),
-      dialog: ctx.signal(DialogMode::Closed),
+      dialog: ctx.signal(dialog),
       working: ctx.signal(Selected(None)),
       picking: ctx.signal(None),
       copied: ctx.signal(Copied::default()),
       revision,
-      nav: ctx
-        .use_context::<ProjectNav>()
-        .expect("the project shell provides ProjectNav"),
+      nav,
     };
     screen.run_picked_program(ctx, &work, &pick);
     screen
@@ -346,6 +353,7 @@ impl ConnectionsScreen {
       project: open.clone(),
       mode,
       taken,
+      link: data.link.clone(),
       close: Arc::new(move || close.set(DialogMode::Closed)),
       saved: Arc::new(move |id| {
         selected.set(Selected(Some(id)));

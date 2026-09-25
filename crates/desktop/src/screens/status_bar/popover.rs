@@ -282,6 +282,7 @@ fn opens_key(target: &Target) -> Option<&'static str> {
       Place::Pipeline(_) => "statusBar.opens.pipeline",
       Place::AgentProfile(_) => "statusBar.opens.agentProfile",
       Place::Connections => "statusBar.opens.connections",
+      Place::Settings => "statusBar.opens.settings",
     },
   })
 }
@@ -296,6 +297,7 @@ pub fn open_key(target: &Target) -> &'static str {
       Place::Pipeline(_) => "statusBar.open.pipeline",
       Place::AgentProfile(_) => "statusBar.open.agentProfile",
       Place::Connections => "statusBar.open.connections",
+      Place::Settings => "statusBar.open.settings",
     },
   }
 }

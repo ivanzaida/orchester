@@ -1,6 +1,6 @@
 //! Project shell: the sidebar (`zo9Py`) beside the open project screen — the overview
-//! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), agent profiles (`WPmtS`)
-//! or connections (`a4Lqb`), above the status bar (`pmOpt`). The shell reads the project's
+//! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), agent profiles (`WPmtS`),
+//! connections (`a4Lqb`) or Project settings (`QV1af`), above the status bar (`pmOpt`). The shell reads the project's
 //! tasks once and hands them to the sidebar, the screen and the status bar.
 
 mod agents;
@@ -10,6 +10,7 @@ mod overview;
 mod page;
 mod pipelines;
 mod runner;
+mod settings;
 mod sidebar;
 mod task_rows;
 mod tasks;
@@ -30,6 +31,7 @@ use self::{
   connections::ConnectionsScreen,
   new_task::{NewTaskForm, NewTaskProps},
   pipelines::{PipelinesProps, PipelinesScreen},
+  settings::SettingsScreen,
   sidebar::sidebar,
   tasks::{TasksProps, TasksScreen},
 };
@@ -51,6 +53,7 @@ pub enum Section {
   Pipelines,
   Agents,
   Connections,
+  Settings,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Section {}
@@ -84,6 +87,8 @@ pub struct ProjectNav {
   revision: Signal<u64>,
   agent: Signal<AgentSelection>,
   pipeline: Signal<PipelineRequest>,
+  /// Connections opens Add GitHub connection when it next mounts.
+  add_github: Signal<bool>,
 }
 
 impl ProjectNav {
@@ -105,6 +110,21 @@ impl ProjectNav {
   pub fn show_profile(&self, profile: ResourceId) {
     self.agent.set(AgentSelection::Profile(profile));
     self.section.set(Section::Agents);
+  }
+
+  /// Opens Connections with Add GitHub connection open, e.g. for a remote on an Enterprise host.
+  pub fn show_add_github(&self) {
+    self.add_github.set(true);
+    self.section.set(Section::Connections);
+  }
+
+  /// Whether Add GitHub connection was asked for; asking again needs another request.
+  pub fn take_add_github(&self) -> bool {
+    let requested = self.add_github.get_untracked();
+    if requested {
+      self.add_github.set(false);
+    }
+    requested
   }
 
   /// Tasks were saved; the shell reads them again.
@@ -147,6 +167,7 @@ impl Component for ProjectShell {
         revision: ctx.signal(0),
         agent: ctx.signal(AgentSelection::First),
         pipeline: ctx.signal(PipelineRequest::default()),
+        add_github: ctx.signal(false),
       },
     }
   }
@@ -194,6 +215,7 @@ impl Component for ProjectShell {
       ),
       Section::Agents => ctx.mount_keyed::<AgentsScreen>("agents", open.clone()),
       Section::Connections => ctx.mount_keyed::<ConnectionsScreen>("connections", open.clone()),
+      Section::Settings => ctx.mount_keyed::<SettingsScreen>("settings", open.clone()),
     };
     let bar = StatusBarProps {
       project: Some(ProjectBar {

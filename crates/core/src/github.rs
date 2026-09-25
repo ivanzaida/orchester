@@ -28,10 +28,15 @@ pub struct GhCli<R> {
 
 impl<R: CommandRunner> GhCli<R> {
   pub fn new(runner: R, connection: &GitHubConnection) -> Self {
+    Self::with_program(runner, connection.executable().to_path_buf(), connection.host().clone())
+  }
+
+  /// `gh` at `executable` for `host`, before a connection to it exists (project setup).
+  pub const fn with_program(runner: R, executable: PathBuf, host: GitHubHost) -> Self {
     Self {
       runner,
-      executable: connection.executable().to_path_buf(),
-      host: connection.host().clone(),
+      executable,
+      host,
     }
   }
 }

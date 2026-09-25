@@ -1,7 +1,10 @@
-//! 01.03 Project & repository (`W6uXiL`), limited to what works locally: a name, a key and a
-//! local git repository. GitHub, runner and agent steps are shown as unavailable.
+//! 01.02 Project folder (`jnpRq`) and 01.03 Project & detected GitHub repository (`W6uXiL`):
+//! a name, the local git repository and its GitHub repository, detected from the folder. The
+//! runner and agent steps are shown as unavailable.
 
+mod folder;
 mod form;
+mod github;
 mod page;
 
 use lurq::{

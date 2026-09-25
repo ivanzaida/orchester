@@ -1,5 +1,5 @@
-//! Shell sidebar (`zo9Py`). Overview, Tasks, Pipelines, Agents and Connections open their
-//! screens; every other entry is shown but unavailable. The runner card (`O2Jjjf`) is not
+//! Shell sidebar (`zo9Py`). Overview, Tasks, Pipelines, Agents, Connections and Project settings
+//! open their screens; every other entry is shown but unavailable. The runner card (`O2Jjjf`) is not
 //! shown: the status bar reports the runner on every screen.
 
 use lurq::{
@@ -45,7 +45,7 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject, section: Section, tasks: &TasksSta
         .child(NavItem::new("nav-import", Icon::Download, ctx.t("nav.importResources")).secondary()),
     )
     .child(Spacer::new().flex(1.0))
-    .child(footer(ctx))
+    .child(footer(ctx, section, nav))
     .into()
 }
 
@@ -120,12 +120,18 @@ fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &Pro
     .into()
 }
 
-fn footer(ctx: &Ctx) -> Element {
+fn footer(ctx: &Ctx, section: Section, nav: &ProjectNav) -> Element {
+  let nav = nav.clone();
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(ExtraSpacing::Stack.role())
     .padding_horizontal(SpacingSize::Md)
     .padding_bottom(ExtraSpacing::Step.role())
-    .child(NavItem::new("nav-settings", Icon::Settings, ctx.t("nav.projectSettings")).compact())
+    .child(
+      NavItem::new("nav-settings", Icon::Settings, ctx.t("nav.projectSettings"))
+        .compact()
+        .selected(section == Section::Settings)
+        .on_click(move || nav.show(Section::Settings)),
+    )
     .into()
 }

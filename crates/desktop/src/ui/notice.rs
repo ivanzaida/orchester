@@ -21,6 +21,8 @@ pub struct Notice {
   emphasized: bool,
   actions: Vec<Element>,
   id: Option<&'static str>,
+  /// Drawn instead of `icon`, for a mark that is not a font glyph (the GitHub mark).
+  mark: Option<Element>,
 }
 
 impl Notice {
@@ -32,6 +34,7 @@ impl Notice {
       emphasized: false,
       actions: Vec::new(),
       id: None,
+      mark: None,
     }
   }
 
@@ -43,6 +46,12 @@ impl Notice {
   /// Content on the right of the copy: buttons, a countdown, a dismiss control.
   pub fn action(mut self, action: impl Into<Element>) -> Self {
     self.actions.push(action.into());
+    self
+  }
+
+  /// Draws `mark` in place of the icon.
+  pub fn mark(mut self, mark: Element) -> Self {
+    self.mark = Some(mark);
     self
   }
 
@@ -88,15 +97,15 @@ impl From<Notice> for Element {
       .spacing(ExtraSpacing::Stack.role())
       .background(PaletteColor::SurfaceRaised)
       .rounded(ExtraRadius::Notice.role())
-      .child(icon(notice.icon, IconSize::Notice, icon_color))
+      .child(
+        notice
+          .mark
+          .unwrap_or_else(|| icon(notice.icon, IconSize::Notice, icon_color).into()),
+      )
       .child(content);
     if let Some(id) = notice.id {
       row = row.id(id);
     }
     row.into()
   }
-}
-
-pub fn notice(glyph: Icon, heading: &str, detail: &str) -> Element {
-  Notice::new(glyph, heading.into(), detail.into()).into()
 }

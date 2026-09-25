@@ -1,7 +1,10 @@
-//! The project form of 01.03 (`Allwo`): name and local repository, then creation through the
-//! workspace. Validation is `ProjectDraft::validate`; storage rules belong to the store.
+//! The project form of 01.02 / 01.03 (`F5bGe`, `Allwo`): name, project folder and the folder's
+//! GitHub repository, then creation through the workspace. Validation is
+//! `ProjectDraft::validate`; storage rules belong to the store. Create stays disabled only
+//! without a name or folder, or for a folder that is not a git repository (01.C9); GitHub states
+//! never block it.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -14,44 +17,76 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
+use orchester_core::{
+  connection::GitHubLogin,
+  repository::{Detection, DetectionState},
+};
 
-use super::page::{heading, ownership, topbar};
+use super::{
+  folder::{PickAction, folder_field, pick_action},
+  github::SetupGitHub,
+  page::{heading, ownership, topbar},
+};
 use crate::{
   activity::{Activity, operations},
-  background, display,
+  background,
   messages::Message,
   navigation::{Navigation, Screen},
-  project_setup::{CreateFailure, ErrorPlace, NewProject, ProjectDraft},
+  project_setup::{CreateFailure, ErrorPlace, NewProject, ProjectDraft, creatable},
+  repository::adopt_in,
+  screens::github::actions::{
+    ChosenPath, DetectAction, ProgramAction, connection_name, detect_action, finished, program_action,
+  },
   theme::ExtraSpacing,
   ui::{
     button::ActionButton,
-    field::{FieldNote, ValueTone, field, text_input, value_box},
+    field::{FieldNote, field, text_input},
     form::{Submit, form},
+    github_mark::github_mark,
     icon::{Icon, IconSize, icon},
     message_text,
-    notice::notice,
+    notice::Notice,
   },
   workspace::{OpenProject, Workspace},
 };
 
-/// Width of "Change GitHub account or access" (`w5XOc`).
-const CHANGE_GITHUB_WIDTH: f32 = 284.0;
-/// Longest repository path shown in full; longer paths keep their last folders (`A3kRgn`).
-const PATH_CHARS: usize = 64;
-
-/// A folder chosen in the native folder dialog.
+/// What Create records besides the project: the detection it saw, the account the project
+/// expects and the name of the GitHub connection it adds.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Folder(PathBuf);
+pub struct Creation {
+  new: NewProject,
+  detection: Option<Detection>,
+  expected: Option<GitHubLogin>,
+  connection_name: String,
+}
 
-impl lurq::app::component::DevtoolsInspectable for Folder {}
+type CreateAction = FutureAction<Creation, OpenProject, CreateFailure>;
 
-/// The dialog title and the folder chosen so far, kept when the dialog is cancelled.
-type PickArgs = (Arc<str>, Option<Folder>);
-type PickAction = FutureAction<PickArgs, Option<Folder>, Message>;
-type CreateAction = FutureAction<NewProject, OpenProject, CreateFailure>;
+/// The futures of the form, requested in this order in `create` and `render`.
+struct Actions {
+  pick: PickAction,
+  detect: DetectAction,
+  program: ProgramAction,
+  create: CreateAction,
+}
+
+impl Actions {
+  fn of(ctx: &mut Ctx) -> Self {
+    let workspace = navigation(ctx).workspace().clone();
+    Self {
+      pick: pick_action(ctx),
+      detect: detect_action(ctx, None),
+      program: program_action(ctx),
+      create: create_action(ctx, workspace),
+    }
+  }
+}
 
 pub struct ProjectForm {
   name: Signal<String>,
+  /// The chosen project folder.
+  folder: Signal<Option<ChosenPath>>,
+  github: SetupGitHub,
 }
 
 impl Component for ProjectForm {
@@ -59,30 +94,43 @@ impl Component for ProjectForm {
 
   fn create(ctx: &mut Ctx) -> Self {
     let navigation = navigation(ctx);
-    // Requested here so the watch is registered once; `render` requests the same slots again.
-    pick_action(ctx);
-    let create = create_action(ctx, navigation.workspace().clone());
-    ctx.watch(&create.state(), move |state| {
+    let actions = Actions::of(ctx);
+    ctx.watch(&actions.create.state(), move |state| {
       if let Some(project) = state.data.clone() {
         navigation.show(Screen::Project(project));
       }
     });
-    Self {
+    let form = Self {
       name: ctx.signal(String::new()),
-    }
+      folder: ctx.signal(None),
+      github: SetupGitHub::new(ctx),
+    };
+    // A newly chosen folder is detected at once.
+    let (folder, github, detect) = (form.folder.clone(), form.github.clone(), actions.detect.clone());
+    ctx.watch(&actions.pick.state(), move |state| {
+      let (Some(Some(picked)), false) = (&state.data, state.is_pending()) else {
+        return;
+      };
+      if folder.get_untracked().as_ref() != Some(picked) {
+        folder.set(Some(picked.clone()));
+        github.check(&detect, picked.0.clone())();
+      }
+    });
+    form
+      .github
+      .watch(ctx, &actions.detect, &actions.program, form.folder.clone());
+    form
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let workspace = navigation(ctx).workspace().clone();
-    let pick = pick_action(ctx);
-    let create = create_action(ctx, workspace);
-    let repository = pick.state().get().data.flatten();
-    let create_state = create.state().get();
+    let actions = Actions::of(ctx);
+    let folder = self.folder.get().map(|folder| folder.0);
+    let create_state = actions.create.state().get();
     let raw_name = self.name.get();
     let name = raw_name.trim();
     let input = ProjectDraft {
       name: &raw_name,
-      repository: repository.as_ref().map(|folder| folder.0.as_path()),
+      repository: folder.as_deref(),
     };
     let draft = input.validate();
     // A creation error stays only while the name and folder it was raised for are unchanged.
@@ -104,10 +152,19 @@ impl Component for ProjectForm {
       .and_then(|errors| errors.name.as_ref())
       .filter(|_| !name.is_empty())
       .map(|error| message_text(ctx, error));
-    // Only a name the rules accept is repeated in the breadcrumb and the explanation.
+    // Only a name the rules accept is repeated in the breadcrumb, the notes and the explanation.
     let shown_name = if name_error.is_some() { "" } else { name };
+    let project = if shown_name.is_empty() {
+      ctx.t("setup.project.unnamed")
+    } else {
+      shown_name.into()
+    };
 
-    // Fields scroll when the window is shorter than the design; the actions stay visible.
+    let detection = finished(&actions.detect);
+    let expected = self.github.expected();
+    let state = detection.as_ref().map(|detection| detection.state(expected.as_ref()));
+    let blocked = state.as_ref().is_some_and(DetectionState::blocks_project);
+
     let fields = Column::new()
       .width(Dimension::Pct(100.0))
       .padding_top(SpacingSize::Md)
@@ -115,43 +172,61 @@ impl Component for ProjectForm {
       .padding_bottom(SpacingSize::Lg)
       .spacing(SpacingSize::Lg)
       .child(self.name_field(ctx, name_error))
-      .child(notice(
-        Icon::CloudOff,
-        &ctx.t("setup.project.githubUnavailable"),
-        &ctx.t("setup.project.githubUnavailableDetail"),
-      ))
-      .child(repository_row(ctx, &pick, repository.as_ref(), folder_error))
-      .child(
-        ActionButton::new(ctx.t("setup.project.changeGithub"))
-          .icon(Icon::ExternalLink)
-          .id("change-github")
-          .in_form()
-          .width(Dimension::Px(CHANGE_GITHUB_WIDTH))
-          .render(ctx),
-      )
+      .child(folder_field(ctx, &actions.pick, folder.as_ref(), folder_error))
+      .child(self.github_part(ctx, &actions, folder.as_deref(), &project))
       .child(ownership(ctx, shown_name));
     let pending = create_state.is_pending();
-    let submit: Submit = draft.ok().filter(|_| !pending).map(|new| {
-      let create = create.clone();
-      Arc::new(move || create.run(new.clone())) as Arc<dyn Fn() + Send + Sync>
+    let submit: Submit = creatable(draft, state.as_ref()).filter(|_| !pending).map(|new| {
+      let create = actions.create.clone();
+      let creation = Creation {
+        connection_name: connection_name(ctx),
+        new,
+        detection: detection.clone(),
+        expected: expected.clone(),
+      };
+      Arc::new(move || create.run(creation.clone())) as Arc<dyn Fn() + Send + Sync>
     });
-    let actions = Column::new()
+    let status = match (&folder, blocked) {
+      (None, _) => ctx.t("setup.project.chooseFolderToContinue"),
+      (Some(_), true) => ctx.t("setup.project.needsRepository"),
+      (Some(_), false) => ctx.t("setup.project.createExplanation"),
+    };
+    let footer = Column::new()
       .width(Dimension::Pct(100.0))
       .padding_horizontal(ExtraSpacing::Page.role())
       .padding_bottom(SpacingSize::Section)
-      .child(actions(ctx, pending, form_error, submit.clone()));
+      .child(actions_row(ctx, pending, form_error, &status, submit.clone()));
     let page = Column::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
       .child(topbar(ctx, shown_name))
       .child(heading(ctx))
       .child(ScrollVertical::new(fields).width(Dimension::Pct(100.0)).flex(1.0))
-      .child(actions);
+      .child(footer)
+      .child(self.github.panel(ctx, &actions.detect, folder.clone(), &project));
     form(submit, page)
   }
 }
 
 impl ProjectForm {
+  /// Before a folder is chosen, that GitHub is detected from it (`hfxMm`); then what was
+  /// detected (`XcbNT`).
+  fn github_part(&self, ctx: &Ctx, actions: &Actions, folder: Option<&Path>, project: &str) -> Element {
+    match folder {
+      None => Notice::new(
+        Icon::FolderGit,
+        ctx.t("setup.project.detectedFromFolder"),
+        ctx.t("setup.project.detectedFromFolderDetail"),
+      )
+      .mark(github_mark(ctx, PaletteColor::TextSecondary))
+      .id("github-detected-from-folder")
+      .into(),
+      Some(folder) => self
+        .github
+        .block(ctx, &actions.detect, &actions.program, folder, project),
+    }
+  }
+
   fn name_field(&self, ctx: &Ctx, error: Option<Arc<str>>) -> Element {
     let invalid = error.is_some();
     field(
@@ -170,10 +245,11 @@ impl ProjectForm {
 }
 
 /// Explanation or creation error, and Create, which stays disabled until the draft is valid.
-fn actions(ctx: &Ctx, pending: bool, error: Option<Arc<str>>, submit: Submit) -> Element {
+fn actions_row(ctx: &Ctx, pending: bool, error: Option<Arc<str>>, status: &str, submit: Submit) -> Element {
   let status: Element = match error {
     Some(error) => inline_error(&error),
-    None => Text::new(&ctx.t("setup.project.createExplanation"))
+    None => Text::new(status)
+      .id("create-explanation")
       .variant(TypographyStyle::Caption)
       .into(),
   };
@@ -207,27 +283,17 @@ fn navigation(ctx: &mut Ctx) -> Navigation {
     .expect("the root provides Navigation before mounting screens")
 }
 
-fn pick_action(ctx: &mut Ctx) -> PickAction {
-  let activity = Activity::of(ctx);
-  ctx.future_action(move |(title, current): PickArgs| {
-    let activity = activity.clone();
-    async move {
-      // Listed while the dialog is open; closing it without a folder leaves no event.
-      let running = activity.start(operations::repository_pick());
-      let picked = background::run(move || rfd::FileDialog::new().set_title(&*title).pick_folder()).await?;
-      if picked.is_some() {
-        running.finish();
-      }
-      Ok(picked.map(Folder).or(current))
-    }
-  })
-}
-
 fn create_action(ctx: &mut Ctx, workspace: Workspace) -> CreateAction {
   let activity = Activity::of(ctx);
-  ctx.future_action(move |new: NewProject| {
+  ctx.future_action(move |creation: Creation| {
     let (workspace, activity) = (workspace.clone(), activity.clone());
     async move {
+      let Creation {
+        new,
+        detection,
+        expected,
+        connection_name,
+      } = creation;
       let attempted = new.clone();
       let running = activity.start(operations::project_create(new.project.name().as_str(), &new.repo_root));
       let created = background::run(move || workspace.create(new))
@@ -243,51 +309,39 @@ fn create_action(ctx: &mut Ctx, workspace: Workspace) -> CreateAction {
         Ok(_) => running.finish(),
         Err(failure) => running.fail(failure.message.clone()),
       }
+      if let (Ok(project), Some(detection)) = (&created, detection) {
+        adopt(&activity, project, detection, expected, connection_name).await;
+      }
       created
     }
   })
 }
 
-fn repository_row(ctx: &Ctx, pick: &PickAction, repository: Option<&Folder>, error: Option<Arc<str>>) -> Element {
-  let picking = pick.state().get_untracked().is_pending();
-  let tone = if error.is_some() {
-    ValueTone::Invalid
-  } else {
-    ValueTone::Value
+/// Records the GitHub connection and link of a created project. Its failure is reported in the
+/// status bar; the project exists and opens either way, and can be linked from Project settings.
+async fn adopt(
+  activity: &Activity,
+  project: &OpenProject,
+  detection: Detection,
+  expected: Option<GitHubLogin>,
+  name: String,
+) {
+  let Some(found) = detection.github() else {
+    return;
   };
-  let (path, tone) = match repository {
-    Some(folder) => (display::shorten_path(&folder.0, PATH_CHARS), tone),
-    None => (ctx.t("setup.project.noRepository").to_string(), ValueTone::Placeholder),
+  let repository = format!("{}/{}", found.repo().owner(), found.repo().name());
+  let spec = operations::repository_link(project.project.name().as_str(), &project.repo_root, &repository);
+  let repo_root = project.repo_root.clone();
+  let work = async move {
+    background::run(move || adopt_in(&repo_root, &detection, expected.as_ref(), &name))
+      .await?
+      .map_err(|error| {
+        tracing::error!(%error, "cannot record the detected GitHub repository");
+        error.message()
+      })
   };
-  let choose: Option<(Icon, Box<dyn Fn() + Send + Sync>)> = (!picking).then(|| {
-    let pick = pick.clone();
-    let title = ctx.t("setup.project.chooseRepositoryTitle");
-    let current = repository.cloned();
-    let open: Box<dyn Fn() + Send + Sync> = Box::new(move || pick.run((title.clone(), current.clone())));
-    (Icon::FolderOpen, open)
-  });
-  let folder = value_box(ctx, "repository-path", &path, tone, choose);
-  let branch = value_box(
-    ctx,
-    "default-branch",
-    &ctx.t("setup.project.branchUnavailable"),
-    ValueTone::Unavailable,
-    None,
-  );
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Lg)
-    .child(Column::new().flex(1.0).child(field(
-      &ctx.t("setup.project.repository"),
-      folder,
-      error.map_or(FieldNote::None, FieldNote::Error),
-    )))
-    .child(
-      Column::new()
-        .flex(1.0)
-        .child(field(&ctx.t("setup.project.defaultBranch"), branch, FieldNote::None)),
-    )
-    .into()
+  // The outcome is in the status bar; the created project does not depend on it.
+  let _recorded: Result<_, Message> = activity.track(spec, work).await;
 }
 
 fn inline_error(text: &str) -> Element {

@@ -211,6 +211,27 @@ pub fn value_box_sized(
   choose: Option<(Icon, Box<dyn Fn() + Send + Sync>)>,
   height: Dimension,
 ) -> Element {
+  let trailing = choose.map_or(Trailing::None, |(glyph, on_click)| Trailing::Choose(glyph, on_click));
+  value_box_parts(ctx, id, text, tone, trailing, height)
+}
+
+/// What a value box shows after its value.
+enum Trailing {
+  None,
+  /// Opens a chooser; the icon says which.
+  Choose(Icon, Box<dyn Fn() + Send + Sync>),
+  /// Says what the value is.
+  Marker(Icon),
+}
+
+fn value_box_parts(
+  ctx: &Ctx,
+  id: &'static str,
+  text: &str,
+  tone: ValueTone,
+  trailing: Trailing,
+  height: Dimension,
+) -> Element {
   let input = ctx.theme().form().input.clone();
   let (background, color) = match tone {
     ValueTone::Value => (input.background, PaletteColor::TextPrimary),
@@ -229,8 +250,8 @@ pub fn value_box_sized(
     .nowrap()
     .text_overflow(TextOverflow::Elipsis)
     .flex(1.0);
-  match choose {
-    Some((glyph, on_click)) if tone != ValueTone::Unavailable => Button::empty()
+  match trailing {
+    Trailing::Choose(glyph, on_click) if tone != ValueTone::Unavailable => Button::empty()
       .button()
       .id(id)
       .width(Dimension::Pct(100.0))
@@ -249,7 +270,7 @@ pub fn value_box_sized(
       .focused_style(Style::new().border(Border::inside(BorderSize::Md, input.border_focus)))
       .on_click(move |_| on_click())
       .into(),
-    _ => {
+    trailing => {
       let row = Row::new()
         .id(id)
         .width(Dimension::Pct(100.0))
@@ -261,15 +282,29 @@ pub fn value_box_sized(
         .border(Border::inside(BorderSize::Sm, border))
         .rounded(input.radius)
         .child(value);
-      if tone == ValueTone::Unavailable {
-        row
+      match (tone, trailing) {
+        (ValueTone::Unavailable, _) => row
           .describe("state", "unavailable")
           .cursor(CursorIcon::NotAllowed)
           .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))
-          .into()
-      } else {
-        row.into()
+          .into(),
+        (_, Trailing::Marker(glyph)) => row
+          .child(icon(glyph, IconSize::Dismiss, PaletteColor::TextSecondary))
+          .into(),
+        (_, Trailing::None | Trailing::Choose(..)) => row.into(),
       }
     }
   }
+}
+
+/// A read-only value box at `height` with an icon that says what the value is, e.g. the
+/// project folder beside its own *Choose folder…* button (`xZAZc`, icon `eASPF`).
+pub fn marked_value_box(
+  ctx: &Ctx,
+  id: &'static str,
+  text: &str,
+  (tone, glyph): (ValueTone, Icon),
+  height: Dimension,
+) -> Element {
+  value_box_parts(ctx, id, text, tone, Trailing::Marker(glyph), height)
 }

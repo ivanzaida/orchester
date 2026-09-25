@@ -10,4 +10,5 @@ mod rows;
 
 pub use app_db::{AppDb, PreviousSession, RegisteredProject, SessionEnd, SessionId};
 pub use error::{RunStoreError, StoreError};
+pub use git_exclude::is_repository_root;
 pub use project_db::ProjectDb;

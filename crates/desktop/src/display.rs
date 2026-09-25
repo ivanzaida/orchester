@@ -43,6 +43,14 @@ pub fn shorten_path(path: &Path, max_chars: usize) -> String {
   format!("{head}{separator}…{separator}{}", tail.join(&separator))
 }
 
+/// A remote URL as a short address, without scheme and `.git`: `https://gitlab.example.com/
+/// ivan/kontur.git` reads `gitlab.example.com/ivan/kontur`. Credentials were removed when the
+/// remote was read.
+pub fn remote_address(url: &str) -> &str {
+  let address = url.split_once("://").map_or(url, |(_, rest)| rest);
+  address.strip_suffix(".git").unwrap_or(address)
+}
+
 /// `amount` as a decimal with at least two places, e.g. `1.50`, `0.125`; a currency sign is
 /// added by the message that shows it ([`money`]).
 pub fn amount(amount: Money) -> String {

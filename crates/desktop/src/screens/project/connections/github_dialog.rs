@@ -245,7 +245,7 @@ impl GitHubDialog {
   }
 
   /// The host of the connection: github.com, or the entered host if it is valid.
-  fn chosen_host(&self) -> Result<GitHubHost, Message> {
+  pub(super) fn chosen_host(&self) -> Result<GitHubHost, Message> {
     if let DialogMode::EditGitHub(connection) = &self.context.mode {
       return Ok(connection.host().clone());
     }

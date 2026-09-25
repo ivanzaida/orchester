@@ -68,6 +68,7 @@ impl Opener {
       Place::Pipeline(id) => nav.show_pipeline(id),
       Place::AgentProfile(id) => nav.show_profile(id),
       Place::Connections => nav.show(Section::Connections),
+      Place::Settings => nav.show(Section::Settings),
     }
   }
 

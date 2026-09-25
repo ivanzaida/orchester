@@ -25,8 +25,11 @@ use lurq::{
 };
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
+  repository::RepositoryLink,
+  store::RepositoryStore,
   task::{MissingDetail, TaskDetails},
 };
+use orchester_store::ProjectDb;
 
 use self::brief::Criterion;
 use super::{ProjectNav, Section};
@@ -132,6 +135,7 @@ impl Component for NewTaskForm {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<NewTaskProps>().clone();
     let save = save_action(ctx);
+    let link = repository_link(ctx, &props.project);
     let state = self.state(&save);
     let submit = self
       .save_handler(&save, &props.project, state.ready.clone())
@@ -148,7 +152,7 @@ impl Component for NewTaskForm {
       .padding_right(ExtraSpacing::Indent.role())
       .padding_bottom(SpacingSize::Section)
       .spacing(ExtraSpacing::Indent.role())
-      .child(brief::brief_form(ctx, self, &props.project, &state))
+      .child(brief::brief_form(ctx, self, &props.project, link.as_deref(), &state))
       .child(plan::execution_plan(
         ctx,
         self,
@@ -216,6 +220,26 @@ impl NewTaskForm {
       save.run((repo_root.clone(), batch, details.clone()));
     }))
   }
+}
+
+/// The project's repository link, once read. Without it the form shows the local folder, which
+/// is the repository either way, so a failed read is logged and the folder shown.
+fn repository_link(ctx: &mut Ctx, project: &OpenProject) -> Option<Arc<RepositoryLink>> {
+  /// The link as the future holds it.
+  #[derive(Clone, PartialEq)]
+  struct Linked(Option<Arc<RepositoryLink>>);
+  impl lurq::app::component::DevtoolsInspectable for Linked {}
+
+  let load = ctx.future(project.repo_root.clone(), |repo_root| async move {
+    background::run(move || ProjectDb::open(&repo_root).and_then(|db| db.repository_link()))
+      .await?
+      .map(|link| Linked(link.map(Arc::new)))
+      .map_err(|error| {
+        tracing::error!(%error, "cannot read the project's repository link");
+        messages::store_error(&error)
+      })
+  });
+  load.state().get().data.and_then(|linked| linked.0)
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {

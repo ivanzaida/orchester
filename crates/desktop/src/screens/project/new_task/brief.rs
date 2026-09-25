@@ -13,7 +13,7 @@ use lurq::{
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::task::MissingDetail;
+use orchester_core::{repository::RepositoryLink, task::MissingDetail};
 
 use super::{FOCUS_ROOM, FormState, NewTaskForm, error_note, missing_note};
 use crate::{
@@ -22,6 +22,7 @@ use crate::{
   ui::{
     button::ActionButton,
     field::{styled_input, text_input},
+    github_mark::github_mark,
     icon::{Icon, IconSize, icon},
     message_text,
     pressable::{Ring, keyboard_stop},
@@ -56,14 +57,20 @@ impl Criterion {
   }
 }
 
-pub fn brief_form(ctx: &Ctx, form: &NewTaskForm, project: &OpenProject, state: &FormState) -> Element {
+pub fn brief_form(
+  ctx: &Ctx,
+  form: &NewTaskForm,
+  project: &OpenProject,
+  link: Option<&RepositoryLink>,
+  state: &FormState,
+) -> Element {
   // `FOCUS_ROOM` on the left, where the viewport starts that much earlier (see `mod.rs`), so
   // focus rings of controls on the content's left edge are not cut by the viewport.
   let fields = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_left(FOCUS_ROOM)
     .spacing(SpacingSize::Lg)
-    .child(labelled(ctx, "tasks.new.project", repository(project)))
+    .child(labelled(ctx, "tasks.new.project", repository(ctx, project, link)))
     .child(title_field(ctx, form, state))
     .child(brief_field(ctx, form, state))
     .child(criteria_field(ctx, form, state))
@@ -93,9 +100,11 @@ fn labelled(ctx: &Ctx, label: &str, control: impl Into<Element>) -> Column {
     .child(control)
 }
 
-/// The project's repository (`QLSCb`). There is no GitHub connection, so it is the local folder.
-fn repository(project: &OpenProject) -> Element {
-  Row::new()
+/// The project's repository (`QLSCb`): the linked GitHub repository with its base branch
+/// (`OORjS`, `F7okLt`), or the local folder while none is linked.
+fn repository(ctx: &Ctx, project: &OpenProject, link: Option<&RepositoryLink>) -> Element {
+  let row = Row::new()
+    .id("new-task-repository")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(REPOSITORY_HEIGHT))
     .padding_horizontal(ExtraSpacing::Group.role())
@@ -103,19 +112,43 @@ fn repository(project: &OpenProject) -> Element {
     .align_items(Alignment::Center)
     .background(PaletteColor::SurfaceInput)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .child(icon(Icon::FolderGit, IconSize::Notice, PaletteColor::TextPrimary))
+    .rounded(RadiusSize::Md);
+  let name = Text::new(project.project.name().as_str())
+    .variant(ExtraTypography::FormLabel.role())
+    .nowrap();
+  let Some(link) = link else {
+    return row
+      .child(icon(Icon::FolderGit, IconSize::Notice, PaletteColor::TextPrimary))
+      .child(name)
+      .child(
+        Text::new(&display::shorten_path(&project.repo_root, PATH_CHARS))
+          .variant(TypographyStyle::Caption)
+          .nowrap()
+          .text_overflow(TextOverflow::Elipsis)
+          .flex(1.0),
+      )
+      .into();
+  };
+  let path = ctx.t_args(
+    "tasks.new.repositoryPath",
+    [("owner", link.repo().owner()), ("name", link.repo().name())],
+  );
+  row
+    .child(github_mark(ctx, PaletteColor::TextPrimary))
+    .child(name)
     .child(
-      Text::new(project.project.name().as_str())
-        .variant(ExtraTypography::FormLabel.role())
-        .nowrap(),
-    )
-    .child(
-      Text::new(&display::shorten_path(&project.repo_root, PATH_CHARS))
+      Text::new(&path)
         .variant(TypographyStyle::Caption)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex(1.0),
+    )
+    .child(
+      Text::new(link.default_branch().as_str())
+        .id("new-task-base-branch")
+        .variant(TypographyStyle::Mono)
+        .color(PaletteColor::TextSecondary)
+        .nowrap(),
     )
     .into()
 }

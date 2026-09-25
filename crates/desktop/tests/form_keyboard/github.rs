@@ -24,8 +24,8 @@ use orchester_store::ProjectDb;
 
 use crate::harness::Desktop;
 
-const VERSION: &str = include_str!("../../../core/tests/fixtures/github/gh_version.stdout");
-const SIGNED_IN: &str = include_str!("../../../core/tests/fixtures/github/gh_auth_status_signed_in.stdout");
+pub(crate) const VERSION: &str = include_str!("../../../core/tests/fixtures/github/gh_version.stdout");
+pub(crate) const SIGNED_IN: &str = include_str!("../../../core/tests/fixtures/github/gh_auth_status_signed_in.stdout");
 const SIGNED_OUT: &str = include_str!("../../../core/tests/fixtures/github/gh_auth_status_not_signed_in.stdout");
 /// Signed in as ivanzaida without the `repo` scope; shaped like the captured output.
 const NO_REPO_SCOPE: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","tokenSource":"keyring","scopes":"read:org","gitProtocol":"https"}]}}"#;
@@ -36,10 +36,10 @@ const PANEL: &str = "github-account-panel";
 const PRESSES: usize = 40;
 
 /// Answers `gh`'s read-only commands with fixed outputs; anything else was never allowed to run.
-struct ReplayGh(HashMap<&'static str, Result<CommandOutput, CommandError>>);
+pub(crate) struct ReplayGh(HashMap<&'static str, Result<CommandOutput, CommandError>>);
 
 impl ReplayGh {
-  fn new(version: Result<&str, CommandError>, auth: Option<&str>) -> Self {
+  pub(crate) fn new(version: Result<&str, CommandError>, auth: Option<&str>) -> Self {
     let mut answers = HashMap::from([("--version", version.map(ok))]);
     if let Some(auth) = auth {
       answers.insert(AUTH_STATUS, Ok(ok(auth)));
@@ -78,7 +78,7 @@ fn gh_path(desktop: &Desktop) -> PathBuf {
 /// Stores a GitHub connection whose last check `gh` answered through `runner`. Only a verified
 /// program can be saved from the dialog, so the connection is saved with a signed-in check
 /// first and the replayed check is recorded over it, as Check again does.
-fn github_connection(desktop: &Desktop, runner: &ReplayGh) -> ConnectionId {
+pub(crate) fn github_connection(desktop: &Desktop, runner: &ReplayGh) -> ConnectionId {
   let host = GitHubHost::github_com();
   let signed_in = ReplayGh::new(Ok(VERSION), Some(SIGNED_IN));
   let draft = GitHubDraft {
@@ -100,7 +100,7 @@ fn github_connection(desktop: &Desktop, runner: &ReplayGh) -> ConnectionId {
 }
 
 /// Links the project's repository through `connection`, expecting `expected`.
-fn link(desktop: &Desktop, connection: ConnectionId, expected: &str) {
+pub(crate) fn link(desktop: &Desktop, connection: ConnectionId, expected: &str) {
   let repo = GitHubRepo::new(GitHubHost::github_com(), "ivanzaida", "kontur").expect("valid repository");
   let view = RepositoryView {
     repo,
@@ -148,7 +148,7 @@ fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
     || element.children().into_iter().any(|child| contains_text(child, text))
 }
 
-fn shows(desktop: &mut Desktop, id: &str, text: &str) -> bool {
+pub(crate) fn shows(desktop: &mut Desktop, id: &str, text: &str) -> bool {
   let element = desktop
     .tree
     .get_element_by_id(id)

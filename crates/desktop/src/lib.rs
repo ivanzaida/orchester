@@ -13,6 +13,7 @@ pub mod messages;
 mod navigation;
 pub mod pipelines;
 pub mod project_setup;
+pub mod repository;
 pub mod root;
 pub mod runner;
 mod screens;

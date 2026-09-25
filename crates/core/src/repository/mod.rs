@@ -4,6 +4,7 @@
 //! records the account that confirmed it, so work is not published under another account that
 //! `gh` happens to have active later.
 
+mod detect;
 mod link;
 mod remote;
 mod url;
@@ -15,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  detect::{DetectRequest, Detection, DetectionState, GhProgram, GitHubDetection, detect_repository},
   link::link_repository,
   remote::{Remote, git_remotes_command, parse_git_remotes, read_remotes},
   url::{GitHubRepo, RepoNameError, redact_userinfo, strip_userinfo},
