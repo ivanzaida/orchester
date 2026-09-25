@@ -1,7 +1,8 @@
 //! Add connection (04.02 `h6CmJ`, dialog `IAN4P`), also used to edit one. The provider's CLI
 //! is looked up on the `PATH` (or chosen as a file) and checked as soon as it is known; the
 //! connection can be saved only when the check found the expected CLI. Checking runs only
-//! the CLI's read-only commands (`orchester_core::connection`). The fields are in `form`.
+//! the CLI's read-only commands (`orchester_core::connection`). The fields are in `form`; a new
+//! connection's type can be switched to GitHub (`github_dialog`).
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -9,19 +10,21 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
   core::{ElementRef, Signal},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::{
   connection::{AgentProvider, ConnectionCheck},
   id::ConnectionId,
 };
 
-use super::{DialogContext, DialogMode, form, status::short_key};
+use super::{
+  DialogContext, DialogMode, KindChoice,
+  dialog_frame::{self, SaveBar, dialog, save_reason_of},
+  form,
+  status::short_key,
+};
 use crate::{
   activity::{Activity, operations},
   background,
@@ -30,22 +33,8 @@ use crate::{
     probe,
   },
   messages::Message,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{
-    backdrop::backdrop,
-    button::{ActionButton, SKIPPED_BY_TAB},
-    form::{Submit, form},
-    icon::{Icon, IconSize, icon},
-    message_text,
-  },
+  ui::form::Submit,
 };
-
-/// Dialog, header, action bar and button sizes (`IAN4P`, `osMan`, `InHni`, `I3629f`).
-const DIALOG_WIDTH: f32 = 800.0;
-const DIALOG_HEIGHT: f32 = 832.0;
-const HEADER_HEIGHT: f32 = 82.0;
-const ACTIONS_HEIGHT: f32 = 76.0;
-pub(super) const BUTTON_HEIGHT: f32 = 36.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct ProviderChoice(pub AgentProvider);
@@ -76,7 +65,7 @@ impl lurq::app::component::DevtoolsInspectable for Saved {}
 
 /// The file chosen in the picker, if any.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct PickedFile(Option<PathBuf>);
+pub(super) struct PickedFile(pub Option<PathBuf>);
 
 impl lurq::app::component::DevtoolsInspectable for PickedFile {}
 
@@ -115,6 +104,8 @@ pub struct ConnectionDialog {
   pub(super) picked: Signal<Picked>,
   /// Bumped by Recheck to run the check again for the same program.
   pub(super) attempt: Signal<u64>,
+  /// The connection type select of a new connection; GitHub switches to the GitHub dialog.
+  pub(super) kind: Signal<KindChoice>,
   /// The dialog, focused when it opens so that Tab starts at its first control. The design
   /// shows no field focused (`IAN4P`), so no field takes the focus.
   frame: ElementRef,
@@ -128,12 +119,12 @@ impl Component for ConnectionDialog {
       .use_context::<DialogContext>()
       .expect("the connections screen provides the dialog context");
     let (provider, name, picked) = match &context.mode {
-      DialogMode::Edit(connection) => (
+      DialogMode::EditAgent(connection) => (
         connection.provider(),
         connection.name().as_str().to_owned(),
         Some(connection.executable().to_path_buf()),
       ),
-      DialogMode::Add | DialogMode::Closed => {
+      _ => {
         let provider = AgentProvider::CodexCli;
         (provider, suggested_name(ctx, &context, provider), None)
       }
@@ -143,6 +134,7 @@ impl Component for ConnectionDialog {
       name: ctx.signal(name),
       picked: ctx.signal(Picked(picked)),
       attempt: ctx.signal(0),
+      kind: ctx.signal(KindChoice::Agent),
       frame: ElementRef::new(),
       context,
     };
@@ -159,20 +151,18 @@ impl Component for ConnectionDialog {
     let draft = self.draft(&program);
     let submit = self.save(&save, draft.as_ref().ok());
     let fields = self.form(ctx, &program, &pick);
-    let dialog = Column::new()
-      .id("connection-dialog")
-      .ref_element(self.frame.clone())
-      .focusable(true)
-      .tab_index(SKIPPED_BY_TAB)
-      .width(Dimension::Px(DIALOG_WIDTH))
-      .height(Dimension::Px(DIALOG_HEIGHT))
-      .background(ExtraColor::Surface.role())
-      .border_inside(BorderSize::Sm, PaletteColor::Border)
-      .rounded(RadiusSize::Lg)
-      .child(self.header(ctx))
-      .child(ScrollVertical::new(fields).width(Dimension::Pct(100.0)).flex(1.0))
-      .child(self.actions(ctx, &save, &draft, submit.clone()));
-    backdrop(form(submit, dialog))
+    let state = save.state().get();
+    let saving = state.is_pending();
+    let bar = SaveBar {
+      saving,
+      reason: save_reason_of(&draft, state.error.filter(|_| !saving)),
+      submit,
+    };
+    let title = match self.context.mode {
+      DialogMode::EditAgent(_) => "connections.dialog.editTitle",
+      _ => "connections.dialog.addTitle",
+    };
+    dialog(ctx, &self.frame, &ctx.t(title), &self.context, fields, bar)
   }
 }
 
@@ -180,7 +170,9 @@ impl ConnectionDialog {
   /// A new provider gets its own program and, unless the user renamed the connection, its own
   /// suggested name. A saved connection closes the dialog; a chosen file replaces the found one.
   fn watch(&self, ctx: &mut Ctx) {
-    if self.context.mode == DialogMode::Add {
+    let retype = self.context.retype.clone();
+    ctx.watch(&self.kind, move |kind| retype(*kind));
+    if self.context.mode == DialogMode::AddAgent {
       let suggestions = AgentProvider::ALL.map(|provider| suggested_name(ctx, &self.context, provider));
       let (name, picked) = (self.name.clone(), self.picked.clone());
       ctx.watch(&self.provider, move |choice| {
@@ -214,7 +206,7 @@ impl ConnectionDialog {
   fn program(&self, ctx: &mut Ctx) -> Program {
     let provider = self.provider.get().0;
     let detect = ctx.future(provider, |provider| async move {
-      background::run(move || Detected(probe::detect(provider))).await
+      background::run(move || Detected(probe::detect(provider.program_name()))).await
     });
     let detected = detect.state().get();
     let found = detected.data.clone().unwrap_or_default().0;
@@ -270,50 +262,14 @@ impl ConnectionDialog {
     }
     Ok(ConnectionDraft {
       id: match &self.context.mode {
-        DialogMode::Edit(connection) => Some(connection.id()),
-        DialogMode::Add | DialogMode::Closed => None,
+        DialogMode::EditAgent(connection) => Some(connection.id()),
+        _ => None,
       },
       name,
       provider: program.provider,
       executable: executable.clone(),
       check: check.clone(),
     })
-  }
-
-  /// Title, the owning project and Close (`osMan`).
-  fn header(&self, ctx: &Ctx) -> Element {
-    let title = match self.context.mode {
-      DialogMode::Edit(_) => "connections.dialog.editTitle",
-      DialogMode::Add | DialogMode::Closed => "connections.dialog.addTitle",
-    };
-    let close = self.context.close.clone();
-    let owner = ctx.t_args(
-      "connections.dialog.owner",
-      [("project", self.context.project.project.name().as_str())],
-    );
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(HEADER_HEIGHT))
-      .padding_horizontal(ExtraSpacing::Rail.role())
-      .spacing(ExtraSpacing::Stack.role())
-      .align_items(Alignment::Center)
-      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .child(
-        Column::new()
-          .flex(1.0)
-          .spacing(SpacingSize::Sm)
-          .child(Text::new(&ctx.t(title)).variant(ExtraTypography::DialogTitle.role()))
-          .child(Text::new(&owner).variant(TypographyStyle::Caption)),
-      )
-      .child(
-        ActionButton::new(ctx.t("common.close"))
-          .icon(Icon::X)
-          .id("connection-dialog-close")
-          .height(Dimension::Px(BUTTON_HEIGHT))
-          .on_click(move || close())
-          .render(ctx),
-      )
-      .into()
   }
 
   /// Stores the draft; `None` until it can be saved, and while it is being saved.
@@ -324,91 +280,20 @@ impl ConnectionDialog {
     let (save, repo_root, draft) = (save.clone(), self.context.project.repo_root.clone(), draft?.clone());
     Some(Arc::new(move || save.run((repo_root.clone(), draft.clone()))))
   }
-
-  /// Cancel and Save connection (`InHni`), with why saving is not possible yet.
-  fn actions(&self, ctx: &Ctx, save: &SaveAction, draft: &Result<ConnectionDraft, Message>, submit: Submit) -> Element {
-    let state = save.state().get();
-    let saving = state.is_pending();
-    let reason = match (draft, state.error.filter(|_| !saving)) {
-      (_, Some(error)) => Some(error),
-      (Err(reason), None) => Some(reason.clone()),
-      (Ok(_), None) => None,
-    };
-    let label = if saving {
-      "connections.dialog.saving"
-    } else {
-      "connections.dialog.save"
-    };
-    let save_button = ActionButton::new(ctx.t(label))
-      .primary()
-      .icon(Icon::Check)
-      .id("connection-save")
-      .height(Dimension::Px(BUTTON_HEIGHT));
-    let save_button = match submit {
-      Some(submit) => save_button.on_click(move || submit()),
-      // Enabled once the reason shown beside it is resolved.
-      None => save_button.on_click(|| {}).enabled(false),
-    };
-    let close = self.context.close.clone();
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(ACTIONS_HEIGHT))
-      .padding_horizontal(ExtraSpacing::Rail.role())
-      .spacing(ExtraSpacing::Stack.role())
-      .align_items(Alignment::Center)
-      .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .with_children(reason.map(|reason| save_reason(ctx, &reason)))
-      .child(Spacer::new().flex(1.0))
-      .child(
-        ActionButton::new(ctx.t("common.cancel"))
-          .icon(Icon::X)
-          .id("connection-cancel")
-          .height(Dimension::Px(BUTTON_HEIGHT))
-          .on_click(move || close())
-          .render(ctx),
-      )
-      .child(save_button.render(ctx))
-      .into()
-  }
-}
-
-fn save_reason(ctx: &Ctx, reason: &Message) -> Element {
-  Row::new()
-    .id("connection-save-reason")
-    .spacing(SpacingSize::Xs)
-    .align_items(Alignment::Center)
-    .child(icon(Icon::AlertCircle, IconSize::Small, PaletteColor::TextSecondary))
-    .child(Text::new(&message_text(ctx, reason)).variant(TypographyStyle::Caption))
-    .into()
 }
 
 /// The provider and the project, e.g. "Codex · Kontur", as the design names connections.
 /// Numbered ("Codex · Kontur 2") when the plain name is taken.
 fn suggested_name(ctx: &Ctx, context: &DialogContext, provider: AgentProvider) -> String {
-  let (short, project) = (ctx.t(short_key(provider)), context.project.project.name().as_str());
-  let taken = |name: &str| context.taken.iter().any(|taken| taken.as_str() == name);
-  let plain = ctx.t_args(
+  let short = ctx.t(short_key(provider));
+  let project = context.project.project.name().as_str();
+  dialog_frame::suggested_name(
+    ctx,
+    context,
     "connections.dialog.suggestedName",
-    [("provider", &*short), ("project", project)],
-  );
-  if !taken(&plain) {
-    return plain.to_string();
-  }
-  (2_usize..)
-    .map(|number| {
-      ctx
-        .t_args(
-          "connections.dialog.suggestedNameNumbered",
-          [
-            ("provider", &*short),
-            ("project", project),
-            ("number", number.to_string().as_str()),
-          ],
-        )
-        .to_string()
-    })
-    .find(|name| !taken(name))
-    .expect("only finitely many connection names are taken")
+    "connections.dialog.suggestedNameNumbered",
+    &[("provider", &*short), ("project", project)],
+  )
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, FormButtonRole, PaletteColor, SpacingSize},
+    theme::{BorderSize, FormButtonRole, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, Text},
   layout::{Alignment, layout_kind::Justify},
@@ -45,6 +45,8 @@ pub struct ActionButton {
   width: Option<Dimension>,
   height: Option<Dimension>,
   roomy: bool,
+  compact: bool,
+  pointer_only: bool,
   id: Option<&'static str>,
 }
 
@@ -59,6 +61,8 @@ impl ActionButton {
       width: None,
       height: None,
       roomy: false,
+      compact: false,
+      pointer_only: false,
       id: None,
     }
   }
@@ -108,6 +112,19 @@ impl ActionButton {
     self
   }
 
+  /// Smaller label and icon, as the Copy button of a command row (`eFsWL` in `LBSz7`).
+  pub fn compact(mut self) -> Self {
+    self.compact = true;
+    self
+  }
+
+  /// Pressed with the pointer only: no Tab stop and no focus ring, for an action outside a
+  /// form (only form controls take the focus).
+  pub fn pointer_only(mut self) -> Self {
+    self.pointer_only = true;
+    self
+  }
+
   pub fn fill_width(mut self) -> Self {
     self.width = Some(Dimension::Pct(100.0));
     self
@@ -144,16 +161,16 @@ impl ActionButton {
     drop(form);
     let (background, border, text) = self.colors(&role);
 
+    let (icon_size, typography) = if self.compact {
+      (IconSize::Marker, TypographyStyle::Link)
+    } else {
+      (IconSize::Button, role.text.typography)
+    };
     let mut content = Row::new().spacing(SpacingSize::Sm).align_items(Alignment::Center);
     if let Some(glyph) = self.icon {
-      content = content.child(icon(glyph, IconSize::Button, text.clone()));
+      content = content.child(icon(glyph, icon_size, text.clone()));
     }
-    content = content.child(
-      Text::new(&self.label)
-        .variant(role.text.typography)
-        .color(text.clone())
-        .nowrap(),
-    );
+    content = content.child(Text::new(&self.label).variant(typography).color(text.clone()).nowrap());
     if matches!(self.state, State::Unavailable) {
       content = content.child(icon(Icon::Lock, IconSize::Small, text));
     }
@@ -178,6 +195,10 @@ impl ActionButton {
       button = button.id(id);
     }
     match self.state {
+      State::Enabled(handler) if self.pointer_only => with_pointer(button, &role)
+        .focusable(false)
+        .describe("state", "enabled")
+        .on_click(move |_| handler()),
       State::Enabled(handler) => with_interaction(button, &role)
         .describe("state", "enabled")
         .on_click(move |_| handler()),
@@ -198,6 +219,13 @@ impl ActionButton {
 /// Pointer, hover and press fills, and keyboard use: a Tab stop outside forms too, with the
 /// outer focus ring while focused. Hover and press set no shadow, so the ring stays.
 fn with_interaction(button: Button, role: &FormButtonRole) -> Button {
+  with_pointer(button, role)
+    .tab_index(TAB_STOP)
+    .focused_style(Ring::Outer.focused())
+}
+
+/// Pointer cursor, and the hover and press fills.
+fn with_pointer(button: Button, role: &FormButtonRole) -> Button {
   let state = |background, border| {
     Style::new()
       .background(background)
@@ -205,8 +233,6 @@ fn with_interaction(button: Button, role: &FormButtonRole) -> Button {
   };
   button
     .cursor(CursorIcon::Pointer)
-    .tab_index(TAB_STOP)
-    .focused_style(Ring::Outer.focused())
     .hovered_style(state(role.background_hover.clone(), role.border_hover.clone()))
     .active_style(state(role.background_active.clone(), role.border_active.clone()))
 }

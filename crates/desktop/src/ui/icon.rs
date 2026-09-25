@@ -31,6 +31,7 @@ pub enum Icon {
   Download,
   ExternalLink,
   FilePenLine,
+  FileSearch,
   FileText,
   FolderGit,
   FolderLock,
@@ -72,6 +73,8 @@ pub enum Icon {
   Trash,
   Unplug,
   Upload,
+  UserCheck,
+  UserCog,
   UserX,
   Workflow,
   Wrench,
@@ -147,7 +150,10 @@ impl Icon {
       Self::Terminal => '\u{e181}',
       Self::Trash => '\u{e18e}',
       Self::Upload => '\u{e19e}',
+      Self::UserCheck => '\u{e1a0}',
+      Self::UserCog => '\u{e342}',
       Self::UserX => '\u{e1a3}',
+      Self::FileSearch => '\u{e0cb}',
       Self::X => '\u{e1b2}',
     }
   }

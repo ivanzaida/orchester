@@ -22,8 +22,9 @@ pub use self::{
   agent::{AgentConnection, CheckResult, ConnectionCheck},
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
   github::{
-    GH_PROGRAM, GhAuthStatus, GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin,
-    GitHubNameError, check_github, gh_auth_status_command, gh_version_command, parse_gh_auth_status, parse_gh_version,
+    GH_PROGRAM, GhAdvice, GhAuthStatus, GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin,
+    GitHubNameError, GitHubState, REQUIRED_SCOPE, check_github, gh_auth_status_command, gh_version_command,
+    parse_gh_auth_status, parse_gh_version,
   },
 };
 use crate::{id::ConnectionId, name::Name, time::Timestamp};
