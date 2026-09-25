@@ -234,3 +234,24 @@ fn focus_ring_follows_pencil() {
     ]
   );
 }
+
+#[test]
+fn select_menu_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  // `u0ByM`: radius 11, padding 4.
+  assert_eq!(theme.radius_value(ExtraRadius::SelectMenu.role()), 11.0);
+  assert_eq!(theme.spacing_value(ExtraSpacing::SelectMenu.role()), Dimension::Px(4.0));
+  // Chevron `eASPF` and check `ClxwV`: lucide 14, which is also the reserved check slot.
+  let icon = theme.typography_style(ExtraTypography::IconSelect.role());
+  assert_eq!((&*icon.font_family, icon.font_size), ("lucide", 14.0));
+  assert_eq!(theme::SELECT_CHECK_SLOT, 14.0);
+  // `g3poI`: overlay thumb 4px in `border`, radius 2, 1px from the menu border, no track.
+  let scrollbar = theme::select_menu_scrollbar();
+  assert_eq!(
+    (scrollbar.width, scrollbar.thumb_radius, scrollbar.padding),
+    (4.0, 2.0, 1.0)
+  );
+  assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
+  assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
+}

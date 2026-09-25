@@ -3,6 +3,7 @@
 use lurq::{
   app::theme::PaletteColor,
   components::{Text, WindowControlContent},
+  node::SelectIcon,
 };
 
 use crate::theme::ExtraTypography;
@@ -202,4 +203,12 @@ pub fn window_control(icon: Icon) -> WindowControlContent {
       .nowrap()
       .into()
   })
+}
+
+/// A select's chevron or option check (`eASPF`, `ClxwV`), in the color the select passes.
+pub fn select_icon(icon: Icon) -> SelectIcon {
+  SelectIcon::glyph(
+    icon.glyph().encode_utf8(&mut [0; 4]).to_string(),
+    ExtraTypography::IconSelect.role(),
+  )
 }

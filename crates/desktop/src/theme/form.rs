@@ -1,9 +1,13 @@
 use lurq::{
   app::theme::{FormTextRole, FormTheme, PaletteColor, RadiusSize, TypographyStyle},
-  node::{dimension::Dimension, padding::Padding},
+  layout::scrollbar::ScrollBarStyle,
+  node::{color::Color, dimension::Dimension, padding::Padding},
 };
 
-use super::tokens::{BUTTON_HEIGHT, CONTROL_PADDING_X, FIELD_HEIGHT};
+use super::tokens::{
+  BORDER, BUTTON_HEIGHT, CONTROL_PADDING_X, FIELD_HEIGHT, NO_TRACK, SELECT_SCROLLBAR_INSET, SELECT_SCROLLBAR_RADIUS,
+  SELECT_SCROLLBAR_WIDTH,
+};
 
 /// Field (`ZGwlv`) and button (`u1XBP`) roles for lurq's compound form controls.
 pub fn form(mut form: FormTheme) -> FormTheme {
@@ -45,4 +49,17 @@ pub fn form(mut form: FormTheme) -> FormTheme {
   form.checkbox.checked_background = PaletteColor::Accent;
   form.checkbox.checked_border = PaletteColor::Accent;
   form
+}
+
+/// Overlay scrollbar of a select menu longer than eight options (`g3poI`).
+pub fn select_menu_scrollbar() -> ScrollBarStyle {
+  ScrollBarStyle {
+    width: SELECT_SCROLLBAR_WIDTH,
+    track_color: Color::from_hex(NO_TRACK),
+    thumb_color: Color::from_hex(BORDER),
+    thumb_radius: SELECT_SCROLLBAR_RADIUS,
+    track_radius: SELECT_SCROLLBAR_RADIUS,
+    padding: SELECT_SCROLLBAR_INSET,
+    ..ScrollBarStyle::default()
+  }
 }

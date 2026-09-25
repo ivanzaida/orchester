@@ -4,10 +4,11 @@ use lurq::{
 };
 
 use super::tokens::{
-  FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, SPACE_COLUMNS, SPACE_DIVIDER,
-  SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO,
-  SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE,
-  SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
+  FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_SELECT_MENU,
+  SPACE_COLUMNS, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM,
+  SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK,
+  SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK,
+  SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -58,10 +59,12 @@ pub enum ExtraSpacing {
   Property,
   /// Above the properties after their divider (`dSLqh`).
   Divider,
+  /// Padding of an open select menu around its options (`u0ByM`).
+  SelectMenu,
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 21] = [
+  const ALL: [Self; 22] = [
     Self::Hair,
     Self::Mark,
     Self::Tight,
@@ -83,6 +86,7 @@ impl ExtraSpacing {
     Self::Field,
     Self::Property,
     Self::Divider,
+    Self::SelectMenu,
   ];
 
   fn name(self) -> &'static str {
@@ -108,6 +112,7 @@ impl ExtraSpacing {
       Self::Field => "field",
       Self::Property => "property",
       Self::Divider => "divider",
+      Self::SelectMenu => "select-menu",
     }
   }
 
@@ -134,6 +139,7 @@ impl ExtraSpacing {
       Self::Field => SPACE_FIELD,
       Self::Property => SPACE_PROPERTY,
       Self::Divider => SPACE_DIVIDER,
+      Self::SelectMenu => SPACE_SELECT_MENU,
     }
   }
 
@@ -150,15 +156,18 @@ pub enum ExtraRadius {
   Notice,
   /// Bars of the Orchester mark (`DIMZ6`).
   Mark,
+  /// An open select menu (`u0ByM`).
+  SelectMenu,
 }
 
 impl ExtraRadius {
-  const ALL: [Self; 2] = [Self::Notice, Self::Mark];
+  const ALL: [Self; 3] = [Self::Notice, Self::Mark, Self::SelectMenu];
 
   fn name(self) -> &'static str {
     match self {
       Self::Notice => "notice",
       Self::Mark => "mark",
+      Self::SelectMenu => "select-menu",
     }
   }
 
@@ -166,6 +175,7 @@ impl ExtraRadius {
     match self {
       Self::Notice => RADIUS_NOTICE,
       Self::Mark => RADIUS_MARK,
+      Self::SelectMenu => RADIUS_SELECT_MENU,
     }
   }
 

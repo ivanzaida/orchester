@@ -11,14 +11,17 @@ use lurq::{
   components::{Button, Column, Row, Text, TextInput, TextOverflow},
   core::Signal,
   layout::Alignment,
-  node::{CursorIcon, Element, SelectPartStyle, SelectStyle, Style, border::Border, dimension::Dimension},
+  node::{
+    CursorIcon, Element, SelectCheckmarkPosition, SelectPartStyle, SelectStyle, Style, border::Border,
+    dimension::Dimension, padding::Padding,
+  },
 };
 
 use super::{
-  icon::{Icon, IconSize, icon},
+  icon::{Icon, IconSize, icon, select_icon},
   pressable::TAB_STOP,
 };
-use crate::theme::SELECT_CHEVRON_SIZE;
+use crate::theme::{ExtraRadius, ExtraShadow, ExtraSpacing, SELECT_CHECK_SLOT, select_menu_scrollbar};
 
 /// Below the control: nothing, or the error of the current value.
 pub enum FieldNote {
@@ -93,33 +96,63 @@ pub fn styled_input(ctx: &Ctx, value: Signal<String>, typography: TypographyStyl
     .caret_color(PaletteColor::TextPrimary)
 }
 
-/// A select drawn like a field (`ZGwlv`) at `height`, with its open menu. The design has no
-/// open-menu state, so the menu follows the field: raised fill, field border and radius, options
-/// padded like the trigger in the field text. The chosen option and the pointer's option take the
-/// hover fill; the keyboard's option also gets the focused field stroke (`o8Oug`).
+/// Height of an option in an open select menu (`L20XvS`).
+const SELECT_OPTION_HEIGHT: f32 = 32.0;
+/// Most an open select menu grows to, eight options and the border, before it scrolls (`g3poI`).
+const SELECT_MENU_MAX_HEIGHT: f32 = 266.0;
+/// Space between a select and its open menu (`g3poI`).
+const SELECT_MENU_OFFSET: f32 = 4.0;
+
+/// A select drawn like a field (`ZGwlv`) at `height`, with its open menu (`u0ByM`, options
+/// `L20XvS`, states `goMne`). A fill means the pointer is on an option, a check marks the value,
+/// and the keyboard highlight is the inset focus ring (`xURvJ`); they compose.
 pub fn select_style(ctx: &Ctx, height: f32) -> SelectStyle {
   let theme = ctx.theme();
   let input = theme.form().input.clone();
   let hover = || SelectPartStyle::new().background(PaletteColor::AccentMuted);
-  SelectStyle::new()
+  let ring = || SelectPartStyle::new().box_shadow(ExtraShadow::FocusRingInset.role());
+  SelectStyle::unstyled()
     .trigger(select_trigger(ctx, height))
+    .trigger_hovered(SelectPartStyle::new().border_inside(BorderSize::Sm, input.border_focus.clone()))
     .trigger_focused(select_trigger_focused(ctx))
-    .chevron_color(theme.palette_color(PaletteColor::TextSecondary))
-    .chevron_size(SELECT_CHEVRON_SIZE)
+    .trigger_open(select_trigger_focused(ctx))
+    .chevron(select_icon(Icon::ChevronDown))
+    .chevron_open(select_icon(Icon::ChevronUp))
+    .chevron_color(PaletteColor::TextSecondary)
     .menu(
       SelectPartStyle::new()
         .background(PaletteColor::SurfaceRaised)
-        .border_inside(BorderSize::Sm, input.border.clone())
-        .rounded(input.radius),
+        .border_inside(BorderSize::Sm, input.border)
+        .rounded(ExtraRadius::SelectMenu.role())
+        .padding(ExtraSpacing::SelectMenu.role())
+        .box_shadow(ExtraShadow::Popover.role()),
     )
+    .menu_scrollbar(select_menu_scrollbar())
+    .max_menu_height(SELECT_MENU_MAX_HEIGHT)
+    .menu_gap(SELECT_MENU_OFFSET)
     .option(
       SelectPartStyle::new()
-        .padding(input.padding)
+        .min_height(SELECT_OPTION_HEIGHT)
+        .padding(Padding::symmetric(SpacingSize::Sm, 0.0))
+        .rounded(input.radius)
         .text(input.text.resolve(&theme.typography(), &theme.palette())),
     )
-    .option_hovered(hover().border_inside(BorderSize::Md, input.border_focus))
-    .option_selected(hover())
+    .option_hovered(hover())
     .option_selected_hovered(hover())
+    .option_highlighted(ring())
+    .option_selected_highlighted(ring())
+    .option_disabled(SelectPartStyle::new().text_color(PaletteColor::TextMuted))
+    .option_detail(
+      SelectPartStyle::new()
+        .typography(TypographyStyle::Caption)
+        .text_color(PaletteColor::TextMuted),
+    )
+    .single_checkmark(true)
+    .checkmark(select_icon(Icon::Check))
+    .checkmark_color(PaletteColor::TextPrimary)
+    .checkmark_size(SELECT_CHECK_SLOT)
+    .checkmark_position(SelectCheckmarkPosition::Trailing)
+    .checkmark_gap(SpacingSize::Sm)
 }
 
 /// Trigger of a select drawn like a field (`ZGwlv`) at `height`.
