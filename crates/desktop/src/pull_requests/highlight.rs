@@ -4,8 +4,8 @@
 //!
 //! A diff shows fragments of a file, so each hunk starts from the grammar's initial state; within
 //! a hunk, removed lines continue the old side and added lines the new side, and context lines
-//! belong to both. Highlighting is CPU work for a background thread; its result is only colors,
-//! and a line the grammar cannot read stays plain.
+//! belong to both. A line cut short takes its side's state with it (see `highlight_hunk`). Highlighting is CPU work for
+//! a background thread; its result is only colors, and a line the grammar cannot read stays plain.
 
 use std::sync::{Arc, OnceLock};
 
@@ -83,6 +83,7 @@ fn syntax_for<'a>(syntaxes: &'a SyntaxSet, path: &str) -> Option<&'a SyntaxRefer
 }
 
 /// A grammar's state on one side of a hunk.
+#[derive(Clone)]
 struct Side {
   parse: ParseState,
   scopes: ScopeStack,
@@ -129,18 +130,40 @@ impl Side {
   }
 }
 
+/// A line cut to its beginning leaves its side's state wherever the cut fell, e.g. inside a
+/// string, so after it that side continues from the other side's state (the lines around a
+/// change are alike), and after a cut context line both start again from the initial state.
 fn highlight_hunk(syntaxes: &SyntaxSet, syntax: &SyntaxReference, hunk: &Hunk) -> Vec<LineTokens> {
   let (mut old, mut new) = (Side::new(syntax), Side::new(syntax));
   hunk
     .lines()
     .iter()
-    .map(|line| match line.kind() {
-      LineKind::Removed => old.tokens(syntaxes, line.text()),
-      LineKind::Added => new.tokens(syntaxes, line.text()),
-      LineKind::Context => {
-        // The old side reads the line too, so its state stays in step; its tokens are the same.
-        old.tokens(syntaxes, line.text());
-        new.tokens(syntaxes, line.text())
+    .map(|line| {
+      let text = line.text();
+      match line.kind() {
+        LineKind::Removed => {
+          let tokens = old.tokens(syntaxes, text);
+          if line.is_cut() {
+            old = new.clone();
+          }
+          tokens
+        }
+        LineKind::Added => {
+          let tokens = new.tokens(syntaxes, text);
+          if line.is_cut() {
+            new = old.clone();
+          }
+          tokens
+        }
+        LineKind::Context => {
+          // The old side reads the line too, so its state stays in step; its tokens are the same.
+          old.tokens(syntaxes, text);
+          let tokens = new.tokens(syntaxes, text);
+          if line.is_cut() {
+            (old, new) = (Side::new(syntax), Side::new(syntax));
+          }
+          tokens
+        }
       }
     })
     .collect()

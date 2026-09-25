@@ -64,3 +64,22 @@ fn shown_text_expands_tabs_and_replaces_control_characters() {
   let tokens = plain("a\tb\u{1b}[31m");
   assert_eq!(&*tokens[0].text, "a   b\u{FFFD}[31m");
 }
+
+/// One file of microsoft/vscode#337624: an added line of 1,674 characters, cut inside a string,
+/// before the context line 130.
+const VSCODE_337624: &str =
+  include_str!("../../core/tests/fixtures/github/gh_api_compare_vscode_337624_excerpt.stdout");
+
+#[test]
+fn highlight_after_a_cut_line_continues_from_the_other_side() {
+  let diff = Diff::parse(VSCODE_337624).expect("a readable diff");
+  let file = &diff.files()[0];
+  let lines = file.hunks()[0].lines();
+  assert!(lines[3].is_cut(), "line 128 is cut inside its string");
+  let tokens = highlight(file).expect("JavaScript reads TypeScript");
+  // Line 130, `if (type === 'agentView') {`, and 131 read as code, not as the cut line's string.
+  assert_eq!(kind_of(&tokens[0][4], "if"), Some(TokenKind::Keyword));
+  assert_eq!(kind_of(&tokens[0][4], "'agentView'"), Some(TokenKind::String));
+  assert_eq!(kind_of(&tokens[0][5], "push"), Some(TokenKind::Function));
+  assert_eq!(kind_of(&tokens[0][5], "localize"), Some(TokenKind::Function));
+}
