@@ -7,6 +7,7 @@ use orchester_core::{
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
+  repository::DetectionState,
 };
 use orchester_store::StoreError;
 
@@ -47,6 +48,15 @@ impl ProjectDraft<'_> {
       }),
     }
   }
+}
+
+/// The project Create makes, if it may: the draft is valid and the folder is not known to be
+/// outside a git repository (01.C9). GitHub states never hold Create back, and neither does a
+/// detection still running (`detection` is `None`).
+pub fn creatable(draft: Result<NewProject, DraftErrors>, detection: Option<&DetectionState>) -> Option<NewProject> {
+  draft
+    .ok()
+    .filter(|_| !detection.is_some_and(DetectionState::blocks_project))
 }
 
 /// Where a creation error is shown.

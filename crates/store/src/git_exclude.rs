@@ -30,6 +30,13 @@ pub(crate) fn exclude(repo_root: &Path, pattern: &str) -> Result<(), StoreError>
   fs::write(&file, format!("{existing}{separator}{pattern}\n")).map_err(StoreError::io(&file))
 }
 
+/// Whether `repo_root` is the top of a git repository or of a linked worktree: what creating a
+/// project there requires.
+pub fn is_repository_root(repo_root: &Path) -> bool {
+  let dot_git = repo_root.join(".git");
+  dot_git.is_dir() || dot_git.is_file()
+}
+
 /// The directory holding `info/exclude`: `.git` itself, or for a linked worktree (`.git` is a
 /// file) the common directory of the main repository.
 fn common_git_dir(repo_root: &Path) -> Result<PathBuf, StoreError> {

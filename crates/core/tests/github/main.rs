@@ -4,6 +4,7 @@
 //! on demand (several accounts, rate limits, credentials in a remote URL).
 
 mod connection;
+mod detect;
 mod link;
 mod remote;
 mod replay;

@@ -18,7 +18,7 @@ use lurq::{
 };
 use orchester_core::connection::{GhAdvice, GitHubCheckResult, GitHubConnection, GitHubLogin, REQUIRED_SCOPE};
 
-use super::github_status::command_ids;
+use super::status::command_ids;
 use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{

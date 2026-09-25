@@ -236,6 +236,39 @@ pub fn expected_account(open: &OpenProject, name: &str) -> OperationSpec {
   .target(in_project(open, Place::Connections))
 }
 
+/// Detecting the GitHub repository of the project folder: in setup, before the project exists,
+/// or from Project settings.
+pub fn repository_detect(project: Option<&OpenProject>) -> OperationSpec {
+  let spec = Wording {
+    running: "statusBar.operations.repositoryDetect.running",
+    done: "statusBar.operations.repositoryDetect.done",
+    failed: "statusBar.operations.repositoryDetect.failed",
+  }
+  .unnamed();
+  match project {
+    Some(open) => spec
+      .project(open.project.name().as_str())
+      .target(in_project(open, Place::Settings)),
+    None => spec,
+  }
+}
+
+/// Recording the detected repository `repository` (`owner/name`) for the project `project` at
+/// `repo_root`: its GitHub connection and link.
+pub fn repository_link(project: &str, repo_root: &Path, repository: &str) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.repositoryLink.running",
+    done: "statusBar.operations.repositoryLink.done",
+    failed: "statusBar.operations.repositoryLink.failed",
+  }
+  .named(repository)
+  .project(project)
+  .target(Target::Project {
+    repo_root: repo_root.to_path_buf(),
+    place: Place::Settings,
+  })
+}
+
 /// The native file dialog for a provider's program, while it is open.
 pub fn program_pick() -> OperationSpec {
   Wording {

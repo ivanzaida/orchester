@@ -21,14 +21,14 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use super::{
-  github_status::{command_ids, status_label},
-  status::CHECKING,
-};
+use super::status::CHECKING;
 use crate::{
   display,
   messages::Message,
-  screens::project::page::TOPBAR_BUTTON_HEIGHT,
+  screens::{
+    github::status::{command_ids, status_label},
+    project::page::TOPBAR_BUTTON_HEIGHT,
+  },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,

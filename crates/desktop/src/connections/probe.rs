@@ -9,6 +9,7 @@ use std::{
 
 use orchester_core::{
   connection::{self, AgentProvider, Connection, ConnectionCheck, ConnectionKind, GitHubCheck, GitHubHost, LastCheck},
+  repository::{self, DetectRequest, Detection},
   time::Timestamp,
 };
 use orchester_exec::ProcessRunner;
@@ -25,6 +26,11 @@ pub fn check(provider: AgentProvider, executable: &Path) -> ConnectionCheck {
 /// Checks the GitHub CLI at `executable` for `host` now.
 pub fn check_github(host: &GitHubHost, executable: &Path) -> GitHubCheck {
   connection::check_github(executable, host, &RUNNER, Timestamp::now())
+}
+
+/// Detects the GitHub repository of `request.repo_root` now.
+pub fn detect_repository(request: &DetectRequest<'_>) -> Detection {
+  repository::detect_repository(&RUNNER, request, Timestamp::now())
 }
 
 /// Checks the program of a stored connection now, whatever its kind.

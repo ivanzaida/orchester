@@ -24,6 +24,7 @@ pub enum Place {
   Pipeline(ResourceId),
   AgentProfile(ResourceId),
   Connections,
+  Settings,
 }
 
 /// What opening an operation or its event shows.

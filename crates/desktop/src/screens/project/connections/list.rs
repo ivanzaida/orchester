@@ -19,7 +19,7 @@ use orchester_core::{
 };
 
 use super::{
-  github_status,
+  super::super::github::status as github_status,
   status::{CHECKING, program_key, status_label, vendor_key},
 };
 use crate::{
