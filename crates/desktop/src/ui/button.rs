@@ -7,7 +7,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, FormButtonRole, PaletteColor, SpacingSize},
+    theme::{BorderSize, FormButtonRole, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, Text},
   layout::{Alignment, layout_kind::Justify},
@@ -46,6 +46,7 @@ pub struct ActionButton {
   width: Option<Dimension>,
   height: Option<Dimension>,
   roomy: bool,
+  compact: bool,
   in_form: bool,
   id: Option<&'static str>,
 }
@@ -61,6 +62,7 @@ impl ActionButton {
       width: None,
       height: None,
       roomy: false,
+      compact: false,
       in_form: false,
       id: None,
     }
@@ -111,6 +113,12 @@ impl ActionButton {
     self
   }
 
+  /// Smaller label and icon, as the Copy button of a command row (`eFsWL` in `LBSz7`).
+  pub fn compact(mut self) -> Self {
+    self.compact = true;
+    self
+  }
+
   /// A control of a form or a dialog: a Tab stop with the outer focus ring while focused.
   pub fn in_form(mut self) -> Self {
     self.in_form = true;
@@ -153,16 +161,16 @@ impl ActionButton {
     drop(form);
     let (background, border, text) = self.colors(&role);
 
+    let (icon_size, typography) = if self.compact {
+      (IconSize::Marker, TypographyStyle::Link)
+    } else {
+      (IconSize::Button, role.text.typography)
+    };
     let mut content = Row::new().spacing(SpacingSize::Sm).align_items(Alignment::Center);
     if let Some(glyph) = self.icon {
-      content = content.child(icon(glyph, IconSize::Button, text.clone()));
+      content = content.child(icon(glyph, icon_size, text.clone()));
     }
-    content = content.child(
-      Text::new(&self.label)
-        .variant(role.text.typography)
-        .color(text.clone())
-        .nowrap(),
-    );
+    content = content.child(Text::new(&self.label).variant(typography).color(text.clone()).nowrap());
     if matches!(self.state, State::Unavailable) {
       content = content.child(icon(Icon::Lock, IconSize::Small, text));
     }

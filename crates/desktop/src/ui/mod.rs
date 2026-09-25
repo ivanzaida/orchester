@@ -3,8 +3,10 @@
 pub mod backdrop;
 pub mod brand;
 pub mod button;
+pub mod command_row;
 pub mod field;
 pub mod form;
+pub mod github_mark;
 pub mod icon;
 pub mod nav_item;
 pub mod notice;

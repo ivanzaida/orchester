@@ -175,6 +175,14 @@ impl RepositoryLink {
     self.checked_at
   }
 
+  /// Makes the project expect `active`, the account `gh` acts as now (from a fresh check). This
+  /// records the account only; `gh` itself is never changed.
+  pub fn expect_account(&mut self, active: Option<&GitHubLogin>) -> Result<(), RepositoryError> {
+    let active = active.ok_or_else(|| RepositoryError::NotSignedIn(self.view.repo.host().clone()))?;
+    self.expected_login = active.clone();
+    Ok(())
+  }
+
   /// Fails unless `active`, the account `gh` currently acts as, is the one that confirmed the
   /// link. Anything published to GitHub for the project is checked against this first.
   pub fn ensure_account(&self, active: Option<&GitHubLogin>) -> Result<(), RepositoryError> {

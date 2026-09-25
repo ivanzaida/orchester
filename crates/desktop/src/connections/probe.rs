@@ -8,7 +8,7 @@ use std::{
 };
 
 use orchester_core::{
-  connection::{self, AgentProvider, Connection, ConnectionCheck, ConnectionKind, LastCheck},
+  connection::{self, AgentProvider, Connection, ConnectionCheck, ConnectionKind, GitHubCheck, GitHubHost, LastCheck},
   time::Timestamp,
 };
 use orchester_exec::ProcessRunner;
@@ -22,24 +22,25 @@ pub fn check(provider: AgentProvider, executable: &Path) -> ConnectionCheck {
   connection::check(provider, executable, &RUNNER, Timestamp::now())
 }
 
+/// Checks the GitHub CLI at `executable` for `host` now.
+pub fn check_github(host: &GitHubHost, executable: &Path) -> GitHubCheck {
+  connection::check_github(executable, host, &RUNNER, Timestamp::now())
+}
+
 /// Checks the program of a stored connection now, whatever its kind.
 pub fn recheck(connection: &Connection) -> LastCheck {
   match connection.kind() {
     ConnectionKind::Agent(provider) => LastCheck::Agent(check(*provider, connection.executable())),
-    ConnectionKind::GitHub { host } => LastCheck::GitHub(connection::check_github(
-      connection.executable(),
-      host,
-      &RUNNER,
-      Timestamp::now(),
-    )),
+    ConnectionKind::GitHub { host } => LastCheck::GitHub(check_github(host, connection.executable())),
   }
 }
 
-/// Installed copies of the provider's CLI found on the `PATH`, in search order.
-pub fn detect(provider: AgentProvider) -> Vec<PathBuf> {
+/// Installed copies of `program` (see `ConnectionKind::program_name`) found on the `PATH`, in
+/// search order.
+pub fn detect(program: &str) -> Vec<PathBuf> {
   let path = std::env::var_os("PATH");
   let mut found: Vec<PathBuf> = Vec::new();
-  for candidate in connection::executable_candidates(provider.program_name(), path.as_deref()) {
+  for candidate in connection::executable_candidates(program, path.as_deref()) {
     if candidate.is_file() && !found.contains(&candidate) {
       found.push(candidate);
     }

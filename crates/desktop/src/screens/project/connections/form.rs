@@ -9,6 +9,7 @@ use lurq::{
     theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Select, Text},
+  core::{Signal, signal::SignalValue},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -18,7 +19,7 @@ use orchester_core::{
 };
 
 use super::{
-  DialogMode,
+  DialogMode, KindChoice,
   dialog::{ConnectionDialog, PickAction, Program, ProviderChoice, Verification},
   inspector::model_chips,
   status::{CHECKING, program_key, status_label},
@@ -62,12 +63,7 @@ impl ConnectionDialog {
       .spacing(ExtraSpacing::Form.role())
       .child(pair(
         self.name_field(ctx),
-        fixed(
-          ctx,
-          "connection-type",
-          "connections.dialog.type",
-          "connections.type.agentProvider",
-        ),
+        type_field(ctx, &self.kind, matches!(self.context.mode, DialogMode::EditAgent(_))),
       ))
       .child(pair(
         self.provider_field(ctx, program.provider),
@@ -119,22 +115,13 @@ impl ConnectionDialog {
   /// The provider select; fixed while editing, since a connection keeps its provider.
   fn provider_field(&self, ctx: &Ctx, provider: AgentProvider) -> Element {
     let label = ctx.t("connections.dialog.provider");
-    if matches!(self.context.mode, DialogMode::Edit(_)) {
+    if matches!(self.context.mode, DialogMode::EditAgent(_)) {
       let value = ctx.t(program_key(provider));
       let control = value_box(ctx, "connection-provider", &value, ValueTone::Value, None);
       return field(&label, control, FieldNote::None);
     }
     let options = AgentProvider::ALL.map(|provider| (ProviderChoice(provider), ctx.t(program_key(provider))));
-    let select = Select::new(self.provider.clone())
-      .options(options)
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(FIELD_HEIGHT))
-      .style(select_style(ctx, FIELD_HEIGHT));
-    let control = Column::new()
-      .id("connection-provider")
-      .width(Dimension::Pct(100.0))
-      .child(select);
-    field(&label, control.into(), FieldNote::None)
+    select_field(ctx, "connection-provider", &label, self.provider.clone(), options)
   }
 
   /// The program file: found on the `PATH`, or chosen with the file picker.
@@ -260,8 +247,45 @@ fn connection_name_error(error: &NameError) -> Message {
   }
 }
 
+/// Connection type: a select for a new connection, fixed once it exists (a connection keeps its
+/// kind).
+pub(super) fn type_field(ctx: &Ctx, kind: &Signal<KindChoice>, editing: bool) -> Element {
+  let label = ctx.t("connections.dialog.type");
+  let key = |kind| match kind {
+    KindChoice::Agent => "connections.type.agentProvider",
+    KindChoice::GitHub => "github.type",
+  };
+  if editing {
+    let control = value_box(ctx, "connection-type", &ctx.t(key(kind.get())), ValueTone::Value, None);
+    return field(&label, control, FieldNote::None);
+  }
+  let options = [KindChoice::Agent, KindChoice::GitHub].map(|choice| (choice, ctx.t(key(choice))));
+  select_field(ctx, "connection-type", &label, kind.clone(), options)
+}
+
+/// A select drawn like a field (`ZGwlv`) under `label`.
+pub(super) fn select_field<T, const N: usize>(
+  ctx: &Ctx,
+  id: &'static str,
+  label: &str,
+  value: Signal<T>,
+  options: [(T, Arc<str>); N],
+) -> Element
+where
+  T: Clone + PartialEq + Send + Sync + 'static + SignalValue,
+  Vec<T>: SignalValue,
+{
+  let select = Select::new(value)
+    .options(options)
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(FIELD_HEIGHT))
+    .style(select_style(ctx, FIELD_HEIGHT));
+  let control = Column::new().id(id).width(Dimension::Pct(100.0)).child(select);
+  field(label, control.into(), FieldNote::None)
+}
+
 /// Two fields side by side (`PVMae`).
-fn pair(left: Element, right: Element) -> Element {
+pub(super) fn pair(left: Element, right: Element) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Step.role())
@@ -271,7 +295,7 @@ fn pair(left: Element, right: Element) -> Element {
 }
 
 /// A field whose value is fixed for agent providers on this computer.
-fn fixed(ctx: &Ctx, id: &'static str, label: &str, value: &str) -> Element {
+pub(super) fn fixed(ctx: &Ctx, id: &'static str, label: &str, value: &str) -> Element {
   let control = value_box(ctx, id, &ctx.t(value), ValueTone::Value, None);
   field(&ctx.t(label), control, FieldNote::None)
 }

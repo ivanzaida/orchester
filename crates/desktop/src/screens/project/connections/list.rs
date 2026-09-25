@@ -1,5 +1,6 @@
-//! A connection in the project list (`sFtAz` as in `d9bo3`): icon, name and what it runs, its
-//! type, how many agents use it, its status and a chevron. The selected row is raised.
+//! A connection in the project list (`sFtAz` as in `d9bo3`, `iYGKy`): icon, name and what it
+//! runs, its type, how many agents or repositories use it, its status and a chevron. The selected
+//! row is raised.
 
 use std::sync::Arc;
 
@@ -12,12 +13,19 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::connection::AgentConnection;
+use orchester_core::{
+  connection::{AgentConnection, GitHubConnection, GitHubState, REQUIRED_SCOPE},
+  id::ConnectionId,
+};
 
-use super::status::{CHECKING, program_key, status_label, vendor_key};
+use super::{
+  github_status,
+  status::{CHECKING, program_key, status_label, vendor_key},
+};
 use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
+    github_mark::github_mark,
     icon::{Icon, IconSize, icon},
     pressable::{pressable, surface},
     status_label::compact_status_label as label,
@@ -34,6 +42,17 @@ pub struct RowState {
   pub uses: usize,
   pub selected: bool,
   pub checking: bool,
+}
+
+/// What a row shows, whatever the kind of connection.
+struct RowContent {
+  id: ConnectionId,
+  icon: Element,
+  name: Arc<str>,
+  description: Arc<str>,
+  kind: Arc<str>,
+  usage: Arc<str>,
+  status: (Icon, Arc<str>),
 }
 
 pub fn connection_row(
@@ -64,22 +83,72 @@ pub fn connection_row(
   } else {
     status_label(connection.status())
   };
+  let content = RowContent {
+    id: connection.id(),
+    icon: icon(Icon::Bot, IconSize::Notice, PaletteColor::TextPrimary).into(),
+    name: connection.name().as_str().into(),
+    description,
+    kind: ctx.t("connections.type.provider"),
+    usage: ctx.t_args(usage_key, [("count", state.uses.to_string().as_str())]),
+    status: (status_icon, ctx.t(status_key)),
+  };
+  row(content, state, on_click)
+}
+
+/// A GitHub connection (`iYGKy`): the host, `gh` and the account it is signed in to, and the
+/// repository link that uses it (at most one).
+pub fn github_row(
+  ctx: &Ctx,
+  connection: &GitHubConnection,
+  github: &GitHubState,
+  state: &RowState,
+  on_click: impl Fn() + Send + Sync + 'static,
+) -> Element {
+  let host = connection.host().as_str();
+  let description = match github {
+    GitHubState::SignedIn { account }
+    | GitHubState::MissingScope { account }
+    | GitHubState::WrongAccount { active: account, .. } => {
+      ctx.t_args("github.row.signedIn", [("host", host), ("account", account.as_str())])
+    }
+    GitHubState::NotSignedIn => ctx.t_args("github.row.notSignedIn", [("host", host)]),
+    _ => ctx.t_args("github.row.description", [("host", host)]),
+  };
+  let usage_key = if state.uses == 1 {
+    "github.row.repoOne"
+  } else {
+    "github.row.repoOther"
+  };
+  let (status_icon, status_key) = if state.checking {
+    CHECKING
+  } else {
+    github_status::status_label(github)
+  };
+  let content = RowContent {
+    id: connection.id(),
+    icon: github_mark(ctx, PaletteColor::TextPrimary),
+    name: connection.name().as_str().into(),
+    description,
+    kind: ctx.t("github.type"),
+    usage: ctx.t_args(usage_key, [("count", state.uses.to_string().as_str())]),
+    status: (status_icon, ctx.t_args(status_key, [("scope", REQUIRED_SCOPE)])),
+  };
+  row(content, state, on_click)
+}
+
+fn row(content: RowContent, state: &RowState, on_click: impl Fn() + Send + Sync + 'static) -> Element {
   let identity = Column::new()
     .flex(1.0)
     .spacing(SpacingSize::Sm)
+    .child(Text::new(&content.name).variant(TypographyStyle::Label).nowrap())
     .child(
-      Text::new(connection.name().as_str())
-        .variant(TypographyStyle::Label)
-        .nowrap(),
-    )
-    .child(
-      Text::new(&description)
+      Text::new(&content.description)
         .variant(ExtraTypography::Footnote.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
     );
   let row = surface()
-    .id(Arc::<str>::from(format!("connection-{}", connection.id())))
+    .id(Arc::<str>::from(format!("connection-{}", content.id)))
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ROW_HEIGHT))
     .padding_horizontal(ExtraSpacing::Stack.role())
@@ -91,15 +160,13 @@ pub fn connection_row(
       ExtraColor::Surface.role()
     })
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(icon_surface())
+    .child(icon_surface(content.icon))
     .child(identity)
-    .child(fixed_caption(&ctx.t("connections.type.provider"), TYPE_WIDTH))
-    .child(fixed_caption(
-      &ctx.t_args(usage_key, [("count", state.uses.to_string().as_str())]),
-      USAGE_WIDTH,
-    ))
-    .child(label(status_icon, &ctx.t(status_key)))
+    .child(fixed_caption(&content.kind, TYPE_WIDTH))
+    .child(fixed_caption(&content.usage, USAGE_WIDTH))
+    .child(label(content.status.0, &content.status.1))
     .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
+  // Rows are outside a form, so they are pointer-only: no Tab stop and no focus ring.
   if state.selected {
     return row.describe("state", "selected").into();
   }
@@ -108,14 +175,14 @@ pub fn connection_row(
     .into()
 }
 
-fn icon_surface() -> Element {
+fn icon_surface(glyph: Element) -> Element {
   Row::new()
     .size(Dimension::Px(ICON_SURFACE), Dimension::Px(ICON_SURFACE))
     .background(PaletteColor::SurfaceRaised)
     .rounded(ExtraRadius::Notice.role())
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .child(icon(Icon::Bot, IconSize::Notice, PaletteColor::TextPrimary))
+    .child(glyph)
     .into()
 }
 

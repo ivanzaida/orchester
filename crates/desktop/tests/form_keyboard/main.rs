@@ -7,6 +7,7 @@
 mod agents;
 mod dialogs;
 mod draft_autosave;
+mod github;
 mod harness;
 mod new_task;
 mod pipeline_editor;

@@ -7,10 +7,11 @@ use std::{
 };
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, Connection, ConnectionCheck, ConnectionError},
+  connection::{AgentConnection, AgentProvider, Connection, ConnectionCheck, ConnectionError, GitHubConnection},
   id::{ConnectionId, ResourceId},
   name::Name,
-  store::{ConnectionStore, ResourceStore},
+  repository::RepositoryLink,
+  store::{ConnectionStore, RepositoryStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -31,11 +32,14 @@ pub struct ProfileUse {
   pub model: Arc<str>,
 }
 
-/// The project's agent provider connections and the profiles that use them, read together.
+/// The project's connections of each kind, the profiles that use the agent providers and the
+/// repository link that uses a GitHub connection, read together.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectConnections {
   pub connections: Arc<Vec<AgentConnection>>,
+  pub github: Arc<Vec<GitHubConnection>>,
   pub uses: Arc<Vec<ProfileUse>>,
+  pub link: Option<Arc<RepositoryLink>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProjectConnections {}
@@ -43,7 +47,7 @@ impl lurq::app::component::DevtoolsInspectable for ProjectConnections {}
 impl ProjectConnections {
   pub fn load<S>(store: &S) -> Result<Self, StoreError>
   where
-    S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError>,
+    S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError> + RepositoryStore<Error = StoreError>,
   {
     // A profile uses the connection its current content names: its draft if it has one.
     let uses = profiles(store)?
@@ -55,9 +59,12 @@ impl ProjectConnections {
         model: entry.profile.model().as_str().into(),
       })
       .collect();
+    let connections = store.connections()?;
     Ok(Self {
-      connections: Arc::new(agent_connections(store.connections()?)),
+      github: Arc::new(github_connections(connections.clone())),
+      connections: Arc::new(agent_connections(connections)),
       uses: Arc::new(uses),
+      link: store.repository_link()?.map(Arc::new),
     })
   }
 
@@ -67,6 +74,15 @@ impl ProjectConnections {
 
   pub fn connection(&self, id: ConnectionId) -> Option<&AgentConnection> {
     self.connections.iter().find(|connection| connection.id() == id)
+  }
+
+  pub fn github_connection(&self, id: ConnectionId) -> Option<&GitHubConnection> {
+    self.github.iter().find(|connection| connection.id() == id)
+  }
+
+  /// The repository link reached through `id`, if the project's link uses that connection.
+  pub fn link_of(&self, id: ConnectionId) -> Option<&RepositoryLink> {
+    self.link.as_deref().filter(|link| link.connection() == id)
   }
 
   /// Profiles that run on `id`, in profile order.
@@ -82,6 +98,15 @@ pub fn agent_connections(connections: Vec<Connection>) -> Vec<AgentConnection> {
     // Other kinds are not agent providers; dropping the conversion error is how they are
     // filtered out.
     .filter_map(|connection| AgentConnection::try_from(connection).ok())
+    .collect()
+}
+
+/// The GitHub connections among `connections`, in their order.
+pub fn github_connections(connections: Vec<Connection>) -> Vec<GitHubConnection> {
+  connections
+    .into_iter()
+    // Other kinds are agent providers; dropping the conversion error filters them out.
+    .filter_map(|connection| GitHubConnection::try_from(connection).ok())
     .collect()
 }
 
