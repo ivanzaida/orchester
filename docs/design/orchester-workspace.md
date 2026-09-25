@@ -40,7 +40,7 @@ Canonical screens and states, in canvas order:
 | 01.04 · Runner & agent models | `w6ODp4` | [Preview](previews/w6ODp4.png) |
 | 01.05 · Ready → Create first task | `x1YpfN` | [Preview](previews/x1YpfN.png) |
 | 01.A · Setup blocked / Restore provider access | `Q7htyU` | [Preview](previews/Q7htyU.png) |
-| 01.C1–C8 · GitHub detection states (compact, see [GitHub](#github)) | `fL24i`, `rwnig`, `JjJiN`, `Yz9Ig`, `MMSQ9`, `fhqgC`, `C1JtM`, `v85QyU` | not exported yet |
+| 01.C1–C10 · GitHub detection states (compact, see [GitHub](#github)) | `fL24i`, `rwnig`, `JjJiN`, `Yz9Ig`, `MMSQ9`, `fhqgC`, `C1JtM`, `v85QyU`, `w1Pvl`, `MTPqL` | not exported yet |
 | 01.D · Change GitHub account or access (panel) | `hNPA1` | not exported yet |
 | 02.01 · Orchestrator / New conversation | `dOIrp` | [Preview](previews/dOIrp.png) |
 | 02.02 · Orchestrator / Task proposal | `I7TCI` | [Preview](previews/I7TCI.png) |
@@ -71,6 +71,7 @@ Canonical screens and states, in canvas order:
 | Token budgets · input states and display rule (compact) | `T1n5BA` | not exported yet |
 | 02.J states · Apply now pending → applied (compact) | `LJmTH` | not exported yet |
 | 02.M · Project settings / Limits | `c7e729` | not exported yet |
+| 02.N · Project settings / General | `QV1af` | not exported yet |
 | Sidebar runner card states (compact) | `O5NoB1` | [Preview](previews/O5NoB1.png) |
 | 03.01 · Pipeline / Feature delivery | `Q21HOA` | [Preview](previews/Q21HOA.png) |
 | 03.02 · Publish v4 / Confirm | `zfjsK` | [Preview](previews/zfjsK.png) |
@@ -88,7 +89,7 @@ Canonical screens and states, in canvas order:
 | 04.06 · Add GitHub connection | `D4mDB` | not exported yet |
 | 04.A · Expired MCP access / Reconnect | `RZUKo` | [Preview](previews/RZUKo.png) |
 | 04.B · Options the connection can't enforce are disabled (compact) | `W0Owo` | not exported yet |
-| 04.C1–C4 · GitHub connection: not signed in, gh not found, wrong account, unrecognized output (compact) | `Cr0P2`, `ve4G9`, `P89Dl`, `kqfaL` | not exported yet |
+| 04.C1–C5 · GitHub connection: not signed in, gh not found, wrong account, unrecognized output, missing scope (compact) | `Cr0P2`, `ve4G9`, `P89Dl`, `kqfaL`, `HwBI7` | not exported yet |
 | 05.01 · Project rules & effective prompt | `yRKeF` | [Preview](previews/yRKeF.png) |
 | 05.02 · Resolved prompt / Inspect sources | `fZa3J` | [Preview](previews/fZa3J.png) |
 | 05.03 · Variables / Search, inspect & insert | `EfTiT` | [Preview](previews/EfTiT.png) |
@@ -114,17 +115,19 @@ Canonical screens and states, in canvas order:
 | 08.D · Pull requests / GitHub unavailable | `dmib5` | not exported yet |
 | 08.E · Pull requests / Stale, last synced (compact) | `FYQMv` | not exported yet |
 | 08.F · Pull requests / Rate limited (compact) | `P1tSu` | not exported yet |
+| 08.G · Pull requests / Wrong account (compact) | `E9ZThy` | not exported yet |
+| 08.H · Pull requests / Missing scope: repo (compact) | `tu1fW` | not exported yet |
 
-There are 66 full screen frames; earlier screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
+There are 67 full screen frames; earlier screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
 
-- Getting started: first launch → project folder → project with detected GitHub repository → runner/agents → ready. Setup blocking, compact empty-project feedback (`RlwqW`), the *Change GitHub account or access* panel (01.D, x 1568 / y 426) and the eight GitHub detection states (01.C1–C8, x 2128–4808, two rows at y 100 and 512) are in `GojEY` below the main flow.
-- Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue. The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. Pause and retry are alternatives in `O4vgKt`; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Application lifecycle states (close with active work, runner connection, recovery on start) and the sidebar runner card states are in `Z7Fyr8`. Agent execution states (Activity transcript, run permissions, permission request, stopped at limit) with the compact Activity, Apply now and token budget states, plus Project settings / Limits (row 3), are in `BnxJ1` (height 3216). Group positions are y 160 / 1376 / 3640 / 5904 / 7120 / 8216 / 10832 respectively; the section height is 14144.
+- Getting started: first launch → project folder → project with detected GitHub repository → runner/agents → ready. Setup blocking, compact empty-project feedback (`RlwqW`), the *Change GitHub account or access* panel (01.D, x 1568 / y 426) and the ten GitHub detection states (01.C1–C10, x 2128–4808, rows at y 100, 512 and 980) are in `GojEY` (height 1400; section height 3920) below the main flow.
+- Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue. The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. Pause and retry are alternatives in `O4vgKt`; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Application lifecycle states (close with active work, runner connection, recovery on start) and the sidebar runner card states are in `Z7Fyr8`. Agent execution states (Activity transcript, run permissions, permission request, stopped at limit) with the compact Activity, Apply now and token budget states, plus Project settings / Limits and General (row 3), are in `BnxJ1` (height 3216). Group positions are y 160 / 1376 / 3640 / 5904 / 7120 / 8216 / 10832 respectively; the section height is 14144.
 - Pipelines: the visual editor is separate from task execution. `UJUi0` holds edit → publish confirmation → published. `t9zWUe` holds the library (the Pipelines navigation destination) → new pipeline → an empty pipeline in the editor. `rBy9L` holds the empty library and the publish-blocked editor. Group positions are y 160 / 1376 / 2592; the section height is 3808.
-- Agents & connections: connections → add provider → assign connection/model in the agent profile (`kOGgX` row 1), then the profile's Permissions tab (04.04), the GitHub connection (04.05) and Add GitHub connection (04.06) in row 2; expired-access recovery, the compact state 04.B (options the connection can't enforce) and the GitHub connection states 04.C1–C4 (x 2108 / 2492 / 2876 / 3260) are in `DLRW5` (now at y 2424; section height 3640).
+- Agents & connections: connections → add provider → assign connection/model in the agent profile (`kOGgX` row 1), then the profile's Permissions tab (04.04), the GitHub connection (04.05) and Add GitHub connection (04.06) in row 2; expired-access recovery, the compact state 04.B (options the connection can't enforce) and the GitHub connection states 04.C1–C5 (x 2108 / 2492 / 2876 / 3260 / 3644) are in `DLRW5` (now at y 2424; section height 3640).
 - Instructions: rules → composed prompt → variable catalog; unavailable-variable state is below.
 - Tools & imports: library → configuration → access policy in the first group. Select → resolve dependencies → ready to import is a separate complete row in `TSGMX`. Success/failure panels remain in `tjNmM`, now with the Create pull request settings (06.A, x 1040) and push-rejected recovery (06.B, x 1600); `tjNmM` is 640 high and the section height is 3328.
 - Secrets & access: library → add credential → runtime approval; duplicate-name validation is below.
-- Pull requests: `scsYh` contains the review inbox → line-specific fix request → verification on a new commit. `u77pi` contains the question/answer alternative, compact stale-revision and queued-request states, the stale-sync and rate-limited strips (08.E, 08.F at x 2064) and the GitHub-unavailable screen (08.D at x 3088). The section is at x 41728 / y 0, width 4896 and height 2592.
+- Pull requests: `scsYh` contains the review inbox → line-specific fix request → verification on a new commit. `u77pi` contains the question/answer alternative, compact stale-revision and queued-request states, the stale-sync and rate-limited strips (08.E, 08.F at x 2064), the GitHub-unavailable screen (08.D at x 3088) and the wrong-account and missing-scope strips (08.G, 08.H at y 1200); `u77pi` is 1680 high. The section is at x 41728 / y 0, width 4896 and height 3152.
 
 Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & runs](previews/organization/g7ncNr.png), [Pipelines](previews/organization/Y6XGt.png), [Agents & connections](previews/organization/wNy9i.png), [Instructions](previews/organization/MRxol.png), [Tools & imports](previews/organization/V8h6d.png), [Secrets & access](previews/organization/b3N1Ix.png).
 
@@ -693,10 +696,13 @@ Rules:
 3. **GitHub is optional.** Local-only projects work. Without a usable GitHub connection, the Create pull request tool and the steps that use it are unavailable, and Pull requests shows *Pull requests are unavailable* (08.D). Project creation is never blocked.
 4. **One linked repository per project**, remote `origin`. Push and pull request go to the same repository. Forks are a later decision.
 5. **Push uses git's own credentials.** Orchester never changes git config. A push rejected for authentication stops the step with the hint *Run `gh auth setup-git` or sign in to git, then retry* (06.B `YDKJS`).
-6. **gh accounts are machine-wide.** The project records the login it expects (set from the account detected when the project is created). If gh's active account differs, the state is *Signed in as X, expected Y* and pull request creation is blocked. Orchester never switches accounts.
+6. **gh accounts are machine-wide.** The project records the login it expects (set from the account detected when the project is created). If gh's active account differs, the state is *Signed in as X, expected Y* and pull request creation and sync are blocked. Orchester never switches gh accounts. The user can change what the project expects: *Use signed-in account* in Project settings → General (02.N `QV1af`), or *Use this account (X)* in every wrong-account state (setup `fhqgC`, connection `P89Dl`, Pull requests `E9ZThy`). Both only record the account gh is using now; they never change gh.
+   - **The project folder must be a git repository** (runs work in git worktrees). A folder without git blocks setup: *This folder is not a git repository* with `git init` and *Create project & continue* disabled (01.C9 `w1Pvl`). A git repository without a GitHub remote is still allowed (local only).
+   - **The only required gh scope is `repo`.** A sign-in without it is its own state, *Missing scope: repo*, with the command `gh auth refresh -h <host> -s repo` (Copy button) and *Check again*: setup 01.C10 `MTPqL`, connection 04.C5 `HwBI7`, Pull requests 08.H `tu1fW`. It is separate from *No access* (the account can't read the repository).
+   - **Commands are shown as separate mono command rows** (Geist Mono 11 on `$canvas`, hairline border, radius 7, with a *Copy* button; source row `LBSz7` in 01.D), introduced by a sentence such as "Run this in a terminal, then check again." Sentences don't embed commands, except in the fixed-layout recovery panel component (`iN90G`: `w5ELZ6`, `YDKJS`), where the implementation renders the command as an inline mono span.
 7. **Pull requests open as drafts by default.** The Create pull request tool has an *Open as draft* switch, on by default (06.A `mtPZd`).
-8. **Change GitHub account or access** (`w5XOc` in 01.03, `sd9ip` in 04.05) opens a small panel (01.D `hNPA1`), not a browser: it shows host, signed-in account, scopes and the expected account, explains `gh auth login` / `gh auth switch --user <login>` and `gh auth refresh -h <host> -s <scope>` with Copy buttons, and ends with *Close* and *Check again*.
-9. **Sync:** when Pull requests opens, on *Refresh*, after Orchester creates a pull request, and every 60 s only while the Pull requests screen is visible. No background polling otherwise. A failed sync keeps the last list and shows *Last synced … · GitHub unreachable* (08.E); a rate limit shows *Rate limited · retry at HH:MM*, disables Refresh and resumes after the reset (08.F).
+8. **Change GitHub account or access** (`w5XOc` in 01.03, `sd9ip` in 04.05) opens a small panel (01.D `hNPA1`), not a browser: it shows host, signed-in account, scopes and the expected account, explains `gh auth login` / `gh auth switch --user <login>` and `gh auth refresh -h github.com -s repo` with Copy buttons, and ends with *Close* and *Check again*.
+9. **Sync:** when Pull requests opens, on *Refresh*, after Orchester creates a pull request, and every 60 s only while the Pull requests screen is visible. No background polling otherwise. A failed sync keeps the last list and shows *Last synced … · GitHub unreachable* (08.E); a rate limit shows the reset as relative time, *Rate limited · resets in 12 min*, with the exact local time in a tooltip (*Resets at 14:32 (local time)*, `Wn3fn`), disables Refresh and resumes after the reset (08.F).
 10. **Pull request feedback stays in Orchester** and is never posted to GitHub (see [Pull request review](#pull-request-review-and-agent-feedback)).
 
 ### Project setup detection
@@ -711,27 +717,34 @@ Detection states (compact, same block, 640 wide):
 | No GitHub remote | `rwnig` | Local only | No GitHub remote · "You can create the project. Pull request steps and the Pull requests screen stay unavailable until the folder has a GitHub remote." | Check again |
 | Remote is not on GitHub | `JjJiN` | Not GitHub | Remote is not on GitHub · "…If this is a GitHub Enterprise host, add a GitHub connection for it, then check again." | Check again, Add GitHub connection |
 | gh not found | `Yz9Ig` | gh not found | GitHub CLI (gh) not found · "Orchester reaches GitHub only through gh. Install it or choose its program file, then check again. You can create the project now." | Check again, Choose program… |
-| Not signed in | `MMSQ9` | Not signed in | gh is not signed in to github.com · "Run gh auth login in a terminal, then check again. Orchester never signs in for you." | Check again |
-| Wrong account | `fhqgC` | Wrong account | Signed in as ivan-work, expected ivanzaida · "Switch with gh auth switch in a terminal, then check again. Orchester never switches accounts. Pull requests can't be created until they match." | Check again, Change GitHub account or access |
-| Repository not accessible | `C1JtM` | No access | ivanzaida can't access this repository · "gh repo view found no repository this account can read. Ask the owner for access, or switch accounts with gh, then check again." | Check again, Change GitHub account or access |
+| Not signed in | `MMSQ9` | Not signed in | gh is not signed in to github.com · "Run this in a terminal, then check again. Orchester never signs in for you." + command `gh auth login --hostname github.com` | Check again |
+| Wrong account | `fhqgC` | Wrong account | Signed in as ivan-work, expected ivanzaida · "Switch gh back to ivanzaida in a terminal and check again, or make Kontur expect ivan-work. Orchester never switches gh accounts; pull requests can't be created until they match." + command `gh auth switch --hostname github.com --user ivanzaida` | Check again, Change GitHub account or access, Use this account (ivan-work) |
+| Repository not accessible | `C1JtM` | No access | ivanzaida can't access this repository · "GitHub found no repository this account can read. Ask the owner for access, or switch accounts in gh, then check again." | Check again, Change GitHub account or access |
 | Unrecognized gh output | `v85QyU` | Unrecognized | Couldn't read gh's answer · "gh 1.9.2 answered in a format Orchester doesn't recognise. Update gh, then check again." | Check again |
+| Not a git repository | `w1Pvl` | Not a repository | This folder is not a git repository · "Runs work in git worktrees, so the project folder must be a git repository. Initialise it in a terminal, or choose another folder, then check again. Create project & continue stays disabled until then." + command `git init` | Check again, Create project & continue (disabled) |
+| Missing scope | `MTPqL` | Missing scope | Missing scope: repo · "gh is signed in as ivanzaida without the repo scope that Orchester needs to read and create pull requests. Add it in a terminal, then check again. You can create the project now." + command `gh auth refresh -h github.com -s repo` | Check again |
 
-In every state *Create project & continue* stays enabled once a folder is chosen. Commands in the copy are shown in the mono font in implementation (the design renders them as plain text inside the sentence).
+*Create project & continue* stays enabled once a folder is chosen in every state except *Not a git repository*. Row 3 of the board (C9, C10) is at y 980; `GojEY` is 1400 high and the section `K7IL6` 3920.
 
 ### GitHub connection
 
 The GitHub row (`iYGKy` in 04.01, same text in `LfeKD`, `an07d`, `x45t6`) reads *GitHub · github.com*, "gh · github.com · signed in as ivanzaida", type GitHub, 1 repo, status *Signed in*. 04.05 `CHa9s` selects it; the inspector `l8BJVr` shows Host, Program (`gh 2.62.0`), Path, Account, Scopes, Last checked, then *Used by Kontur*: Expected account, Repository, Remote, Used by tool (Create pull request); the rule "Orchester runs gh with its own sign-in on this computer. It never signs in, stores or sees tokens."; *Check again*, *Change account or access* (`sd9ip`, opens 01.D), *Edit connection*; and "Removing this connection makes pull request steps unavailable. Tasks and local work are kept."
 
-Connection states (compact inspector heads in `DLRW5`): not signed in `Cr0P2` ("Run gh auth login in a terminal, then check again…"), gh not found `ve4G9` (Program *Not found on PATH*, *Choose program…*), wrong account `P89Dl` (Account ivan-work, Expected account ivanzaida, *Change account or access*), unrecognized output `kqfaL`. Signed in is 04.05.
+Connection states (compact inspector heads in `DLRW5`): not signed in `Cr0P2` (command `gh auth login --hostname github.com`), gh not found `ve4G9` (Program *Not found on PATH*, *Choose program…*), wrong account `P89Dl` (Account ivan-work, Expected account ivanzaida, command `gh auth switch -h github.com -u ivanzaida`, *Check again*, *Change account or access*, *Use this account (ivan-work)*), unrecognized output `kqfaL`, missing scope 04.C5 `HwBI7` (Scopes *read:org*, command `gh auth refresh -h github.com -s repo`, *Check again*; x 3644). Signed in is 04.05.
+
+### Pull requests states
+
+08.D `dmib5` unavailable (no GitHub connection), 08.E `FYQMv` stale, 08.F `P1tSu` rate limited (relative reset, tooltip `Wn3fn` with local time), 08.G `E9ZThy` wrong account (sync status *Paused · gh signed in as ivan-work*, the last list kept, command `gh auth switch -h github.com -u ivanzaida`, *Check again*, *Use this account (ivan-work)*), 08.H `tu1fW` missing scope (command `gh auth refresh -h github.com -s repo`, *Check again*). 08.G and 08.H are at x 48 / 1072, y 1200 in `u77pi` (now 1680 high; section `McWTM` 3152).
+
+### Project settings / General
+
+02.N `QV1af` (in `BnxJ1`, x 3088 / y 2196, next to 02.M Limits) is the General tab, minimal: Project name (`Kontur`), Project folder (path, "Git repository · Choose folder… to move the project"), GitHub repository (read-only `ivanzaida / kontur`, "github.com · origin · default branch main"), Expected GitHub account (`ivanzaida`, read-back "gh is signed in as ivan-work · pull requests blocked", button *Use signed-in account (ivan-work)*, row `yBZWh`) and the notice `V9tFZ` "Use signed-in account changes only what Kontur expects — it records the account gh is using now. It doesn't sign in, switch or change gh." The button is shown only when gh's account differs from the expected one.
+
+06.A `mtPZd` shows the push hint as a command row (`gh auth setup-git`).
 
 Add GitHub connection (04.06 `D4mDB`) reuses the agent-CLI dialog `IAN4P`: Name, Connection type *GitHub*, Host (`github.com` default; *Other host…* takes a GitHub Enterprise host such as `github.example.com`), Program (gh discovered on PATH with its version, or a chosen file — the same disabled-option rule as the select menu, e.g. *Not found on PATH*), Program file with a folder picker, the notice *Uses gh's own sign-in*, the verification row (*Signed in* · account · scopes · *Check again*) and "After saving, Kontur expects ivanzaida…". There is no model section.
 
-### Open questions
-
-- Folder that is not a git repository: blocked at setup, or allowed as local-only?
-- Changing the expected account after creation: a project setting (e.g. "Expect ivan-work for Kontur") or only by recreating the connection?
-- Which scopes Orchester requires (e.g. `repo`, `read:org`) and whether a missing scope is a separate state from *No access*.
-- Whether Pull requests should show a rate-limit reset in local time or relative time.
+The former open questions (non-git folder, changing the expected account, required scopes, rate-limit time format) were decided by the user on 2026-09-25 and are rule 6 (with its sub-points) and rule 9 above.
 
 ## Instructions
 

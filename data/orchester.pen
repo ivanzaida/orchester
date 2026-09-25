@@ -17637,7 +17637,7 @@
       "y": 0,
       "name": "01 / Getting started",
       "width": 4896,
-      "height": 3640,
+      "height": 3920,
       "fill": "$canvas",
       "layout": "none",
       "children": [
@@ -20376,7 +20376,7 @@
           "y": 2424,
           "name": "States & outcomes",
           "width": 4896,
-          "height": 1120,
+          "height": 1400,
           "layout": "none",
           "children": [
             {
@@ -21828,28 +21828,79 @@
                   "height": 1
                 },
                 {
-                  "type": "frame",
-                  "id": "l8BM0",
-                  "name": "GitHub detection footer",
+                  "type": "text",
+                  "id": "YO3pe",
+                  "name": "Note",
+                  "fill": "$muted",
+                  "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "gap": 12,
+                  "content": "Run this in a terminal, then check again. Orchester never signs in for you.",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "wKj5f",
+                  "name": "Command",
+                  "width": "fill_container",
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-control",
+                  "stroke": "$hairline",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    6,
+                    6,
+                    10
+                  ],
                   "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "e4yr5",
-                      "name": "Expected account note",
-                      "fill": "$muted",
+                      "id": "Dn1ZZ",
+                      "name": "Command text",
+                      "fill": "$text",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Run gh auth login in a terminal, then check again. Orchester never signs in for you.",
-                      "lineHeight": 1.6,
-                      "fontFamily": "$font",
+                      "content": "gh auth login --hostname github.com",
+                      "fontFamily": "$mono",
                       "fontSize": 11,
                       "fontWeight": "normal"
                     },
                     {
-                      "id": "ZyNaK",
+                      "id": "N3qv9q",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Copy command",
+                      "height": 26,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "copy",
+                          "width": 13,
+                          "height": 13
+                        },
+                        "Y7HQGw": {
+                          "content": "Copy",
+                          "fontSize": 11
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "NOz1Y",
+                  "name": "Actions",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "justifyContent": "end",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "id": "GhfCK",
                       "type": "ref",
                       "ref": "u1XBP",
                       "name": "Check again",
@@ -22026,28 +22077,79 @@
                   "height": 1
                 },
                 {
-                  "type": "frame",
-                  "id": "d3Wql",
-                  "name": "GitHub detection footer",
+                  "type": "text",
+                  "id": "WIbgw",
+                  "name": "Note",
+                  "fill": "$muted",
+                  "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "gap": 12,
+                  "content": "Switch gh back to ivanzaida in a terminal and check again, or make Kontur expect ivan-work. Orchester never switches gh accounts; pull requests can’t be created until they match.",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "XOAb6",
+                  "name": "Command",
+                  "width": "fill_container",
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-control",
+                  "stroke": "$hairline",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    6,
+                    6,
+                    10
+                  ],
                   "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "KzudH",
-                      "name": "Expected account note",
-                      "fill": "$muted",
+                      "id": "S3kLV",
+                      "name": "Command text",
+                      "fill": "$text",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Switch with gh auth switch in a terminal, then check again. Orchester never switches accounts. Pull requests can’t be created until they match.",
-                      "lineHeight": 1.6,
-                      "fontFamily": "$font",
+                      "content": "gh auth switch --hostname github.com --user ivanzaida",
+                      "fontFamily": "$mono",
                       "fontSize": 11,
                       "fontWeight": "normal"
                     },
                     {
-                      "id": "N0FxjD",
+                      "id": "FOZwd",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Copy command",
+                      "height": 26,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "copy",
+                          "width": 13,
+                          "height": 13
+                        },
+                        "Y7HQGw": {
+                          "content": "Copy",
+                          "fontSize": 11
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "mk3Zn",
+                  "name": "Actions",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "justifyContent": "end",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "id": "FzFaN",
                       "type": "ref",
                       "ref": "u1XBP",
                       "name": "Check again",
@@ -22062,18 +22164,32 @@
                       }
                     },
                     {
-                      "id": "JXiWl",
+                      "id": "ICfx2",
                       "type": "ref",
                       "ref": "u1XBP",
                       "name": "Change GitHub account or access",
                       "height": 36,
-                      "width": "fit_content",
                       "descendants": {
                         "xfnek": {
                           "icon": "user-cog"
                         },
                         "Y7HQGw": {
                           "content": "Change GitHub account or access"
+                        }
+                      }
+                    },
+                    {
+                      "id": "u7tRBX",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Use this account (ivan-work)",
+                      "height": 36,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "user-check"
+                        },
+                        "Y7HQGw": {
+                          "content": "Use this account (ivan-work)"
                         }
                       }
                     }
@@ -22238,7 +22354,7 @@
                       "fill": "$muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "gh repo view found no repository this account can read. Ask the owner for access, or switch accounts with gh, then check again.",
+                      "content": "GitHub found no repository this account can read. Ask the owner for access, or switch accounts in gh, then check again.",
                       "lineHeight": 1.6,
                       "fontFamily": "$font",
                       "fontSize": 11,
@@ -22750,7 +22866,7 @@
                       "fill": "$muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "If an action needs a scope gh doesn’t have, add it.",
+                      "content": "Orchester needs the repo scope. If gh doesn’t have it, add it.",
                       "lineHeight": 1.6,
                       "fontFamily": "$font",
                       "fontSize": 11,
@@ -22781,7 +22897,7 @@
                           "fill": "$text",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "gh auth refresh -h github.com -s <scope>",
+                          "content": "gh auth refresh -h github.com -s repo",
                           "fontFamily": "$mono",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -22867,6 +22983,479 @@
                         "Y7HQGw": {
                           "content": "Check again",
                           "fill": "$inverse-text"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "LAkjs",
+              "x": 2128,
+              "y": 948,
+              "name": "01.C9 · Not a git repository label",
+              "fill": "$muted",
+              "content": "01.C9 · Not a git repository (Create disabled)",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "w1Pvl",
+              "x": 2128,
+              "y": 980,
+              "name": "01.C9 · Not a git repository",
+              "width": 640,
+              "fill": "$sidebar",
+              "cornerRadius": "$radius-panel",
+              "stroke": "$hairline",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "IsjSf",
+                  "name": "GitHub detection header",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "s15v5",
+                      "name": "GitHub icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "folder-x",
+                      "library": "lucide",
+                      "fill": "$text"
+                    },
+                    {
+                      "type": "text",
+                      "id": "c00Hb",
+                      "name": "GitHub detection title",
+                      "fill": "$text",
+                      "content": "This folder is not a git repository",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "w27SZ",
+                      "name": "Header space",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "id": "tcTug",
+                      "type": "ref",
+                      "ref": "DeizF",
+                      "name": "Detected",
+                      "descendants": {
+                        "bhGXK": {
+                          "icon": "folder-x"
+                        },
+                        "JuW4o": {
+                          "content": "Not a repository"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "DZPXq",
+                  "name": "Detected properties",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "id": "w1e9v",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Repository",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Folder"
+                        },
+                        "yeeIR": {
+                          "content": "D:\\projects\\kontur-notes",
+                          "fontFamily": "$mono"
+                        }
+                      }
+                    },
+                    {
+                      "id": "zwQca",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Remote",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Git"
+                        },
+                        "yeeIR": {
+                          "content": "No git repository found",
+                          "fontFamily": "$font"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "eG0tl",
+                  "name": "Divider",
+                  "fill": "$hairline",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "text",
+                  "id": "KvuCf",
+                  "name": "Note",
+                  "fill": "$muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Runs work in git worktrees, so the project folder must be a git repository. Initialise it in a terminal, or choose another folder, then check again. Create project & continue stays disabled until then.",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "FirAd",
+                  "name": "Command",
+                  "width": "fill_container",
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-control",
+                  "stroke": "$hairline",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    6,
+                    6,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "SwsjG",
+                      "name": "Command text",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "git init",
+                      "fontFamily": "$mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "RSmke",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Copy command",
+                      "height": 26,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "copy",
+                          "width": 13,
+                          "height": 13
+                        },
+                        "Y7HQGw": {
+                          "content": "Copy",
+                          "fontSize": 11
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "zsvy2",
+                  "name": "Actions",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "justifyContent": "end",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "id": "yptuY",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Check again",
+                      "height": 36,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "refresh-cw"
+                        },
+                        "Y7HQGw": {
+                          "content": "Check again"
+                        }
+                      }
+                    },
+                    {
+                      "id": "HN7cO",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Create project & continue (disabled)",
+                      "opacity": 0.4,
+                      "height": 36,
+                      "fill": "$accent",
+                      "stroke": "$accent",
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "arrow-right",
+                          "fill": "$inverse-text"
+                        },
+                        "Y7HQGw": {
+                          "content": "Create project & continue",
+                          "fill": "$inverse-text"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "PGx96",
+              "x": 2808,
+              "y": 948,
+              "name": "01.C10 · Missing scope label",
+              "fill": "$muted",
+              "content": "01.C10 · Missing scope: repo",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "MTPqL",
+              "x": 2808,
+              "y": 980,
+              "name": "01.C10 · Missing scope: repo",
+              "width": 640,
+              "fill": "$sidebar",
+              "cornerRadius": "$radius-panel",
+              "stroke": "$hairline",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "u9IVdG",
+                  "name": "GitHub detection header",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "kk6G6",
+                      "name": "GitHub icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "github",
+                      "library": "lucide",
+                      "fill": "$text"
+                    },
+                    {
+                      "type": "text",
+                      "id": "OPTMX",
+                      "name": "GitHub detection title",
+                      "fill": "$text",
+                      "content": "Missing scope: repo",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "dtvg9",
+                      "name": "Header space",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "id": "qIu0h",
+                      "type": "ref",
+                      "ref": "DeizF",
+                      "name": "Detected",
+                      "descendants": {
+                        "bhGXK": {
+                          "icon": "key-round"
+                        },
+                        "JuW4o": {
+                          "content": "Missing scope"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "hb2sb",
+                  "name": "Detected properties",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "id": "C74Maw",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Repository",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Repository"
+                        },
+                        "yeeIR": {
+                          "content": "ivanzaida / kontur"
+                        }
+                      }
+                    },
+                    {
+                      "id": "YbIds",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Remote",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Remote"
+                        },
+                        "yeeIR": {
+                          "content": "origin · github.com/ivanzaida/kontur",
+                          "fontFamily": "$mono"
+                        }
+                      }
+                    },
+                    {
+                      "id": "NdvQu",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Account",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Account"
+                        },
+                        "yeeIR": {
+                          "content": "ivanzaida · scopes read:org",
+                          "fill": "$text"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "jvHJk",
+                  "name": "Divider",
+                  "fill": "$hairline",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "text",
+                  "id": "Txwiy",
+                  "name": "Note",
+                  "fill": "$muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "gh is signed in as ivanzaida without the repo scope that Orchester needs to read and create pull requests. Add it in a terminal, then check again. You can create the project now.",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "x5wgm",
+                  "name": "Command",
+                  "width": "fill_container",
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-control",
+                  "stroke": "$hairline",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    6,
+                    6,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "QG7yt",
+                      "name": "Command text",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "gh auth refresh -h github.com -s repo",
+                      "fontFamily": "$mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "LsDMz",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Copy command",
+                      "height": 26,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "copy",
+                          "width": 13,
+                          "height": 13
+                        },
+                        "Y7HQGw": {
+                          "content": "Copy",
+                          "fontSize": 11
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nenzc",
+                  "name": "Actions",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "justifyContent": "end",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "id": "UjbPB",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Check again",
+                      "height": 36,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "refresh-cw"
+                        },
+                        "Y7HQGw": {
+                          "content": "Check again"
                         }
                       }
                     }
@@ -48886,6 +49475,632 @@
                           "content": "9d07b3f · 12:09 · saved to apply permissions"
                         }
                       }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "ohS0P",
+              "x": 3088,
+              "y": 2164,
+              "name": "02.N · Project settings / General label",
+              "fill": "$muted",
+              "content": "02.N · Project settings / General",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "QV1af",
+              "x": 3088,
+              "y": 2196,
+              "name": "02.N · Project settings / General",
+              "clip": true,
+              "width": 1440,
+              "height": 960,
+              "fill": "$surface",
+              "children": [
+                {
+                  "id": "bmpWd",
+                  "type": "ref",
+                  "ref": "zo9Py",
+                  "name": "Sidebar",
+                  "height": "fill_container",
+                  "descendants": {
+                    "JI3gd": {
+                      "fill": "$sidebar"
+                    },
+                    "JI3gd/sQnmq": {
+                      "fill": "$muted"
+                    },
+                    "JI3gd/YWsP0": {
+                      "fill": "$muted"
+                    },
+                    "A028bq": {
+                      "fill": "$sidebar"
+                    },
+                    "A028bq/sQnmq": {
+                      "fill": "$muted"
+                    },
+                    "A028bq/YWsP0": {
+                      "fill": "$muted"
+                    },
+                    "wqkkE": {
+                      "fill": "$hover"
+                    },
+                    "wqkkE/sQnmq": {
+                      "fill": "$text"
+                    },
+                    "wqkkE/YWsP0": {
+                      "fill": "$text"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "ho3YH",
+                  "name": "Workspace",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "w6k3n",
+                      "name": "Topbar",
+                      "width": "fill_container",
+                      "height": 64,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 12,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "iXIYR",
+                          "name": "Breadcrumb",
+                          "fill": "$muted",
+                          "content": "Kontur / Project settings / General",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "oc7a9",
+                          "name": "Topbar space",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "eNr52",
+                          "name": "Save status",
+                          "fill": "$muted",
+                          "content": "All changes saved",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "OdQdx",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "enabled": false,
+                          "name": "Publish v3",
+                          "height": 36,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "check",
+                              "fill": "$inverse-text"
+                            },
+                            "Y7HQGw": {
+                              "content": "Publish v3",
+                              "fill": "$inverse-text"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zg10v",
+                      "name": "Page heading",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": [
+                        28,
+                        32,
+                        24,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zWnQz",
+                          "name": "Page title",
+                          "fill": "$text",
+                          "content": "Project settings",
+                          "fontFamily": "$font",
+                          "fontSize": 27,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "UEgz6",
+                          "name": "Page description",
+                          "fill": "$muted",
+                          "content": "Name, folder and GitHub account for Kontur.",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "uCE3x",
+                      "name": "Settings body",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "z1vSun",
+                          "name": "Settings tabs",
+                          "width": "fill_container",
+                          "height": 42,
+                          "stroke": "$hairline",
+                          "strokeWidth": {
+                            "bottom": 1
+                          },
+                          "gap": 20,
+                          "padding": [
+                            0,
+                            32
+                          ],
+                          "children": [
+                            {
+                              "id": "X9Rl7",
+                              "type": "ref",
+                              "ref": "SOW6S",
+                              "stroke": "$text",
+                              "strokeWidth": {
+                                "bottom": 2
+                              },
+                              "name": "General tab",
+                              "height": "fill_container",
+                              "descendants": {
+                                "v66T9G": {
+                                  "fill": "$text",
+                                  "content": "General"
+                                }
+                              }
+                            },
+                            {
+                              "id": "JQ6rf",
+                              "type": "ref",
+                              "ref": "SOW6S",
+                              "strokeWidth": 0,
+                              "name": "Limits tab",
+                              "height": "fill_container",
+                              "stroke": "$text",
+                              "descendants": {
+                                "v66T9G": {
+                                  "fill": "$muted",
+                                  "content": "Limits"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vtzYf",
+                          "name": "Limits content",
+                          "width": 760,
+                          "layout": "vertical",
+                          "gap": 8,
+                          "padding": [
+                            24,
+                            32
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "j8fHCU",
+                              "name": "Project heading",
+                              "fill": "$text",
+                              "content": "Project",
+                              "fontFamily": "$font",
+                              "fontSize": 15,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "l2808",
+                              "name": "Project name",
+                              "width": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 32,
+                              "padding": [
+                                18,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "pMPRz",
+                                  "name": "Maximum run budget text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "jcsJ6",
+                                      "name": "Setting name",
+                                      "fill": "$text",
+                                      "content": "Project name",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "pJMPi",
+                                      "name": "Setting description",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Shown in the sidebar and breadcrumbs.",
+                                      "lineHeight": 1.6,
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "cYbuY",
+                                  "name": "Maximum run budget input",
+                                  "width": 300,
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "id": "v86BF",
+                                      "type": "ref",
+                                      "ref": "ZGwlv",
+                                      "name": "Project name value",
+                                      "height": 36,
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "ObbY7": {
+                                          "content": "Kontur",
+                                          "fontSize": 12
+                                        },
+                                        "eASPF": {
+                                          "enabled": false,
+                                          "width": 0,
+                                          "height": 0,
+                                          "layoutPosition": "absolute",
+                                          "x": 0,
+                                          "y": 0
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "jqdvk",
+                              "name": "Project folder",
+                              "width": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 32,
+                              "padding": [
+                                18,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "By34J",
+                                  "name": "Maximum run budget text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "DPEid",
+                                      "name": "Setting name",
+                                      "fill": "$text",
+                                      "content": "Project folder",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "uXtrY",
+                                      "name": "Setting description",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Agents work in git worktrees of this folder, so it must be a git repository.",
+                                      "lineHeight": 1.6,
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "HUtue",
+                                  "name": "Maximum run budget input",
+                                  "width": 300,
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "id": "F5KwDR",
+                                      "type": "ref",
+                                      "ref": "ZGwlv",
+                                      "name": "Project folder value",
+                                      "height": 36,
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "ObbY7": {
+                                          "content": "D:\\projects\\kontur",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 12
+                                        },
+                                        "eASPF": {
+                                          "enabled": true,
+                                          "icon": "folder",
+                                          "width": 14,
+                                          "height": 14,
+                                          "x": 274,
+                                          "y": 11
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "fMdmA",
+                                      "name": "Read-back",
+                                      "fill": "$subtle",
+                                      "content": "Git repository · Choose folder… to move the project",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "dSOKq",
+                              "name": "GitHub repository",
+                              "width": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 32,
+                              "padding": [
+                                18,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "TilJE",
+                                  "name": "Maximum run budget text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "yaevI",
+                                      "name": "Setting name",
+                                      "fill": "$text",
+                                      "content": "GitHub repository",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "yGS9A",
+                                      "name": "Setting description",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Detected from the folder’s origin remote. Pushes and pull requests go to this repository.",
+                                      "lineHeight": 1.6,
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "y6spgO",
+                                  "name": "Maximum run budget input",
+                                  "width": 300,
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "J7m2a",
+                                      "name": "Repository value",
+                                      "fill": "$text",
+                                      "content": "ivanzaida / kontur",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "Toxzz",
+                                      "name": "Read-back",
+                                      "fill": "$subtle",
+                                      "content": "github.com · origin · default branch main",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "yBZWh",
+                              "name": "Expected GitHub account",
+                              "width": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 32,
+                              "padding": [
+                                18,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "D9A5O",
+                                  "name": "Maximum run budget text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "xT7W3",
+                                      "name": "Setting name",
+                                      "fill": "$text",
+                                      "content": "Expected GitHub account",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "LZZ85",
+                                      "name": "Setting description",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Pull requests are created only while gh is signed in as this account. Orchester never switches gh accounts; Use signed-in account only changes what Kontur expects.",
+                                      "lineHeight": 1.6,
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "drzPL",
+                                  "name": "Maximum run budget input",
+                                  "width": 300,
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "dk1P1",
+                                      "name": "Expected account value",
+                                      "fill": "$text",
+                                      "content": "ivanzaida",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "rKHJw",
+                                      "name": "Read-back",
+                                      "fill": "$subtle",
+                                      "content": "gh is signed in as ivan-work · pull requests blocked",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "id": "y4Zv54",
+                                      "type": "ref",
+                                      "ref": "u1XBP",
+                                      "name": "Use signed-in account",
+                                      "width": "fill_container",
+                                      "height": 36,
+                                      "descendants": {
+                                        "xfnek": {
+                                          "icon": "user-check"
+                                        },
+                                        "Y7HQGw": {
+                                          "content": "Use signed-in account (ivan-work)"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "id": "V9tFZ",
+                              "type": "ref",
+                              "ref": "q5LzI",
+                              "name": "Expected account notice",
+                              "width": "fill_container",
+                              "descendants": {
+                                "GkfFF": {
+                                  "icon": "user-check"
+                                },
+                                "CoAOk": {
+                                  "content": "Use signed-in account changes only what Kontur expects"
+                                },
+                                "szYuk": {
+                                  "content": "It records the account gh is using now. It doesn’t sign in, switch or change gh. The next sync and pull request use it."
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
                     }
                   ]
                 }
@@ -130243,14 +131458,64 @@
                   "fill": "$muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Run gh auth login in a terminal, then check again. Pull request steps are unavailable until gh is signed in.",
+                  "content": "Run this in a terminal, then check again. Pull request steps are unavailable until gh is signed in.",
                   "lineHeight": 1.6,
                   "fontFamily": "$font",
                   "fontSize": 11,
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "tT58T",
+                  "type": "frame",
+                  "id": "s4DoJ",
+                  "name": "Command",
+                  "width": "fill_container",
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-control",
+                  "stroke": "$hairline",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    6,
+                    6,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Z913A",
+                      "name": "Command text",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "gh auth login --hostname github.com",
+                      "fontFamily": "$mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "nLkgl",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Copy command",
+                      "height": 26,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "copy",
+                          "width": 13,
+                          "height": 13
+                        },
+                        "Y7HQGw": {
+                          "content": "Copy",
+                          "fontSize": 11
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "bepcf",
                   "type": "ref",
                   "ref": "u1XBP",
                   "name": "Check again",
@@ -130548,14 +131813,64 @@
                   "fill": "$muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Signed in as ivan-work, expected ivanzaida. Switch with gh auth switch in a terminal, then check again. Creating pull requests is blocked; Orchester never switches accounts.",
+                  "content": "Signed in as ivan-work, expected ivanzaida. Switch gh back in a terminal, or make Kontur expect ivan-work. Creating pull requests is blocked; Orchester never switches accounts.",
                   "lineHeight": 1.6,
                   "fontFamily": "$font",
                   "fontSize": 11,
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "PP6L4",
+                  "type": "frame",
+                  "id": "N1GDYU",
+                  "name": "Command",
+                  "width": "fill_container",
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-control",
+                  "stroke": "$hairline",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    6,
+                    6,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "N083g",
+                      "name": "Command text",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "gh auth switch -h github.com -u ivanzaida",
+                      "fontFamily": "$mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "zWI4P",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Copy command",
+                      "height": 26,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "copy",
+                          "width": 13,
+                          "height": 13
+                        },
+                        "Y7HQGw": {
+                          "content": "Copy",
+                          "fontSize": 11
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "VWAYM",
                   "type": "ref",
                   "ref": "u1XBP",
                   "name": "Check again",
@@ -130571,7 +131886,7 @@
                   }
                 },
                 {
-                  "id": "ZUIwK",
+                  "id": "oZYBC",
                   "type": "ref",
                   "ref": "u1XBP",
                   "name": "Change account or access",
@@ -130583,6 +131898,22 @@
                     },
                     "Y7HQGw": {
                       "content": "Change account or access"
+                    }
+                  }
+                },
+                {
+                  "id": "jPeVy",
+                  "type": "ref",
+                  "ref": "u1XBP",
+                  "name": "Use this account (ivan-work)",
+                  "height": 36,
+                  "width": "fill_container",
+                  "descendants": {
+                    "xfnek": {
+                      "icon": "user-check"
+                    },
+                    "Y7HQGw": {
+                      "content": "Use this account (ivan-work)"
                     }
                   }
                 }
@@ -130709,6 +132040,208 @@
                 },
                 {
                   "id": "xrm5y",
+                  "type": "ref",
+                  "ref": "u1XBP",
+                  "name": "Check again",
+                  "height": 36,
+                  "width": "fill_container",
+                  "descendants": {
+                    "xfnek": {
+                      "icon": "refresh-cw"
+                    },
+                    "Y7HQGw": {
+                      "content": "Check again"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "GcWQg",
+              "x": 3644,
+              "y": 68,
+              "name": "04.C5 · GitHub / Missing scope label",
+              "fill": "$muted",
+              "content": "04.C5 · GitHub / Missing scope: repo",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "HwBI7",
+              "x": 3644,
+              "y": 100,
+              "name": "04.C5 · GitHub / Missing scope: repo",
+              "width": 344,
+              "fill": "$sidebar",
+              "cornerRadius": "$radius-panel",
+              "stroke": "$hairline",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 14,
+              "padding": 20,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "UVsvl",
+                  "name": "Connection name",
+                  "fill": "$text",
+                  "content": "GitHub · github.com",
+                  "fontFamily": "$font",
+                  "fontSize": 15,
+                  "fontWeight": "500"
+                },
+                {
+                  "id": "oYxJO",
+                  "type": "ref",
+                  "ref": "DeizF",
+                  "name": "Status",
+                  "descendants": {
+                    "bhGXK": {
+                      "icon": "key-round"
+                    },
+                    "JuW4o": {
+                      "content": "Missing scope: repo"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "Gfg1K",
+                  "name": "Properties",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "id": "EumeY",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Host",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Host"
+                        },
+                        "yeeIR": {
+                          "content": "github.com"
+                        }
+                      }
+                    },
+                    {
+                      "id": "c23AH",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Account",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Account"
+                        },
+                        "yeeIR": {
+                          "content": "ivanzaida"
+                        }
+                      }
+                    },
+                    {
+                      "id": "UaLUf",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Scopes",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Scopes"
+                        },
+                        "yeeIR": {
+                          "content": "read:org"
+                        }
+                      }
+                    },
+                    {
+                      "id": "R7fa2W",
+                      "type": "ref",
+                      "ref": "tfGRt",
+                      "name": "Last checked",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QkG27": {
+                          "content": "Last checked"
+                        },
+                        "yeeIR": {
+                          "content": "Just now"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "e8S2F",
+                  "name": "Hint",
+                  "fill": "$muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Orchester needs the repo scope to read and create pull requests. Add it in a terminal, then check again.",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "MGvGV",
+                  "name": "Command",
+                  "width": "fill_container",
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-control",
+                  "stroke": "$hairline",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    6,
+                    6,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "qx94K",
+                      "name": "Command text",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "gh auth refresh -h github.com -s repo",
+                      "fontFamily": "$mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "kIIZj",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Copy command",
+                      "height": 26,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "copy",
+                          "width": 13,
+                          "height": 13
+                        },
+                        "Y7HQGw": {
+                          "content": "Copy",
+                          "fontSize": 11
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "vgCLR",
                   "type": "ref",
                   "ref": "u1XBP",
                   "name": "Check again",
@@ -141850,15 +143383,65 @@
                   "fill": "$muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Orchester never changes git config. If a push is rejected for authentication, the step stops with: Run gh auth setup-git or sign in to git, then retry.",
+                  "content": "Orchester never changes git config. If a push is rejected for authentication, the step stops and suggests this command (or signing in to git), then retry:",
                   "lineHeight": 1.6,
                   "fontFamily": "$font",
                   "fontSize": 11,
                   "fontWeight": "normal"
                 },
                 {
+                  "type": "frame",
+                  "id": "xYuKB",
+                  "name": "Command",
+                  "width": "fill_container",
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-control",
+                  "stroke": "$hairline",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    6,
+                    6,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "III6C",
+                      "name": "Command text",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "gh auth setup-git",
+                      "fontFamily": "$mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "Y11fqZ",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Copy command",
+                      "height": 26,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "copy",
+                          "width": 13,
+                          "height": 13
+                        },
+                        "Y7HQGw": {
+                          "content": "Copy",
+                          "fontSize": 11
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
                   "type": "text",
-                  "id": "zWt0Z",
+                  "id": "k43DSz",
                   "name": "Unavailable rule",
                   "fill": "$subtle",
                   "textGrowth": "fixed-width",
@@ -145396,7 +146979,7 @@
       "y": 0,
       "name": "08 / Pull requests",
       "width": 4896,
-      "height": 2592,
+      "height": 3152,
       "fill": "$canvas",
       "layout": "none",
       "children": [
@@ -149829,7 +151412,7 @@
           "y": 1376,
           "name": "States · Questions and recovery",
           "width": 4896,
-          "height": 1120,
+          "height": 1680,
           "layout": "none",
           "children": [
             {
@@ -152295,7 +153878,7 @@
                       "id": "JspuL",
                       "name": "Sync status",
                       "fill": "$muted",
-                      "content": "Rate limited · retry at 14:32",
+                      "content": "Rate limited · resets in 12 min",
                       "fontFamily": "$font",
                       "fontSize": 11,
                       "fontWeight": "normal"
@@ -152341,12 +153924,521 @@
                           "content": "GitHub rate limit reached"
                         },
                         "szYuk": {
-                          "content": "gh reports no requests left for ivanzaida until 14:32. The list is from 14:05; sync resumes on its own after the reset."
+                          "content": "gh reports no requests left for ivanzaida; the limit resets in 12 min. The list is from 14:05, and sync resumes on its own after the reset."
                         }
                       }
                     },
                     {
                       "id": "rwmAG",
+                      "type": "ref",
+                      "ref": "QHBNZ",
+                      "name": "PR 43 / Repository switcher",
+                      "width": "fill_container",
+                      "descendants": {
+                        "G2kdX": {
+                          "content": "Add repository switcher"
+                        },
+                        "IzEsp": {
+                          "content": "#43 · ORC-129 · orc/repository-switcher → main"
+                        },
+                        "YDIWj": {
+                          "content": "4 files · +182 / −19 · Updated 8m ago"
+                        },
+                        "vtYfT/bhGXK": {
+                          "icon": "loader"
+                        },
+                        "vtYfT/JuW4o": {
+                          "content": "Agent fixing"
+                        },
+                        "u4K3o7": {
+                          "content": "Builder · 1 fix request"
+                        },
+                        "DoMCn": {
+                          "content": "Will rerun after fix"
+                        },
+                        "U5x8q": {
+                          "content": "last head 93d412f"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Wn3fn",
+                  "layoutPosition": "absolute",
+                  "x": 650,
+                  "y": 50,
+                  "name": "Tooltip · exact reset time",
+                  "fill": "$raised",
+                  "cornerRadius": "$radius-control",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#00000066",
+                    "offset": {
+                      "x": 0,
+                      "y": 8
+                    },
+                    "blur": 24
+                  },
+                  "padding": [
+                    6,
+                    8
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "V9sDP",
+                      "name": "Tooltip text",
+                      "fill": "$text",
+                      "content": "Resets at 14:32 (local time)",
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "P5G9t",
+              "x": 48,
+              "y": 1168,
+              "name": "08.G · Pull requests / Wrong account label",
+              "fill": "$muted",
+              "content": "08.G · Pull requests / Wrong account",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "E9ZThy",
+              "x": 48,
+              "y": 1200,
+              "name": "08.G · Pull requests / Wrong account",
+              "clip": true,
+              "width": 944,
+              "fill": "$surface",
+              "cornerRadius": "$radius-panel",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "o0jhU",
+                  "name": "Topbar",
+                  "width": "fill_container",
+                  "height": 64,
+                  "stroke": "$hairline",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    0,
+                    32
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "m3zps",
+                      "name": "Breadcrumb",
+                      "fill": "$muted",
+                      "content": "Kontur  /  Pull requests",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "b2Uml",
+                      "name": "Topbar space",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "SzB9U",
+                      "name": "Sync status",
+                      "fill": "$muted",
+                      "content": "Paused · gh signed in as ivan-work",
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "u6krz",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "opacity": 1,
+                      "name": "Refresh",
+                      "height": 36,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "refresh-cw"
+                        },
+                        "Y7HQGw": {
+                          "content": "Refresh"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "GgqT5",
+                  "name": "Content",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 24,
+                  "children": [
+                    {
+                      "id": "nnFzy",
+                      "type": "ref",
+                      "ref": "q5LzI",
+                      "name": "Signed in as ivan-work, expected ivanzaida",
+                      "width": "fill_container",
+                      "descendants": {
+                        "GkfFF": {
+                          "icon": "user-x"
+                        },
+                        "CoAOk": {
+                          "content": "Signed in as ivan-work, expected ivanzaida"
+                        },
+                        "szYuk": {
+                          "content": "The list is from 14:05. Sync and creating pull requests are paused until gh uses ivanzaida again, or until Kontur expects ivan-work. Orchester never switches gh accounts."
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NlTdS",
+                      "name": "Command",
+                      "width": "fill_container",
+                      "fill": "$canvas",
+                      "cornerRadius": "$radius-control",
+                      "stroke": "$hairline",
+                      "strokeWidth": 1,
+                      "gap": 8,
+                      "padding": [
+                        6,
+                        6,
+                        6,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "G6cd8",
+                          "name": "Command text",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "gh auth switch -h github.com -u ivanzaida",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "QgDX7",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Copy command",
+                          "height": 26,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "copy",
+                              "width": 13,
+                              "height": 13
+                            },
+                            "Y7HQGw": {
+                              "content": "Copy",
+                              "fontSize": 11
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yhdDU",
+                      "name": "Actions",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "F4wka",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Check again",
+                          "height": 36,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "refresh-cw"
+                            },
+                            "Y7HQGw": {
+                              "content": "Check again"
+                            }
+                          }
+                        },
+                        {
+                          "id": "N29Nb2",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Use this account (ivan-work)",
+                          "height": 36,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "user-check"
+                            },
+                            "Y7HQGw": {
+                              "content": "Use this account (ivan-work)"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "KzU1l",
+                      "type": "ref",
+                      "ref": "QHBNZ",
+                      "name": "PR 43 / Repository switcher",
+                      "width": "fill_container",
+                      "descendants": {
+                        "G2kdX": {
+                          "content": "Add repository switcher"
+                        },
+                        "IzEsp": {
+                          "content": "#43 · ORC-129 · orc/repository-switcher → main"
+                        },
+                        "YDIWj": {
+                          "content": "4 files · +182 / −19 · Updated 8m ago"
+                        },
+                        "vtYfT/bhGXK": {
+                          "icon": "loader"
+                        },
+                        "vtYfT/JuW4o": {
+                          "content": "Agent fixing"
+                        },
+                        "u4K3o7": {
+                          "content": "Builder · 1 fix request"
+                        },
+                        "DoMCn": {
+                          "content": "Will rerun after fix"
+                        },
+                        "U5x8q": {
+                          "content": "last head 93d412f"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "FH3Ee",
+              "x": 1072,
+              "y": 1168,
+              "name": "08.H · Pull requests / Missing scope label",
+              "fill": "$muted",
+              "content": "08.H · Pull requests / Missing scope: repo",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "tu1fW",
+              "x": 1072,
+              "y": 1200,
+              "name": "08.H · Pull requests / Missing scope: repo",
+              "clip": true,
+              "width": 944,
+              "fill": "$surface",
+              "cornerRadius": "$radius-panel",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "OpU8C",
+                  "name": "Topbar",
+                  "width": "fill_container",
+                  "height": 64,
+                  "stroke": "$hairline",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    0,
+                    32
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "OYHZZ",
+                      "name": "Breadcrumb",
+                      "fill": "$muted",
+                      "content": "Kontur  /  Pull requests",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rMXUo",
+                      "name": "Topbar space",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "kbcMV",
+                      "name": "Sync status",
+                      "fill": "$muted",
+                      "content": "Missing scope: repo",
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "xOzSW",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "opacity": 1,
+                      "name": "Refresh",
+                      "height": 36,
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "refresh-cw"
+                        },
+                        "Y7HQGw": {
+                          "content": "Refresh"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "unKNb",
+                  "name": "Content",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 24,
+                  "children": [
+                    {
+                      "id": "A1OfF",
+                      "type": "ref",
+                      "ref": "q5LzI",
+                      "name": "Missing scope: repo",
+                      "width": "fill_container",
+                      "descendants": {
+                        "GkfFF": {
+                          "icon": "key-round"
+                        },
+                        "CoAOk": {
+                          "content": "Missing scope: repo"
+                        },
+                        "szYuk": {
+                          "content": "gh is signed in as ivanzaida without the repo scope, so Orchester can’t read or create pull requests. The list is from 14:05. Add the scope in a terminal, then check again."
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "nmrC3",
+                      "name": "Command",
+                      "width": "fill_container",
+                      "fill": "$canvas",
+                      "cornerRadius": "$radius-control",
+                      "stroke": "$hairline",
+                      "strokeWidth": 1,
+                      "gap": 8,
+                      "padding": [
+                        6,
+                        6,
+                        6,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "IQemx",
+                          "name": "Command text",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "gh auth refresh -h github.com -s repo",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "sLCsh",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Copy command",
+                          "height": 26,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "copy",
+                              "width": 13,
+                              "height": 13
+                            },
+                            "Y7HQGw": {
+                              "content": "Copy",
+                              "fontSize": 11
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mDOLF",
+                      "name": "Actions",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "dFtGv",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Check again",
+                          "height": 36,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "refresh-cw"
+                            },
+                            "Y7HQGw": {
+                              "content": "Check again"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "r2TDaH",
                       "type": "ref",
                       "ref": "QHBNZ",
                       "name": "PR 43 / Repository switcher",
