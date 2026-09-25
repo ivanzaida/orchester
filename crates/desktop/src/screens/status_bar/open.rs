@@ -65,6 +65,7 @@ impl Opener {
     match place {
       Place::Overview => nav.show(Section::Overview),
       Place::Tasks => nav.show(Section::Tasks),
+      Place::PullRequests => nav.show(Section::PullRequests),
       Place::Pipeline(id) => nav.show_pipeline(id),
       Place::AgentProfile(id) => nav.show_profile(id),
       Place::Connections => nav.show(Section::Connections),

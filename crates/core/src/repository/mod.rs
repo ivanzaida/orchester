@@ -15,6 +15,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub(crate) use self::view::{classify_failure, unrecognized};
 pub use self::{
   detect::{DetectRequest, Detection, DetectionState, GhProgram, GitHubDetection, detect_repository},
   link::link_repository,

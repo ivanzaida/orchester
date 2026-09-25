@@ -214,6 +214,17 @@ fn agents_and_connections_roles_follow_pencil() {
 }
 
 #[test]
+fn pull_request_roles_follow_pencil() {
+  let app = themed_app();
+  let title = app.theme().typography_style(ExtraTypography::RowTitle.role());
+  // `G2kdX` in the pull request list row `QHBNZ`: Inter 15/500 in `text`.
+  assert_eq!((title.font_size, title.weight), (15.0, FontWeight::Medium));
+  // `r0ZlXX`: the row's lucide icon at 20px.
+  let icon = app.theme().typography_style(ExtraTypography::IconRow.role());
+  assert_eq!(icon.font_size, 20.0);
+}
+
+#[test]
 fn popover_shadow_follows_pencil() {
   let app = themed_app();
   let shadow = app.theme().shadow_style(ExtraShadow::Popover.role());

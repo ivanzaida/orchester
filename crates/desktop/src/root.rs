@@ -19,6 +19,7 @@ use crate::{
   close::Lifecycle,
   messages::{self, Message},
   navigation::{Navigation, Screen},
+  programs::Programs,
   screens::{
     close_dialog::CloseConfirmation,
     project::ProjectShell,
@@ -44,6 +45,8 @@ pub enum Startup {
     lifecycle: Lifecycle,
     /// Background operations of the session, for the status bar.
     activity: Activity,
+    /// How `gh` runs for pull request sync.
+    programs: Programs,
   },
   /// The application database cannot be used; `path` is the file involved, if known.
   Failed { message: Message, path: Option<String> },
@@ -68,9 +71,13 @@ impl Component for Root {
     };
     ctx.provide(activity);
     if let Startup::Ready {
-      workspace, lifecycle, ..
+      workspace,
+      lifecycle,
+      programs,
+      ..
     } = startup
     {
+      ctx.provide(programs);
       ctx.provide(Navigation::new(workspace, screen.clone()));
       let close = lifecycle.clone();
       ctx

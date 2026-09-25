@@ -279,6 +279,7 @@ fn opens_key(target: &Target) -> Option<&'static str> {
     Target::Project { place, .. } => match place {
       Place::Overview => "statusBar.opens.overview",
       Place::Tasks => "statusBar.opens.tasks",
+      Place::PullRequests => "statusBar.opens.pullRequests",
       Place::Pipeline(_) => "statusBar.opens.pipeline",
       Place::AgentProfile(_) => "statusBar.opens.agentProfile",
       Place::Connections => "statusBar.opens.connections",
@@ -294,6 +295,7 @@ pub fn open_key(target: &Target) -> &'static str {
     Target::Project { place, .. } => match place {
       Place::Overview => "statusBar.open.overview",
       Place::Tasks => "statusBar.open.tasks",
+      Place::PullRequests => "statusBar.open.pullRequests",
       Place::Pipeline(_) => "statusBar.open.pipeline",
       Place::AgentProfile(_) => "statusBar.open.agentProfile",
       Place::Connections => "statusBar.open.connections",

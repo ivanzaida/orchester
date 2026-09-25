@@ -17,7 +17,7 @@ use lurq::{
 };
 
 use super::{
-  ProjectNav, Section, TasksState,
+  ProjectNav, Section, TasksState, page,
   task_rows::{QueueRow, table_heading},
 };
 use crate::{
@@ -25,7 +25,7 @@ use crate::{
     data::ProjectTasks,
     list::{self, DraftSummary, TaskTab},
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing},
   ui::{
     button::ActionButton,
     field::{ValueTone, value_box_sized},
@@ -92,7 +92,7 @@ impl Component for TasksScreen {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(topbar(ctx, &props.project, &nav))
-      .child(heading(ctx))
+      .child(page::screen_heading(&ctx.t("tasks.title"), &ctx.t("tasks.description")))
       .child(self.tabs(ctx, props.tasks.ready()))
       .child(body)
   }
@@ -173,19 +173,6 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
         .on_click(move || nav.show(Section::NewTask))
         .render(ctx),
     )
-    .into()
-}
-
-/// Page heading (`LIfyO`).
-fn heading(ctx: &Ctx) -> Element {
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding_top(ExtraSpacing::HeadingTop.role())
-    .padding_horizontal(SpacingSize::Section)
-    .padding_bottom(ExtraSpacing::HeadingBottom.role())
-    .spacing(ExtraSpacing::Inline.role())
-    .child(Text::new(&ctx.t("tasks.title")).variant(ExtraTypography::ScreenTitle.role()))
-    .child(Text::new(&ctx.t("tasks.description")).variant(TypographyStyle::Description))
     .into()
 }
 

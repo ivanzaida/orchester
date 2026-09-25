@@ -175,4 +175,40 @@ CREATE TABLE repository_link (
   checked_at INTEGER NOT NULL
 ) STRICT;
 ",
+  r"
+-- Open pull requests of the linked repository as the last sync read them: a cache of GitHub,
+-- replaced by every sync. A repository has a sync row once it was read, even with no pull requests.
+CREATE TABLE pull_request_syncs (
+  host TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  name TEXT NOT NULL,
+  synced_at INTEGER NOT NULL,
+  PRIMARY KEY (host, owner, name)
+) STRICT;
+
+CREATE TABLE pull_requests (
+  host TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  name TEXT NOT NULL,
+  number INTEGER NOT NULL CHECK (number > 0),
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('open', 'draft', 'merged', 'closed')),
+  head_branch TEXT NOT NULL,
+  base_branch TEXT NOT NULL,
+  head_sha TEXT NOT NULL,
+  author TEXT,
+  changed_files INTEGER NOT NULL CHECK (changed_files >= 0),
+  additions INTEGER NOT NULL CHECK (additions >= 0),
+  deletions INTEGER NOT NULL CHECK (deletions >= 0),
+  checks_passed INTEGER NOT NULL CHECK (checks_passed >= 0),
+  checks_failed INTEGER NOT NULL CHECK (checks_failed >= 0),
+  checks_pending INTEGER NOT NULL CHECK (checks_pending >= 0),
+  checks_skipped INTEGER NOT NULL CHECK (checks_skipped >= 0),
+  review_decision TEXT CHECK (review_decision IN ('review_required', 'approved', 'changes_requested')),
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (host, owner, name, number),
+  FOREIGN KEY (host, owner, name) REFERENCES pull_request_syncs (host, owner, name) ON DELETE CASCADE
+) STRICT;
+",
 ];

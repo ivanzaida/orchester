@@ -1,4 +1,4 @@
-//! Shell sidebar (`zo9Py`). Overview, Tasks, Pipelines, Agents, Connections and Project settings
+//! Shell sidebar (`zo9Py`). Overview, Tasks, Pull requests, Pipelines, Agents, Connections and Project settings
 //! open their screens; every other entry is shown but unavailable. The runner card (`O2Jjjf`) is not
 //! shown: the status bar reports the runner on every screen.
 
@@ -98,7 +98,9 @@ fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &Pro
       .selected(matches!(section, Section::Tasks | Section::NewTask))
       .on_click(open(Section::Tasks))
       .count(tasks.ready().map(|tasks| tasks.tasks.len())),
-    NavItem::new("nav-pull-requests", Icon::GitPullRequest, ctx.t("nav.pullRequests")),
+    NavItem::new("nav-pull-requests", Icon::GitPullRequest, ctx.t("nav.pullRequests"))
+      .selected(section == Section::PullRequests)
+      .on_click(open(Section::PullRequests)),
     NavItem::new("nav-pipelines", Icon::Workflow, ctx.t("nav.pipelines"))
       .selected(section == Section::Pipelines)
       .on_click(open(Section::Pipelines)),

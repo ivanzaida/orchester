@@ -10,6 +10,7 @@ pub mod id;
 pub mod money;
 pub mod name;
 pub mod project;
+pub mod pull_request;
 pub mod repository;
 pub mod resource;
 pub mod revision;

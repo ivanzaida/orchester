@@ -5,7 +5,8 @@ use crate::{
   connection::Connection,
   id::{ConnectionId, IdempotencyKey, ResourceId, RunId, TaskId},
   name::Name,
-  repository::RepositoryLink,
+  pull_request::{PullRequest, SyncedPullRequests},
+  repository::{GitHubRepo, RepositoryLink},
   resource::{Draft, DraftSaved, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   run::{Checkpoint, NewRun, Run, RunEvent},
   task::{Task, TaskDetails},
@@ -102,6 +103,25 @@ pub trait RepositoryStore {
 
   /// Unlinks the project from GitHub; nothing happens if it is not linked.
   fn remove_repository_link(&mut self) -> Result<(), Self::Error>;
+}
+
+/// The last list of a repository's open pull requests read from GitHub, kept so the list shows
+/// while GitHub cannot be reached. GitHub is the source; this is a cache. Written by the desktop.
+pub trait PullRequestStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Replaces the stored pull requests of `repo` with `pull_requests`, read at `synced_at`,
+  /// atomically.
+  fn replace_pull_requests(
+    &mut self,
+    repo: &GitHubRepo,
+    pull_requests: &[PullRequest],
+    synced_at: Timestamp,
+  ) -> Result<(), Self::Error>;
+
+  /// The pull requests of `repo` as last read, most recently updated first; `None` before the
+  /// first sync of `repo`.
+  fn pull_requests(&self, repo: &GitHubRepo) -> Result<Option<SyncedPullRequests>, Self::Error>;
 }
 
 /// Execution data, written by the runner. A run changes only by appending the events a

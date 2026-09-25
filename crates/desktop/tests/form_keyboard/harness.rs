@@ -5,15 +5,18 @@
 use std::{
   fs,
   path::{Path, PathBuf},
+  sync::Arc,
   thread,
   time::Duration,
 };
 
 use lurq::app::{App, Tree, events::MouseButton};
+use orchester_core::command::{Command, CommandError, CommandOutput, CommandRunner};
 use orchester_desktop::{
   activity::Activity,
   close::Lifecycle,
   i18n,
+  programs::Programs,
   project_setup::ProjectDraft,
   root::{Root, Startup},
   runner::Runners,
@@ -43,15 +46,20 @@ pub struct Desktop {
 impl Desktop {
   /// First launch: no project yet.
   pub fn first_launch() -> Self {
-    Self::start(false)
+    Self::start(false, no_programs())
   }
 
   /// A project in a git repository, opened at startup.
   pub fn with_project() -> Self {
-    Self::start(true)
+    Self::start(true, no_programs())
   }
 
-  fn start(with_project: bool) -> Self {
+  /// A project whose `gh` runs are answered by `runner`.
+  pub fn with_project_and_programs(runner: Arc<dyn CommandRunner + Send + Sync>) -> Self {
+    Self::start(true, Programs::with_runner(runner))
+  }
+
+  fn start(with_project: bool, programs: Programs) -> Self {
     let dir = TempDir::new().expect("temporary directory");
     let repo = dir.path().join("kontur");
     fs::create_dir_all(repo.join(".git")).expect("create .git");
@@ -81,6 +89,7 @@ impl Desktop {
       workspace: session.workspace().clone(),
       lifecycle: Lifecycle::new(runners, runtime.handle().clone()),
       activity: activity.clone(),
+      programs,
     };
     let mut tree = Tree::new();
     tree.resize(WIDTH, HEIGHT);
@@ -208,6 +217,17 @@ impl Desktop {
       self.key(&key, &key);
     }
   }
+}
+
+/// Programs for screens that are not expected to run any: a run fails the test.
+fn no_programs() -> Programs {
+  struct NoPrograms;
+  impl CommandRunner for NoPrograms {
+    fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
+      panic!("`{}` was run by a test that runs no programs", command.args().join(" "));
+    }
+  }
+  Programs::with_runner(Arc::new(NoPrograms))
 }
 
 /// Expected [`Desktop::stops`], written with `&str`.

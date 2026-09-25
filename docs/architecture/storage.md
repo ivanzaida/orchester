@@ -177,6 +177,7 @@ denied behavior) is part of the tool version body. "Used by" is derived by query
 | `messages` | conversation, idempotency key, author, recipient, run / step, body, attachments, delivery state and times |
 | `proposals` | conversation, version, proposed task set (not tasks until created) |
 | `pull_requests` | number, title, state, branches, head revision, linked task, synced at |
+| `pull_request_syncs` | repository (host / owner / name) and when its open pull requests were last read; `pull_requests` rows of a repository are replaced with every sync (a cache of GitHub, desktop-written) |
 | `pr_revisions` | pull request, revision, diff blob, synced at |
 | `feedback_threads` | pull request, conversation, mode (question, fix), base / head revision, file, side, line range, excerpt, target profile, state |
 

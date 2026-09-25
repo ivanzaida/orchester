@@ -215,6 +215,112 @@
       "repositoryPath": "{{owner}}/{{name}}"
     }
   },
+  "pullRequests": {
+    "breadcrumb": "{{project}}  /  Pull requests",
+    "title": "Pull requests",
+    "description": "Review changes, ask agents about the code, and send work back for a fix.",
+    "refresh": "Refresh",
+    "tabs": {
+      "open": "Open",
+      "needsReview": "Needs your review",
+      "agentWorking": "Agent working",
+      "merged": "Merged",
+      "closed": "Closed"
+    },
+    "search": "Search title, PR number or branch…",
+    "sortUpdated": "Recently updated",
+    "repository": "{{owner}} / {{name}}",
+    "columns": {
+      "pullRequest": "PULL REQUEST / LINKED TASK",
+      "state": "STATE & REVIEW",
+      "checks": "GITHUB CHECKS"
+    },
+    "row": {
+      "meta": "#{{number}} · No linked task · {{head}} → {{base}}",
+      "changesOne": "{{files}} file · +{{additions}} / −{{deletions}} · Updated {{updated}}",
+      "changesOther": "{{files}} files · +{{additions}} / −{{deletions}} · Updated {{updated}}",
+      "openInGitHub": "Open in GitHub"
+    },
+    "state": {
+      "open": "Open",
+      "draft": "Draft",
+      "merged": "Merged",
+      "closed": "Closed"
+    },
+    "review": {
+      "none": "No review required",
+      "reviewRequired": "Review required",
+      "approved": "Approved",
+      "changesRequested": "Changes requested"
+    },
+    "checks": {
+      "none": "No checks",
+      "passedOne": "1 check passed",
+      "passedOther": "{{count}} checks passed",
+      "passedSkipped": "{{passed}} passed · {{skipped}} skipped",
+      "failed": "{{failed}} of {{total}} checks failed",
+      "pending": "{{pending}} of {{total}} checks running",
+      "on": "on {{revision}}"
+    },
+    "footer": {
+      "one": "1 open pull request",
+      "other": "{{count}} open pull requests",
+      "limited": "The {{count}} most recently updated open pull requests",
+      "scope": "From this project’s repository",
+      "noMatch": "No open pull request matches “{{query}}”."
+    },
+    "age": {
+      "justNow": "just now",
+      "minutes": "{{count}} min ago",
+      "hours": "{{count}} h ago",
+      "days": "{{count}} d ago"
+    },
+    "sync": {
+      "syncing": "Syncing…",
+      "notConnected": "GitHub not connected",
+      "synced": "Synced {{ago}}",
+      "unreachable": "Last synced {{ago}} · GitHub unreachable",
+      "failed": "Last synced {{ago}} · Sync failed",
+      "neverUnreachable": "Not synced · GitHub unreachable",
+      "neverFailed": "Not synced · Sync failed",
+      "rateLimited": "Rate limited · resets in {{minutes}} min",
+      "rateLimitedUnknown": "Rate limited",
+      "resetsAt": "Resets at {{time}} (local time)",
+      "paused": "Paused · gh signed in as {{account}}"
+    },
+    "unavailable": {
+      "title": "Pull requests are unavailable",
+      "detail": "{{project}} isn’t linked to a GitHub repository. Pull requests come from the repository detected in the project folder’s origin remote, read through the GitHub CLI (gh). Tasks and runs keep working locally.",
+      "openConnections": "Open Connections"
+    },
+    "loadFailed": "Pull requests could not be read",
+    "empty": {
+      "title": "No open pull requests",
+      "detail": "{{owner}} / {{name}} has no open pull requests on GitHub. New ones appear here after the next sync."
+    },
+    "notice": {
+      "listFrom": "Showing pull requests from {{time}}",
+      "notSynced": "Pull requests could not be read",
+      "unreachable": "Couldn’t reach GitHub. The list may be out of date. Orchester retries every 60 s while this screen is open; Refresh tries now.",
+      "unreachableNoList": "Couldn’t reach GitHub. Orchester retries every 60 s while this screen is open; Refresh tries now.",
+      "noAccessTitle": "{{account}} can’t read {{owner}} / {{name}}",
+      "noAccess": "GitHub found no repository this account can read. Ask the owner for access, or switch accounts in gh, then check again.",
+      "unrecognized": "gh answered in a format Orchester doesn’t recognise. Update gh, then refresh.",
+      "couldNotRun": "gh could not be started or did not answer in time. Refresh, or check the connection.",
+      "failed": "GitHub did not return the list. Refresh tries again; the log has the details.",
+      "rateLimitedTitle": "GitHub rate limit reached",
+      "rateLimited": "gh reports no requests left for {{account}}; the limit resets in {{minutes}} min. The list is from {{time}}, and sync resumes on its own after the reset.",
+      "rateLimitedNoList": "gh reports no requests left for {{account}}; the limit resets in {{minutes}} min. Sync resumes on its own after the reset.",
+      "rateLimitedUnknown": "gh reports no requests left for {{account}} and did not say when the limit resets. Refresh tries again.",
+      "wrongAccountTitle": "Signed in as {{active}}, expected {{expected}}",
+      "wrongAccount": "The list is from {{time}}. Sync and creating pull requests are paused until gh uses {{expected}} again, or until {{project}} expects {{active}}. Orchester never switches gh accounts.",
+      "wrongAccountNoList": "Sync and creating pull requests are paused until gh uses {{expected}} again, or until {{project}} expects {{active}}. Orchester never switches gh accounts.",
+      "missingScope": "gh is signed in as {{account}} without the {{scope}} scope, so Orchester can’t read or create pull requests. The list is from {{time}}. Add the scope in a terminal, then check again.",
+      "missingScopeNoList": "gh is signed in as {{account}} without the {{scope}} scope, so Orchester can’t read or create pull requests. Add the scope in a terminal, then check again.",
+      "notSignedInTitle": "gh is not signed in to {{host}}",
+      "actionFailed": "Pull requests could not be synced"
+    }
+  },
   "agents": {
     "breadcrumb": "{{project}} / Agents",
     "breadcrumbProfile": "{{project}} / Agents / {{role}}",
@@ -658,7 +764,8 @@
     "githubNotSignedIn": "gh is not signed in to {{host}}. Sign in in a terminal, then try again.",
     "githubUnavailable": "gh could not be used. Check the connection again.",
     "repositoryNotLinked": "The project’s repository is no longer linked through this connection.",
-    "repositoryNotLinkable": "The detected repository can’t be linked. Check again first."
+    "repositoryNotLinkable": "The detected repository can’t be linked. Check again first.",
+    "openInBrowser": "The address could not be handed to the browser. The log has the details."
   },
   "money": {
     "usd": "${{amount}}",
@@ -1100,6 +1207,16 @@
         "running": "Linking {{name}}",
         "done": "Linked {{name}}",
         "failed": "Could not link {{name}}"
+      },
+      "pullRequestSync": {
+        "running": "Syncing pull requests",
+        "done": "Pull requests synced",
+        "failed": "Could not sync pull requests"
+      },
+      "pullRequestOpen": {
+        "running": "Opening pull request #{{name}} in the browser",
+        "done": "Opened pull request #{{name}} in the browser",
+        "failed": "Could not open pull request #{{name}} in the browser"
       }
     },
     "opens": {
@@ -1109,7 +1226,8 @@
       "agentProfile": "opens the agent profile",
       "connections": "opens Connections",
       "runnerLog": "opens the runner log",
-      "settings": "opens Project settings"
+      "settings": "opens Project settings",
+      "pullRequests": "opens Pull requests"
     },
     "open": {
       "overview": "Open overview",
@@ -1117,7 +1235,8 @@
       "pipeline": "Open pipeline",
       "agentProfile": "Open profile",
       "connections": "Open connections",
-      "settings": "Open settings"
+      "settings": "Open settings",
+      "pullRequests": "Open pull requests"
     }
   }
 }

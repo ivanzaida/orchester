@@ -21,6 +21,7 @@ pub struct OperationId(u64);
 pub enum Place {
   Overview,
   Tasks,
+  PullRequests,
   Pipeline(ResourceId),
   AgentProfile(ResourceId),
   Connections,

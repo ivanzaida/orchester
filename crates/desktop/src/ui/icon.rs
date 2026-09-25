@@ -42,7 +42,10 @@ pub enum Icon {
   FolderSearch,
   FolderX,
   Folders,
+  GitMerge,
   GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
   History,
   Info,
   KeyRound,
@@ -74,6 +77,7 @@ pub enum Icon {
   Sparkles,
   Square,
   Terminal,
+  Timer,
   Trash,
   Unplug,
   Upload,
@@ -115,7 +119,10 @@ impl Icon {
       Self::FolderSearch => '\u{e339}',
       Self::FolderX => '\u{e33e}',
       Self::Folders => '\u{e33f}',
+      Self::GitMerge => '\u{e0e4}',
       Self::GitPullRequest => '\u{e0e5}',
+      Self::GitPullRequestClosed => '\u{e35a}',
+      Self::GitPullRequestDraft => '\u{e35b}',
       Self::History => '\u{e1f5}',
       Self::KeyRound => '\u{e4a3}',
       Self::LayoutDashboard => '\u{e1c1}',
@@ -155,6 +162,7 @@ impl Icon {
       Self::ScanEye => '\u{e536}',
       Self::SlidersHorizontal => '\u{e29a}',
       Self::Terminal => '\u{e181}',
+      Self::Timer => '\u{e1e0}',
       Self::Trash => '\u{e18e}',
       Self::Upload => '\u{e19e}',
       Self::UserCheck => '\u{e1a0}',
@@ -179,6 +187,7 @@ pub enum IconSize {
   Feature,
   Panel,
   Large,
+  Row,
 }
 
 impl IconSize {
@@ -194,6 +203,7 @@ impl IconSize {
       Self::Feature => ExtraTypography::IconFeature,
       Self::Panel => ExtraTypography::IconPanel,
       Self::Large => ExtraTypography::IconLarge,
+      Self::Row => ExtraTypography::IconRow,
     }
   }
 }
