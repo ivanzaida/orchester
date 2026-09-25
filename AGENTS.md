@@ -30,6 +30,8 @@ Workspace layout:
   own directory. Run the app with `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g.
   `--features mcp`); plain `cargo run -p orchester-desktop` does not build the runner, and the app then shows the
   runner as unable to start. The desktop's runner integration is Windows-only for now (see requirement 0).
+- `crates/exec` (`orchester-exec`): runs external programs (git, gh, agent CLIs) for the desktop and the runner,
+  implementing core's `CommandRunner`. Platform details (hidden console window, process kill) stay behind `cfg` here.
 - Add a crate only when a real boundary exists (for example the server or a runner). No empty placeholder crates.
 
 Hard requirements:
