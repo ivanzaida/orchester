@@ -27,9 +27,9 @@ use super::{
 use crate::{
   agents::form::{ModelSelection, effort_options, model_options},
   messages::Message,
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, SELECT_CHEVRON_SIZE},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
-    field::{FieldNote, ValueTone, field, select_trigger, select_trigger_focused, styled_input, text_input, value_box},
+    field::{FieldNote, ValueTone, field, select_style, styled_input, text_input, value_box},
     icon::{Icon, IconSize, icon},
     message_text,
     property::property,
@@ -327,17 +327,10 @@ where
   T: Clone + PartialEq + Send + Sync + 'static + lurq::core::SignalValue,
   Vec<T>: lurq::core::SignalValue,
 {
-  let chevron = ctx.theme().palette_color(PaletteColor::TextSecondary);
   select
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(FIELD_HEIGHT))
-    .style_with(|style| {
-      style
-        .trigger(select_trigger(ctx, FIELD_HEIGHT))
-        .trigger_focused(select_trigger_focused(ctx))
-        .chevron_color(chevron)
-        .chevron_size(SELECT_CHEVRON_SIZE)
-    })
+    .style(select_style(ctx, FIELD_HEIGHT))
     .into()
 }
 

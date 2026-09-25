@@ -6,7 +6,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Select, Text},
   layout::Alignment,
@@ -26,10 +26,10 @@ use super::{
 use crate::{
   display,
   messages::{self, Message},
-  theme::{ExtraSpacing, ExtraTypography, SELECT_CHEVRON_SIZE},
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
-    field::{FieldNote, ValueTone, field, select_trigger, select_trigger_focused, text_input, value_box},
+    field::{FieldNote, ValueTone, field, select_style, text_input, value_box},
     icon::Icon,
     message_text,
     notice::Notice,
@@ -125,18 +125,11 @@ impl ConnectionDialog {
       return field(&label, control, FieldNote::None);
     }
     let options = AgentProvider::ALL.map(|provider| (ProviderChoice(provider), ctx.t(program_key(provider))));
-    let chevron = ctx.theme().palette_color(PaletteColor::TextSecondary);
     let select = Select::new(self.provider.clone())
       .options(options)
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(FIELD_HEIGHT))
-      .style_with(|style| {
-        style
-          .trigger(select_trigger(ctx, FIELD_HEIGHT))
-          .trigger_focused(select_trigger_focused(ctx))
-          .chevron_color(chevron)
-          .chevron_size(SELECT_CHEVRON_SIZE)
-      });
+      .style(select_style(ctx, FIELD_HEIGHT));
     let control = Column::new()
       .id("connection-provider")
       .width(Dimension::Pct(100.0))

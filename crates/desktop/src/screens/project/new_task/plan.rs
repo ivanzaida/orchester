@@ -19,10 +19,10 @@ use orchester_core::task::MissingDetail;
 use super::{FormState, NewTaskForm, PipelineSelection, error_note, missing_note};
 use crate::{
   tasks::{data::PipelineChoice, form::BUDGET_CURRENCY},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, SELECT_CHEVRON_SIZE},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, SKIPPED_BY_TAB},
-    field::{ValueTone, select_trigger, select_trigger_focused, styled_input, value_box_sized},
+    field::{ValueTone, select_style, styled_input, value_box_sized},
     form::Submit,
     icon::Icon,
     message_text,
@@ -97,18 +97,11 @@ fn pipeline_select(ctx: &Ctx, selection: &Signal<PipelineSelection>, choices: &[
     );
     (PipelineSelection(Some(choice.id)), label)
   }));
-  let chevron = ctx.theme().palette_color(PaletteColor::TextSecondary);
   Select::new(selection.clone())
     .options(options)
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(SELECTOR_HEIGHT))
-    .style_with(|style| {
-      style
-        .trigger(select_trigger(ctx, SELECTOR_HEIGHT))
-        .trigger_focused(select_trigger_focused(ctx))
-        .chevron_color(chevron)
-        .chevron_size(SELECT_CHEVRON_SIZE)
-    })
+    .style(select_style(ctx, SELECTOR_HEIGHT))
     .into()
 }
 

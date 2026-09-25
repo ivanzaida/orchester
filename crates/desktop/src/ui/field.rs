@@ -11,13 +11,14 @@ use lurq::{
   components::{Button, Column, Row, Text, TextInput, TextOverflow},
   core::Signal,
   layout::Alignment,
-  node::{CursorIcon, Element, SelectPartStyle, Style, border::Border, dimension::Dimension},
+  node::{CursorIcon, Element, SelectPartStyle, SelectStyle, Style, border::Border, dimension::Dimension},
 };
 
 use super::{
   icon::{Icon, IconSize, icon},
   pressable::TAB_STOP,
 };
+use crate::theme::SELECT_CHEVRON_SIZE;
 
 /// Below the control: nothing, or the error of the current value.
 pub enum FieldNote {
@@ -92,6 +93,35 @@ pub fn styled_input(ctx: &Ctx, value: Signal<String>, typography: TypographyStyl
     .caret_color(PaletteColor::TextPrimary)
 }
 
+/// A select drawn like a field (`ZGwlv`) at `height`, with its open menu. The design has no
+/// open-menu state, so the menu follows the field: raised fill, field border and radius, options
+/// padded like the trigger in the field text. The chosen option and the pointer's option take the
+/// hover fill; the keyboard's option also gets the focused field stroke (`o8Oug`).
+pub fn select_style(ctx: &Ctx, height: f32) -> SelectStyle {
+  let theme = ctx.theme();
+  let input = theme.form().input.clone();
+  let hover = || SelectPartStyle::new().background(PaletteColor::AccentMuted);
+  SelectStyle::new()
+    .trigger(select_trigger(ctx, height))
+    .trigger_focused(select_trigger_focused(ctx))
+    .chevron_color(theme.palette_color(PaletteColor::TextSecondary))
+    .chevron_size(SELECT_CHEVRON_SIZE)
+    .menu(
+      SelectPartStyle::new()
+        .background(PaletteColor::SurfaceRaised)
+        .border_inside(BorderSize::Sm, input.border.clone())
+        .rounded(input.radius),
+    )
+    .option(
+      SelectPartStyle::new()
+        .padding(input.padding)
+        .text(input.text.resolve(&theme.typography(), &theme.palette())),
+    )
+    .option_hovered(hover().border_inside(BorderSize::Md, input.border_focus))
+    .option_selected(hover())
+    .option_selected_hovered(hover())
+}
+
 /// Trigger of a select drawn like a field (`ZGwlv`) at `height`.
 pub fn select_trigger(ctx: &Ctx, height: f32) -> SelectPartStyle {
   let theme = ctx.theme();
@@ -106,7 +136,7 @@ pub fn select_trigger(ctx: &Ctx, height: f32) -> SelectPartStyle {
 }
 
 /// Focused trigger of a select: the focused field stroke (`o8Oug`).
-pub fn select_trigger_focused(ctx: &Ctx) -> SelectPartStyle {
+fn select_trigger_focused(ctx: &Ctx) -> SelectPartStyle {
   SelectPartStyle::new().border_inside(BorderSize::Md, ctx.theme().form().input.border_focus.clone())
 }
 

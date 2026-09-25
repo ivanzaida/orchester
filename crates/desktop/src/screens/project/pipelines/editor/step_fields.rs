@@ -27,12 +27,10 @@ use crate::{
     describe::repository_access,
     fields::{AccessChoice, Executor, ModelChoice, RouteChoice, model_choices},
   },
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, SELECT_CHEVRON_SIZE},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
-    field::{
-      ValueTone, field_error, select_trigger, select_trigger_focused, styled_input, text_input, value_box_sized,
-    },
+    field::{ValueTone, field_error, select_style, select_trigger, styled_input, text_input, value_box_sized},
     icon::{Icon, IconSize, icon},
     message_text,
     pressable::{Ring, keyboard_stop},
@@ -65,10 +63,9 @@ fn select<T: Clone + PartialEq + Send + Sync + SignalValue + 'static>(
   options: Vec<(T, Arc<str>)>,
   required: bool,
 ) -> Element {
-  let chevron = ctx.theme().palette_color(PaletteColor::TextSecondary);
-  let mut trigger = select_trigger(ctx, SELECT_HEIGHT);
+  let mut style = select_style(ctx, SELECT_HEIGHT);
   if required {
-    trigger = trigger.border_inside(BorderSize::Sm, PaletteColor::TextPrimary);
+    style = style.trigger(select_trigger(ctx, SELECT_HEIGHT).border_inside(BorderSize::Sm, PaletteColor::TextPrimary));
   }
   Column::new()
     .id(id)
@@ -78,13 +75,7 @@ fn select<T: Clone + PartialEq + Send + Sync + SignalValue + 'static>(
         .options(options)
         .width(Dimension::Pct(100.0))
         .height(Dimension::Px(SELECT_HEIGHT))
-        .style_with(|style| {
-          style
-            .trigger(trigger)
-            .trigger_focused(select_trigger_focused(ctx))
-            .chevron_color(chevron)
-            .chevron_size(SELECT_CHEVRON_SIZE)
-        }),
+        .style(style),
     )
     .into()
 }
