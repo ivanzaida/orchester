@@ -38,7 +38,8 @@ fn step_inspector_tab_follows_the_fields_and_skips_unavailable_ones() {
   // Profile select; the model and Edit profile are unavailable without a profile and skipped;
   // instructions; one "runs after" toggle per other step and the route select; the budget
   // (the first step has no route, so no retries); repository access, approval, Duplicate
-  // and Remove. Then Tab leaves the editor for the status bar.
+  // and Remove. The toolbar, the canvas and the status bar take no focus, so Tab wraps to the
+  // name.
   let mut order = vec![None, Some(INSTRUCTIONS)];
   order.extend(std::iter::repeat_n(None, others + 1));
   order.extend([
@@ -47,7 +48,7 @@ fn step_inspector_tab_follows_the_fields_and_skips_unavailable_ones() {
     Some("step-approval"),
     Some("step-duplicate"),
     Some("step-remove"),
-    Some("status-runner"),
+    Some(NAME),
   ]);
   assert_eq!(desktop.stops(order.len(), false), expected(&order));
   order.reverse();
@@ -56,23 +57,47 @@ fn step_inspector_tab_follows_the_fields_and_skips_unavailable_ones() {
 }
 
 #[test]
-fn toolbar_and_step_cards_are_tab_stops() {
+fn step_card_press_selects_its_step_without_taking_the_focus() {
   let mut desktop = starter();
-  desktop.tab_to("pipeline-breadcrumb-library", MAX_STOPS);
-  assert_eq!(
-    desktop.stops(2, false),
-    expected(&[Some("pipeline-add-step"), Some("pipeline-settings")])
-  );
   let first = desktop.value(NAME);
-  // Every card is a stop; Enter on another card selects its step.
-  desktop.tab_to("step-card-plan", MAX_STOPS);
-  desktop.enter();
+  desktop.press("step-card-plan");
   desktop.settle("the second step in the inspector", |tree| {
     tree
       .get_element_by_id_mut(NAME)
       .and_then(|element| element.as_text_input())
       .is_some_and(|input| input.value() != first)
   });
+  assert_eq!(desktop.focused(), None);
+  // Neither the cards nor the toolbar are stops.
+  let stops = desktop.stops(MAX_STOPS, false);
+  for pointer_only in [
+    "step-card-plan",
+    "pipeline-breadcrumb-library",
+    "pipeline-add-step",
+    "pipeline-settings",
+  ] {
+    assert!(
+      !stops.contains(&Some(pointer_only.to_owned())),
+      "{pointer_only} is a Tab stop"
+    );
+  }
+}
+
+/// The first card in the tree, which is the selected first step.
+fn first_card(element: ElementRef<'_>) -> Option<String> {
+  match element.id() {
+    Some(id) if id.starts_with("step-card-") => Some(id.to_owned()),
+    _ => element.children().into_iter().find_map(first_card),
+  }
+}
+
+#[test]
+fn pressing_a_pointer_only_control_keeps_the_focus_where_it_is() {
+  let mut desktop = starter();
+  let card = desktop.tree.root().and_then(first_card).expect("a step card");
+  desktop.tab_to(INSTRUCTIONS, MAX_STOPS);
+  desktop.press(&card);
+  assert_eq!(desktop.focused().as_deref(), Some(INSTRUCTIONS));
 }
 
 #[test]

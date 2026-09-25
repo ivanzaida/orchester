@@ -255,6 +255,7 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit) -> Element {
         .primary()
         .icon(Icon::Play)
         .id("create-and-run")
+        .in_form()
         .fill_width()
         .height(Dimension::Px(CREATE_AND_RUN_HEIGHT))
         .render(ctx),

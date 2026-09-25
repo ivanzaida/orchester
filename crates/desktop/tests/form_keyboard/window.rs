@@ -1,9 +1,10 @@
 use orchester_desktop::{activity::OperationSpec, messages::Message};
 
-use crate::harness::{Desktop, expected};
+use crate::harness::Desktop;
 
 /// More than the window has stops on these screens.
 const MAX_STOPS: usize = 30;
+const TITLE: &str = "task-title";
 
 fn overview() -> Desktop {
   let mut desktop = Desktop::with_project();
@@ -12,67 +13,46 @@ fn overview() -> Desktop {
 }
 
 #[test]
-fn overview_tab_reaches_sidebar_page_and_status_bar() {
+fn overview_without_a_form_has_no_tab_stops() {
   let mut desktop = overview();
-  // The selected Overview stays a stop; the screens that do not exist yet are skipped. The
-  // status bar items that open something are stops: the runner (whose failure actions appear
-  // once the missing runner gives up), then the agents and the queue, the last stop before Tab
-  // wraps.
-  assert_eq!(
-    desktop.stops(7, false),
-    expected(&[
-      Some("nav-overview"),
-      Some("nav-tasks"),
-      Some("nav-pipelines"),
-      Some("nav-agents"),
-      Some("nav-connections"),
-      Some("new-task"),
-      Some("status-runner"),
-    ])
-  );
-  desktop.tab_to("status-queued", MAX_STOPS);
-  assert_eq!(desktop.stops(1, false), expected(&[Some("nav-overview")]));
-  assert_eq!(desktop.stops(1, true), expected(&[Some("status-queued")]));
+  // The sidebar, the tabs, New task, View all tasks and the status bar are pointer-only.
+  assert!(desktop.stops(MAX_STOPS, false).iter().all(Option::is_none));
+  assert!(desktop.stops(MAX_STOPS, true).iter().all(Option::is_none));
 }
 
 #[test]
-fn sidebar_enter_opens_the_focused_screen() {
+fn clicking_a_nav_item_opens_its_screen_without_focusing_it() {
   let mut desktop = overview();
-  desktop.tab_to("nav-pipelines", MAX_STOPS);
-  desktop.enter();
+  desktop.press("nav-pipelines");
   desktop.wait_for("pipelines-new");
-  // The opened screen's item is selected now and keeps the focus.
-  assert_eq!(desktop.focused().as_deref(), Some("nav-pipelines"));
-  desktop.tab_to("nav-overview", MAX_STOPS);
-  desktop.key(" ", "Space");
-  desktop.wait_for("new-task");
+  assert_eq!(desktop.focused(), None);
 }
 
 #[test]
-fn tasks_tab_row_selects_from_the_keyboard() {
+fn clicking_a_tab_selects_it_without_focusing_it() {
   let mut desktop = overview();
   desktop.click("nav-tasks");
   desktop.wait_for("tasks-new-task");
-  // Both tabs are stops, the selected All tasks too.
-  desktop.tab_to("tasks-tab-all", MAX_STOPS);
-  assert_eq!(desktop.stops(1, false), expected(&[Some("tasks-tab-drafts")]));
-  desktop.enter();
-  // Drafts is selected now and keeps the focus; the empty Drafts list offers New task next.
-  assert_eq!(desktop.focused().as_deref(), Some("tasks-tab-drafts"));
-  assert_eq!(desktop.stops(1, false), expected(&[Some("empty-new-task")]));
+  desktop.press("tasks-tab-drafts");
+  desktop.wait_for("empty-new-task");
+  assert_eq!(desktop.focused(), None);
 }
 
 #[test]
 fn pressing_an_unavailable_item_clears_the_focus() {
   let mut desktop = overview();
-  desktop.tab_to("nav-tasks", MAX_STOPS);
-  // Tools does not exist yet: it cannot take the focus, so the press clears it.
+  desktop.click("nav-tasks");
+  desktop.wait_for("tasks-new-task");
+  desktop.click("tasks-new-task");
+  desktop.wait_for(TITLE);
+  desktop.tab_to(TITLE, MAX_STOPS);
+  // Tools does not exist yet: a press on it is a press on empty space, which clears the focus.
   desktop.press("nav-tools");
   assert_eq!(desktop.focused(), None);
 }
 
 #[test]
-fn escape_in_the_operations_popover_returns_the_focus_to_the_activity_item() {
+fn escape_closes_the_operations_popover_without_focusing_the_activity_item() {
   // Without a project nothing opens a failure, so the activity item opens the popover, whose
   // row for the failure has a dismiss button.
   let mut desktop = Desktop::first_launch();
@@ -83,11 +63,10 @@ fn escape_in_the_operations_popover_returns_the_focus_to_the_activity_item() {
     .start(OperationSpec::new(failed.clone(), failed.clone(), failed.clone()))
     .fail(failed);
   desktop.wait_for("status-activity");
-  desktop.tab_to("status-activity", MAX_STOPS);
-  desktop.enter();
+  desktop.press("status-activity");
   desktop.wait_for("status-operations");
-  desktop.tab_to("status-operation-dismiss", MAX_STOPS);
+  assert_eq!(desktop.focused(), None);
   desktop.key("Escape", "Escape");
   assert!(desktop.tree.get_element_by_id("status-operations").is_none());
-  assert_eq!(desktop.focused().as_deref(), Some("status-activity"));
+  assert_eq!(desktop.focused(), None);
 }

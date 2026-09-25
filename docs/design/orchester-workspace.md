@@ -297,20 +297,33 @@ Proposed copy namespace: `statusBar.*` (`statusBar.runner.*`, `statusBar.activit
 
 ## Focus
 
-Proposed 2026-09-24 for keyboard navigation (Tab / Shift+Tab across sidebar, page and status bar;
-dialogs trap Tab). lurq has one focused state for mouse and keyboard focus. A click focuses the
-control and shows the ring. A click on empty space clears focus. Canvas group `xURvJ`
-("Interaction · Focus") in Foundations, below the status bar group:
+Proposed 2026-09-24 for keyboard navigation; narrowed 2026-09-25 to forms.
+
+**Only form controls take focus; everything outside forms is pointer-only.** Form controls are
+text fields, text areas, selects, checkboxes, toggles and switches, option cards, and the buttons
+of a form or dialog (dialog Cancel / Save / Create / Close, the new task form, project setup, the
+agent profile's fields, the step and pipeline inspector with Duplicate / Remove step). Tab and
+Shift+Tab move only between them, in the order they appear, and wrap; dialogs trap Tab. The close
+dialog, which has only buttons, keeps its buttons focusable so it can be answered by keyboard.
+Everything else is not focusable: no Tab stop, no ring, no focused style. That covers sidebar
+navigation items (sidebar navigation items are not focusable), tabs, list rows, pipeline canvas
+step cards and the add-first-step slot, toolbars, topbars, breadcrumbs and back arrows, page
+actions outside forms (New task, New pipeline, Add connection, Publish, Settings, View all tasks,
+the agent editor's Save draft and Publish), the status bar and the operations popover. A click on
+a pointer-only control acts without taking focus and leaves the focus where it is; a click on an
+inert item (selected or unavailable navigation item, empty space) clears focus. Escape still
+closes the operations popover.
+
+lurq has one focused state for mouse and keyboard focus. A click on a form control focuses it and
+shows the ring. Canvas group `xURvJ` ("Interaction · Focus") in Foundations, below the status bar
+group:
 
 | Node | Content |
 | --- | --- |
-| `Ayb2K` | Specimen board: each control in default / hover / focused / focused + hover / selected / focused + selected, with its rule |
+| `Ayb2K` | Specimen board: each control in default / hover / focused / focused + hover / selected / focused + selected, with its rule. The pointer-only rows (navigation item, tab, list row, pipeline step card, popover row, status bar item) show "Not focusable" and no ring in the focused cells |
 | `Oz9EN` | Anatomy at 4×, values and combination rules |
 | `X9gPDr` | `Focus / Ring`, the overlay that draws the ring in Pencil (gap child `N0nV4`). Design-only: implement it as box shadows, not as an element |
-| `ASfcG` | Example: sidebar navigation item focused (Pipelines focused, Tasks selected), from 02.03 |
-| `A6HO2F` | Example: tab focused (Queue focused, Drafts selected), from 02.03 |
 | `CfdDd` | Example: dialog primary button focused (Create draft), from 03.05. The name field is unfocused here |
-| `bISzE` | Example: status bar item focused (Needs you), state A |
 | `g3poI` | Select menu board: components, option states, trigger and menu, values (see [Select menu](#select-menu)) |
 | `kdxtI` | Example: Add connection dialog, *Provider / adapter* open with *Claude Code CLI* selected, from 04.02 `h6CmJ` |
 
@@ -337,15 +350,17 @@ so they cannot remove the ring.
 
 | Control | Ring | Selected look (unchanged) |
 | --- | --- | --- |
-| Button primary / secondary (`u1XBP`), dialog buttons | outer, radius 11 | — |
-| Icon button (32 × 32, no fill) | outer, radius 11 | — |
-| Navigation item (`TSJpn`) | outer, radius 10 | `$hover` fill, `$text` label |
-| Pipeline step card (`ajikA`) | outer, radius 16 | 1.5 inside `$text` stroke |
+| Button primary / secondary (`u1XBP`) in a form or dialog | outer, radius 11 | — |
+| Icon button (32 × 32, no fill) in a form or dialog | outer, radius 11 | — |
+| Button or icon button outside forms (toolbar, topbar, page action) | none: not focusable | — |
+| Navigation item (`TSJpn`) | none: not focusable | `$hover` fill, `$text` label |
+| Pipeline step card (`ajikA`) | none: not focusable | 1.5 inside `$text` stroke |
 | Option card (new pipeline "Start from") | outer, radius 11 | 1.5 inside `$text` stroke + radio dot |
-| Tab (`SOW6S`) | inset, corners 6 6 0 0 | 2px `$text` bottom underline |
-| List row stacked edge to edge (e.g. `SGjO0`, `clVjO`, `QHBNZ`, `hn8qO`) | inset, square | — |
-| Popover row (`E1msJS`) | inset, radius 7 | — |
-| Status bar item (`pmOpt`) | inset, radius 5 | `$hover` fill while its popover is open |
+| Tab (`SOW6S`) | none: not focusable | 2px `$text` bottom underline |
+| List row (e.g. `SGjO0`, `clVjO`, `QHBNZ`, `hn8qO`, `sFtAz`, agent list `jNTVN`) | none: not focusable | — |
+| Popover row (`E1msJS`), its dismiss control and Open runner log | none: not focusable | — |
+| Status bar item (`pmOpt`) | none: not focusable | `$hover` fill while its popover is open |
+| Toggle row in a form (step "runs after", approval) | inset, radius of the row | — |
 | Field / select (`ZGwlv`) | none: keeps `o8Oug` (1.5 inside `$text`) and the caret | — |
 | Select option (`L20XvS`, keyboard highlight) | inset, radius 7 | trailing check, no fill |
 
@@ -356,16 +371,14 @@ Combinations:
 - Focused + selected: the selection look stays and the ring is added (outside it for outer
   controls, on the edge for inset controls). A selected step card shows stroke, dark gap and ring,
   so it no longer looks like plain selection.
-- On tabs, the selected or hover underline paints over the bottom edge of the inset ring. The ring
-  top corners are rounded (6) and the bottom stays square, so the underline stays straight.
 - Disabled controls are not focusable and show no ring.
 
 Containers: an outer ring must not be cut by a clipping ancestor. Scroll viewports and clipped
 panels that hold outer-ring controls keep at least 4px (`focus-extent`) of inner padding on
 their clipped edges. If they cannot, the control uses the inset ring. Do not add padding
-just for focus. A focusable row needs horizontal padding of at least 12px so the inset ring
-does not touch its content. `clVjO` and `QHBNZ` already have 12px; the pipeline library row `hn8qO` and its column headings in `LRMQW` have 12px since they became focusable. `zemhy`, `SGjO0`, `sFtAz`, `HfNoA` and `kOI6w` have none and need 12px if they
-become focusable.
+just for focus. A focusable row in a form needs horizontal padding of at least 12px so the inset
+ring does not touch its content. List rows outside forms are not focusable; the 12px of the
+pipeline library row `hn8qO` and its column headings in `LRMQW` stay as designed.
 
 Implementation (lurq 0.24): `focused_style(Style::new().box_shadow([...]))` with two
 `BoxShadow::new(0.0, 0.0, 0.0, color).spread(n)` values (`.inset()` for the inset variant). The

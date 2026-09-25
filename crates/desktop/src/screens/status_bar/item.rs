@@ -1,7 +1,6 @@
 //! Parts of the status bar items (`pmOpt`): a 22px item with 8px padding and a 6px gap,
 //! labels in Inter 11, values in Geist Mono 11, 12px icons and hairline separators. Items are
-//! buttons: one that opens something is a Tab stop pressed by Enter or Space, one that opens
-//! nothing never takes focus.
+//! buttons that never take focus: the status bar is pointer-only (see `ui::pressable`).
 
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
@@ -14,7 +13,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
-    pressable::{Ring, pressable, surface},
+    pressable::{pressable, surface},
   },
 };
 
@@ -35,9 +34,9 @@ pub fn item(id: &'static str) -> Button {
     .rounded(RadiusSize::Sm)
 }
 
-/// An item that opens something: pointer, the `$hover` fill and keyboard use.
+/// An item that opens something: pointer and the `$hover` fill.
 pub fn clickable(item: Button, open: impl Fn() + Send + Sync + 'static) -> Button {
-  pressable(item, Ring::Inset, open).hovered_style(Style::new().background(PaletteColor::AccentMuted))
+  pressable(item, open).hovered_style(Style::new().background(PaletteColor::AccentMuted))
 }
 
 pub fn glyph(glyph: Icon, color: PaletteColor) -> Element {

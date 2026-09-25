@@ -309,6 +309,7 @@ impl ConnectionDialog {
         ActionButton::new(ctx.t("common.close"))
           .icon(Icon::X)
           .id("connection-dialog-close")
+          .in_form()
           .height(Dimension::Px(BUTTON_HEIGHT))
           .on_click(move || close())
           .render(ctx),
@@ -343,6 +344,7 @@ impl ConnectionDialog {
       .primary()
       .icon(Icon::Check)
       .id("connection-save")
+      .in_form()
       .height(Dimension::Px(BUTTON_HEIGHT));
     let save_button = match submit {
       Some(submit) => save_button.on_click(move || submit()),
@@ -363,6 +365,7 @@ impl ConnectionDialog {
         ActionButton::new(ctx.t("common.cancel"))
           .icon(Icon::X)
           .id("connection-cancel")
+          .in_form()
           .height(Dimension::Px(BUTTON_HEIGHT))
           .on_click(move || close())
           .render(ctx),

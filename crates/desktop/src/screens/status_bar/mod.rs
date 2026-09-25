@@ -28,7 +28,7 @@ use lurq::{
 use self::{
   activity_item::{activity_slot, shows_activity},
   counts::counts,
-  hint::{Anchors, Hint, HintAnchor},
+  hint::{Anchors, Hint},
   open::Opener,
   runner_item::runner_item,
 };
@@ -63,8 +63,6 @@ impl lurq::app::component::DevtoolsInspectable for StatusBarProps {}
 pub struct StatusBar {
   activity: Activity,
   popover: Signal<bool>,
-  /// Escape closed the popover; the activity item takes the focus back on the next render.
-  escaped: Signal<bool>,
   hint: Signal<Option<Hint>>,
   anchors: Anchors,
 }
@@ -76,7 +74,6 @@ impl Component for StatusBar {
     Self {
       activity: Activity::of(ctx),
       popover: ctx.signal(false),
-      escaped: ctx.signal(false),
       hint: ctx.signal(None),
       anchors: Anchors::default(),
     }
@@ -108,11 +105,7 @@ impl Component for StatusBar {
       props.project.is_some(),
     ));
     // The popover hangs from the activity item; without it there is nothing to anchor to.
-    let popover = shows_activity(&slot).then(|| popover::popover(ctx, &log, &opener, &self.anchors, &self.escaped));
-    if !self.popover.get() && self.escaped.get_untracked() {
-      self.escaped.set(false);
-      ctx.focus(self.anchors.get(HintAnchor::Activity));
-    }
+    let popover = shows_activity(&slot).then(|| popover::popover(ctx, &log, &opener, &self.anchors));
     Row::new()
       .id("status-bar")
       .width(Dimension::Pct(100.0))

@@ -23,7 +23,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{Ring, hairline_row_focused, pressable, surface},
+    pressable::{pressable, surface},
     status_label::status_label,
   },
 };
@@ -128,7 +128,6 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
     .describe("pipeline", entry.name.to_string())
     .width(Dimension::Pct(100.0))
     .padding_vertical(SpacingSize::Md)
-    // A focusable row keeps its content clear of the inset focus ring (`xURvJ`).
     .padding_horizontal(ExtraSpacing::Stack.role())
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
@@ -149,7 +148,5 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
     ))
     .child(cell(&published, PUBLISHED_WIDTH, PaletteColor::TextSecondary))
     .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
-  pressable(row, Ring::Inset, move || open.open(id))
-    .focused_style(hairline_row_focused())
-    .into()
+  pressable(row, move || open.open(id)).into()
 }

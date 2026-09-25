@@ -274,6 +274,7 @@ fn actions(ctx: &Ctx, stage: CloseStage, actions: &CloseActions) -> Element {
       ActionButton::new(ctx.t("lifecycle.close.quitNow"))
         .icon(Icon::Power)
         .id("close-quit-now")
+        .in_form()
         .on_click(move || quit())
         .render(ctx),
     )
@@ -287,6 +288,7 @@ fn actions(ctx: &Ctx, stage: CloseStage, actions: &CloseActions) -> Element {
           ActionButton::new(ctx.t("common.cancel"))
             .icon(Icon::X)
             .id("close-cancel")
+            .in_form()
             .on_click(move || cancel())
             .render(ctx),
         )
@@ -295,6 +297,7 @@ fn actions(ctx: &Ctx, stage: CloseStage, actions: &CloseActions) -> Element {
             .primary()
             .icon(Icon::Save)
             .id("close-wait")
+            .in_form()
             .on_click(move || wait())
             .render(ctx),
         );

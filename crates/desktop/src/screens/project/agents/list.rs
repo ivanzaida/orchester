@@ -9,7 +9,6 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Button, Column, ScrollVertical, Text, TextOverflow},
-  core::{ElementRef, Signal},
   node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::id::ResourceId;
@@ -21,35 +20,9 @@ use crate::{
   ui::{
     button::ActionButton,
     icon::Icon,
-    pressable::{Ring, keyboard_stop, pressable, surface},
+    pressable::{pressable, surface},
   },
 };
-
-/// Keeps the focus in the list when an item is chosen. Choosing a profile mounts a new editor,
-/// and the list with it, so the chosen item is a new element: the press is remembered here and
-/// the new editor asks for the focus on the item's ref.
-#[derive(Clone)]
-pub struct ListFocus {
-  pressed: Signal<bool>,
-  selected: ElementRef,
-}
-
-impl ListFocus {
-  pub fn new(ctx: &mut Ctx) -> Self {
-    Self {
-      pressed: ctx.signal(false),
-      selected: ElementRef::new(),
-    }
-  }
-
-  /// Called when an editor mounts: focuses the selected item if an item press opened it.
-  pub fn restore(&self, ctx: &Ctx) {
-    if self.pressed.get_untracked() {
-      self.pressed.set(false);
-      ctx.focus(&self.selected);
-    }
-  }
-}
 
 /// List and item sizes (`ORWrW`, `mmKpE`).
 const LIST_WIDTH: f32 = 264.0;
@@ -63,13 +36,7 @@ pub enum ListSelection {
   New,
 }
 
-pub fn profile_list(
-  ctx: &Ctx,
-  agents: &ProjectAgents,
-  selection: ListSelection,
-  nav: &ProjectNav,
-  focus: &ListFocus,
-) -> Element {
+pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selection: ListSelection, nav: &ProjectNav) -> Element {
   let new_agent = {
     let button = ActionButton::new(ctx.t("agents.new"))
       .icon(Icon::Plus)
@@ -91,13 +58,13 @@ pub fn profile_list(
   let mut items: Vec<Element> = agents
     .profiles
     .iter()
-    .map(|entry| item(ctx, agents, entry, Some(entry.id) == selected, nav, focus))
+    .map(|entry| item(ctx, agents, entry, Some(entry.id) == selected, nav))
     .collect();
   if matches!(selection, ListSelection::New) {
     let placeholder = frame(&ctx.t("agents.newTitle"), &ctx.t("agents.notSaved"), true)
       .id("agent-new")
       .describe("state", "selected");
-    items.push(keyboard_stop(placeholder, Ring::Inset).into());
+    items.push(placeholder.into());
   }
   Column::new()
     .id("agent-profiles")
@@ -130,14 +97,7 @@ pub fn profile_list(
 }
 
 /// A profile (`jNTVN` as in `mmKpE`): its role over its connection and model.
-fn item(
-  ctx: &Ctx,
-  agents: &ProjectAgents,
-  entry: &ProfileEntry,
-  selected: bool,
-  nav: &ProjectNav,
-  focus: &ListFocus,
-) -> Element {
+fn item(ctx: &Ctx, agents: &ProjectAgents, entry: &ProfileEntry, selected: bool, nav: &ProjectNav) -> Element {
   let profile = &entry.profile;
   let connection = agents
     .connections
@@ -153,22 +113,15 @@ fn item(
   );
   let item = frame(profile.role().as_str(), &metadata, selected).id(Arc::<str>::from(format!("agent-{}", entry.id)));
   if selected {
-    return keyboard_stop(item, Ring::Inset)
-      .ref_element(focus.selected.clone())
-      .describe("state", "selected")
-      .into();
+    return item.describe("state", "selected").into();
   }
-  let (agent, id, pressed) = (nav.agent.clone(), entry.id, focus.pressed.clone());
-  pressable(item, Ring::Inset, move || {
-    pressed.set(true);
-    agent.set(AgentSelection::Profile(id));
-  })
-  .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
-  .into()
+  let (agent, id) = (nav.agent.clone(), entry.id);
+  pressable(item, move || agent.set(AgentSelection::Profile(id)))
+    .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
+    .into()
 }
 
-/// A list item (`jNTVN`): title over metadata. A button, so an item that can be selected is
-/// reached by Tab and selected by Enter or Space.
+/// A list item (`jNTVN`): title over metadata. Pointer-only, as the list is outside the form.
 fn frame(title: &str, metadata: &str, selected: bool) -> Button {
   let text = Column::new()
     .flex(1.0)

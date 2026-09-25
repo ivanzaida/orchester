@@ -19,7 +19,7 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
-    pressable::{Ring, hairline_row_focused, keyboard_stop, pressable, surface},
+    pressable::{pressable, surface},
     status_label::compact_status_label as label,
   },
 };
@@ -101,13 +101,9 @@ pub fn connection_row(
     .child(label(status_icon, &ctx.t(status_key)))
     .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
   if state.selected {
-    return keyboard_stop(row, Ring::Inset)
-      .focused_style(hairline_row_focused())
-      .describe("state", "selected")
-      .into();
+    return row.describe("state", "selected").into();
   }
-  pressable(row, Ring::Inset, on_click)
-    .focused_style(hairline_row_focused())
+  pressable(row, on_click)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .into()
 }

@@ -199,6 +199,7 @@ impl ConnectionDialog {
     let recheck = ActionButton::new(ctx.t("connections.recheck"))
       .icon(Icon::RefreshCw)
       .id("connection-recheck")
+      .in_form()
       .height(Dimension::Px(RECHECK_HEIGHT));
     let recheck = match program.verification {
       Verification::Done(_) | Verification::Failed(_) => {
