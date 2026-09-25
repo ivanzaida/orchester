@@ -125,6 +125,7 @@ impl Component for ProjectForm {
         ActionButton::new(ctx.t("setup.project.changeGithub"))
           .icon(Icon::ExternalLink)
           .id("change-github")
+          .in_form()
           .width(Dimension::Px(CHANGE_GITHUB_WIDTH))
           .render(ctx),
       )
@@ -184,7 +185,8 @@ fn actions(ctx: &Ctx, pending: bool, error: Option<Arc<str>>, submit: Submit) ->
   let create = ActionButton::new(label)
     .primary()
     .icon(Icon::ArrowRight)
-    .id("create-project");
+    .id("create-project")
+    .in_form();
   let create = match submit {
     Some(submit) => create.on_click(move || submit()),
     None => create.on_click(|| {}).enabled(false),

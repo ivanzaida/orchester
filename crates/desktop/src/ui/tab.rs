@@ -1,12 +1,12 @@
 //! Tab (`SOW6S`): a label with an optional count; the selected tab is underlined (`Iefue`).
 //! A tab without a data source yet is unavailable: muted, locked and without a count.
-//! [`tab_row`] lays tabs out over the hairline that ends their row. The selected and the
-//! available tabs are Tab stops; Enter or Space selects one.
+//! [`tab_row`] lays tabs out over the hairline that ends their row. Tabs are outside any form,
+//! so they never take focus: they are pointer-only (see `ui::pressable`).
 
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+  app::theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   components::{Column, Row, Stack, Text},
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -14,17 +14,14 @@ use lurq::{
 
 use super::{
   icon::{Icon, IconSize, icon},
-  pressable::{Ring, keyboard_stop, pressable, surface},
+  pressable::{pressable, surface},
 };
 use crate::theme::{ExtraColor, ExtraSpacing};
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
 enum State {
-  /// `navigable` when the item also has a click handler: it stays a Tab stop while selected.
-  Selected {
-    navigable: bool,
-  },
+  Selected,
   Available(Handler),
   Unavailable,
 }
@@ -64,17 +61,16 @@ impl Tab {
 
   pub fn selected(mut self, selected: bool) -> Self {
     if selected {
-      let navigable = matches!(self.state, State::Available(_));
-      self.state = State::Selected { navigable };
+      self.state = State::Selected;
     }
     self
   }
 
+  /// Selects the tab. A selected tab selects nothing.
   pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    self.state = match self.state {
-      State::Selected { .. } => State::Selected { navigable: true },
-      _ => State::Available(Arc::new(handler)),
-    };
+    if !matches!(self.state, State::Selected) {
+      self.state = State::Available(Arc::new(handler));
+    }
     self
   }
 }
@@ -82,7 +78,7 @@ impl Tab {
 impl From<Tab> for Element {
   fn from(tab: Tab) -> Self {
     let color = match tab.state {
-      State::Selected { .. } => PaletteColor::TextPrimary,
+      State::Selected => PaletteColor::TextPrimary,
       State::Available(_) => PaletteColor::TextSecondary,
       State::Unavailable => PaletteColor::TextMuted,
     };
@@ -105,33 +101,19 @@ impl From<Tab> for Element {
           .count
           .map(|count| Text::new(&count.to_string()).variant(TypographyStyle::Mono)),
       );
-    // The selected and the available tab are buttons around the row. The row's underline
-    // paints over the bottom edge of the button's inset focus ring, whose top corners are
-    // rounded; an unavailable tab stays a plain row, so a press on it clears the focus.
-    let button = |row: Row| {
-      surface()
-        .id(tab.id)
-        .height(tab.height)
-        .corner_radius_top_left(RadiusSize::Sm)
-        .corner_radius_top_right(RadiusSize::Sm)
-        .child(row)
-    };
     match tab.state {
-      State::Selected { navigable: true } => keyboard_stop(
-        button(row.border_bottom(Border::inside(BorderSize::Lg, PaletteColor::TextPrimary))),
-        Ring::Inset,
-      )
-      .describe("state", "selected")
-      .into(),
-      State::Selected { navigable: false } => row
+      State::Selected => row
         .id(tab.id)
         .height(tab.height)
         .border_bottom(Border::inside(BorderSize::Lg, PaletteColor::TextPrimary))
         .describe("state", "selected")
         .into(),
+      // A button around the row, so a press on it keeps the focus where it is.
       State::Available(handler) => pressable(
-        button(row.hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Lg, PaletteColor::Border)))),
-        Ring::Inset,
+        surface()
+          .id(tab.id)
+          .height(tab.height)
+          .child(row.hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Lg, PaletteColor::Border)))),
         move || handler(),
       )
       .describe("state", "enabled")

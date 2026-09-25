@@ -33,7 +33,7 @@ use crate::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{Ring, pressable, surface},
+    pressable::{pressable, surface},
     status_label::topbar_status_label,
   },
 };
@@ -61,10 +61,7 @@ pub fn topbar(
   publish: impl Fn() + Send + Sync + 'static,
 ) -> Element {
   let back = nav.clone();
-  let breadcrumb = pressable(surface().id("pipeline-breadcrumb-library"), Ring::Outer, move || {
-    back.library()
-  })
-  .child(
+  let breadcrumb = pressable(surface().id("pipeline-breadcrumb-library"), move || back.library()).child(
     Text::new(&ctx.t_args("pipelines.library.breadcrumb", [("project", project)]))
       .variant(TypographyStyle::Description),
   );
@@ -289,8 +286,6 @@ pub fn problems_strip(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> 
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .justify(Justify::End)
-    // The focus rings of the first and last line reach into the strip's padding.
-    .overflow_visible()
     .with_children(views.iter().map(|view| problem_button(ctx, view, handle)));
   let strip = Row::new()
     .id("pipeline-problems")

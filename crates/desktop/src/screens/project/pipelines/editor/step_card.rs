@@ -1,7 +1,6 @@
 //! Pipeline step card (`ajikA`): the step's icon, name and number, who runs it and what it
 //! waits for. The selected card has a stronger outline; a step without a profile or tool says
-//! so in the text color (`ipfll` in `UjHDL`). A card is a button: Tab reaches it and Enter or
-//! Space selects its step. The selected card shows no focus ring, only its outline.
+//! so in the text color (`ipfll` in `UjHDL`). A card is pointer-only: a click selects its step.
 
 use lurq::{
   app::{
@@ -24,7 +23,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{Ring, pressable, stroke_selected_focused, surface},
+    pressable::{pressable, surface},
   },
 };
 
@@ -108,7 +107,6 @@ pub fn step_card(
     .border(Border::inside(stroke, outline))
     .rounded(RadiusSize::Lg)
     .child(content);
-  pressable(card, Ring::Outer, move || select.select(Selection::Step(key.clone())))
-    .focused_style(stroke_selected_focused(Ring::Outer, selected))
+  pressable(card, move || select.select(Selection::Step(key.clone())))
     .hovered_style(Style::new().border(Border::inside(stroke, PaletteColor::BorderStrong)))
 }

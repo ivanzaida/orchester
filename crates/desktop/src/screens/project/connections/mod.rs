@@ -1,11 +1,20 @@
 //! Connections (04.01 `a4Lqb`): the project's connections with the selected one's details,
-//! adding and editing an agent provider (04.02 `h6CmJ`) and checking a connection again when
-//! it needs attention (04.A `RZUKo`). Only agent provider CLIs exist, so the repository and
-//! MCP server tabs and the search are unavailable.
+//! adding and editing an agent provider (04.02 `h6CmJ`) or a GitHub connection (04.06
+//! `D4mDB`), GitHub's details and states (04.05 `CHa9s`, 04.C1–C5) with the account panel
+//! (01.D `hNPA1`), and checking a connection again when it needs attention (04.A `RZUKo`).
+//! MCP servers and the search are not available yet.
 
+mod account_panel;
+mod actions;
 mod dialog;
+mod dialog_frame;
 mod form;
+mod github_dialog;
+mod github_form;
+mod github_inspector;
+mod github_status;
 mod inspector;
+mod library;
 mod list;
 mod status;
 
@@ -15,71 +24,88 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    theme::{PaletteColor, SpacingSize},
+    theme::SpacingSize,
   },
-  components::{Column, Modal, ModalTarget, Row, ScrollVertical, Text},
+  components::{Column, Modal, ModalTarget},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{connection::AgentConnection, id::ConnectionId, name::Name};
+use orchester_core::{
+  connection::{AgentConnection, GitHubConnection},
+  id::ConnectionId,
+  name::Name,
+};
 
 use self::{
-  dialog::ConnectionDialog,
-  inspector::{InspectorActions, InspectorState, inspector},
-  list::{RowState, connection_row},
+  account_panel::{AccountPanel, AccountPanelProps},
+  actions::{Work, WorkAction, work_action},
+  dialog::{ConnectionDialog, PickedFile, pick_action},
+  github_dialog::GitHubDialog,
 };
 use super::{
   ProjectNav,
   page::{self, TOPBAR_BUTTON_HEIGHT},
 };
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{OperationSpec, operations},
   background,
-  connections::data::{ProjectConnections, recheck_in},
+  connections::data::ProjectConnections,
   messages::{self, Message},
-  theme::{ExtraSpacing, ExtraTypography},
+  theme::ExtraSpacing,
   ui::{
     button::ActionButton,
-    field::{ValueTone, value_box_sized},
+    command_row::Copied,
     icon::Icon,
     message_text,
-    notice::Notice,
     panel::RecoveryPanel,
     tab::{Tab, tab_row},
   },
   workspace::OpenProject,
 };
 
-/// Tab row and search heights (`rxo81`, `ZH6bm`).
+/// Tab row height (`rxo81`).
 const TAB_ROW_HEIGHT: f32 = 42.0;
-const SEARCH_HEIGHT: f32 = 38.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ConnectionTab {
   All,
   AgentProviders,
+  GitHub,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ConnectionTab {}
 
-/// The connection whose details are shown; `None` shows the first.
+/// The connection whose details are shown; `None` shows the first listed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Selected(Option<ConnectionId>);
+pub(super) struct Selected(pub Option<ConnectionId>);
 
 impl lurq::app::component::DevtoolsInspectable for Selected {}
 
-/// Whether the add or edit dialog is open.
+/// The type chosen in a new connection's Connection type select.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KindChoice {
+  Agent,
+  GitHub,
+}
+
+impl lurq::app::component::DevtoolsInspectable for KindChoice {}
+
+/// Which dialog is open.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DialogMode {
   Closed,
-  Add,
-  Edit(AgentConnection),
+  AddAgent,
+  AddGitHub,
+  EditAgent(AgentConnection),
+  EditGitHub(GitHubConnection),
+  /// Change GitHub account or access, for this connection.
+  Account(ConnectionId),
 }
 
 impl lurq::app::component::DevtoolsInspectable for DialogMode {}
 
-/// Provided to the dialog: the project, and what happens when it closes or saves.
+/// Provided to the add and edit dialogs: the project, and what happens when they close or save.
 #[derive(Clone)]
 pub struct DialogContext {
   pub project: OpenProject,
@@ -88,15 +114,21 @@ pub struct DialogContext {
   pub taken: Vec<Name>,
   pub close: Arc<dyn Fn() + Send + Sync>,
   pub saved: Arc<dyn Fn(ConnectionId) + Send + Sync>,
+  /// Switches a new connection to the other type's dialog.
+  pub retype: Arc<dyn Fn(KindChoice) + Send + Sync>,
 }
 
-/// The connection that was checked.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Rechecked(ConnectionId);
+type PickAction = FutureAction<Arc<str>, PickedFile, Message>;
 
-impl lurq::app::component::DevtoolsInspectable for Rechecked {}
+/// The connection whose program file is being chosen, and how storing it is reported.
+#[derive(Clone, Debug, PartialEq)]
+struct PickTarget {
+  repo_root: PathBuf,
+  id: ConnectionId,
+  spec: OperationSpec,
+}
 
-type RecheckAction = FutureAction<(PathBuf, ConnectionId, OperationSpec), Rechecked, Message>;
+impl lurq::app::component::DevtoolsInspectable for PickTarget {}
 
 enum Loaded {
   Loading,
@@ -108,8 +140,12 @@ pub struct ConnectionsScreen {
   tab: Signal<ConnectionTab>,
   selected: Signal<Selected>,
   dialog: Signal<DialogMode>,
-  /// The connection whose check runs, while the recheck action is pending.
-  checking: Signal<Selected>,
+  /// The connection work runs on, while the work action is pending.
+  working: Signal<Selected>,
+  /// The connection a program file is being chosen for.
+  picking: Signal<Option<PickTarget>>,
+  /// The last command copied from the inspector.
+  copied: Signal<Copied>,
   /// Bumped after a change, to read the connections again.
   revision: Signal<u64>,
   nav: ProjectNav,
@@ -120,29 +156,35 @@ impl Component for ConnectionsScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     let revision = ctx.signal(0_u64);
-    let recheck = recheck_action(ctx);
+    let work = work_action(ctx);
+    let pick = pick_action(ctx);
     let reload = revision.clone();
-    ctx.watch(&recheck.state(), move |state| {
+    ctx.watch(&work.state(), move |state| {
       if !state.is_pending() && state.data.is_some() {
         reload.update(|revision| *revision += 1);
       }
     });
-    Self {
+    let screen = Self {
       tab: ctx.signal(ConnectionTab::All),
       selected: ctx.signal(Selected(None)),
       dialog: ctx.signal(DialogMode::Closed),
-      checking: ctx.signal(Selected(None)),
+      working: ctx.signal(Selected(None)),
+      picking: ctx.signal(None),
+      copied: ctx.signal(Copied::default()),
       revision,
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
-    }
+    };
+    screen.run_picked_program(ctx, &work, &pick);
+    screen
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let open = ctx.props::<OpenProject>().clone();
-    // Futures are matched by call order: the action comes first, as in `create`.
-    let recheck = recheck_action(ctx);
+    // Futures are matched by call order: the actions come first, as in `create`.
+    let work = work_action(ctx);
+    let pick = pick_action(ctx);
     let loaded = self.load(ctx, &open);
     let body = match &loaded {
       Loaded::Loading => Column::new().flex(1.0).into(),
@@ -154,8 +196,7 @@ impl Component for ConnectionsScreen {
         )
         .into(),
       ),
-      Loaded::Ready(data) if data.connections.is_empty() => self.empty(ctx),
-      Loaded::Ready(data) => self.library(ctx, &open, data, &recheck),
+      Loaded::Ready(data) => self.library(ctx, &open, data, &work, &pick),
     };
     let breadcrumb = ctx.t_args("connections.breadcrumb", [("project", open.project.name().as_str())]);
     Column::new()
@@ -168,7 +209,7 @@ impl Component for ConnectionsScreen {
       ))
       .child(self.tabs(ctx))
       .child(body)
-      .child(self.dialog(ctx, &open, &loaded))
+      .child(self.dialog(ctx, &open, &loaded, &work))
   }
 }
 
@@ -191,18 +232,36 @@ impl ConnectionsScreen {
     }
   }
 
+  /// A program file chosen for a connection (gh not found) is stored and checked.
+  fn run_picked_program(&self, ctx: &mut Ctx, work: &WorkAction, pick: &PickAction) {
+    let (work, picking, working) = (work.clone(), self.picking.clone(), self.working.clone());
+    ctx.watch(&pick.state(), move |state| {
+      let (Some(PickedFile(Some(path))), Some(target)) = (&state.data, picking.get_untracked()) else {
+        return;
+      };
+      picking.set(None);
+      working.set(Selected(Some(target.id)));
+      work.run((target.repo_root, target.id, Work::Program(path.clone()), target.spec));
+    });
+  }
+
   fn add_button(&self, ctx: &Ctx, id: &'static str) -> Element {
-    let dialog = self.dialog.clone();
+    let (dialog, tab) = (self.dialog.clone(), self.tab.clone());
     ActionButton::new(ctx.t("connections.add"))
       .primary()
       .icon(Icon::Plus)
       .id(id)
       .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
-      .on_click(move || dialog.set(DialogMode::Add))
+      .on_click(move || {
+        dialog.set(match tab.get_untracked() {
+          ConnectionTab::GitHub => DialogMode::AddGitHub,
+          ConnectionTab::All | ConnectionTab::AgentProviders => DialogMode::AddAgent,
+        });
+      })
       .render(ctx)
   }
 
-  /// Section tabs (`rxo81`): every connection is an agent provider so far.
+  /// Section tabs (`rxo81`, `BCZsv`): MCP servers are not available yet.
   fn tabs(&self, ctx: &Ctx) -> Element {
     let selected = self.tab.get();
     let height = Dimension::Pct(100.0);
@@ -223,122 +282,65 @@ impl ConnectionsScreen {
           "connections.tabs.agentProviders",
           ConnectionTab::AgentProviders,
         ),
-        Tab::new(
-          "connections-tab-repositories",
-          ctx.t("connections.tabs.repositories"),
-          height,
+        available(
+          "connections-tab-github",
+          "connections.tabs.github",
+          ConnectionTab::GitHub,
         ),
         Tab::new("connections-tab-mcp", ctx.t("connections.tabs.mcpServers"), height),
       ],
     )
   }
 
-  /// No connections yet.
-  fn empty(&self, ctx: &Ctx) -> Element {
-    centered(
-      RecoveryPanel::new(
-        Icon::Plug,
-        &ctx.t("connections.emptyTitle"),
-        &ctx.t("connections.emptyDetail"),
-      )
-      .action(self.add_button(ctx, "empty-add-connection"))
-      .into(),
-    )
-  }
-
-  /// The list (`Bc9cT`) beside the selected connection's details (`ez6IT`).
-  fn library(&self, ctx: &Ctx, open: &OpenProject, data: &ProjectConnections, recheck: &RecheckAction) -> Element {
-    let selected = self
-      .selected
-      .get()
-      .0
-      .and_then(|id| data.connection(id))
-      .or_else(|| data.connections.first())
-      .expect("the library is shown only with connections");
-    let checking = recheck.state().get();
-    let checking_id = if checking.is_pending() {
-      self.checking.get().0
-    } else {
-      None
+  /// The open dialog (`IAN4P`, `d8yPD5`, `hNPA1`), over a backdrop.
+  fn dialog(&self, ctx: &mut Ctx, open: &OpenProject, loaded: &Loaded, work: &WorkAction) -> Element {
+    let mode = self.dialog.get();
+    let Loaded::Ready(data) = loaded else {
+      return Modal::new(Column::new()).open_when(false).into();
     };
-    let rows: Vec<Element> = data
-      .connections
-      .iter()
-      .map(|connection| {
-        let state = RowState {
-          uses: data.used_by(connection.id()).count(),
-          selected: connection.id() == selected.id(),
-          checking: checking_id == Some(connection.id()),
-        };
-        let (signal, id) = (self.selected.clone(), connection.id());
-        connection_row(ctx, connection, &state, move || signal.set(Selected(Some(id))))
-      })
-      .collect();
-    let state = InspectorState {
-      uses: data.used_by(selected.id()).collect(),
-      checking: checking_id == Some(selected.id()),
-      check_error: checking.error.clone().filter(|_| !checking.is_pending()),
+    let content = match &mode {
+      DialogMode::Closed => return Modal::new(Column::new()).open_when(false).into(),
+      DialogMode::Account(id) => match self.account_panel(ctx, open, data, *id, work) {
+        Some(panel) => panel,
+        None => return Modal::new(Column::new()).open_when(false).into(),
+      },
+      DialogMode::AddAgent | DialogMode::EditAgent(_) => {
+        let key = dialog_key(&mode);
+        self.provide_dialog_context(ctx, open, data, mode.clone());
+        ctx.mount_keyed::<ConnectionDialog>(&key, ())
+      }
+      DialogMode::AddGitHub | DialogMode::EditGitHub(_) => {
+        let key = dialog_key(&mode);
+        self.provide_dialog_context(ctx, open, data, mode.clone());
+        ctx.mount_keyed::<GitHubDialog>(&key, ())
+      }
     };
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .child(list_column(ctx, open, rows))
-      .child(inspector(
-        ctx,
-        selected,
-        &state,
-        &self.actions(open, selected, recheck, state.checking),
-      ))
+    Modal::new(content)
+      .target(ModalTarget::Root)
+      .dismiss_on_escape(false)
       .into()
   }
 
-  fn actions(
-    &self,
-    open: &OpenProject,
-    connection: &AgentConnection,
-    recheck: &RecheckAction,
-    checking: bool,
-  ) -> InspectorActions {
-    let check = (!checking).then(|| {
-      let (recheck, repo_root, id) = (recheck.clone(), open.repo_root.clone(), connection.id());
-      let spec = operations::connection_check(open, connection.name().as_str());
-      let checking = self.checking.clone();
-      Arc::new(move || {
-        checking.set(Selected(Some(id)));
-        recheck.run((repo_root.clone(), id, spec.clone()));
-      }) as Arc<dyn Fn() + Send + Sync>
-    });
-    let (dialog, editing) = (self.dialog.clone(), connection.clone());
-    let nav = self.nav.clone();
-    InspectorActions {
-      check,
-      edit: Arc::new(move || dialog.set(DialogMode::Edit(editing.clone()))),
-      show_profile: Arc::new(move |profile| nav.show_profile(profile)),
-    }
-  }
-
-  /// The add or edit dialog (`IAN4P`), over a backdrop.
-  fn dialog(&self, ctx: &mut Ctx, open: &OpenProject, loaded: &Loaded) -> Element {
-    let mode = self.dialog.get();
-    let key = match &mode {
-      DialogMode::Closed => return Modal::new(Column::new()).open_when(false).into(),
-      DialogMode::Add => "connection-dialog-add".to_owned(),
-      DialogMode::Edit(connection) => format!("connection-dialog-{}", connection.id()),
-    };
+  fn provide_dialog_context(&self, ctx: &mut Ctx, open: &OpenProject, data: &ProjectConnections, mode: DialogMode) {
     let editing = match &mode {
-      DialogMode::Edit(connection) => Some(connection.id()),
-      DialogMode::Add | DialogMode::Closed => None,
+      DialogMode::EditAgent(connection) => Some(connection.id()),
+      DialogMode::EditGitHub(connection) => Some(connection.id()),
+      _ => None,
     };
-    let taken = match loaded {
-      Loaded::Ready(data) => data
-        .connections
-        .iter()
-        .filter(|connection| Some(connection.id()) != editing)
-        .map(|connection| connection.name().clone())
-        .collect(),
-      Loaded::Loading | Loaded::Failed(_) => Vec::new(),
-    };
-    let (close, saved) = (self.dialog.clone(), self.dialog.clone());
+    let taken = data
+      .connections
+      .iter()
+      .map(|connection| (connection.id(), connection.name()))
+      .chain(
+        data
+          .github
+          .iter()
+          .map(|connection| (connection.id(), connection.name())),
+      )
+      .filter(|(id, _)| Some(*id) != editing)
+      .map(|(_, name)| name.clone())
+      .collect();
+    let (close, saved, retype) = (self.dialog.clone(), self.dialog.clone(), self.dialog.clone());
     let (selected, revision) = (self.selected.clone(), self.revision.clone());
     ctx.provide(DialogContext {
       project: open.clone(),
@@ -350,51 +352,49 @@ impl ConnectionsScreen {
         revision.update(|revision| *revision += 1);
         saved.set(DialogMode::Closed);
       }),
+      retype: Arc::new(move |kind| {
+        retype.set(match kind {
+          KindChoice::Agent => DialogMode::AddAgent,
+          KindChoice::GitHub => DialogMode::AddGitHub,
+        });
+      }),
     });
-    Modal::new(ctx.mount_keyed::<ConnectionDialog>(&key, ()))
-      .target(ModalTarget::Root)
-      .dismiss_on_escape(false)
-      .into()
+  }
+
+  /// Change GitHub account or access (01.D) for connection `id`, while it exists.
+  fn account_panel(
+    &self,
+    ctx: &mut Ctx,
+    open: &OpenProject,
+    data: &ProjectConnections,
+    id: ConnectionId,
+    work: &WorkAction,
+  ) -> Option<Element> {
+    let connection = data.github_connection(id)?.clone();
+    let busy = work.state().get().is_pending();
+    let check = (!busy).then(|| {
+      let spec = operations::connection_check(open, connection.name().as_str());
+      actions::start(work, &self.working, &open.repo_root, id, Work::Recheck, spec)
+    });
+    let close = self.dialog.clone();
+    let props = AccountPanelProps {
+      expected: data.link_of(id).map(|link| link.expected_login().clone()),
+      project: open.project.name().as_str().into(),
+      check,
+      close: Arc::new(move || close.set(DialogMode::Closed)),
+      connection,
+    };
+    Some(ctx.mount_keyed::<AccountPanel>(&format!("github-account-{id}"), props))
   }
 }
 
-/// Search, rows, the provider notice and who owns the connections (`Bc9cT`).
-fn list_column(ctx: &Ctx, open: &OpenProject, rows: Vec<Element>) -> Element {
-  let search = value_box_sized(
-    ctx,
-    "connection-search",
-    &ctx.t("connections.search"),
-    ValueTone::Unavailable,
-    None,
-    Dimension::Px(SEARCH_HEIGHT),
-  );
-  let content = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
-    .with_children(rows)
-    .child(Notice::new(
-      Icon::Workflow,
-      ctx.t("connections.mixTitle"),
-      ctx.t("connections.mixDetail"),
-    ));
-  Column::new()
-    .flex(1.0)
-    .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Section)
-    .spacing(SpacingSize::Md)
-    .child(search)
-    .child(
-      ScrollVertical::new(content)
-        .id("connection-list")
-        .width(Dimension::Pct(100.0))
-        .flex(1.0),
-    )
-    .child(
-      Text::new(&ctx.t_args("connections.ownership", [("project", open.project.name().as_str())]))
-        .variant(ExtraTypography::Detail.role())
-        .color(PaletteColor::TextSecondary),
-    )
-    .into()
+fn dialog_key(mode: &DialogMode) -> String {
+  match mode {
+    DialogMode::EditAgent(connection) => format!("connection-dialog-{}", connection.id()),
+    DialogMode::EditGitHub(connection) => format!("github-dialog-{}", connection.id()),
+    DialogMode::AddGitHub => "github-dialog-add".to_owned(),
+    DialogMode::AddAgent | DialogMode::Closed | DialogMode::Account(_) => "connection-dialog-add".to_owned(),
+  }
 }
 
 fn centered(content: Element) -> Element {
@@ -406,21 +406,4 @@ fn centered(content: Element) -> Element {
     .justify(Justify::Center)
     .child(content)
     .into()
-}
-
-fn recheck_action(ctx: &mut Ctx) -> RecheckAction {
-  let activity = Activity::of(ctx);
-  ctx.future_action(move |(repo_root, id, spec): (PathBuf, ConnectionId, OperationSpec)| {
-    let activity = activity.clone();
-    async move {
-      let check = async move {
-        let checked = background::run(move || recheck_in(&repo_root, id)).await?;
-        checked.map(|()| Rechecked(id)).map_err(|error| {
-          tracing::error!(%error, "cannot store the connection check");
-          messages::store_error(&error)
-        })
-      };
-      activity.track(spec, check).await
-    }
-  })
 }

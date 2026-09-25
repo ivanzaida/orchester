@@ -354,12 +354,14 @@ fn actions(ctx: &Ctx, open: &Signal<bool>, submit: Submit, error: Option<Message
   let cancel = ActionButton::new(ctx.t("common.cancel"))
     .icon(Icon::X)
     .id("new-pipeline-cancel")
+    .in_form()
     .on_click(move || close.set(false))
     .render(ctx);
   let create = ActionButton::new(ctx.t("pipelines.create.create"))
     .primary()
     .icon(Icon::Plus)
-    .id("new-pipeline-create");
+    .id("new-pipeline-create")
+    .in_form();
   let create = match submit {
     Some(submit) => create.on_click(move || submit()),
     None => create.on_click(|| {}).enabled(false),

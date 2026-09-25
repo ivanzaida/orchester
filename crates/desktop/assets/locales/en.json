@@ -8,7 +8,10 @@
     "cancel": "Cancel",
     "notAvailableYet": "Not available in this version yet",
     "separator": "·",
-    "close": "Close"
+    "close": "Close",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "The command could not be copied. Select it and copy it by hand."
   },
   "workspace": {
     "personal": "Personal workspace"
@@ -270,21 +273,22 @@
   "connections": {
     "breadcrumb": "{{project}} / Connections",
     "title": "Connections",
-    "description": "Connect repositories, model providers and MCP servers for this project.",
+    "description": "GitHub, agent CLIs and MCP servers this project uses.",
     "loadFailed": "Connections could not be read",
     "add": "Add connection",
     "search": "Search connections…",
     "tabs": {
       "all": "All connections",
       "agentProviders": "Agent providers",
-      "repositories": "Repositories",
+      "github": "GitHub",
       "mcpServers": "MCP servers"
     },
     "emptyTitle": "No connections yet",
     "emptyDetail": "Add the Codex or Claude Code CLI installed on this computer. Each agent profile then chooses its connection and model.",
+    "emptyProvidersTitle": "No agent providers yet",
     "mixTitle": "Each agent can use a different provider",
     "mixDetail": "Choose the connection and model in each agent profile; one pipeline can mix providers.",
-    "ownership": "Connections belong to {{project}}. Each CLI keeps its own sign-in; Orchester stores no credentials for it.",
+    "ownership": "Connections belong to {{project}}. CLI connections use the account the CLI is signed in to on this computer; {{project}} records which account it expects.",
     "type": {
       "provider": "Provider",
       "agentProvider": "Agent provider"
@@ -380,6 +384,93 @@
       "saving": "Saving…"
     }
   },
+  "github": {
+    "type": "GitHub",
+    "checkAgain": "Check again",
+    "emptyTitle": "No GitHub connection yet",
+    "emptyDetail": "Add the GitHub CLI (gh) installed on this computer. Orchester uses gh’s own sign-in to read the project’s repository and create pull requests.",
+    "status": {
+      "notChecked": "Not checked",
+      "signedIn": "Signed in",
+      "notSignedIn": "Not signed in",
+      "signInUnknown": "Sign-in unknown",
+      "wrongAccount": "Wrong account",
+      "missingScope": "Missing scope: {{scope}}",
+      "programMissing": "gh not found",
+      "unrecognized": "Unrecognized",
+      "couldNotRun": "Could not run"
+    },
+    "row": {
+      "description": "gh · {{host}}",
+      "signedIn": "gh · {{host}} · signed in as {{account}}",
+      "notSignedIn": "gh · {{host}} · not signed in",
+      "repoOne": "{{count}} repo",
+      "repoOther": "{{count}} repos"
+    },
+    "connection": {
+      "host": "Host",
+      "path": "Path",
+      "program": "gh {{version}}",
+      "programMissing": "Not found",
+      "unknown": "Unknown",
+      "account": "Account",
+      "notSignedIn": "Not signed in",
+      "scopes": "Scopes",
+      "noScopes": "None listed",
+      "usedBy": "Used by {{project}}",
+      "expectedAccount": "Expected account",
+      "repository": "Repository",
+      "repositoryName": "{{owner}} / {{name}}",
+      "remote": "Remote",
+      "chooseProgram": "Choose program…",
+      "changeAccount": "Change account or access",
+      "useAccount": "Use this account ({{account}})"
+    },
+    "hint": {
+      "notChecked": "This connection has not been checked yet. Check it to see which account gh is signed in to.",
+      "signedIn": "Orchester runs gh with its own sign-in on this computer. It never signs in, stores or sees tokens.",
+      "notSignedIn": "Run this in a terminal, then check again. Pull request steps are unavailable until gh is signed in.",
+      "signInUnknown": "gh answers, but whether it is signed in could not be read. Check again; pull request steps may fail until it is.",
+      "wrongAccount": "Signed in as {{active}}, expected {{expected}}. Switch gh back in a terminal, or make {{project}} expect {{active}}. Creating pull requests is blocked; Orchester never switches accounts.",
+      "missingScope": "Orchester needs the {{scope}} scope to read and create pull requests. Add it in a terminal, then check again.",
+      "programMissing": "Install the GitHub CLI or choose its program file, then check again. Pull request steps are unavailable.",
+      "unrecognized": "The program did not answer as the GitHub CLI. Update gh or choose its program file, then check again.",
+      "couldNotRun": "gh could not be started or did not answer in time. Check again, or edit the connection."
+    },
+    "account": {
+      "title": "Change GitHub account or access",
+      "detail": "Orchester uses the account gh is signed in to on this computer. It never signs in, switches accounts or sees your token.",
+      "signedInAs": "Signed in as",
+      "projectExpects": "{{project}} expects",
+      "otherTitle": "Use another account",
+      "otherDetail": "Sign in once, then switch. gh accounts are shared by every project on this computer.",
+      "accessTitle": "Add access",
+      "accessDetail": "Orchester needs the {{scope}} scope. If gh doesn’t have it, add it.",
+      "runHint": "Run these in a terminal, then check again."
+    },
+    "dialog": {
+      "addTitle": "Add GitHub connection",
+      "editTitle": "Edit GitHub connection",
+      "suggestedName": "GitHub · {{host}}",
+      "suggestedNameNumbered": "GitHub · {{host}} {{number}}",
+      "otherHost": "Other host…",
+      "hostName": "GitHub Enterprise host",
+      "otherHostPlaceholder": "github.example.com",
+      "chooseProgram": "Choose the gh program",
+      "programOnPath": "gh {{version}} · found on PATH",
+      "programChosen": "gh {{version}} · chosen file",
+      "programNotGh": "Not the GitHub CLI",
+      "programNotOnPath": "Not found on PATH",
+      "authTitle": "Uses gh’s own sign-in",
+      "authDetail": "Orchester runs gh with the account it is signed in to for this host. It never signs in, stores or sees tokens. For a GitHub Enterprise host, choose Other host and enter it, e.g. github.example.com.",
+      "checking": "Asking gh for its version and the signed-in account…",
+      "enterHost": "Enter the host to check gh for it.",
+      "signedIn": "{{account}} · scopes {{scopes}}",
+      "signedInNoScopes": "{{account}} · no scopes listed",
+      "notSignedIn": "gh {{version}} · not signed in: run gh auth login in a terminal, then check again",
+      "nextStep": "After saving, {{project}} can reach GitHub through this connection. If gh is not signed in, run gh auth login in a terminal, then check again."
+    }
+  },
   "time": {
     "justNow": "Just now",
     "minutesAgo": "{{count}}m ago",
@@ -430,7 +521,13 @@
     "placeholderUnclosed": "A variable is opened with double braces but never closed.",
     "unknownVariable": "{{name}} is not a variable in the catalog.",
     "staleDraft": "A newer version ({{version}}) was published after this draft was started. Keep your draft over it to publish.",
-    "versionLimit": "This profile has reached the maximum number of versions."
+    "versionLimit": "This profile has reached the maximum number of versions.",
+    "githubHostRequired": "Enter the GitHub Enterprise host.",
+    "githubHostInvalid": "Enter a host name such as github.example.com, without https:// or a path.",
+    "githubNotVerified": "Save is available once the program answers as the GitHub CLI.",
+    "githubNotSignedIn": "gh is not signed in to {{host}}. Sign in in a terminal, then try again.",
+    "githubUnavailable": "gh could not be used. Check the connection again.",
+    "repositoryNotLinked": "The project’s repository is no longer linked through this connection."
   },
   "money": {
     "usd": "${{amount}}",
@@ -846,12 +943,22 @@
           "running": "Checking Claude Code CLI",
           "done": "Checked Claude Code CLI",
           "failed": "Could not check Claude Code CLI"
+        },
+        "gh": {
+          "running": "Checking GitHub CLI",
+          "done": "Checked GitHub CLI",
+          "failed": "Could not check GitHub CLI"
         }
       },
       "programPick": {
         "running": "Choosing a program file",
         "done": "Program file chosen",
         "failed": "Could not choose a program file"
+      },
+      "expectedAccount": {
+        "running": "Recording the account {{name}} uses",
+        "done": "Recorded the account {{name}} uses",
+        "failed": "Could not record the account {{name}} uses"
       }
     },
     "opens": {

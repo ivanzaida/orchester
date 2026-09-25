@@ -3,6 +3,7 @@
 //! lets `gh` make the requests.
 
 mod cli;
+mod state;
 
 use std::{fmt, ops::Deref, path::PathBuf};
 
@@ -10,9 +11,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub(crate) use self::cli::gh_command;
-pub use self::cli::{
-  GH_PROGRAM, GhAuthStatus, check_github, gh_auth_status_command, gh_version_command, parse_gh_auth_status,
-  parse_gh_version,
+pub use self::{
+  cli::{
+    GH_PROGRAM, GhAuthStatus, check_github, gh_auth_status_command, gh_version_command, parse_gh_auth_status,
+    parse_gh_version,
+  },
+  state::{GhAdvice, GitHubState, REQUIRED_SCOPE},
 };
 use super::{Connection, ConnectionError, ConnectionKind, ConnectionStatus, LastCheck, SignIn, agent::sign_in_status};
 use crate::{id::ConnectionId, name::Name, time::Timestamp};
@@ -224,6 +228,20 @@ impl GitHubConnection {
 
   pub fn record_check(&mut self, check: GitHubCheck) {
     self.connection.last_check = Some(LastCheck::GitHub(check));
+  }
+
+  pub fn rename(&mut self, name: Name) {
+    self.connection.rename(name);
+  }
+
+  /// See [`Connection::set_executable`].
+  pub fn set_executable(&mut self, executable: PathBuf) -> Result<(), ConnectionError> {
+    self.connection.set_executable(executable)
+  }
+
+  /// What the last check means for a project that expects `expected`.
+  pub fn state(&self, expected: Option<&GitHubLogin>) -> GitHubState {
+    GitHubState::of(self.last_check().map(|check| &check.result), expected)
   }
 }
 

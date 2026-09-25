@@ -1,12 +1,13 @@
 //! Button (`u1XBP`): an optional icon and a label, as the primary or secondary action.
 //! Sizes and colors come from lurq's form button roles, filled from the design in `theme::form`.
+//! A button is pointer-only unless it is marked [`ActionButton::in_form`] (see `ui::pressable`).
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, FormButtonRole, PaletteColor, SpacingSize},
+    theme::{BorderSize, FormButtonRole, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, Text},
   layout::{Alignment, layout_kind::Justify},
@@ -45,6 +46,8 @@ pub struct ActionButton {
   width: Option<Dimension>,
   height: Option<Dimension>,
   roomy: bool,
+  compact: bool,
+  in_form: bool,
   id: Option<&'static str>,
 }
 
@@ -59,6 +62,8 @@ impl ActionButton {
       width: None,
       height: None,
       roomy: false,
+      compact: false,
+      in_form: false,
       id: None,
     }
   }
@@ -108,6 +113,18 @@ impl ActionButton {
     self
   }
 
+  /// Smaller label and icon, as the Copy button of a command row (`eFsWL` in `LBSz7`).
+  pub fn compact(mut self) -> Self {
+    self.compact = true;
+    self
+  }
+
+  /// A control of a form or a dialog: a Tab stop with the outer focus ring while focused.
+  pub fn in_form(mut self) -> Self {
+    self.in_form = true;
+    self
+  }
+
   pub fn fill_width(mut self) -> Self {
     self.width = Some(Dimension::Pct(100.0));
     self
@@ -144,16 +161,16 @@ impl ActionButton {
     drop(form);
     let (background, border, text) = self.colors(&role);
 
+    let (icon_size, typography) = if self.compact {
+      (IconSize::Marker, TypographyStyle::Link)
+    } else {
+      (IconSize::Button, role.text.typography)
+    };
     let mut content = Row::new().spacing(SpacingSize::Sm).align_items(Alignment::Center);
     if let Some(glyph) = self.icon {
-      content = content.child(icon(glyph, IconSize::Button, text.clone()));
+      content = content.child(icon(glyph, icon_size, text.clone()));
     }
-    content = content.child(
-      Text::new(&self.label)
-        .variant(role.text.typography)
-        .color(text.clone())
-        .nowrap(),
-    );
+    content = content.child(Text::new(&self.label).variant(typography).color(text.clone()).nowrap());
     if matches!(self.state, State::Unavailable) {
       content = content.child(icon(Icon::Lock, IconSize::Small, text));
     }
@@ -177,36 +194,45 @@ impl ActionButton {
     if let Some(id) = self.id {
       button = button.id(id);
     }
+    let in_form = self.in_form;
+    let focus = |button: Button, tab_index| {
+      if in_form {
+        button.tab_index(tab_index)
+      } else {
+        button.focusable(false)
+      }
+    };
     match self.state {
-      State::Enabled(handler) => with_interaction(button, &role)
+      State::Enabled(handler) => with_interaction(focus(button, TAB_STOP), &role, in_form)
         .describe("state", "enabled")
         .on_click(move |_| handler()),
       // Tab skips a button that cannot be pressed.
-      State::Disabled => button
+      State::Disabled => focus(button, SKIPPED_BY_TAB)
         .describe("state", "disabled")
-        .cursor(CursorIcon::NotAllowed)
-        .tab_index(SKIPPED_BY_TAB),
-      State::Unavailable => button
+        .cursor(CursorIcon::NotAllowed),
+      State::Unavailable => focus(button, SKIPPED_BY_TAB)
         .describe("state", "unavailable")
-        .cursor(CursorIcon::NotAllowed)
-        .tab_index(SKIPPED_BY_TAB),
+        .cursor(CursorIcon::NotAllowed),
     }
     .into()
   }
 }
 
-/// Pointer, hover and press fills, and keyboard use: a Tab stop outside forms too, with the
-/// outer focus ring while focused. Hover and press set no shadow, so the ring stays.
-fn with_interaction(button: Button, role: &FormButtonRole) -> Button {
+/// Pointer, hover and press fills; in a form also the outer focus ring while focused. Hover and
+/// press set no shadow, so the ring stays.
+fn with_interaction(button: Button, role: &FormButtonRole, in_form: bool) -> Button {
   let state = |background, border| {
     Style::new()
       .background(background)
       .border(Border::inside(BorderSize::Sm, border))
   };
+  let button = if in_form {
+    button.focused_style(Ring::Outer.focused())
+  } else {
+    button
+  };
   button
     .cursor(CursorIcon::Pointer)
-    .tab_index(TAB_STOP)
-    .focused_style(Ring::Outer.focused())
     .hovered_style(state(role.background_hover.clone(), role.border_hover.clone()))
     .active_style(state(role.background_active.clone(), role.border_active.clone()))
 }

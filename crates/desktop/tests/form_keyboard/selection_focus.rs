@@ -1,6 +1,6 @@
-//! A control whose selected state is the 1.5px selection stroke (pipeline step card, new pipeline
-//! option card) shows no focus ring while selected, since stroke, gap and ring read as a double
-//! border. It stays a Tab stop; unselected, it shows its ring when focused. lurq exposes no
+//! A form control whose selected state is the 1.5px selection stroke (new pipeline option card)
+//! shows no focus ring while selected, since stroke, gap and ring read as a double border. It
+//! stays a Tab stop; unselected, it shows its ring when focused. lurq exposes no
 //! resolved style of a node, so the ring is read from the rule the cards build their focused
 //! style with, and the Tab stops from the tree.
 
@@ -19,18 +19,6 @@ fn stroke_selected_control_has_no_focus_ring_while_selected() {
 #[test]
 fn stroke_selected_control_has_its_focus_ring_while_unselected() {
   assert_eq!(stroke_selection_ring(Ring::Outer, false), Some(Ring::Outer));
-}
-
-#[test]
-fn selected_step_card_stays_a_tab_stop() {
-  let mut desktop = Desktop::with_project();
-  desktop.wait_for("nav-pipelines");
-  desktop.click("nav-pipelines");
-  desktop.wait_for("pipelines-create-starter");
-  desktop.click("pipelines-create-starter");
-  // The starter opens with its first step selected.
-  desktop.wait_for("step-name");
-  desktop.tab_to("step-card-research", MAX_STOPS);
 }
 
 #[test]

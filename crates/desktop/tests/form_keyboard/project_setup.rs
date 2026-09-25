@@ -11,18 +11,13 @@ fn setup() -> Desktop {
 }
 
 #[test]
-fn project_setup_tab_moves_between_back_name_and_folder() {
+fn project_setup_tab_moves_between_name_and_folder() {
   let mut desktop = setup();
-  // Back in the setup rail, then the form; Create stays disabled without a folder and is
-  // skipped. Without a project the status bar has nothing to open.
+  // Only the form: Back in the setup rail is pointer-only, and Create stays disabled without
+  // a folder and is skipped.
   assert_eq!(
-    desktop.stops(4, false),
-    expected(&[
-      Some("setup-back"),
-      Some(NAME),
-      Some("repository-path"),
-      Some("setup-back")
-    ])
+    desktop.stops(3, false),
+    expected(&[Some(NAME), Some("repository-path"), Some(NAME)])
   );
   assert_eq!(desktop.stops(2, true), expected(&[Some("repository-path"), Some(NAME)]));
 }

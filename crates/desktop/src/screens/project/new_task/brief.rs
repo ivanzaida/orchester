@@ -73,6 +73,7 @@ pub fn brief_form(ctx: &Ctx, form: &NewTaskForm, project: &OpenProject, state: &
       ActionButton::new(ctx.t("tasks.new.attachContext"))
         .icon(Icon::Plus)
         .id("attach-context")
+        .in_form()
         .height(Dimension::Px(CONTEXT_BUTTON_HEIGHT))
         .render(ctx),
     ));

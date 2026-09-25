@@ -310,7 +310,7 @@ impl PipelineEditor {
           .child(inspector_panel),
       )
       .child(self.publish_modal(ctx, state, publish, &props.project));
-    // One form for the whole editor, so Tab also leads from the toolbar into the inspector.
+    // One form for the whole editor; only the inspector's fields and buttons take focus.
     // Edits are saved as the draft as they are made: there is nothing for Enter to submit.
     form(None, column)
   }

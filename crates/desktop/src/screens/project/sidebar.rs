@@ -116,8 +116,6 @@ fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &Pro
     .width(Dimension::Pct(100.0))
     .padding_horizontal(ExtraSpacing::Stack.role())
     .spacing(SpacingSize::Xs)
-    // The first and last items' focus rings reach past the list.
-    .overflow_visible()
     .with_children(items)
     .into()
 }

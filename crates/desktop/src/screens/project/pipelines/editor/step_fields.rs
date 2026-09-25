@@ -244,6 +244,7 @@ fn effective(ctx: &Ctx, line: &str, hint: &str, button: &str) -> Element {
       ActionButton::new(ctx.t(button))
         .icon(Icon::ExternalLink)
         .id("step-edit-profile")
+        .in_form()
         .fill_width()
         .height(Dimension::Px(SMALL_BUTTON_HEIGHT))
         .render(ctx),
@@ -449,6 +450,7 @@ pub fn actions(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, handle: &
   let duplicate_button = ActionButton::new(ctx.t("pipelines.inspector.duplicate"))
     .icon(Icon::Copy)
     .id("step-duplicate")
+    .in_form()
     .fill_width()
     .on_click(move || {
       if let Some(Some(copy)) = duplicate.edit(|edit| edit.duplicate_step(&key)) {
@@ -469,6 +471,7 @@ pub fn actions(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, handle: &
   let remove_button = ActionButton::new(label)
     .icon(Icon::Trash)
     .id("step-remove")
+    .in_form()
     .fill_width()
     .on_click(move || {
       if confirm.get() {

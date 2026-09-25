@@ -212,6 +212,30 @@ pub fn cli_check(open: &OpenProject, provider: AgentProvider) -> OperationSpec {
     .target(in_project(open, Place::Connections))
 }
 
+/// Checking the GitHub CLI in the GitHub connection dialog.
+pub fn gh_check(open: &OpenProject) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.cliCheck.gh.running",
+    done: "statusBar.operations.cliCheck.gh.done",
+    failed: "statusBar.operations.cliCheck.gh.failed",
+  }
+  .unnamed()
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::Connections))
+}
+
+/// Making the project expect the account `gh` of connection `name` uses now.
+pub fn expected_account(open: &OpenProject, name: &str) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.expectedAccount.running",
+    done: "statusBar.operations.expectedAccount.done",
+    failed: "statusBar.operations.expectedAccount.failed",
+  }
+  .named(name)
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::Connections))
+}
+
 /// The native file dialog for a provider's program, while it is open.
 pub fn program_pick() -> OperationSpec {
   Wording {

@@ -1,18 +1,16 @@
 //! Operations popover (`E1msJS`, anchored example `imT2E`): opens upward from the activity
 //! item, 6px above the bar, with the running operations and the session's RECENT events
-//! (unresolved failures pinned first). Escape or a click outside closes it. Rows that open
-//! something, the dismiss controls and Open runner log are Tab stops.
+//! (unresolved failures pinned first). Escape or a click outside closes it. Its rows, dismiss
+//! controls and Open runner log are pointer-only, like the rest of the status bar.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::{Ctx, Placement},
-    events::KeyboardEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Popup, Rect, Row, ScrollVertical, Text},
-  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension},
 };
@@ -32,7 +30,7 @@ use crate::{
   ui::{
     icon::Icon,
     message_text,
-    pressable::{Ring, pressable, surface},
+    pressable::{pressable, surface},
   },
 };
 
@@ -45,15 +43,7 @@ const DIVIDER_HEIGHT: f32 = 1.0;
 /// row's time lines up.
 const CHEVRON_WIDTH: f32 = 12.0;
 
-/// `escaped` is set when Escape closes the popover, so the bar can give the focus back to the
-/// activity item it hangs from.
-pub fn popover(
-  ctx: &mut Ctx,
-  log: &ActivityLog,
-  opener: &Opener,
-  anchors: &Anchors,
-  escaped: &Signal<bool>,
-) -> Element {
+pub fn popover(ctx: &mut Ctx, log: &ActivityLog, opener: &Opener, anchors: &Anchors) -> Element {
   let running: Vec<&Operation> = log.running().collect();
   let recent = log.recent();
   let mut list = Column::new()
@@ -87,14 +77,6 @@ pub fn popover(
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .box_shadow(ExtraShadow::Popover.role())
-    .on_key_down({
-      let escaped = escaped.clone();
-      move |event: KeyboardEvent| {
-        if event.key == "Escape" {
-          escaped.set(true);
-        }
-      }
-    })
     .child(header(ctx, running.len()))
     .child(
       ScrollVertical::new(list)
@@ -133,8 +115,6 @@ fn footer(ctx: &Ctx, opener: &Opener) -> Element {
     .padding_left(SpacingSize::Sm)
     .justify(Justify::SpaceBetween)
     .align_items(Alignment::Center)
-    // Open runner log sits on the right edge; its focus ring reaches into the panel padding.
-    .overflow_visible()
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(retention);
   if !opener.can_open(&Target::RunnerLog) {
@@ -144,16 +124,14 @@ fn footer(ctx: &Ctx, opener: &Opener) -> Element {
       .padding_bottom(SpacingSize::Xs)
       .into();
   }
-  // The link's own padding keeps the focus ring off its text; the row gives up the same
+  // The link's own padding widens its press area around the text; the row gives up the same
   // amount, so the text stays where the design puts it (`sQkff`).
   let log = opener.clone();
-  let link = pressable(surface().id("status-operations-open-log"), Ring::Outer, move || {
-    log.open_log()
-  })
-  .padding_horizontal(SpacingSize::Xs)
-  .padding_vertical(ExtraSpacing::Hair.role())
-  .rounded(RadiusSize::Sm)
-  .child(Text::new(&ctx.t("runner.connection.openLog")).variant(TypographyStyle::Link));
+  let link = pressable(surface().id("status-operations-open-log"), move || log.open_log())
+    .padding_horizontal(SpacingSize::Xs)
+    .padding_vertical(ExtraSpacing::Hair.role())
+    .rounded(RadiusSize::Sm)
+    .child(Text::new(&ctx.t("runner.connection.openLog")).variant(TypographyStyle::Link));
   row
     .padding_top(ExtraSpacing::Tight.role())
     .padding_right(SpacingSize::Xs)
@@ -217,8 +195,8 @@ struct RowParts {
   time: Element,
 }
 
-/// A row; one that opens something is a button beside its dismiss control, so both are Tab
-/// stops (lurq never makes a button inside a button a stop of its own).
+/// A row; one that opens something is a button beside its dismiss control, as lurq does not
+/// press a button inside a button.
 fn row(parts: RowParts, target: &Target, failure: Option<OperationId>, opener: &Opener) -> Element {
   let chevron = Row::new()
     .width(Dimension::Px(CHEVRON_WIDTH))
@@ -242,7 +220,7 @@ fn row(parts: RowParts, target: &Target, failure: Option<OperationId>, opener: &
       .with_children(content);
     row
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-      .child(pressable(button, Ring::Inset, move || open.open(&target, failure)))
+      .child(pressable(button, move || open.open(&target, failure)))
   } else {
     row
       .padding(SpacingSize::Sm)

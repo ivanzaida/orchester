@@ -66,24 +66,20 @@ fn status(desktop: &mut Desktop) -> String {
 }
 
 #[test]
-fn agent_editor_tab_follows_the_fields_and_skips_disabled_actions() {
+fn agent_editor_tab_follows_the_fields_only() {
   let mut desktop = new_profile();
-  desktop.tab_to("new-agent", MAX_STOPS);
-  // The new profile, selected in the list, then the form. Save draft and Publish (before New
-  // agent) and Import cannot be used yet and are skipped; the connection, model and effort
-  // selects are stops. After the form Tab moves on to the
-  // status bar.
+  // The fields; the connection, model and effort selects are stops. The list, the topbar's
+  // Save draft and Publish and the status bar are pointer-only, so Tab wraps.
   assert_eq!(
-    desktop.stops(8, false),
+    desktop.stops(7, false),
     expected(&[
-      Some("agent-new"),
       Some(ROLE),
       Some(RESPONSIBILITY),
       None,
       None,
       None,
       Some(INSTRUCTIONS),
-      Some("status-runner"),
+      Some(ROLE),
     ])
   );
   assert_eq!(desktop.stops(3, true), expected(&[Some(INSTRUCTIONS), None, None]));
@@ -130,30 +126,24 @@ fn stored_profile(desktop: &Desktop, role: &str) -> String {
 }
 
 #[test]
-fn agent_list_keeps_the_focus_on_the_chosen_profile() {
+fn agent_list_press_chooses_the_profile_without_taking_the_focus() {
   let mut desktop = with_connection();
   let planner = stored_profile(&desktop, "Planner");
   let builder = stored_profile(&desktop, "Builder");
   desktop.wait_for("nav-agents");
   desktop.click("nav-agents");
   desktop.wait_for(&builder);
-  // Choosing a profile opens a new editor; the focus stays on the chosen item.
-  desktop.tab_to(&builder, MAX_STOPS);
-  desktop.enter();
+  desktop.press(&builder);
   desktop.settle("the builder in the editor", |tree| {
     tree
       .get_element_by_id_mut(ROLE)
       .and_then(|element| element.as_text_input())
       .is_some_and(|input| input.value() == "Builder")
   });
-  assert_eq!(desktop.focused().as_deref(), Some(builder.as_str()));
-  // A press moves the focus with the selection too.
-  desktop.press(&planner);
-  desktop.settle("the planner in the editor", |tree| {
-    tree
-      .get_element_by_id_mut(ROLE)
-      .and_then(|element| element.as_text_input())
-      .is_some_and(|input| input.value() == "Planner")
-  });
-  assert_eq!(desktop.focused().as_deref(), Some(planner.as_str()));
+  assert_eq!(desktop.focused(), None);
+  // Tab reaches the editor's fields, never the list items.
+  let stops = desktop.stops(MAX_STOPS, false);
+  assert!(stops.contains(&Some(ROLE.to_owned())));
+  assert!(!stops.contains(&Some(planner)));
+  assert!(!stops.contains(&Some(builder)));
 }

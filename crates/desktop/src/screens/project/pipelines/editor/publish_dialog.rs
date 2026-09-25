@@ -225,6 +225,7 @@ fn actions(
       ActionButton::new(ctx.t("common.cancel"))
         .icon(Icon::X)
         .id("publish-cancel")
+        .in_form()
         .on_click(move || close.set(false))
         .render(ctx),
     )
@@ -233,6 +234,7 @@ fn actions(
         .primary()
         .icon(Icon::Check)
         .id("publish-confirm")
+        .in_form()
         .on_click(publish)
         .enabled(!pending)
         .render(ctx),
