@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use lurq::{
   app::theme::{ThemeTypography, TypographyStyle},
-  layout::text_style::{FontWeight, TextStyle},
+  layout::text_style::{FontFeature, FontFeatures, FontWeight, TextStyle},
   node::color::Color,
 };
 
@@ -210,9 +210,12 @@ fn style(font_size: f32, weight: FontWeight, color: &str) -> TextStyle {
   }
 }
 
+/// Geist Mono without ligatures: its `liga` turns `--` into one cell-wide glyph that overlaps the
+/// space before it, so commands such as `gh auth login --hostname` would read wrong.
 fn mono(font_size: f32, color: &str) -> TextStyle {
   TextStyle {
     font_family: MONO.into(),
+    font_features: FontFeatures::from([FontFeature::disable(*b"liga"), FontFeature::disable(*b"calt")]),
     ..style(font_size, FontWeight::Normal, color)
   }
 }

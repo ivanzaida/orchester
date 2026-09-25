@@ -33,7 +33,7 @@ orchester-ipc = { path = "crates/ipc" }
 orchester-store = { path = "crates/store" }
 # Local wall-clock time of status bar events (the OS time zone); std has no local time.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-lurq = { version = "0.26.0", default-features = false }
+lurq = { version = "0.27.0", default-features = false }
 parking_lot = "0.12"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
