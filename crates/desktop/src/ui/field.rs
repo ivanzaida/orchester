@@ -11,13 +11,17 @@ use lurq::{
   components::{Button, Column, Row, Text, TextInput, TextOverflow},
   core::Signal,
   layout::Alignment,
-  node::{CursorIcon, Element, SelectPartStyle, Style, border::Border, dimension::Dimension},
+  node::{
+    CursorIcon, Element, SelectCheckmarkPosition, SelectPartStyle, SelectStyle, Style, border::Border,
+    dimension::Dimension, padding::Padding,
+  },
 };
 
 use super::{
-  icon::{Icon, IconSize, icon},
+  icon::{Icon, IconSize, icon, select_icon},
   pressable::TAB_STOP,
 };
+use crate::theme::{ExtraRadius, ExtraShadow, ExtraSpacing, SELECT_CHECK_SLOT, select_menu_scrollbar};
 
 /// Below the control: nothing, or the error of the current value.
 pub enum FieldNote {
@@ -92,6 +96,65 @@ pub fn styled_input(ctx: &Ctx, value: Signal<String>, typography: TypographyStyl
     .caret_color(PaletteColor::TextPrimary)
 }
 
+/// Height of an option in an open select menu (`L20XvS`).
+const SELECT_OPTION_HEIGHT: f32 = 32.0;
+/// Most an open select menu grows to, eight options and the border, before it scrolls (`g3poI`).
+const SELECT_MENU_MAX_HEIGHT: f32 = 266.0;
+/// Space between a select and its open menu (`g3poI`).
+const SELECT_MENU_OFFSET: f32 = 4.0;
+
+/// A select drawn like a field (`ZGwlv`) at `height`, with its open menu (`u0ByM`, options
+/// `L20XvS`, states `goMne`). A fill means the pointer is on an option, a check marks the value,
+/// and the keyboard highlight is the inset focus ring (`xURvJ`); they compose.
+pub fn select_style(ctx: &Ctx, height: f32) -> SelectStyle {
+  let theme = ctx.theme();
+  let input = theme.form().input.clone();
+  let hover = || SelectPartStyle::new().background(PaletteColor::AccentMuted);
+  let ring = || SelectPartStyle::new().box_shadow(ExtraShadow::FocusRingInset.role());
+  SelectStyle::unstyled()
+    .trigger(select_trigger(ctx, height))
+    .trigger_hovered(SelectPartStyle::new().border_inside(BorderSize::Sm, input.border_focus.clone()))
+    .trigger_focused(select_trigger_focused(ctx))
+    .trigger_open(select_trigger_focused(ctx))
+    .chevron(select_icon(Icon::ChevronDown))
+    .chevron_open(select_icon(Icon::ChevronUp))
+    .chevron_color(PaletteColor::TextSecondary)
+    .menu(
+      SelectPartStyle::new()
+        .background(PaletteColor::SurfaceRaised)
+        .border_inside(BorderSize::Sm, input.border)
+        .rounded(ExtraRadius::SelectMenu.role())
+        .padding(ExtraSpacing::SelectMenu.role())
+        .box_shadow(ExtraShadow::Popover.role()),
+    )
+    .menu_scrollbar(select_menu_scrollbar())
+    .max_menu_height(SELECT_MENU_MAX_HEIGHT)
+    .menu_gap(SELECT_MENU_OFFSET)
+    .option(
+      SelectPartStyle::new()
+        .min_height(SELECT_OPTION_HEIGHT)
+        .padding(Padding::symmetric(SpacingSize::Sm, 0.0))
+        .rounded(input.radius)
+        .text(input.text.resolve(&theme.typography(), &theme.palette())),
+    )
+    .option_hovered(hover())
+    .option_selected_hovered(hover())
+    .option_highlighted(ring())
+    .option_selected_highlighted(ring())
+    .option_disabled(SelectPartStyle::new().text_color(PaletteColor::TextMuted))
+    .option_detail(
+      SelectPartStyle::new()
+        .typography(TypographyStyle::Caption)
+        .text_color(PaletteColor::TextMuted),
+    )
+    .single_checkmark(true)
+    .checkmark(select_icon(Icon::Check))
+    .checkmark_color(PaletteColor::TextPrimary)
+    .checkmark_size(SELECT_CHECK_SLOT)
+    .checkmark_position(SelectCheckmarkPosition::Trailing)
+    .checkmark_gap(SpacingSize::Sm)
+}
+
 /// Trigger of a select drawn like a field (`ZGwlv`) at `height`.
 pub fn select_trigger(ctx: &Ctx, height: f32) -> SelectPartStyle {
   let theme = ctx.theme();
@@ -106,7 +169,7 @@ pub fn select_trigger(ctx: &Ctx, height: f32) -> SelectPartStyle {
 }
 
 /// Focused trigger of a select: the focused field stroke (`o8Oug`).
-pub fn select_trigger_focused(ctx: &Ctx) -> SelectPartStyle {
+fn select_trigger_focused(ctx: &Ctx) -> SelectPartStyle {
   SelectPartStyle::new().border_inside(BorderSize::Md, ctx.theme().form().input.border_focus.clone())
 }
 

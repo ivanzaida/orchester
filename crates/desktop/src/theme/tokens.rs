@@ -38,8 +38,9 @@ pub const CONTROL_PADDING_X: f32 = 12.0;
 pub const FOCUS_STROKE: f32 = 1.5;
 /// Underline of the selected tab (`Iefue`, `Okyxt`).
 pub const TAB_INDICATOR_STROKE: f32 = 2.0;
-/// Disclosure icon of a select field (`eASPF` in `ZGwlv`).
-pub const SELECT_CHEVRON_SIZE: f32 = 14.0;
+/// Chevron of a select field and check of its selected option (`eASPF` in `ZGwlv`, `ClxwV` in
+/// `L20XvS`); also the width of the check slot every option reserves.
+pub const SELECT_ICON_SIZE: f32 = 14.0;
 /// Lucide icon font, the icon library of every Pencil icon node.
 pub const ICON_FONT: &str = "lucide";
 
@@ -47,6 +48,8 @@ pub const ICON_FONT: &str = "lucide";
 pub const RADIUS_NOTICE: f32 = 8.0;
 /// Corner radius of the bars in the Orchester mark (`DIMZ6`).
 pub const RADIUS_MARK: f32 = 2.0;
+/// Corner radius of an open select menu: option radius 7 plus its padding 4 (`u0ByM`).
+pub const RADIUS_SELECT_MENU: f32 = 11.0;
 
 /// Gaps and paddings used by the Getting started screens, the sidebar and the overview.
 /// Pencil node ids are listed on the `ExtraSpacing` variants that use them.
@@ -72,6 +75,7 @@ pub const SPACE_MARGIN: f32 = 120.0;
 pub const SPACE_FIELD: f32 = 9.0;
 pub const SPACE_PROPERTY: f32 = 15.0;
 pub const SPACE_DIVIDER: f32 = 18.0;
+pub const SPACE_SELECT_MENU: f32 = 4.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;
@@ -93,3 +97,10 @@ pub const FOCUS_RING: &str = "#EEEEEE";
 pub const FOCUS_GAP: &str = "#101010";
 pub const FOCUS_WIDTH: f32 = 2.0;
 pub const FOCUS_EXTENT: f32 = 4.0;
+
+/// Overlay scrollbar of a long select menu (`g3poI`): a 4px `border` thumb, radius 2, 1px from
+/// the menu border, no track.
+pub const SELECT_SCROLLBAR_WIDTH: f32 = 4.0;
+pub const SELECT_SCROLLBAR_RADIUS: f32 = 2.0;
+pub const SELECT_SCROLLBAR_INSET: f32 = 1.0;
+pub const NO_TRACK: &str = "#00000000";

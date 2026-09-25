@@ -10,6 +10,7 @@ mod shadow;
 mod tokens;
 mod typography;
 
+pub use form::select_menu_scrollbar;
 use lurq::app::App;
 pub use metrics::{ExtraRadius, ExtraSpacing};
 pub use palette::ExtraColor;
@@ -22,8 +23,9 @@ pub const TITLE_BAR_HEIGHT: f32 = tokens::TITLE_BAR_HEIGHT;
 pub const WINDOW_CONTROL_WIDTH: f32 = tokens::WINDOW_CONTROL_WIDTH;
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = tokens::CONNECTOR_STROKE;
-/// Size of the chevron lurq draws in a select, the field's disclosure icon (`eASPF` in `ZGwlv`).
-pub const SELECT_CHEVRON_SIZE: f32 = tokens::SELECT_CHEVRON_SIZE;
+/// Width of the check slot every select option reserves, the size of the check (`ClxwV` in
+/// `L20XvS`).
+pub const SELECT_CHECK_SLOT: f32 = tokens::SELECT_ICON_SIZE;
 
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),

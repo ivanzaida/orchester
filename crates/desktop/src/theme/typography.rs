@@ -6,7 +6,7 @@ use lurq::{
   node::color::Color,
 };
 
-use super::tokens::{FONT, ICON_FONT, MONO, MUTED, SUBTLE, TEXT};
+use super::tokens::{FONT, ICON_FONT, MONO, MUTED, SELECT_ICON_SIZE, SUBTLE, TEXT};
 
 /// Pencil text styles without a built-in lurq role, registered as `TypographyStyle::Extra`.
 /// Use these instead of spelling extra names at call sites.
@@ -76,6 +76,8 @@ pub enum ExtraTypography {
   IconPanel,
   /// Window control icons in the title bar (`QQmsI`), 14px.
   IconWindowControl,
+  /// Chevron of a select and check of its selected option (`eASPF`, `ClxwV`), 14px.
+  IconSelect,
   /// Spaced mono label on the pipeline canvas, e.g. "ON TASK START" (`wRjZD`, `qwFek`, `RAoRx`).
   CanvasLabel,
   /// Small mono tag beside an inspector title, e.g. "STEP 05" (`kAJZA`, `N2NBl`).
@@ -99,7 +101,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 42] = [
+  const ALL: [Self; 43] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -132,6 +134,7 @@ impl ExtraTypography {
     Self::IconFeature,
     Self::IconPanel,
     Self::IconWindowControl,
+    Self::IconSelect,
     Self::CanvasLabel,
     Self::MonoTag,
     Self::MonoValue,
@@ -178,6 +181,7 @@ impl ExtraTypography {
       Self::IconFeature => "icon-feature",
       Self::IconPanel => "icon-panel",
       Self::IconWindowControl => "icon-window-control",
+      Self::IconSelect => "icon-select",
       Self::CanvasLabel => "canvas-label",
       Self::MonoTag => "mono-tag",
       Self::MonoValue => "mono-value",
@@ -278,6 +282,7 @@ impl ExtraTypography {
       Self::IconFeature => icon(19.0),
       Self::IconPanel => icon(24.0),
       Self::IconWindowControl => icon(14.0),
+      Self::IconSelect => icon(SELECT_ICON_SIZE),
       Self::CanvasLabel => TextStyle {
         letter_spacing: 1.0,
         ..mono(9.0, SUBTLE)
