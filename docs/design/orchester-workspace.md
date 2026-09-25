@@ -61,6 +61,12 @@ Canonical screens and states, in canvas order:
 | 02.F · Runner stopped / Reconnecting | `MAn7V` | [Preview](previews/MAn7V.png) |
 | 02.G · Runner reconnected | `YHS1v` | [Preview](previews/YHS1v.png) |
 | 02.H · Runner could not restart | `EFY7I` | [Preview](previews/EFY7I.png) |
+| 02.I · Activity / Live transcript | `SfXU1` | not exported yet |
+| 02.J · Run permissions / Change for this run | `q4K1G` | not exported yet |
+| 02.K · Blocked by permission / Needs you (later milestone) | `H03XN` | not exported yet |
+| 02.L · Stopped at limit / Raise limit | `D6Nwxz` | not exported yet |
+| 02.I states · Activity empty, loading, failed, not following (compact) | `hig8O` | not exported yet |
+| Token budgets · input states and display rule (compact) | `T1n5BA` | not exported yet |
 | Sidebar runner card states (compact) | `O5NoB1` | [Preview](previews/O5NoB1.png) |
 | 03.01 · Pipeline / Feature delivery | `Q21HOA` | [Preview](previews/Q21HOA.png) |
 | 03.02 · Publish v4 / Confirm | `zfjsK` | [Preview](previews/zfjsK.png) |
@@ -73,7 +79,9 @@ Canonical screens and states, in canvas order:
 | 04.01 · Project connections | `a4Lqb` | [Preview](previews/a4Lqb.png) |
 | 04.02 · Add agent provider | `h6CmJ` | [Preview](previews/h6CmJ.png) |
 | 04.03 · Agent profiles / Assign connection & model | `WPmtS` | [Preview](previews/WPmtS.png) |
+| 04.04 · Agent profile / Permissions | `T1rjv` | not exported yet |
 | 04.A · Expired MCP access / Reconnect | `RZUKo` | [Preview](previews/RZUKo.png) |
+| 04.B · Connection cannot enforce a permission (compact) | `G5oNzl` | not exported yet |
 | 05.01 · Project rules & effective prompt | `yRKeF` | [Preview](previews/yRKeF.png) |
 | 05.02 · Resolved prompt / Inspect sources | `fZa3J` | [Preview](previews/fZa3J.png) |
 | 05.03 · Variables / Search, inspect & insert | `EfTiT` | [Preview](previews/EfTiT.png) |
@@ -95,12 +103,12 @@ Canonical screens and states, in canvas order:
 | 08.B · PR updated while composing (compact state) | `hfoDa` | [Preview](previews/hfoDa.png) |
 | 08.C · Agent request queued (compact state) | `uD6Ho` | [Preview](previews/uD6Ho.png) |
 
-There are 57 full screen frames; earlier screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
+There are 62 full screen frames; earlier screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
 
 - Getting started: first launch → GitHub authorization → repository → runner/agents → ready. Setup blocking and compact empty-project feedback are below the main flow.
-- Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue. The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. Pause and retry are alternatives in `O4vgKt`; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Application lifecycle states (close with active work, runner connection, recovery on start) and the sidebar runner card states are in `Z7Fyr8`. Group positions are y 160 / 1376 / 3640 / 5904 / 7120 / 8216 respectively; the section height is 10832.
+- Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue. The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. Pause and retry are alternatives in `O4vgKt`; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Application lifecycle states (close with active work, runner connection, recovery on start) and the sidebar runner card states are in `Z7Fyr8`. Agent execution states (Activity transcript, run permissions, permission request, stopped at limit) with the compact Activity states and the token budget specimen are in `BnxJ1`. Group positions are y 160 / 1376 / 3640 / 5904 / 7120 / 8216 / 10832 respectively; the section height is 13096.
 - Pipelines: the visual editor is separate from task execution. `UJUi0` holds edit → publish confirmation → published. `t9zWUe` holds the library (the Pipelines navigation destination) → new pipeline → an empty pipeline in the editor. `rBy9L` holds the empty library and the publish-blocked editor. Group positions are y 160 / 1376 / 2592; the section height is 3808.
-- Agents & connections: connections → add provider → assign connection/model in the agent profile; expired-access recovery is below.
+- Agents & connections: connections → add provider → assign connection/model in the agent profile (`kOGgX` row 1), then the profile's Permissions tab (04.04, row 2); expired-access recovery and the compact enforcement-gap state 04.B are in `DLRW5` (now at y 2424; section height 3640).
 - Instructions: rules → composed prompt → variable catalog; unavailable-variable state is below.
 - Tools & imports: library → configuration → access policy in the first group. Select → resolve dependencies → ready to import is a separate complete row in `TSGMX`. Success/failure panels remain in `tjNmM`.
 - Secrets & access: library → add credential → runtime approval; duplicate-name validation is below.
@@ -110,7 +118,7 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 
 ## Components and tokens
 
-43 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
+48 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
 
 | Family | Node |
 | --- | --- |
@@ -157,6 +165,11 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 | Window status bar | `pmOpt` |
 | Window status bar operations popover | `E1msJS` |
 | Focus ring overlay (design-only, see [Focus](#focus)) | `X9gPDr` |
+| Field / Token budget (whole-number input with `tokens` unit) | `sN3du` |
+| Control / Switch (off state; on = `$accent` fill, knob right) | `K8ItM` |
+| Permissions / Command entry (allowlist chip with remove) | `bpmzN` |
+| Activity / Transcript entry | `N4SlQq` |
+| Activity / Step header | `mDnc3` |
 
 Colors: canvas `#101010`, sidebar `#141414`, surface `#1A1A1A`, raised `#222222`, hover/selection `#2C2C2C`, border `#363636`, hairline `#2B2B2B`, text `#EEEEEE`, muted `#A3A3A3`, subtle `#8F8F8F`, primary action `#E6E6E6` with `#181818` text, focus ring `#EEEEEE` with a `#101010` gap (`focus-ring`, `focus-gap`). Variables also hold fonts, spacing and 7/12px control/panel radii. Status always includes text and an icon.
 
@@ -205,7 +218,7 @@ that is not measured.
 | Agents | bot · *Agents* `2/4` | agent slots in use / configured (`settings`, runner) | Tasks › Queue (`Z22wg`) |
 | Queued | clock · *Queued* `2` | queued task runs in the project | Tasks › Queue (`Z22wg`) |
 | Needs you | message · *Needs you* `2` | plan approvals, questions, reviews (same count as the Overview metric) | Overview › Needs you panel |
-| Budget | wallet · *Spent today* `$3.84 / $20.00` | project usage vs. project daily budget | **Not built:** usage accounting and a usage screen do not exist; until then the item is non-interactive with a tooltip |
+| Tokens | gauge · *Tokens today* `3.8M / 20M` | counted tokens (input + output, see [Token budgets](#token-budgets)) of all runs in the project today vs. the project daily token budget | **Not built:** usage accounting and a usage screen do not exist; until then the item is non-interactive with a tooltip |
 | Version | `v0.1.0` | application version | Non-interactive; tooltip with build info |
 
 Not included on purpose: a notifications counter (the Overview top bar already has a bell, and a
@@ -258,7 +271,7 @@ the session is not designed.
 Rule: the status bar is for ambient state; an inline notice is only for something that needs the
 user's decision.
 
-**Narrow windows.** Drop the version first, then the budget, then labels (icon + count only). The
+**Narrow windows.** Drop the version first, then the token item, then labels (icon + count only). The
 activity text truncates with an ellipsis; its tooltip holds the full text.
 
 Proposed copy namespace: `statusBar.*` (`statusBar.runner.*`, `statusBar.activity.*`,
@@ -352,7 +365,7 @@ shadow: control + 4px on each side for outer, the control bounds for inset.
 
 The task creation fixture includes four acceptance criteria, including cancelled OAuth, and shows the six steps from published Feature delivery v3. Create & run leads to research and planning; it does not bypass plan approval. The plan screen exposes plan v1, scope and acceptance criteria, with Approve plan & continue and Request changes. Requested changes return to Planner; a revised plan requires a new decision.
 
-Pause first settles at a safe checkpoint and stops new scheduling/tool calls; only then may the UI claim Paused. Resume continues the same run and version snapshot. Cancel stops new scheduling and preserves work and artifacts; it does not undo completed external operations, and unresolved in-flight outcomes remain visible. Retry-limit recovery offers one explicitly authorized additional attempt within the remaining budget or revision of the task first. The exhausted example is an alternative Run 129 / Attempt 3; the normal Run 128 shows intermediate checkpoint `4b92ad0` and final reviewed revision `8f3a2c1`.
+A run that reaches its time or token budget stops its agents, commits a checkpoint and waits as *Stopped at limit* until the user raises the limit ([Stopped at limit](#stopped-at-limit)). Pause first settles at a safe checkpoint and stops new scheduling/tool calls; only then may the UI claim Paused. Resume continues the same run and version snapshot. Cancel stops new scheduling and preserves work and artifacts; it does not undo completed external operations, and unresolved in-flight outcomes remain visible. Retry-limit recovery offers one explicitly authorized additional attempt within the remaining budget or revision of the task first. The exhausted example is an alternative Run 129 / Attempt 3; the normal Run 128 shows intermediate checkpoint `4b92ad0` and final reviewed revision `8f3a2c1`.
 
 ## Pipelines library, creation and publishing
 
@@ -378,7 +391,7 @@ Tasks (`J9467`) is the main backlog, with All tasks, Drafts, Queue, Needs review
 
 Create multiple supports pasting one title per line, adding rows and editing each task's brief, acceptance criteria, pipeline, limits and dependencies. Pasting titles does not invent accepted requirements. The drawn state shows ten completed briefs, with Task 03 selected. Create 10 tasks creates ten drafts and returns to Tasks; it does not start agents. It remains valid to save incomplete drafts, but missing required details are surfaced before queueing. Creating and queueing must each be idempotent; a failed response must not result in duplicate tasks or runs on retry.
 
-The fixture uses tasks ORC-129–138 in a separate sample backlog from the original overview. ORC-131, Add switcher keyboard shortcuts, depends on ORC-129, Add repository switcher, being merged to main. References to Task 01 before creation are mapped to the new local task identity during creation. All ten tasks use published Feature delivery v3, a $5 per-task cap and 30-minute run limit; the selected group cap is $50. These remain fictional values and records.
+The fixture uses tasks ORC-129–138 in a separate sample backlog from the original overview. ORC-131, Add switcher keyboard shortcuts, depends on ORC-129, Add repository switcher, being merged to main. References to Task 01 before creation are mapped to the new local task identity during creation. All ten tasks use published Feature delivery v3, a 1.4M-token per-task budget and 30-minute run limit; the selected group cap is 14M tokens. These remain fictional values and records.
 
 | Setting | Proposed behavior |
 | --- | --- |
@@ -406,7 +419,7 @@ The project chat handles ideation, decomposition, queue coordination and cross-t
 
 The header identifies the project Orchestrator profile and model; Agent profile links to the existing profile editor. Project instructions apply to the project coordinator, and Manage context shows attached files, selected tasks and applicable source versions. Chat text alone does not publish permanent instructions. Repository access is not proof the entire repository was read; responses must identify sources actually consulted. Tool credentials and raw secrets remain excluded. Provider/model names in this fixture have the same unverified illustrative status as the other model screens.
 
-The shown user asks to plan from an attached scope.md. The Orchestrator proposes ten briefs with acceptance criteria, a merge dependency, parallelism of two tasks and a $50 aggregate cap. The proposal's local task numbers are not persisted task IDs. Review & create tasks opens the existing bulk brief editor (`OqmXc`) populated with that proposal. Selecting a proposed row opens its brief in that editor. Create 10 tasks then saves drafts and returns confirmed IDs/links to this conversation; it does not queue work. Run selected opens the existing parallel or sequential scheduling review with the proposal settings carried over. Edits preserve the conversation/proposal link. This is one connected flow, not a second task or scheduler implementation.
+The shown user asks to plan from an attached scope.md. The Orchestrator proposes ten briefs with acceptance criteria, a merge dependency, parallelism of two tasks and a 14M-token aggregate cap. The proposal's local task numbers are not persisted task IDs. Review & create tasks opens the existing bulk brief editor (`OqmXc`) populated with that proposal. Selecting a proposed row opens its brief in that editor. Create 10 tasks then saves drafts and returns confirmed IDs/links to this conversation; it does not queue work. Run selected opens the existing parallel or sequential scheduling review with the proposal settings carried over. Edits preserve the conversation/proposal link. This is one connected flow, not a second task or scheduler implementation.
 
 Natural-language queue commands use the same project actions, permission checks, scheduling limits and plan/tool approvals as direct UI controls. Resolve the intended task/group scope; ambiguous requests need clarification. An explicit authorized action need not acquire an unrelated extra chat approval. Changes and their outcomes remain inspectable with exact affected task links. Requests to pause scheduling hold new starts; pausing a working task is a separate action at its checkpoint. Progress answers read actual run state and link to tasks; an unavailable status source is reported as unavailable. Fresh authorization, missing credentials or a changed configuration cannot be bypassed through chat.
 
@@ -423,6 +436,67 @@ The task has a visible Conversation tab, an Open conversation entry on the revie
 Delivery states distinguish Queued, Delivered and Acknowledged. Acknowledgement does not prove the requested change was applied. Work-changing messages are delivered at the next checkpoint; Pause is the visible control for an urgent interruption. While paused, messages remain queued and are delivered before the next action on resume. Scope changes return to plan review rather than silently changing approved work.
 
 Proposed interaction contract: failed or pending sends retain the draft; retries deduplicate the message; Enter adds a newline and Ctrl/Cmd+Enter sends. Escape closes the recipient picker and restores focus. Keyboard, delivery and persistence behavior remains to be implemented and tested.
+
+## Token budgets
+
+Decided 2026-09-25 (user): budgets are measured in tokens, not money. Every former money amount in the design is now a token amount: new task (`l2YA4`), bulk limits (`OqmXc`), group and per-task caps (`W1Dq6`, `IyJ5a`), orchestrator proposal (`I7TCI`), run snapshot rows (`RD4pc`, `x3lVC`, `jgqPe`, `vpgrJ`, `Oqmog`, `J3JZaT`), step budget (`Q21HOA`, `zfjsK`, `yf6XH`, `UjHDL`), setup run limits (`x1YpfN`, `Q7htyU`), PR fix request (`Rrmhf`), the Overview metric (`Twtqc` and the lifecycle backgrounds) and the status bar item (`pmOpt`, states `keJ9Z`). Fixture values: 1.4M per task, 14M per group, 400k per step, 20M per project per day. The fixture task "Add task cost breakdown" is now "Add task token breakdown".
+
+**What counts.** Token counts come from the usage each CLI reports (per turn or per invocation), never from estimates. Counted = input + output (reasoning output is part of output). Cached input is shown separately (*Cached input · 1.2M · not counted*) and does not count toward any budget. Where a CLI reports cached tokens as part of input (OpenAI-style usage), counted input = input − cached; where it reports them separately (Claude's cache reads), they are simply excluded; cache writes count as input. Field names are unverified. Money fields (`total_cost_usd` and similar) are ignored. Because usage arrives after a turn, a run can end slightly above its budget; the UI shows the real figure, never a clamped one.
+
+**Display rule** (specimen `T1n5BA`).
+
+- Below 1 000: the exact number (`980`).
+- From 1 000: `k`; from 1 000 000: `M`; from 1 000 000 000: `B`.
+- One decimal while the scaled value is below 100, none from 100 up; a trailing `.0` is dropped: `12.5k`, `18k`, `250k`, `412k`, `1.4M`, `20M`.
+- Round half up. A value that rounds to 1 000 of a unit moves to the next unit (`999 960` → `1M`).
+- Add "tokens" wherever the label does not already say so (`412k / 1.4M tokens`; the Overview metric is labelled *Tokens today* and shows `3.8M`).
+- Spend reads *used / budget*. Tooltips show the exact count (`412 345 tokens`).
+
+Implementation sketch: `fn compact(n: u64) -> String` — pick the unit by the thresholds 1e3 / 1e6 / 1e9; if `n / unit < 100` round to tenths, else to a whole number, using integer arithmetic (half up) to avoid float drift; if the rounded value reaches 1000, move to the next unit; strip `.0`. Unit letters are not translated; the word "tokens" and the "used / budget" pattern are i18n keys with placeholders.
+
+**Input rule** (user correction 2026-09-25): budget fields take **absolute whole numbers only**, never `1.4M` or `250k`. Field `sN3du` (*Field / Token budget*): the number, then a muted `tokens` unit inside the field. Digits are grouped with spaces while typing (`1 400 000`) — a design choice for readability; the caret stays after the same digit. Spaces, commas and underscores in pasted text are removed; anything else makes the value invalid. A read-back under or beside the field shows the compact value (*= 1.4M tokens*; in the raise-limit panel also the difference, *600k more than now*). Validation appears under the field with an alert icon, and the field gets a 1.5px `$text` border — grayscale, like every other error:
+
+| Input | Message |
+| --- | --- |
+| empty | *Enter a token budget.* |
+| `1.4M`, `1,4`, letters | *Use digits only, for example 1400000.* |
+| `0` | *Enter a budget above 0 tokens.* |
+| above the maximum | *A run budget can be at most 100M tokens.* (the maximum is a proposed constant) |
+
+The run-limits picker in bulk creation (`OqmXc`, *Run limits / task*) is a select that shows the compact value and opens the same inputs.
+
+**Where budgets live.** Task/run budget (new task, bulk, queue), group cap (queue), step budget (pipeline step), project daily budget (status bar, Overview). Exhausting the group cap stops further scheduling with a reason; exhausting a run or step budget stops the run at its limit (below).
+
+## Stopped at limit
+
+Decided 2026-09-25 (user): when a run reaches its time or token budget, its agents are stopped, a checkpoint is committed and the run pauses as **Stopped at limit**. It continues only after the user raises the limit.
+
+**02.L (`D6Nwxz`)**, built on 02.A Paused. The page description says what happened (*Stopped at the token limit at 12:31*). The top notice names the limit and the checkpoint (*Stopped at the token limit · checkpoint 7c1e9f2*) and states that nothing runs until the limit is raised. Below it, *Raise the limit to continue*: each limit with what was used (*Used 1.4M of 1.4M · Implement stopped mid-step*, *Used 24 of 30 minutes*) and its input with the read-back (*= 2M tokens · 600k more than now*). The token input is focused because the token limit was hit; after a time stop the time field is. The single primary action states the result (*Continue with 2M tokens*). The explanation says what continuing does: a new invocation of the stopped agent from the checkpoint, repeating the unfinished part of the step; the new limit applies to this run only. *Cancel run* stays in the top bar. Working context shows *Budget 1.4M / 1.4M tokens · limit reached* and *Last checkpoint 7c1e9f2 · 12:31 · saved at limit*. The conversation panel shows *Stopped*; messages queue until the run continues. The status variant *Stopped at limit* (octagon-pause) is added to `P3HONM` for lists and the queue; such a run is not counted as running.
+
+Runtime contract: on reaching the limit the runner stops new tool calls, ends the agent CLI process tree, commits the worktree state as a checkpoint on the run branch, then records the state — only then may the UI claim *Stopped at limit*. If the commit fails, the state is *Stopped at limit · checkpoint failed* with the uncommitted changes listed (not drawn). A step-budget stop behaves the same and names the step. A raised limit can never be below what was already used. Whether the time limit counts wall-clock time or only active agent time (excluding waiting for approvals or pause) is an open decision; the fixture assumes active time.
+
+Proposed copy namespace: `runs.limit.*`.
+
+## Activity tab
+
+The task page's Activity tab (`jQt8l`) is the agent transcript: a chronological, readable stream per step execution. **02.I (`SfXU1`)** shows working Run 128.
+
+- **Toolbar:** step filter (*All steps · 3 executions*, a select listing each step execution with agent, invocation and status), *Show raw lines* switch (off by default), live state at the right (*Following live*).
+- **Step execution header** (`mDnc3`): disclosure, step number, step · agent, provider / model · invocation and time span, counted tokens for that execution and a status label. Finished executions are collapsed (chevron-right); the running one is open.
+- **Entries** (`N4SlQq`): time, glyph, one-line header with right-aligned mono meta, optional body text, optional output block. Kinds:
+  - agent message — body text;
+  - reasoning summary — collapsed by default; only the summary the CLI emits is shown;
+  - command — the command, `exit N · duration`, output collapsible (collapsed on success, expanded on failure; long output shows the last lines first with *Show all*);
+  - file change — path and `A/M/D · +added / −removed`; the row opens the file in the Changes tab (↗);
+  - denied or failed tool call / stderr — alert glyph, what was blocked and why (*denied · not an allowed command*);
+  - usage — *Usage reported* with `in · out · cached (not counted)` per invocation or turn;
+  - unparsed raw lines — muted (60 % opacity), collapsed and counted (*2 unparsed lines*); shown line by line when *Show raw lines* is on. Nothing the CLI prints is dropped silently.
+- **Invocation panel** (right, 320px): step and attempt, agent and model, start time, input / output / cached / counted tokens, run budget and the permissions row (opens 02.J). Footnote: counts come from the CLI's reported usage; cached input is not counted.
+- **Follow:** while the run is live the list follows new entries (*Following live*; footer *Builder is working · last event 2 s ago*, a real timestamp, never fake progress). Scrolling up stops following; a centred *Jump to latest · 6 new* button appears above the bottom edge and resumes following.
+
+Compact states (`hig8O`): *No activity yet* (queued run; says why), *Loading activity for Run 128* (spinner; no skeleton that pretends to be entries), *Couldn't load activity* (the run is unaffected; *Open runner log*, *Try again*) and scrolled-up with *Jump to latest*. Secret values never appear in the transcript: tool output passes through the same redaction as logs before it is stored or shown.
+
+Reused: `DeizF` status labels, `ZGwlv` select, `tfGRt` rows, `u1XBP` buttons, `K8ItM` switch. `mBkeJ` (Activity / Event) and `J5MIT` (Conversation / Message) were considered: `mBkeJ` has 74px rows with a subtitle and no meta or output slot, too loose for a dense transcript; agent messages in Activity are run output, not a conversation. Hence the new entry and step-header components. Proposed copy namespace: `runs.activity.*`.
 
 ## Application lifecycle and runner connection
 
@@ -464,7 +538,7 @@ Agent feedback has explicit Ask a question and Request a fix modes. Both record 
 
 Proposed visibility choice: the shown comments are Orchester-only and this is labeled beside every thread and before sending. They are not GitHub review comments, do not post to GitHub, and do not constitute a GitHub Request changes review. GitHub discussions, formal approval and merge remain available through Open in GitHub. Native GitHub discussion import/posting is outside this increment and would need explicit source/visibility and delivery states. No actual GitHub comment, review, task execution or push occurred during this design work.
 
-Sending preserves a local draft until persistence is confirmed and deduplicates retries. Distinguish Saved/Queued, Delivered, Working, Answered, Ready to verify and Resolved; a successful send alone must not claim execution. Questions can fail or need clarification without becoming code work. A queued request (`uD6Ho`) links to the existing task queue. A fix respects task concurrency, agent capacity, branch/worktree serialization and the remaining task budget; multiple requests must not create concurrent writers on one PR branch. The sample shows $3.72 remaining from the existing $5 cap. If budget, time, access or agent availability prevents execution, show the actual blocking reason and retain the request. Previously finished tasks can return from review to implementation; never create a duplicate task or silently reset limits.
+Sending preserves a local draft until persistence is confirmed and deduplicates retries. Distinguish Saved/Queued, Delivered, Working, Answered, Ready to verify and Resolved; a successful send alone must not claim execution. Questions can fail or need clarification without becoming code work. A queued request (`uD6Ho`) links to the existing task queue. A fix respects task concurrency, agent capacity, branch/worktree serialization and the remaining task budget; multiple requests must not create concurrent writers on one PR branch. The sample shows 432k tokens remaining of the existing 1.4M-token budget. If budget, time, access or agent availability prevents execution, show the actual blocking reason and retain the request. Previously finished tasks can return from review to implementation; never create a duplicate task or silently reset limits.
 
 On completion (`i4GUz`), the thread links the agent's answer, pushed commit b7c92e4, changed files and checks for that exact revision. Since your review compares 8f3a2c1 with b7c92e4 and shows two updated files (+4 in the handler, +12 in its test), while the PR still contains six changed files in total. The original 43–45 anchor maps to current 47–49; the added cancellation guard is highlighted separately. The agent reports what it did, but the thread remains Ready to verify. Mark resolved is the reviewer's action and closes only the Orchester thread; it does not approve or merge the PR. Reply or request another fix keeps the conversation and source references together. Resolved threads remain inspectable and can be reopened.
 
@@ -480,11 +554,57 @@ The three new reusable components are QHBNZ (PR list row), j9NDM (changed file),
 
 An agent profile defines a role, responsibilities, role instructions and a project connection/model. Connections establish project access to repositories, agent providers and MCP servers. Tools expose the actual callable actions. A provider is selected per profile; the project does not impose one provider on every agent.
 
+The profile editor has *Profile*, *Permissions* and *Used in pipelines* tabs; see [Agent permissions](#agent-permissions).
+
 The mixed-provider fixture assigns Explorer and Reviewer to Claude · Kontur / Opus, and Orchestrator, Planner and Builder to Codex · Kontur / Sol. The Builder inspector contains separate Connection and Model selectors; provider-supported settings such as reasoning/context appear conditionally. Pipeline steps select a published project profile and inherit its model by default. A step can explicitly override the model, and the inspector shows the effective connection and model.
 
 Connections (`a4Lqb`, section 04) lists GitHub, Codex · Kontur, Claude · Kontur and Project knowledge MCP. The selected connection shows provider, execution location, authentication source, status, last check, available models and read-only Used by links. Add connection (`h6CmJ`) configures an agent provider and validates access before saving. Expired MCP access (`RZUKo`) exposes Reconnect and preserves task work. Revocation blocks future calls immediately; ordinary profile publishing does not rotate or revoke credentials.
 
 Sol, Luna and Opus are illustrative labels supplied during the design discussion. Provider adapters, public model identifiers, authentication options and supported settings were not verified by this design task. The implementation must obtain actual model catalogs and capabilities from each adapter and validate profile compatibility; the mockups do not establish working Codex or Claude integration.
+
+## Agent permissions
+
+Decided 2026-09-25 (user): permissions are set on the agent profile and can be changed during a run. They are part of the profile version, like connection and model: *Publish vN* makes them available to new runs, and a run keeps the permissions it launched with unless you change them for that run.
+
+**Profile editor tabs.** The profile editor (`WPmtS`) now has three tabs under the page heading: *Profile* (identity, connection & model, role instructions), *Permissions* and *Used in pipelines* (count). The former "Used in pipelines" block moved to its tab. A one-line summary of the permissions stays visible at the right of the tab strip on every tab (*Edits files in the task worktree · 3 allowed commands · Network off*).
+
+**Permissions tab (04.04 `T1rjv`).** Three settings, then an enforcement panel:
+
+| Setting | Options (fixture: Builder) | Notes |
+| --- | --- | --- |
+| Repository access | *Read-only* · **Edit files in the task worktree** | Option cards (`lcwsy`). Edits are only ever inside the run's own worktree. |
+| Commands | *Ask before running commands* (disabled, marked *later*) · **Allowed commands** · *Any command in the worktree* | The allowlist is edited as chips (`bpmzN`) plus *Add command*. Entries match by prefix: `pnpm test` also allows `pnpm test src/auth`. A command outside the list is denied and the agent is told why; it is not a failure of the run. *Ask* needs the permission-request flow (below) and stays disabled until it ships. |
+| Network | Switch (`K8ItM`), **Off** | Off: package installs and web requests fail. |
+
+The *Enforced by <CLI>* panel lists each setting with the mechanism the chosen connection uses and whether it is enforced. It comes from a capability check of the connection's CLI (*checked 14:02*), not from a static table. There is no bypass, "skip permissions" or "full auto" option anywhere, and no setting to add one; the panel says so. Wording in the UI is provider-neutral except in this panel, which names the CLI.
+
+**Enforcement gaps (04.B `G5oNzl`, compact).** When the connection cannot enforce a setting, its row shows *not enforced* with an alert icon, and an inline notice explains what actually happens, with two ways out (*Edit allowed commands*, *Turn network on*). Fixture: Explorer on Claude · Kontur with network off and `git` allowed — Claude Code can deny its web tools, but an allowed command such as `git fetch` still reaches the network. A gap never blocks publishing; runs of that profile list the gap in their permission summary so nobody relies on a limit that is not there.
+
+**Pipeline steps narrow, never widen.** The step inspector (`Q21HOA`, and the same inspector in `zfjsK`, `yf6XH`, `UjHDL`) shows *Repository access*, *Commands* and *Network* under the step limits. A step can only choose values at or below its profile's (read-only instead of edit, a subset of the allowlist, network off); wider values are not offered. A narrowed row says so (*Commands · narrowed* `git, pnpm test`) and a note names what the profile additionally allows (*Reviewer v2 also allows pnpm lint*). With no profile selected (`UjHDL`) a single *Permissions —* row and a note say that permissions come from the profile. Effective step permissions = profile ∩ step. The former single "Repository access" value is now the first of these rows.
+
+**On the task page.** The run panels show the current agent's effective permissions as a row with a link: *This run* in 02.10 (`RD4pc`, *Explorer · Read-only · view ↗*) and *Working context* in 02.12 (`jgqPe`) and 02.A (`Oqmog`) (*Builder · Edit files · 3 commands · Network off · change ↗*). The Activity tab's invocation panel repeats it.
+
+**Change for this run (02.J `q4K1G`).** The link opens a popover anchored above the row (same surface as the status bar popover: `$raised`, `$border`, 12px radius, shadow 0 8 24 #00000066; 460px wide). It shows the agent, step, model and the profile version the values came from, then the three settings in compact form, with changed values outlined (fixture: `pnpm build`, *added for this run*). Timing, stated in the popover: **changes apply from the next agent invocation; the invocation running now keeps the permissions it started with.** This is the honest rule for CLIs that read permissions at launch. An invocation is one launch of the agent CLI (a step execution, a retry, a continue after pause or limit). *Apply to this run* changes Run 128 only (scope note bottom left). *Also save to the Builder profile* adds the same change to the profile draft (v3); new runs get it only after publishing. Escape or *Cancel* closes without changes and returns focus to the row. If the current invocation will run for long, Pause then Resume starts a new invocation with the new permissions.
+
+**Blocked by permission (02.K `H03XN`) — later milestone, not v1.** When an agent asks for something outside its permissions (fixture: `pnpm add @octokit/auth-oauth-app`, which also needs network), the task page shows a *Needs you* request card at the top of the run: the exact command, the worktree, what else it needs (network), the agent's stated reason, and three decisions — *Deny* (the agent is told and continues without it), *Allow once* (this exact command, one time, with network for that command) and *Allow for this run* (adds `pnpm add` and network access to this run's permissions from now on). The agent waits on that command; no answer within 10 minutes (proposed) denies it. The request also counts in *Needs you* (status bar, Overview). It needs a CLI hook that asks Orchester instead of denying: Claude Code's permission-prompt tool can route the decision to an MCP tool the runner serves; `codex exec` has no such hook (Codex's app-server protocol has approval requests). Both unverified. In v1 a command outside the permissions is denied and appears as a *denied* entry in Activity (`SfXU1`); the user can then change the run's permissions (02.J).
+
+**How settings map to CLI flags (implementation notes — every item is unverified until checked against the installed CLI versions, on Windows and macOS).**
+
+| Setting | Codex CLI (`codex exec`) | Claude Code (`claude -p`) |
+| --- | --- | --- |
+| Working directory | `--cd <worktree>` | process cwd = worktree |
+| Read-only | `--sandbox read-only` | deny edit tools: `--disallowedTools Edit Write NotebookEdit` (or `--permission-mode plan`) |
+| Edit files in the worktree | `--sandbox workspace-write` | `--permission-mode acceptEdits` |
+| Allowed commands | no flag; Codex exec-policy prefix rules, if they apply to `exec` | `--allowedTools "Bash(git:*)" "Bash(pnpm test:*)"`; anything else is denied in `-p` mode |
+| Any command | `workspace-write` sandbox (commands confined to the worktree) | `--allowedTools Bash`; **not confined to the worktree** unless Claude Code's own sandbox is enabled → shown as a gap |
+| Network off | default of `workspace-write` (sandbox network access off) | `--disallowedTools WebFetch WebSearch`; commands keep network → shown as a gap |
+| Network on | sandbox network access enabled through a `-c` config override | web tools allowed |
+| Ask (later) | app-server approval requests | `--permission-prompt-tool <mcp tool>` |
+| Never used | `--dangerously-bypass-approvals-and-sandbox`, `--full-auto` | `--dangerously-skip-permissions`, `--permission-mode bypassPermissions` |
+
+The fixture shows all three Builder settings enforced by Codex. If exec-policy rules turn out not to apply to `codex exec`, the Codex *Allowed commands* row becomes a gap like 04.B. Sandbox behaviour differs by platform (Codex's sandbox on Windows is the least certain); the capability check must run per machine, and a missing sandbox is a visible gap, never silently treated as enforced.
+
+Proposed copy namespaces: `agents.permissions.*`, `agents.permissions.enforcement.*`, `pipelines.step.permissions.*`, `runs.permissions.*`, `runs.permissionRequest.*`.
 
 ## First project setup
 
@@ -533,7 +653,7 @@ The count of 24 in the mockup refers to this proposed catalog, not a discovered 
 | Pipeline | `pipeline.version` | integer | Published version selected |
 | Run | `run.id` | string | Run created |
 | Run | `run.attempt` | integer | Attempt created |
-| Run | `run.budget` | decimal in project currency | Run limits configured |
+| Run | `run.budget` | integer, tokens | Run limits configured |
 | Run | `run.branch` | string | Working branch created |
 | Run | `run.revision` | string | Commit available |
 | Step | `step.id` | string | Step selected |
