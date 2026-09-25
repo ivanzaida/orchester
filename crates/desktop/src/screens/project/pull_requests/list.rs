@@ -60,6 +60,8 @@ pub struct ListProps {
   pub open_connections: Handler,
   /// Opens a pull request (number, address) in the browser.
   pub open: Arc<dyn Fn(u64, Arc<str>) + Send + Sync>,
+  /// Opens a pull request, by number, in Orchester.
+  pub show: Arc<dyn Fn(u64) + Send + Sync>,
 }
 
 impl PartialEq for ListProps {
@@ -214,13 +216,16 @@ impl PullRequestList {
       return vec![empty.into()];
     }
     let query = self.query.get();
-    let open = props.open.clone();
+    let (open, show) = (props.open.clone(), props.show.clone());
     let rows: Vec<Element> = synced
       .pull_requests
       .iter()
       .filter(|pull_request| pull_request.matches(&query))
       .map(|pull_request| {
-        ctx.mount_keyed::<PullRequestRow>(&pull_request.number().to_string(), row_props(pull_request, &open))
+        ctx.mount_keyed::<PullRequestRow>(
+          &pull_request.number().to_string(),
+          row_props(pull_request, &open, &show),
+        )
       })
       .collect();
     let shown = rows.len();
@@ -253,15 +258,21 @@ impl PullRequestList {
   }
 }
 
-fn row_props(pull_request: &PullRequest, open: &Arc<dyn Fn(u64, Arc<str>) + Send + Sync>) -> RowProps {
-  let (open, number, url) = (
+fn row_props(
+  pull_request: &PullRequest,
+  open: &Arc<dyn Fn(u64, Arc<str>) + Send + Sync>,
+  show: &Arc<dyn Fn(u64) + Send + Sync>,
+) -> RowProps {
+  let (open, show, number, url) = (
     open.clone(),
+    show.clone(),
     pull_request.number(),
     Arc::<str>::from(pull_request.url()),
   );
   RowProps {
     pull_request: pull_request.clone(),
     open: Arc::new(move || open(number, url.clone())),
+    show: Arc::new(move || show(number)),
   }
 }
 

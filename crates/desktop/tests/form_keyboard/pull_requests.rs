@@ -22,14 +22,15 @@ use crate::{
   harness::Desktop,
 };
 
-const AUTH_STATUS: &str = "auth status --hostname github.com --json hosts";
-const LIST: &str = "pr list -R github.com/ivanzaida/kontur --state open --limit 100 --json \
+pub(crate) const AUTH_STATUS: &str = "auth status --hostname github.com --json hosts";
+pub(crate) const LIST: &str = "pr list -R github.com/ivanzaida/kontur --state open --limit 100 --json \
                     number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,additions,deletions,\
                     changedFiles,updatedAt,reviewDecision,statusCheckRollup";
 const RATE_LIMIT: &str = "api --hostname github.com rate_limit";
-const OPEN_PULL_REQUESTS: &str = include_str!("../../../core/tests/fixtures/github/gh_pr_list_synthetic_open.stdout");
+pub(crate) const OPEN_PULL_REQUESTS: &str =
+  include_str!("../../../core/tests/fixtures/github/gh_pr_list_synthetic_open.stdout");
 const NO_PULL_REQUESTS: &str = include_str!("../../../core/tests/fixtures/github/gh_pr_list_orchester_open.stdout");
-const NETWORK: &str = include_str!("../../../core/tests/fixtures/github/gh_repo_view_network.stderr");
+pub(crate) const NETWORK: &str = include_str!("../../../core/tests/fixtures/github/gh_repo_view_network.stderr");
 const RATE_LIMITED: &str = include_str!("../../../core/tests/fixtures/github/gh_repo_view_rate_limited.stderr");
 /// Signed in as ivanzaida without the `repo` scope; shaped like the captured output.
 const NO_REPO_SCOPE: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","tokenSource":"keyring","scopes":"read:org","gitProtocol":"https"}]}}"#;
@@ -37,13 +38,13 @@ const LIST_ID: &str = "pull-requests-list";
 const STATUS: &str = "pull-requests-sync-status";
 
 /// `gh` answering read-only commands from a table that tests change between syncs.
-struct FakeGh {
+pub(crate) struct FakeGh {
   answers: Mutex<HashMap<&'static str, Result<CommandOutput, CommandError>>>,
-  ran: Mutex<Vec<String>>,
+  pub(crate) ran: Mutex<Vec<String>>,
 }
 
 impl FakeGh {
-  fn signed_in(auth: &str, list: Result<CommandOutput, CommandError>) -> Arc<Self> {
+  pub(crate) fn signed_in(auth: &str, list: Result<CommandOutput, CommandError>) -> Arc<Self> {
     Arc::new(Self {
       answers: Mutex::new(HashMap::from([
         ("--version", Ok(ok(VERSION))),
@@ -54,7 +55,7 @@ impl FakeGh {
     })
   }
 
-  fn answer(&self, args: &'static str, output: Result<CommandOutput, CommandError>) {
+  pub(crate) fn answer(&self, args: &'static str, output: Result<CommandOutput, CommandError>) {
     self.answers.lock().insert(args, output);
   }
 
@@ -76,7 +77,7 @@ impl CommandRunner for FakeGh {
   }
 }
 
-fn ok(stdout: &str) -> CommandOutput {
+pub(crate) fn ok(stdout: &str) -> CommandOutput {
   CommandOutput {
     success: true,
     stdout: stdout.to_owned(),
@@ -84,7 +85,7 @@ fn ok(stdout: &str) -> CommandOutput {
   }
 }
 
-fn failed(stderr: &str) -> CommandOutput {
+pub(crate) fn failed(stderr: &str) -> CommandOutput {
   CommandOutput {
     success: false,
     stdout: String::new(),
@@ -93,20 +94,20 @@ fn failed(stderr: &str) -> CommandOutput {
 }
 
 /// A project linked to `ivanzaida/kontur` that expects `expected`, with `gh` answered by `gh`.
-fn linked(gh: &Arc<FakeGh>, expected: &str) -> (Desktop, ConnectionId) {
+pub(crate) fn linked(gh: &Arc<FakeGh>, expected: &str) -> (Desktop, ConnectionId) {
   let desktop = Desktop::with_project_and_programs(gh.clone());
   let connection = github_connection(&desktop, &ReplayGh::new(Ok(VERSION), Some(SIGNED_IN)));
   link(&desktop, connection, expected);
   (desktop, connection)
 }
 
-fn open_pull_requests(desktop: &mut Desktop) {
+pub(crate) fn open_pull_requests(desktop: &mut Desktop) {
   desktop.wait_for("nav-pull-requests");
   desktop.click("nav-pull-requests");
   desktop.wait_for(STATUS);
 }
 
-fn settle_on(desktop: &mut Desktop, id: &'static str, text: &'static str) {
+pub(crate) fn settle_on(desktop: &mut Desktop, id: &'static str, text: &'static str) {
   desktop.settle(text, |tree| {
     tree
       .get_element_by_id(id)

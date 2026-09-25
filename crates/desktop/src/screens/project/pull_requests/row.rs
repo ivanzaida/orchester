@@ -1,8 +1,7 @@
 //! Pull request list row (`QHBNZ`) and the column headings above the rows (`Qcgjy`). Rows are
-//! pointer-only and show GitHub's state of the pull request; agent work and review in Orchester
-//! come with runs, so every row reads "No linked task". The review screen a row opens in the
-//! design (`Rrmhf`) does not exist yet: the row is not clickable and shows a lock, and Open in
-//! GitHub opens the pull request in the browser.
+//! pointer-only and show GitHub's state of the pull request; agent work in Orchester comes with
+//! runs, so every row reads "No linked task". A row opens the pull request (`Rrmhf`); Open in
+//! GitHub opens it in the browser instead.
 
 use std::sync::Arc;
 
@@ -14,7 +13,7 @@ use lurq::{
   },
   components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
-  node::{CursorIcon, Element, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   pull_request::{CheckRollup, PullRequest, PullRequestState, ReviewDecision},
@@ -29,6 +28,7 @@ use crate::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     message_text,
+    pressable::{pressable, surface},
     status_label::status_label,
   },
 };
@@ -37,9 +37,10 @@ use crate::{
 pub const ROW_HEIGHT: f32 = 100.0;
 const STATE_WIDTH: f32 = 180.0;
 const CHECKS_WIDTH: f32 = 150.0;
-/// Open in GitHub, fixed so the column headings line up with the rows, and the lock after it.
+/// Open in GitHub, fixed so the column headings line up with the rows, and the chevron after it
+/// (`laxWE`).
 const OPEN_WIDTH: f32 = 128.0;
-const LOCK_WIDTH: f32 = 12.0;
+const CHEVRON_WIDTH: f32 = 14.0;
 /// Characters of a revision shown in a row ("8f3a2c1").
 const SHORT_REVISION: usize = 7;
 /// Height of the Open in GitHub button, as the Copy button of a command row (`eFsWL`).
@@ -63,15 +64,16 @@ pub fn column_headings(ctx: &Ctx) -> Element {
     .child(heading("pullRequests.columns.state").width(Dimension::Px(STATE_WIDTH)))
     .child(heading("pullRequests.columns.checks").width(Dimension::Px(CHECKS_WIDTH)))
     .child(Row::new().width(Dimension::Px(OPEN_WIDTH)))
-    .child(Row::new().width(Dimension::Px(LOCK_WIDTH)))
+    .child(Row::new().width(Dimension::Px(CHEVRON_WIDTH)))
     .into()
 }
 
-/// A row's pull request and what Open in GitHub does with it.
+/// A row's pull request, what Open in GitHub does with it, and opening it in Orchester.
 #[derive(Clone)]
 pub struct RowProps {
   pub pull_request: PullRequest,
   pub open: Handler,
+  pub show: Handler,
 }
 
 impl PartialEq for RowProps {
@@ -93,8 +95,12 @@ impl Component for PullRequestRow {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let RowProps { pull_request, open } = ctx.props::<RowProps>().clone();
-    Row::new()
+    let RowProps {
+      pull_request,
+      open,
+      show,
+    } = ctx.props::<RowProps>().clone();
+    let row = surface()
       .id("pull-request-row")
       .describe("number", pull_request.number().to_string())
       .width(Dimension::Pct(100.0))
@@ -104,7 +110,7 @@ impl Component for PullRequestRow {
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .cursor(CursorIcon::NotAllowed)
+      .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
       .child(icon(Icon::GitPullRequest, IconSize::Row, PaletteColor::TextPrimary))
       .child(identity(ctx, &pull_request, Timestamp::now()))
       .child(review(ctx, &pull_request))
@@ -118,13 +124,12 @@ impl Component for PullRequestRow {
           .on_click(move || open())
           .render(ctx),
       )
-      // The review screen the row opens in the design does not exist yet: a lock where the
-      // design has the open chevron (`laxWE`), as on task rows.
-      .child(
-        Row::new()
-          .width(Dimension::Px(LOCK_WIDTH))
-          .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted)),
-      )
+      .child(Row::new().width(Dimension::Px(CHEVRON_WIDTH)).child(icon(
+        Icon::ChevronRight,
+        IconSize::Dismiss,
+        PaletteColor::TextSecondary,
+      )));
+    pressable(row, move || show())
   }
 }
 
@@ -231,7 +236,7 @@ fn checks(ctx: &Ctx, checks: &CheckRollup) -> Element {
     .into()
 }
 
-const fn state_icon(state: PullRequestState) -> Icon {
+pub(super) const fn state_icon(state: PullRequestState) -> Icon {
   match state {
     PullRequestState::Open => Icon::GitPullRequest,
     PullRequestState::Draft => Icon::GitPullRequestDraft,
@@ -240,7 +245,7 @@ const fn state_icon(state: PullRequestState) -> Icon {
   }
 }
 
-const fn state_key(state: PullRequestState) -> &'static str {
+pub(super) const fn state_key(state: PullRequestState) -> &'static str {
   match state {
     PullRequestState::Open => "pullRequests.state.open",
     PullRequestState::Draft => "pullRequests.state.draft",

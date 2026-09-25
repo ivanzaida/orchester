@@ -13,6 +13,7 @@ mod new_task;
 mod pipeline_editor;
 mod project_settings;
 mod project_setup;
+mod pull_request_detail;
 mod pull_requests;
 mod selection_focus;
 mod window;

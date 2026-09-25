@@ -12,6 +12,7 @@ use crate::theme::ExtraTypography;
 pub enum Icon {
   Activity,
   AlertCircle,
+  AlignLeft,
   ArrowLeft,
   ArrowRight,
   BookOpen,
@@ -95,6 +96,7 @@ impl Icon {
     match self {
       Self::Activity => '\u{e038}',
       Self::AlertCircle => '\u{e077}',
+      Self::AlignLeft => '\u{e185}',
       Self::ArrowLeft => '\u{e048}',
       Self::ArrowRight => '\u{e049}',
       Self::BookOpen => '\u{e05f}',

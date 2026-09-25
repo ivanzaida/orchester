@@ -225,6 +225,45 @@ fn pull_request_roles_follow_pencil() {
 }
 
 #[test]
+fn pull_request_diff_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  // Pencil `code-*` and `diff-*` variables, used by the diff line `vEZ42`.
+  for (role, hex) in [
+    (ExtraColor::CodeBackground, "#0D1117"),
+    (ExtraColor::CodeText, "#E6EDF3"),
+    (ExtraColor::CodeKeyword, "#FF7B72"),
+    (ExtraColor::CodeString, "#A5D6FF"),
+    (ExtraColor::CodeFunction, "#D2A8FF"),
+    (ExtraColor::CodeVariable, "#FFA657"),
+    (ExtraColor::CodeConstant, "#79C0FF"),
+    (ExtraColor::CodeComment, "#8B949E"),
+    (ExtraColor::DiffAddedBackground, "#14261C"),
+    (ExtraColor::DiffAddedMark, "#7EE787"),
+    (ExtraColor::DiffRemovedBackground, "#301C20"),
+    (ExtraColor::DiffRemovedMark, "#FFA198"),
+  ] {
+    assert_eq!(theme.palette_color(role.role()), Color::from_hex(hex), "{hex}");
+  }
+  // Code tokens: Geist Mono 12, line height 1.6 (`DQMrs`); line numbers Geist Mono 11 in
+  // `code-comment` (`b8bSop`); the pull request title Inter 24/500 (`CNO65`); the context line
+  // Geist Mono 11 (`ADELW`); the diff's file path Geist Mono 14 (`rxiPH`).
+  let code = theme.typography_style(ExtraTypography::Code.role());
+  assert_eq!(
+    (&*code.font_family, code.font_size, code.line_height),
+    ("Geist Mono", 12.0, 1.6)
+  );
+  assert_eq!(code.color, Color::from_hex("#E6EDF3"));
+  let number = theme.typography_style(ExtraTypography::DiffLineNumber.role());
+  assert_eq!((number.font_size, number.color), (11.0, Color::from_hex("#8B949E")));
+  let title = theme.typography_style(ExtraTypography::PullRequestTitle.role());
+  assert_eq!((title.font_size, title.weight), (24.0, FontWeight::Medium));
+  let context = theme.typography_style(ExtraTypography::PullRequestContext.role());
+  assert_eq!((&*context.font_family, context.font_size), ("Geist Mono", 11.0));
+  assert_eq!(theme.typography_style(ExtraTypography::DiffPath.role()).font_size, 14.0);
+}
+
+#[test]
 fn popover_shadow_follows_pencil() {
   let app = themed_app();
   let shadow = app.theme().shadow_style(ExtraShadow::Popover.role());

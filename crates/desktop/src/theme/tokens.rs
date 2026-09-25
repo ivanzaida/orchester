@@ -17,6 +17,21 @@ pub const INVERSE_TEXT: &str = "#181818";
 /// Backdrop behind the close dialog (`a8U756`).
 pub const SCRIM: &str = "#000000A6";
 
+/// Code and diff colors (Pencil `code-*` and `diff-*`, used by the diff line `vEZ42`): a
+/// restrained GitHub Dark palette for code only; the application chrome stays grayscale.
+pub const CODE_BG: &str = "#0D1117";
+pub const CODE_TEXT: &str = "#E6EDF3";
+pub const CODE_KEYWORD: &str = "#FF7B72";
+pub const CODE_STRING: &str = "#A5D6FF";
+pub const CODE_FUNCTION: &str = "#D2A8FF";
+pub const CODE_VARIABLE: &str = "#FFA657";
+pub const CODE_CONSTANT: &str = "#79C0FF";
+pub const CODE_COMMENT: &str = "#8B949E";
+pub const DIFF_ADD_BG: &str = "#14261C";
+pub const DIFF_ADD_TEXT: &str = "#7EE787";
+pub const DIFF_REMOVE_BG: &str = "#301C20";
+pub const DIFF_REMOVE_TEXT: &str = "#FFA198";
+
 pub const FONT: &str = "Inter";
 /// Pencil's `mono`, bundled from `assets/fonts/GeistMono-Regular.ttf` (SIL OFL 1.1).
 pub const MONO: &str = "Geist Mono";

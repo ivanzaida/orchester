@@ -6,7 +6,7 @@ use lurq::{
   node::color::Color,
 };
 
-use super::tokens::{FONT, ICON_FONT, MONO, MUTED, SELECT_ICON_SIZE, SUBTLE, TEXT};
+use super::tokens::{CODE_COMMENT, CODE_TEXT, FONT, ICON_FONT, MONO, MUTED, SELECT_ICON_SIZE, SUBTLE, TEXT};
 
 /// Pencil text styles without a built-in lurq role, registered as `TypographyStyle::Extra`.
 /// Use these instead of spelling extra names at call sites.
@@ -104,10 +104,25 @@ pub enum ExtraTypography {
   RowTitle,
   /// Leading icon of a pull request list row (`r0ZlXX` in `QHBNZ`), 20px.
   IconRow,
+  /// Title of a pull request's review screen (`CNO65` in `Rrmhf`).
+  PullRequestTitle,
+  /// Mono line under it: number, branches, head, sync (`ADELW`).
+  PullRequestContext,
+  /// Heading of the changed file list, e.g. "FILES  6" (`UwSNk`).
+  FileListHeading,
+  /// Name of a changed file in the file list (`qkwbj` in `j9NDM`).
+  FileName,
+  /// Path of the file a diff shows (`rxiPH`).
+  DiffPath,
+  /// Old and new line numbers of a diff line (`b8bSop`, `U4wNN` in `vEZ42`).
+  DiffLineNumber,
+  /// Code of a diff line and its change mark (`DQMrs`, `K3NKFG` in `vEZ42`); tokens take their
+  /// `ExtraColor::Code*` color.
+  Code,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 46] = [
+  const ALL: [Self; 53] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -154,6 +169,13 @@ impl ExtraTypography {
     Self::InspectorTitle,
     Self::RowTitle,
     Self::IconRow,
+    Self::PullRequestTitle,
+    Self::PullRequestContext,
+    Self::FileListHeading,
+    Self::FileName,
+    Self::DiffPath,
+    Self::DiffLineNumber,
+    Self::Code,
   ];
 
   fn name(self) -> &'static str {
@@ -204,6 +226,13 @@ impl ExtraTypography {
       Self::InspectorTitle => "inspector-title",
       Self::RowTitle => "row-title",
       Self::IconRow => "icon-row",
+      Self::PullRequestTitle => "pull-request-title",
+      Self::PullRequestContext => "pull-request-context",
+      Self::FileListHeading => "file-list-heading",
+      Self::FileName => "file-name",
+      Self::DiffPath => "diff-path",
+      Self::DiffLineNumber => "diff-line-number",
+      Self::Code => "code",
     }
   }
 
@@ -307,6 +336,16 @@ impl ExtraTypography {
       Self::InspectorTitle => style(18.0, FontWeight::Medium, TEXT),
       Self::RowTitle => style(15.0, FontWeight::Medium, TEXT),
       Self::IconRow => icon(20.0),
+      Self::PullRequestTitle => style(24.0, FontWeight::Medium, TEXT),
+      Self::PullRequestContext => mono(11.0, MUTED),
+      Self::FileListHeading => style(10.0, FontWeight::Medium, MUTED),
+      Self::FileName => style(12.0, FontWeight::Normal, TEXT),
+      Self::DiffPath => TextStyle {
+        weight: FontWeight::Medium,
+        ..mono(14.0, TEXT)
+      },
+      Self::DiffLineNumber => mono(11.0, CODE_COMMENT),
+      Self::Code => leading(1.6, mono(12.0, CODE_TEXT)),
     }
   }
 }

@@ -102,6 +102,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | operations popover drop shadow 0 8 24 #00000066 (`E1msJS`) | `ExtraShadow::Popover.role()` |
 | `focus-ring` #EEEEEE / `focus-gap` #101010 (`xURvJ`) | `ExtraColor::FocusRing.role()` / `ExtraColor::FocusGap.role()` |
 | focus ring, outer / inset: spreads `focus-width` 2 and `focus-extent` 4 (`xURvJ`, `Oz9EN`) | `ExtraShadow::FocusRing.role()` / `FocusRingInset.role()`, applied only through `ui::pressable::Ring` |
+| `code-bg`, `code-text`, `code-keyword`, `code-string`, `code-function`, `code-variable`, `code-constant`, `code-comment` (`vEZ42`) | `ExtraColor::CodeBackground` / `CodeText` / `CodeKeyword` / `CodeString` / `CodeFunction` / `CodeVariable` / `CodeConstant` / `CodeComment` — code and diff only |
+| `diff-add-bg` / `diff-add-text`, `diff-remove-bg` / `diff-remove-text` (`vEZ42`) | `ExtraColor::DiffAddedBackground` / `DiffAddedMark`, `DiffRemovedBackground` / `DiffRemovedMark` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |
@@ -140,6 +142,13 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::IconSelect.role()` | lucide 14 | select chevron and option check (`eASPF`, `ClxwV`) |
 | `ExtraTypography::RowTitle.role()` | 15/500 | pull request list row title (`G2kdX` in `QHBNZ`) |
 | `ExtraTypography::IconRow.role()` | lucide 20 | leading icon of a pull request list row (`r0ZlXX`) |
+| `ExtraTypography::PullRequestTitle.role()` | 24/500 | pull request title (`CNO65` in `Rrmhf`) |
+| `ExtraTypography::PullRequestContext.role()` | mono 11 muted | pull request context line (`ADELW`) |
+| `ExtraTypography::FileListHeading.role()` | 10/500 muted | changed file list heading (`UwSNk`) |
+| `ExtraTypography::FileName.role()` | 12 | changed file name (`qkwbj` in `j9NDM`) |
+| `ExtraTypography::DiffPath.role()` | mono 14/500 | path of the diffed file (`rxiPH`) |
+| `ExtraTypography::DiffLineNumber.role()` | mono 11 `code-comment` | diff line numbers (`b8bSop`, `U4wNN`) |
+| `ExtraTypography::Code.role()` | mono 12, 1.6, `code-text` | diff code and change mark; tokens color with `ExtraColor::Code*` (`DQMrs`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

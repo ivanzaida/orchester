@@ -6,6 +6,7 @@
 //! unavailable (08.D `dmib5`). Only the search field takes focus.
 
 mod actions;
+mod detail;
 mod list;
 mod notice;
 mod row;
@@ -23,6 +24,7 @@ use lurq::{
 };
 use orchester_core::time::Timestamp;
 
+pub use self::detail::{PullRequestProps, PullRequestScreen};
 use self::{
   actions::{Actions, InboxAction},
   list::ListProps,
@@ -139,7 +141,7 @@ impl PullRequestsScreen {
       let (action, repo_root) = (action.clone(), open.repo_root.clone());
       Arc::new(move || action.run(repo_root.clone()))
     };
-    let (nav, browse) = (self.nav.clone(), actions.open.clone());
+    let (nav, browse, show) = (self.nav.clone(), actions.open.clone(), self.nav.clone());
     ListProps {
       project: open.clone(),
       inbox: inbox.clone(),
@@ -149,6 +151,7 @@ impl PullRequestsScreen {
       use_account: run(&actions.account),
       open_connections: Arc::new(move || nav.show(Section::Connections)),
       open: Arc::new(move |number, url| browse.run((number, url))),
+      show: Arc::new(move |number| show.show(Section::PullRequest(number))),
     }
   }
 

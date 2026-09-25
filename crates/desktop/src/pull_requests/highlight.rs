@@ -1,0 +1,218 @@
+//! Syntax highlighting of a changed file's diff lines with syntect's bundled Sublime grammars. A
+//! grammar's scopes are reduced to the few kinds of token the design colors (Pencil `code-*`,
+//! mapped like GitHub Dark maps them), so the UI draws tokens through theme roles only.
+//!
+//! A diff shows fragments of a file, so each hunk starts from the grammar's initial state; within
+//! a hunk, removed lines continue the old side and added lines the new side, and context lines
+//! belong to both. Highlighting is CPU work for a background thread; its result is only colors,
+//! and a line the grammar cannot read stays plain.
+
+use std::sync::{Arc, OnceLock};
+
+use orchester_core::pull_request::diff::{FileDiff, Hunk, LineKind};
+use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxReference, SyntaxSet};
+
+/// Columns between tab stops when a tab is shown as spaces.
+const TAB_WIDTH: usize = 4;
+
+/// What a token is, for its color.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TokenKind {
+  Plain,
+  Keyword,
+  String,
+  Comment,
+  Constant,
+  Function,
+  Variable,
+}
+
+/// Text of one kind within a line, ready to show: tabs expanded, control characters replaced.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Token {
+  pub kind: TokenKind,
+  pub text: Arc<str>,
+}
+
+/// The tokens of one diff line.
+pub type LineTokens = Arc<[Token]>;
+
+/// Tokens of every kept line of a file, hunk by hunk.
+pub type FileTokens = Vec<Vec<LineTokens>>;
+
+/// `text` as one plain token, e.g. before highlighting finished or without a grammar.
+pub fn plain(text: &str) -> LineTokens {
+  let mut column = 0;
+  Arc::from([Token {
+    kind: TokenKind::Plain,
+    text: display(text, &mut column).into(),
+  }])
+}
+
+/// Highlights `file` with the grammar its path names; `None` when no bundled grammar knows it.
+pub fn highlight(file: &FileDiff) -> Option<FileTokens> {
+  let syntaxes = syntaxes();
+  let syntax = syntax_for(syntaxes, file.path())?;
+  Some(
+    file
+      .hunks()
+      .iter()
+      .map(|hunk| highlight_hunk(syntaxes, syntax, hunk))
+      .collect(),
+  )
+}
+
+fn syntaxes() -> &'static SyntaxSet {
+  static SYNTAXES: OnceLock<SyntaxSet> = OnceLock::new();
+  SYNTAXES.get_or_init(SyntaxSet::load_defaults_nonewlines)
+}
+
+/// The grammar for `path`, by file name or extension. The bundled set has no TypeScript grammar;
+/// JavaScript's reads most of it.
+fn syntax_for<'a>(syntaxes: &'a SyntaxSet, path: &str) -> Option<&'a SyntaxReference> {
+  let name = path.rsplit('/').next().unwrap_or(path);
+  let extension = name.rsplit_once('.').map_or(name, |(_, extension)| extension);
+  let extension = match extension {
+    "ts" | "tsx" | "mts" | "cts" => "js",
+    other => other,
+  };
+  syntaxes
+    .find_syntax_by_extension(name)
+    .or_else(|| syntaxes.find_syntax_by_extension(extension))
+    .filter(|syntax| syntax.name != "Plain Text")
+}
+
+/// A grammar's state on one side of a hunk.
+struct Side {
+  parse: ParseState,
+  scopes: ScopeStack,
+  /// The grammar failed on this side; the rest of its lines stay plain.
+  failed: bool,
+}
+
+impl Side {
+  fn new(syntax: &SyntaxReference) -> Self {
+    Self {
+      parse: ParseState::new(syntax),
+      scopes: ScopeStack::new(),
+      failed: false,
+    }
+  }
+
+  /// The tokens of `line`, advancing the state.
+  fn tokens(&mut self, syntaxes: &SyntaxSet, line: &str) -> LineTokens {
+    if !self.failed {
+      match self.try_tokens(syntaxes, line) {
+        Some(tokens) => return tokens,
+        None => self.failed = true,
+      }
+    }
+    plain(line)
+  }
+
+  fn try_tokens(&mut self, syntaxes: &SyntaxSet, line: &str) -> Option<LineTokens> {
+    let operations = self.parse.parse_line(line, syntaxes).ok()?;
+    let mut tokens: Vec<Token> = Vec::new();
+    let (mut start, mut column) = (0, 0);
+    for (position, operation) in operations {
+      let position = position.min(line.len());
+      if position > start {
+        push(&mut tokens, kind(&self.scopes), &line[start..position], &mut column);
+        start = position;
+      }
+      self.scopes.apply(&operation).ok()?;
+    }
+    if start < line.len() {
+      push(&mut tokens, kind(&self.scopes), &line[start..], &mut column);
+    }
+    Some(tokens.into())
+  }
+}
+
+fn highlight_hunk(syntaxes: &SyntaxSet, syntax: &SyntaxReference, hunk: &Hunk) -> Vec<LineTokens> {
+  let (mut old, mut new) = (Side::new(syntax), Side::new(syntax));
+  hunk
+    .lines()
+    .iter()
+    .map(|line| match line.kind() {
+      LineKind::Removed => old.tokens(syntaxes, line.text()),
+      LineKind::Added => new.tokens(syntaxes, line.text()),
+      LineKind::Context => {
+        // The old side reads the line too, so its state stays in step; its tokens are the same.
+        old.tokens(syntaxes, line.text());
+        new.tokens(syntaxes, line.text())
+      }
+    })
+    .collect()
+}
+
+/// Appends `text` as `kind`, merged into the previous token when that is of the same kind.
+fn push(tokens: &mut Vec<Token>, kind: TokenKind, text: &str, column: &mut usize) {
+  let text = display(text, column);
+  match tokens.last_mut() {
+    Some(last) if last.kind == kind => last.text = format!("{}{text}", last.text).into(),
+    _ => tokens.push(Token {
+      kind,
+      text: text.into(),
+    }),
+  }
+}
+
+/// `text` as it is shown from `column` on: tabs as spaces to the next tab stop, other control
+/// characters as the replacement character, so nothing in a diff can steer the text renderer.
+fn display(text: &str, column: &mut usize) -> String {
+  let mut shown = String::with_capacity(text.len());
+  for character in text.chars() {
+    if character == '\t' {
+      let spaces = TAB_WIDTH - *column % TAB_WIDTH;
+      shown.extend(std::iter::repeat_n(' ', spaces));
+      *column += spaces;
+    } else {
+      shown.push(if character.is_control() { '\u{FFFD}' } else { character });
+      *column += 1;
+    }
+  }
+  shown
+}
+
+/// The kind of the innermost scope a rule knows; scopes without a rule (punctuation, meta)
+/// take the kind of the scope around them.
+fn kind(scopes: &ScopeStack) -> TokenKind {
+  let rules = rules();
+  for scope in scopes.as_slice().iter().rev() {
+    if let Some((_, kind)) = rules.iter().find(|(prefix, _)| prefix.is_prefix_of(*scope)) {
+      return *kind;
+    }
+  }
+  TokenKind::Plain
+}
+
+/// Scope prefixes to kinds, most specific first, following GitHub Dark (`primer/github-vscode-
+/// theme`): parameters and plain variables read as text, other variables and declared names as
+/// `code-variable`, built-ins and tags as `code-constant`.
+fn rules() -> &'static [(Scope, TokenKind)] {
+  static RULES: OnceLock<Vec<(Scope, TokenKind)>> = OnceLock::new();
+  RULES.get_or_init(|| {
+    [
+      ("comment", TokenKind::Comment),
+      ("string", TokenKind::String),
+      ("constant", TokenKind::Constant),
+      ("variable.language", TokenKind::Constant),
+      ("variable.function", TokenKind::Function),
+      ("variable.parameter", TokenKind::Plain),
+      ("variable.other", TokenKind::Plain),
+      ("variable", TokenKind::Variable),
+      ("entity.name.function", TokenKind::Function),
+      ("support.function", TokenKind::Function),
+      ("entity.name.tag", TokenKind::Constant),
+      ("entity.name", TokenKind::Variable),
+      ("entity.other.inherited-class", TokenKind::Variable),
+      ("support", TokenKind::Constant),
+      ("keyword", TokenKind::Keyword),
+      ("storage", TokenKind::Keyword),
+    ]
+    .into_iter()
+    .map(|(prefix, kind)| (Scope::new(prefix).expect("the rule prefixes are valid scopes"), kind))
+    .collect()
+  })
+}

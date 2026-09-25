@@ -52,6 +52,20 @@ pub fn pull_request_sync(open: &OpenProject) -> OperationSpec {
   .quiet()
 }
 
+/// Reading one pull request and its diff from GitHub. Quiet: the pull request screen reads it
+/// every time it opens, so only the outcome is listed.
+pub fn pull_request_refresh(open: &OpenProject, number: u64) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.pullRequestRefresh.running",
+    done: "statusBar.operations.pullRequestRefresh.done",
+    failed: "statusBar.operations.pullRequestRefresh.failed",
+  }
+  .named(&number.to_string())
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::PullRequests))
+  .quiet()
+}
+
 /// Handing a pull request's address to the default browser.
 pub fn pull_request_open(open: &OpenProject, number: u64) -> OperationSpec {
   Wording {

@@ -17,6 +17,17 @@ pub const TOPBAR_BUTTON_HEIGHT: f32 = 36.0;
 
 /// The breadcrumb on the left, `trailing` (status text, actions) on the right.
 pub fn topbar(breadcrumb: &str, trailing: impl IntoIterator<Item = Element>) -> Element {
+  topbar_with(
+    Text::new(breadcrumb)
+      .variant(TypographyStyle::Description)
+      .nowrap()
+      .into(),
+    trailing,
+  )
+}
+
+/// [`topbar`] with a breadcrumb of its own, e.g. one that leads back.
+pub fn topbar_with(breadcrumb: Element, trailing: impl IntoIterator<Item = Element>) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(TOPBAR_HEIGHT))
@@ -24,7 +35,7 @@ pub fn topbar(breadcrumb: &str, trailing: impl IntoIterator<Item = Element>) -> 
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(Text::new(breadcrumb).variant(TypographyStyle::Description).nowrap())
+    .child(breadcrumb)
     .child(Spacer::new().flex(1.0))
     .with_children(trailing)
     .into()

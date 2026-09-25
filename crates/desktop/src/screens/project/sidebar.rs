@@ -99,7 +99,7 @@ fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &Pro
       .on_click(open(Section::Tasks))
       .count(tasks.ready().map(|tasks| tasks.tasks.len())),
     NavItem::new("nav-pull-requests", Icon::GitPullRequest, ctx.t("nav.pullRequests"))
-      .selected(section == Section::PullRequests)
+      .selected(matches!(section, Section::PullRequests | Section::PullRequest(_)))
       .on_click(open(Section::PullRequests)),
     NavItem::new("nav-pipelines", Icon::Workflow, ctx.t("nav.pipelines"))
       .selected(section == Section::Pipelines)
