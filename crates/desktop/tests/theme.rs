@@ -246,11 +246,17 @@ fn select_menu_roles_follow_pencil() {
   let icon = theme.typography_style(ExtraTypography::IconSelect.role());
   assert_eq!((&*icon.font_family, icon.font_size), ("lucide", 14.0));
   assert_eq!(theme::SELECT_CHECK_SLOT, 14.0);
-  // `g3poI`: overlay thumb 4px in `border`, radius 2, 1px from the menu border, no track.
+  // `YD8PV`: overlay thumb 4px in `border`, radius 2, 3px from the outer right edge, 11px from
+  // the top and bottom, at least 24px long, no track.
   let scrollbar = theme::select_menu_scrollbar();
+  assert_eq!((scrollbar.width, scrollbar.thumb_radius), (4.0, 2.0));
   assert_eq!(
-    (scrollbar.width, scrollbar.thumb_radius, scrollbar.padding),
-    (4.0, 2.0, 1.0)
+    (
+      scrollbar.resolved_edge_inset(),
+      scrollbar.resolved_end_inset(),
+      scrollbar.min_thumb_length
+    ),
+    (3.0, 11.0, 24.0)
   );
   assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
   assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));

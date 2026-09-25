@@ -5,8 +5,8 @@ use lurq::{
 };
 
 use super::tokens::{
-  BORDER, BUTTON_HEIGHT, CONTROL_PADDING_X, FIELD_HEIGHT, NO_TRACK, SELECT_SCROLLBAR_INSET, SELECT_SCROLLBAR_RADIUS,
-  SELECT_SCROLLBAR_WIDTH,
+  BORDER, BUTTON_HEIGHT, CONTROL_PADDING_X, FIELD_HEIGHT, NO_TRACK, SELECT_SCROLLBAR_EDGE_INSET,
+  SELECT_SCROLLBAR_END_INSET, SELECT_SCROLLBAR_MIN_THUMB, SELECT_SCROLLBAR_RADIUS, SELECT_SCROLLBAR_WIDTH,
 };
 
 /// Field (`ZGwlv`) and button (`u1XBP`) roles for lurq's compound form controls.
@@ -59,7 +59,8 @@ pub fn select_menu_scrollbar() -> ScrollBarStyle {
     thumb_color: Color::from_hex(BORDER),
     thumb_radius: SELECT_SCROLLBAR_RADIUS,
     track_radius: SELECT_SCROLLBAR_RADIUS,
-    padding: SELECT_SCROLLBAR_INSET,
+    min_thumb_length: SELECT_SCROLLBAR_MIN_THUMB,
     ..ScrollBarStyle::default()
   }
+  .insets(SELECT_SCROLLBAR_EDGE_INSET, SELECT_SCROLLBAR_END_INSET)
 }

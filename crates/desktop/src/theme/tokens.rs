@@ -98,9 +98,12 @@ pub const FOCUS_GAP: &str = "#101010";
 pub const FOCUS_WIDTH: f32 = 2.0;
 pub const FOCUS_EXTENT: f32 = 4.0;
 
-/// Overlay scrollbar of a long select menu (`g3poI`): a 4px `border` thumb, radius 2, 1px from
-/// the menu border, no track.
+/// Overlay scrollbar of a long select menu (`g3poI`): a 4px `border` thumb, radius 2, no track.
 pub const SELECT_SCROLLBAR_WIDTH: f32 = 4.0;
 pub const SELECT_SCROLLBAR_RADIUS: f32 = 2.0;
-pub const SELECT_SCROLLBAR_INSET: f32 = 1.0;
+/// Scroll thumb of the select menu (`YD8PV`): 3px from the menu's outer right edge and 11px (the
+/// corner radius) from its top and bottom, so it never enters a rounded corner; at least 24px long.
+pub const SELECT_SCROLLBAR_EDGE_INSET: f32 = 3.0;
+pub const SELECT_SCROLLBAR_END_INSET: f32 = 11.0;
+pub const SELECT_SCROLLBAR_MIN_THUMB: f32 = 24.0;
 pub const NO_TRACK: &str = "#00000000";
