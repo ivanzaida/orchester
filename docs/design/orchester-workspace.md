@@ -35,11 +35,13 @@ Canonical screens and states, in canvas order:
 | Screen | Node | Preview |
 | --- | --- | --- |
 | 01.01 · First launch | `ZBoBm` | [Preview](previews/ZBoBm.png) |
-| 01.02 · Authorize GitHub | `jnpRq` | [Preview](previews/jnpRq.png) |
-| 01.03 · Project & repository | `W6uXiL` | [Preview](previews/W6uXiL.png) |
+| 01.02 · Project folder | `jnpRq` | preview outdated (reworked 2026-09-25) |
+| 01.03 · Project & detected GitHub repository | `W6uXiL` | preview outdated (reworked 2026-09-25) |
 | 01.04 · Runner & agent models | `w6ODp4` | [Preview](previews/w6ODp4.png) |
 | 01.05 · Ready → Create first task | `x1YpfN` | [Preview](previews/x1YpfN.png) |
 | 01.A · Setup blocked / Restore provider access | `Q7htyU` | [Preview](previews/Q7htyU.png) |
+| 01.C1–C8 · GitHub detection states (compact, see [GitHub](#github)) | `fL24i`, `rwnig`, `JjJiN`, `Yz9Ig`, `MMSQ9`, `fhqgC`, `C1JtM`, `v85QyU` | not exported yet |
+| 01.D · Change GitHub account or access (panel) | `hNPA1` | not exported yet |
 | 02.01 · Orchestrator / New conversation | `dOIrp` | [Preview](previews/dOIrp.png) |
 | 02.02 · Orchestrator / Task proposal | `I7TCI` | [Preview](previews/I7TCI.png) |
 | 02.03 · Tasks / Select drafts to run | `J9467` | [Preview](previews/J9467.png) |
@@ -82,8 +84,11 @@ Canonical screens and states, in canvas order:
 | 04.02 · Add agent provider | `h6CmJ` | [Preview](previews/h6CmJ.png) |
 | 04.03 · Agent profiles / Assign connection & model | `WPmtS` | [Preview](previews/WPmtS.png) |
 | 04.04 · Agent profile / Permissions | `T1rjv` | not exported yet |
+| 04.05 · Connections / GitHub connection | `CHa9s` | not exported yet |
+| 04.06 · Add GitHub connection | `D4mDB` | not exported yet |
 | 04.A · Expired MCP access / Reconnect | `RZUKo` | [Preview](previews/RZUKo.png) |
 | 04.B · Options the connection can't enforce are disabled (compact) | `W0Owo` | not exported yet |
+| 04.C1–C4 · GitHub connection: not signed in, gh not found, wrong account, unrecognized output (compact) | `Cr0P2`, `ve4G9`, `P89Dl`, `kqfaL` | not exported yet |
 | 05.01 · Project rules & effective prompt | `yRKeF` | [Preview](previews/yRKeF.png) |
 | 05.02 · Resolved prompt / Inspect sources | `fZa3J` | [Preview](previews/fZa3J.png) |
 | 05.03 · Variables / Search, inspect & insert | `EfTiT` | [Preview](previews/EfTiT.png) |
@@ -94,6 +99,8 @@ Canonical screens and states, in canvas order:
 | 06.04 · Import / Select project resources | `W4zGKx` | [Preview](previews/W4zGKx.png) |
 | 06.05 · Import / Resolve dependencies | `QqnDd` | [Preview](previews/QqnDd.png) |
 | 06.06 · Import / Ready to create local drafts | `hF664` | [Preview](previews/hF664.png) |
+| 06.A · Create pull request / Settings, Open as draft (compact) | `mtPZd` | not exported yet |
+| 06.B · Create pull request / Push rejected (compact) | `YDKJS` | not exported yet |
 | 07.01 · Project secrets | `R99lt` | [Preview](previews/R99lt.png) |
 | 07.02 · Add project credential | `tpF7R` | [Preview](previews/tpF7R.png) |
 | 07.03 · Runtime approval / One deployment | `nuuZL` | [Preview](previews/nuuZL.png) |
@@ -104,17 +111,20 @@ Canonical screens and states, in canvas order:
 | 08.A · Pull request / Agent answers a question | `qJKSC` | [Preview](previews/qJKSC.png) |
 | 08.B · PR updated while composing (compact state) | `hfoDa` | [Preview](previews/hfoDa.png) |
 | 08.C · Agent request queued (compact state) | `uD6Ho` | [Preview](previews/uD6Ho.png) |
+| 08.D · Pull requests / GitHub unavailable | `dmib5` | not exported yet |
+| 08.E · Pull requests / Stale, last synced (compact) | `FYQMv` | not exported yet |
+| 08.F · Pull requests / Rate limited (compact) | `P1tSu` | not exported yet |
 
-There are 63 full screen frames; earlier screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
+There are 66 full screen frames; earlier screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
 
-- Getting started: first launch → GitHub authorization → repository → runner/agents → ready. Setup blocking and compact empty-project feedback are below the main flow.
+- Getting started: first launch → project folder → project with detected GitHub repository → runner/agents → ready. Setup blocking, compact empty-project feedback (`RlwqW`), the *Change GitHub account or access* panel (01.D, x 1568 / y 426) and the eight GitHub detection states (01.C1–C8, x 2128–4808, two rows at y 100 and 512) are in `GojEY` below the main flow.
 - Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue. The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. Pause and retry are alternatives in `O4vgKt`; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Application lifecycle states (close with active work, runner connection, recovery on start) and the sidebar runner card states are in `Z7Fyr8`. Agent execution states (Activity transcript, run permissions, permission request, stopped at limit) with the compact Activity, Apply now and token budget states, plus Project settings / Limits (row 3), are in `BnxJ1` (height 3216). Group positions are y 160 / 1376 / 3640 / 5904 / 7120 / 8216 / 10832 respectively; the section height is 14144.
 - Pipelines: the visual editor is separate from task execution. `UJUi0` holds edit → publish confirmation → published. `t9zWUe` holds the library (the Pipelines navigation destination) → new pipeline → an empty pipeline in the editor. `rBy9L` holds the empty library and the publish-blocked editor. Group positions are y 160 / 1376 / 2592; the section height is 3808.
-- Agents & connections: connections → add provider → assign connection/model in the agent profile (`kOGgX` row 1), then the profile's Permissions tab (04.04, row 2); expired-access recovery and the compact state 04.B (options the connection can't enforce) are in `DLRW5` (now at y 2424; section height 3640).
+- Agents & connections: connections → add provider → assign connection/model in the agent profile (`kOGgX` row 1), then the profile's Permissions tab (04.04), the GitHub connection (04.05) and Add GitHub connection (04.06) in row 2; expired-access recovery, the compact state 04.B (options the connection can't enforce) and the GitHub connection states 04.C1–C4 (x 2108 / 2492 / 2876 / 3260) are in `DLRW5` (now at y 2424; section height 3640).
 - Instructions: rules → composed prompt → variable catalog; unavailable-variable state is below.
-- Tools & imports: library → configuration → access policy in the first group. Select → resolve dependencies → ready to import is a separate complete row in `TSGMX`. Success/failure panels remain in `tjNmM`.
+- Tools & imports: library → configuration → access policy in the first group. Select → resolve dependencies → ready to import is a separate complete row in `TSGMX`. Success/failure panels remain in `tjNmM`, now with the Create pull request settings (06.A, x 1040) and push-rejected recovery (06.B, x 1600); `tjNmM` is 640 high and the section height is 3328.
 - Secrets & access: library → add credential → runtime approval; duplicate-name validation is below.
-- Pull requests: `scsYh` contains the review inbox → line-specific fix request → verification on a new commit. `u77pi` contains the question/answer alternative and compact stale-revision and queued-request states. The section is at x 41728 / y 0, width 4896 and height 2592.
+- Pull requests: `scsYh` contains the review inbox → line-specific fix request → verification on a new commit. `u77pi` contains the question/answer alternative, compact stale-revision and queued-request states, the stale-sync and rate-limited strips (08.E, 08.F at x 2064) and the GitHub-unavailable screen (08.D at x 3088). The section is at x 41728 / y 0, width 4896 and height 2592.
 
 Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & runs](previews/organization/g7ncNr.png), [Pipelines](previews/organization/Y6XGt.png), [Agents & connections](previews/organization/wNy9i.png), [Instructions](previews/organization/MRxol.png), [Tools & imports](previews/organization/V8h6d.png), [Secrets & access](previews/organization/b3N1Ix.png).
 
@@ -584,7 +594,7 @@ Proposed copy namespaces: `lifecycle.close.*`, `lifecycle.recovery.*`, `runner.c
 
 The user requested viewing pull requests and leaving comments for an agent to fix code or answer a question. Pull requests is now a project navigation entry after Tasks. It lists PRs from the selected project's repository with linked task, feedback state, current head and agent verification. Ready for review (`vpgrJ`) now opens Review PR in Orchester; Ask agent opens general feedback for the linked PR. Open in GitHub remains a clearly separate external destination.
 
-The new inbox (`wGtxT`) shows three illustrative open PRs: #42 needs review, #43 has an agent fixing feedback, and #44 is not linked to an agent task. An unlinked PR remains readable; link or create an authorized project task before asking an agent to execute work. PR open/draft/merged/closed state is distinct from agent readiness and local verification. Refresh errors preserve existing data with a stale marker and last successful sync time; loading and empty results must not fabricate PRs. Connection/permission failures lead to the relevant project Connection. Repository lookup, GitHub API synchronization and access have not been implemented or verified by these screens.
+The new inbox (`wGtxT`) shows three illustrative open PRs: #42 needs review, #43 has an agent fixing feedback, and #44 is not linked to an agent task. An unlinked PR remains readable; link or create an authorized project task before asking an agent to execute work. PR open/draft/merged/closed state is distinct from agent readiness and local verification. Refresh errors preserve existing data with a stale marker and last successful sync time (08.E `FYQMv`); a rate limit shows the reset time and pauses automatic sync until then (08.F `P1tSu`); loading and empty results must not fabricate PRs. Without a usable GitHub connection the screen shows *Pull requests are unavailable* with *Open Connections* (08.D `dmib5`). The list is always the project's one linked repository, shown as a read-only label (`rQjxm`) instead of a repository selector. Sync rules are in [GitHub](#github). Repository lookup, GitHub synchronization and access have not been implemented or verified by these screens.
 
 The diff view (`Rrmhf`) includes a changed-file list, selected revision range, unified code diff, Viewed state and a contextual feedback panel. Code additions/removals use plus/minus signs, line numbers and muted green/red surfaces; a comment selection uses blue, so meaning is not dependent on color alone. The selected fixture shows new lines 43–45 of src/auth/github.ts at 8f3a2c1. The full PR totals six files and +248 / −32; the shown handler is one excerpt, not the entire diff. The test counts are illustrative agent/local evidence, not a claim about GitHub Actions or required branch checks.
 
@@ -616,7 +626,7 @@ The profile editor has *Profile*, *Permissions* and *Used in pipelines* tabs; se
 
 The mixed-provider fixture assigns Explorer and Reviewer to Claude · Kontur / Opus, and Orchestrator, Planner and Builder to Codex · Kontur / Sol. The Builder inspector contains separate Connection and Model selectors; provider-supported settings such as reasoning/context appear conditionally. Pipeline steps select a published project profile and inherit its model by default. A step can explicitly override the model, and the inspector shows the effective connection and model.
 
-Connections (`a4Lqb`, section 04) lists GitHub, Codex · Kontur, Claude · Kontur and Project knowledge MCP. The selected connection shows provider, execution location, authentication source, status, last check, available models and read-only Used by links. Add connection (`h6CmJ`) configures an agent provider and validates access before saving. Expired MCP access (`RZUKo`) exposes Reconnect and preserves task work. Revocation blocks future calls immediately; ordinary profile publishing does not rotate or revoke credentials.
+Connections (`a4Lqb`, section 04) lists GitHub · github.com, Codex · Kontur, Claude · Kontur and Project knowledge MCP; its tabs are All connections, Agent providers, GitHub (formerly Repositories) and MCP servers. The selected connection shows provider, execution location, authentication source, status, last check, available models and read-only Used by links. CLI connections (agent CLIs and `gh`) use the account the CLI is signed in to on this computer; Orchester never signs in, stores or sees tokens, and the project records which account it expects (`J48psR`). The GitHub connection is described in [GitHub](#github). Add connection (`h6CmJ`) configures an agent provider and validates access before saving. Expired MCP access (`RZUKo`) exposes Reconnect and preserves task work. Revocation blocks future calls immediately; ordinary profile publishing does not rotate or revoke credentials.
 
 Sol, Luna and Opus are illustrative labels supplied during the design discussion. Provider adapters, public model identifiers, authentication options and supported settings were not verified by this design task. The implementation must obtain actual model catalogs and capabilities from each adapter and validate profile compatibility; the mockups do not establish working Codex or Claude integration.
 
@@ -668,9 +678,60 @@ Proposed copy namespaces: `agents.permissions.*`, `agents.permissions.enforcemen
 
 First launch (`ZBoBm`) appears when the personal workspace has no projects or resumable setup. It has no selected project or project navigation, and no fabricated recent projects, activity or connected-runner status. Create your first project opens the first setup step. The name field initially starts empty; the following setup fixtures show the state after the user enters Kontur. The three-step preview explains repository access, mixed-provider agent assignment and the first task. The primary action creates a setup draft once, rather than starting agents or triggering provider authorization by itself. Existing incomplete setup should resume at its saved step; a configured returning workspace opens its projects rather than repeatedly showing Welcome.
 
-Setup covers project/repository → runner and agents → readiness. GitHub authorization precedes repository selection; unavailable repository/continue controls stay disabled. The second step configures the runner and each role's connection/model, including mixed providers. The final review checks repository, runner, required profiles, instructions and the starter pipeline. Finish & create first task publishes the reviewed starter configuration and opens New task; it does not start a run automatically.
+Setup covers project folder → runner and agents → readiness. The first step asks for a name and a local folder (01.02 `jnpRq`: no folder yet, *Create project & continue* disabled with "Choose the project folder to continue."). After the folder is chosen, Orchester detects its GitHub repository and shows the result (01.03 `W6uXiL`, block `XcbNT`); GitHub is optional and never blocks *Create project & continue*. The detection states and the *Change GitHub account or access* panel are in [GitHub](#github). The second step configures the runner and each role's connection/model, including mixed providers. The final review checks the folder and GitHub repository, runner, required profiles, instructions and the starter pipeline. Finish & create first task publishes the reviewed starter configuration and opens New task; it does not start a run automatically.
 
-An expired required provider blocks completion with Reconnect or change-profile recovery. Save & leave retains incomplete setup so it can be resumed. Connection authorization is scoped to this project, including when importing configuration from another project.
+An unusable required agent connection blocks completion with Reconnect or change-profile recovery. Save & leave retains incomplete setup so it can be resumed. Importing configuration from another project never copies an expected account; the destination project checks its own connections again.
+
+## GitHub
+
+Decided 2026-09-25 (user). Proposed copy namespace `github.*` (`github.detection.*`, `github.connection.*`, `github.account.*`, `github.pullRequests.*`); account logins, hosts, repository names, paths and commands are data, not translated.
+
+Rules:
+
+1. **Sign-in is the user's own `gh` CLI**, the same rule as agent CLIs. Orchester never signs in, never stores or sees a token and never opens a browser OAuth flow. A GitHub connection is a CLI connection: host (`github.com` or a GitHub Enterprise host), program (`gh` path and version), signed-in account, scopes, last check and *Check again*.
+2. **The repository source is the local project folder.** The GitHub repository is detected from the folder's git remote (`origin` by default) and `gh repo view`. Nothing is cloned.
+3. **GitHub is optional.** Local-only projects work. Without a usable GitHub connection, the Create pull request tool and the steps that use it are unavailable, and Pull requests shows *Pull requests are unavailable* (08.D). Project creation is never blocked.
+4. **One linked repository per project**, remote `origin`. Push and pull request go to the same repository. Forks are a later decision.
+5. **Push uses git's own credentials.** Orchester never changes git config. A push rejected for authentication stops the step with the hint *Run `gh auth setup-git` or sign in to git, then retry* (06.B `YDKJS`).
+6. **gh accounts are machine-wide.** The project records the login it expects (set from the account detected when the project is created). If gh's active account differs, the state is *Signed in as X, expected Y* and pull request creation is blocked. Orchester never switches accounts.
+7. **Pull requests open as drafts by default.** The Create pull request tool has an *Open as draft* switch, on by default (06.A `mtPZd`).
+8. **Change GitHub account or access** (`w5XOc` in 01.03, `sd9ip` in 04.05) opens a small panel (01.D `hNPA1`), not a browser: it shows host, signed-in account, scopes and the expected account, explains `gh auth login` / `gh auth switch --user <login>` and `gh auth refresh -h <host> -s <scope>` with Copy buttons, and ends with *Close* and *Check again*.
+9. **Sync:** when Pull requests opens, on *Refresh*, after Orchester creates a pull request, and every 60 s only while the Pull requests screen is visible. No background polling otherwise. A failed sync keeps the last list and shows *Last synced … · GitHub unreachable* (08.E); a rate limit shows *Rate limited · retry at HH:MM*, disables Refresh and resumes after the reset (08.F).
+10. **Pull request feedback stays in Orchester** and is never posted to GitHub (see [Pull request review](#pull-request-review-and-agent-feedback)).
+
+### Project setup detection
+
+01.03 `W6uXiL` shows the detection block `XcbNT` under the folder field `Y1vmV`: *GitHub repository* with status *Detected*, then Repository (`ivanzaida / kontur`), Remote (`origin · github.com/ivanzaida/kontur`), Default branch (`main`) and Account (`ivanzaida · gh on github.com`), the note "Kontur will expect ivanzaida. Orchester uses gh's own sign-in and never stores or sees a token.", *Check again* and *Change GitHub account or access* (`w5XOc`). The default branch is read from GitHub, not chosen here. 01.02 `jnpRq` shows the folder field before a folder is chosen and the notice `hfxMm` explaining that GitHub is detected from the folder and is optional.
+
+Detection states (compact, same block, 640 wide):
+
+| State | Node | Status | Copy (title · body) | Actions |
+| --- | --- | --- | --- | --- |
+| Detecting | `fL24i` | Checking… | GitHub repository · "Reading the folder's git remote and asking gh about the repository. You can already create the project." | — |
+| No GitHub remote | `rwnig` | Local only | No GitHub remote · "You can create the project. Pull request steps and the Pull requests screen stay unavailable until the folder has a GitHub remote." | Check again |
+| Remote is not on GitHub | `JjJiN` | Not GitHub | Remote is not on GitHub · "…If this is a GitHub Enterprise host, add a GitHub connection for it, then check again." | Check again, Add GitHub connection |
+| gh not found | `Yz9Ig` | gh not found | GitHub CLI (gh) not found · "Orchester reaches GitHub only through gh. Install it or choose its program file, then check again. You can create the project now." | Check again, Choose program… |
+| Not signed in | `MMSQ9` | Not signed in | gh is not signed in to github.com · "Run gh auth login in a terminal, then check again. Orchester never signs in for you." | Check again |
+| Wrong account | `fhqgC` | Wrong account | Signed in as ivan-work, expected ivanzaida · "Switch with gh auth switch in a terminal, then check again. Orchester never switches accounts. Pull requests can't be created until they match." | Check again, Change GitHub account or access |
+| Repository not accessible | `C1JtM` | No access | ivanzaida can't access this repository · "gh repo view found no repository this account can read. Ask the owner for access, or switch accounts with gh, then check again." | Check again, Change GitHub account or access |
+| Unrecognized gh output | `v85QyU` | Unrecognized | Couldn't read gh's answer · "gh 1.9.2 answered in a format Orchester doesn't recognise. Update gh, then check again." | Check again |
+
+In every state *Create project & continue* stays enabled once a folder is chosen. Commands in the copy are shown in the mono font in implementation (the design renders them as plain text inside the sentence).
+
+### GitHub connection
+
+The GitHub row (`iYGKy` in 04.01, same text in `LfeKD`, `an07d`, `x45t6`) reads *GitHub · github.com*, "gh · github.com · signed in as ivanzaida", type GitHub, 1 repo, status *Signed in*. 04.05 `CHa9s` selects it; the inspector `l8BJVr` shows Host, Program (`gh 2.62.0`), Path, Account, Scopes, Last checked, then *Used by Kontur*: Expected account, Repository, Remote, Used by tool (Create pull request); the rule "Orchester runs gh with its own sign-in on this computer. It never signs in, stores or sees tokens."; *Check again*, *Change account or access* (`sd9ip`, opens 01.D), *Edit connection*; and "Removing this connection makes pull request steps unavailable. Tasks and local work are kept."
+
+Connection states (compact inspector heads in `DLRW5`): not signed in `Cr0P2` ("Run gh auth login in a terminal, then check again…"), gh not found `ve4G9` (Program *Not found on PATH*, *Choose program…*), wrong account `P89Dl` (Account ivan-work, Expected account ivanzaida, *Change account or access*), unrecognized output `kqfaL`. Signed in is 04.05.
+
+Add GitHub connection (04.06 `D4mDB`) reuses the agent-CLI dialog `IAN4P`: Name, Connection type *GitHub*, Host (`github.com` default; *Other host…* takes a GitHub Enterprise host such as `github.example.com`), Program (gh discovered on PATH with its version, or a chosen file — the same disabled-option rule as the select menu, e.g. *Not found on PATH*), Program file with a folder picker, the notice *Uses gh's own sign-in*, the verification row (*Signed in* · account · scopes · *Check again*) and "After saving, Kontur expects ivanzaida…". There is no model section.
+
+### Open questions
+
+- Folder that is not a git repository: blocked at setup, or allowed as local-only?
+- Changing the expected account after creation: a project setting (e.g. "Expect ivan-work for Kontur") or only by recreating the connection?
+- Which scopes Orchester requires (e.g. `repo`, `read:org`) and whether a missing scope is a separate state from *No access*.
+- Whether Pull requests should show a rate-limit reset in local time or relative time.
 
 ## Instructions
 
@@ -729,7 +790,7 @@ The tool library offers creation of HTTP, command and database tools and discove
 
 A tool may only bind secrets owned by its project. Tool settings offer New project secret, returning the newly created reference to the binding selector. Secret settings have no tool picker or editable tool policy: Used by is a derived read-only list linking to the consuming tool. The secret creation screen collects name, type, value and environment in its current project.
 
-Import resources is available in project navigation and from resource libraries. It covers pipelines, agent profiles, instructions, tools and secrets. The proposed default is an independent copy with a new local identity and source provenance. Dependencies must be enumerated: pipeline steps reference local agent/tool/instruction versions, and tools reference local connections and secrets. Tool credential dependencies are mapped to an existing compatible target-project secret, imported as a new secret, or supplied with a new value. Standalone secret import is also supported. Connections require target-project authorization before use; importing configuration must not silently confer access. No credential value is displayed in the preview or placed on the clipboard.
+Import resources is available in project navigation and from resource libraries. It covers pipelines, agent profiles, instructions, tools and secrets. The proposed default is an independent copy with a new local identity and source provenance. Dependencies must be enumerated: pipeline steps reference local agent/tool/instruction versions, and tools reference local connections and secrets. Tool credential dependencies are mapped to an existing compatible target-project secret, imported as a new secret, or supplied with a new value. Standalone secret import is also supported. Connections are checked again in the target project before use (for CLI connections: program, sign-in and the target project's expected account); importing configuration must not silently confer access. No credential value is displayed in the preview or placed on the clipboard.
 
 The import fixture uses Select resources → Resolve dependencies for Preview release v3 from Personal website into Kontur. Seven mapping rows show the pipeline and six dependencies: reuse local Builder published v2 and Implementation standards v2; copy Build preview; rename the copied Deploy preview to Website preview because Kontur already contains a draft Deploy preview; import PREVIEW_HOST_API_KEY; and authorize Preview host configuration in Kontur. The library shows that existing draft among five tools, with two existing secret bindings.
 

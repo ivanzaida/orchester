@@ -133,7 +133,7 @@ The findings above are the historical audit of the original 13 screens. After th
 | 07 · Variable context | Shared preview context includes historical run/attempt, agent/step and injection event. `m2WjL` demonstrates unavailable revision, required-value blocking and explicit alternatives. |
 | 08 · Duplicate secret | Unique happy-path name in `tpF7R`; inline duplicate error, disabled Save and existing-secret link in `m9Dhp`. |
 | 09 · Project owner | One project switcher in the shell; resource ownership is read-only. |
-| 10 · Setup | `jnpRq`, `W6uXiL`, `w6ODp4`, `x1YpfN`, `Q7htyU`: GitHub authorization, repository, runner/agent assignments, readiness and recoverable blocking. First launch was subsequently added as `ZBoBm`. |
+| 10 · Setup | `jnpRq`, `W6uXiL`, `w6ODp4`, `x1YpfN`, `Q7htyU`: GitHub authorization, repository, runner/agent assignments, readiness and recoverable blocking. First launch was subsequently added as `ZBoBm`. Revised 2026-09-25: GitHub authorization and repository selection were replaced by a local project folder with a detected GitHub repository through the user's own `gh` sign-in (handoff section *GitHub*); `RlwqW` now reads *Create your first project*. |
 
 The user also requested direct task communication and mixed providers per role. The design now has a task Conversation panel with recipient and delivery states, project agent profiles (`WPmtS`), project Connections (`a4Lqb`), Add provider (`h6CmJ`) and expired MCP access (`RZUKo`). The example maps Explorer to Claude / Opus and Builder to Codex / Sol. These are proposed interface fixtures, not verified provider integrations.
 
