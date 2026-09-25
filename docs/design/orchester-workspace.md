@@ -355,7 +355,7 @@ so they cannot remove the ring.
 | Button or icon button outside forms (toolbar, topbar, page action) | none: not focusable | — |
 | Navigation item (`TSJpn`) | none: not focusable | `$hover` fill, `$text` label |
 | Pipeline step card (`ajikA`) | none: not focusable | 1.5 inside `$text` stroke |
-| Option card (new pipeline "Start from") | outer, radius 11 | 1.5 inside `$text` stroke + radio dot |
+| Option card (new pipeline "Start from") | outer, radius 11; none while selected | 1.5 inside `$text` stroke + radio dot |
 | Tab (`SOW6S`) | none: not focusable | 2px `$text` bottom underline |
 | List row (e.g. `SGjO0`, `clVjO`, `QHBNZ`, `hn8qO`, `sFtAz`, agent list `jNTVN`) | none: not focusable | — |
 | Popover row (`E1msJS`), its dismiss control and Open runner log | none: not focusable | — |
@@ -369,8 +369,12 @@ Combinations:
 - Focused + hover: the hover look plus the ring.
 - Focused + pressed: the pressed look plus the ring.
 - Focused + selected: the selection look stays and the ring is added (outside it for outer
-  controls, on the edge for inset controls). A selected step card shows stroke, dark gap and ring,
-  so it no longer looks like plain selection.
+  controls, on the edge for inset controls) when the selection is a fill or an underline.
+- Selection drawn as a stroke hides the focus ring (decided 2026-09-25). This applies to
+  stroke-selected form controls: a selected option card shows only its 1.5 `$text` stroke,
+  focused or not, since stroke, dark gap and ring read as a double border. It stays a Tab stop,
+  and shows the ring when focused while not selected. The pipeline step card also draws its
+  selection as a stroke but is outside forms and never focusable.
 - Disabled controls are not focusable and show no ring.
 
 Containers: an outer ring must not be cut by a clipping ancestor. Scroll viewports and clipped
