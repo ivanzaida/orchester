@@ -160,4 +160,19 @@ CREATE TABLE connections (
   CHECK ((checked_at IS NULL) = (last_check IS NULL))
 ) STRICT;
 ",
+  r"
+-- A project links at most one GitHub repository, so the table has at most one row.
+CREATE TABLE repository_link (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  connection_id TEXT NOT NULL REFERENCES connections (id),
+  remote TEXT NOT NULL,
+  host TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  name TEXT NOT NULL,
+  default_branch TEXT NOT NULL,
+  permission TEXT NOT NULL CHECK (permission IN ('admin', 'maintain', 'write', 'triage', 'read')),
+  expected_login TEXT NOT NULL,
+  checked_at INTEGER NOT NULL
+) STRICT;
+",
 ];

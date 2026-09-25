@@ -128,6 +128,7 @@ open at the next start means the previous session crashed.
 | `meta` | schema version, project id |
 | `project` | key (`ORC`), name, repository, default branch |
 | `counters` | next task number, next run number |
+| `repository_link` | at most one row: GitHub connection, git remote, host / owner / name, default branch, permission, expected login, checked at |
 
 ### Versioned configuration
 

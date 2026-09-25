@@ -49,6 +49,8 @@ pub enum StoreError {
   DuplicateConnectionName(String),
   #[error("connection {0} does not exist")]
   ConnectionNotFound(ConnectionId),
+  #[error("connection {0} is not a GitHub connection")]
+  NotAGitHubConnection(ConnectionId),
 }
 
 impl StoreError {
