@@ -21,7 +21,7 @@ use super::{
   icon::{Icon, IconSize, icon, select_icon},
   pressable::TAB_STOP,
 };
-use crate::theme::{ExtraRadius, ExtraShadow, ExtraSpacing, SELECT_CHECK_SLOT, select_menu_scrollbar};
+use crate::theme::{ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography, SELECT_CHECK_SLOT, select_menu_scrollbar};
 
 /// Below the control: nothing, or the error of the current value.
 pub enum FieldNote {
@@ -212,7 +212,8 @@ pub fn value_box_sized(
   height: Dimension,
 ) -> Element {
   let trailing = choose.map_or(Trailing::None, |(glyph, on_click)| Trailing::Choose(glyph, on_click));
-  value_box_parts(ctx, id, text, tone, trailing, height)
+  let typography = ctx.theme().form().input.text.typography;
+  value_box_parts(ctx, id, (text, typography), tone, trailing, height)
 }
 
 /// What a value box shows after its value.
@@ -224,10 +225,11 @@ enum Trailing {
   Marker(Icon),
 }
 
+/// `text` is drawn in `typography`, in the tone's color.
 fn value_box_parts(
   ctx: &Ctx,
   id: &'static str,
-  text: &str,
+  (text, typography): (&str, TypographyStyle),
   tone: ValueTone,
   trailing: Trailing,
   height: Dimension,
@@ -245,7 +247,7 @@ fn value_box_parts(
     input.border.clone()
   };
   let value = Text::new(text)
-    .variant(input.text.typography)
+    .variant(typography)
     .color(color)
     .nowrap()
     .text_overflow(TextOverflow::Elipsis)
@@ -297,8 +299,9 @@ fn value_box_parts(
   }
 }
 
-/// A read-only value box at `height` with an icon that says what the value is, e.g. the
-/// project folder beside its own *Choose folder…* button (`xZAZc`, icon `eASPF`).
+/// A read-only path at `height` with an icon that says what the path is, e.g. the project
+/// folder beside its own *Choose folder…* button (`xZAZc`, icon `eASPF`). A path is in mono
+/// (`ObbY7` in `xZAZc`, `F5KwDR`); the placeholder is not (`bnN26`).
 pub fn marked_value_box(
   ctx: &Ctx,
   id: &'static str,
@@ -306,5 +309,9 @@ pub fn marked_value_box(
   (tone, glyph): (ValueTone, Icon),
   height: Dimension,
 ) -> Element {
-  value_box_parts(ctx, id, text, tone, Trailing::Marker(glyph), height)
+  let typography = match tone {
+    ValueTone::Value | ValueTone::Invalid => ExtraTypography::MonoField.role(),
+    ValueTone::Placeholder | ValueTone::Unavailable => ctx.theme().form().input.text.typography,
+  };
+  value_box_parts(ctx, id, (text, typography), tone, Trailing::Marker(glyph), height)
 }

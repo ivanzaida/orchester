@@ -190,6 +190,8 @@ fn actions(ctx: &Ctx, props: &AccountPanelProps) -> Element {
   };
   Row::new()
     .width(Dimension::Pct(100.0))
+    // Close and Check again are as tall as the row; their focus rings reach past it.
+    .overflow_visible()
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .child(

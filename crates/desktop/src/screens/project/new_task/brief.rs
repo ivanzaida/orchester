@@ -69,6 +69,8 @@ pub fn brief_form(
   let fields = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_left(FOCUS_ROOM)
+    // Attach context is last; the room keeps its ring when the brief scrolls to the end.
+    .padding_bottom(FOCUS_ROOM)
     .spacing(SpacingSize::Lg)
     .child(labelled(ctx, "tasks.new.project", repository(ctx, project, link)))
     .child(title_field(ctx, form, state))
@@ -95,6 +97,8 @@ pub fn brief_form(
 fn labelled(ctx: &Ctx, label: &str, control: impl Into<Element>) -> Column {
   Column::new()
     .width(Dimension::Pct(100.0))
+    // A button control (Attach context) starts at the column's edge; its ring reaches past it.
+    .overflow_visible()
     .spacing(ExtraSpacing::Inline.role())
     .child(Text::new(&ctx.t(label)).variant(ExtraTypography::FormLabel.role()))
     .child(control)

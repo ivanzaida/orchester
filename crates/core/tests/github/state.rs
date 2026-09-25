@@ -79,11 +79,11 @@ fn state_advice_commands_are_for_the_connection_host() {
   );
   assert_eq!(
     GhAdvice::Switch(Some(login("ivanzaida"))).command(&host),
-    "gh auth switch --hostname ghe.example.com --user ivanzaida"
+    "gh auth switch -h ghe.example.com -u ivanzaida"
   );
   assert_eq!(
     GhAdvice::Switch(None).command(&GitHubHost::github_com()),
-    "gh auth switch --hostname github.com --user <login>"
+    "gh auth switch -h github.com -u <login>"
   );
   assert_eq!(
     GhAdvice::Refresh.command(&GitHubHost::github_com()),

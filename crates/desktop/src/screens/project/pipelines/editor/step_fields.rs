@@ -232,6 +232,8 @@ pub fn model(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields) -> Vec<Elem
 fn effective(ctx: &Ctx, line: &str, hint: &str, button: &str) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
+    // The full-width button's focus ring reaches past the column.
+    .overflow_visible()
     .spacing(SpacingSize::Sm)
     .child(
       Text::new(line)
@@ -484,6 +486,8 @@ pub fn actions(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, handle: &
     .render(ctx);
   Column::new()
     .width(Dimension::Pct(100.0))
+    // The full-width buttons' focus rings reach past the column.
+    .overflow_visible()
     .spacing(SpacingSize::Sm)
     .child(duplicate_button)
     .child(remove_button)

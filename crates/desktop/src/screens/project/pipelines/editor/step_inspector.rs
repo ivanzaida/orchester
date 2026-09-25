@@ -33,6 +33,10 @@ const INSTRUCTIONS: &str = "instructions";
 const BUDGET: &str = "budget";
 const RETRIES: &str = "retries";
 
+/// Room the inspector's scroll content and actions keep on their sides for the outer focus
+/// rings of full-width buttons (`focus-extent`, rounded up to the spacing scale).
+const FOCUS_ROOM: SpacingSize = SpacingSize::Sm;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct StepInspectorProps {
   pub step: Step,
@@ -127,6 +131,7 @@ impl Component for StepInspector {
     };
     let content = Column::new()
       .width(Dimension::Pct(100.0))
+      .padding_horizontal(FOCUS_ROOM)
       .spacing(SpacingSize::Md)
       .child(step_fields::header(ctx, &props, &self.fields, errors.name.as_ref()))
       .child(step_fields::executor(ctx, &props, &self.fields))
@@ -140,13 +145,24 @@ impl Component for StepInspector {
       .child(step_fields::route(ctx, &props, &self.fields))
       .child(step_fields::constraints(ctx, &props, &self.fields, &errors))
       .child(step_fields::approval(ctx, &props, &self.handle));
+    // The scroll viewport starts `FOCUS_ROOM` early on both sides and its content is padded by
+    // the same amount, so the fields stay at the designed inset and keep room for focus rings.
+    let inset =
+      ctx.theme().spacing_value(SpacingSize::Lg).resolve(0.0) - ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .padding(SpacingSize::Lg)
+      .padding_vertical(SpacingSize::Lg)
+      .padding_horizontal(Dimension::Px(inset))
       .spacing(SpacingSize::Md)
       .child(ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0))
-      .child(step_fields::actions(ctx, &props, &self.fields, &self.handle))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding_horizontal(FOCUS_ROOM)
+          .overflow_visible()
+          .child(step_fields::actions(ctx, &props, &self.fields, &self.handle)),
+      )
   }
 }
 

@@ -119,9 +119,9 @@ impl Component for SettingsScreen {
     let actions = Actions::of(ctx);
     let loaded = self.load(ctx, &open);
     let tab = self.tab.get();
-    let tab_key = match tab {
-      SettingsTab::General => "settings.tabs.general",
-      SettingsTab::Limits => "settings.tabs.limits",
+    let (tab_key, description_key) = match tab {
+      SettingsTab::General => ("settings.tabs.general", "settings.description"),
+      SettingsTab::Limits => ("settings.tabs.limits", "settings.limits.description"),
     };
     let breadcrumb = ctx.t_args(
       "settings.breadcrumb",
@@ -150,7 +150,7 @@ impl Component for SettingsScreen {
       .child(page::topbar(&breadcrumb, []))
       .child(page::heading(
         &ctx.t("settings.title"),
-        &ctx.t_args("settings.description", [("project", open.project.name().as_str())]),
+        &ctx.t_args(description_key, [("project", open.project.name().as_str())]),
       ))
       .child(self.tabs(ctx, tab))
       .child(body)

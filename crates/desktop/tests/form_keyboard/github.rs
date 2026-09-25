@@ -143,7 +143,7 @@ fn open_connections(desktop: &mut Desktop) {
   desktop.wait_for(INSPECTOR);
 }
 
-fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
+pub(crate) fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
   element.text_content().is_some_and(|content| content.contains(text))
     || element.children().into_iter().any(|child| contains_text(child, text))
 }
@@ -261,7 +261,7 @@ fn github_inspector_wrong_account_shows_what_the_project_expects() {
   assert!(shows(
     &mut desktop,
     "github-command-switch",
-    "gh auth switch --hostname github.com --user ivan-work"
+    "gh auth switch -h github.com -u ivan-work"
   ));
   assert!(shows(
     &mut desktop,
@@ -289,7 +289,7 @@ fn github_account_panel_lists_the_commands_and_traps_tab() {
   assert!(shows(
     &mut desktop,
     "github-command-switch",
-    "gh auth switch --hostname github.com --user ivanzaida"
+    "gh auth switch -h github.com -u ivanzaida"
   ));
   assert!(shows(
     &mut desktop,

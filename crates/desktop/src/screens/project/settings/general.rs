@@ -73,8 +73,10 @@ impl SettingsScreen {
       .child(name_row(ctx, open))
       .child(folder_row(ctx, open))
       .child(repository_row(ctx, link, check.clone()));
+    let mut wrong_account = false;
     if let Some(link) = link {
       let connection = data.github_connection(link.connection());
+      wrong_account = is_wrong_account(link, connection);
       let use_account = (!busy).then(|| use_account(actions, link, connection)).flatten();
       content = content.child(account_row(ctx, open, link, connection, use_account));
     }
@@ -88,7 +90,8 @@ impl SettingsScreen {
     if let Some(block) = self.detection(ctx, &general) {
       content = content.child(block);
     }
-    if link.is_some() {
+    // The notice explains *Use signed-in account*, so it is shown with the button only.
+    if wrong_account {
       content = content.child(
         Notice::new(
           Icon::UserCheck,
@@ -195,13 +198,10 @@ impl SettingsScreen {
 
 /// *Use signed-in account* while `gh` acts as another account than the link expects.
 fn use_account(actions: &Actions, link: &RepositoryLink, connection: Option<&GitHubConnection>) -> Option<Handler> {
-  let connection = connection?;
-  if !matches!(
-    connection.state(Some(link.expected_login())),
-    GitHubState::WrongAccount { .. }
-  ) {
+  if !is_wrong_account(link, connection) {
     return None;
   }
+  let connection = connection?;
   let (work, id, name) = (
     actions.work.clone(),
     connection.id(),
@@ -213,6 +213,16 @@ fn use_account(actions: &Actions, link: &RepositoryLink, connection: Option<&Git
       name: name.clone(),
     });
   }))
+}
+
+/// `gh` acts as another account than the link expects: *Use signed-in account* is offered.
+fn is_wrong_account(link: &RepositoryLink, connection: Option<&GitHubConnection>) -> bool {
+  connection.is_some_and(|connection| {
+    matches!(
+      connection.state(Some(link.expected_login())),
+      GitHubState::WrongAccount { .. }
+    )
+  })
 }
 
 fn name_row(ctx: &Ctx, open: &OpenProject) -> Element {
@@ -282,7 +292,7 @@ fn repository_row(ctx: &Ctx, link: Option<&RepositoryLink>, check: Option<Handle
   setting_row(
     &ctx.t("settings.general.repository"),
     &ctx.t("settings.general.repositoryDetail"),
-    vec![value.into(), readback(&detail), button_for(ctx, button, check)],
+    vec![value.into(), readback(&detail), small_button(ctx, button, check)],
   )
 }
 
@@ -374,7 +384,7 @@ fn readback(text: &str) -> Element {
     .into()
 }
 
-/// A full-width form button, disabled without a handler (while other work runs).
+/// A full-width form button (`y4Zv54`), disabled without a handler (while other work runs).
 fn button_for(ctx: &Ctx, (id, label, glyph): (&'static str, Arc<str>, Icon), handler: Option<Handler>) -> Element {
   let button = ActionButton::new(label)
     .icon(glyph)
@@ -382,6 +392,21 @@ fn button_for(ctx: &Ctx, (id, label, glyph): (&'static str, Arc<str>, Icon), han
     .in_form()
     .fill_width()
     .height(Dimension::Px(CONTROL_HEIGHT));
+  with_handler(ctx, button, handler)
+}
+
+/// A secondary button as wide as its label under a read-only value, e.g. *Check again* in the
+/// repository row (`dSOKq`, like `FvVwL` in 01.03).
+fn small_button(ctx: &Ctx, (id, label, glyph): (&'static str, Arc<str>, Icon), handler: Option<Handler>) -> Element {
+  let button = ActionButton::new(label)
+    .icon(glyph)
+    .id(id)
+    .in_form()
+    .height(Dimension::Px(CONTROL_HEIGHT));
+  with_handler(ctx, button, handler)
+}
+
+fn with_handler(ctx: &Ctx, button: ActionButton, handler: Option<Handler>) -> Element {
   match handler {
     Some(handler) => button.on_click(move || handler()).render(ctx),
     None => button.on_click(|| {}).enabled(false).render(ctx),

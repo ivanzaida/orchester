@@ -122,12 +122,20 @@ fn mono_text_uses_bundled_geist_mono() {
 }
 
 #[test]
+fn mono_field_path_follows_pencil() {
+  let app = themed_app();
+  let path = app.theme().typography_style(ExtraTypography::MonoField.role());
+  assert_eq!((&*path.font_family, path.font_size), ("Geist Mono", 12.0));
+}
+
+#[test]
 fn mono_text_keeps_the_space_before_double_hyphens() {
   let app = themed_app();
   let off = FontFeatures::from([FontFeature::disable(*b"liga"), FontFeature::disable(*b"calt")]);
   for role in [
     TypographyStyle::Mono,
     ExtraTypography::MonoValue.role(),
+    ExtraTypography::MonoField.role(),
     ExtraTypography::Metric.role(),
   ] {
     assert_eq!(app.theme().typography_style(role).font_features, off);
