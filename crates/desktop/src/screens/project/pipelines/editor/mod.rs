@@ -5,6 +5,7 @@
 //! under the toolbar (03.B `UjHDL`). Running a pipeline and its version history do not exist
 //! yet, so Run and Version history are unavailable.
 
+mod autosave;
 mod canvas;
 mod header;
 mod pipeline_inspector;
@@ -27,11 +28,12 @@ use lurq::{
 };
 use orchester_core::{
   id::ResourceId,
-  resource::{Draft, DraftSaved, Pipeline, PipelineEdit, StepKey, VersionNumber},
+  resource::{Pipeline, PipelineEdit, StepKey, VersionNumber},
   time::Timestamp,
 };
 
 use self::{
+  autosave::{DraftQueue, SaveAction, SaveJob, save_action, watch_saves},
   canvas::{Canvas, CanvasProps},
   pipeline_inspector::{PipelineInspector, PipelineInspectorProps},
   publish_dialog::publish_dialog,
@@ -43,7 +45,7 @@ use crate::{
   background,
   messages::{self, Message},
   pipelines::{
-    data::{OpenError, OpenedPipeline, publish_in, save_draft_in},
+    data::{OpenError, OpenedPipeline, publish_in},
     editor::EditorState,
     problems::publish_error,
   },
@@ -73,16 +75,6 @@ pub enum Selection {
 
 impl lurq::app::component::DevtoolsInspectable for Selection {}
 
-/// A draft revision stored at a time.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Saved {
-  revision: u64,
-  at: Timestamp,
-  outcome: DraftSaved,
-}
-
-impl lurq::app::component::DevtoolsInspectable for Saved {}
-
 /// The version a publish created, and what it contains.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PublishedDraft {
@@ -93,8 +85,6 @@ struct PublishedDraft {
 
 impl lurq::app::component::DevtoolsInspectable for PublishedDraft {}
 
-type SaveArgs = (PathBuf, ResourceId, u64, Draft<Pipeline>, OperationSpec);
-type SaveAction = FutureAction<SaveArgs, Saved, Message>;
 type PublishArgs = (PathBuf, ResourceId, Pipeline, OperationSpec);
 type PublishAction = FutureAction<PublishArgs, PublishedDraft, Message>;
 
@@ -123,6 +113,7 @@ pub struct EditorHandle {
   /// Changes when steps are replaced as a whole, so step inspectors start again from them.
   epoch: Signal<u64>,
   save: SaveAction,
+  queue: DraftQueue,
   /// Set by the editor's render: props are not available when the handle is created.
   project: Signal<Project>,
 }
@@ -165,12 +156,9 @@ impl EditorHandle {
     self.epoch.update(|epoch| *epoch += 1);
   }
 
-  /// Stores the current revision as the draft, unless a save is running (its completion
-  /// saves again) or there is nothing that can be saved.
+  /// Stores the current revision as the draft, unless there is nothing that can be saved; while
+  /// a save runs, the revision waits for it (see [`autosave`]).
   fn flush(&self) {
-    if self.save.state().get().is_pending() {
-      return;
-    }
     let Some(state) = self.state.get() else {
       return;
     };
@@ -178,8 +166,16 @@ impl EditorHandle {
       return;
     };
     if let Some((revision, draft)) = state.draft_to_save(Timestamp::now()) {
-      let spec = operations::pipeline_draft(&project, state.id(), state.name());
-      self.save.run((project.repo_root, state.id(), revision, draft, spec));
+      let job = SaveJob {
+        spec: operations::pipeline_draft(&project, state.id(), state.name()),
+        repo_root: project.repo_root,
+        id: state.id(),
+        revision,
+        draft,
+      };
+      if let Some(job) = self.queue.offer(job) {
+        self.save.run((job, self.queue.clone()));
+      }
     }
   }
 }
@@ -200,6 +196,7 @@ impl Component for PipelineEditor {
       selection: ctx.signal(Selection::Pipeline),
       epoch: ctx.signal(0),
       save: save.clone(),
+      queue: DraftQueue::default(),
       project: ctx.signal(Project::default()),
     };
     let confirm_publish = ctx.signal(false);
@@ -371,24 +368,6 @@ fn failed(ctx: &Ctx, error: &Message) -> Element {
     .into()
 }
 
-fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
-  ctx.future_action(move |(repo_root, id, revision, draft, spec): SaveArgs| {
-    let activity = activity.clone();
-    async move {
-      let save = async move {
-        let at = draft.updated_at();
-        let saved = background::run(move || save_draft_in(&repo_root, id, &draft)).await?;
-        saved.map(|outcome| Saved { revision, at, outcome }).map_err(|error| {
-          tracing::error!(%error, "cannot save the pipeline draft");
-          messages::store_error(&error)
-        })
-      };
-      activity.track(spec, save).await
-    }
-  })
-}
-
 fn publish_action(ctx: &mut Ctx) -> PublishAction {
   let activity = Activity::of(ctx);
   ctx.future_action(move |(repo_root, id, body, spec): PublishArgs| {
@@ -406,26 +385,6 @@ fn publish_action(ctx: &mut Ctx) -> PublishAction {
       activity.track(spec, publish).await
     }
   })
-}
-
-fn watch_saves(ctx: &mut Ctx, save: &SaveAction, handle: &EditorHandle) {
-  let handle = handle.clone();
-  ctx.watch(&save.state(), move |state| {
-    if state.is_pending() {
-      return;
-    }
-    if let Some(saved) = &state.data {
-      handle.state.update(|editor| {
-        if let Some(editor) = editor {
-          editor.saved(saved.revision, saved.at, saved.outcome);
-        }
-      });
-    }
-    // A failed save waits for the next edit instead of retrying in a loop.
-    if state.error.is_none() {
-      handle.flush();
-    }
-  });
 }
 
 fn watch_publishes(ctx: &mut Ctx, publish: &PublishAction, handle: &EditorHandle, confirm: &Signal<bool>) {

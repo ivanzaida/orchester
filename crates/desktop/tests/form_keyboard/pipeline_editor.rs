@@ -83,11 +83,9 @@ fn step_inspector_remove_works_from_the_keyboard() {
   // Remove asks once more.
   desktop.enter();
   desktop.enter();
-  // Removing is an edit of the editor state, shown by the next render. Background work is
-  // not polled here: the probes' edits left draft saves running, and polling their
-  // completion hangs (a defect of the editor's saving, reported separately).
-  desktop.tree.rebuild();
-  assert_eq!(step_cards(&mut desktop), cards - 1);
+  desktop.settle("the step removed", |tree| {
+    tree.root().map_or(0, count_step_cards) == cards - 1
+  });
 }
 
 #[test]
