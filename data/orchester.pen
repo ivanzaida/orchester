@@ -17110,7 +17110,7 @@
                               "id": "muQCP",
                               "name": "Creation action explanation",
                               "fill": "$muted",
-                              "content": "Creates the project and keeps setup in progress.",
+                              "content": "Creates the project in the repository’s .orchester folder and opens it.",
                               "fontFamily": "$font",
                               "fontSize": 11,
                               "fontWeight": "normal"
@@ -20008,7 +20008,7 @@
                       "fill": "$text",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "gh auth switch --hostname github.com --user ivanzaida",
+                      "content": "gh auth switch -h github.com -u ivanzaida",
                       "fontFamily": "$mono",
                       "fontSize": 11,
                       "fontWeight": "normal"
@@ -20708,7 +20708,7 @@
                           "fill": "$text",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "gh auth switch --hostname github.com --user <login>",
+                          "content": "gh auth switch -h github.com -u <login>",
                           "fontFamily": "$mono",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -47789,7 +47789,7 @@
                                       "id": "fMdmA",
                                       "name": "Read-back",
                                       "fill": "$subtle",
-                                      "content": "Git repository · Choose folder… to move the project",
+                                      "content": "Git repository · moving the project is not available yet",
                                       "fontFamily": "$font",
                                       "fontSize": 10,
                                       "fontWeight": "normal"
@@ -47873,6 +47873,21 @@
                                       "fontFamily": "$font",
                                       "fontSize": 10,
                                       "fontWeight": "normal"
+                                    },
+                                    {
+                                      "id": "FQXpo",
+                                      "type": "ref",
+                                      "ref": "u1XBP",
+                                      "name": "Check again",
+                                      "height": 36,
+                                      "descendants": {
+                                        "xfnek": {
+                                          "icon": "refresh-cw"
+                                        },
+                                        "Y7HQGw": {
+                                          "content": "Check again"
+                                        }
+                                      }
                                     }
                                   ]
                                 }
