@@ -8,7 +8,7 @@
       "y": 0,
       "name": "00 / Foundations",
       "width": 4896,
-      "height": 6396,
+      "height": 7456,
       "fill": "$canvas",
       "layout": "none",
       "children": [
@@ -6724,7 +6724,7 @@
           "y": 3536,
           "name": "Interaction · Focus",
           "width": 4896,
-          "height": 2800,
+          "height": 3860,
           "layout": "none",
           "children": [
             {
@@ -10737,7 +10737,7 @@
                           "fill": "$subtle",
                           "textGrowth": "fixed-width",
                           "width": 200,
-                          "content": "ZGwlv · reference",
+                          "content": "ZGwlv · reference · menu u0ByM · option L20XvS",
                           "fontFamily": "$font",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -10749,7 +10749,7 @@
                       "id": "T5Zj6P",
                       "name": "Default",
                       "width": 264,
-                      "height": 88,
+                      "height": 176,
                       "fill": "$surface",
                       "cornerRadius": 8,
                       "justifyContent": "center",
@@ -10779,7 +10779,7 @@
                       "id": "Hloy1",
                       "name": "Hover",
                       "width": 264,
-                      "height": 88,
+                      "height": 176,
                       "fill": "$surface",
                       "cornerRadius": 8,
                       "justifyContent": "center",
@@ -10809,7 +10809,7 @@
                       "id": "KgBC2",
                       "name": "Focused",
                       "width": 264,
-                      "height": 88,
+                      "height": 176,
                       "fill": "$surface",
                       "cornerRadius": 8,
                       "justifyContent": "center",
@@ -10839,7 +10839,7 @@
                       "id": "X6qoJ",
                       "name": "Focused + hover",
                       "width": 264,
-                      "height": 88,
+                      "height": 176,
                       "fill": "$surface",
                       "cornerRadius": 8,
                       "justifyContent": "center",
@@ -10869,21 +10869,50 @@
                       "id": "K5sW94",
                       "name": "Selected",
                       "width": 264,
-                      "height": 88,
+                      "height": 176,
                       "fill": "$surface",
                       "cornerRadius": 8,
                       "justifyContent": "center",
                       "alignItems": "center",
                       "children": [
                         {
-                          "type": "text",
-                          "id": "q1QLVp",
-                          "name": "Not applicable",
-                          "fill": "$subtle",
-                          "content": "—",
-                          "fontFamily": "$font",
-                          "fontSize": 13,
-                          "fontWeight": "normal"
+                          "type": "frame",
+                          "id": "w0KYb",
+                          "name": "Open · pointer",
+                          "width": 224,
+                          "layout": "vertical",
+                          "gap": 4,
+                          "children": [
+                            {
+                              "id": "R9d5fZ",
+                              "type": "ref",
+                              "ref": "ZGwlv",
+                              "name": "Field · open",
+                              "width": 224,
+                              "stroke": "$text",
+                              "strokeWidth": 1.5,
+                              "descendants": {
+                                "ObbY7": {
+                                  "content": "Claude Code CLI"
+                                },
+                                "eASPF": {
+                                  "icon": "chevron-up"
+                                }
+                              }
+                            },
+                            {
+                              "id": "oDrgq",
+                              "type": "ref",
+                              "ref": "u0ByM",
+                              "name": "Menu",
+                              "width": 224,
+                              "descendants": {
+                                "jUv8O": {
+                                  "fill": "$hover"
+                                }
+                              }
+                            }
+                          ]
                         }
                       ]
                     },
@@ -10892,21 +10921,62 @@
                       "id": "HFSRY",
                       "name": "Focused + selected",
                       "width": 264,
-                      "height": 88,
+                      "height": 176,
                       "fill": "$surface",
                       "cornerRadius": 8,
                       "justifyContent": "center",
                       "alignItems": "center",
                       "children": [
                         {
-                          "type": "text",
-                          "id": "QhzNo",
-                          "name": "Not applicable",
-                          "fill": "$subtle",
-                          "content": "—",
-                          "fontFamily": "$font",
-                          "fontSize": 13,
-                          "fontWeight": "normal"
+                          "type": "frame",
+                          "id": "MUhOt",
+                          "name": "Open · keyboard",
+                          "width": 224,
+                          "layout": "vertical",
+                          "gap": 4,
+                          "children": [
+                            {
+                              "id": "xRLnH",
+                              "type": "ref",
+                              "ref": "ZGwlv",
+                              "name": "Field · open",
+                              "width": 224,
+                              "stroke": "$text",
+                              "strokeWidth": 1.5,
+                              "descendants": {
+                                "ObbY7": {
+                                  "content": "Claude Code CLI"
+                                },
+                                "eASPF": {
+                                  "icon": "chevron-up"
+                                }
+                              }
+                            },
+                            {
+                              "id": "Za0WC",
+                              "type": "ref",
+                              "ref": "u0ByM",
+                              "name": "Menu",
+                              "width": 224
+                            },
+                            {
+                              "id": "f9ZbmW",
+                              "type": "ref",
+                              "ref": "X9gPDr",
+                              "name": "Focus ring · inset (highlighted option)",
+                              "layoutPosition": "absolute",
+                              "x": 4,
+                              "y": 80,
+                              "width": 216,
+                              "height": 32,
+                              "cornerRadius": 7,
+                              "descendants": {
+                                "N0nV4": {
+                                  "cornerRadius": 5
+                                }
+                              }
+                            }
+                          ]
                         }
                       ]
                     },
@@ -10929,7 +10999,7 @@
                           "fill": "$muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Fields keep the focused stroke o8Oug (1.5 inside $text) and the caret; no ring.",
+                          "content": "Fields keep the focused stroke o8Oug (1.5 inside $text) and the caret; no ring. Open (Selected columns): chevron-up, menu 4 px below; hover = $hover fill, selected = trailing check, keyboard highlight = inset ring radius 7. Board g3poI.",
                           "lineHeight": 1.5,
                           "fontFamily": "$font",
                           "fontSize": 11,
@@ -10974,7 +11044,7 @@
               "type": "frame",
               "id": "CfdDd",
               "x": 3088,
-              "y": 1660,
+              "y": 1780,
               "name": "Focus example · Dialog primary button",
               "clip": true,
               "width": 1440,
@@ -12061,7 +12131,7 @@
               "type": "frame",
               "id": "ASfcG",
               "x": 48,
-              "y": 1660,
+              "y": 1780,
               "name": "Focus example · Sidebar navigation item",
               "clip": true,
               "width": 1440,
@@ -12992,7 +13062,7 @@
               "type": "frame",
               "id": "A6HO2F",
               "x": 1568,
-              "y": 1660,
+              "y": 1780,
               "name": "Focus example · Tab",
               "clip": true,
               "width": 1440,
@@ -13918,7 +13988,7 @@
               "ref": "pmOpt",
               "name": "Focus example · Status bar item",
               "x": 48,
-              "y": 2720,
+              "y": 2840,
               "descendants": {
                 "F7mn6G": {
                   "content": "0/4",
@@ -14529,7 +14599,7 @@
               "type": "text",
               "id": "Qp62T",
               "x": 48,
-              "y": 1628,
+              "y": 1748,
               "name": "Example caption · Sidebar",
               "fill": "$muted",
               "content": "Focus example · Sidebar navigation item (Pipelines focused, Tasks selected) · outer ring",
@@ -14541,7 +14611,7 @@
               "type": "text",
               "id": "ysGOD",
               "x": 1568,
-              "y": 1628,
+              "y": 1748,
               "name": "Example caption · Tab",
               "fill": "$muted",
               "content": "Focus example · Tab (Queue focused, Drafts selected) · inset ring",
@@ -14553,7 +14623,7 @@
               "type": "text",
               "id": "m2T2e",
               "x": 3088,
-              "y": 1628,
+              "y": 1748,
               "name": "Example caption · Dialog",
               "fill": "$muted",
               "content": "Focus example · Dialog primary button (Create draft focused) · outer ring",
@@ -14565,10 +14635,2993 @@
               "type": "text",
               "id": "SfZCs",
               "x": 48,
-              "y": 2688,
+              "y": 2808,
               "name": "Example caption · Status bar",
               "fill": "$muted",
               "content": "Focus example · Status bar item (Needs you focused) · inset ring",
+              "fontFamily": "$font",
+              "fontSize": 13,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "g3poI",
+              "x": 3100,
+              "y": 220,
+              "name": "Select menu · open states",
+              "width": 1700,
+              "fill": "$sidebar",
+              "cornerRadius": 12,
+              "layout": "vertical",
+              "gap": 20,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "iXtiE",
+                  "name": "Board header",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": [
+                    0,
+                    0,
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "BajYP",
+                      "name": "Board title",
+                      "fill": "$text",
+                      "content": "Field / Select · open menu",
+                      "fontFamily": "$font",
+                      "fontSize": 15,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "eft92",
+                      "name": "Board description",
+                      "fill": "$muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "The menu opens 4 px below the trigger at the trigger's width. Options are 32 px rows; the selected option carries a trailing check that sits under the trigger chevron. Hover is a $hover fill; the keyboard highlight is the inset focus ring.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "bmYyP",
+                  "name": "Components",
+                  "width": "fill_container",
+                  "gap": 48,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "L20XvS",
+                      "name": "Field / Select option",
+                      "reusable": true,
+                      "width": 240,
+                      "height": 32,
+                      "cornerRadius": "$radius-control",
+                      "gap": 8,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "V4WqT",
+                          "name": "Label",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Codex CLI",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "wcFIg",
+                          "x": 0,
+                          "y": 0,
+                          "name": "Reason",
+                          "enabled": false,
+                          "fill": "$subtle",
+                          "content": "Not found on PATH",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "ClxwV",
+                          "name": "Check",
+                          "opacity": 0,
+                          "width": 14,
+                          "height": 14,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$text"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "u0ByM",
+                      "name": "Field / Select menu",
+                      "reusable": true,
+                      "clip": true,
+                      "width": 260,
+                      "fill": "$raised",
+                      "cornerRadius": 11,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#00000066",
+                        "offset": {
+                          "x": 0,
+                          "y": 8
+                        },
+                        "blur": 24
+                      },
+                      "layout": "vertical",
+                      "padding": 4,
+                      "children": [
+                        {
+                          "id": "jUv8O",
+                          "type": "ref",
+                          "ref": "L20XvS",
+                          "name": "Option · Codex CLI",
+                          "width": "fill_container",
+                          "descendants": {
+                            "V4WqT": {
+                              "content": "Codex CLI"
+                            },
+                            "ClxwV": {
+                              "opacity": 0
+                            }
+                          }
+                        },
+                        {
+                          "id": "h8Jhup",
+                          "type": "ref",
+                          "ref": "L20XvS",
+                          "name": "Option · Claude Code CLI",
+                          "width": "fill_container",
+                          "descendants": {
+                            "V4WqT": {
+                              "content": "Claude Code CLI"
+                            },
+                            "ClxwV": {
+                              "opacity": 1
+                            }
+                          }
+                        },
+                        {
+                          "id": "nAZ6U",
+                          "type": "ref",
+                          "ref": "L20XvS",
+                          "name": "Option · Gemini CLI",
+                          "width": "fill_container",
+                          "descendants": {
+                            "V4WqT": {
+                              "content": "Gemini CLI"
+                            },
+                            "ClxwV": {
+                              "opacity": 0
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "goMne",
+                  "name": "Option states",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ryHbx",
+                      "name": "Section title",
+                      "fill": "$text",
+                      "content": "Option states",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "spEaF",
+                      "name": "States row 1",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "UrpsP",
+                          "name": "State · Default",
+                          "width": 256,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "MbPRi",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "DEFAULT",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "EI96H",
+                              "name": "Stage",
+                              "width": "fill_container",
+                              "fill": "$raised",
+                              "cornerRadius": 8,
+                              "layout": "vertical",
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "ql503",
+                                  "name": "Option wrapper",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "id": "SPRnx",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option",
+                                      "width": 240,
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Claude Code CLI"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "CUXKm",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "No fill. Label Inter 12 $text. The 14 px check slot is reserved, so labels never shift.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "U0y9x",
+                          "name": "State · Hovered",
+                          "width": 256,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "evQLA",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "HOVERED",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "j8V2t",
+                              "name": "Stage",
+                              "width": "fill_container",
+                              "fill": "$raised",
+                              "cornerRadius": 8,
+                              "layout": "vertical",
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "gPnkO",
+                                  "name": "Option wrapper",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "id": "tRSmV",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option",
+                                      "width": 240,
+                                      "fill": "$hover",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Claude Code CLI"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "BH6e0",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "$hover fill, radius 7. Pointer only; never a stroke or shadow.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "JBWO1",
+                          "name": "State · Selected",
+                          "width": 256,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "R52oeR",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "SELECTED",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "f4X8De",
+                              "name": "Stage",
+                              "width": "fill_container",
+                              "fill": "$raised",
+                              "cornerRadius": 8,
+                              "layout": "vertical",
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "qfrfL",
+                                  "name": "Option wrapper",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "id": "P9US72",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option",
+                                      "width": 240,
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Claude Code CLI"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 1
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "M9kFX",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Trailing lucide check 14 $text. No fill: fill means pointer or highlight, not selection.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Aq1BB",
+                          "name": "State · Selected + hovered",
+                          "width": 256,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "c6eEJM",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "SELECTED + HOVERED",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "vC3k4",
+                              "name": "Stage",
+                              "width": "fill_container",
+                              "fill": "$raised",
+                              "cornerRadius": 8,
+                              "layout": "vertical",
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "oDGBb",
+                                  "name": "Option wrapper",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "id": "qhniS",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option",
+                                      "width": 240,
+                                      "fill": "$hover",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Claude Code CLI"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 1
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "duTmb",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Check + $hover fill.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "c3Y7Lm",
+                      "name": "States row 2",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "gLqTV",
+                          "name": "State · Highlighted (keyboard)",
+                          "width": 256,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "LsvMa",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "HIGHLIGHTED (KEYBOARD)",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "kEF8M",
+                              "name": "Stage",
+                              "width": "fill_container",
+                              "fill": "$raised",
+                              "cornerRadius": 8,
+                              "layout": "vertical",
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "tXOQ2",
+                                  "name": "Option wrapper",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "id": "Y6s8H4",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option",
+                                      "width": 240,
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Claude Code CLI"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "RlnCy",
+                                      "type": "ref",
+                                      "ref": "X9gPDr",
+                                      "name": "Focus ring · inset",
+                                      "layoutPosition": "absolute",
+                                      "x": 0,
+                                      "y": 0,
+                                      "width": 240,
+                                      "height": 32,
+                                      "cornerRadius": 7,
+                                      "descendants": {
+                                        "N0nV4": {
+                                          "cornerRadius": 5
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "Jqfo0",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Inset focus ring, radius 7 / gap 5. No fill, like a focused popover row.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "RYrah",
+                          "name": "State · Highlighted + hovered",
+                          "width": 256,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "mQpOj",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "HIGHLIGHTED + HOVERED",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "pSK4s",
+                              "name": "Stage",
+                              "width": "fill_container",
+                              "fill": "$raised",
+                              "cornerRadius": 8,
+                              "layout": "vertical",
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "bUoso",
+                                  "name": "Option wrapper",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "id": "Y27iO5",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option",
+                                      "width": 240,
+                                      "fill": "$hover",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Claude Code CLI"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "HxTOC",
+                                      "type": "ref",
+                                      "ref": "X9gPDr",
+                                      "name": "Focus ring · inset",
+                                      "layoutPosition": "absolute",
+                                      "x": 0,
+                                      "y": 0,
+                                      "width": 240,
+                                      "height": 32,
+                                      "cornerRadius": 7,
+                                      "descendants": {
+                                        "N0nV4": {
+                                          "cornerRadius": 5
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "Brx6n",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "$hover fill + inset ring.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "MTYd6",
+                          "name": "State · Highlighted + selected",
+                          "width": 256,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "X3etIf",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "HIGHLIGHTED + SELECTED",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "n6tlb",
+                              "name": "Stage",
+                              "width": "fill_container",
+                              "fill": "$raised",
+                              "cornerRadius": 8,
+                              "layout": "vertical",
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "pRmLs",
+                                  "name": "Option wrapper",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "id": "hpzJt",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option",
+                                      "width": 240,
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Claude Code CLI"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 1
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "GgNwo",
+                                      "type": "ref",
+                                      "ref": "X9gPDr",
+                                      "name": "Focus ring · inset",
+                                      "layoutPosition": "absolute",
+                                      "x": 0,
+                                      "y": 0,
+                                      "width": 240,
+                                      "height": 32,
+                                      "cornerRadius": 7,
+                                      "descendants": {
+                                        "N0nV4": {
+                                          "cornerRadius": 5
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "WXFZc",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Check + inset ring. The state after opening with the keyboard.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vrCtQ",
+                          "name": "State · Disabled",
+                          "width": 256,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "X7ejUF",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "DISABLED",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "D6DAjI",
+                              "name": "Stage",
+                              "width": "fill_container",
+                              "fill": "$raised",
+                              "cornerRadius": 8,
+                              "layout": "vertical",
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "F7sAe",
+                                  "name": "Option wrapper",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "id": "O5b4pi",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option",
+                                      "width": 240,
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "fill": "$subtle",
+                                          "content": "Gemini CLI"
+                                        },
+                                        "wcFIg": {
+                                          "enabled": true
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "ZMdWn",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Label $subtle, reason Inter 11 $subtle before the check slot. No hover, skipped by arrows and type-ahead.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "i7r59",
+                  "name": "Trigger and menu",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "s6TL84",
+                      "name": "Section title",
+                      "fill": "$text",
+                      "content": "Trigger and menu",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Psxh0",
+                      "name": "Anatomy row",
+                      "gap": 48,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "tB7If",
+                          "name": "Anatomy · Closed",
+                          "width": 260,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "K6j0J",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "CLOSED",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "bwUnv",
+                              "name": "Stack",
+                              "width": 260,
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "id": "Q1het3",
+                                  "type": "ref",
+                                  "ref": "ZGwlv",
+                                  "name": "Trigger · closed",
+                                  "width": 260,
+                                  "descendants": {
+                                    "ObbY7": {
+                                      "content": "Claude Code CLI"
+                                    },
+                                    "eASPF": {
+                                      "icon": "chevron-down"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "SQxu8",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "lucide chevron-down 14 $muted, 12 px from the right edge.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "O06MD5",
+                          "name": "Anatomy · Open · pointer",
+                          "width": 260,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "n5DDJ",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "OPEN · POINTER",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "jgTXz",
+                              "name": "Stack",
+                              "width": 260,
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "id": "RLQBF",
+                                  "type": "ref",
+                                  "ref": "ZGwlv",
+                                  "name": "Trigger · open",
+                                  "width": 260,
+                                  "stroke": "$text",
+                                  "strokeWidth": 1.5,
+                                  "descendants": {
+                                    "ObbY7": {
+                                      "content": "Claude Code CLI"
+                                    },
+                                    "eASPF": {
+                                      "icon": "chevron-up"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "Vylep",
+                                  "type": "ref",
+                                  "ref": "u0ByM",
+                                  "name": "Menu",
+                                  "width": 260,
+                                  "descendants": {
+                                    "jUv8O": {
+                                      "fill": "$hover"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "qqFKn",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Trigger keeps the focused stroke (1.5 inside $text); chevron-up. Pointer over Codex CLI.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "DyBrs",
+                          "name": "Anatomy · Open · keyboard",
+                          "width": 260,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "IM30i",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "OPEN · KEYBOARD",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "RSgsa",
+                              "name": "Stack",
+                              "width": 260,
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "id": "G736Ws",
+                                  "type": "ref",
+                                  "ref": "ZGwlv",
+                                  "name": "Trigger · open",
+                                  "width": 260,
+                                  "stroke": "$text",
+                                  "strokeWidth": 1.5,
+                                  "descendants": {
+                                    "ObbY7": {
+                                      "content": "Claude Code CLI"
+                                    },
+                                    "eASPF": {
+                                      "icon": "chevron-up"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "jyFPS",
+                                  "type": "ref",
+                                  "ref": "u0ByM",
+                                  "name": "Menu",
+                                  "width": 260
+                                },
+                                {
+                                  "id": "l9rAP",
+                                  "type": "ref",
+                                  "ref": "X9gPDr",
+                                  "name": "Focus ring · inset (highlighted option)",
+                                  "layoutPosition": "absolute",
+                                  "x": 4,
+                                  "y": 80,
+                                  "width": 252,
+                                  "height": 32,
+                                  "cornerRadius": 7,
+                                  "descendants": {
+                                    "N0nV4": {
+                                      "cornerRadius": 5
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "nVCTj",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Opened with Enter, Space, Alt+Down or Down: the highlight starts on the selected option.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "exuVt",
+                          "name": "Anatomy · Long list",
+                          "width": 260,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "zduRm",
+                              "name": "Caption",
+                              "fill": "$subtle",
+                              "content": "LONG LIST",
+                              "fontFamily": "$font",
+                              "fontSize": 9,
+                              "fontWeight": "600",
+                              "letterSpacing": 0.5
+                            },
+                            {
+                              "type": "frame",
+                              "id": "j2Ve50",
+                              "name": "Stack",
+                              "width": 260,
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "id": "jeH1i",
+                                  "type": "ref",
+                                  "ref": "ZGwlv",
+                                  "name": "Trigger · open",
+                                  "width": 260,
+                                  "stroke": "$text",
+                                  "strokeWidth": 1.5,
+                                  "descendants": {
+                                    "ObbY7": {
+                                      "content": "Claude Code CLI"
+                                    },
+                                    "eASPF": {
+                                      "icon": "chevron-up"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "U6FA7L",
+                                  "name": "Menu · scrolling (max height 266)",
+                                  "clip": true,
+                                  "width": 260,
+                                  "height": 266,
+                                  "fill": "$raised",
+                                  "cornerRadius": 11,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "effect": {
+                                    "type": "shadow",
+                                    "shadowType": "outer",
+                                    "color": "#00000066",
+                                    "offset": {
+                                      "x": 0,
+                                      "y": 8
+                                    },
+                                    "blur": 24
+                                  },
+                                  "layout": "vertical",
+                                  "padding": 4,
+                                  "children": [
+                                    {
+                                      "id": "hVebn",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Codex CLI",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Codex CLI"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "AFKCz",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Claude Code CLI",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Claude Code CLI"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 1
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "rEuHh",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Gemini CLI",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Gemini CLI"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "u1wjn",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Aider",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Aider"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "ycICm",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · OpenCode",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "OpenCode"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "R0xW6",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Cursor Agent",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Cursor Agent"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "A7SkN",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Amp",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Amp"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "fUpem",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Goose",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Goose"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "tKF4u",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Qwen Code",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Qwen Code"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "cNs5h",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Crush",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Crush"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "XuWL1",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Kiro CLI",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Kiro CLI"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "ZywMq",
+                                      "type": "ref",
+                                      "ref": "L20XvS",
+                                      "name": "Option · Cline CLI",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "V4WqT": {
+                                          "content": "Cline CLI"
+                                        },
+                                        "ClxwV": {
+                                          "opacity": 0
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "rectangle",
+                                      "cornerRadius": 2,
+                                      "id": "YD8PV",
+                                      "layoutPosition": "absolute",
+                                      "x": 251,
+                                      "y": 4,
+                                      "name": "Scroll thumb",
+                                      "fill": "$border",
+                                      "width": 4,
+                                      "height": 170
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "SZigt",
+                              "name": "Rule",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Max height 8 options (266 px with border); the list scrolls inside the clipped menu. Overlay thumb 4 px $border, radius 2, 1 px from the border. Arrows scroll the highlight into view.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "AA8wF",
+                  "name": "Values",
+                  "width": 1100,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "guGiN",
+                      "name": "Section title",
+                      "fill": "$text",
+                      "content": "Values",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "g1FjX",
+                      "name": "Spec · Menu",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "AbPqN",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Menu",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "uZTfv",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "$raised fill · 1 px $border · radius 11 (option 7 + padding 4) · padding 4 · no gap between options · clip",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "k5KDJP",
+                      "name": "Spec · Menu shadow",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "lAxKK",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Menu shadow",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "U3m6kV",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "0 8 24 #00000066 — the one elevation shadow, shared with the operations popover E1msJS; only floating layers use it",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "d4yhY1",
+                      "name": "Spec · Placement",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YTH8t",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Placement",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "uvKvk",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "4 px below the trigger, trigger width; flips above when there is no room below; stays inside the window",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "MVSEn",
+                      "name": "Spec · Max height",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "wArD4",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Max height",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Mq0TL",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "8 options = 266 px with border; longer lists scroll; overlay thumb 4 px $border radius 2",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "szjTu",
+                      "name": "Spec · Option",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "mdod0",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Option",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "fJ9CB",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "height 32 · padding 0 8 · gap 8 · radius 7 ($radius-control); label Inter 12 $text (field text); text lines up with the trigger text at 12 px",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "m5AMvT",
+                      "name": "Spec · Check",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "jigAh",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Check",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "qfLKF",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "lucide check 14 $text in a trailing slot that is always reserved; it sits under the trigger chevron",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "o1X3pK",
+                      "name": "Spec · Hovered",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "BaTUc",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Hovered",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "c6ZlUS",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "$hover fill",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zUTu5",
+                      "name": "Spec · Selected",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "t1LILX",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Selected",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Q9vxWX",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "check only, no fill",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "uLq9U",
+                      "name": "Spec · Highlighted",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "L8mUJa",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Highlighted",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "MUoGR",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "inset focus ring: inset 0 0 0 2 $focus-ring, inset 0 0 0 4 $focus-gap; radius 7 / 5; no fill",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "l0BEA",
+                      "name": "Spec · Disabled",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "L0CaY",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Disabled",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ESZFj",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "label $subtle; reason Inter 11 $subtle; no hover, no highlight",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rBtR3",
+                      "name": "Spec · Trigger · open",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "WN4Hq",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Trigger · open",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "x71Ps",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "focused stroke o8Oug (1.5 inside $text) stays; lucide chevron-up 14 $muted (closed: chevron-down)",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "W8YFW",
+                      "name": "Spec · Keys",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "SPytD",
+                          "name": "Spec key",
+                          "fill": "$subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 150,
+                          "content": "Keys",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "KNais",
+                          "name": "Spec value",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Enter / Space / Alt+Down / Down open; Up / Down / Home / End / type-ahead move the highlight; Enter selects and closes; Escape, Tab or click outside closes without change; focus returns to the trigger",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "kdxtI",
+              "x": 1568,
+              "y": 2840,
+              "name": "Select example · Provider / adapter open",
+              "clip": true,
+              "width": 1440,
+              "height": 960,
+              "fill": "$surface",
+              "children": [
+                {
+                  "id": "IrFZS",
+                  "type": "ref",
+                  "ref": "zo9Py",
+                  "name": "Sidebar",
+                  "height": "fill_container",
+                  "descendants": {
+                    "JI3gd": {
+                      "fill": "$sidebar"
+                    },
+                    "JI3gd/sQnmq": {
+                      "fill": "$muted"
+                    },
+                    "JI3gd/YWsP0": {
+                      "fill": "$muted"
+                    },
+                    "oDrj4": {
+                      "fill": "$hover"
+                    },
+                    "oDrj4/sQnmq": {
+                      "fill": "$text"
+                    },
+                    "oDrj4/YWsP0": {
+                      "fill": "$text"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "dBBR4",
+                  "name": "Workspace",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "nSwxH",
+                      "name": "Topbar",
+                      "width": "fill_container",
+                      "height": 64,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 12,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "T91XlG",
+                          "name": "Breadcrumb",
+                          "fill": "$muted",
+                          "content": "Kontur / Connections",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "qiVGu",
+                          "name": "Topbar space",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "id": "Ek1QA",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Add connection",
+                          "height": 36,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "plus",
+                              "fill": "$inverse-text"
+                            },
+                            "Y7HQGw": {
+                              "content": "Add connection",
+                              "fill": "$inverse-text"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "HbjKP",
+                      "name": "Page heading",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": [
+                        28,
+                        32,
+                        24,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zOwsg",
+                          "name": "Page title",
+                          "fill": "$text",
+                          "content": "Connections",
+                          "fontFamily": "$font",
+                          "fontSize": 27,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "cAVzN",
+                          "name": "Page description",
+                          "fill": "$muted",
+                          "content": "Connect repositories, model providers and MCP servers for this project.",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QoEcF",
+                      "name": "Section tabs",
+                      "width": "fill_container",
+                      "height": 42,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 20,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "id": "JBEgk",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "All connections tab",
+                          "height": "fill_container",
+                          "stroke": "$text",
+                          "strokeWidth": {
+                            "bottom": 2
+                          },
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "All connections",
+                              "fill": "$text"
+                            }
+                          }
+                        },
+                        {
+                          "id": "PelAs",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Agent providers tab",
+                          "height": "fill_container",
+                          "stroke": "$hairline",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Agent providers",
+                              "fill": "$muted"
+                            }
+                          }
+                        },
+                        {
+                          "id": "U9eOd",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Repositories tab",
+                          "height": "fill_container",
+                          "stroke": "$hairline",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Repositories",
+                              "fill": "$muted"
+                            }
+                          }
+                        },
+                        {
+                          "id": "BBHLh",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "MCP servers tab",
+                          "height": "fill_container",
+                          "stroke": "$hairline",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "MCP servers",
+                              "fill": "$muted"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "W3CWM",
+                      "name": "Connections library and details",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "iOPVI",
+                          "name": "Project connection list",
+                          "width": "fill_container",
+                          "height": "fill_container",
+                          "layout": "vertical",
+                          "gap": 16,
+                          "padding": 32,
+                          "children": [
+                            {
+                              "id": "BKPrN",
+                              "type": "ref",
+                              "ref": "ZGwlv",
+                              "name": "Connection search",
+                              "width": "fill_container",
+                              "height": 38,
+                              "descendants": {
+                                "ObbY7": {
+                                  "content": "Search connections…",
+                                  "fontSize": 12
+                                },
+                                "eASPF": {
+                                  "icon": "search"
+                                }
+                              }
+                            },
+                            {
+                              "id": "x45t6",
+                              "type": "ref",
+                              "ref": "sFtAz",
+                              "name": "GitHub connection",
+                              "width": "fill_container",
+                              "height": 88,
+                              "fill": "$surface",
+                              "padding": [
+                                16,
+                                12
+                              ],
+                              "descendants": {
+                                "eg6Nq": {
+                                  "icon": "github"
+                                },
+                                "mPu7w": {
+                                  "content": "GitHub"
+                                },
+                                "jsXpq": {
+                                  "content": "ivanzaida/kontur · main",
+                                  "fontSize": 10
+                                },
+                                "JIsjZ": {
+                                  "content": "Repository",
+                                  "width": 76
+                                },
+                                "f6poW": {
+                                  "content": "1 repo",
+                                  "width": 58
+                                },
+                                "v7McTX/bhGXK": {
+                                  "icon": "circle-check"
+                                },
+                                "v7McTX/JuW4o": {
+                                  "content": "Connected",
+                                  "fontSize": 10
+                                }
+                              }
+                            },
+                            {
+                              "id": "o5pC5o",
+                              "type": "ref",
+                              "ref": "sFtAz",
+                              "name": "Codex · Kontur connection",
+                              "width": "fill_container",
+                              "height": 88,
+                              "fill": "$surface",
+                              "padding": [
+                                16,
+                                12
+                              ],
+                              "descendants": {
+                                "eg6Nq": {
+                                  "icon": "bot"
+                                },
+                                "mPu7w": {
+                                  "content": "Codex · Kontur"
+                                },
+                                "jsXpq": {
+                                  "content": "OpenAI · local runner account",
+                                  "fontSize": 10
+                                },
+                                "JIsjZ": {
+                                  "content": "Provider",
+                                  "width": 76
+                                },
+                                "f6poW": {
+                                  "content": "3 agents",
+                                  "width": 58
+                                },
+                                "v7McTX/bhGXK": {
+                                  "icon": "circle-check"
+                                },
+                                "v7McTX/JuW4o": {
+                                  "content": "Connected",
+                                  "fontSize": 10
+                                }
+                              }
+                            },
+                            {
+                              "id": "K4EgR",
+                              "type": "ref",
+                              "ref": "sFtAz",
+                              "name": "Claude · Kontur connection",
+                              "width": "fill_container",
+                              "height": 88,
+                              "fill": "$raised",
+                              "padding": [
+                                16,
+                                12
+                              ],
+                              "descendants": {
+                                "eg6Nq": {
+                                  "icon": "bot"
+                                },
+                                "mPu7w": {
+                                  "content": "Claude · Kontur"
+                                },
+                                "jsXpq": {
+                                  "content": "Anthropic · local runner account",
+                                  "fontSize": 10
+                                },
+                                "JIsjZ": {
+                                  "content": "Provider",
+                                  "width": 76
+                                },
+                                "f6poW": {
+                                  "content": "2 agents",
+                                  "width": 58
+                                },
+                                "v7McTX/bhGXK": {
+                                  "icon": "circle-check"
+                                },
+                                "v7McTX/JuW4o": {
+                                  "content": "Connected",
+                                  "fontSize": 10
+                                }
+                              }
+                            },
+                            {
+                              "id": "B1w9lf",
+                              "type": "ref",
+                              "ref": "sFtAz",
+                              "name": "Project knowledge connection",
+                              "width": "fill_container",
+                              "height": 88,
+                              "fill": "$surface",
+                              "padding": [
+                                16,
+                                12
+                              ],
+                              "descendants": {
+                                "eg6Nq": {
+                                  "icon": "plug"
+                                },
+                                "mPu7w": {
+                                  "content": "Project knowledge"
+                                },
+                                "jsXpq": {
+                                  "content": "Remote MCP · 4 discovered tools",
+                                  "fontSize": 10
+                                },
+                                "JIsjZ": {
+                                  "content": "MCP",
+                                  "width": 76
+                                },
+                                "f6poW": {
+                                  "content": "4 tools",
+                                  "width": 58
+                                },
+                                "v7McTX/bhGXK": {
+                                  "icon": "circle-alert"
+                                },
+                                "v7McTX/JuW4o": {
+                                  "content": "Reconnect",
+                                  "fontSize": 10
+                                }
+                              }
+                            },
+                            {
+                              "id": "z5JCoy",
+                              "type": "ref",
+                              "ref": "q5LzI",
+                              "name": "Each agent can use a different provider",
+                              "width": "fill_container",
+                              "descendants": {
+                                "GkfFF": {
+                                  "icon": "workflow"
+                                },
+                                "CoAOk": {
+                                  "content": "Each agent can use a different provider"
+                                },
+                                "szYuk": {
+                                  "content": "Explorer → Claude / Opus. Builder → Codex / Sol. Choose the connection and model in each agent profile."
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "JmlFa",
+                              "name": "Connection list space",
+                              "width": "fill_container",
+                              "height": "fill_container"
+                            },
+                            {
+                              "type": "text",
+                              "id": "eZm74",
+                              "name": "Project connection ownership",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Connections belong to Kontur. Imports require authorization in the destination project.",
+                              "lineHeight": 1.6,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "JUSlW",
+                          "name": "Selected connection details",
+                          "width": 344,
+                          "height": "fill_container",
+                          "fill": "$sidebar",
+                          "stroke": "$hairline",
+                          "strokeWidth": {
+                            "left": 1
+                          },
+                          "layout": "vertical",
+                          "gap": 20,
+                          "padding": 24,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "j1NzeW",
+                              "name": "Connection name",
+                              "fill": "$text",
+                              "content": "Claude · Kontur",
+                              "fontFamily": "$font",
+                              "fontSize": 18,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "id": "YNtcf",
+                              "type": "ref",
+                              "ref": "DeizF",
+                              "name": "Connected",
+                              "descendants": {
+                                "bhGXK": {
+                                  "icon": "circle-check"
+                                },
+                                "JuW4o": {
+                                  "content": "Connected"
+                                }
+                              }
+                            },
+                            {
+                              "id": "vedI6",
+                              "type": "ref",
+                              "ref": "tfGRt",
+                              "name": "Provider",
+                              "width": "fill_container",
+                              "descendants": {
+                                "QkG27": {
+                                  "content": "Provider"
+                                },
+                                "yeeIR": {
+                                  "content": "Anthropic"
+                                }
+                              }
+                            },
+                            {
+                              "id": "E20Vq",
+                              "type": "ref",
+                              "ref": "tfGRt",
+                              "name": "Execution",
+                              "width": "fill_container",
+                              "descendants": {
+                                "QkG27": {
+                                  "content": "Execution"
+                                },
+                                "yeeIR": {
+                                  "content": "Local runner"
+                                }
+                              }
+                            },
+                            {
+                              "id": "iGq9V",
+                              "type": "ref",
+                              "ref": "tfGRt",
+                              "name": "Authentication",
+                              "width": "fill_container",
+                              "descendants": {
+                                "QkG27": {
+                                  "content": "Authentication"
+                                },
+                                "yeeIR": {
+                                  "content": "Runner account"
+                                }
+                              }
+                            },
+                            {
+                              "id": "s3kHlJ",
+                              "type": "ref",
+                              "ref": "tfGRt",
+                              "name": "Last checked",
+                              "width": "fill_container",
+                              "descendants": {
+                                "QkG27": {
+                                  "content": "Last checked"
+                                },
+                                "yeeIR": {
+                                  "content": "Just now"
+                                }
+                              }
+                            },
+                            {
+                              "type": "text",
+                              "id": "R7ZU3S",
+                              "name": "Available models heading",
+                              "fill": "$text",
+                              "content": "Available models",
+                              "fontFamily": "$font",
+                              "fontSize": 13,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "id": "MZ78u",
+                              "type": "ref",
+                              "ref": "DeizF",
+                              "name": "Opus",
+                              "descendants": {
+                                "bhGXK": {
+                                  "icon": "sparkles"
+                                },
+                                "JuW4o": {
+                                  "content": "Opus"
+                                }
+                              }
+                            },
+                            {
+                              "id": "e98vWj",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Refresh models",
+                              "height": 36,
+                              "width": "fill_container",
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "refresh-cw"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Refresh models"
+                                }
+                              }
+                            },
+                            {
+                              "type": "text",
+                              "id": "D1EzTI",
+                              "name": "Connection used by",
+                              "fill": "$text",
+                              "content": "Used by",
+                              "fontFamily": "$font",
+                              "fontSize": 13,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "id": "F36yr",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Explorer → Opus",
+                              "height": 36,
+                              "width": "fill_container",
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "external-link"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Explorer → Opus"
+                                }
+                              }
+                            },
+                            {
+                              "id": "O317u3",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Reviewer → Opus",
+                              "height": 36,
+                              "width": "fill_container",
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "external-link"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Reviewer → Opus"
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "hCYYv",
+                              "name": "Connection detail space",
+                              "width": "fill_container",
+                              "height": "fill_container"
+                            },
+                            {
+                              "id": "ifOmt",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Test connection",
+                              "height": 36,
+                              "width": "fill_container",
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "activity"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Test connection"
+                                }
+                              }
+                            },
+                            {
+                              "id": "cwdbB",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Edit connection",
+                              "height": 36,
+                              "width": "fill_container",
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "settings-2"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Edit connection"
+                                }
+                              }
+                            },
+                            {
+                              "type": "text",
+                              "id": "EewJQ",
+                              "name": "Connection removal impact",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Disconnecting blocks new calls from these profiles; existing task work is preserved.",
+                              "lineHeight": 1.6,
+                              "fontFamily": "$font",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "enZwN",
+                  "layoutPosition": "absolute",
+                  "x": 0,
+                  "y": 0,
+                  "name": "Connection dialog backdrop",
+                  "fill": "#000000A6",
+                  "width": 1440,
+                  "height": 960
+                },
+                {
+                  "type": "frame",
+                  "id": "BE6jn",
+                  "layoutPosition": "absolute",
+                  "x": 320,
+                  "y": 64,
+                  "name": "Add connection dialog",
+                  "clip": true,
+                  "width": 800,
+                  "height": 832,
+                  "fill": "$surface",
+                  "cornerRadius": 12,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "fjHa8",
+                      "name": "Connection dialog header",
+                      "width": "fill_container",
+                      "height": 82,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 12,
+                      "padding": [
+                        0,
+                        28
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "OeZy8",
+                          "name": "Connection dialog title",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "cfSpt",
+                              "name": "Add connection title",
+                              "fill": "$text",
+                              "content": "Add connection",
+                              "fontFamily": "$font",
+                              "fontSize": 21,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "g58XiK",
+                              "name": "Connection owner",
+                              "fill": "$muted",
+                              "content": "Project: Kontur",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "id": "Vkr90",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Close",
+                          "height": 36,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "x"
+                            },
+                            "Y7HQGw": {
+                              "content": "Close"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T22Uuf",
+                      "name": "Connection configuration form",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "gap": 22,
+                      "padding": 28,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Ey42M",
+                          "name": "Connection identity row",
+                          "width": "fill_container",
+                          "gap": 20,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "l2fnfd",
+                              "name": "Name field",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 9,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "R7Lot0",
+                                  "name": "Name label",
+                                  "fill": "$muted",
+                                  "content": "Name",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "id": "eRfqZ",
+                                  "type": "ref",
+                                  "ref": "ZGwlv",
+                                  "name": "Name value",
+                                  "width": "fill_container",
+                                  "height": 40,
+                                  "descendants": {
+                                    "ObbY7": {
+                                      "content": "Codex · Secondary",
+                                      "fontSize": 12
+                                    },
+                                    "eASPF": {
+                                      "enabled": false,
+                                      "width": 0,
+                                      "height": 0,
+                                      "layoutPosition": "absolute",
+                                      "x": 0,
+                                      "y": 0
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "a67sSl",
+                              "name": "Connection type field",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 9,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "RyMSw",
+                                  "name": "Connection type label",
+                                  "fill": "$muted",
+                                  "content": "Connection type",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "id": "EVLrW",
+                                  "type": "ref",
+                                  "ref": "ZGwlv",
+                                  "name": "Connection type value",
+                                  "width": "fill_container",
+                                  "height": 40,
+                                  "descendants": {
+                                    "ObbY7": {
+                                      "content": "Agent provider",
+                                      "fontSize": 12
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "t3Xnd",
+                          "name": "Provider and execution row",
+                          "width": "fill_container",
+                          "gap": 20,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "g7hCI9",
+                              "name": "Provider / adapter field",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 9,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "D5BuZ5",
+                                  "name": "Provider / adapter label",
+                                  "fill": "$muted",
+                                  "content": "Provider / adapter",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "id": "GwQkU",
+                                  "type": "ref",
+                                  "ref": "ZGwlv",
+                                  "name": "Provider / adapter value",
+                                  "width": "fill_container",
+                                  "height": 40,
+                                  "stroke": "$text",
+                                  "strokeWidth": 1.5,
+                                  "descendants": {
+                                    "ObbY7": {
+                                      "content": "Claude Code CLI",
+                                      "fontSize": 12
+                                    },
+                                    "eASPF": {
+                                      "icon": "chevron-up"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "xoLSb",
+                              "name": "Execution target field",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 9,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "K8mEo",
+                                  "name": "Execution target label",
+                                  "fill": "$muted",
+                                  "content": "Execution target",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "id": "n6gK9",
+                                  "type": "ref",
+                                  "ref": "ZGwlv",
+                                  "name": "Execution target value",
+                                  "width": "fill_container",
+                                  "height": 40,
+                                  "descendants": {
+                                    "ObbY7": {
+                                      "content": "Local runner",
+                                      "fontSize": 12
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "S4oAGg",
+                          "name": "Authentication field",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 9,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "CRXXh",
+                              "name": "Authentication label",
+                              "fill": "$muted",
+                              "content": "Authentication",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "id": "gjFWk",
+                              "type": "ref",
+                              "ref": "ZGwlv",
+                              "name": "Authentication value",
+                              "width": "fill_container",
+                              "height": 40,
+                              "descendants": {
+                                "ObbY7": {
+                                  "content": "Runner account",
+                                  "fontSize": 12
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "id": "u7LuX",
+                          "type": "ref",
+                          "ref": "q5LzI",
+                          "name": "Account authorized for Kontur",
+                          "width": "fill_container",
+                          "descendants": {
+                            "GkfFF": {
+                              "icon": "shield-check"
+                            },
+                            "CoAOk": {
+                              "content": "Account authorized for Kontur"
+                            },
+                            "szYuk": {
+                              "content": "This connection may run agents using the selected account. Other projects need their own authorization."
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "DwBii",
+                          "name": "Connection verification",
+                          "width": "fill_container",
+                          "gap": 16,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "hSEfO",
+                              "type": "ref",
+                              "ref": "DeizF",
+                              "name": "Verified",
+                              "descendants": {
+                                "bhGXK": {
+                                  "icon": "circle-check"
+                                },
+                                "JuW4o": {
+                                  "content": "Verified"
+                                }
+                              }
+                            },
+                            {
+                              "type": "text",
+                              "id": "Bb1LV",
+                              "name": "Verification detail",
+                              "fill": "$muted",
+                              "content": "Local runner reachable · account available",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "AAuwe",
+                              "name": "Verification space",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "id": "Q7hh5",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Recheck",
+                              "height": 30,
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "refresh-cw"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Recheck"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "IqxM3",
+                          "name": "Discovered models heading",
+                          "fill": "$text",
+                          "content": "Available models",
+                          "fontFamily": "$font",
+                          "fontSize": 14,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "d955s5",
+                          "name": "Discovered model choices",
+                          "width": "fill_container",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "id": "Jkb6E",
+                              "type": "ref",
+                              "ref": "DeizF",
+                              "name": "Sol",
+                              "descendants": {
+                                "bhGXK": {
+                                  "icon": "sparkles"
+                                },
+                                "JuW4o": {
+                                  "content": "Sol"
+                                }
+                              }
+                            },
+                            {
+                              "id": "PCR0o",
+                              "type": "ref",
+                              "ref": "DeizF",
+                              "name": "Luna",
+                              "descendants": {
+                                "bhGXK": {
+                                  "icon": "sparkles"
+                                },
+                                "JuW4o": {
+                                  "content": "Luna"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "UlQsa",
+                          "name": "Next step after connection",
+                          "fill": "$muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "After saving, select this connection in an agent profile and choose its model.",
+                          "lineHeight": 1.7,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DKufv",
+                      "name": "Connection dialog actions",
+                      "width": "fill_container",
+                      "height": 76,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "gap": 12,
+                      "padding": [
+                        0,
+                        28
+                      ],
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "zzMwk",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Cancel",
+                          "height": 36,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "x"
+                            },
+                            "Y7HQGw": {
+                              "content": "Cancel"
+                            }
+                          }
+                        },
+                        {
+                          "id": "LCgYR",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Save connection",
+                          "height": 36,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "check",
+                              "fill": "$inverse-text"
+                            },
+                            "Y7HQGw": {
+                              "content": "Save connection",
+                              "fill": "$inverse-text"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "pvhqo",
+                  "type": "ref",
+                  "ref": "u0ByM",
+                  "name": "Provider / adapter menu (open)",
+                  "layoutPosition": "absolute",
+                  "x": 348,
+                  "y": 324,
+                  "width": 362,
+                  "descendants": {
+                    "nAZ6U": {
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "E91Ie",
+              "x": 1568,
+              "y": 2808,
+              "name": "Example caption · Select menu",
+              "fill": "$muted",
+              "content": "Select example · Add connection, Provider / adapter open with Claude Code CLI selected (from 04.02 h6CmJ) · menu u0ByM",
               "fontFamily": "$font",
               "fontSize": 13,
               "fontWeight": "normal"

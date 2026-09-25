@@ -120,7 +120,7 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 
 ## Components and tokens
 
-48 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
+50 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens. The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
 
 | Family | Node |
 | --- | --- |
@@ -130,6 +130,8 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 | Pipeline step | `ajikA` |
 | Task row | `zemhy` |
 | Select/input field | `ZGwlv` |
+| Select menu (open list, see [Select menu](#select-menu)) | `u0ByM` |
+| Select option | `L20XvS` |
 | Sidebar | `zo9Py` |
 | Tab | `SOW6S` |
 | Activity event | `mBkeJ` |
@@ -296,6 +298,8 @@ control and shows the ring. A click on empty space clears focus. Canvas group `x
 | `A6HO2F` | Example: tab focused (Queue focused, Drafts selected), from 02.03 |
 | `CfdDd` | Example: dialog primary button focused (Create draft), from 03.05. The name field is unfocused here |
 | `bISzE` | Example: status bar item focused (Needs you), state A |
+| `g3poI` | Select menu board: components, option states, trigger and menu, values (see [Select menu](#select-menu)) |
+| `kdxtI` | Example: Add connection dialog, *Provider / adapter* open with *Claude Code CLI* selected, from 04.02 `h6CmJ` |
 
 The examples are copies. The canonical screens are unchanged and show no focused control.
 
@@ -330,6 +334,7 @@ so they cannot remove the ring.
 | Popover row (`E1msJS`) | inset, radius 7 | — |
 | Status bar item (`pmOpt`) | inset, radius 5 | `$hover` fill while its popover is open |
 | Field / select (`ZGwlv`) | none: keeps `o8Oug` (1.5 inside `$text`) and the caret | — |
+| Select option (`L20XvS`, keyboard highlight) | inset, radius 7 | trailing check, no fill |
 
 Combinations:
 
@@ -356,6 +361,52 @@ order focused → hovered → active, so hover and active styles must not set `b
 field-style focused border (`Border::inside(BorderSize::Sm, border_focus)`) that buttons use today. Pencil cannot render a crisp spread shadow,
 so the design draws the ring with the `Focus / Ring` overlay (`X9gPDr`). Its geometry equals the
 shadow: control + 4px on each side for outer, the control bounds for inset.
+
+### Select menu
+
+Proposed 2026-09-25 for the open state of `Field / Select` (`ZGwlv`). Board `g3poI` in
+`xURvJ`; the *Selected* and *Focused + selected* cells of the `ZGwlv` specimen row (`U8mZ0s`) now
+show the menu open with the pointer (`w0KYb`) and with the keyboard (`MUhOt`); worked example
+`kdxtI` (Add connection, *Provider / adapter* open, *Claude Code CLI* selected; the canonical
+04.02 `h6CmJ` is unchanged and already uses the lucide `chevron-down`).
+
+| Part | Value |
+| --- | --- |
+| Menu (`u0ByM`) | `$raised` fill, 1px `$border`, radius 11 (option radius 7 + padding 4), padding 4, no gap between options, clipped |
+| Menu shadow | `0 8 24 #00000066`, the same elevation shadow as the operations popover `E1msJS`. Only floating layers (popover, select menu) carry it; controls never do (the focus ring is their only shadow) |
+| Placement | 4px below the trigger, same width as the trigger; flips above when there is no room below; stays inside the window, above dialogs (not clipped by the dialog) |
+| Max height | 8 options: 266px including the border. Longer lists scroll inside the menu with an overlay thumb (4px, `$border`, radius 2, 1px from the border); the highlight is scrolled into view |
+| Option (`L20XvS`) | 32px high, padding 0 8, gap 8, radius 7 (`$radius-control`). Label Inter 12 `$text`, the field text; with the menu padding its text lines up with the trigger text 12px from the edge |
+| Check | lucide `check` 14 `$text` in a trailing slot that is always reserved (labels never shift). It sits exactly under the trigger chevron |
+| Hovered | `$hover` fill (pointer only) |
+| Selected | check, no fill. Fill always means "pointer or highlight is here", never "this is the value" |
+| Selected + hovered | check + `$hover` fill |
+| Keyboard highlight | inset focus ring (`inset 0 0 0 2 $focus-ring, inset 0 0 0 4 $focus-gap`), radius 7 / gap 5, no fill, the same as a focused popover row (`ncCFU`). With hover: fill + ring |
+| Highlight + selected | check + inset ring |
+| Disabled option | label `$subtle`; optional reason Inter 11 `$subtle` before the check slot (e.g. *Not found on PATH*); no hover, no highlight, skipped by arrows and type-ahead |
+| Trigger while open | keeps the focused stroke `o8Oug` (1.5 inside `$text`); lucide `chevron-up` 14 `$muted` (closed: `chevron-down`) |
+
+Behaviour: Enter, Space, Alt+Down or Down on the focused trigger opens the menu with the highlight
+on the selected option (first enabled option if none). A pointer click opens it with no highlight;
+the first arrow key places it on the selected option. Up/Down/Home/End and type-ahead move the
+highlight over enabled options; Enter or a click selects and closes; Escape, Tab or a click outside
+closes without a change. Focus returns to the trigger.
+
+Implementation (lurq `SelectStyle`), replacing the current fallback (option padding 12, selected =
+`$hover` fill, keyboard highlight = `$hover` + field stroke, text triangle chevron):
+
+- `menu`: fill raised, `Border::inside(1, border)`, radius 11, padding 4, the popover's elevation
+  shadow; offset 4 below the trigger; max height 266.
+- `option`: height 32, padding 0 8, radius 7 (`radius-control`), field text style, no fill.
+- `option_hovered`: fill hover.
+- `option_selected`: no fill, check visible.
+- `option_selected_hovered`: fill hover, check visible.
+- keyboard highlight: the inset focus box shadows (`FocusRing`, `FocusGap`, `.inset()`), no fill,
+  no border; combined with the hover fill when both apply. Not the field stroke: the stroke is the
+  trigger's focus, and the ring is how every row-like item in Orchester shows focus.
+- `chevron`: lucide `chevron-down` 14 `$muted`, `chevron-up` while open (an icon, not a text glyph).
+- `checkmark`: lucide `check` 14 `$text`, trailing, slot reserved on every option.
+- Disabled option: text subtle, optional reason text 11 subtle, excluded from hover and highlight.
 
 ## Core workflow
 
