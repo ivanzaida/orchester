@@ -16,7 +16,8 @@
 //! - anything else: edits `README.md` in its working directory (appending `hello`), runs `git status`, and ends with
 //!   the step result `{"outcome":"done","summary":"Finished <step>"}` and exit 0.
 //!
-//! `--resume <session>` continues that session: it appends `continued` to `README.md` and ends the same way. A new
+//! `--resume <session>` continues that session: once no `fake-hold` lies next to the worktrees (a test holds a
+//! continued session at work with it), it appends `continued` to `README.md` and ends the same way. A new
 //! session takes its id from `--session-id`.
 //!
 //! On standard error it reports its arguments, the names of its environment variables, the first line of the prompt
@@ -90,6 +91,7 @@ fn main() -> ExitCode {
     .unwrap_or("the step")
     .to_owned();
   if resumed.is_some() {
+    wait_while_held(&worktree);
     return fake.finish(&worktree, "continued", &step);
   }
   if prompt.contains("Keep working") {
@@ -209,6 +211,17 @@ fn append(worktree: &Path, line: &str) -> std::io::Result<()> {
     .append(true)
     .open(worktree.join("README.md"))
     .and_then(|mut readme| writeln!(readme, "{line}"))
+}
+
+/// Waits while the test holds continued sessions with `fake-hold` next to the worktrees.
+fn wait_while_held(worktree: &Path) {
+  let hold = worktree
+    .parent()
+    .and_then(Path::parent)
+    .map(|orchester| orchester.join("fake-hold"));
+  while hold.as_ref().is_some_and(|hold| hold.exists()) {
+    thread::sleep(Duration::from_millis(50));
+  }
 }
 
 fn wait_to_be_ended() -> ! {
