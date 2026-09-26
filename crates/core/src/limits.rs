@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use crate::tokens::TokenBudget;
+use crate::tokens::{TokenBudget, TokensUsed};
 
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
 pub enum ProjectLimitsError {
@@ -71,6 +71,12 @@ impl ProjectLimits {
   /// Tokens all runs of the project may use per day.
   pub const fn daily_budget(self) -> TokenBudget {
     self.daily_budget
+  }
+
+  /// Whether the project's runs used up today's budget with `used_today`: new runs wait and
+  /// running ones stop at their next turn until the day has room again.
+  pub const fn daily_budget_used(self, used_today: TokensUsed) -> bool {
+    used_today.reached(self.daily_budget)
   }
 
   /// Prefilled in New task; counts active agent time only.

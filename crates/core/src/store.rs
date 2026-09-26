@@ -185,6 +185,10 @@ pub trait RunStore {
 
   /// Interrupted runs of the project, ordered by number, for recovery.
   fn interrupted_runs(&self) -> Result<Vec<Run>, Self::Error>;
+
+  /// Runs recorded as running, ordered by number: a runner executes them, or the runner or the
+  /// session ended before it could record their interruption.
+  fn running_runs(&self) -> Result<Vec<Run>, Self::Error>;
 }
 
 /// Agent CLI invocations and their transcripts, written by the runner. Transcript entries are

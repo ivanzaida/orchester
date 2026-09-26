@@ -33,12 +33,16 @@ pub enum RunFailure {
   RetriesExhausted(StepKey),
 }
 
-/// A limit of a run: its token budget or its time limit on active agent time.
+/// A limit of a run: its token budget, its time limit on active agent time, or the project's
+/// daily token budget that all its runs share.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunLimit {
   Tokens,
   Time,
+  /// The project's runs used today's token budget. The run continues with a plain resume once
+  /// the day has room again (tomorrow, or a raised daily budget).
+  DailyBudget,
 }
 
 /// Why a run is paused.
@@ -49,7 +53,7 @@ pub enum PauseReason {
   #[default]
   Requested,
   /// It reached this limit, its agents were stopped and its work committed: "Stopped at limit". It
-  /// continues only after the limit is raised.
+  /// continues only after the limit is raised; after the daily budget, once the day has room.
   LimitReached(RunLimit),
 }
 

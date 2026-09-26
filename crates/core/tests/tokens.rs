@@ -3,6 +3,7 @@ use std::time::Duration;
 use orchester_core::{
   limits::{ProjectLimits, ProjectLimitsError},
   run::TokenUsage,
+  time::Timestamp,
   tokens::{BudgetInputError, TokenBudget, TokensUsed, grouped, parse_budget, regroup},
 };
 
@@ -97,4 +98,21 @@ fn tokens_project_limits_keep_the_default_within_the_maximum() {
     Err(ProjectLimitsError::ZeroTimeLimit)
   );
   assert!(ProjectLimits::new(budget(MAX), budget(MAX), budget(1), thirty).is_ok());
+}
+
+#[test]
+fn tokens_daily_budget_is_used_once_today_reaches_it() {
+  let limits = ProjectLimits::DEFAULT;
+  assert!(!limits.daily_budget_used(TokensUsed::new(19_999_999)));
+  assert!(limits.daily_budget_used(TokensUsed::new(20_000_000)));
+  assert!(limits.daily_budget_used(TokensUsed::new(20_000_001)));
+}
+
+#[test]
+fn tokens_the_local_day_starts_at_or_before_now_and_within_a_day() {
+  let now = Timestamp::now();
+  let start = now.local_day_start();
+  assert!(start <= now);
+  assert!(now.unix_millis() - start.unix_millis() < 25 * 60 * 60 * 1000);
+  assert_eq!(start.local_day_start(), start);
 }

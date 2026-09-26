@@ -15,8 +15,8 @@ use orchester_core::{
   },
   revision::Revision,
   run::{
-    BranchName, InterruptCause, NewRun, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot, RunStatus,
-    StepExecutor, StepStatus,
+    BranchName, InterruptCause, NewRun, PauseReason, PlanDecision, PublishedVersions, Run, RunEvent, RunLimit,
+    RunSnapshot, RunStatus, StepExecutor, StepStatus,
   },
   store::{ResourceStore, RunStore, TaskStore},
   task::TaskDetails,
@@ -427,4 +427,32 @@ fn runs_interrupted_by_runner_loss_continue_after_reconnect_once() {
     .collect();
   assert_eq!(interrupted, BTreeSet::from([crashed.id()]));
   assert_eq!(fixture.db.run(running.id()).expect("load"), Some(running));
+}
+
+#[test]
+fn runs_running_lists_only_running_runs_in_number_order() {
+  let mut fixture = Fixture::new();
+  let first = fixture.implementing();
+  let mut paused = fixture.implementing();
+  let third = fixture.implementing();
+  let _pending = fixture.create();
+  fixture.apply(&mut paused, |run| run.request_pause(at(16)));
+  fixture.apply(&mut paused, |run| run.pause(at(17)));
+  let running: Vec<_> = fixture.db.running_runs().expect("list").iter().map(Run::id).collect();
+  assert_eq!(running, [first.id(), third.id()]);
+}
+
+#[test]
+fn runs_stopped_by_the_daily_budget_round_trip_and_resume() {
+  let mut fixture = Fixture::new();
+  let mut run = fixture.implementing();
+  fixture.apply(&mut run, |run| run.stop_at_limit(RunLimit::DailyBudget, at(16)));
+  let stored = fixture.db.run(run.id()).expect("load").expect("exists");
+  assert_eq!(
+    stored.status(),
+    &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget))
+  );
+  // The daily budget is the project's: the run resumes as it is once the day has room.
+  fixture.apply(&mut run, |run| run.resume(at(17)));
+  assert_eq!(run.status(), &RunStatus::Running);
 }

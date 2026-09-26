@@ -180,3 +180,15 @@ fn run_limits_time_counts_active_agent_time_only() {
   assert!(!logged.run.time_limit_reached(MINUTE * 29));
   assert!(logged.run.time_limit_reached(MINUTE * 30));
 }
+
+#[test]
+fn run_limits_a_daily_budget_stop_resumes_without_a_raise() {
+  let mut logged = working(700);
+  logged.apply(|run| run.stop_at_limit(RunLimit::DailyBudget, at(14)));
+  assert_eq!(
+    logged.run.status(),
+    &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget))
+  );
+  logged.apply(|run| run.resume(at(15)));
+  assert_eq!(logged.run.status(), &RunStatus::Running);
+}
