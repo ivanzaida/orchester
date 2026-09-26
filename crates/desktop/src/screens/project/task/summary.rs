@@ -168,7 +168,7 @@ fn latest(ctx: &Ctx, run: &RunView) -> Option<Element> {
   );
   Some(
     Column::new()
-      .spacing(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Form.role())
       .child(
         Text::new(&ctx.t("runs.summary.latest"))
           .variant(TypographyStyle::FieldLabel)

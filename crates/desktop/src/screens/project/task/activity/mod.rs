@@ -42,7 +42,7 @@ use crate::{
     detail::{RunView, TaskDetail, activity_in},
     transcript::{Entry, entries},
   },
-  theme::{ExtraColor, ExtraSpacing},
+  theme::{ExtraColor, ExtraSpacing, gutter_scrollbar},
   ui::{button::ActionButton, field::select_style, icon::Icon, status_label::compact_status_label, switch::Switch},
 };
 
@@ -198,11 +198,13 @@ impl ActivityTab {
       self.left_at.clone(),
       rows.len(),
     );
+    let scrollbar = gutter_scrollbar(&ctx.theme().scrollbar());
     VirtualizedList::new_shared(ctx, rows)
       .list_key("activity-rows")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .with_scroll_state(self.scroll.clone())
+      .scrollbar(scrollbar)
       .on_scroll(move |event: ScrollEvent| {
         // The handler runs before the wheel moves the list, which moves by the opposite of the delta.
         let end = (scroll.content_height() - scroll.viewport_height()).max(0.0);

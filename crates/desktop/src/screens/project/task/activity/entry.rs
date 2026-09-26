@@ -160,10 +160,15 @@ fn entry_row(ctx: &Ctx, row: &TranscriptRow, entry: &Entry, agent: &Arc<str>, op
     .spacing(ExtraSpacing::Stack.role())
     .describe("entry", entry.sequence.to_string())
     .child(
-      Text::new(&display::clock(entry.at))
-        .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted)
-        .width(Dimension::Px(TIME_WIDTH)),
+      Row::new()
+        .size(Dimension::Px(TIME_WIDTH), Dimension::Px(GLYPH_SIZE))
+        .align_items(Alignment::Center)
+        .child(
+          Text::new(&display::clock(entry.at))
+            .variant(TypographyStyle::Mono)
+            .color(PaletteColor::TextMuted)
+            .nowrap(),
+        ),
     )
     .child(glyph(shown.glyph))
     .child(content);
@@ -185,6 +190,7 @@ fn entry_header(shown: &Shown, open: bool) -> Element {
   });
   Row::new()
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(GLYPH_SIZE))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(
@@ -200,7 +206,8 @@ fn entry_header(shown: &Shown, open: bool) -> Element {
       Text::new(&shown.meta)
         .variant(TypographyStyle::Mono)
         .color(PaletteColor::TextMuted)
-        .nowrap(),
+        .nowrap()
+        .flex_shrink(0.0),
     )
     .with_children(disclosure)
     .into()
@@ -273,7 +280,7 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
         Some(FileChangeKind::Deleted) => (Icon::FileMinus, "runs.activity.fileDeleted"),
         Some(FileChangeKind::Modified) | None => (Icon::FilePenLine, "runs.activity.fileModified"),
       };
-      let paths: Vec<&str> = changes.iter().map(|change| change.path.as_str()).collect();
+      let paths: Vec<&str> = changes.iter().map(|change| in_worktree(&change.path)).collect();
       plain(glyph, paths.join(", ").into(), ctx.t(key), None)
     }
     EntryKind::Usage(usage) => {
@@ -379,4 +386,18 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       Some(detail.as_str().into()),
     ),
   }
+}
+
+/// A path the CLI reported inside the run's worktree, relative to the worktree
+/// (`<repo>/.orchester/worktrees/<run>/src/a.rs` reads `src/a.rs`); other paths as reported.
+fn in_worktree(path: &str) -> &str {
+  const WORKTREES: [&str; 2] = [".orchester\\worktrees\\", ".orchester/worktrees/"];
+  let Some(start) = WORKTREES
+    .iter()
+    .find_map(|marker| path.find(marker).map(|at| at + marker.len()))
+  else {
+    return path;
+  };
+  let rest = &path[start..];
+  rest.find(['\\', '/']).map_or(path, |separator| &rest[separator + 1..])
 }

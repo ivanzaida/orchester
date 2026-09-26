@@ -20,8 +20,9 @@ use crate::{
   ui::property::property,
 };
 
-/// Panel width (`n0cEOG`).
+/// Panel width and its dividers (`n0cEOG`, `ZR50O`).
 const PANEL_WIDTH: f32 = 320.0;
+const DIVIDER_HEIGHT: f32 = 1.0;
 
 pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView) -> Element {
   let panel = Column::new()
@@ -42,6 +43,12 @@ pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView) -> Element {
     .with_children(details(ctx, run, invocation))
     .child(divider())
     .with_children(tokens(ctx, run, invocation))
+    .child(divider())
+    .with_children(
+      run
+        .step_of(invocation.execution)
+        .map(|step| property(&ctx.t("runs.summary.permissions"), &permissions(ctx, step))),
+    )
     .child(Spacer::new().flex(1.0))
     .child(Text::new(&ctx.t("runs.activity.panel.note")).variant(ExtraTypography::Hint.role()))
     .into()
@@ -80,7 +87,6 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
     property(&ctx.t("runs.activity.panel.agent"), &agent),
     property(&ctx.t("runs.activity.panel.invocation"), &invocation_number),
     property(&ctx.t("runs.activity.panel.started"), &started),
-    property(&ctx.t("runs.summary.permissions"), &permissions(ctx, step)),
   ]
 }
 
@@ -99,9 +105,11 @@ fn tokens(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
   ]
 }
 
+/// A 1px hairline between groups (`ZR50O`, `TTt5s`).
 fn divider() -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
-    .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .height(Dimension::Px(DIVIDER_HEIGHT))
+    .background(ExtraColor::Hairline.role())
     .into()
 }
