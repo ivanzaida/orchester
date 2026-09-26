@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::prompt::PromptText;
-use crate::{id::ConnectionId, name::Name};
+use crate::{id::ConnectionId, name::Name, permission::AgentPermissions};
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ModelIdError {
@@ -97,8 +97,9 @@ impl From<ProviderSettings> for BTreeMap<String, String> {
   }
 }
 
-/// A project agent role: what it is responsible for, how it is instructed and which
-/// connection and model run it. Pipeline steps select a profile and inherit its model.
+/// A project agent role: what it is responsible for, how it is instructed, which connection and
+/// model run it and what it may do. Pipeline steps select a profile, inherit its model and can
+/// only narrow its permissions.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentProfile {
   role: Name,
@@ -107,9 +108,12 @@ pub struct AgentProfile {
   connection: ConnectionId,
   model: ModelId,
   settings: ProviderSettings,
+  permissions: AgentPermissions,
 }
 
 impl AgentProfile {
+  /// A profile with the most restrictive permissions ([`AgentPermissions::before_permissions`]);
+  /// see [`Self::with_permissions`].
   pub const fn new(
     role: Name,
     responsibilities: String,
@@ -125,7 +129,14 @@ impl AgentProfile {
       connection,
       model,
       settings,
+      permissions: AgentPermissions::before_permissions(),
     }
+  }
+
+  #[must_use]
+  pub fn with_permissions(mut self, permissions: AgentPermissions) -> Self {
+    self.permissions = permissions;
+    self
   }
 
   pub fn role(&self) -> &Name {
@@ -151,5 +162,9 @@ impl AgentProfile {
 
   pub fn settings(&self) -> &ProviderSettings {
     &self.settings
+  }
+
+  pub const fn permissions(&self) -> &AgentPermissions {
+    &self.permissions
   }
 }

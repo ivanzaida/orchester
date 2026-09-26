@@ -6,6 +6,7 @@ use std::num::NonZeroU32;
 use orchester_core::{
   id::ResourceId,
   name::Name,
+  permission::StepPermissions,
   resource::{FailureRoute, ModelId, PromptText, RepositoryAccess, Step, StepKey, StepKind},
   tokens::{TokenBudget, grouped},
 };
@@ -39,23 +40,31 @@ impl Executor {
   }
 
   /// Runs the step with this executor. Choosing a profile for an agent step keeps its
-  /// repository access and model; nothing chosen keeps whether it is an agent or a tool step.
+  /// repository access, model and permission narrowing; nothing chosen keeps whether it is an
+  /// agent or a tool step.
   pub fn apply(self, step: &mut Step) {
-    let (repository, model) = match &step.kind {
-      StepKind::Agent { repository, model, .. } => (*repository, model.clone()),
-      StepKind::Tool { .. } => (RepositoryAccess::ReadOnly, None),
+    let (repository, model, permissions) = match &step.kind {
+      StepKind::Agent {
+        repository,
+        model,
+        permissions,
+        ..
+      } => (*repository, model.clone(), permissions.clone()),
+      StepKind::Tool { .. } => (RepositoryAccess::ReadOnly, None, StepPermissions::default()),
     };
     step.kind = match (self, &step.kind) {
       (Self::Profile(id), _) => StepKind::Agent {
         profile: Some(id),
         repository,
         model,
+        permissions,
       },
       (Self::Tool(id), _) => StepKind::Tool { tool: Some(id) },
       (Self::Unset, StepKind::Agent { .. }) => StepKind::Agent {
         profile: None,
         repository,
         model,
+        permissions,
       },
       (Self::Unset, StepKind::Tool { .. }) => StepKind::Tool { tool: None },
     };

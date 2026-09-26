@@ -2,12 +2,13 @@
 //!
 //! `codex -a never exec --json --ignore-user-config --ignore-rules -m <model>
 //!  [-c model_reasoning_effort=<e>] --sandbox <mode> [-c windows.sandbox=elevated]
-//!  [--output-schema <file>] -C <worktree> -`
+//!  [-c sandbox_workspace_write.network_access=true] [--output-schema <file>] -C <worktree> -`
 //!
 //! and continues a session after a pause or a limit with
 //!
 //! `codex -a never exec resume --json --ignore-user-config --ignore-rules -m <model>
-//!  [-c model_reasoning_effort=<e>] -c sandbox_mode=<mode> [-c windows.sandbox=elevated] <session> -`
+//!  [-c model_reasoning_effort=<e>] -c sandbox_mode=<mode> [-c windows.sandbox=elevated]
+//!  [-c sandbox_workspace_write.network_access=true] <session> -`
 //!
 //! in the worktree as the process's working directory.
 //!
@@ -16,6 +17,10 @@
 //! - Permissions are enforced by Codex's own sandbox; bypass modes are never used. Read-only steps run in `read-only`;
 //!   writing steps in `workspace-write`, which on Windows only confines writes with `windows.sandbox=elevated` (without
 //!   it every command is declined).
+//! - The mode and network access come from the step's enforced permissions
+//!   ([`crate::permission::AgentPermissions::enforced_on`]); commands are always those the sandbox allows, since Codex
+//!   cannot enforce a command list. Network access is a setting of the `workspace-write` sandbox only; the `read-only`
+//!   sandbox has none.
 //! - `--ignore-user-config` and `--ignore-rules` keep the user's own configuration (MCP servers, default model,
 //!   execution rules) out of the run.
 //! - The prompt goes on standard input (`-`); free-form text in arguments would not survive the `.cmd` launcher on
@@ -30,7 +35,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use crate::{command::Command, resource::RepositoryAccess};
+use crate::{command::Command, permission::NetworkAccess, resource::RepositoryAccess};
 
 /// The operating system an invocation is built for. Builders take it as a value so both
 /// variants can be built and tested on either platform.
@@ -119,6 +124,8 @@ pub struct CodexInvocation<'a> {
   /// The profile's reasoning effort; `None` leaves Codex's default.
   pub reasoning_effort: Option<&'a str>,
   pub access: RepositoryAccess,
+  /// Network access of a `workspace-write` sandbox.
+  pub network: NetworkAccess,
   pub worktree: &'a Path,
   pub platform: Platform,
   /// The session to continue (`codex exec resume`), for an invocation that repeats the
@@ -160,6 +167,10 @@ impl CodexInvocation<'_> {
     if (self.access, self.platform) == (RepositoryAccess::Write, Platform::Windows) {
       args.push("-c".into());
       args.push("windows.sandbox=elevated".into());
+    }
+    if (self.access, self.network) == (RepositoryAccess::Write, NetworkAccess::On) {
+      args.push("-c".into());
+      args.push("sandbox_workspace_write.network_access=true".into());
     }
     match self.resume {
       Some(session) => args.push(session.into()),

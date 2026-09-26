@@ -3,6 +3,7 @@ use std::num::NonZeroU32;
 use orchester_core::{
   id::ResourceId,
   name::Name,
+  permission::StepPermissions,
   resource::{
     EditProblem, FailureRoute, Pipeline, PipelineChange, PipelineEdit, PipelineError, PromptText, PublishError,
     RepositoryAccess, ResourceBody, StarterAssignments, StarterStep, StarterStepText, StepChange, StepKey, StepKind,
@@ -95,6 +96,7 @@ fn starter_uses_the_given_profiles_and_tools() {
       profile: assignments.builder,
       repository: RepositoryAccess::Write,
       model: None,
+      permissions: StepPermissions::default(),
     }
   );
   let checks = pipeline.step(&key("run-checks")).expect("run checks");
@@ -240,6 +242,7 @@ fn problems_name_the_cycle_and_every_step_without_a_profile() {
       profile: None,
       repository: RepositoryAccess::ReadOnly,
       model: None,
+      permissions: StepPermissions::default(),
     };
   });
   assert!(edit.set_dependency(&key("plan"), &key("review"), true));

@@ -14,19 +14,17 @@ use lurq::{
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::resource::{RepositoryAccess, StepKind};
+use orchester_core::resource::StepKind;
 
 use super::{
   EditorHandle, Selection,
   step_card::step_icon,
   step_inspector::{FieldErrors, Fields, StepInspectorProps},
+  step_permissions,
 };
 use crate::{
   messages::Message,
-  pipelines::{
-    describe::repository_access,
-    fields::{AccessChoice, Executor, ModelChoice, RouteChoice, model_choices},
-  },
+  pipelines::fields::{Executor, ModelChoice, RouteChoice, model_choices},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -340,8 +338,14 @@ pub fn route(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields) -> Element 
   .into()
 }
 
-/// Maximum retries, step budget and repository access (`dSLqh`).
-pub fn constraints(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, errors: &FieldErrors) -> Element {
+/// Maximum retries, step budget and the step's permissions (`dSLqh`).
+pub fn constraints(
+  ctx: &Ctx,
+  props: &StepInspectorProps,
+  fields: &Fields,
+  errors: &FieldErrors,
+  handle: &EditorHandle,
+) -> Element {
   let mut column = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(ExtraSpacing::Divider.role())
@@ -356,25 +360,30 @@ pub fn constraints(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, error
       errors.retries.as_ref(),
     ));
   }
-  column = column.child(budget_input(ctx, fields, errors.budget.as_ref()));
-  if matches!(props.step.kind, StepKind::Agent { .. }) {
-    let options = [RepositoryAccess::ReadOnly, RepositoryAccess::Write]
-      .into_iter()
-      .map(|access| (AccessChoice(access), message_text(ctx, &repository_access(access))))
-      .collect();
-    column = column.child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .align_items(Alignment::Center)
-        .child(label(ctx, "pipelines.inspector.repositoryAccess").flex(1.0))
-        .child(
-          Column::new()
-            .width(Dimension::Px(VALUE_WIDTH + VALUE_WIDTH / 2.0))
-            .child(select(ctx, "step-repository", &fields.access, options, false)),
-        ),
-    );
-  }
-  column.into()
+  column
+    .child(budget_input(ctx, fields, errors.budget.as_ref()))
+    .with_children(step_permissions::rows(ctx, props, fields, handle))
+    .into()
+}
+
+/// A labelled select on one line, as the step's repository access (`PFnPS`).
+pub fn select_row<T: Clone + PartialEq + Send + Sync + SignalValue + 'static>(
+  ctx: &Ctx,
+  label: &str,
+  id: &'static str,
+  value: &Signal<T>,
+  options: Vec<(T, Arc<str>)>,
+) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .align_items(Alignment::Center)
+    .child(Text::new(label).variant(TypographyStyle::Caption).flex(1.0))
+    .child(
+      Column::new()
+        .width(Dimension::Px(VALUE_WIDTH + VALUE_WIDTH / 2.0))
+        .child(select(ctx, id, value, options, false)),
+    )
+    .into()
 }
 
 /// The step budget (`Jufa2`): whole tokens typed in place with the `tokens` unit inside the field

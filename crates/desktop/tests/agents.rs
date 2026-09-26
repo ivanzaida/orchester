@@ -10,6 +10,10 @@ use orchester_core::{
   },
   id::{ConnectionId, ProjectId},
   name::Name,
+  permission::{
+    AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
+    capability::{PermissionOption, PermissionProblem},
+  },
   project::{Project, ProjectKey},
   resource::{AgentProfile, Draft, ModelId, PublishError, ResourceKind, VersionNumber},
   store::{ConnectionStore, ResourceStore},
@@ -21,6 +25,8 @@ use orchester_desktop::agents::{
 };
 use orchester_store::{ProjectDb, StoreError};
 use tempfile::TempDir;
+
+static READ_ONLY: AgentPermissions = AgentPermissions::before_permissions();
 
 fn project_db() -> (TempDir, ProjectDb) {
   let repo = tempfile::tempdir().expect("temporary directory");
@@ -87,6 +93,7 @@ fn form<'a>(
     model: selection,
     custom_model: "",
     effort,
+    permissions: &READ_ONLY,
   }
 }
 
@@ -142,6 +149,7 @@ fn profile_form_reports_each_problem() {
     model: &custom,
     custom_model: "bad model",
     effort: None,
+    permissions: &READ_ONLY,
   }
   .profile()
   .expect_err("invalid form");
@@ -215,6 +223,7 @@ fn profile_lifecycle_draft_publish_and_next_draft() {
 fn stale_draft_is_refused_until_kept_over_the_latest_version() {
   let (repo, mut db) = project_db();
   let codex = codex(&repo);
+  db.create_connection(&codex).expect("store the connection");
   let listed = ModelSelection::Listed(model("gpt-5.5"));
   let profile = form(&codex, &listed, None).profile().expect("valid form");
   let id = create_profile(&mut db, &profile, now()).expect("create");
@@ -269,4 +278,58 @@ fn profiles_with_the_same_role_get_distinct_slugs() {
     (slug(first), slug(second)),
     ("builder".to_owned(), "builder-2".to_owned())
   );
+}
+
+#[test]
+fn profile_publish_refuses_permissions_its_connection_cannot_enforce() {
+  let (repo, mut db) = project_db();
+  let codex = codex(&repo);
+  db.create_connection(&codex).expect("store the connection");
+  let listed = ModelSelection::Listed(model("gpt-5.5"));
+  let commands = AllowedCommands::new(vec![CommandPrefix::new("git").expect("command")]).expect("list");
+  let permissions = AgentPermissions::new(
+    RepositoryAccess::ReadOnly,
+    CommandPermission::Allowed(commands),
+    NetworkAccess::On,
+  );
+  let profile = ProfileForm {
+    permissions: &permissions,
+    ..form(&codex, &listed, None)
+  }
+  .profile()
+  .expect("valid form");
+  let id = create_profile(&mut db, &profile, now()).expect("create");
+  assert!(matches!(
+    publish(&mut db, id, now()),
+    Err(StoreError::Publish(PublishError::Permissions(
+      PermissionProblem::NotEnforceable {
+        option: PermissionOption::AllowedCommands,
+        ..
+      }
+    )))
+  ));
+  assert!(db.latest_version::<AgentProfile>(id).expect("read").is_none());
+
+  let orphan = create_profile(
+    &mut db,
+    &form(&codex_elsewhere(&repo), &listed, None).profile().expect("valid"),
+    now(),
+  )
+  .expect("create");
+  assert!(matches!(
+    publish(&mut db, orphan, now()),
+    Err(StoreError::Publish(PublishError::ConnectionMissing))
+  ));
+}
+
+/// A Codex connection that is not stored in the project.
+fn codex_elsewhere(repo: &TempDir) -> AgentConnection {
+  AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new("Codex elsewhere").expect("valid name"),
+    AgentProvider::CodexCli,
+    repo.path().join("codex.exe"),
+    now(),
+  )
+  .expect("absolute executable")
 }

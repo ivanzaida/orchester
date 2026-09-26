@@ -9,6 +9,7 @@ mod controls;
 mod heading;
 mod limit_panel;
 mod notice;
+mod permissions;
 mod progress;
 mod retry_limit;
 mod summary;

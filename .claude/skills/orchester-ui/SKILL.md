@@ -101,6 +101,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | select menu radius 11 / padding 4 (`u0ByM`) | `ExtraRadius::SelectMenu.role()` / `ExtraSpacing::SelectMenu.role()` |
 | switch track radius 8, knob round (`K8ItM`) | `ExtraRadius::Pill.role()` |
 | unparsed transcript lines at 60 % (`Ane9j`) | `theme::UNPARSED_OPACITY` |
+| permission option that cannot be chosen at 50 % (`BNliD` in `T1rjv`) | `theme::UNAVAILABLE_OPTION_OPACITY` |
 | select menu overlay scrollbar: 4px `border` thumb, radius 2, inset 1 (`g3poI`) | `theme::select_menu_scrollbar()` |
 | operations popover drop shadow 0 8 24 #00000066 (`E1msJS`) | `ExtraShadow::Popover.role()` |
 | `focus-ring` #EEEEEE / `focus-gap` #101010 (`xURvJ`) | `ExtraColor::FocusRing.role()` / `ExtraColor::FocusGap.role()` |

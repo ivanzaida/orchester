@@ -17,6 +17,7 @@ use orchester_core::{
   connection::{AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
   id::{ConnectionId, ResourceId},
   name::Name,
+  permission::StepPermissions,
   resource::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
   },
@@ -109,6 +110,7 @@ pub(crate) fn agent_step(builder: ResourceId, key: &str, name: &str, instruction
       profile: Some(builder),
       repository: RepositoryAccess::Write,
       model: None,
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new(instructions).expect("prompt"),
     depends_on: after.iter().map(|key| StepKey::new(key).expect("key")).collect(),

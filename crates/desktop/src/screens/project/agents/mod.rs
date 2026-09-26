@@ -3,8 +3,11 @@
 //! publish it. Importing profiles does not exist yet and is unavailable.
 
 mod editor;
+mod enforcement;
 mod fields;
 mod list;
+mod permissions;
+mod tabs;
 
 use std::path::PathBuf;
 
@@ -48,7 +51,8 @@ type ChangeAction = FutureAction<(PathBuf, ProfileChange), Changed, Message>;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Editing {
   New,
-  Profile(ProfileEntry),
+  /// Boxed: a profile is much larger than nothing.
+  Profile(Box<ProfileEntry>),
 }
 
 /// Provided to the editor when it is mounted: the data it starts from and how to save.
@@ -132,8 +136,13 @@ impl AgentsScreen {
         .profile(id)
         .or_else(|| loaded.agents.profiles.first())
         .cloned()
-        .map(Editing::Profile),
-      AgentSelection::First => loaded.agents.profiles.first().cloned().map(Editing::Profile),
+        .map(|entry| Editing::Profile(Box::new(entry))),
+      AgentSelection::First => loaded
+        .agents
+        .profiles
+        .first()
+        .cloned()
+        .map(|entry| Editing::Profile(Box::new(entry))),
     };
     let Some(editing) = editing else {
       let empty = empty(ctx, &loaded.agents, &self.nav);

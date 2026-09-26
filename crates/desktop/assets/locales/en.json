@@ -8,6 +8,7 @@
     "cancel": "Cancel",
     "notAvailableYet": "Not available in this version yet",
     "separator": "·",
+    "listSeparator": ", ",
     "close": "Close",
     "copy": "Copy",
     "copied": "Copied",
@@ -411,9 +412,17 @@
       "cancelled": "Cancelled"
     },
     "permissions": {
-      "value": "{{agent}} · {{access}}",
-      "readOnly": "Read-only",
-      "write": "Edits files in the run worktree"
+      "value": "{{agent}} · {{repository}} · {{commands}} · {{network}}",
+      "view": "view ↗",
+      "popover": {
+        "title": "Permissions for this run",
+        "subtitle": "{{agent}} · {{step}} · {{connection}} / {{model}} · from profile {{version}}",
+        "unavailable": "Changing permissions during a run is not available yet. This run keeps the permissions it started with; to use others, change the agent profile and publish it for new runs.",
+        "applyNow": "Apply now",
+        "applyNext": "Apply from next invocation",
+        "saveToProfile": "Also save to the {{agent}} profile",
+        "saveToProfileDetail": "Adds the change to the profile draft. New runs get it after you publish."
+      }
     },
     "summary": {
       "stepDetail": "{{agent}} · {{state}}",
@@ -591,6 +600,7 @@
       "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
       "unsupportedProvider": "Step “{{step}}” runs on a provider other than Codex; only Codex runs in this version.",
       "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
+      "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
       "notAGitRepository": "The project folder is not a git repository.",
       "noCommits": "The repository has no commit to start the run from."
     },
@@ -904,7 +914,7 @@
     "modelFromProfile": "Model from profile · {{model}}",
     "modelOverride": "Model override · {{model}}",
     "runsKeepTitle": "Runs keep the exact assignment",
-    "runsKeepDetail": "Publishing affects new runs. A pipeline step can override the model; its effective connection and model stay visible.",
+    "runsKeepDetail": "Publishing affects new runs. A step can override the model and narrow permissions; the effective values stay visible on the step and the run.",
     "notSaved": "Not saved",
     "saving": "Saving…",
     "unsavedChanges": "Unsaved changes · {{published}}",
@@ -918,7 +928,125 @@
     "publish": "Publish v{{version}}",
     "staleTitle": "A newer version was published after this draft was started",
     "staleDetail": "This draft is based on {{basedOn}}, but {{published}} is the latest version. Publishing the draft as is replaces what {{published}} changed.",
-    "keepDraft": "Keep my draft"
+    "keepDraft": "Keep my draft",
+    "permissions": {
+      "publish": {
+        "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing.",
+        "notEnforceable": "The connection cannot enforce these permissions. Change them or the connection before publishing."
+      },
+      "tabProfile": "Profile",
+      "tabPermissions": "Permissions",
+      "intro": "What {{role}} may do inside a task’s worktree. Each agent invocation starts with these limits.",
+      "repository": "Repository access",
+      "commands": "Commands",
+      "network": "Network",
+      "option": {
+        "readOnly": {
+          "title": "Read-only",
+          "detail": "Read files and history in the task worktree. No edits."
+        },
+        "editWorktree": {
+          "title": "Edit files in the task worktree",
+          "detail": "Create and change files only inside this task’s worktree."
+        },
+        "askBefore": {
+          "title": "Ask before running commands · later",
+          "detail": "Each command waits for your decision in Needs you. Arrives with permission requests."
+        },
+        "allowed": {
+          "title": "Allowed commands",
+          "detail": "Only these commands run. Anything else is denied and the agent is told why."
+        },
+        "any": {
+          "title": "Any command in the worktree",
+          "detail": "Commands run inside the sandbox and cannot change files outside the worktree."
+        }
+      },
+      "addCommand": "Add command",
+      "commandPlaceholder": "e.g. pnpm test",
+      "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
+      "noCommands": "No command is allowed yet.",
+      "commandInvalid": {
+        "blank": "Type a command first.",
+        "tooLong": "A command is at most {{max}} characters long.",
+        "character": "A command cannot contain {{character}}: list each command on its own.",
+        "duplicate": "{{command}} is already allowed.",
+        "tooMany": "At most {{max}} commands can be allowed."
+      },
+      "networkOff": "Off",
+      "networkOn": "On",
+      "networkOffDetail": "Package installs and web requests fail while network access is off.",
+      "networkOnDetail": "Commands and web tools can reach the network.",
+      "summary": "{{repository}} · {{commands}} · {{network}}",
+      "long": {
+        "readOnly": "Read-only",
+        "edit": "Edits files in the task worktree",
+        "commandsAsk": "Asks before commands",
+        "commandsAny": "Any command in the worktree",
+        "commandsNone": "No commands",
+        "commandsOne": "1 allowed command",
+        "commandsOther": "{{count}} allowed commands",
+        "networkOff": "Network off",
+        "networkStaysOn": "Network stays on",
+        "networkOn": "Network on"
+      },
+      "compact": {
+        "readOnly": "Read-only",
+        "edit": "Edit files",
+        "commandsAsk": "Asks before commands",
+        "commandsAny": "Any command",
+        "commandsNone": "No commands",
+        "commandsOne": "1 command",
+        "commandsOther": "{{count}} commands",
+        "networkOff": "Network off",
+        "networkStaysOn": "Network stays on",
+        "networkOn": "Network on"
+      },
+      "unavailable": {
+        "cannotLimitCommands": "Unavailable on this connection: {{cli}} can’t limit commands to a list.",
+        "cannotConfineCommands": "Unavailable on this connection: {{cli}} can’t confine commands to the worktree.",
+        "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t keep commands off the network here, so network stays on. The run summary says so."
+      },
+      "enforcement": {
+        "title": "Enforced by {{cli}}",
+        "source": "{{connection}} · known limits on {{platform}}",
+        "platform": {
+          "windows": "Windows",
+          "macos": "macOS"
+        },
+        "enforced": "{{setting}} · enforced",
+        "staysOn": "Network off · not enforceable, stays on",
+        "notEnforceable": "{{setting}} · not enforceable",
+        "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
+        "noBypass": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
+        "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
+        "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them."
+      },
+      "mechanism": {
+        "codexReadOnly": "sandbox · read-only",
+        "codexWorkspaceWrite": "sandbox · workspace-write",
+        "codexCommands": "sandbox · commands stay in the worktree",
+        "codexNetworkOff": "sandbox · network access off",
+        "codexNetworkOn": "sandbox · network access on",
+        "claudeEditToolsRemoved": "edit tools removed · listed commands still run",
+        "claudeAcceptEdits": "permission mode · accept edits",
+        "claudeAllowedTools": {
+          "one": "allowed tools · 1 prefix rule",
+          "other": "allowed tools · {{count}} prefix rules"
+        },
+        "claudeWebTools": "web tools allowed"
+      },
+      "problem": {
+        "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",
+        "notEnforceable": "{{cli}} cannot enforce {{option}}. Choose another option."
+      },
+      "blockedTitle": "This profile cannot be published with these permissions",
+      "changeConnection": "Change connection",
+      "resetTitle": "Changed to what {{connection}} can enforce",
+      "resetDetail": "Unavailable on this connection and replaced by the most restrictive option it enforces: {{options}}. Review before publishing.",
+      "appliesTitle": "Applies to new runs after publishing",
+      "appliesDetail": "Runs keep the permissions they launched with. Changing them for a single run is not available yet."
+    }
   },
   "connections": {
     "breadcrumb": "{{project}} / Connections",
@@ -1590,7 +1718,17 @@
       "steps": "Steps",
       "notAvailableTitle": "Not available to tasks yet",
       "notAvailableDetail": "Tasks can select {{pipeline}} after you publish v1.",
-      "effectiveModelNoConnection": "Connection removed → {{model}}"
+      "effectiveModelNoConnection": "Connection removed → {{model}}",
+      "permissions": {
+        "title": "Permissions",
+        "none": "—",
+        "fromProfile": "Permissions come from the agent profile. Choose a profile, then narrow them here if needed.",
+        "commands": "Commands",
+        "commandsNarrowed": "Commands · narrowed",
+        "networkStaysOn": "Stays on",
+        "onlyNarrow": "Steps can only narrow profile permissions.",
+        "alsoAllows": "{{profile}} {{version}} also allows {{commands}}. Steps can only narrow profile permissions."
+      }
     },
     "publish": {
       "title": "Publish {{pipeline}} v{{draft}}?",
@@ -1623,6 +1761,7 @@
       "executor": "{{step}} · agent profile or tool changed",
       "model": "{{step}} · model changed",
       "repositoryAccess": "{{step}} · repository access changed",
+      "permissions": "{{step}} · commands or network narrowed differently",
       "instructions": "{{step}} · instructions edited",
       "dependencies": "{{step}} · runs after different steps",
       "approvalAdded": "{{step}} · now waits for approval",

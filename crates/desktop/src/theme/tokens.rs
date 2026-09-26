@@ -132,3 +132,6 @@ pub const NO_TRACK: &str = "#00000000";
 
 /// Unparsed CLI lines in the agent transcript are muted to 60 % (`Ane9j` in `SfXU1`).
 pub const UNPARSED_OPACITY: f32 = 0.6;
+/// A permission option the connection cannot enforce, or one that is not available yet, at 50 %
+/// (`BNliD` in 04.04 `T1rjv`; the compact 04.B `W0Owo` shows 45 %).
+pub const UNAVAILABLE_OPTION_OPACITY: f32 = 0.5;

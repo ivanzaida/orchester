@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use orchester_core::{
   id::ConnectionId,
   name::Name,
-  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, ProviderSettingsError},
+  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
+  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, ProviderSettingsError, ResourceBody},
 };
 
 fn builder() -> AgentProfile {
@@ -65,4 +66,31 @@ fn agent_profile_body_round_trips_and_revalidates_on_read() {
   assert!(serde_json::from_str::<AgentProfile>(&blank_model).is_err());
   let blank_role = json.replace(r#""Builder""#, r#""  ""#);
   assert!(serde_json::from_str::<AgentProfile>(&blank_role).is_err());
+}
+
+#[test]
+fn agent_profile_keeps_its_permissions() {
+  let edit = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::On,
+  );
+  let profile = builder().with_permissions(edit.clone());
+  assert_eq!(profile.permissions(), &edit);
+  let json = serde_json::to_string(&profile).unwrap();
+  assert_eq!(serde_json::from_str::<AgentProfile>(&json).unwrap(), profile);
+  assert_eq!(builder().permissions(), &AgentPermissions::before_permissions());
+}
+
+#[test]
+fn agent_profile_schema_1_bodies_get_the_permissions_before_permissions() {
+  let original = builder();
+  let mut body = serde_json::to_value(&original).unwrap();
+  body.as_object_mut().unwrap().remove("permissions");
+  assert!(serde_json::from_value::<AgentProfile>(body.clone()).is_err());
+  let upgraded = AgentProfile::upgrade(1, body.clone()).expect("schema 1 upgrades");
+  let profile: AgentProfile = serde_json::from_value(upgraded).unwrap();
+  assert_eq!(profile, original);
+  assert_eq!(AgentProfile::SCHEMA, 2);
+  assert!(AgentProfile::upgrade(0, body).is_none());
 }

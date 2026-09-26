@@ -11,9 +11,10 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus},
+  connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus, invocation::Platform},
   id::{ConnectionId, ResourceId},
-  resource::{AgentProfile, Pipeline, StepKey, StepKind, Version},
+  permission::capability::PermissionProblem,
+  resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, Version},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -35,6 +36,9 @@ pub enum PreflightProblem {
   UnsupportedProvider { step: StepKey },
   /// The connection's last check says its CLI cannot be used (not signed in, missing, …).
   ConnectionNotUsable { step: StepKey, status: ConnectionStatus },
+  /// The connection's CLI cannot enforce the step's effective permissions (profile ∩ step) on this
+  /// platform; a step never runs with permissions that are not enforced.
+  PermissionsNotEnforceable { step: StepKey, reason: PermissionProblem },
   /// The project folder is not a git repository the runner can branch from.
   NotAGitRepository,
   /// The repository has no commit to start the run's branch from.
@@ -82,11 +86,34 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
       problems.push(PreflightProblem::ProfileNotPublished { step: key() });
       continue;
     };
-    if let Some(problem) = connection_problem(&connections, profile.body().connection(), key()) {
-      problems.push(problem);
+    match connection_problem(&connections, profile.body().connection(), key()) {
+      Some(problem) => problems.push(problem),
+      None => problems.extend(permission_problem(step, profile.body())),
     }
   }
   problems
+}
+
+/// Whether the Codex CLI enforces the step's effective permissions on this platform. Only
+/// reached for steps on a usable Codex connection.
+fn permission_problem(step: &Step, profile: &AgentProfile) -> Option<PreflightProblem> {
+  let StepKind::Agent {
+    repository,
+    permissions,
+    ..
+  } = &step.kind
+  else {
+    return None;
+  };
+  let reason = profile
+    .permissions()
+    .narrowed(*repository, permissions)
+    .enforced_on(AgentProvider::CodexCli, Platform::current())
+    .err()?;
+  Some(PreflightProblem::PermissionsNotEnforceable {
+    step: step.key.clone(),
+    reason,
+  })
 }
 
 fn connection_problem(

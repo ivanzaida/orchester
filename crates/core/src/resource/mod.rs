@@ -34,14 +34,21 @@ pub use self::{
   },
   variable::{UnknownVariable, Variable},
 };
+use crate::permission::AgentPermissions;
 
 /// Content of a versioned resource kind, stored as JSON. Deserializing re-runs the domain
 /// constructors, so a stored body that breaks a rule is rejected instead of loaded.
 pub trait ResourceBody: Serialize + DeserializeOwned + PartialEq {
   const KIND: ResourceKind;
   /// Version of the stored JSON shape. Changing the shape requires a new number and a
-  /// conversion from every older one.
+  /// conversion from every older one ([`Self::upgrade`]).
   const SCHEMA: u32;
+
+  /// A body stored with an older `schema`, converted to the current shape; `None` for a schema
+  /// this kind never had.
+  fn upgrade(_schema: u32, _body: serde_json::Value) -> Option<serde_json::Value> {
+    None
+  }
 
   /// Rules a body must meet to be published beyond those of a draft. Every
   /// [`crate::store::ResourceStore::publish_draft`] implementation checks it before publishing.
@@ -52,7 +59,19 @@ pub trait ResourceBody: Serialize + DeserializeOwned + PartialEq {
 
 impl ResourceBody for AgentProfile {
   const KIND: ResourceKind = ResourceKind::AgentProfile;
-  const SCHEMA: u32 = 1;
+  /// 2: permissions (2026-09-26). Profiles of schema 1 get
+  /// [`AgentPermissions::before_permissions`].
+  const SCHEMA: u32 = 2;
+
+  fn upgrade(schema: u32, mut body: serde_json::Value) -> Option<serde_json::Value> {
+    if schema != 1 {
+      return None;
+    }
+    let permissions =
+      serde_json::to_value(AgentPermissions::before_permissions()).expect("permissions serialize to JSON");
+    body.as_object_mut()?.insert("permissions".to_owned(), permissions);
+    Some(body)
+  }
 }
 
 impl ResourceBody for Instruction {

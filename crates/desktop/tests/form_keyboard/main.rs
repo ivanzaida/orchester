@@ -5,6 +5,7 @@
 //! when the form can be submitted. The mouse's side buttons and the history shortcuts go back
 //! and forward through the screens.
 
+mod agent_permissions;
 mod agents;
 mod dialogs;
 mod draft_autosave;

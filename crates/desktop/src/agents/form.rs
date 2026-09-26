@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use orchester_core::{
   connection::{AgentConnection, ModelSupport, REASONING_EFFORT},
   name::{Name, NameError},
+  permission::AgentPermissions,
   resource::{AgentProfile, ModelId, PromptError, PromptText, ProviderSettings},
 };
 
@@ -70,6 +71,7 @@ pub struct ProfileForm<'a> {
   pub custom_model: &'a str,
   /// `None` keeps the CLI's default effort.
   pub effort: Option<&'a str>,
+  pub permissions: &'a AgentPermissions,
 }
 
 /// Why the profile cannot be saved yet, per field.
@@ -90,14 +92,17 @@ impl ProfileForm<'_> {
     match (role, instructions, connection, model) {
       (Ok(role), Ok(instructions), Ok(connection), Ok(model)) => {
         let settings = self.settings(connection, &model);
-        Ok(AgentProfile::new(
-          role,
-          self.responsibilities.trim().to_owned(),
-          instructions,
-          connection.id(),
-          model,
-          settings,
-        ))
+        Ok(
+          AgentProfile::new(
+            role,
+            self.responsibilities.trim().to_owned(),
+            instructions,
+            connection.id(),
+            model,
+            settings,
+          )
+          .with_permissions(self.permissions.clone()),
+        )
       }
       (role, instructions, connection, model) => Err(Box::new(ProfileErrors {
         role: role.err(),

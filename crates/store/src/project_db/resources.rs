@@ -12,7 +12,7 @@ use rusqlite::{Connection, OptionalExtension, Params, Row, params};
 use super::ProjectDb;
 use crate::{
   StoreError,
-  rows::{corrupt, decode_json, encode_json, parse},
+  rows::{corrupt, decode_body, decode_document, encode_json, parse},
 };
 
 const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM resources";
@@ -277,8 +277,24 @@ fn encode<B: ResourceBody>(body: &B) -> Result<String, StoreError> {
   encode_json("resource body", B::SCHEMA, body)
 }
 
+/// A stored body in the current shape; bodies of an older schema are upgraded as they are read
+/// (published versions are immutable, so they are not rewritten).
 fn decode<B: ResourceBody>(text: &str) -> Result<B, StoreError> {
-  decode_json("resource body", B::SCHEMA, text)
+  const WHAT: &str = "resource body";
+  let (schema, body) = decode_document(WHAT, text)?;
+  if schema == B::SCHEMA {
+    return decode_body(WHAT, body);
+  }
+  let upgraded = (schema < B::SCHEMA)
+    .then(|| B::upgrade(schema, body))
+    .flatten()
+    .ok_or_else(|| {
+      corrupt(
+        WHAT,
+        format!("schema {schema} is not the supported schema {}", B::SCHEMA),
+      )
+    })?;
+  decode_body(WHAT, upgraded)
 }
 
 fn version_number(number: i64) -> Result<VersionNumber, StoreError> {
