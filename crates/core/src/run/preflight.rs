@@ -2,16 +2,16 @@
 //! configuration, authorization, runner readiness"). Each problem is a typed, visible reason;
 //! a run with any problem does not start.
 //!
-//! This version of the runner executes graphs of agent steps on the Codex CLI — parallel steps,
-//! failure routes and retries included; tool steps, approval gates and other providers are
-//! reported as not supported yet rather than skipped.
+//! This version of the runner executes graphs of agent steps on the Codex and Claude Code CLIs —
+//! parallel steps, failure routes and retries included; tool steps and approval gates are reported
+//! as not supported yet rather than skipped.
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus},
+  connection::{Connection, ConnectionKind, ConnectionStatus},
   id::{ConnectionId, ResourceId},
   resource::{AgentProfile, Pipeline, StepKey, StepKind, Version},
 };
@@ -31,7 +31,7 @@ pub enum PreflightProblem {
   ProfileNotPublished { step: StepKey },
   /// The profile's connection no longer exists.
   ConnectionMissing { step: StepKey },
-  /// The profile runs on a provider other than the Codex CLI, which cannot run yet.
+  /// The profile's connection is not an agent CLI, so it cannot run the step.
   UnsupportedProvider { step: StepKey },
   /// The connection's last check says its CLI cannot be used (not signed in, missing, …).
   ConnectionNotUsable { step: StepKey, status: ConnectionStatus },
@@ -97,7 +97,7 @@ fn connection_problem(
   let Some(connection) = connections.get(&id) else {
     return Some(PreflightProblem::ConnectionMissing { step });
   };
-  if connection.kind() != &ConnectionKind::Agent(AgentProvider::CodexCli) {
+  if !matches!(connection.kind(), ConnectionKind::Agent(_)) {
     return Some(PreflightProblem::UnsupportedProvider { step });
   }
   let status = connection.status();

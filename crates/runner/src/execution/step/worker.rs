@@ -7,7 +7,7 @@
 use std::{path::PathBuf, time::Duration};
 
 use orchester_core::{
-  connection::stream::{AgentEvent, InvocationOutcome, InvocationTracker, parse_codex_line},
+  connection::stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker},
   id::StepExecutionId,
   run::{Invocation, RunLimit},
   store::ActivityStore,
@@ -79,6 +79,8 @@ pub(in super::super) struct Finished {
 pub(in super::super) struct Worker {
   pub(in super::super) root: PathBuf,
   pub(in super::super) invocation: Invocation,
+  /// Reads the CLI's output with the parser of its provider.
+  pub(in super::super) output: AgentStream,
   pub(in super::super) process: Supervised,
   pub(in super::super) notifier: Notifier,
   pub(in super::super) events: mpsc::UnboundedSender<WorkerEvent>,
@@ -125,7 +127,9 @@ impl Worker {
       tokio::select! {
         event = self.process.next() => match event {
           Some(ProcessEvent::Output { stream, line }) => {
-            self.observe(&mut watch, parse_codex_line(stream, &line))?;
+            for event in self.output.parse(stream, &line) {
+              self.observe(&mut watch, event)?;
+            }
             if watch.stop.is_some() {
               self.process.terminate();
             }

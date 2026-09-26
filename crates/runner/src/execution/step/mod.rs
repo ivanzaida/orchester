@@ -1,5 +1,6 @@
 //! Starting agent steps: which ready executions start (as agent slots allow), where each works
-//! ([`super::workspace`]), its invocation record and the Codex CLI in its worktree — a new session,
+//! ([`super::workspace`]), its invocation record and its agent CLI (Codex or Claude Code) in its
+//! worktree — a new session,
 //! or the step's earlier session continued — handed to a [`worker::Worker`] of its own.
 
 mod command;
@@ -7,7 +8,7 @@ mod end;
 pub(super) mod worker;
 
 use orchester_core::{
-  connection::stream::{InvocationOutcome, RunnerProblem},
+  connection::stream::{AgentStream, InvocationOutcome, RunnerProblem},
   id::StepExecutionId,
   resource::ModelId,
   run::{Invocation, StepExecutor, StepFailure, StepStatus, execution_tokens},
@@ -132,8 +133,8 @@ impl RunTask {
         return Ok(true);
       }
     };
-    let command = match self.command(execution, resume.as_deref(), workspace.path()) {
-      Ok(command) => command,
+    let (command, provider) = match self.command(execution, resume.as_deref(), workspace.path()) {
+      Ok(started) => started,
       Err(problem) => {
         self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted)?;
         return Ok(true);
@@ -149,7 +150,7 @@ impl RunTask {
         return Ok(true);
       }
     };
-    self.spawn(execution, invocation, process, workspace)?;
+    self.spawn(execution, invocation, AgentStream::new(provider), process, workspace)?;
     Ok(true)
   }
 
@@ -157,6 +158,7 @@ impl RunTask {
     &mut self,
     execution: StepExecutionId,
     invocation: Invocation,
+    output: AgentStream,
     process: Supervised,
     workspace: Workspace,
   ) -> Result<(), ExecutionError> {
@@ -165,6 +167,7 @@ impl RunTask {
     let worker = Worker {
       root: self.root.clone(),
       invocation: invocation.clone(),
+      output,
       process,
       notifier: self.notifier.clone(),
       events: self.worker_events.clone(),

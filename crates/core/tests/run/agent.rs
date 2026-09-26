@@ -5,8 +5,8 @@ use std::{collections::BTreeMap, num::NonZeroU32};
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, CatalogSource, CheckResult, Connection, ConnectionCheck, ConnectionStatus,
-    ModelCatalog, SignIn,
+    AgentConnection, AgentProvider, CatalogSource, CheckResult, Connection, ConnectionCheck, ConnectionKind,
+    ConnectionStatus, GitHubHost, ModelCatalog, SignIn,
   },
   id::{ConnectionId, ProjectId, ResourceId, TaskId},
   name::Name,
@@ -260,8 +260,31 @@ fn preflight_reports_approval_gates_and_unusable_connections() {
       status: ConnectionStatus::SignInRequired,
     })
   );
+  // Claude Code steps run like Codex ones.
   let claude = connection(AgentProvider::ClaudeCodeCli, SignIn::SignedIn);
-  assert!(problems_with(&claude).contains(&PreflightProblem::UnsupportedProvider { step: key("review") }));
+  assert_eq!(
+    problems_with(&claude),
+    [PreflightProblem::ApprovalGate { step: key("plan") }]
+  );
+  let claude_signed_out = connection(AgentProvider::ClaudeCodeCli, SignIn::SignedOut);
+  assert!(
+    problems_with(&claude_signed_out).contains(&PreflightProblem::ConnectionNotUsable {
+      step: key("review"),
+      status: ConnectionStatus::SignInRequired,
+    })
+  );
+  // A connection that is not an agent CLI cannot run a step.
+  let github = Connection::new(
+    ConnectionId::generate(),
+    Name::new("GitHub").expect("valid name"),
+    ConnectionKind::GitHub {
+      host: GitHubHost::github_com(),
+    },
+    std::env::temp_dir().join("gh"),
+    at(1),
+  )
+  .expect("absolute path");
+  assert!(problems_with(&github).contains(&PreflightProblem::UnsupportedProvider { step: key("review") }));
 }
 
 #[test]
