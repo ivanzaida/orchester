@@ -126,6 +126,7 @@ pub fn clock_time(at: SystemTime) -> String {
 
 /// [`clock_time`] of a stored instant.
 pub fn clock(at: Timestamp) -> String {
+  // Stored times are after 1970; an earlier one reads as the epoch rather than failing.
   let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
   clock_time(UNIX_EPOCH + Duration::from_millis(millis))
 }

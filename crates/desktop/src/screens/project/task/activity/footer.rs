@@ -60,6 +60,7 @@ impl Component for LiveFooter {
     let props = ctx.props::<LiveFooterProps>().clone();
     let text = match props.last {
       Some(last) => {
+        // A clock set back since the entry arrived reads as just now.
         let millis = u64::try_from(Timestamp::now().unix_millis() - last.unix_millis()).unwrap_or_default();
         let elapsed = message_text(ctx, &display::duration(Duration::from_millis(millis)));
         ctx.t_args(

@@ -192,6 +192,7 @@ fn this_run(ctx: &Ctx, run: &RunView) -> Element {
     "runs.cachedValue",
     [("count", compact_tokens(usage.cached_input).as_str())],
   );
+  // Active time is never negative; a clock set back reads as none.
   let time = message_text(
     ctx,
     &display::duration(std::time::Duration::from_millis(

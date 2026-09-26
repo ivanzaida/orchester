@@ -86,7 +86,7 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
 
 fn tokens(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
   let usage = invocation.usage;
-  let count = |value: u64| compact_tokens(value);
+  let count = compact_tokens;
   let counted = ctx.t_args("runs.tokens", [("count", count(usage.counted()).as_str())]);
   let cached = ctx.t_args("runs.cachedValue", [("count", count(usage.cached_input).as_str())]);
   let total = ctx.t_args("runs.tokens", [("count", count(run.usage().counted()).as_str())]);
