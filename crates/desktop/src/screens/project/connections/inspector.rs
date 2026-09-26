@@ -21,7 +21,7 @@ use orchester_core::{
 use orchester_exec::launch::Launch;
 
 use super::{
-  launch::launch_property,
+  launch::launch_properties,
   status::{CHECKING, status_detail_key, status_label, vendor_key},
 };
 use crate::{
@@ -29,7 +29,7 @@ use crate::{
   display,
   messages::Message,
   screens::project::page::TOPBAR_BUTTON_HEIGHT,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::ActionButton,
     icon::Icon,
@@ -83,22 +83,10 @@ pub fn inspector(
       actions.check.clone(),
     ))
     .child(used_by(ctx, &state.uses, &actions.show_profile));
-  // The details scroll when they do not fit; the actions and the status detail stay at the
-  // bottom, as in the GitHub inspector.
-  Column::new()
-    .id("connection-inspector")
-    .width(Dimension::Px(INSPECTOR_WIDTH))
-    .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
+  let pinned = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_right(ExtraSpacing::Stack.role())
     .spacing(ExtraSpacing::Step.role())
-    .background(PaletteColor::SurfacePanel)
-    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(
-      ScrollVertical::new(details)
-        .id("connection-inspector-details")
-        .width(Dimension::Pct(100.0))
-        .flex(1.0),
-    )
     .child(button(
       ctx,
       "test-connection",
@@ -113,7 +101,28 @@ pub fn inspector(
       Icon::Settings,
       Some(actions.edit.clone()),
     ))
-    .child(status_detail(ctx, connection, status, state.check_error.as_ref()))
+    .child(status_detail(ctx, connection, status, state.check_error.as_ref()));
+  // The details scroll when they do not fit, their bar in a gutter of its own that takes the
+  // right padding's inner half; the actions and the status detail stay at the bottom, as in
+  // the GitHub inspector.
+  Column::new()
+    .id("connection-inspector")
+    .width(Dimension::Px(INSPECTOR_WIDTH))
+    .height(Dimension::Pct(100.0))
+    .padding_vertical(SpacingSize::Lg)
+    .padding_left(SpacingSize::Lg)
+    .padding_right(ExtraSpacing::Stack.role())
+    .spacing(ExtraSpacing::Step.role())
+    .background(PaletteColor::SurfacePanel)
+    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .child(
+      ScrollVertical::new(details)
+        .id("connection-inspector-details")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
+    )
+    .child(pinned)
     .into()
 }
 
@@ -138,7 +147,7 @@ fn properties(ctx: &Ctx, connection: &AgentConnection, launch: Option<&Launch>) 
       ValueStyle::Path,
     ),
   ];
-  rows.extend(launch_property(ctx, launch, PATH_CHARS));
+  rows.extend(launch_properties(ctx, launch, PATH_CHARS));
   rows.extend([
     property(&ctx.t("connections.property.version"), &version),
     property(

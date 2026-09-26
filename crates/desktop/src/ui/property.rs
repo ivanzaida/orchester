@@ -3,7 +3,7 @@
 use lurq::{
   app::theme::{PaletteColor, SpacingSize, TypographyStyle},
   components::{Row, Text, TextOverflow},
-  layout::{Alignment, layout_kind::Justify},
+  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension},
 };
 
@@ -41,13 +41,22 @@ pub fn styled_property(label: &str, value: &str, style: ValueStyle) -> Element {
     .align_items(Alignment::Center)
     .spacing(SpacingSize::Sm)
     .justify(Justify::SpaceBetween)
-    .child(Text::new(label).variant(TypographyStyle::Caption).nowrap())
+    // The label keeps its width; the value takes the rest after the gap and shortens with an
+    // ellipsis, so the two never touch.
+    .child(
+      Text::new(label)
+        .variant(TypographyStyle::Caption)
+        .nowrap()
+        .flex_shrink(0.0),
+    )
     .child(
       Text::new(value)
         .variant(typography)
         .color(color)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
+        .text_align(TextAlign::Right)
+        .flex(1.0)
         .selectable(true),
     )
     .into()

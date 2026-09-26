@@ -21,7 +21,7 @@ use orchester_core::{
 };
 use orchester_exec::launch::Launch;
 
-use super::{launch::launch_property, status::CHECKING};
+use super::{launch::launch_properties, status::CHECKING};
 use crate::{
   display,
   messages::Message,
@@ -29,7 +29,7 @@ use crate::{
     github::status::{command_ids, status_label},
     project::page::TOPBAR_BUTTON_HEIGHT,
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::ActionButton,
     command_row::{CommandPlace, Copied, command_row},
@@ -96,12 +96,21 @@ impl GitHubInspector<'_> {
       let command = advice.command(self.connection.host());
       details = details.child(command_row(ctx, id, copy_id, &command, CommandPlace::Page, self.copied));
     }
-    // The details scroll when a state has more to say than fits; the actions stay at the bottom.
+    let pinned = Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding_right(ExtraSpacing::Stack.role())
+      .spacing(SpacingSize::Md)
+      .with_children(buttons(ctx, &state, actions))
+      .with_children(self.error.as_ref().map(|error| field_error(&message_text(ctx, error))));
+    // The details scroll when a state has more to say than fits, their bar in a gutter of its
+    // own that takes the right padding's inner half; the actions stay at the bottom.
     Column::new()
       .id("connection-inspector")
       .width(Dimension::Px(INSPECTOR_WIDTH))
       .height(Dimension::Pct(100.0))
-      .padding(SpacingSize::Lg)
+      .padding_vertical(SpacingSize::Lg)
+      .padding_left(SpacingSize::Lg)
+      .padding_right(ExtraSpacing::Stack.role())
       .spacing(SpacingSize::Md)
       .background(PaletteColor::SurfacePanel)
       .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
@@ -109,10 +118,10 @@ impl GitHubInspector<'_> {
         ScrollVertical::new(details)
           .id("github-inspector-details")
           .width(Dimension::Pct(100.0))
-          .flex(1.0),
+          .flex(1.0)
+          .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
       )
-      .with_children(buttons(ctx, &state, actions))
-      .with_children(self.error.as_ref().map(|error| field_error(&message_text(ctx, error))))
+      .child(pinned)
       .into()
   }
 
@@ -142,7 +151,7 @@ impl GitHubInspector<'_> {
         ValueStyle::Path,
       ),
     ];
-    rows.extend(launch_property(ctx, self.launch, PATH_CHARS));
+    rows.extend(launch_properties(ctx, self.launch, PATH_CHARS));
     if let Some(GitHubCheckResult::Available { account, scopes, .. }) = result {
       let account = match (state, account) {
         (GitHubState::NotSignedIn, _) | (_, None) => ctx.t("github.connection.notSignedIn"),
