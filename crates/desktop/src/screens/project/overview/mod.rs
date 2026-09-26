@@ -113,7 +113,12 @@ impl Component for OverviewScreen {
         let figures = Pulse::of(&tasks.phases, Timestamp::now().local_day_start());
         let online = props.runner == RunnerState::Online;
         body
-          .child(pulse::pulse(ctx, &figures, (online, props.agents_working), props.usage))
+          .child(pulse::pulse(
+            ctx,
+            &figures,
+            (online, props.agents_working, tasks.lost_to_runner),
+            props.usage,
+          ))
           .child(
             Row::new()
               .id("overview-tasks-and-attention")

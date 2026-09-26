@@ -37,6 +37,9 @@ pub struct ProjectTasks {
   pub phases: Arc<Phases>,
   /// Runs started in the project, of every task.
   pub runs: usize,
+  /// Runs recorded as running that lost their agent because no runner is connected; 0 while
+  /// one is ([`Self::without_runner`]).
+  pub lost_to_runner: usize,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProjectTasks {}
@@ -64,6 +67,7 @@ impl ProjectTasks {
       pipelines: Arc::new(published_pipelines(&db)?),
       phases: Arc::new(phases),
       runs: count,
+      lost_to_runner: 0,
     })
   }
 
@@ -71,13 +75,18 @@ impl ProjectTasks {
   /// interrupted ([`orchester_core::run::TaskPhase::without_runner`]).
   #[must_use]
   pub fn without_runner(&self) -> Self {
-    let phases = self
+    let phases: Phases = self
       .phases
       .iter()
       .map(|(task, latest)| (*task, latest.without_runner()))
       .collect();
+    let lost_to_runner = phases
+      .iter()
+      .filter(|(task, latest)| self.phases.get(task).is_some_and(|before| before.phase != latest.phase))
+      .count();
     Self {
       phases: Arc::new(phases),
+      lost_to_runner,
       ..self.clone()
     }
   }

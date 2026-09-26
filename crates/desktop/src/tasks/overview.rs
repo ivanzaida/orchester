@@ -84,8 +84,6 @@ pub struct Pulse {
   pub needs_input: usize,
   /// Runs that passed every step since the day began.
   pub completed_today: usize,
-  /// Runs interrupted, e.g. while no runner is connected.
-  pub interrupted: usize,
 }
 
 impl Pulse {
@@ -102,10 +100,6 @@ impl Pulse {
           needs_input: pulse.needs_input + 1,
           ..pulse
         },
-        TaskPhase::Interrupted => Self {
-          interrupted: pulse.interrupted + 1,
-          ..pulse
-        },
         TaskPhase::Succeeded if latest.updated_at >= day_start => Self {
           completed_today: pulse.completed_today + 1,
           ..pulse
@@ -115,8 +109,8 @@ impl Pulse {
   }
 
   /// Under Running now: the agents at work while the runner is online (`None` until it
-  /// reported), else the runs it interrupted ("2 runs interrupted" in `Z7Fyr8`).
-  pub fn running_context(&self, online: bool, agents_working: Option<usize>) -> Message {
+  /// reported), else the `lost` runs its absence interrupted ("2 runs interrupted" in `Z7Fyr8`).
+  pub fn running_context(online: bool, agents_working: Option<usize>, lost: usize) -> Message {
     let count = |key_one: &'static str, key_other: &'static str, count: usize| {
       let key = if count == 1 { key_one } else { key_other };
       Message::new(key).with("count", count.to_string())
@@ -131,7 +125,7 @@ impl Pulse {
       (false, _) => count(
         "overview.metrics.interrupted.one",
         "overview.metrics.interrupted.other",
-        self.interrupted,
+        lost,
       ),
     }
   }

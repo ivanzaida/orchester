@@ -232,6 +232,7 @@ impl Component for ProjectShell {
       runner: status.clone(),
       queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
       usage,
+      lost_to_runner: tasks.ready().map(|tasks| tasks.lost_to_runner),
     };
     Column::new()
       .width(Dimension::Pct(100.0))

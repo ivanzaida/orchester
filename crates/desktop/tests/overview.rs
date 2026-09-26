@@ -38,16 +38,19 @@ fn overview_pulse_counts_running_waiting_and_completed_today() {
 #[test]
 fn overview_pulse_without_a_runner_counts_interrupted_runs() {
   let (_fixture, tasks) = project();
-  let online = Pulse::of(&tasks.phases, support::at(0));
-  let context = online.running_context(true, Some(2));
+  let context = Pulse::running_context(true, Some(2), 0);
   assert_eq!(context.key, "overview.metrics.agentsWorking.other");
   assert_eq!(context.args, vec![("count", "2".to_owned())]);
-  assert_eq!(online.running_context(true, None).key, "overview.metrics.agentsUnknown");
+  assert_eq!(
+    Pulse::running_context(true, None, 0).key,
+    "overview.metrics.agentsUnknown"
+  );
 
-  let away = Pulse::of(&tasks.without_runner().phases, support::at(0));
-  assert_eq!(away.running, 0);
-  assert_eq!(away.interrupted, 1);
-  let context = away.running_context(false, None);
+  assert_eq!(tasks.lost_to_runner, 0);
+  let away = tasks.without_runner();
+  assert_eq!(away.lost_to_runner, 1);
+  assert_eq!(Pulse::of(&away.phases, support::at(0)).running, 0);
+  let context = Pulse::running_context(false, None, away.lost_to_runner);
   assert_eq!(context.key, "overview.metrics.interrupted.one");
   assert_eq!(context.args, vec![("count", "1".to_owned())]);
 }

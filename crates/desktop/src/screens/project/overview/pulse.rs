@@ -27,14 +27,15 @@ use crate::{
 /// Pulse row height (`C95Z93`).
 const PULSE_HEIGHT: f32 = 94.0;
 
-/// `runner`: whether the runner is online, and the agents it reported at work.
+/// `runner`: whether the runner is online, the agents it reported at work, and the runs its
+/// absence interrupted.
 pub(super) fn pulse(
   ctx: &Ctx,
   pulse: &Pulse,
-  (online, agents_working): (bool, Option<usize>),
+  (online, agents_working, lost): (bool, Option<usize>, usize),
   usage: Option<ProjectUsage>,
 ) -> Element {
-  let running = message_text(ctx, &pulse.running_context(online, agents_working));
+  let running = message_text(ctx, &Pulse::running_context(online, agents_working, lost));
   let (tokens, budget) = match usage {
     Some(usage) => (
       Arc::from(compact_tokens(usage.today.get())),

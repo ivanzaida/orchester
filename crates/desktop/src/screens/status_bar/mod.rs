@@ -53,6 +53,8 @@ pub struct ProjectBar {
   pub queued: Option<usize>,
   /// The project's limits and today's usage; `None` while they are read.
   pub usage: Option<ProjectUsage>,
+  /// Runs recorded as running while no runner is connected; `None` while the tasks are read.
+  pub lost_to_runner: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -99,7 +101,11 @@ impl Component for StatusBar {
       left = left.child(runner_item(ctx, project, &opener, &hints));
     }
     let slot = bar::activity_slot(runner.as_ref(), &log);
-    let interrupted = props.project.as_ref().map_or(0, |project| project.runner.interrupted());
+    // The runs the task lists show as interrupted, once read; until then what the runner was
+    // working on when it dropped.
+    let interrupted = props.project.as_ref().map_or(0, |project| {
+      project.lost_to_runner.unwrap_or_else(|| project.runner.interrupted())
+    });
     left = left.with_children(activity_slot(
       ctx,
       (&slot, interrupted),
