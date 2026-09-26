@@ -10,9 +10,8 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text, TextOverflow},
+  components::{Column, ScrollVertical, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -37,14 +36,13 @@ use crate::{
     field::field_error,
     icon::Icon,
     message_text,
-    property::property,
+    property::{ValueStyle, property, styled_property},
     status_label::status_label as label,
   },
 };
 
-/// Inspector width (`l8BJVr`), property row height (`tfGRt`) and the longest path shown in full.
+/// Inspector width (`l8BJVr`) and the longest path shown in full.
 const INSPECTOR_WIDTH: f32 = 344.0;
-const PROPERTY_HEIGHT: f32 = 20.0;
 const PATH_CHARS: usize = 34;
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
@@ -138,7 +136,11 @@ impl GitHubInspector<'_> {
     let mut rows = vec![
       property(&ctx.t("github.connection.host"), connection.host().as_str()),
       property(&ctx.t("connections.property.program"), &program),
-      path_property(ctx, &display::shorten_path(connection.executable(), PATH_CHARS)),
+      styled_property(
+        &ctx.t("github.connection.path"),
+        &display::shorten_path(connection.executable(), PATH_CHARS),
+        ValueStyle::Path,
+      ),
     ];
     rows.extend(launch_property(ctx, self.launch, PATH_CHARS));
     if let Some(GitHubCheckResult::Available { account, scopes, .. }) = result {
@@ -185,30 +187,6 @@ impl GitHubInspector<'_> {
       GitHubState::CouldNotRun => ctx.t("github.hint.couldNotRun"),
     }
   }
-}
-
-/// The program path in mono (`xJ8W9`).
-fn path_property(ctx: &Ctx, path: &str) -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(PROPERTY_HEIGHT))
-    .align_items(Alignment::Center)
-    .spacing(SpacingSize::Sm)
-    .justify(Justify::SpaceBetween)
-    .child(
-      Text::new(&ctx.t("github.connection.path"))
-        .variant(TypographyStyle::Caption)
-        .nowrap(),
-    )
-    .child(
-      Text::new(path)
-        .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextPrimary)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .selectable(true),
-    )
-    .into()
 }
 
 /// Expected account, repository and remote of the link through this connection (`WtiPq`).

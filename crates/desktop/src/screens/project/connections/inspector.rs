@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -30,7 +30,13 @@ use crate::{
   messages::Message,
   screens::project::page::TOPBAR_BUTTON_HEIGHT,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{button::ActionButton, icon::Icon, message_text, property::property, status_label::status_label as label},
+  ui::{
+    button::ActionButton,
+    icon::Icon,
+    message_text,
+    property::{ValueStyle, property, styled_property},
+    status_label::status_label as label,
+  },
 };
 
 /// Inspector width (`ez6IT`) and the longest executable path shown in full.
@@ -62,14 +68,9 @@ pub fn inspector(
 ) -> Element {
   let status = connection.status();
   let (status_icon, status_key) = if state.checking { CHECKING } else { status_label(status) };
-  Column::new()
-    .id("connection-inspector")
-    .width(Dimension::Px(INSPECTOR_WIDTH))
-    .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
+  let details = Column::new()
+    .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Step.role())
-    .background(PaletteColor::SurfacePanel)
-    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Text::new(connection.name().as_str()).variant(ExtraTypography::InspectorTitle.role()))
     .child(label(status_icon, &ctx.t(status_key)))
     .with_children(properties(ctx, connection, state.launch))
@@ -81,8 +82,23 @@ pub fn inspector(
       Icon::RefreshCw,
       actions.check.clone(),
     ))
-    .child(used_by(ctx, &state.uses, &actions.show_profile))
-    .child(Spacer::new().flex(1.0))
+    .child(used_by(ctx, &state.uses, &actions.show_profile));
+  // The details scroll when they do not fit; the actions and the status detail stay at the
+  // bottom, as in the GitHub inspector.
+  Column::new()
+    .id("connection-inspector")
+    .width(Dimension::Px(INSPECTOR_WIDTH))
+    .height(Dimension::Pct(100.0))
+    .padding(SpacingSize::Lg)
+    .spacing(ExtraSpacing::Step.role())
+    .background(PaletteColor::SurfacePanel)
+    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .child(
+      ScrollVertical::new(details)
+        .id("connection-inspector-details")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0),
+    )
     .child(button(
       ctx,
       "test-connection",
@@ -116,9 +132,10 @@ fn properties(ctx: &Ctx, connection: &AgentConnection, launch: Option<&Launch>) 
   };
   let mut rows = vec![
     property(&ctx.t("connections.property.provider"), &ctx.t(vendor_key(provider))),
-    property(
+    styled_property(
       &ctx.t("connections.property.executable"),
       &display::shorten_path(connection.executable(), PATH_CHARS),
+      ValueStyle::Path,
     ),
   ];
   rows.extend(launch_property(ctx, launch, PATH_CHARS));

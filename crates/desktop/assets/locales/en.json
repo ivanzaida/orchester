@@ -532,12 +532,11 @@
       "execution": "Execution",
       "authentication": "Authentication",
       "lastChecked": "Last checked",
-      "version": "Version",
-      "runs": "Runs"
+      "version": "Version"
     },
     "runs": {
-      "nodeScript": "Node.js · {{script}}",
-      "commandScript": "cmd.exe · {{script}}"
+      "nodeScript": "Runs with Node.js",
+      "commandScript": "Runs through cmd.exe"
     },
     "thisComputer": "This computer",
     "cliLogin": "CLI login",
