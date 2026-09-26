@@ -12,7 +12,7 @@ pub mod display;
 mod external;
 pub mod i18n;
 pub mod messages;
-mod navigation;
+pub mod navigation;
 pub mod pipelines;
 pub mod programs;
 pub mod project_setup;

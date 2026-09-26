@@ -36,13 +36,14 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 
 use self::brief::Criterion;
-use super::{ProjectNav, Section};
+use super::ProjectNav;
 use crate::{
   activity::{Activity, operations},
   background,
   budget::minutes_text,
   messages,
   messages::Message,
+  navigation::route::Page,
   runner::Runners,
   tasks::{
     data::{PipelineChoice, save_draft_in},
@@ -153,7 +154,7 @@ impl Component for NewTaskForm {
     ctx.watch(&save.state(), move |state| {
       if state.data.is_some() {
         saved.tasks_changed();
-        saved.show(Section::Tasks);
+        saved.replace(Page::Tasks);
       }
     });
     let run = run_action(ctx);
@@ -165,7 +166,7 @@ impl Component for NewTaskForm {
       // The task may have been saved and queued even when the run did not start.
       started.tasks_changed();
       if let Some(StartedTask(task)) = state.data {
-        started.show(Section::Task(task));
+        started.replace(Page::Task(task));
       }
     });
     Self {
@@ -379,7 +380,7 @@ fn run_action(ctx: &mut Ctx) -> RunAction {
 /// Save as draft or Create & run, so the state says so rather than claiming a saved draft.
 fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, form: &FormState) -> Element {
   let nav = nav.clone();
-  let back = pressable(surface().id("new-task-back"), move || nav.show(Section::Tasks))
+  let back = pressable(surface().id("new-task-back"), move || nav.show(Page::Tasks))
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));

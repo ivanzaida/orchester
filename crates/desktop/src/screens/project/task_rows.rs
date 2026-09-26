@@ -17,6 +17,7 @@ use orchester_core::{run::TaskPhase, time::Timestamp};
 use super::ProjectNav;
 use crate::{
   display,
+  navigation::route::Page,
   tasks::list::TaskRow,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
@@ -77,7 +78,7 @@ fn open_chevron() -> Element {
 /// `row` as a surface that opens the task's page.
 fn opens(nav: &ProjectNav, row: &TaskRow, content: Row) -> Element {
   let (nav, task) = (nav.clone(), row.id);
-  pressable(surface(), move || nav.show_task(task))
+  pressable(surface(), move || nav.show(Page::Task(task)))
     .id(format!("task-row-{}", row.key))
     .width(Dimension::Pct(100.0))
     .describe("task", row.key.clone())

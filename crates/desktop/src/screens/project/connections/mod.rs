@@ -52,6 +52,7 @@ use crate::{
   background,
   connections::data::ProjectConnections,
   messages::{self, Message},
+  navigation::route::{ConnectionTab, Page, Route},
   theme::ExtraSpacing,
   ui::{
     button::ActionButton,
@@ -67,14 +68,30 @@ use crate::{
 /// Tab row height (`rxo81`).
 const TAB_ROW_HEIGHT: f32 = 42.0;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ConnectionTab {
-  All,
-  AgentProviders,
-  GitHub,
+/// The tab and the connection whose details are shown, as the path names them; without a
+/// connection the first listed is shown.
+#[derive(Clone, Copy)]
+pub(super) struct View {
+  tab: ConnectionTab,
+  selected: Option<ConnectionId>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ConnectionTab {}
+impl View {
+  fn current(ctx: &mut Ctx) -> Self {
+    match Route::current_page(ctx) {
+      Some(Page::Connections(tab, selected)) => Self { tab, selected },
+      _ => Self {
+        tab: ConnectionTab::All,
+        selected: None,
+      },
+    }
+  }
+
+  /// This tab with `selected` shown.
+  const fn page(self, selected: Option<ConnectionId>) -> Page {
+    Page::Connections(self.tab, selected)
+  }
+}
 
 /// The connection whose details are shown; `None` shows the first listed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,8 +156,6 @@ enum Loaded {
 }
 
 pub struct ConnectionsScreen {
-  tab: Signal<ConnectionTab>,
-  selected: Signal<Selected>,
   dialog: Signal<DialogMode>,
   /// The connection work runs on, while the work action is pending.
   working: Signal<Selected>,
@@ -175,8 +190,6 @@ impl Component for ConnectionsScreen {
       DialogMode::Closed
     };
     let screen = Self {
-      tab: ctx.signal(ConnectionTab::All),
-      selected: ctx.signal(Selected(None)),
       dialog: ctx.signal(dialog),
       working: ctx.signal(Selected(None)),
       picking: ctx.signal(None),
@@ -190,6 +203,7 @@ impl Component for ConnectionsScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let open = ctx.props::<OpenProject>().clone();
+    let view = View::current(ctx);
     // Futures are matched by call order: the actions come first, as in `create`.
     let work = work_action(ctx);
     let pick = pick_action(ctx);
@@ -204,20 +218,23 @@ impl Component for ConnectionsScreen {
         )
         .into(),
       ),
-      Loaded::Ready(data) => self.library(ctx, &open, data, &work, &pick),
+      Loaded::Ready(data) => self.library(ctx, &open, data, (&work, &pick), view),
     };
     let breadcrumb = ctx.t_args("connections.breadcrumb", [("project", open.project.name().as_str())]);
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(page::topbar(&breadcrumb, [self.add_button(ctx, "add-connection")]))
+      .child(page::topbar(
+        &breadcrumb,
+        [self.add_button(ctx, "add-connection", view.tab)],
+      ))
       .child(page::heading(
         &ctx.t("connections.title"),
         &ctx.t("connections.description"),
       ))
-      .child(self.tabs(ctx))
+      .child(self.tabs(ctx, view))
       .child(body)
-      .child(self.dialog(ctx, &open, &loaded, &work))
+      .child(self.dialog(ctx, &open, &loaded, &work, view))
   }
 }
 
@@ -253,15 +270,15 @@ impl ConnectionsScreen {
     });
   }
 
-  fn add_button(&self, ctx: &Ctx, id: &'static str) -> Element {
-    let (dialog, tab) = (self.dialog.clone(), self.tab.clone());
+  fn add_button(&self, ctx: &Ctx, id: &'static str, tab: ConnectionTab) -> Element {
+    let dialog = self.dialog.clone();
     ActionButton::new(ctx.t("connections.add"))
       .primary()
       .icon(Icon::Plus)
       .id(id)
       .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
       .on_click(move || {
-        dialog.set(match tab.get_untracked() {
+        dialog.set(match tab {
           ConnectionTab::GitHub => DialogMode::AddGitHub,
           ConnectionTab::All | ConnectionTab::AgentProviders => DialogMode::AddAgent,
         });
@@ -270,14 +287,13 @@ impl ConnectionsScreen {
   }
 
   /// Section tabs (`rxo81`, `BCZsv`): MCP servers are not available yet.
-  fn tabs(&self, ctx: &Ctx) -> Element {
-    let selected = self.tab.get();
+  fn tabs(&self, ctx: &Ctx, view: View) -> Element {
     let height = Dimension::Pct(100.0);
     let available = |id, key, tab: ConnectionTab| {
-      let signal = self.tab.clone();
+      let nav = self.nav.clone();
       Tab::new(id, ctx.t(key), height)
-        .selected(selected == tab)
-        .on_click(move || signal.set(tab))
+        .selected(view.tab == tab)
+        .on_click(move || nav.show(Page::Connections(tab, view.selected)))
     };
     tab_row(
       Dimension::Px(TAB_ROW_HEIGHT),
@@ -301,7 +317,7 @@ impl ConnectionsScreen {
   }
 
   /// The open dialog (`IAN4P`, `d8yPD5`, `hNPA1`), over a backdrop.
-  fn dialog(&self, ctx: &mut Ctx, open: &OpenProject, loaded: &Loaded, work: &WorkAction) -> Element {
+  fn dialog(&self, ctx: &mut Ctx, open: &OpenProject, loaded: &Loaded, work: &WorkAction, view: View) -> Element {
     let mode = self.dialog.get();
     let Loaded::Ready(data) = loaded else {
       return Modal::new(Column::new()).open_when(false).into();
@@ -314,12 +330,12 @@ impl ConnectionsScreen {
       },
       DialogMode::AddAgent | DialogMode::EditAgent(_) => {
         let key = dialog_key(&mode);
-        self.provide_dialog_context(ctx, open, data, mode.clone());
+        self.provide_dialog_context(ctx, (open, data, view), mode.clone());
         ctx.mount_keyed::<ConnectionDialog>(&key, ())
       }
       DialogMode::AddGitHub | DialogMode::EditGitHub(_) => {
         let key = dialog_key(&mode);
-        self.provide_dialog_context(ctx, open, data, mode.clone());
+        self.provide_dialog_context(ctx, (open, data, view), mode.clone());
         ctx.mount_keyed::<GitHubDialog>(&key, ())
       }
     };
@@ -329,7 +345,12 @@ impl ConnectionsScreen {
       .into()
   }
 
-  fn provide_dialog_context(&self, ctx: &mut Ctx, open: &OpenProject, data: &ProjectConnections, mode: DialogMode) {
+  fn provide_dialog_context(
+    &self,
+    ctx: &mut Ctx,
+    (open, data, view): (&OpenProject, &ProjectConnections, View),
+    mode: DialogMode,
+  ) {
     let editing = match &mode {
       DialogMode::EditAgent(connection) => Some(connection.id()),
       DialogMode::EditGitHub(connection) => Some(connection.id()),
@@ -349,7 +370,7 @@ impl ConnectionsScreen {
       .map(|(_, name)| name.clone())
       .collect();
     let (close, saved, retype) = (self.dialog.clone(), self.dialog.clone(), self.dialog.clone());
-    let (selected, revision) = (self.selected.clone(), self.revision.clone());
+    let (nav, revision) = (self.nav.clone(), self.revision.clone());
     ctx.provide(DialogContext {
       project: open.clone(),
       mode,
@@ -357,7 +378,8 @@ impl ConnectionsScreen {
       link: data.link.clone(),
       close: Arc::new(move || close.set(DialogMode::Closed)),
       saved: Arc::new(move |id| {
-        selected.set(Selected(Some(id)));
+        // The saved connection is shown in place of the one shown before it was saved.
+        nav.replace(view.page(Some(id)));
         revision.update(|revision| *revision += 1);
         saved.set(DialogMode::Closed);
       }),

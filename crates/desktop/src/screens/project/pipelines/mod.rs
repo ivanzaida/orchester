@@ -21,7 +21,8 @@ use self::{
   editor::{EditorProps, PipelineEditor},
   library::{Library, LibraryProps},
 };
-use crate::{pipelines::library::StarterText, workspace::OpenProject};
+use super::ProjectNav;
+use crate::{navigation::route::Page, pipelines::library::StarterText, workspace::OpenProject};
 
 /// A pipeline to open, as signals and futures carry it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,18 +34,18 @@ impl lurq::app::component::DevtoolsInspectable for PipelineId {}
 /// that pipelines changed so the library reads them again.
 #[derive(Clone)]
 pub struct PipelinesNav {
-  open: Signal<Option<PipelineId>>,
+  project: ProjectNav,
   revision: Signal<u64>,
 }
 
 impl PipelinesNav {
   pub fn open(&self, id: ResourceId) {
     self.changed();
-    self.open.set(Some(PipelineId(id)));
+    self.project.show(Page::Pipeline(id));
   }
 
   pub fn library(&self) {
-    self.open.set(None);
+    self.project.show(Page::Pipelines);
   }
 
   pub fn changed(&self) {
@@ -55,7 +56,7 @@ impl PipelinesNav {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipelinesProps {
   pub project: OpenProject,
-  /// The pipeline to open first instead of the library, e.g. from the status bar.
+  /// The pipeline shown in its editor; `None` shows the library.
   pub open: Option<ResourceId>,
 }
 
@@ -69,10 +70,11 @@ impl Component for PipelinesScreen {
   type Props = PipelinesProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let open = ctx.props::<PipelinesProps>().open.map(PipelineId);
     Self {
       nav: PipelinesNav {
-        open: ctx.signal(open),
+        project: ctx
+          .use_context::<ProjectNav>()
+          .expect("the project shell provides ProjectNav"),
         revision: ctx.signal(0),
       },
     }
@@ -80,8 +82,8 @@ impl Component for PipelinesScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     ctx.provide(self.nav.clone());
-    let project = ctx.props::<PipelinesProps>().project.clone();
-    match self.nav.open.get() {
+    let PipelinesProps { project, open } = ctx.props::<PipelinesProps>().clone();
+    match open {
       None => ctx.mount_keyed::<Library>(
         "pipelines-library",
         LibraryProps {
@@ -89,9 +91,7 @@ impl Component for PipelinesScreen {
           revision: self.nav.revision.get(),
         },
       ),
-      Some(PipelineId(id)) => {
-        ctx.mount_keyed::<PipelineEditor>(&format!("pipeline-editor-{id}"), EditorProps { project, id })
-      }
+      Some(id) => ctx.mount_keyed::<PipelineEditor>(&format!("pipeline-editor-{id}"), EditorProps { project, id }),
     }
   }
 }

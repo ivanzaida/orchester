@@ -12,7 +12,7 @@ use lurq::{
 };
 
 use crate::{
-  navigation::{Navigation, Screen},
+  navigation::Navigation,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     brand::brand,
@@ -88,7 +88,7 @@ fn introduction(ctx: &Ctx, navigation: Navigation) -> Element {
     .icon(Icon::Plus)
     .id("create-first-project")
     .size(Dimension::Px(CREATE_WIDTH), Dimension::Px(CREATE_HEIGHT))
-    .on_click(move || navigation.show(Screen::Setup))
+    .on_click(move || navigation.show_setup())
     .render(ctx);
   Column::new()
     .width(Dimension::Px(INTRO_WIDTH))

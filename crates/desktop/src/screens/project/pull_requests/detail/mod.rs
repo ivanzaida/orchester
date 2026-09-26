@@ -40,11 +40,12 @@ use self::{
   heading::{HeadingProps, PullRequestHeading},
 };
 use super::{
-  super::{ProjectNav, Section, page},
+  super::{ProjectNav, page},
   view::SyncLine,
 };
 use crate::{
   messages::Message,
+  navigation::route::Page,
   pull_requests::detail::{Detail, DiffState, LinkedDetail, ReadDiff},
   theme::ExtraSpacing,
   ui::{
@@ -152,7 +153,7 @@ impl PullRequestScreen {
     let number = props.number.to_string();
     let nav = self.nav.clone();
     let breadcrumb = pressable(surface().id("pull-request-breadcrumb"), move || {
-      nav.show(Section::PullRequests);
+      nav.show(Page::PullRequests);
     })
     .child(
       Text::new(&ctx.t_args(
@@ -196,7 +197,7 @@ impl PullRequestScreen {
     let action = ActionButton::new(ctx.t("pullRequests.unavailable.openConnections"))
       .icon(Icon::Plug)
       .id("pull-request-open-connections")
-      .on_click(move || nav.show(Section::Connections))
+      .on_click(move || nav.show(Page::CONNECTIONS))
       .render(ctx);
     centered(
       RecoveryPanel::new(

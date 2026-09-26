@@ -12,8 +12,9 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 
-use super::{ProjectNav, Section, TasksState};
+use super::{ProjectNav, TasksState};
 use crate::{
+  navigation::route::{AgentSelection, Page, SettingsTab, SidebarItem},
   theme::{ExtraColor, ExtraSpacing},
   ui::{brand::brand, icon::Icon, nav_item::NavItem},
   workspace::OpenProject,
@@ -26,7 +27,14 @@ const CURRENT_PROJECT_HEIGHT: f32 = 70.0;
 const SELECTOR_HEIGHT: f32 = 42.0;
 const AVATAR_SIZE: f32 = 24.0;
 
-pub fn sidebar(ctx: &Ctx, open: &OpenProject, section: Section, tasks: &TasksState, nav: &ProjectNav) -> Element {
+/// `selected` is the item of the page shown; `None` while the path names no page.
+pub fn sidebar(
+  ctx: &Ctx,
+  open: &OpenProject,
+  selected: Option<SidebarItem>,
+  tasks: &TasksState,
+  nav: &ProjectNav,
+) -> Element {
   Column::new()
     .width(Dimension::Px(SIDEBAR_WIDTH))
     .height(Dimension::Pct(100.0))
@@ -34,7 +42,7 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject, section: Section, tasks: &TasksSta
     .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Column::new().padding_horizontal(SpacingSize::Lg).child(brand(ctx)))
     .child(project_selector(open))
-    .child(primary_navigation(ctx, section, tasks, nav))
+    .child(primary_navigation(ctx, selected, tasks, nav))
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
@@ -45,7 +53,7 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject, section: Section, tasks: &TasksSta
         .child(NavItem::new("nav-import", Icon::Download, ctx.t("nav.importResources")).secondary()),
     )
     .child(Spacer::new().flex(1.0))
-    .child(footer(ctx, section, nav))
+    .child(footer(ctx, selected, nav))
     .into()
 }
 
@@ -83,36 +91,38 @@ fn project_selector(open: &OpenProject) -> Element {
     .into()
 }
 
-/// Tasks stays selected while a new task is written (`l2YA4`).
-fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &ProjectNav) -> Element {
-  let open = |target: Section| {
+/// Tasks stays selected while a new task is written (`l2YA4`). An item opens its section at its
+/// start: the first profile, all connections.
+fn primary_navigation(ctx: &Ctx, selected: Option<SidebarItem>, tasks: &TasksState, nav: &ProjectNav) -> Element {
+  let open = |target: Page| {
     let nav = nav.clone();
     move || nav.show(target)
   };
+  let is = |item: SidebarItem| selected == Some(item);
   let items = [
     NavItem::new("nav-overview", Icon::LayoutDashboard, ctx.t("nav.overview"))
-      .selected(section == Section::Overview)
-      .on_click(open(Section::Overview)),
+      .selected(is(SidebarItem::Overview))
+      .on_click(open(Page::Overview)),
     NavItem::new("nav-orchestrator", Icon::MessagesSquare, ctx.t("nav.orchestrator")),
     NavItem::new("nav-tasks", Icon::CircleCheck, ctx.t("nav.tasks"))
-      .selected(matches!(section, Section::Tasks | Section::NewTask | Section::Task(_)))
-      .on_click(open(Section::Tasks))
+      .selected(is(SidebarItem::Tasks))
+      .on_click(open(Page::Tasks))
       .count(tasks.ready().map(|tasks| tasks.tasks.len())),
     NavItem::new("nav-pull-requests", Icon::GitPullRequest, ctx.t("nav.pullRequests"))
-      .selected(matches!(section, Section::PullRequests | Section::PullRequest(_)))
-      .on_click(open(Section::PullRequests)),
+      .selected(is(SidebarItem::PullRequests))
+      .on_click(open(Page::PullRequests)),
     NavItem::new("nav-pipelines", Icon::Workflow, ctx.t("nav.pipelines"))
-      .selected(section == Section::Pipelines)
-      .on_click(open(Section::Pipelines)),
+      .selected(is(SidebarItem::Pipelines))
+      .on_click(open(Page::Pipelines)),
     NavItem::new("nav-instructions", Icon::BookOpen, ctx.t("nav.instructions")),
     NavItem::new("nav-agents", Icon::Bot, ctx.t("nav.agents"))
-      .selected(section == Section::Agents)
-      .on_click(open(Section::Agents)),
+      .selected(is(SidebarItem::Agents))
+      .on_click(open(Page::Agents(AgentSelection::First))),
     NavItem::new("nav-tools", Icon::Wrench, ctx.t("nav.tools")),
     NavItem::new("nav-secrets", Icon::KeyRound, ctx.t("nav.secrets")),
     NavItem::new("nav-connections", Icon::Plug, ctx.t("nav.connections"))
-      .selected(section == Section::Connections)
-      .on_click(open(Section::Connections)),
+      .selected(is(SidebarItem::Connections))
+      .on_click(open(Page::CONNECTIONS)),
   ];
   Column::new()
     .width(Dimension::Pct(100.0))
@@ -122,7 +132,7 @@ fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &Pro
     .into()
 }
 
-fn footer(ctx: &Ctx, section: Section, nav: &ProjectNav) -> Element {
+fn footer(ctx: &Ctx, selected: Option<SidebarItem>, nav: &ProjectNav) -> Element {
   let nav = nav.clone();
   Column::new()
     .width(Dimension::Pct(100.0))
@@ -132,8 +142,8 @@ fn footer(ctx: &Ctx, section: Section, nav: &ProjectNav) -> Element {
     .child(
       NavItem::new("nav-settings", Icon::Settings, ctx.t("nav.projectSettings"))
         .compact()
-        .selected(section == Section::Settings)
-        .on_click(move || nav.show(Section::Settings)),
+        .selected(selected == Some(SidebarItem::Settings))
+        .on_click(move || nav.show(Page::Settings(SettingsTab::General))),
     )
     .into()
 }

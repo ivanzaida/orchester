@@ -13,9 +13,10 @@ use lurq::{
 };
 use orchester_core::time::Timestamp;
 
-use super::{ProjectNav, Section, TasksState, task_rows::list_row};
+use super::{ProjectNav, TasksState, task_rows::list_row};
 use crate::{
   display,
+  navigation::route::Page,
   tasks::{data::ProjectTasks, list},
   theme::{ExtraColor, ExtraSpacing},
   ui::{
@@ -124,7 +125,7 @@ fn heading(ctx: &Ctx, open: &OpenProject, nav: &ProjectNav) -> Element {
         .id("new-task")
         .height(Dimension::Px(NEW_TASK_HEIGHT))
         .roomy()
-        .on_click(move || nav.show(Section::NewTask))
+        .on_click(move || nav.show(Page::NewTask))
         .render(ctx),
     )
     .into()
@@ -201,7 +202,7 @@ fn list_footer(ctx: &Ctx, count: usize, nav: &ProjectNav) -> Element {
     .align_items(Alignment::Center)
     .child(Text::new(&ctx.t_args(count_key, [("count", count.to_string().as_str())])).variant(TypographyStyle::Caption))
     .child(
-      pressable(surface().id("view-all-tasks"), move || nav.show(Section::Tasks))
+      pressable(surface().id("view-all-tasks"), move || nav.show(Page::Tasks))
         .hovered_style(Style::new().background(PaletteColor::AccentMuted))
         .child(
           Text::new(&ctx.t("overview.viewAllTasks"))

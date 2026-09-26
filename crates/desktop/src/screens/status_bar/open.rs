@@ -8,8 +8,9 @@ use lurq::{app::ctx::Ctx, core::Signal};
 use super::ProjectBar;
 use crate::{
   activity::{Activity, OperationId, Place, Target},
+  navigation::route::{AgentSelection, Page, SettingsTab},
   runner::Runners,
-  screens::project::{ProjectNav, Section},
+  screens::project::ProjectNav,
 };
 
 #[derive(Clone)]
@@ -62,21 +63,21 @@ impl Opener {
     let Some(nav) = &self.nav else {
       return;
     };
-    match place {
-      Place::Overview => nav.show(Section::Overview),
-      Place::Tasks => nav.show(Section::Tasks),
-      Place::PullRequests => nav.show(Section::PullRequests),
-      Place::Pipeline(id) => nav.show_pipeline(id),
-      Place::AgentProfile(id) => nav.show_profile(id),
-      Place::Connections => nav.show(Section::Connections),
-      Place::Settings => nav.show(Section::Settings),
-    }
+    nav.show(match place {
+      Place::Overview => Page::Overview,
+      Place::Tasks => Page::Tasks,
+      Place::PullRequests => Page::PullRequests,
+      Place::Pipeline(id) => Page::Pipeline(id),
+      Place::AgentProfile(id) => Page::Agents(AgentSelection::Profile(id)),
+      Place::Connections => Page::CONNECTIONS,
+      Place::Settings => Page::Settings(SettingsTab::General),
+    });
   }
 
   /// Opens the Tasks screen, the target of the Agents and Queued items.
   pub fn tasks(&self) -> Option<impl Fn() + Send + Sync + 'static> {
     let nav = self.nav.clone()?;
-    Some(move || nav.show(Section::Tasks))
+    Some(move || nav.show(Page::Tasks))
   }
 
   pub fn open_log(&self) {

@@ -31,6 +31,7 @@ use crate::{
   background,
   connections::data::ProjectConnections,
   messages::{self, Message},
+  navigation::route::{Page, Route, SettingsTab},
   repository::DetectTarget,
   screens::github::{
     account_panel::{AccountPanel, AccountPanelProps},
@@ -49,14 +50,6 @@ use crate::{
 
 /// Tab row height (`z1vSun`).
 const TAB_ROW_HEIGHT: f32 = 42.0;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SettingsTab {
-  General,
-  Limits,
-}
-
-impl lurq::app::component::DevtoolsInspectable for SettingsTab {}
 
 enum Loaded {
   Loading,
@@ -83,7 +76,6 @@ impl Actions {
 }
 
 pub struct SettingsScreen {
-  tab: Signal<SettingsTab>,
   /// Whether the Limits tab's changes are stored.
   limits_status: Signal<LimitsSave>,
   /// Bumped after a change, to read the project's connections and link again.
@@ -106,7 +98,6 @@ impl Component for SettingsScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     let screen = Self {
-      tab: ctx.signal(SettingsTab::General),
       limits_status: ctx.signal(LimitsSave::Saved),
       revision: ctx.signal(0_u64),
       program: ctx.signal(None),
@@ -128,7 +119,10 @@ impl Component for SettingsScreen {
     let open = ctx.props::<OpenProject>().clone();
     let actions = Actions::of(ctx);
     let loaded = self.load(ctx, &open);
-    let tab = self.tab.get();
+    let tab = match Route::current_page(ctx) {
+      Some(Page::Settings(tab)) => tab,
+      _ => SettingsTab::General,
+    };
     let (tab_key, description_key) = match tab {
       SettingsTab::General => ("settings.tabs.general", "settings.description"),
       SettingsTab::Limits => ("settings.tabs.limits", "settings.limits.description"),
@@ -264,10 +258,10 @@ impl SettingsScreen {
   fn tabs(&self, ctx: &Ctx, selected: SettingsTab) -> Element {
     let height = Dimension::Pct(100.0);
     let tab = |id, key, tab: SettingsTab| {
-      let signal = self.tab.clone();
+      let nav = self.nav.clone();
       Tab::new(id, ctx.t(key), height)
         .selected(selected == tab)
-        .on_click(move || signal.set(tab))
+        .on_click(move || nav.show(Page::Settings(tab)))
     };
     tab_row(
       Dimension::Px(TAB_ROW_HEIGHT),

@@ -25,12 +25,13 @@ use self::{
   editor::ProfileEditor,
   list::{ListSelection, profile_list},
 };
-use super::{AgentSelection, ProjectNav, Section, page};
+use super::{ProjectNav, page};
 use crate::{
   activity::{Activity, operations},
   agents::data::{ProfileChange, ProfileEntry, ProjectAgents, apply_in},
   background,
   messages::{self, Message},
+  navigation::route::{AgentSelection, Page, Route},
   ui::{button::ActionButton, icon::Icon, message_text, panel::RecoveryPanel},
   workspace::OpenProject,
 };
@@ -87,7 +88,8 @@ impl Component for AgentsScreen {
     let (reload, select) = (revision.clone(), nav.clone());
     ctx.watch(&change.state(), move |state| {
       if let (false, Some(Changed(id))) = (state.is_pending(), state.data) {
-        select.agent.set(AgentSelection::Profile(id));
+        // The saved profile takes the place of what was edited, a new profile's form included.
+        select.replace(Page::Agents(AgentSelection::Profile(id)));
         reload.update(|revision| *revision += 1);
       }
     });
@@ -119,7 +121,11 @@ impl Component for AgentsScreen {
 
 impl AgentsScreen {
   fn loaded(&self, ctx: &mut Ctx, open: &OpenProject, loaded: Loaded, change: ChangeAction) -> Element {
-    let editing = match self.nav.agent.get() {
+    let selection = match Route::current_page(ctx) {
+      Some(Page::Agents(selection)) => selection,
+      _ => AgentSelection::First,
+    };
+    let editing = match selection {
       AgentSelection::New => Some(Editing::New),
       AgentSelection::Profile(id) => loaded
         .agents
@@ -191,7 +197,7 @@ fn empty(ctx: &Ctx, agents: &ProjectAgents, nav: &ProjectNav) -> Element {
     let action = ActionButton::new(ctx.t("agents.openConnections"))
       .icon(Icon::Plug)
       .id("agents-open-connections")
-      .on_click(move || nav.show(Section::Connections))
+      .on_click(move || nav.show(Page::CONNECTIONS))
       .render(ctx);
     return RecoveryPanel::new(Icon::Bot, &ctx.t("agents.emptyTitle"), &ctx.t("agents.needsConnection"))
       .action(action)
@@ -201,7 +207,7 @@ fn empty(ctx: &Ctx, agents: &ProjectAgents, nav: &ProjectNav) -> Element {
     .primary()
     .icon(Icon::Plus)
     .id("empty-new-agent")
-    .on_click(move || nav.agent.set(AgentSelection::New))
+    .on_click(move || nav.show(Page::Agents(AgentSelection::New)))
     .render(ctx);
   RecoveryPanel::new(Icon::Bot, &ctx.t("agents.emptyTitle"), &ctx.t("agents.emptyDetail"))
     .action(action)

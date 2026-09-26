@@ -31,9 +31,10 @@ use self::{
   sync_status::{SyncStatus, SyncStatusProps},
   view::SyncLine,
 };
-use super::{ProjectNav, Section, page};
+use super::{ProjectNav, page};
 use crate::{
   messages::Message,
+  navigation::route::Page,
   pull_requests::{Inbox, LinkedInbox},
   theme::ExtraSpacing,
   ui::{
@@ -150,9 +151,9 @@ impl PullRequestsScreen {
       running: actions.running(),
       check_again: run(&actions.sync),
       use_account: run(&actions.account),
-      open_connections: Arc::new(move || nav.show(Section::Connections)),
+      open_connections: Arc::new(move || nav.show(Page::CONNECTIONS)),
       open: Arc::new(move |number, url| browse.run((number, url))),
-      show: Arc::new(move |number| show.show(Section::PullRequest(number))),
+      show: Arc::new(move |number| show.show(Page::PullRequest(number))),
     }
   }
 
@@ -176,7 +177,7 @@ impl PullRequestsScreen {
     let action = ActionButton::new(ctx.t("pullRequests.unavailable.openConnections"))
       .icon(Icon::Plug)
       .id("pull-requests-open-connections")
-      .on_click(move || nav.show(Section::Connections))
+      .on_click(move || nav.show(Page::CONNECTIONS))
       .render(ctx);
     let panel = Column::new().id("pull-requests-unavailable").child(
       RecoveryPanel::new(

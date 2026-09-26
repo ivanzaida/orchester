@@ -2,7 +2,8 @@
 //! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), a task (`RD4pc`, `SfXU1`),
 //! pull requests (`wGtxT`) and one pull request
 //! (`Rrmhf`), agent profiles (`WPmtS`),
-//! connections (`a4Lqb`) or Project settings (`QV1af`), above the status bar (`pmOpt`). The shell reads the project's
+//! connections (`a4Lqb`) or Project settings (`QV1af`), above the status bar (`pmOpt`). The router
+//! renders the screen the path names into the shell's outlet. The shell reads the project's
 //! tasks once and hands them to the sidebar, the screen and the status bar.
 
 mod agents;
@@ -10,6 +11,7 @@ pub(crate) mod connections;
 mod new_task;
 mod overview;
 mod page;
+mod pages;
 mod pipelines;
 mod pull_requests;
 mod runner;
@@ -24,112 +26,54 @@ use lurq::{
     component::Component,
     ctx::{Ctx, StreamEmitter},
   },
-  components::{Column, Row},
+  components::{Column, Outlet, Row},
   core::Signal,
   node::{Element, dimension::Dimension},
+  router::Navigator,
 };
-use orchester_core::{
-  id::{ResourceId, TaskId},
-  time::Timestamp,
-};
+use orchester_core::{id::ProjectId, time::Timestamp};
 
-use self::{
-  agents::AgentsScreen,
-  connections::ConnectionsScreen,
-  new_task::{NewTaskForm, NewTaskProps},
-  pipelines::{PipelinesProps, PipelinesScreen},
-  pull_requests::{PullRequestProps, PullRequestScreen, PullRequestsScreen},
-  settings::SettingsScreen,
-  sidebar::sidebar,
-  task::{TaskProps, TaskScreen},
-  tasks::{TasksProps, TasksScreen},
-};
+pub(crate) use self::pages::page;
+use self::{pages::Shown, sidebar::sidebar};
 use super::status_bar::{ProjectBar, StatusBar, StatusBarProps};
 use crate::{
   background,
   messages::{self, Message},
+  navigation::{
+    Navigation, PROJECT_PARAM,
+    route::{Page, Route},
+  },
   runner::{RunnerStatus, Runners},
   tasks::{data::ProjectTasks, list, usage::ProjectUsage},
   workspace::OpenProject,
 };
 
-/// The screen shown beside the sidebar.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Section {
-  Overview,
-  Tasks,
-  NewTask,
-  /// One task and its latest run (`RD4pc`, `SfXU1`).
-  Task(TaskId),
-  PullRequests,
-  /// One pull request of the linked repository, by number (`Rrmhf`).
-  PullRequest(u64),
-  Pipelines,
-  Agents,
-  Connections,
-  Settings,
-}
-
-impl lurq::app::component::DevtoolsInspectable for Section {}
-
-/// The profile the Agents screen shows.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AgentSelection {
-  /// The first profile, if there is one.
-  First,
-  Profile(ResourceId),
-  /// A profile being written that is not saved yet.
-  New,
-}
-
-impl lurq::app::component::DevtoolsInspectable for AgentSelection {}
-
-/// A pipeline to open when the Pipelines screen next mounts. `revision` changes with every
-/// request, so a request remounts the screen even while it is shown.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct PipelineRequest {
-  revision: u64,
-  id: Option<ResourceId>,
-}
-
-impl lurq::app::component::DevtoolsInspectable for PipelineRequest {}
-
-/// Provided by the shell: switching screens and announcing that tasks changed.
+/// Provided by the shell: going to a page of the project and announcing that tasks changed.
 #[derive(Clone)]
 pub struct ProjectNav {
-  section: Signal<Section>,
+  navigator: Navigator,
+  project: ProjectId,
   revision: Signal<u64>,
-  agent: Signal<AgentSelection>,
-  pipeline: Signal<PipelineRequest>,
   /// Connections opens Add GitHub connection when it next mounts.
   add_github: Signal<bool>,
 }
 
 impl ProjectNav {
-  pub fn show(&self, section: Section) {
-    self.pipeline.update(|request| request.id = None);
-    self.section.set(section);
+  /// Opens `page` as a new history entry, as every user navigation does.
+  pub fn show(&self, page: Page) {
+    self.navigator.push(page.path(self.project));
   }
 
-  /// Opens a pipeline in its editor, e.g. from an operation in the status bar.
-  pub fn show_pipeline(&self, pipeline: ResourceId) {
-    self.pipeline.update(|request| {
-      request.revision += 1;
-      request.id = Some(pipeline);
-    });
-    self.section.set(Section::Pipelines);
-  }
-
-  /// Opens the Agents screen at `profile`, e.g. from a connection's "Used by" link.
-  pub fn show_profile(&self, profile: ResourceId) {
-    self.agent.set(AgentSelection::Profile(profile));
-    self.section.set(Section::Agents);
+  /// Shows `page` in place of the current entry: after a form was submitted, or when the
+  /// selection follows a save, so going back does not return to the stale state.
+  pub fn replace(&self, page: Page) {
+    self.navigator.replace(page.path(self.project));
   }
 
   /// Opens Connections with Add GitHub connection open, e.g. for a remote on an Enterprise host.
   pub fn show_add_github(&self) {
     self.add_github.set(true);
-    self.section.set(Section::Connections);
+    self.show(Page::CONNECTIONS);
   }
 
   /// Whether Add GitHub connection was asked for; asking again needs another request.
@@ -139,11 +83,6 @@ impl ProjectNav {
       self.add_github.set(false);
     }
     requested
-  }
-
-  /// Opens a task's page.
-  pub fn show_task(&self, task: TaskId) {
-    self.show(Section::Task(task));
   }
 
   /// Tasks were saved; the shell reads them again.
@@ -172,6 +111,29 @@ impl TasksState {
   }
 }
 
+/// The project layout route: the shell of the project the path names. The route guard lets only
+/// projects opened in this session through.
+pub(crate) fn shell(ctx: &mut Ctx) -> Element {
+  let navigation = ctx
+    .use_context::<Navigation>()
+    .expect("the root provides Navigation before mounting screens");
+  let open = ctx
+    .route_params()
+    .get_parsed::<ProjectId>(PROJECT_PARAM)
+    .and_then(|project| navigation.places().project(project));
+  let Some(open) = open else {
+    return Element::new();
+  };
+  // A project's runner starts as soon as the project is shown, at startup or after setup, and
+  // keeps running in the background when another screen replaces it. Repeating the same project
+  // is a no-op.
+  ctx
+    .use_context::<Runners>()
+    .expect("the root provides Runners before mounting screens")
+    .show(Some(&open));
+  ctx.mount_keyed::<ProjectShell>(&format!("project-{}", open.project.id()), open)
+}
+
 pub struct ProjectShell {
   nav: ProjectNav,
 }
@@ -182,10 +144,9 @@ impl Component for ProjectShell {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       nav: ProjectNav {
-        section: ctx.signal(Section::Overview),
+        navigator: ctx.navigator().expect("the router mounts the project shell"),
+        project: ctx.props::<OpenProject>().project.id(),
         revision: ctx.signal(0),
-        agent: ctx.signal(AgentSelection::First),
-        pipeline: ctx.signal(PipelineRequest::default()),
         add_github: ctx.signal(false),
       },
     }
@@ -200,62 +161,17 @@ impl Component for ProjectShell {
       .use_context::<Runners>()
       .expect("the root provides Runners before mounting screens");
     let status = runner_status(ctx, &runners);
-    let runner = status.state_for(&open.repo_root);
     let runs = run_changes(ctx, &runners);
     let tasks = self.tasks(ctx, &open, runs);
     let usage = self.usage(ctx, &open, runs);
-    let section = self.nav.section.get();
-    let content = match section {
-      Section::Overview => {
-        let notice = runner::connection_notice(ctx, &runner, &runners);
-        overview::overview(ctx, &open, notice, &tasks, &self.nav)
-      }
-      Section::Tasks => ctx.mount_keyed::<TasksScreen>(
-        "tasks",
-        TasksProps {
-          project: open.project.name().as_str().into(),
-          tasks: tasks.clone(),
-        },
-      ),
-      Section::Pipelines => {
-        let request = self.nav.pipeline.get();
-        ctx.mount_keyed::<PipelinesScreen>(
-          &format!("pipelines-{}", request.revision),
-          PipelinesProps {
-            project: open.clone(),
-            open: request.id,
-          },
-        )
-      }
-      Section::NewTask => ctx.mount_keyed::<NewTaskForm>(
-        "new-task",
-        NewTaskProps {
-          project: open.clone(),
-          pipelines: tasks.ready().map(|tasks| tasks.pipelines.clone()),
-          limits: usage.map(|usage| usage.limits),
-        },
-      ),
-      Section::Task(task) => ctx.mount_keyed::<TaskScreen>(
-        &format!("task-{task}"),
-        TaskProps {
-          project: open.clone(),
-          task,
-          revision: (self.nav.revision.get(), runs),
-          limits: usage.map(|usage| usage.limits),
-        },
-      ),
-      Section::PullRequests => ctx.mount_keyed::<PullRequestsScreen>("pull-requests", open.clone()),
-      Section::PullRequest(number) => ctx.mount_keyed::<PullRequestScreen>(
-        &format!("pull-request-{number}"),
-        PullRequestProps {
-          project: open.clone(),
-          number,
-        },
-      ),
-      Section::Agents => ctx.mount_keyed::<AgentsScreen>("agents", open.clone()),
-      Section::Connections => ctx.mount_keyed::<ConnectionsScreen>("connections", open.clone()),
-      Section::Settings => ctx.mount_keyed::<SettingsScreen>("settings", open.clone()),
-    };
+    let item = Route::current_page(ctx).map(|page| page.sidebar_item());
+    ctx.provide(Shown {
+      open: open.clone(),
+      runner: status.state_for(&open.repo_root),
+      revision: (self.nav.revision.get(), runs),
+      tasks: tasks.clone(),
+      usage,
+    });
     let bar = ProjectBar {
       repo_root: open.repo_root.clone(),
       runner: status,
@@ -269,8 +185,13 @@ impl Component for ProjectShell {
         Row::new()
           .width(Dimension::Pct(100.0))
           .flex(1.0)
-          .child(sidebar(ctx, &open, section, &tasks, &self.nav))
-          .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(content)),
+          .child(sidebar(ctx, &open, item, &tasks, &self.nav))
+          .child(
+            Column::new()
+              .flex(1.0)
+              .height(Dimension::Pct(100.0))
+              .child(Outlet::mount(ctx)),
+          ),
       )
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
   }
