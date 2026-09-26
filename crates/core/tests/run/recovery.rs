@@ -1,4 +1,6 @@
-use orchester_core::run::{ContinueTrigger, InterruptCause, Run, RunError, RunEventKind, RunStatus, StepStatus};
+use orchester_core::run::{
+  ContinueTrigger, InterruptCause, PauseReason, Run, RunError, RunEventKind, RunStatus, StepStatus,
+};
 
 use crate::fixture::{Logged, at, revision};
 
@@ -29,7 +31,7 @@ fn run_recovery_only_a_running_run_is_interrupted() {
   assert!(matches!(
     logged.run.interrupt(InterruptCause::QuitNow, at(13)),
     Err(RunError::InvalidRunTransition {
-      status: RunStatus::Paused,
+      status: RunStatus::Paused(PauseReason::Requested),
       ..
     })
   ));

@@ -4,6 +4,7 @@
 use crate::{
   connection::{Connection, stream::AgentEvent},
   id::{ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  limits::ProjectLimits,
   name::Name,
   pull_request::{PullRequest, RevisionDiff, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
@@ -12,6 +13,7 @@ use crate::{
   run::{ActivityEntry, Checkpoint, Invocation, NewRun, Run, RunEvent},
   task::{Task, TaskDetails},
   time::Timestamp,
+  tokens::TokensUsed,
 };
 
 pub trait TaskStore {
@@ -33,6 +35,16 @@ pub trait TaskStore {
 
   /// Persists the details and status of an existing task.
   fn save_task(&mut self, task: &Task) -> Result<(), Self::Error>;
+}
+
+/// Project settings. Written by the desktop; the runner reads them.
+pub trait SettingsStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// The project's limits: the defaults until they were changed.
+  fn project_limits(&self) -> Result<ProjectLimits, Self::Error>;
+
+  fn save_project_limits(&mut self, limits: &ProjectLimits) -> Result<(), Self::Error>;
 }
 
 /// Versioned configuration resources. Reading a body of the wrong kind is an error, not `None`.
@@ -206,4 +218,8 @@ pub trait ActivityStore {
 
   /// Transcript entries of a run after sequence `after` (0: from the start), in order.
   fn activity(&self, run: RunId, after: u64) -> Result<Vec<ActivityEntry>, Self::Error>;
+
+  /// Tokens that counted toward budgets in every run of the project since `since`, from the
+  /// usage each completed turn reported.
+  fn tokens_used_since(&self, since: Timestamp) -> Result<TokensUsed, Self::Error>;
 }

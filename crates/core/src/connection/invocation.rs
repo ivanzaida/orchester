@@ -3,6 +3,13 @@
 //! `codex -a never exec --json --ignore-user-config --ignore-rules -m <model>
 //!  [-c model_reasoning_effort=<e>] --sandbox <mode> [-c windows.sandbox=elevated] -C <worktree> -`
 //!
+//! and continues a session after a pause or a limit with
+//!
+//! `codex -a never exec resume --json --ignore-user-config --ignore-rules -m <model>
+//!  [-c model_reasoning_effort=<e>] -c sandbox_mode=<mode> [-c windows.sandbox=elevated] <session> -`
+//!
+//! in the worktree as the process's working directory.
+//!
 //! - `-a never` is a top-level flag: after `exec` it is an error. With it nothing ever waits for an approval; whatever
 //!   the sandbox does not allow is declined and the agent is told.
 //! - Permissions are enforced by Codex's own sandbox; bypass modes are never used. Read-only steps run in `read-only`;
@@ -110,40 +117,51 @@ pub struct CodexInvocation<'a> {
   pub access: RepositoryAccess,
   pub worktree: &'a Path,
   pub platform: Platform,
+  /// The session to continue (`codex exec resume`), for an invocation that repeats the
+  /// unfinished part of a step; `None` starts a new session.
+  pub resume: Option<&'a str>,
 }
 
 impl CodexInvocation<'_> {
   /// Arguments after the program, in order.
   pub fn args(&self) -> Vec<OsString> {
-    let mut args: Vec<OsString> = [
-      "-a",
-      "never",
-      "exec",
-      "--json",
-      "--ignore-user-config",
-      "--ignore-rules",
-      "-m",
-    ]
-    .into_iter()
-    .map(OsString::from)
-    .collect();
-    args.push(self.model.into());
+    let mut args: Vec<OsString> = ["-a", "never", "exec"].into_iter().map(OsString::from).collect();
+    if self.resume.is_some() {
+      args.push("resume".into());
+    }
+    args.extend(
+      ["--json", "--ignore-user-config", "--ignore-rules", "-m", self.model]
+        .into_iter()
+        .map(OsString::from),
+    );
     if let Some(effort) = self.reasoning_effort {
       args.push("-c".into());
       args.push(format!("model_reasoning_effort={effort}").into());
     }
-    args.push("--sandbox".into());
-    match (self.access, self.platform) {
-      (RepositoryAccess::ReadOnly, _) => args.push("read-only".into()),
-      (RepositoryAccess::Write, Platform::MacOs) => args.push("workspace-write".into()),
-      (RepositoryAccess::Write, Platform::Windows) => {
-        args.push("workspace-write".into());
-        args.push("-c".into());
-        args.push("windows.sandbox=elevated".into());
+    let mode = match self.access {
+      RepositoryAccess::ReadOnly => "read-only",
+      RepositoryAccess::Write => "workspace-write",
+    };
+    // `exec resume` has no `--sandbox` or `-C`: the sandbox is set through its configuration key
+    // and the working directory is the process's.
+    if self.resume.is_some() {
+      args.push("-c".into());
+      args.push(format!("sandbox_mode={mode}").into());
+    } else {
+      args.push("--sandbox".into());
+      args.push(mode.into());
+    }
+    if (self.access, self.platform) == (RepositoryAccess::Write, Platform::Windows) {
+      args.push("-c".into());
+      args.push("windows.sandbox=elevated".into());
+    }
+    match self.resume {
+      Some(session) => args.push(session.into()),
+      None => {
+        args.push("-C".into());
+        args.push(self.worktree.as_os_str().to_owned());
       }
     }
-    args.push("-C".into());
-    args.push(self.worktree.as_os_str().to_owned());
     args.push("-".into());
     args
   }

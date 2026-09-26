@@ -106,17 +106,22 @@ impl PromptInput<'_> {
       Variable::RunRevision => self.run.base().as_str().to_owned(),
       Variable::StepId => self.step.key.as_str().to_owned(),
       Variable::StepName => self.step.name.as_str().to_owned(),
+      Variable::RunBudget => self.run.budget().to_string(),
       // Not known to a run yet: tasks have no attachments, the project records no repository
-      // or default branch, creation times have no agreed text form, and budgets are changing
-      // from money to tokens.
+      // or default branch, and creation times have no agreed text form.
       Variable::TaskAttachments
       | Variable::TaskCreatedAt
       | Variable::ProjectRepository
-      | Variable::ProjectDefaultBranch
-      | Variable::RunBudget => return None,
+      | Variable::ProjectDefaultBranch => return None,
     })
   }
 }
+
+/// What a continued agent session is told when it resumes a step it did not finish: after a
+/// pause, a stop at a limit or a restart. Its earlier conversation holds the step's prompt.
+pub const CONTINUE_PROMPT: &str = "You were stopped before you finished this step. Everything you changed so far \
+                                   is committed in the worktree. Continue the step from where you stopped and \
+                                   finish it.";
 
 fn push_block(prompt: &mut String, text: &str) {
   let text = text.trim();

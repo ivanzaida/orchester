@@ -9,12 +9,15 @@ use super::{
   error::RunError,
   event::{EventSequence, PlannedExecution, RunEvent, RunEventKind},
   state::Run,
-  status::{AttemptReason, AttemptStatus, ContinueTrigger, PlanDecision, RunStatus, StepStatus, WaitReason},
+  status::{
+    AttemptReason, AttemptStatus, ContinueTrigger, PauseReason, PlanDecision, RunLimit, RunStatus, StepStatus,
+    WaitReason,
+  },
 };
 use crate::{
   id::{CheckpointId, StepExecutionId},
-  money::Money,
   time::Timestamp,
+  tokens::TokenBudget,
 };
 
 impl Run {
@@ -74,10 +77,18 @@ impl Run {
     match kind {
       RunEventKind::Created(_) => Err(RunError::Creation),
       RunEventKind::Started => self.expect_status(kind, matches!(self.status, RunStatus::Pending)),
-      RunEventKind::Paused | RunEventKind::Interrupted { .. } => {
+      RunEventKind::PauseRequested => {
+        self.expect_status(kind, self.status == RunStatus::Running && !self.pause_requested)
+      }
+      RunEventKind::Paused { .. } | RunEventKind::Interrupted { .. } => {
         self.expect_status(kind, self.status == RunStatus::Running)
       }
-      RunEventKind::Resumed => self.expect_status(kind, self.status == RunStatus::Paused),
+      RunEventKind::Resumed => match self.status {
+        RunStatus::Paused(PauseReason::Requested) => Ok(()),
+        RunStatus::Paused(PauseReason::LimitReached(limit)) => Err(RunError::LimitNotRaised(limit)),
+        _ => self.expect_status(kind, false),
+      },
+      RunEventKind::LimitRaised { budget, .. } => self.check_raise(kind, *budget),
       RunEventKind::Continued { trigger, from } => self.check_continue(kind, *trigger, *from),
       RunEventKind::Succeeded => {
         self.expect_status(kind, self.status == RunStatus::Running)?;
@@ -101,7 +112,7 @@ impl Run {
         executions,
         ..
       } => self.check_attempt(kind, *number, reason, executions),
-      RunEventKind::SpendRecorded { amount } => self.check_spend(*amount).map(|_| ()),
+      RunEventKind::UsageRecorded { .. } => Ok(()),
       _ => self.check_step(kind),
     }
   }
@@ -271,24 +282,18 @@ impl Run {
     }
   }
 
-  /// The spent total after adding `amount`.
-  fn check_spend(&self, amount: Money) -> Result<Money, RunError> {
-    let currency = self.spent.currency();
-    if amount.currency() != currency {
-      return Err(RunError::CurrencyMismatch {
-        budget: currency,
-        spent: amount.currency(),
-      });
+  /// A raised limit applies to a run stopped at a limit, and its budget is above what the run
+  /// used. The time limit is checked against active time by [`Run::continue_with_limits`],
+  /// which knows it.
+  fn check_raise(&self, kind: &RunEventKind, budget: TokenBudget) -> Result<(), RunError> {
+    self.expect_status(
+      kind,
+      matches!(self.status, RunStatus::Paused(PauseReason::LimitReached(_))),
+    )?;
+    if self.used.reached(budget) {
+      return Err(RunError::LimitNotAboveUsed(RunLimit::Tokens));
     }
-    if amount.micros() < 0 {
-      return Err(RunError::NegativeSpend);
-    }
-    let total = self
-      .spent
-      .micros()
-      .checked_add(amount.micros())
-      .ok_or(RunError::SpendOverflow)?;
-    Ok(Money::from_micros(total, currency))
+    Ok(())
   }
 
   /// Changes the state for an event [`Run::check`] accepted.
@@ -298,8 +303,21 @@ impl Run {
       RunEventKind::Started | RunEventKind::Resumed | RunEventKind::Continued { .. } => {
         self.status = RunStatus::Running;
       }
-      RunEventKind::Paused => self.status = RunStatus::Paused,
-      RunEventKind::Interrupted { cause } => self.status = RunStatus::Interrupted(*cause),
+      RunEventKind::PauseRequested => self.pause_requested = true,
+      RunEventKind::Paused { reason } => {
+        self.status = RunStatus::Paused(*reason);
+        self.pause_requested = false;
+      }
+      RunEventKind::Interrupted { cause } => {
+        self.status = RunStatus::Interrupted(*cause);
+        self.pause_requested = false;
+      }
+      // With its limits raised the run is an ordinary paused run, which resuming continues.
+      RunEventKind::LimitRaised { budget, max_duration } => {
+        self.budget = *budget;
+        self.max_duration = *max_duration;
+        self.status = RunStatus::Paused(PauseReason::Requested);
+      }
       RunEventKind::Succeeded => self.end(RunStatus::Succeeded, AttemptStatus::Succeeded),
       RunEventKind::Failed { reason } => self.end(RunStatus::Failed(reason.clone()), AttemptStatus::Failed),
       RunEventKind::Cancelled => self.end(RunStatus::Cancelled, AttemptStatus::Cancelled),
@@ -329,9 +347,7 @@ impl Run {
         execution,
         revision,
       } => self.last_checkpoint = Some(Checkpoint::new(*checkpoint, *execution, revision.clone(), at)),
-      RunEventKind::SpendRecorded { amount } => {
-        self.spent = self.check_spend(*amount).expect("Run::check accepted this spend");
-      }
+      RunEventKind::UsageRecorded { tokens } => self.used += *tokens,
       RunEventKind::StepStarted { execution } | RunEventKind::StepResumed { execution } => {
         self.set_step(*execution, StepStatus::Running);
       }
@@ -360,6 +376,7 @@ impl Run {
 
   fn end(&mut self, status: RunStatus, attempt: AttemptStatus) {
     self.status = status;
+    self.pause_requested = false;
     if let Some(current) = self.attempts.last_mut() {
       current.set_status(attempt);
     }

@@ -2,19 +2,19 @@ use std::{num::NonZeroU32, time::Duration};
 
 use orchester_core::{
   id::{ResourceId, TaskId},
-  money::{Currency, Money},
   name::Name,
   project::{ProjectKey, TaskKey},
   task::{LimitsError, MissingDetail, QueueError, Task, TaskDetails, TaskLimits, TaskStatus},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 
-fn five_dollars_for_thirty_minutes() -> TaskLimits {
+fn default_limits() -> TaskLimits {
   TaskLimits::new(
-    Money::from_micros(5_000_000, Currency::USD),
+    TokenBudget::new(1_400_000).expect("above zero"),
     Duration::from_secs(30 * 60),
   )
-  .expect("positive budget and duration")
+  .expect("positive duration")
 }
 
 fn title_only() -> TaskDetails {
@@ -32,7 +32,7 @@ fn complete() -> TaskDetails {
     brief: "Let users switch repositories from the sidebar.".into(),
     acceptance_criteria: vec!["The switcher lists connected repositories.".into()],
     pipeline: Some(ResourceId::generate()),
-    limits: Some(five_dollars_for_thirty_minutes()),
+    limits: Some(default_limits()),
     ..title_only()
   }
 }
@@ -65,12 +65,8 @@ fn complete_draft_is_queued_once() {
 }
 
 #[test]
-fn limits_reject_empty_budget_and_duration() {
-  let zero = Money::from_micros(0, Currency::USD);
-  assert_eq!(
-    TaskLimits::new(zero, Duration::from_secs(60)),
-    Err(LimitsError::NonPositiveBudget)
-  );
-  let five = Money::from_micros(5_000_000, Currency::USD);
-  assert_eq!(TaskLimits::new(five, Duration::ZERO), Err(LimitsError::ZeroDuration));
+fn limits_reject_an_empty_budget_and_duration() {
+  assert!(TokenBudget::new(0).is_err());
+  let budget = TokenBudget::new(1_400_000).expect("above zero");
+  assert_eq!(TaskLimits::new(budget, Duration::ZERO), Err(LimitsError::ZeroDuration));
 }

@@ -1,4 +1,7 @@
-use std::num::{NonZeroU32, NonZeroU64};
+use std::{
+  num::{NonZeroU32, NonZeroU64},
+  time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -6,14 +9,14 @@ use super::{
   branch::BranchName,
   number::RunNumber,
   snapshot::RunSnapshot,
-  status::{AttemptReason, ContinueTrigger, InterruptCause, PlanDecision, RunFailure, WaitReason},
+  status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, PlanDecision, RunFailure, WaitReason},
 };
 use crate::{
   id::{AttemptId, CheckpointId, RunId, StepExecutionId, TaskId},
-  money::Money,
   resource::StepKey,
   revision::Revision,
   time::Timestamp,
+  tokens::{TokenBudget, TokensUsed},
 };
 
 /// Position of an event in its run's log, starting at 1 without gaps.
@@ -82,7 +85,10 @@ pub struct RunCreated {
   pub snapshot: RunSnapshot,
   pub branch: BranchName,
   pub base: Revision,
-  pub budget: Money,
+  pub budget: TokenBudget,
+  /// The most active agent time the run may use; pauses and waits for a person do not count.
+  #[serde(with = "millis")]
+  pub max_duration: Duration,
 }
 
 /// A step execution created by a new attempt.
@@ -97,8 +103,19 @@ pub struct PlannedExecution {
 pub enum RunEventKind {
   Created(Box<RunCreated>),
   Started,
-  Paused,
+  /// A person asked to pause; the run keeps working until its active step reaches a checkpoint.
+  PauseRequested,
+  /// The run settled at a checkpoint and stopped scheduling.
+  Paused {
+    reason: PauseReason,
+  },
   Resumed,
+  /// A run stopped at a limit got new limits; it continues with a [`RunEventKind::Resumed`].
+  LimitRaised {
+    budget: TokenBudget,
+    #[serde(with = "millis")]
+    max_duration: Duration,
+  },
   Interrupted {
     cause: InterruptCause,
   },
@@ -149,8 +166,9 @@ pub enum RunEventKind {
     execution: StepExecutionId,
     revision: Revision,
   },
-  SpendRecorded {
-    amount: Money,
+  /// Tokens an agent CLI reported, as far as they count toward the budget.
+  UsageRecorded {
+    tokens: TokensUsed,
   },
 }
 
@@ -175,8 +193,10 @@ impl RunEventKind {
     match self {
       Self::Created(_) => "created",
       Self::Started => "started",
-      Self::Paused => "paused",
+      Self::PauseRequested => "pause_requested",
+      Self::Paused { .. } => "paused",
       Self::Resumed => "resumed",
+      Self::LimitRaised { .. } => "limit_raised",
       Self::Interrupted { .. } => "interrupted",
       Self::Continued { .. } => "continued",
       Self::Succeeded => "succeeded",
@@ -191,7 +211,23 @@ impl RunEventKind {
       Self::StepFailed { .. } => "step_failed",
       Self::StepSkipped { .. } => "step_skipped",
       Self::CheckpointRecorded { .. } => "checkpoint_recorded",
-      Self::SpendRecorded { .. } => "spend_recorded",
+      Self::UsageRecorded { .. } => "usage_recorded",
     }
+  }
+}
+
+/// A duration stored as whole milliseconds.
+mod millis {
+  use std::time::Duration;
+
+  use serde::{Deserialize, Deserializer, Serializer};
+
+  pub(super) fn serialize<S: Serializer>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
+    let millis = u64::try_from(duration.as_millis()).map_err(serde::ser::Error::custom)?;
+    serializer.serialize_u64(millis)
+  }
+
+  pub(super) fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duration, D::Error> {
+    u64::deserialize(deserializer).map(Duration::from_millis)
   }
 }

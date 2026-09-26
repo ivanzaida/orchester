@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, num::NonZeroU32, sync::Arc};
+use std::{collections::BTreeSet, num::NonZeroU32, sync::Arc, time::Duration};
 
 use super::{
   attempt::{Attempt, Checkpoint, StepExecution},
@@ -11,10 +11,10 @@ use super::{
 };
 use crate::{
   id::{RunId, StepExecutionId, TaskId},
-  money::Money,
   resource::StepKey,
   revision::Revision,
   time::Timestamp,
+  tokens::{TokenBudget, TokensUsed},
 };
 
 /// What a caller decides when it starts a run; the store adds the id and the display number.
@@ -24,7 +24,9 @@ pub struct NewRun {
   pub snapshot: RunSnapshot,
   pub branch: BranchName,
   pub base: Revision,
-  pub budget: Money,
+  pub budget: TokenBudget,
+  /// Most active agent time the run may use.
+  pub max_duration: Duration,
 }
 
 /// Current state of a run as persisted alongside its events, before [`Run::restore`] checks it.
@@ -34,14 +36,18 @@ pub struct StoredRun {
   pub created: RunCreated,
   pub created_at: Timestamp,
   pub status: RunStatus,
-  pub spent: Money,
+  /// Limits in force, the creation limits or the last raised ones.
+  pub budget: TokenBudget,
+  pub max_duration: Duration,
+  pub used: TokensUsed,
+  pub pause_requested: bool,
   pub attempts: Vec<Attempt>,
   pub last_checkpoint: Option<Checkpoint>,
   pub last_sequence: EventSequence,
 }
 
 /// One execution of a task: its pinned configuration, attempts, step executions, last
-/// checkpoint and spending. Changes go through transition methods, each returning the events
+/// checkpoint, limits and usage. Changes go through transition methods, each returning the events
 /// to append; applying the same events to the creation event rebuilds the same state.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Run {
@@ -49,7 +55,10 @@ pub struct Run {
   pub(super) created: Arc<RunCreated>,
   pub(super) created_at: Timestamp,
   pub(super) status: RunStatus,
-  pub(super) spent: Money,
+  pub(super) budget: TokenBudget,
+  pub(super) max_duration: Duration,
+  pub(super) used: TokensUsed,
+  pub(super) pause_requested: bool,
   pub(super) attempts: Vec<Attempt>,
   pub(super) last_checkpoint: Option<Checkpoint>,
   pub(super) last_sequence: EventSequence,
@@ -65,6 +74,7 @@ impl Run {
       branch: new.branch,
       base: new.base,
       budget: new.budget,
+      max_duration: new.max_duration,
     };
     let run = Self::from_created(id, created.clone(), now)?;
     let event = RunEvent::new(id, EventSequence::FIRST, now, RunEventKind::Created(Box::new(created)));
@@ -72,12 +82,15 @@ impl Run {
   }
 
   pub(super) fn from_created(id: RunId, created: RunCreated, at: Timestamp) -> Result<Self, RunError> {
-    if created.budget.micros() <= 0 {
-      return Err(RunError::NonPositiveBudget);
+    if created.max_duration.is_zero() {
+      return Err(RunError::ZeroDuration);
     }
     Ok(Self {
       id,
-      spent: Money::from_micros(0, created.budget.currency()),
+      budget: created.budget,
+      max_duration: created.max_duration,
+      used: TokensUsed::ZERO,
+      pause_requested: false,
       created: Arc::new(created),
       created_at: at,
       status: RunStatus::Pending,
@@ -90,8 +103,14 @@ impl Run {
   /// Rebuilds a persisted run, rejecting state that no event log could have produced.
   pub fn restore(stored: StoredRun) -> Result<Self, RunError> {
     let mut run = Self::from_created(stored.id, stored.created, stored.created_at)?;
+    if stored.max_duration.is_zero() {
+      return Err(RunError::ZeroDuration);
+    }
     run.status = stored.status;
-    run.spent = stored.spent;
+    run.budget = stored.budget;
+    run.max_duration = stored.max_duration;
+    run.used = stored.used;
+    run.pause_requested = stored.pause_requested;
     run.attempts = stored.attempts;
     run.last_checkpoint = stored.last_checkpoint;
     run.last_sequence = stored.last_sequence;
@@ -100,8 +119,8 @@ impl Run {
   }
 
   fn check_restored(&self) -> Result<(), RunError> {
-    if self.spent.currency() != self.budget().currency() {
-      return Err(RunError::Inconsistent("spent and budget currencies differ"));
+    if self.pause_requested && self.status != RunStatus::Running {
+      return Err(RunError::Inconsistent("only a running run waits to pause"));
     }
     if (self.status == RunStatus::Pending) != self.attempts.is_empty() {
       return Err(RunError::Inconsistent("only a pending run has no attempts"));
@@ -151,8 +170,34 @@ impl Run {
     &self.created.base
   }
 
-  pub fn budget(&self) -> Money {
-    self.created.budget
+  /// The token budget in force: the creation budget or the last raised one.
+  pub const fn budget(&self) -> TokenBudget {
+    self.budget
+  }
+
+  /// The time limit on active agent time in force.
+  pub const fn max_duration(&self) -> Duration {
+    self.max_duration
+  }
+
+  /// Tokens used so far, as the CLIs reported them.
+  pub const fn used(&self) -> TokensUsed {
+    self.used
+  }
+
+  /// Whether the used tokens have reached the budget.
+  pub const fn token_limit_reached(&self) -> bool {
+    self.used.reached(self.budget)
+  }
+
+  /// Whether `active` agent time has reached the time limit.
+  pub fn time_limit_reached(&self, active: Duration) -> bool {
+    active >= self.max_duration
+  }
+
+  /// A person asked to pause and the run is settling at its next checkpoint ("Pausing…").
+  pub const fn pause_requested(&self) -> bool {
+    self.pause_requested
   }
 
   /// Creation facts, as recorded in the first event.
@@ -166,10 +211,6 @@ impl Run {
 
   pub const fn status(&self) -> &RunStatus {
     &self.status
-  }
-
-  pub const fn spent(&self) -> Money {
-    self.spent
   }
 
   pub fn attempts(&self) -> &[Attempt] {
