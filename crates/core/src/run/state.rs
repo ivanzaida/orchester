@@ -11,11 +11,12 @@ use super::{
   error::RunError,
   event::{EventSequence, RunCreated, RunEvent, RunEventKind},
   number::RunNumber,
+  permissions::RunPermissions,
   snapshot::RunSnapshot,
   status::{AttemptReason, PauseReason, RunLimit, RunStatus, StepStatus},
 };
 use crate::{
-  id::{RunId, StepExecutionId, TaskId},
+  id::{ResourceId, RunId, StepExecutionId, TaskId},
   resource::StepKey,
   revision::Revision,
   time::Timestamp,
@@ -46,6 +47,8 @@ pub struct StoredRun {
   pub max_duration: Duration,
   /// Step budgets raised for this run, in force instead of the snapshot's.
   pub step_budgets: BTreeMap<StepKey, TokenBudget>,
+  /// Permissions changed for this run, by agent profile.
+  pub permissions: BTreeMap<ResourceId, RunPermissions>,
   pub used: TokensUsed,
   pub pause_requested: bool,
   pub attempts: Vec<Attempt>,
@@ -65,6 +68,7 @@ pub struct Run {
   pub(super) budget: TokenBudget,
   pub(super) max_duration: Duration,
   pub(super) step_budgets: BTreeMap<StepKey, TokenBudget>,
+  pub(super) permissions: BTreeMap<ResourceId, RunPermissions>,
   pub(super) used: TokensUsed,
   pub(super) pause_requested: bool,
   pub(super) attempts: Vec<Attempt>,
@@ -98,6 +102,7 @@ impl Run {
       budget: created.budget,
       max_duration: created.max_duration,
       step_budgets: BTreeMap::new(),
+      permissions: BTreeMap::new(),
       used: TokensUsed::ZERO,
       pause_requested: false,
       created: Arc::new(created),
@@ -119,6 +124,7 @@ impl Run {
     run.budget = stored.budget;
     run.max_duration = stored.max_duration;
     run.step_budgets = stored.step_budgets;
+    run.permissions = stored.permissions;
     run.used = stored.used;
     run.pause_requested = stored.pause_requested;
     run.attempts = stored.attempts;
@@ -156,6 +162,7 @@ impl Run {
         "a raised step budget names a step outside the snapshot",
       ));
     }
+    self.check_restored_permissions()?;
     if let RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) = self.status
       && self.execution(execution).is_none()
     {
@@ -230,6 +237,11 @@ impl Run {
   /// Step budgets raised for this run.
   pub const fn raised_step_budgets(&self) -> &BTreeMap<StepKey, TokenBudget> {
     &self.step_budgets
+  }
+
+  /// Permissions changed for this run, by agent profile.
+  pub const fn all_changed_permissions(&self) -> &BTreeMap<ResourceId, RunPermissions> {
+    &self.permissions
   }
 
   /// Whether the used tokens have reached the budget.

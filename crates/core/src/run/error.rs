@@ -2,7 +2,8 @@ use thiserror::Error;
 
 use super::status::{InterruptCause, RunLimit, RunStatus, StepStatus};
 use crate::{
-  id::{CheckpointId, RunId, StepExecutionId},
+  id::{CheckpointId, ResourceId, RunId, StepExecutionId},
+  permission::capability::PermissionProblem,
   resource::StepKey,
   tokens::TokenBudget,
 };
@@ -49,6 +50,16 @@ pub enum RunError {
   LimitNotAboveUsed(RunLimit),
   #[error("a run budget can be at most {max} tokens")]
   BudgetAboveMaximum { max: TokenBudget },
+  #[error("no step of the run uses agent profile {0}")]
+  ProfileNotInRun(ResourceId),
+  #[error("step `{step}` cannot run with these permissions: {problem}")]
+  PermissionsNotEnforceable { step: StepKey, problem: PermissionProblem },
+  #[error("no agent of profile {0} is at work, so none can restart with new permissions now")]
+  NoAgentToRestart(ResourceId),
+  #[error("no change of profile {0}'s permissions waits for a checkpoint")]
+  NoPendingPermissions(ResourceId),
+  #[error("step execution {0} is not waiting to restart with new permissions")]
+  NotRestartingForPermissions(StepExecutionId),
   #[error("a run log starts with exactly one creation event at sequence 1")]
   Creation,
   #[error("event of run {found} appears in the log of run {expected}")]
