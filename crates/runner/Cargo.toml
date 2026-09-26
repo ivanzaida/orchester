@@ -13,9 +13,26 @@ workspace = true
 name = "orchester-runner"
 path = "src/main.rs"
 
+# A stand-in for the Codex CLI that replays recorded output, for the execution tests. Built only
+# with the `test-agent` feature, so it never ships next to the runner.
+[[bin]]
+name = "orchester-fake-codex"
+path = "tests/support/fake_codex.rs"
+required-features = ["test-agent"]
+
+[[test]]
+name = "execution"
+required-features = ["test-agent"]
+
+[features]
+test-agent = []
+
 [dependencies]
 orchester-core.workspace = true
+orchester-exec.workspace = true
 orchester-ipc.workspace = true
+orchester-store.workspace = true
+parking_lot.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

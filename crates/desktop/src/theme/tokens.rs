@@ -65,6 +65,9 @@ pub const RADIUS_NOTICE: f32 = 8.0;
 pub const RADIUS_MARK: f32 = 2.0;
 /// Corner radius of an open select menu: option radius 7 plus its padding 4 (`u0ByM`).
 pub const RADIUS_SELECT_MENU: f32 = 11.0;
+/// Switch track (`K8ItM`, radius 8 on a 16px track). lurq clamps a radius to half the box, so
+/// the 10px knob is round with it too.
+pub const RADIUS_PILL: f32 = 8.0;
 
 /// Gaps and paddings used by the Getting started screens, the sidebar and the overview.
 /// Pencil node ids are listed on the `ExtraSpacing` variants that use them.
@@ -122,3 +125,6 @@ pub const SELECT_SCROLLBAR_EDGE_INSET: f32 = 3.0;
 pub const SELECT_SCROLLBAR_END_INSET: f32 = 11.0;
 pub const SELECT_SCROLLBAR_MIN_THUMB: f32 = 24.0;
 pub const NO_TRACK: &str = "#00000000";
+
+/// Unparsed CLI lines in the agent transcript are muted to 60 % (`Ane9j` in `SfXU1`).
+pub const UNPARSED_OPACITY: f32 = 0.6;

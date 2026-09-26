@@ -2513,6 +2513,7 @@ dependencies = [
 name = "orchester-ipc"
 version = "0.1.0"
 dependencies = [
+ "orchester-core",
  "serde",
  "serde_json",
  "tempfile",
@@ -2528,7 +2529,10 @@ name = "orchester-runner"
 version = "0.1.0"
 dependencies = [
  "orchester-core",
+ "orchester-exec",
  "orchester-ipc",
+ "orchester-store",
+ "parking_lot",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",

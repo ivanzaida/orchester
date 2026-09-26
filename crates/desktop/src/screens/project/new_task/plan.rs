@@ -1,6 +1,7 @@
 //! Right column of the new task form (`AoFj6`): pipeline, its steps, limits and the actions.
 //! Only published pipelines can be chosen; with none, the selector says why it is empty.
-//! Create & run is unavailable: nothing can run tasks yet.
+//! Create & run needs every detail; while it works it says so, and when the run does not start
+//! it lists why, keeping the form so the same run can be retried.
 
 use std::sync::Arc;
 
@@ -45,6 +46,7 @@ pub fn execution_plan(
   pipelines: Option<&Vec<PipelineChoice>>,
   state: &FormState,
   save: Submit,
+  start: Submit,
 ) -> Element {
   let selected = form.pipeline.get().0;
   let steps = pipelines
@@ -65,7 +67,7 @@ pub fn execution_plan(
     .with_children(missing_note(ctx, state, MissingDetail::Pipeline))
     .child(limits(ctx, form, state))
     .child(Spacer::new().flex(1.0))
-    .child(actions(ctx, state, save))
+    .child(actions(ctx, state, save, start))
     .into()
 }
 
@@ -97,12 +99,14 @@ fn pipeline_select(ctx: &Ctx, selection: &Signal<PipelineSelection>, choices: &[
     );
     (PipelineSelection(Some(choice.id)), label)
   }));
-  Select::new(selection.clone())
-    .options(options)
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(SELECTOR_HEIGHT))
-    .style(select_style(ctx, SELECTOR_HEIGHT))
-    .into()
+  Element::from(
+    Select::new(selection.clone())
+      .options(options)
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(SELECTOR_HEIGHT))
+      .style(select_style(ctx, SELECTOR_HEIGHT)),
+  )
+  .id("pipeline-selector")
 }
 
 /// Steps of the chosen pipeline's published version (`o9ty9`).
@@ -129,6 +133,36 @@ fn pipeline_steps(steps: &[Arc<str>]) -> Element {
         )
     }))
     .into()
+}
+
+/// What Create & run is doing, why it cannot be pressed, or why the run did not start.
+fn run_status(ctx: &Ctx, state: &FormState) -> Vec<Element> {
+  if state.starting {
+    return vec![
+      Text::new(&ctx.t("tasks.new.startingDetail"))
+        .variant(TypographyStyle::Caption)
+        .into(),
+    ];
+  }
+  if let Some(problems) = &state.run_problems {
+    return problems
+      .0
+      .iter()
+      .map(|problem| error_note(&message_text(ctx, problem)))
+      .collect();
+  }
+  if state.missing.is_empty() {
+    return vec![
+      Text::new(&ctx.t("tasks.new.runExplanation"))
+        .variant(TypographyStyle::Caption)
+        .into(),
+    ];
+  }
+  vec![
+    Text::new(&ctx.t("tasks.new.runNeedsDetails"))
+      .variant(TypographyStyle::Caption)
+      .into(),
+  ]
 }
 
 /// Run budget and time limit (`iuFln`).
@@ -197,13 +231,14 @@ fn limit_row(ctx: &Ctx, label: &str, id: &'static str, value: &Signal<String>, u
     .into()
 }
 
-/// Create & run, unavailable with its reason, then Save as draft (`Hc1Cp`, `Q4xE7q`).
-/// `save` is `None` while the draft cannot be saved, including while it is being saved.
-fn actions(ctx: &Ctx, state: &FormState, save: Submit) -> Element {
+/// Create & run with what it is doing or why it did not start, then Save as draft (`Hc1Cp`,
+/// `Q4xE7q`). `save` and `start` are `None` while they cannot be pressed.
+fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element {
   let status: Option<Element> = state
     .save_error
     .as_ref()
     .map(|error| error_note(&message_text(ctx, error)));
+  let run_status = run_status(ctx, state);
   // Full width, so a long reason wraps inside the panel instead of running past its edge.
   let reasons: Vec<Text> = state
     .errors
@@ -246,21 +281,31 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit) -> Element {
       .cursor(CursorIcon::NotAllowed)
       .tab_index(SKIPPED_BY_TAB),
   };
+  let label = if state.starting {
+    ctx.t("tasks.new.starting")
+  } else {
+    ctx.t("tasks.new.createAndRun")
+  };
+  let enabled = start.is_some();
+  let create_and_run = ActionButton::new(label)
+    .primary()
+    .icon(Icon::Play)
+    .id("create-and-run")
+    .in_form()
+    .fill_width()
+    .height(Dimension::Px(CREATE_AND_RUN_HEIGHT))
+    .on_click(move || {
+      if let Some(start) = &start {
+        start();
+      }
+    })
+    .enabled(enabled);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .overflow_visible()
-    .child(
-      ActionButton::new(ctx.t("tasks.new.createAndRun"))
-        .primary()
-        .icon(Icon::Play)
-        .id("create-and-run")
-        .in_form()
-        .fill_width()
-        .height(Dimension::Px(CREATE_AND_RUN_HEIGHT))
-        .render(ctx),
-    )
-    .child(Text::new(&ctx.t("tasks.new.runUnavailable")).variant(TypographyStyle::Caption))
+    .child(create_and_run.render(ctx))
+    .with_children(run_status)
     .with_children(status)
     .with_children(reasons)
     .child(save_draft)

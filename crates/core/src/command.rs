@@ -15,6 +15,7 @@ pub struct Command {
   current_dir: Option<PathBuf>,
   env: Vec<(String, String)>,
   env_removed: Vec<String>,
+  inherit_env: bool,
   stdin: Option<String>,
 }
 
@@ -32,6 +33,7 @@ impl Command {
       current_dir: None,
       env: Vec::new(),
       env_removed: Vec::new(),
+      inherit_env: true,
       stdin: None,
     }
   }
@@ -53,6 +55,15 @@ impl Command {
   #[must_use]
   pub fn without_env(mut self, key: &str) -> Self {
     self.env_removed.push(key.to_owned());
+    self
+  }
+
+  /// Gives the program exactly `variables` instead of the caller's environment.
+  #[must_use]
+  pub fn with_environment(mut self, variables: Vec<(String, String)>) -> Self {
+    self.inherit_env = false;
+    self.env_removed.clear();
+    self.env = variables;
     self
   }
 
@@ -81,6 +92,12 @@ impl Command {
 
   pub fn env_removed(&self) -> &[String] {
     &self.env_removed
+  }
+
+  /// Whether the program starts from the caller's environment; otherwise it sees only
+  /// [`Command::env`].
+  pub const fn inherits_env(&self) -> bool {
+    self.inherit_env
   }
 
   pub fn stdin(&self) -> Option<&str> {

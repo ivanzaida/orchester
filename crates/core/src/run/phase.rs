@@ -1,0 +1,62 @@
+//! Where a task stands, derived from the task and its latest run (`docs/architecture/storage.md`,
+//! "State machines"). The phase is never stored: the task holds the user's intent (draft or
+//! queued) and the run holds what execution did.
+
+use super::{
+  state::Run,
+  status::{RunStatus, StepStatus},
+};
+use crate::task::{Task, TaskStatus};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TaskPhase {
+  Draft,
+  /// Queued, and its run has not started yet.
+  Queued,
+  Running,
+  /// Running, with a step waiting for a person (an approval, a plan decision or a message).
+  Waiting,
+  Paused,
+  /// Stopped without settling; its last checkpoint is kept.
+  Interrupted,
+  /// Every step passed.
+  Succeeded,
+  Failed,
+  Cancelled,
+}
+
+impl TaskPhase {
+  /// The phase of `task` whose most recent run is `latest`.
+  pub fn of(task: &Task, latest: Option<&Run>) -> Self {
+    let Some(run) = latest else {
+      return match task.status() {
+        TaskStatus::Draft => Self::Draft,
+        TaskStatus::Queued => Self::Queued,
+      };
+    };
+    match run.status() {
+      RunStatus::Pending => Self::Queued,
+      RunStatus::Running if waiting(run) => Self::Waiting,
+      RunStatus::Running => Self::Running,
+      RunStatus::Paused => Self::Paused,
+      RunStatus::Interrupted(_) => Self::Interrupted,
+      RunStatus::Succeeded => Self::Succeeded,
+      RunStatus::Failed(_) => Self::Failed,
+      RunStatus::Cancelled => Self::Cancelled,
+    }
+  }
+
+  /// An agent may be working: the run has started and not settled.
+  pub const fn is_active(self) -> bool {
+    matches!(self, Self::Running | Self::Waiting)
+  }
+}
+
+fn waiting(run: &Run) -> bool {
+  run.current_attempt().is_some_and(|attempt| {
+    attempt
+      .executions()
+      .iter()
+      .any(|execution| matches!(execution.status(), StepStatus::Waiting(_)))
+  })
+}

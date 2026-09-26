@@ -2,7 +2,7 @@
 
 use std::{
   path::{MAIN_SEPARATOR, Path},
-  time::{Duration, SystemTime},
+  time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use orchester_core::{
@@ -122,4 +122,16 @@ pub fn duration(elapsed: Duration) -> Message {
 /// Local wall-clock time of `at`, e.g. `14:32`, as the status bar shows event times.
 pub fn clock_time(at: SystemTime) -> String {
   chrono::DateTime::<chrono::Local>::from(at).format("%H:%M").to_string()
+}
+
+/// [`clock_time`] of a stored instant.
+pub fn clock(at: Timestamp) -> String {
+  // Stored times are after 1970; an earlier one reads as the epoch rather than failing.
+  let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
+  clock_time(UNIX_EPOCH + Duration::from_millis(millis))
+}
+
+/// A revision as people read it: its first seven characters.
+pub fn short_revision(revision: &str) -> &str {
+  revision.get(..7).unwrap_or(revision)
 }

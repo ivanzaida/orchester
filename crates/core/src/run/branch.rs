@@ -1,7 +1,9 @@
-use std::fmt;
+use std::{fmt, num::NonZeroU32};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::project::TaskKey;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum BranchNameError {
@@ -36,6 +38,12 @@ impl BranchName {
     } else {
       Err(BranchNameError::Invalid(value.to_owned()))
     }
+  }
+
+  /// The branch of the `ordinal`-th run of task `task` (from 1): `orchester/orc-12-run-1`.
+  pub fn for_run(task: &TaskKey, ordinal: NonZeroU32) -> Self {
+    let name = format!("orchester/{}-run-{ordinal}", task.to_string().to_ascii_lowercase());
+    Self::new(&name).expect("a lowercase task key, digits, dashes and one slash form a valid branch name")
   }
 
   pub fn as_str(&self) -> &str {

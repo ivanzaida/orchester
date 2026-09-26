@@ -6,11 +6,14 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   resource::{Pipeline, ResourceKind, VersionNumber},
-  store::{ResourceStore, TaskStore},
+  run::TaskPhase,
+  store::{ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, RunStoreError, StoreError};
+
+use super::list::Phases;
 
 /// A pipeline a task can use: one with a published version.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,6 +30,8 @@ pub struct PipelineChoice {
 pub struct ProjectTasks {
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  /// The phase of each task that has a run, from its latest run.
+  pub phases: Arc<Phases>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProjectTasks {}
@@ -34,9 +39,24 @@ impl lurq::app::component::DevtoolsInspectable for ProjectTasks {}
 impl ProjectTasks {
   pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
+    let tasks = db.tasks()?;
+    let mut phases = Phases::new();
+    for task in &tasks {
+      let runs = db.runs_of_task(task.id()).map_err(|error| match error {
+        RunStoreError::Store(error) => error,
+        other => StoreError::Corrupt {
+          what: "run",
+          detail: other.to_string(),
+        },
+      })?;
+      if let Some(latest) = runs.last() {
+        phases.insert(task.id(), TaskPhase::of(task, Some(latest)));
+      }
+    }
     Ok(Self {
-      tasks: Arc::new(db.tasks()?),
+      tasks: Arc::new(tasks),
       pipelines: Arc::new(published_pipelines(&db)?),
+      phases: Arc::new(phases),
     })
   }
 }

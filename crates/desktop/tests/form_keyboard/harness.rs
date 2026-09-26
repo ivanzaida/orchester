@@ -32,6 +32,9 @@ const SETTLE_PAUSE: Duration = Duration::from_millis(5);
 const WIDTH: u32 = 1440;
 const HEIGHT: u32 = 960;
 
+/// Work on the test repository: setting it up before the project exists, or seeding it after.
+type RepoStep<'a> = Box<dyn FnOnce(&Path) + 'a>;
+
 pub struct Desktop {
   pub tree: Tree,
   pub repo: PathBuf,
@@ -59,10 +62,38 @@ impl Desktop {
     Self::start(true, Programs::with_runner(runner))
   }
 
+  /// A project in the repository `init` sets up, whose runner is the program `runner`, with
+  /// `seed` run on the repository once the project exists.
+  pub fn with_runner(runner: PathBuf, init: impl FnOnce(&Path), seed: impl FnOnce(&Path)) -> Self {
+    Self::start_with(Some(Box::new(init)), no_programs(), runner, Some(Box::new(seed)))
+  }
+
   fn start(with_project: bool, programs: Programs) -> Self {
+    let init: Option<RepoStep<'static>> = if with_project {
+      Some(Box::new(|repo: &Path| {
+        fs::create_dir_all(repo.join(".git")).expect("create .git")
+      }))
+    } else {
+      None
+    };
+    // No runner program exists here; the project shows its runner as unable to start.
+    Self::start_with(init, programs, PathBuf::from("no-runner.exe"), None)
+  }
+
+  fn start_with<'a>(
+    init: Option<RepoStep<'a>>,
+    programs: Programs,
+    runner: PathBuf,
+    seed: Option<RepoStep<'a>>,
+  ) -> Self {
+    let with_project = init.is_some();
     let dir = TempDir::new().expect("temporary directory");
     let repo = dir.path().join("kontur");
-    fs::create_dir_all(repo.join(".git")).expect("create .git");
+    fs::create_dir_all(&repo).expect("create the repository folder");
+    match init {
+      Some(init) => init(&repo),
+      None => fs::create_dir_all(repo.join(".git")).expect("create .git"),
+    }
     let session = AppSession::start_at(&dir.path().join("orchester.db")).expect("session starts");
     if with_project {
       let new = ProjectDraft {
@@ -73,18 +104,21 @@ impl Desktop {
       .expect("valid draft");
       session.workspace().create(new).expect("project is created");
     }
+    if let Some(seed) = seed {
+      seed(&repo);
+    }
     let runtime = Runtime::new().expect("tokio runtime");
     let mut app = App::new();
     app.set_tokio_handle(runtime.handle().clone());
     theme::install(&mut app);
     i18n::install(&app).expect("bundled locales load");
-    // No runner program exists here; the project shows its runner as unable to start.
     let activity = Activity::new();
-    let runners = Runners::new(
-      dir.path().join("no-runner.exe"),
-      runtime.handle().clone(),
-      activity.clone(),
-    );
+    let runner = if runner.is_absolute() {
+      runner
+    } else {
+      dir.path().join(runner)
+    };
+    let runners = Runners::new(runner, runtime.handle().clone(), activity.clone());
     let startup = Startup::Ready {
       workspace: session.workspace().clone(),
       lifecycle: Lifecycle::new(runners, runtime.handle().clone()),

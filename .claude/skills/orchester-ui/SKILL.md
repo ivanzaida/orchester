@@ -98,6 +98,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | stroke 1 / focus stroke 1.5 / selected tab underline 2 | `BorderSize::Sm` / `Md` / `Lg` |
 | form group gap 22 (`xT2ex`, `dCLMl`) | `ExtraSpacing::Form.role()` |
 | select menu radius 11 / padding 4 (`u0ByM`) | `ExtraRadius::SelectMenu.role()` / `ExtraSpacing::SelectMenu.role()` |
+| switch track radius 8, knob round (`K8ItM`) | `ExtraRadius::Pill.role()` |
+| unparsed transcript lines at 60 % (`Ane9j`) | `theme::UNPARSED_OPACITY` |
 | select menu overlay scrollbar: 4px `border` thumb, radius 2, inset 1 (`g3poI`) | `theme::select_menu_scrollbar()` |
 | operations popover drop shadow 0 8 24 #00000066 (`E1msJS`) | `ExtraShadow::Popover.role()` |
 | `focus-ring` #EEEEEE / `focus-gap` #101010 (`xURvJ`) | `ExtraColor::FocusRing.role()` / `ExtraColor::FocusGap.role()` |
@@ -149,6 +151,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::DiffPath.role()` | mono 14/500 | path of the diffed file (`rxiPH`) |
 | `ExtraTypography::DiffLineNumber.role()` | mono 11 `code-comment` | diff line numbers (`b8bSop`, `U4wNN`) |
 | `ExtraTypography::Code.role()` | mono 12, 1.6, `code-text` | diff code and change mark; tokens color with `ExtraColor::Code*` (`DQMrs`) |
+| `ExtraTypography::Output.role()` | mono 11 muted, 1.6 | command output in the agent transcript (`mMUyR` in `N4SlQq`) |
+| `ExtraTypography::IconEntry.role()` / `IconEvent` / `IconState` | lucide 13 / 14 / 20 | transcript entry glyph (`DQmo9`), activity event glyph (`xQYdP` in `mBkeJ`), tab state icon (`qgZru` in `hig8O`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

@@ -2,8 +2,9 @@
 //! `docs/architecture/storage.md`.
 //!
 //! Every connection starts with a [`handshake`] in which both sides send their
-//! [`PROTOCOL_VERSION`]; after that the desktop sends [`Command`]s and the runner sends
-//! [`Event`]s, each as one length-prefixed JSON frame (see [`frame`]).
+//! [`PROTOCOL_VERSION`]; after that the desktop sends [`Request`]s and the runner sends
+//! [`Event`]s (replies and change notifications), each as one length-prefixed JSON frame (see
+//! [`frame`]).
 //!
 //! Only the Windows named-pipe transport exists today. It lives in `transport`; the rest of
 //! the crate is written against `AsyncRead`/`AsyncWrite`, so another transport only has to
@@ -31,6 +32,6 @@ pub use handshake::{Handshake, PROTOCOL_VERSION, handshake};
 #[cfg(windows)]
 pub use job::KillOnCloseJob;
 pub use log_path::{runner_log_dir, runner_log_path, utc_date};
-pub use message::{Command, Event, OutputStream, ProcessEvent, ProcessExit, ProcessId, ShutdownMode};
+pub use message::{Command, Event, Rejection, Reply, Request, RequestId, ShutdownMode};
 #[cfg(windows)]
 pub use transport::{ClientStream, Endpoint, ServerStream};

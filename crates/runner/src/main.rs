@@ -5,10 +5,13 @@ use std::{io, path::PathBuf, process::ExitCode, sync::Arc};
 use orchester_ipc::IpcError;
 use orchester_runner::{
   lock::{LockError, RunnerLock},
-  log_file, server,
+  log_file,
 };
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+
+/// Agents run on the runtime's workers while database and git calls block one of them briefly.
+const WORKER_THREADS: usize = 2;
 
 #[derive(Debug, Error)]
 enum RunnerError {
@@ -20,6 +23,10 @@ enum RunnerError {
   Runtime(io::Error),
   #[error(transparent)]
   Ipc(#[from] IpcError),
+  /// The desktop connection is a named pipe, which exists on Windows only (`AGENTS.md`, known gaps).
+  #[cfg(not(windows))]
+  #[error("the runner cannot talk to the desktop on this platform yet")]
+  TransportUnsupported,
 }
 
 fn main() -> ExitCode {
@@ -60,11 +67,22 @@ fn main() -> ExitCode {
 fn run(project_root: Result<PathBuf, RunnerError>) -> Result<(), RunnerError> {
   let project_root = project_root?;
   let _lock = RunnerLock::acquire(&project_root)?;
-  let runtime = tokio::runtime::Builder::new_current_thread()
+  let runtime = tokio::runtime::Builder::new_multi_thread()
+    .worker_threads(WORKER_THREADS)
     .enable_all()
     .build()
     .map_err(RunnerError::Runtime)?;
-  Ok(runtime.block_on(server::serve(&project_root))?)
+  serve(&runtime, &project_root)
+}
+
+#[cfg(windows)]
+fn serve(runtime: &tokio::runtime::Runtime, project_root: &std::path::Path) -> Result<(), RunnerError> {
+  Ok(runtime.block_on(orchester_runner::server::serve(project_root))?)
+}
+
+#[cfg(not(windows))]
+fn serve(_runtime: &tokio::runtime::Runtime, _project_root: &std::path::Path) -> Result<(), RunnerError> {
+  Err(RunnerError::TransportUnsupported)
 }
 
 fn project_root_argument() -> Result<PathBuf, RunnerError> {

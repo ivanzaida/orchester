@@ -1,57 +1,107 @@
-//! Serves the desktop over the project's IPC endpoint.
+//! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the
+//! scheduler's change notifications.
 
 use std::{path::Path, time::Duration};
 
+use orchester_core::run::InterruptCause;
 use orchester_ipc::{
-  Command, Endpoint, Event, IpcError, ServerStream, ShutdownMode,
+  Command, Endpoint, Event, IpcError, Reply, Request, ShutdownMode,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
-use tokio::io::ReadHalf;
+use tokio::sync::mpsc;
+
+use crate::execution::{Notifier, Scheduler};
 
 /// After [`Event::Stopped`] the runner waits this long for the desktop to close the pipe, so
 /// the event is read before the pipe goes away.
 const DISCONNECT_GRACE: Duration = Duration::from_secs(5);
 
-/// Accepts the desktop's connection and handles commands until the desktop disconnects or asks
-/// the runner to stop.
-///
-/// Nothing is scheduled yet, so there are no active steps: both shutdown modes stop at once.
+type Incoming = Result<Option<Request>, IpcError>;
+
+/// Accepts the desktop's connection and serves it until the desktop disconnects or asks the
+/// runner to stop. Runs still executing then are interrupted: their agents are ended and the
+/// runs keep their last checkpoint.
 pub async fn serve(project_root: &Path) -> Result<(), IpcError> {
   let endpoint = Endpoint::for_project(project_root)?;
   tracing::info!("listening on {}", endpoint.name());
   let stream = endpoint.accept().await?;
   let (read, write) = tokio::io::split(stream);
-  let mut commands = FrameReader::new(read);
-  let mut events = FrameWriter::new(write);
-  handshake(&mut commands, &mut events).await?;
+  let mut reader = FrameReader::new(read);
+  let mut writer = FrameWriter::new(write);
+  handshake(&mut reader, &mut writer).await?;
   tracing::info!("desktop connected");
-  while let Some(command) = commands.read::<Command>().await? {
-    match command {
-      Command::Ping { nonce } => events.write(&Event::Pong { nonce }).await?,
-      Command::Shutdown { mode } => {
-        tracing::info!("shutdown requested: {mode:?}");
-        events.write(&Event::Stopped { mode }).await?;
-        wait_for_disconnect(&mut commands, mode).await;
-        return Ok(());
+  let (notifications, mut outgoing) = mpsc::unbounded_channel();
+  let scheduler = Scheduler::new(project_root, Notifier::new(notifications));
+  // A frame read cannot be interrupted without losing data, so requests are read on their own task.
+  let (incoming, mut requests) = mpsc::unbounded_channel::<Incoming>();
+  let reading = tokio::spawn(async move {
+    loop {
+      let request = reader.read::<Request>().await.map_err(IpcError::from);
+      let last = !matches!(request, Ok(Some(_)));
+      if incoming.send(request).is_err() || last {
+        return;
       }
     }
-  }
-  tracing::info!("desktop disconnected");
-  Ok(())
+  });
+  let result = loop {
+    tokio::select! {
+      request = requests.recv() => match request {
+        Some(Ok(Some(request))) => match answer(&scheduler, &request) {
+          Answer::Reply(event) => writer.write(&event).await?,
+          Answer::Shutdown(mode) => {
+            tracing::info!("shutdown requested: {mode:?}");
+            scheduler.stop_all(InterruptCause::QuitNow).await;
+            while let Ok(event) = outgoing.try_recv() {
+              writer.write(&event).await?;
+            }
+            writer.write(&Event::Stopped { mode }).await?;
+            wait_for_disconnect(&mut requests).await;
+            break Ok(());
+          }
+        },
+        Some(Err(error)) => {
+          tracing::warn!("desktop connection failed: {error}");
+          scheduler.stop_all(InterruptCause::RunnerLost).await;
+          break Err(error);
+        }
+        Some(Ok(None)) | None => {
+          tracing::info!("desktop disconnected");
+          scheduler.stop_all(InterruptCause::RunnerLost).await;
+          break Ok(());
+        }
+      },
+      Some(event) = outgoing.recv() => writer.write(&event).await?,
+    }
+  };
+  reading.abort();
+  result
 }
 
-async fn wait_for_disconnect(commands: &mut FrameReader<ReadHalf<ServerStream>>, mode: ShutdownMode) {
+enum Answer {
+  Reply(Event),
+  Shutdown(ShutdownMode),
+}
+
+fn answer(scheduler: &Scheduler, request: &Request) -> Answer {
+  let reply = match request.command {
+    Command::Attach => Reply::Attached {
+      active_runs: scheduler.active_runs(),
+    },
+    Command::Ping { nonce } => Reply::Pong { nonce },
+    Command::StartRun { key, task } => match scheduler.start_run(key, task) {
+      Ok(run) => Reply::RunStarted { run },
+      Err(rejection) => Reply::Rejected(rejection),
+    },
+    Command::Shutdown { mode } => return Answer::Shutdown(mode),
+  };
+  Answer::Reply(Event::Reply { id: request.id, reply })
+}
+
+async fn wait_for_disconnect(requests: &mut mpsc::UnboundedReceiver<Incoming>) {
   let drain = async {
-    loop {
-      match commands.read::<Command>().await {
-        Ok(Some(command)) => tracing::warn!("ignoring {command:?} after {mode:?} shutdown"),
-        Ok(None) => return,
-        Err(error) => {
-          tracing::warn!("connection failed while stopping: {error}");
-          return;
-        }
-      }
+    while let Some(Ok(Some(request))) = requests.recv().await {
+      tracing::warn!("ignoring {:?} after shutdown", request.command);
     }
   };
   if tokio::time::timeout(DISCONNECT_GRACE, drain).await.is_err() {

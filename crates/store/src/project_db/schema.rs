@@ -235,4 +235,40 @@ CREATE TABLE pr_revisions (
 ) STRICT;
 CREATE INDEX pr_revisions_by_sync ON pr_revisions (host, owner, name, number, synced_at);
 ",
+  r"
+-- Launches of agent CLIs for step executions, with the session and usage each reported.
+CREATE TABLE invocations (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES runs (id),
+  step_execution_id TEXT NOT NULL REFERENCES step_executions (id),
+  number INTEGER NOT NULL CHECK (number > 0),
+  model TEXT NOT NULL,
+  session_id TEXT,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  input_tokens INTEGER NOT NULL CHECK (input_tokens >= 0),
+  cached_input_tokens INTEGER NOT NULL CHECK (cached_input_tokens >= 0),
+  output_tokens INTEGER NOT NULL CHECK (output_tokens >= 0),
+  outcome TEXT,
+  UNIQUE (step_execution_id, number),
+  CHECK ((ended_at IS NULL) = (outcome IS NULL))
+) STRICT;
+CREATE INDEX invocations_by_run ON invocations (run_id, started_at);
+
+-- The agent transcript of a run: what its CLIs reported, in order. Append-only.
+CREATE TABLE agent_events (
+  run_id TEXT NOT NULL REFERENCES runs (id),
+  sequence INTEGER NOT NULL CHECK (sequence > 0),
+  step_execution_id TEXT NOT NULL REFERENCES step_executions (id),
+  invocation_id TEXT NOT NULL REFERENCES invocations (id),
+  at INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  PRIMARY KEY (run_id, sequence)
+) STRICT;
+CREATE TRIGGER agent_events_no_update BEFORE UPDATE ON agent_events
+BEGIN SELECT RAISE(ABORT, 'agent events are append-only'); END;
+CREATE TRIGGER agent_events_no_delete BEFORE DELETE ON agent_events
+BEGIN SELECT RAISE(ABORT, 'agent events are append-only'); END;
+",
 ];

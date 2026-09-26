@@ -16,7 +16,7 @@ use tokio::{
 };
 
 use crate::{
-  ClientStream, Command, Endpoint, Event, IpcError, KillOnCloseJob,
+  ClientStream, Endpoint, Event, IpcError, KillOnCloseJob, Request,
   frame::{FrameReader, FrameWriter},
   handshake, pipe_owner,
 };
@@ -75,8 +75,8 @@ impl RunnerClient {
     })
   }
 
-  pub async fn send(&mut self, command: &Command) -> Result<(), IpcError> {
-    self.commands.send(command).await
+  pub async fn send(&mut self, request: &Request) -> Result<(), IpcError> {
+    self.commands.send(request).await
   }
 
   /// The next event, or `None` once the runner closed the connection.
@@ -96,8 +96,8 @@ pub struct CommandSender {
 }
 
 impl CommandSender {
-  pub async fn send(&mut self, command: &Command) -> Result<(), IpcError> {
-    Ok(self.writer.write(command).await?)
+  pub async fn send(&mut self, request: &Request) -> Result<(), IpcError> {
+    Ok(self.writer.write(request).await?)
   }
 }
 

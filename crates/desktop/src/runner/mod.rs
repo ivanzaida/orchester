@@ -7,6 +7,7 @@
 
 mod connection;
 mod report;
+mod requests;
 pub mod state;
 
 use std::{
@@ -19,11 +20,13 @@ use std::{
   time::{Duration, SystemTime},
 };
 
+use orchester_core::id::{IdempotencyKey, RunId, TaskId};
+use orchester_ipc::{Command, Rejection, Reply};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch};
 
-pub use self::report::RunnerStatus;
 use self::{connection::Connection, report::Reporter, state::RunnerEvent};
+pub use self::{report::RunnerStatus, requests::RequestError};
 use crate::activity::Activity;
 
 /// How long a close without active work waits for the runner to stop and exit before
@@ -103,6 +106,15 @@ impl ActiveWork {
 
 impl lurq::app::component::DevtoolsInspectable for ActiveWork {}
 
+/// Why a run did not start.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum StartRunError {
+  #[error(transparent)]
+  Request(#[from] RequestError),
+  #[error("the runner refused to start the run: {0:?}")]
+  Rejected(Rejection),
+}
+
 /// Starts and stops the runner of the open project and publishes its status.
 #[derive(Clone)]
 pub struct Runners {
@@ -113,6 +125,9 @@ struct Inner {
   runner_exe: PathBuf,
   runtime: Handle,
   status: watch::Sender<RunnerStatus>,
+  /// Counts the runner's run change notifications; screens showing runs read them again on
+  /// every change.
+  runs: watch::Sender<u64>,
   /// Where the runner's events (a reconnect) are recorded for the status bar.
   activity: Activity,
   current: Mutex<Option<Connection>>,
@@ -135,6 +150,7 @@ impl Runners {
         runner_exe,
         runtime,
         status: watch::Sender::new(RunnerStatus::none(0)),
+        runs: watch::Sender::new(0),
         activity,
         current: Mutex::new(None),
         closing: AtomicBool::new(false),
@@ -197,7 +213,12 @@ impl Runners {
       &self.inner.runtime,
       self.inner.runner_exe.clone(),
       project.to_path_buf(),
-      Reporter::new(generation, self.inner.status.clone(), self.inner.activity.clone()),
+      Reporter::new(
+        generation,
+        self.inner.status.clone(),
+        self.inner.activity.clone(),
+        self.inner.runs.clone(),
+      ),
       previous,
     )
   }
@@ -223,8 +244,33 @@ impl Runners {
     self.inner.status.borrow().clone()
   }
 
-  /// Work that closing would interrupt. Runs do not exist yet and the runner protocol reports
-  /// none, so nothing is ever active; this is the one place that will ask the runner.
+  /// Changes whenever the runner reports that a run or its transcript changed.
+  pub fn run_changes(&self) -> watch::Receiver<u64> {
+    self.inner.runs.subscribe()
+  }
+
+  /// Asks the open project's runner to start a run of queued task `task`. Idempotent by `key`:
+  /// retrying after a lost reply answers with the run the first request created.
+  pub async fn start_run(&self, key: IdempotencyKey, task: TaskId) -> Result<RunId, StartRunError> {
+    let answer = match self.inner.current.lock().as_ref() {
+      Some(connection) => connection.request(Command::StartRun { key, task }),
+      None => return Err(StartRunError::Request(RequestError::NotConnected)),
+    };
+    // The task ended without answering, e.g. when the project closed meanwhile.
+    let reply = answer.await.unwrap_or(Err(RequestError::Lost))?;
+    match reply {
+      Reply::RunStarted { run } => Ok(run),
+      Reply::Rejected(rejection) => Err(StartRunError::Rejected(rejection)),
+      other => {
+        tracing::error!(?other, "unexpected reply to StartRun");
+        Err(StartRunError::Request(RequestError::Lost))
+      }
+    }
+  }
+
+  /// Work that closing would interrupt. The runner protocol does not list active work yet, so
+  /// nothing is listed and closing interrupts running agents (their runs are recorded as
+  /// interrupted); this is the one place that will ask the runner.
   pub fn active_work(&self) -> Vec<ActiveWork> {
     Vec::new()
   }

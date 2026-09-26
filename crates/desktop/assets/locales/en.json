@@ -161,7 +161,14 @@
     },
     "status": {
       "draft": "Draft",
-      "queued": "Queued"
+      "queued": "Queued",
+      "running": "Running",
+      "waiting": "Needs you",
+      "paused": "Paused",
+      "interrupted": "Interrupted",
+      "succeeded": "Finished",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
     },
     "readiness": {
       "ready": "Ready to queue",
@@ -208,11 +215,182 @@
       "timeLimit": "Time limit",
       "minutes": "min",
       "createAndRun": "Create & run",
-      "runUnavailable": "Running tasks is not available in this version yet. Save the task as a draft for now.",
       "saveDraft": "Save as draft",
       "limitsBlockSave": "Correct the run budget and time limit to save the draft.",
       "savingDraft": "Saving draft…",
-      "repositoryPath": "{{owner}}/{{name}}"
+      "repositoryPath": "{{owner}}/{{name}}",
+      "starting": "Starting the run…",
+      "startingDetail": "Saving the task, checking its setup and handing it to the runner.",
+      "runExplanation": "Saves the task, queues it and starts its run in its own branch and worktree.",
+      "runNeedsDetails": "Add the missing details above to run the task."
+    }
+  },
+  "runs": {
+    "tokens": "{{count}} tokens",
+    "cached": "Cached input",
+    "cachedValue": "{{count}} · not counted",
+    "page": {
+      "breadcrumb": "{{project}} / Tasks / {{task}}",
+      "pause": "Pause run",
+      "cancel": "Cancel run",
+      "loading": "Loading the task",
+      "loadingDetail": "Reading the task and its latest run.",
+      "loadFailed": "The task cannot be read",
+      "draft": "Draft · not queued for a run",
+      "queued": "Queued · its run has not started",
+      "describe": {
+        "pending": "Run {{run}} · starting",
+        "starting": "Run {{run}} · Attempt {{attempt}} · starting",
+        "working": "Run {{run}} · Attempt {{attempt}} · {{step}} · {{agent}} working",
+        "paused": "Run {{run}} · Attempt {{attempt}} · paused at {{step}}",
+        "interrupted": "Run {{run}} · Attempt {{attempt}} · interrupted at {{step}}",
+        "succeeded": "Run {{run}} · Attempt {{attempt}} · every step passed",
+        "failed": "Run {{run}} · Attempt {{attempt}} · failed at {{step}}",
+        "cancelled": "Run {{run}} · Attempt {{attempt}} · cancelled"
+      },
+      "tabs": {
+        "summary": "Summary",
+        "conversation": "Conversation",
+        "changes": "Changes",
+        "activity": "Activity",
+        "artifacts": "Artifacts"
+      }
+    },
+    "step": {
+      "pending": "Waiting",
+      "running": "Running",
+      "waiting": "Needs you",
+      "passed": "Done",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    },
+    "permissions": {
+      "value": "{{agent}} · {{access}}",
+      "readOnly": "Read-only",
+      "write": "Edits files in the run worktree"
+    },
+    "summary": {
+      "execution": "Execution",
+      "stepDetail": "{{agent}} · {{state}}",
+      "latest": "Latest activity",
+      "latestStarted": "{{time}}  {{step}} · {{agent}} started",
+      "latestEnded": "{{time}}  {{step}} · {{agent}} finished",
+      "thisRun": "This run",
+      "pipeline": "Pipeline",
+      "pipelineValue": "{{name}} · {{version}}",
+      "branch": "Branch",
+      "base": "Base",
+      "model": "Model",
+      "tokens": "Tokens used",
+      "time": "Active agent time",
+      "permissions": "Permissions",
+      "snapshotNote": "Configuration updates do not change this run’s saved versions.",
+      "notice": {
+        "draftTitle": "This task is a draft",
+        "draftDetail": "A run starts from Create & run once the task has every detail.",
+        "queuedTitle": "The run has not started",
+        "queuedDetail": "The task is queued. Its run starts when the runner accepts it; Create & run on the new task form retries without starting a second run.",
+        "runningTitle": "{{step}} is running",
+        "runningDetail": "The agent works in the run’s own worktree and branch; your checkout is not touched. Pausing and cancelling come in a later version.",
+        "interruptedTitle": "The run was interrupted at {{step}}",
+        "interruptedDetail": "Its agent was stopped when the runner stopped. The run keeps its last checkpoint; continuing it comes in a later version.",
+        "succeededTitle": "Every step passed",
+        "succeededDetail": "The run’s changes are committed on {{branch}}.",
+        "failedTitle": "The run failed at {{step}}",
+        "failedDetail": "Activity shows what the agent reported.",
+        "cancelledTitle": "The run was cancelled",
+        "cancelledDetail": "Completed work stays on {{branch}}."
+      }
+    },
+    "activity": {
+      "allSteps": {
+        "one": "All steps · {{count}} execution",
+        "other": "All steps · {{count}} executions"
+      },
+      "stepOption": "{{number}} · {{step}} · {{agent}}",
+      "showRaw": "Show raw lines",
+      "following": "Following live",
+      "notFollowing": "Not following",
+      "ended": "Run ended",
+      "stepTitle": "{{step}} · {{agent}}",
+      "headerRunning": "{{model}} · invocation {{count}} · started {{start}}",
+      "headerFinished": {
+        "one": "{{model}} · {{count}} invocation · {{start}}–{{end}}",
+        "other": "{{model}} · {{count}} invocations · {{start}}–{{end}}"
+      },
+      "agentMessage": "agent message",
+      "reasoning": "Reasoning summary",
+      "commandRunning": "running",
+      "exit": "exit {{code}}",
+      "exitDuration": "exit {{code}} · {{seconds}} s",
+      "declined": "declined · blocked by the sandbox",
+      "declinedDetail": "Blocked by this run’s permissions. The agent was told and continued without it.",
+      "fileAdded": "A",
+      "fileModified": "M",
+      "fileDeleted": "D",
+      "usage": "Usage reported",
+      "usageMeta": "in {{input}} · out {{output}} · cached {{cached}} not counted",
+      "error": "The agent CLI reported an error",
+      "problem": {
+        "unavailableVariable": "The prompt uses {{variable}}, which has no value in this run",
+        "couldNotStart": "The agent could not be started",
+        "checkpointFailed": "The step’s changes could not be committed"
+      },
+      "unparsed": {
+        "one": "{{count}} unparsed line",
+        "other": "{{count}} unparsed lines"
+      },
+      "rawOutput": "raw output",
+      "stderrLine": "stderr  {{line}}",
+      "outputTrimmed": "{{count}} earlier lines are not shown",
+      "jump": "Jump to latest",
+      "jumpNew": "Jump to latest · {{count}} new",
+      "working": "{{agent}} is working · last event {{elapsed}} ago",
+      "workingStarted": "{{agent}} is starting",
+      "emptyTitle": "No activity yet",
+      "emptyNoRun": "Entries appear here once the task’s run starts its first agent.",
+      "emptyStarting": "Entries appear here as soon as the first agent reports.",
+      "emptyNone": "The run’s agents reported nothing.",
+      "loadingTitle": "Loading activity for Run {{run}}",
+      "loadingDetail": "Reading the saved transcript. Live entries continue after it loads.",
+      "failedTitle": "Couldn’t load activity",
+      "failedDetail": "The transcript could not be read. The run itself is unaffected and keeps working.",
+      "tryAgain": "Try again",
+      "panel": {
+        "title": "Current invocation",
+        "none": "No agent has started yet.",
+        "step": "Step",
+        "stepValue": "{{number}} · {{step}} · attempt {{attempt}}",
+        "agent": "Agent",
+        "agentValue": "{{agent}} · {{model}}",
+        "invocation": "Invocation",
+        "started": "Started",
+        "input": "Input tokens",
+        "output": "Output tokens",
+        "counted": "Counted",
+        "runTotal": "Run total",
+        "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget."
+      }
+    },
+    "preflight": {
+      "pipelineNotPublished": "The task’s pipeline has no published version.",
+      "noSteps": "The pipeline has no steps.",
+      "toolStep": "Step “{{step}}” calls a tool; tool steps cannot run in this version yet.",
+      "approvalGate": "Step “{{step}}” waits for an approval; approval gates cannot run in this version yet.",
+      "profileNotPublished": "Step “{{step}}” uses an agent profile without a published version.",
+      "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
+      "unsupportedProvider": "Step “{{step}}” runs on a provider other than Codex; only Codex runs in this version.",
+      "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
+      "notAGitRepository": "The project folder is not a git repository.",
+      "noCommits": "The repository has no commit to start the run from."
+    },
+    "start": {
+      "incomplete": "Add the missing details before running the task.",
+      "runnerUnavailable": "The runner is not connected. Try again once it is online.",
+      "lost": "The runner stopped answering. Try again; the same run is started, never a second one.",
+      "taskMissing": "The task no longer exists.",
+      "notQueued": "The task is not queued for a run.",
+      "failed": "The runner could not start the run. The runner log says why."
     }
   },
   "pullRequests": {

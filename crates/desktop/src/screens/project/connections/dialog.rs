@@ -202,11 +202,11 @@ impl ConnectionDialog {
     });
   }
 
-  /// The program to check (chosen, or the first found on the `PATH`) and what its check found.
+  /// The program to check (chosen, or the newest found on the `PATH`) and what its check found.
   fn program(&self, ctx: &mut Ctx) -> Program {
     let provider = self.provider.get().0;
     let detect = ctx.future(provider, |provider| async move {
-      background::run(move || Detected(probe::detect(provider.program_name()))).await
+      background::run(move || Detected(probe::detect_agent(provider))).await
     });
     let detected = detect.state().get();
     let found = detected.data.clone().unwrap_or_default().0;

@@ -1,5 +1,6 @@
 //! Project shell: the sidebar (`zo9Py`) beside the open project screen — the overview
-//! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), pull requests (`wGtxT`) and one pull request
+//! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), a task (`RD4pc`, `SfXU1`),
+//! pull requests (`wGtxT`) and one pull request
 //! (`Rrmhf`), agent profiles (`WPmtS`),
 //! connections (`a4Lqb`) or Project settings (`QV1af`), above the status bar (`pmOpt`). The shell reads the project's
 //! tasks once and hands them to the sidebar, the screen and the status bar.
@@ -14,6 +15,7 @@ mod pull_requests;
 mod runner;
 mod settings;
 mod sidebar;
+mod task;
 mod task_rows;
 mod tasks;
 
@@ -26,7 +28,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::id::ResourceId;
+use orchester_core::id::{ResourceId, TaskId};
 
 use self::{
   agents::AgentsScreen,
@@ -36,6 +38,7 @@ use self::{
   pull_requests::{PullRequestProps, PullRequestScreen, PullRequestsScreen},
   settings::SettingsScreen,
   sidebar::sidebar,
+  task::{TaskProps, TaskScreen},
   tasks::{TasksProps, TasksScreen},
 };
 use super::status_bar::{ProjectBar, StatusBar, StatusBarProps};
@@ -53,6 +56,8 @@ pub enum Section {
   Overview,
   Tasks,
   NewTask,
+  /// One task and its latest run (`RD4pc`, `SfXU1`).
+  Task(TaskId),
   PullRequests,
   /// One pull request of the linked repository, by number (`Rrmhf`).
   PullRequest(u64),
@@ -133,6 +138,11 @@ impl ProjectNav {
     requested
   }
 
+  /// Opens a task's page.
+  pub fn show_task(&self, task: TaskId) {
+    self.show(Section::Task(task));
+  }
+
   /// Tasks were saved; the shell reads them again.
   pub fn tasks_changed(&self) {
     self.revision.update(|revision| *revision += 1);
@@ -188,7 +198,8 @@ impl Component for ProjectShell {
       .expect("the root provides Runners before mounting screens");
     let status = runner_status(ctx, &runners);
     let runner = status.state_for(&open.repo_root);
-    let tasks = self.tasks(ctx, &open);
+    let runs = run_changes(ctx, &runners);
+    let tasks = self.tasks(ctx, &open, runs);
     let section = self.nav.section.get();
     let content = match section {
       Section::Overview => {
@@ -219,6 +230,14 @@ impl Component for ProjectShell {
           pipelines: tasks.ready().map(|tasks| tasks.pipelines.clone()),
         },
       ),
+      Section::Task(task) => ctx.mount_keyed::<TaskScreen>(
+        &format!("task-{task}"),
+        TaskProps {
+          project: open.clone(),
+          task,
+          revision: (self.nav.revision.get(), runs),
+        },
+      ),
       Section::PullRequests => ctx.mount_keyed::<PullRequestsScreen>("pull-requests", open.clone()),
       Section::PullRequest(number) => ctx.mount_keyed::<PullRequestScreen>(
         &format!("pull-request-{number}"),
@@ -235,7 +254,7 @@ impl Component for ProjectShell {
       project: Some(ProjectBar {
         repo_root: open.repo_root.clone(),
         runner: status,
-        queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks)),
+        queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
       }),
     };
     Column::new()
@@ -253,9 +272,10 @@ impl Component for ProjectShell {
 }
 
 impl ProjectShell {
-  fn tasks(&self, ctx: &mut Ctx, open: &OpenProject) -> TasksState {
-    let deps = (open.repo_root.clone(), self.nav.revision.get());
-    let load = ctx.future(deps, |(repo_root, _)| async move {
+  /// The project's tasks, read again whenever tasks were saved or the runner changed a run.
+  fn tasks(&self, ctx: &mut Ctx, open: &OpenProject, runs: u64) -> TasksState {
+    let deps = (open.repo_root.clone(), self.nav.revision.get(), runs);
+    let load = ctx.future(deps, |(repo_root, ..)| async move {
       background::run(move || ProjectTasks::load(&repo_root))
         .await?
         .map_err(|error| {
@@ -271,6 +291,20 @@ impl ProjectShell {
       (None, None) => TasksState::Loading,
     }
   }
+}
+
+/// Counts the runner's run change notifications, so screens showing runs read them again.
+fn run_changes(ctx: &mut Ctx, runners: &Runners) -> u64 {
+  let changes = ctx.stream(runners.clone(), |runners, emitter: StreamEmitter<u64, ()>| async move {
+    let mut updates = runners.run_changes();
+    loop {
+      let revision = *updates.borrow_and_update();
+      if !emitter.emit(revision) || updates.changed().await.is_err() {
+        return;
+      }
+    }
+  });
+  changes.state().get().data.unwrap_or(0)
 }
 
 fn runner_status(ctx: &mut Ctx, runners: &Runners) -> RunnerStatus {

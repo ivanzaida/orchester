@@ -215,7 +215,7 @@ fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
 
 /// Filters, the selection bar, the task table and its footer (`npcrO`).
 fn library(ctx: &mut Ctx, tasks: &ProjectTasks, tab: TaskTab) -> Element {
-  let rows = Arc::new(list::rows(&tasks.tasks, &tasks.pipelines, tab));
+  let rows = Arc::new(list::rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, tab));
   let table: Element = if rows.is_empty() {
     Column::new()
       .width(Dimension::Pct(100.0))

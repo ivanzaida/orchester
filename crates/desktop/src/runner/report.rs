@@ -107,14 +107,28 @@ pub(super) struct Reporter {
   generation: u64,
   status: watch::Sender<RunnerStatus>,
   activity: Activity,
+  runs: watch::Sender<u64>,
 }
 
 impl Reporter {
-  pub(super) fn new(generation: u64, status: watch::Sender<RunnerStatus>, activity: Activity) -> Self {
+  pub(super) fn new(
+    generation: u64,
+    status: watch::Sender<RunnerStatus>,
+    activity: Activity,
+    runs: watch::Sender<u64>,
+  ) -> Self {
     Self {
       generation,
       status,
       activity,
+      runs,
+    }
+  }
+
+  /// The runner changed a run or its transcript: screens showing runs read them again.
+  pub(super) fn runs_changed(&self) {
+    if self.status.borrow().generation == self.generation {
+      self.runs.send_modify(|revision| *revision += 1);
     }
   }
 

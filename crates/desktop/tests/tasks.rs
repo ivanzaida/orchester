@@ -7,7 +7,7 @@ use orchester_core::{
   project::{Project, ProjectKey},
   resource::{Pipeline, PromptText, RepositoryAccess, Slug, Step, StepKey, StepKind},
   store::{ResourceStore, TaskStore},
-  task::{MissingDetail, Task, TaskDetails, TaskStatus},
+  task::{MissingDetail, Task, TaskDetails},
   time::Timestamp,
 };
 use orchester_desktop::{
@@ -255,12 +255,12 @@ fn tabs_filter_and_count_tasks() {
   for unavailable in [TaskTab::Queue, TaskTab::NeedsReview, TaskTab::Done] {
     assert!(!unavailable.is_available());
     assert_eq!(unavailable.count(&tasks), None);
-    assert!(list::rows(&tasks, &[], unavailable).is_empty());
+    assert!(list::rows(&tasks, &[], &Default::default(), unavailable).is_empty());
   }
-  let drafts = list::rows(&tasks, &[], TaskTab::Drafts);
+  let drafts = list::rows(&tasks, &[], &Default::default(), TaskTab::Drafts);
   assert_eq!(drafts.len(), 1);
   assert_eq!(&*drafts[0].title, "Incomplete");
-  assert_eq!(drafts[0].status, TaskStatus::Draft);
+  assert_eq!(drafts[0].phase, orchester_core::run::TaskPhase::Draft);
   assert_eq!(
     DraftSummary::of(&tasks),
     DraftSummary {
@@ -268,7 +268,7 @@ fn tabs_filter_and_count_tasks() {
       incomplete: 1
     }
   );
-  let recent = list::recent(&tasks, &[], 1);
+  let recent = list::recent(&tasks, &[], &Default::default(), 1);
   assert_eq!(&*recent[0].title, "To queue");
 }
 
@@ -332,8 +332,11 @@ fn task_list_keeps_task_order_and_overview_shows_newest_first() {
   let tasks = stored_tasks();
   let titles = |rows: Vec<list::TaskRow>| rows.iter().map(|row| row.title.to_string()).collect::<Vec<_>>();
   assert_eq!(
-    titles(list::rows(&tasks, &[], TaskTab::All)),
+    titles(list::rows(&tasks, &[], &Default::default(), TaskTab::All)),
     ["Incomplete", "To queue"]
   );
-  assert_eq!(titles(list::recent(&tasks, &[], 2)), ["To queue", "Incomplete"]);
+  assert_eq!(
+    titles(list::recent(&tasks, &[], &Default::default(), 2)),
+    ["To queue", "Incomplete"]
+  );
 }

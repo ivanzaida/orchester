@@ -4,7 +4,7 @@ use lurq::{
 };
 
 use super::tokens::{
-  FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_SELECT_MENU,
+  FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_PILL, RADIUS_SELECT_MENU,
   SPACE_COLUMNS, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM,
   SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK,
   SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK,
@@ -158,16 +158,19 @@ pub enum ExtraRadius {
   Mark,
   /// An open select menu (`u0ByM`).
   SelectMenu,
+  /// Fully rounded ends: the switch track and its knob (`K8ItM`, `Y0aZS`).
+  Pill,
 }
 
 impl ExtraRadius {
-  const ALL: [Self; 3] = [Self::Notice, Self::Mark, Self::SelectMenu];
+  const ALL: [Self; 4] = [Self::Notice, Self::Mark, Self::SelectMenu, Self::Pill];
 
   fn name(self) -> &'static str {
     match self {
       Self::Notice => "notice",
       Self::Mark => "mark",
       Self::SelectMenu => "select-menu",
+      Self::Pill => "pill",
     }
   }
 
@@ -176,6 +179,7 @@ impl ExtraRadius {
       Self::Notice => RADIUS_NOTICE,
       Self::Mark => RADIUS_MARK,
       Self::SelectMenu => RADIUS_SELECT_MENU,
+      Self::Pill => RADIUS_PILL,
     }
   }
 
