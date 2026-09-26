@@ -117,7 +117,7 @@ fn project_guard(places: &Places, matched: &RouteMatch) -> GuardAction {
   }
   let nearest = match Route::nearest(matched.path()) {
     Some(route @ Route::Project(..)) => route,
-    _ => Route::Project(project, Page::Overview),
+    _ => Route::Project(project, Page::OVERVIEW),
   };
   redirect(nearest)
 }

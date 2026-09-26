@@ -13,12 +13,13 @@ use lurq::{
 use orchester_core::id::{ConnectionId, ProjectId, ResourceId, TaskId};
 use orchester_desktop::{
   navigation::{
-    Navigation, Places, Start,
-    route::{AgentSelection, ConnectionTab, Page, Route, SettingsTab},
+    Navigation, Places, Start, forward,
+    route::{AgentSelection, ConnectionTab, Page, Route, SettingsTab, TaskPageTab},
     routes,
   },
   project_setup::ProjectDraft,
   session::AppSession,
+  tasks::{list::TaskTab, overview::OverviewTab},
   workspace::OpenProject,
 };
 use parking_lot::Mutex;
@@ -116,10 +117,13 @@ impl Window {
 
 fn pages() -> Vec<Page> {
   vec![
-    Page::Overview,
-    Page::Tasks,
+    Page::OVERVIEW,
+    Page::Overview(OverviewTab::NeedsYou),
+    Page::TASKS,
+    Page::Tasks(TaskTab::Drafts),
     Page::NewTask,
-    Page::Task(TaskId::generate()),
+    Page::task(TaskId::generate()),
+    Page::Task(TaskId::generate(), TaskPageTab::Activity),
     Page::PullRequests,
     Page::PullRequest(42),
     Page::Pipelines,
@@ -153,7 +157,7 @@ fn route_every_page_resolves_and_reads_back() {
 #[test]
 fn route_params_hold_the_ids_of_the_path() {
   let (project, task) = (ProjectId::generate(), TaskId::generate());
-  let path = Route::Project(project, Page::Task(task)).path();
+  let path = Route::Project(project, Page::task(task)).path();
   let matched = routes(&Places::default()).resolve(&path);
   let params = matched.last().expect("the task route").params();
   assert_eq!(params.get_parsed::<ProjectId>("project"), Some(project));
@@ -171,22 +175,47 @@ fn route_defaults_are_left_out_of_the_path() {
     Route::Project(project, Page::CONNECTIONS).path(),
     format!("/project/{project}/connections")
   );
+  assert_eq!(
+    Route::Project(project, Page::OVERVIEW).path(),
+    format!("/project/{project}")
+  );
+  assert_eq!(
+    Route::Project(project, Page::TASKS).path(),
+    format!("/project/{project}/tasks")
+  );
+  let task = TaskId::generate();
+  assert_eq!(
+    Route::Project(project, Page::task(task)).path(),
+    format!("/project/{project}/tasks/{task}")
+  );
+}
+
+#[test]
+fn route_tabs_are_part_of_the_path() {
+  let project = ProjectId::generate();
+  let drafts = Route::Project(project, Page::Tasks(TaskTab::Drafts)).path();
+  assert_eq!(drafts, format!("/project/{project}/tasks?tab=drafts"));
+  // A tab that cannot be opened yet, or does not exist, is the first tab.
+  let queue = format!("/project/{project}/tasks?tab=queue");
+  assert_eq!(Route::parse(&queue), Some(Route::Project(project, Page::TASKS)));
+  let unknown = format!("/project/{project}?tab=nothing");
+  assert_eq!(Route::parse(&unknown), Some(Route::Project(project, Page::OVERVIEW)));
 }
 
 #[test]
 fn route_start_is_replaced_by_the_start_screen() {
   let (window, project) = Window::on_project();
-  assert_eq!(window.path(), Route::Project(project, Page::Overview).path());
+  assert_eq!(window.path(), Route::Project(project, Page::OVERVIEW).path());
   assert!(!window.router.can_back(), "the empty start route left no entry");
   // Going to the start again leads to the start screen.
   window.navigation.back_to_start();
-  assert_eq!(window.path(), Route::Project(project, Page::Overview).path());
+  assert_eq!(window.path(), Route::Project(project, Page::OVERVIEW).path());
 }
 
 #[test]
 fn route_invalid_ids_fall_back_to_their_section() {
   let (window, project) = Window::on_project();
-  let tasks = Route::Project(project, Page::Tasks).path();
+  let tasks = Route::Project(project, Page::TASKS).path();
   window.router.push(format!("{tasks}/not-a-task"));
   assert_eq!(window.path(), tasks);
   let settings = Route::Project(project, Page::Settings(SettingsTab::General)).path();
@@ -200,16 +229,26 @@ fn route_invalid_ids_fall_back_to_their_section() {
 #[test]
 fn route_unknown_places_lead_to_the_start_screen() {
   let (window, project) = Window::on_project();
-  let overview = Route::Project(project, Page::Overview).path();
-  window.router.push(Route::Project(project, Page::Tasks).path());
+  let overview = Route::Project(project, Page::OVERVIEW).path();
+  window.router.push(Route::Project(project, Page::TASKS).path());
   window
     .router
-    .push(Route::Project(ProjectId::generate(), Page::Tasks).path());
+    .push(Route::Project(ProjectId::generate(), Page::TASKS).path());
   assert_eq!(window.path(), overview, "a project not opened in this session");
   window.router.push("/nowhere");
   assert_eq!(window.path(), overview);
   window.router.push(Route::Unavailable.path());
   assert_eq!(window.path(), overview, "no project was reported unavailable");
+}
+
+/// The entries of the history from the first, as going back and then forward visits them.
+fn entries(router: &RouterHandle) -> Vec<String> {
+  while router.back() {}
+  let mut paths = vec![router.path().get_untracked()];
+  while forward(router) {
+    paths.push(router.path().get_untracked());
+  }
+  paths
 }
 
 #[test]
@@ -219,16 +258,28 @@ fn route_created_project_takes_the_place_of_setup() {
   window.navigation.show_setup();
   assert_eq!(window.path(), Route::Setup.path());
   let created = window.project("kontur");
-  let overview = Route::Project(created.project.id(), Page::Overview).path();
+  let overview = Route::Project(created.project.id(), Page::OVERVIEW).path();
   window.navigation.open_project(created);
   assert_eq!(window.path(), overview);
-  assert!(window.router.back());
-  assert_eq!(window.path(), Route::Welcome.path(), "setup left no entry");
-  assert!(!window.router.can_back());
-  // With a project, the first-launch screen no longer applies: the window shows the project in
-  // its place, and opening it leads to the project.
+  // The first-launch screen no longer applies, and setup was submitted: the project is the only
+  // entry, and going forward does not reopen setup.
+  assert!(!window.router.can_back(), "the welcome entry shows the project");
+  assert!(!forward(&window.router), "setup is not visited again");
+  assert_eq!(window.path(), overview);
   assert!(!window.navigation.places().applies(Route::Welcome));
   window.router.push(Route::Setup.path());
   window.router.push(Route::Welcome.path());
   assert_eq!(window.path(), overview);
+}
+
+#[test]
+fn route_project_created_from_a_project_follows_it() {
+  let (window, first) = Window::on_project();
+  window.navigation.show_setup();
+  let created = window.project("second");
+  let second = Route::Project(created.project.id(), Page::OVERVIEW).path();
+  window.navigation.open_project(created);
+  assert_eq!(window.path(), second);
+  let first = Route::Project(first, Page::OVERVIEW).path();
+  assert_eq!(entries(&window.router), [first, second]);
 }

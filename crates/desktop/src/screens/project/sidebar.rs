@@ -93,12 +93,12 @@ fn primary_navigation(ctx: &Ctx, shown: Option<Page>, tasks: &TasksState, nav: &
   let items = [
     item(
       NavItem::new("nav-overview", Icon::LayoutDashboard, ctx.t("nav.overview")),
-      Page::Overview,
+      Page::OVERVIEW,
     ),
     NavItem::new("nav-orchestrator", Icon::MessagesSquare, ctx.t("nav.orchestrator")),
     item(
       NavItem::new("nav-tasks", Icon::CircleCheck, ctx.t("nav.tasks")),
-      Page::Tasks,
+      Page::TASKS,
     )
     .count(tasks.ready().map(|tasks| tasks.tasks.len())),
     item(

@@ -50,10 +50,11 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
   let open = shown.open.clone();
   let limits = shown.usage.map(|usage| usage.limits);
   match page {
-    Page::Overview => ctx.mount_keyed::<OverviewScreen>(
+    Page::Overview(tab) => ctx.mount_keyed::<OverviewScreen>(
       "overview",
       OverviewProps {
         open,
+        tab,
         tasks: shown.tasks,
         usage: shown.usage,
         runner: shown.runner,
@@ -61,10 +62,11 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         agents_working: shown.status.work().map(WorkSummary::agents_working),
       },
     ),
-    Page::Tasks => ctx.mount_keyed::<TasksScreen>(
+    Page::Tasks(tab) => ctx.mount_keyed::<TasksScreen>(
       "tasks",
       TasksProps {
         project: open.project.name().as_str().into(),
+        tab,
         tasks: shown.tasks,
       },
     ),
@@ -76,11 +78,12 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         limits,
       },
     ),
-    Page::Task(task) => ctx.mount_keyed::<TaskScreen>(
+    Page::Task(task, tab) => ctx.mount_keyed::<TaskScreen>(
       &format!("task-{task}"),
       TaskProps {
         project: open,
         task,
+        tab,
         revision: shown.revision,
         limits,
         runner: shown.runner,

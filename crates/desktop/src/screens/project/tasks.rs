@@ -11,7 +11,6 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text, VirtualizedList},
-  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -55,13 +54,13 @@ const FOOTER_HEIGHT: f32 = 30.0;
 #[derive(Clone, Debug, PartialEq)]
 pub struct TasksProps {
   pub project: Arc<str>,
+  pub tab: TaskTab,
   pub tasks: TasksState,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TasksProps {}
 
 pub struct TasksScreen {
-  tab: Signal<TaskTab>,
   nav: ProjectNav,
 }
 
@@ -70,7 +69,6 @@ impl Component for TasksScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      tab: ctx.signal(TaskTab::All),
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
@@ -80,7 +78,7 @@ impl Component for TasksScreen {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TasksProps>().clone();
     let nav = self.nav.clone();
-    let tab = self.tab.get();
+    let tab = props.tab;
     let body = match &props.tasks {
       TasksState::Loading => Column::new().into(),
       TasksState::Failed(error) => {
@@ -94,25 +92,24 @@ impl Component for TasksScreen {
       .height(Dimension::Pct(100.0))
       .child(topbar(ctx, &props.project, &nav))
       .child(page::screen_heading(&ctx.t("tasks.title"), &ctx.t("tasks.description")))
-      .child(self.tabs(ctx, props.tasks.ready()))
+      .child(self.tabs(ctx, tab, props.tasks.ready()))
       .child(body)
   }
 }
 
 impl TasksScreen {
-  fn tabs(&self, ctx: &Ctx, tasks: Option<&ProjectTasks>) -> Element {
-    let selected = self.tab.get();
+  fn tabs(&self, ctx: &Ctx, selected: TaskTab, tasks: Option<&ProjectTasks>) -> Element {
     let tabs = TaskTab::ALL.into_iter().map(|tab| {
       let item = Tab::new(tab_id(tab), ctx.t(tab.label_key()), Dimension::Px(TAB_ROW_HEIGHT))
         .min_width(Dimension::Px(tab_width(tab)));
       if !tab.is_available() {
         return item;
       }
-      let signal = self.tab.clone();
+      let nav = self.nav.clone();
       item
         .count(tasks.and_then(|tasks| tab.count(&tasks.tasks)))
         .selected(tab == selected)
-        .on_click(move || signal.set(tab))
+        .on_click(move || nav.show(Page::Tasks(tab)))
     });
     tab_row(
       Dimension::Px(TAB_ROW_HEIGHT),

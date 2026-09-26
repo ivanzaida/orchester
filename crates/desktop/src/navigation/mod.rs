@@ -2,6 +2,7 @@
 //! history. The root owns the router and provides [`Navigation`] to every screen; the project
 //! shell adds its own navigation for the pages inside it.
 
+pub(crate) mod entry;
 mod history;
 pub mod route;
 mod table;
@@ -14,7 +15,7 @@ use parking_lot::Mutex;
 
 use self::route::{Page, Route};
 pub use self::{
-  history::with_history_input,
+  history::{forward, with_history_input},
   table::{PROJECT_PARAM, routes},
 };
 use crate::{
@@ -95,7 +96,7 @@ impl Places {
     let route = match start {
       Start::Welcome => Route::Welcome,
       Start::Project(project) => {
-        let route = Route::Project(project.project.id(), Page::Overview);
+        let route = Route::Project(project.project.id(), Page::OVERVIEW);
         self.add_project(project);
         route
       }
@@ -111,7 +112,7 @@ impl Places {
   /// A project was created: it is where the application now starts, and the first-launch and
   /// unavailable screens no longer apply.
   fn created(&self, project: OpenProject) -> Route {
-    let route = Route::Project(project.project.id(), Page::Overview);
+    let route = Route::Project(project.project.id(), Page::OVERVIEW);
     let mut known = self.0.lock();
     known.projects.insert(project.project.id(), project);
     known.start = Some(route);
@@ -174,18 +175,24 @@ impl Navigation {
   }
 
   pub fn show_setup(&self) {
-    self.router.push(Route::Setup.path());
+    entry::push(&self.router.navigator(), Route::Setup.path());
   }
 
   /// Back to the screen chosen at startup.
   pub fn back_to_start(&self) {
-    self.router.push(Route::Start.path());
+    entry::push(&self.router.navigator(), Route::Start.path());
   }
 
   /// Opens a project that was just created: its overview takes the place of the setup form,
-  /// so going back does not return to a form that was already submitted.
+  /// so going back does not return to a form that was already submitted. The welcome or
+  /// unavailable screen setup was opened from no longer applies and shows the project too, so
+  /// history returns to that entry instead of holding the project twice.
   pub fn open_project(&self, project: OpenProject) {
     let route = self.places.created(project);
-    self.router.replace(route.path());
+    let navigator = self.router.navigator();
+    if matches!(entry::from(&navigator), Some(Route::Welcome | Route::Unavailable)) {
+      entry::finish_back(&navigator);
+    }
+    entry::replace(&navigator, route.path());
   }
 }

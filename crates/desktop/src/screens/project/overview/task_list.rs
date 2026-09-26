@@ -8,7 +8,6 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, dimension::Dimension},
 };
@@ -37,9 +36,8 @@ const LIST_FOOTER_HEIGHT: f32 = 54.0;
 /// Tasks shown in the overview; the task list has all of them.
 const RECENT_TASKS: usize = 6;
 
-pub(super) fn task_list(ctx: &Ctx, tasks: &ProjectTasks, tab: &Signal<OverviewTab>, nav: &ProjectNav) -> Element {
+pub(super) fn task_list(ctx: &Ctx, tasks: &ProjectTasks, selected: OverviewTab, nav: &ProjectNav) -> Element {
   let now = Timestamp::now();
-  let selected = tab.get();
   let rows = selected.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, RECENT_TASKS);
   let pipeline_filter = Row::new()
     .spacing(SpacingSize::Sm)
@@ -53,11 +51,11 @@ pub(super) fn task_list(ctx: &Ctx, tasks: &ProjectTasks, tab: &Signal<OverviewTa
     SpacingSize::Sm,
     None,
     OverviewTab::ALL.into_iter().map(|each| {
-      let signal = tab.clone();
+      let nav = nav.clone();
       Tab::new(tab_id(each), ctx.t(each.label_key()), Dimension::Px(TAB_HEIGHT))
         .count(Some(each.count(&tasks.tasks, &tasks.phases)))
         .selected(each == selected)
-        .on_click(move || signal.set(each))
+        .on_click(move || nav.show(Page::Overview(each)))
     }),
   );
   let list: Vec<Element> = if rows.is_empty() {
@@ -110,7 +108,7 @@ fn list_footer(ctx: &Ctx, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
     .align_items(Alignment::Center)
     .child(Text::new(&message_text(ctx, &footer(&tasks.tasks, &tasks.phases))).variant(TypographyStyle::Caption))
     .child(
-      pressable(surface().id("view-all-tasks"), move || nav.show(Page::Tasks))
+      pressable(surface().id("view-all-tasks"), move || nav.show(Page::TASKS))
         .hovered_style(Style::new().background(PaletteColor::AccentMuted))
         .child(
           Text::new(&ctx.t("overview.viewAllTasks"))

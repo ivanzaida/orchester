@@ -11,6 +11,8 @@ use lurq::{
   router::RouterHandle,
 };
 
+use super::entry;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Step {
   Back,
@@ -54,8 +56,22 @@ fn go(router: &RouterHandle, step: Step) {
   // At either end of the history there is nowhere to go, and the step does nothing.
   match step {
     Step::Back => router.back(),
-    Step::Forward => router.forward(),
+    Step::Forward => forward(router),
   };
+}
+
+/// Goes forward a step; `false` when there is nowhere to go. A finished step (a submitted form)
+/// is only ever the last entry, and going forward onto it returns at once, as if history ended
+/// before it.
+pub fn forward(router: &RouterHandle) -> bool {
+  if !router.forward() {
+    return false;
+  }
+  if entry::is_finished(&router.navigator()) {
+    router.back();
+    return false;
+  }
+  true
 }
 
 fn mouse_step(button: MouseButton) -> Option<Step> {
