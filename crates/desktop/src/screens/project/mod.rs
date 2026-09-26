@@ -176,7 +176,7 @@ impl Component for ProjectShell {
       .tasks(ctx, &open, runs)
       .without_runner(runner == RunnerState::Online);
     let usage = self.usage(ctx, &open, runs);
-    let item = Route::current_page(ctx).map(|page| page.sidebar_item());
+    let page = Route::current_page(ctx);
     ctx.provide(Shown {
       open: open.clone(),
       status: status.clone(),
@@ -199,7 +199,7 @@ impl Component for ProjectShell {
         Row::new()
           .width(Dimension::Pct(100.0))
           .flex(1.0)
-          .child(sidebar(ctx, &open, item, &tasks, &self.nav))
+          .child(sidebar(ctx, &open, page, &tasks, &self.nav))
           .child(
             Column::new()
               .flex(1.0)

@@ -1,5 +1,6 @@
 //! Navigation item (`TSJpn`): icon, label and an optional count. An item is the selected
 //! screen, a screen that can be opened, or visibly unavailable when the screen does not exist yet.
+//! A selected item can still be pressed when it leads elsewhere, e.g. from a task to the tasks.
 //! Navigation is outside any form, so no item takes focus: they are pointer-only (see
 //! `ui::pressable`).
 
@@ -7,7 +8,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, TypographyStyle},
-  components::{Row, Text},
+  components::{Button, Row, Text},
   layout::Alignment,
   node::{CursorIcon, Element, Style, dimension::Dimension},
 };
@@ -37,7 +38,9 @@ enum Density {
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
 enum State {
-  Selected,
+  /// The item of the screen shown. With a handler it leads somewhere else in that screen's
+  /// section, e.g. from a task back to the task list.
+  Selected(Option<Handler>),
   Available(Handler),
   Unavailable,
 }
@@ -64,17 +67,23 @@ impl NavItem {
     }
   }
 
-  /// Opens the item's screen. A selected item opens nothing.
+  /// Opens the item's screen; a selected item stays selected.
   pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    if !matches!(self.state, State::Selected) {
-      self.state = State::Available(Arc::new(handler));
-    }
+    let handler: Handler = Arc::new(handler);
+    self.state = match self.state {
+      State::Selected(_) => State::Selected(Some(handler)),
+      State::Available(_) | State::Unavailable => State::Available(handler),
+    };
     self
   }
 
   pub fn selected(mut self, selected: bool) -> Self {
     if selected {
-      self.state = State::Selected;
+      self.state = match self.state {
+        State::Available(handler) => State::Selected(Some(handler)),
+        State::Selected(handler) => State::Selected(handler),
+        State::Unavailable => State::Selected(None),
+      };
     }
     self
   }
@@ -104,7 +113,7 @@ impl NavItem {
 impl From<NavItem> for Element {
   fn from(item: NavItem) -> Self {
     let color = match item.state {
-      State::Selected => PaletteColor::TextPrimary,
+      State::Selected(_) => PaletteColor::TextPrimary,
       State::Available(_) => PaletteColor::TextSecondary,
       State::Unavailable => PaletteColor::TextMuted,
     };
@@ -135,23 +144,23 @@ impl From<NavItem> for Element {
           .map(|count| Text::new(&count.to_string()).variant(ExtraTypography::NavCount.role())),
       );
     match item.state {
-      State::Selected => row
+      State::Selected(None) => row
         .id(item.id)
         .background(PaletteColor::AccentMuted)
         .describe("state", "selected")
         .into(),
-      // A button around the row, so a press on it keeps the focus where it is.
-      State::Available(handler) => pressable(
-        surface()
-          .id(item.id)
-          .width(Dimension::Pct(100.0))
-          .height(Dimension::Px(height))
-          .rounded(RadiusSize::Sm)
-          .child(row.hovered_style(Style::new().background(PaletteColor::AccentMuted))),
-        move || handler(),
-      )
-      .describe("state", "enabled")
-      .into(),
+      State::Selected(Some(handler)) => {
+        let row = row.background(PaletteColor::AccentMuted);
+        pressable_item(item.id, height, row, handler)
+          .describe("state", "selected")
+          .into()
+      }
+      State::Available(handler) => {
+        let row = row.hovered_style(Style::new().background(PaletteColor::AccentMuted));
+        pressable_item(item.id, height, row, handler)
+          .describe("state", "enabled")
+          .into()
+      }
       State::Unavailable => row
         .id(item.id)
         .describe("state", "unavailable")
@@ -160,4 +169,17 @@ impl From<NavItem> for Element {
         .into(),
     }
   }
+}
+
+/// A button around the row, so a press on it keeps the focus where it is.
+fn pressable_item(id: &'static str, height: f32, row: Row, handler: Handler) -> Button {
+  pressable(
+    surface()
+      .id(id)
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(height))
+      .rounded(RadiusSize::Sm)
+      .child(row),
+    move || handler(),
+  )
 }
