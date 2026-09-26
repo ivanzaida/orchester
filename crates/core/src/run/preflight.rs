@@ -2,9 +2,9 @@
 //! configuration, authorization, runner readiness"). Each problem is a typed, visible reason;
 //! a run with any problem does not start.
 //!
-//! This version of the runner executes agent steps one after another on the Codex CLI; tool
-//! steps, approval gates and other providers are reported as not supported yet rather than
-//! skipped.
+//! This version of the runner executes graphs of agent steps on the Codex CLI — parallel steps,
+//! failure routes and retries included; tool steps, approval gates and other providers are
+//! reported as not supported yet rather than skipped.
 
 use std::collections::BTreeMap;
 

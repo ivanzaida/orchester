@@ -362,18 +362,21 @@ impl Run {
         self.set_step(*execution, status);
       }
       RunEventKind::StepPassed { execution } => self.set_step(*execution, StepStatus::Passed),
-      RunEventKind::StepFailed { execution } => self.set_step(*execution, StepStatus::Failed),
+      RunEventKind::StepFailed { execution, reason } => self.current_execution_mut(*execution).fail(*reason),
       RunEventKind::StepSkipped { execution } => self.set_step(*execution, StepStatus::Skipped),
     }
   }
 
   fn set_step(&mut self, execution: StepExecutionId, status: StepStatus) {
+    self.current_execution_mut(execution).set_status(status);
+  }
+
+  fn current_execution_mut(&mut self, execution: StepExecutionId) -> &mut StepExecution {
     self
       .attempts
       .last_mut()
       .and_then(|attempt| attempt.execution_mut(execution))
       .expect("Run::check found the execution in the current attempt")
-      .set_status(status);
   }
 
   fn end(&mut self, status: RunStatus, attempt: AttemptStatus) {

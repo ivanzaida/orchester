@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use super::status::{AttemptReason, AttemptStatus, StepStatus};
+use super::status::{AttemptReason, AttemptStatus, StepFailure, StepStatus};
 use crate::{
   id::{AttemptId, CheckpointId, StepExecutionId},
   resource::StepKey,
@@ -14,12 +14,25 @@ pub struct StepExecution {
   id: StepExecutionId,
   step: StepKey,
   status: StepStatus,
+  failure: Option<StepFailure>,
 }
 
 impl StepExecution {
   /// Rebuilds a persisted execution; [`super::Run::restore`] checks it against the run.
   pub const fn new(id: StepExecutionId, step: StepKey, status: StepStatus) -> Self {
-    Self { id, step, status }
+    Self {
+      id,
+      step,
+      status,
+      failure: None,
+    }
+  }
+
+  /// A persisted failed execution with the reason it failed for.
+  #[must_use]
+  pub const fn with_failure(mut self, failure: Option<StepFailure>) -> Self {
+    self.failure = failure;
+    self
   }
 
   pub const fn id(&self) -> StepExecutionId {
@@ -34,8 +47,18 @@ impl StepExecution {
     self.status
   }
 
+  /// Why a failed execution failed, when its log says.
+  pub const fn failure(&self) -> Option<StepFailure> {
+    self.failure
+  }
+
   pub(super) const fn set_status(&mut self, status: StepStatus) {
     self.status = status;
+  }
+
+  pub(super) const fn fail(&mut self, failure: Option<StepFailure>) {
+    self.status = StepStatus::Failed;
+    self.failure = failure;
   }
 }
 

@@ -107,6 +107,11 @@ pub enum RunnerProblem {
   CouldNotStart { detail: String },
   /// The step's changes could not be committed as a checkpoint.
   CheckpointFailed { detail: String },
+  /// The step's changes conflict with what other steps changed on the run's branch in `files`;
+  /// they stay on the step's own branch.
+  MergeConflict { branch: String, files: Vec<String> },
+  /// The execution used its step budget of `budget` tokens; its agent was ended.
+  StepBudgetReached { budget: u64 },
 }
 
 impl AgentEvent {
@@ -161,6 +166,7 @@ pub struct InvocationTracker {
   usage: TokenUsage,
   completed_turns: u32,
   failure: Option<String>,
+  last_message: Option<String>,
 }
 
 impl InvocationTracker {
@@ -172,6 +178,7 @@ impl InvocationTracker {
         self.completed_turns += 1;
       }
       AgentEvent::TurnFailed { message } => self.failure = Some(message.clone()),
+      AgentEvent::Message { text } => self.last_message = Some(text.clone()),
       AgentEvent::Error { message } if self.failure.is_none() => self.failure = Some(message.clone()),
       _ => {}
     }
@@ -183,6 +190,11 @@ impl InvocationTracker {
 
   pub const fn usage(&self) -> TokenUsage {
     self.usage
+  }
+
+  /// The last message the agent wrote: its final message once the invocation ended.
+  pub fn last_message(&self) -> Option<&str> {
+    self.last_message.as_deref()
   }
 
   /// How the invocation ended, given the CLI's exit code (`None`: no code, e.g. killed).

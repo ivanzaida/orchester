@@ -5,7 +5,7 @@ use super::{
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
   state::Run,
-  status::{AttemptReason, PlanDecision, RunFailure, StepStatus, WaitReason},
+  status::{AttemptReason, PlanDecision, RunFailure, StepFailure, StepStatus, WaitReason},
 };
 use crate::{
   id::{AttemptId, StepExecutionId},
@@ -71,12 +71,21 @@ impl Run {
     })
   }
 
-  /// Fails an active step and routes the failure: with a failure route that has retries left,
-  /// a new attempt re-executes the route's target and everything downstream of it; otherwise
-  /// the run fails. Open executions of the ending attempt are skipped either way.
-  pub fn fail_step(&mut self, execution: StepExecutionId, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+  /// Fails an active step for `reason` and routes the failure: with a failure route that has
+  /// retries left, a new attempt re-executes the route's target and everything downstream of it;
+  /// otherwise the run fails. Open executions of the ending attempt — steps running in parallel
+  /// included — are skipped either way, so their agents must be ended.
+  pub fn fail_step(
+    &mut self,
+    execution: StepExecutionId,
+    reason: StepFailure,
+    now: Timestamp,
+  ) -> Result<Vec<RunEvent>, RunError> {
     self.transition(now, |transition| {
-      transition.record(RunEventKind::StepFailed { execution })?;
+      transition.record(RunEventKind::StepFailed {
+        execution,
+        reason: Some(reason),
+      })?;
       transition.skip_open()?;
       let run = &transition.run;
       let step = run

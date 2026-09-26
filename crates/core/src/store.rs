@@ -10,7 +10,7 @@ use crate::{
   repository::{GitHubRepo, RepositoryLink},
   resource::{Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   revision::Revision,
-  run::{ActivityEntry, Checkpoint, Invocation, NewRun, Run, RunEvent},
+  run::{ActivityEntry, Checkpoint, Invocation, NewRun, Run, RunEvent, StepOutput},
   task::{Task, TaskDetails},
   time::Timestamp,
   tokens::TokensUsed,
@@ -226,4 +226,11 @@ pub trait ActivityStore {
   /// Tokens that counted toward budgets in every run of the project since `since`, from the
   /// usage each completed turn reported.
   fn tokens_used_since(&self, since: Timestamp) -> Result<TokensUsed, Self::Error>;
+
+  /// Stores what a step execution left for the steps after it; an execution has at most one
+  /// output, and storing it again changes nothing.
+  fn save_step_output(&mut self, output: &StepOutput) -> Result<(), Self::Error>;
+
+  /// Outputs of a run's step executions, in the order they were stored.
+  fn step_outputs(&self, run: RunId) -> Result<Vec<StepOutput>, Self::Error>;
 }

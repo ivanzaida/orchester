@@ -104,6 +104,25 @@ impl StepStatus {
   }
 }
 
+/// Why a step execution failed. Its step's failure route decides what happens next.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepFailure {
+  /// The agent CLI did not finish the step: a turn failed, it exited with a failure or it
+  /// reported no result.
+  AgentFailed,
+  /// The agent finished and reported that it could not do the step.
+  ReportedFailed,
+  /// The agent could not be started.
+  NotStarted,
+  /// The execution used the step's token budget; its agent was ended.
+  StepBudget,
+  /// The step's changes conflict with what other steps changed on the run's branch.
+  MergeConflict,
+  /// The step's changes could not be committed or merged.
+  CheckpointFailed,
+}
+
 /// A person's decision on a gated step's result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

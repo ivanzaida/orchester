@@ -1,11 +1,13 @@
 //! The prompt an agent step starts with, assembled in the design's order (agent role → step
-//! instructions → task context; `docs/design/orchester-workspace.md`, "Instructions"). Project,
-//! pipeline and step instruction resources are not part of the prompt yet.
+//! instructions → task context; `docs/design/orchester-workspace.md`, "Instructions"), then the
+//! outputs of the steps it runs after, each naming its source, and how to report the result
+//! ([`super::StepResult`]). Project, pipeline and step instruction resources are not part of the
+//! prompt yet.
 //!
 //! Placeholders resolve against the run; a variable without a value in this run is an error
 //! that names it, never an empty string.
 
-use std::fmt::Write as _;
+use std::{fmt::Write as _, num::NonZeroU32};
 
 use thiserror::Error;
 
@@ -38,6 +40,20 @@ pub struct PipelineInfo<'a> {
   pub version: VersionNumber,
 }
 
+/// The output of a step the prompt's step runs after, and the execution it came from.
+#[derive(Clone, Copy, Debug)]
+pub struct DependencyOutput<'a> {
+  pub step: &'a Step,
+  pub attempt: NonZeroU32,
+  /// Empty when the step's agent wrote no final message.
+  pub text: &'a str,
+}
+
+/// How every new session is told to end, matching [`super::STEP_RESULT_SCHEMA`].
+const RESULT_INSTRUCTIONS: &str = "End with your result: the outcome `done` when the step is complete, or `failed` \
+                                   when you could not complete it, and a short summary of what you did for the \
+                                   steps that run after this one.";
+
 /// Everything one step's prompt is made of.
 #[derive(Clone, Copy, Debug)]
 pub struct PromptInput<'a> {
@@ -49,6 +65,8 @@ pub struct PromptInput<'a> {
   pub step: &'a Step,
   pub profile_id: ResourceId,
   pub profile: &'a AgentProfile,
+  /// Outputs of the steps `step` depends on, in pipeline order.
+  pub dependencies: &'a [DependencyOutput<'a>],
 }
 
 impl PromptInput<'_> {
@@ -70,7 +88,51 @@ impl PromptInput<'_> {
       prompt.push_str("\n## Acceptance criteria\n");
       prompt.push_str(&criteria(&details.acceptance_criteria));
     }
+    self.push_dependencies(&mut prompt);
+    prompt.push_str(
+      "
+# When you finish
+",
+    );
+    push_block(&mut prompt, RESULT_INSTRUCTIONS);
     Ok(prompt)
+  }
+
+  /// "Results of earlier steps": the list of sources, then each output under its source.
+  fn push_dependencies(&self, prompt: &mut String) {
+    if self.dependencies.is_empty() {
+      return;
+    }
+    let source = |output: &DependencyOutput<'_>| {
+      format!(
+        "{} (`{}`, attempt {})",
+        output.step.name.as_str(),
+        output.step.key,
+        output.attempt
+      )
+    };
+    prompt.push_str(
+      "
+# Results of earlier steps
+",
+    );
+    let sources: Vec<String> = self.dependencies.iter().map(source).collect();
+    let _ = writeln!(
+      prompt,
+      "
+Sources: {}",
+      sources.join(", ")
+    );
+    for output in self.dependencies {
+      let _ = writeln!(
+        prompt,
+        "
+## {}",
+        source(output)
+      );
+      let text = output.text.trim();
+      push_block(prompt, if text.is_empty() { "(no output)" } else { text });
+    }
   }
 
   fn render(&self, text: &PromptText, source: PromptSource) -> Result<String, PromptAssemblyError> {

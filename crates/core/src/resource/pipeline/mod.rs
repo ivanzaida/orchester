@@ -12,8 +12,9 @@ use super::{
   lifecycle::{Slug, SlugError},
   prompt::PromptText,
 };
-use crate::{id::ResourceId, money::Money, name::Name};
+use crate::{id::ResourceId, name::Name, tokens::TokenBudget};
 
+mod budget;
 mod changes;
 mod edit;
 mod starter;
@@ -117,7 +118,11 @@ pub struct Step {
   /// A person approves the step's result before dependent steps start, e.g. plan approval.
   pub approval_gate: bool,
   pub on_failure: Option<FailureRoute>,
-  pub budget: Option<Money>,
+  /// Most tokens one execution of the step may use; reaching it fails the execution, which then
+  /// takes the step's failure route. Versions published while step budgets were money read as
+  /// having none (see [`budget`]).
+  #[serde(default, deserialize_with = "budget::deserialize")]
+  pub budget: Option<TokenBudget>,
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -132,8 +137,6 @@ pub enum PipelineError {
   UnknownRetryTarget { step: StepKey, target: StepKey },
   #[error("step `{step}` returns to `{target}` on failure, but `{target}` does not run before it")]
   RetryTargetNotUpstream { step: StepKey, target: StepKey },
-  #[error("step `{0}` has a budget that is not greater than zero")]
-  NonPositiveBudget(StepKey),
 }
 
 /// Ordered steps forming an acyclic dependency graph. A draft may have no steps yet;
@@ -166,7 +169,6 @@ impl Pipeline {
   pub fn new(steps: Vec<Step>) -> Result<Self, PipelineError> {
     let graph = Graph::new(&steps)?;
     for step in &steps {
-      check_budget(step)?;
       graph.check_route(step)?;
     }
     Ok(Self {
@@ -203,6 +205,30 @@ impl Pipeline {
   pub fn into_steps(self) -> Vec<Step> {
     self.steps
   }
+
+  /// The steps in stages: a step's stage is one after the latest stage of the steps it depends
+  /// on, so the steps of one stage can run beside each other. Each stage keeps pipeline order.
+  pub fn stages(&self) -> Vec<Vec<&Step>> {
+    let mut depth: HashMap<&StepKey, usize> = HashMap::with_capacity(self.steps.len());
+    // Every pass places at least one more step: the graph is acyclic (see `Pipeline::new`).
+    while depth.len() < self.steps.len() {
+      for step in &self.steps {
+        if depth.contains_key(&step.key) {
+          continue;
+        }
+        let known: Option<Vec<usize>> = step.depends_on.iter().map(|key| depth.get(key).copied()).collect();
+        if let Some(known) = known {
+          depth.insert(&step.key, known.into_iter().max().map_or(0, |deepest| deepest + 1));
+        }
+      }
+    }
+    let count = depth.values().max().map_or(0, |deepest| deepest + 1);
+    let mut stages = vec![Vec::new(); count];
+    for step in &self.steps {
+      stages[depth[&step.key]].push(step);
+    }
+    stages
+  }
 }
 
 fn unassigned(steps: &[Step]) -> impl Iterator<Item = &StepKey> {
@@ -210,13 +236,6 @@ fn unassigned(steps: &[Step]) -> impl Iterator<Item = &StepKey> {
     .iter()
     .filter(|step| step.kind.executor().is_none())
     .map(|step| &step.key)
-}
-
-fn check_budget(step: &Step) -> Result<(), PipelineError> {
-  match step.budget {
-    Some(budget) if budget.micros() <= 0 => Err(PipelineError::NonPositiveBudget(step.key.clone())),
-    _ => Ok(()),
-  }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

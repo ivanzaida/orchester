@@ -1,7 +1,8 @@
 //! How an agent step starts the Codex CLI (`.tmp/cli-probe/REPORT.md`, "Recommended argv"):
 //!
 //! `codex -a never exec --json --ignore-user-config --ignore-rules -m <model>
-//!  [-c model_reasoning_effort=<e>] --sandbox <mode> [-c windows.sandbox=elevated] -C <worktree> -`
+//!  [-c model_reasoning_effort=<e>] --sandbox <mode> [-c windows.sandbox=elevated]
+//!  [--output-schema <file>] -C <worktree> -`
 //!
 //! and continues a session after a pause or a limit with
 //!
@@ -20,6 +21,9 @@
 //! - The prompt goes on standard input (`-`); free-form text in arguments would not survive the `.cmd` launcher on
 //!   Windows.
 //! - The environment is cleaned: see [`agent_environment`].
+//! - `--output-schema` makes the final agent message JSON of the step result schema
+//!   ([`crate::run::STEP_RESULT_SCHEMA`]). The probe verified it for new sessions only, so a continued session is
+//!   started without it and its result is read from its exit.
 
 use std::{
   ffi::OsString,
@@ -120,6 +124,8 @@ pub struct CodexInvocation<'a> {
   /// The session to continue (`codex exec resume`), for an invocation that repeats the
   /// unfinished part of a step; `None` starts a new session.
   pub resume: Option<&'a str>,
+  /// The file holding the step result schema, for a new session.
+  pub output_schema: Option<&'a Path>,
 }
 
 impl CodexInvocation<'_> {
@@ -158,6 +164,10 @@ impl CodexInvocation<'_> {
     match self.resume {
       Some(session) => args.push(session.into()),
       None => {
+        if let Some(schema) = self.output_schema {
+          args.push("--output-schema".into());
+          args.push(schema.as_os_str().to_owned());
+        }
         args.push("-C".into());
         args.push(self.worktree.as_os_str().to_owned());
       }

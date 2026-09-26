@@ -3,7 +3,7 @@
 //! short enough to show.
 
 use super::{Pipeline, Step, StepKey, StepKind};
-use crate::{money::Money, name::Name};
+use crate::{name::Name, tokens::TokenBudget};
 
 /// One difference between two versions of a pipeline.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -39,8 +39,8 @@ pub enum StepChange {
     to: u32,
   },
   Budget {
-    from: Option<Money>,
-    to: Option<Money>,
+    from: Option<TokenBudget>,
+    to: Option<TokenBudget>,
   },
 }
 
