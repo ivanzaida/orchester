@@ -12,7 +12,9 @@ use orchester_core::{
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps, wait_long},
+  task_run::{
+    agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps, wait_long,
+  },
 };
 
 fn retry(to: &str) -> Option<FailureRoute> {
@@ -44,7 +46,11 @@ fn task_graph_progress_lists_parallel_steps_with_their_attempt_and_usage() {
   for step in ["Implement · Builder", "Checks · Builder", "Review · Builder"] {
     assert!(shows(&mut desktop, "task-progress-steps", step), "{step}");
   }
-  assert!(shows(&mut desktop, "task-progress-steps", "Complete · attempt 1 · 9.7k tokens ·"));
+  assert!(shows(
+    &mut desktop,
+    "task-progress-steps",
+    "Complete · attempt 1 · 9.7k tokens ·"
+  ));
 }
 
 #[test]
@@ -62,9 +68,8 @@ fn task_graph_retry_limit_shows_the_failing_step_and_unavailable_actions() {
   });
   create_and_run(&mut desktop, "Say hello.", "1400000");
   wait_long(&mut desktop, "the run to fail", |desktop| {
-    latest_run(desktop.repo()).is_some_and(|run| {
-      matches!(run.status(), RunStatus::Failed(RunFailure::RetriesExhausted(_)))
-    })
+    latest_run(desktop.repo())
+      .is_some_and(|run| matches!(run.status(), RunStatus::Failed(RunFailure::RetriesExhausted(_))))
   });
   wait_long(&mut desktop, "the retry limit state", |desktop| {
     has(desktop, "task-retry-limit")
@@ -74,7 +79,11 @@ fn task_graph_retry_limit_shows_the_failing_step_and_unavailable_actions() {
   assert!(shows(&mut desktop, "task-retry-limit", "Review · Builder"));
   assert!(shows(&mut desktop, "task-retry-limit", "Reported failed · attempt 2"));
   assert!(shows(&mut desktop, "task-failure-excerpt", "Finished Review"));
-  assert!(shows(&mut desktop, "task-retry-settings", "is not available in this version yet"));
+  assert!(shows(
+    &mut desktop,
+    "task-retry-settings",
+    "is not available in this version yet"
+  ));
   // Allowing another attempt is not possible yet: pressing it changes nothing.
   desktop.click("task-allow-retry");
   let run = latest_run(desktop.repo()).expect("run");

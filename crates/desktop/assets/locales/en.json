@@ -441,6 +441,7 @@
         "queuedTitle": "The run has not started",
         "queuedDetail": "The task is queued. Its run starts when the runner accepts it; Create & run on the new task form retries without starting a second run.",
         "runningTitle": "{{step}} is running",
+        "runningParallelTitle": "{{steps}} are running",
         "runningDetail": "The agent works in the run’s own worktree and branch; your checkout is not touched.",
         "pausingTitle": "Pausing at the next checkpoint",
         "pausingDetail": "The agent finishes the invocation it is running and its work is committed as a checkpoint; then the run pauses. Nothing in the worktree is lost.",

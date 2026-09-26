@@ -22,16 +22,17 @@ use crate::{
 
 /// Every step of `run`. `lost`: the run is recorded as running but has no runner.
 pub(super) fn progress_list(ctx: &Ctx, run: &RunView, lost: bool) -> Element {
-  rows(ctx, &progress(run, lost, Timestamp::now()))
+  rows(ctx, &progress(run, lost, Timestamp::now()), SpacingSize::Sm)
     .id("task-progress-steps")
     .into()
 }
 
-/// `rows` as check rows, one below the other.
-pub(super) fn rows(ctx: &Ctx, rows: &[ProgressRow]) -> Column {
+/// `rows` as check rows, one below the other, `gap` apart: 8 in the progress list (`qB7mj`), 22 in
+/// the retry limit's evidence (`yYFkk`).
+pub(super) fn rows(ctx: &Ctx, rows: &[ProgressRow], gap: SpacingSize) -> Column {
   Column::new()
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
+    .spacing(gap)
     .with_children(rows.iter().map(|row| progress_row(ctx, row)))
 }
 

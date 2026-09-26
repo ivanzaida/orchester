@@ -111,7 +111,7 @@ fn evidence(ctx: &Ctx, run: &RunView, step: &StepKey) -> Element {
     .spacing(ExtraSpacing::Form.role())
     .child(notice)
     .child(Text::new(&latest).variant(ExtraTypography::Subheading.role()))
-    .child(rows(ctx, &attempt_rows))
+    .child(rows(ctx, &attempt_rows, ExtraSpacing::Form.role()))
     .with_children(excerpt(ctx, run, step))
     .child(
       ActionButton::new(ctx.t("runs.retryLimit.openReport"))
@@ -161,6 +161,7 @@ fn excerpt(ctx: &Ctx, run: &RunView, step: &StepKey) -> Option<Element> {
       )
       .child(
         Text::new(&output.text)
+          .width(Dimension::Pct(100.0))
           .variant(ExtraTypography::MonoField.role())
           .color(PaletteColor::TextSecondary)
           .selectable(true),

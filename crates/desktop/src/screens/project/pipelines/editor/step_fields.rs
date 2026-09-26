@@ -391,7 +391,7 @@ fn budget_input(ctx: &Ctx, fields: &Fields, error: Option<&Message>) -> Element 
   .invalid(error.is_some())
   .size(
     Dimension::Px(VALUE_WIDTH + VALUE_WIDTH / 2.0),
-    Dimension::Px(SMALL_BUTTON_HEIGHT),
+    Dimension::Px(SELECT_HEIGHT),
   );
   let row = Row::new()
     .width(Dimension::Pct(100.0))

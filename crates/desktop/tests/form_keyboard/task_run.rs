@@ -85,10 +85,15 @@ pub(crate) fn init_repository(repo: &Path) {
 /// pipeline: Implement, and with `review` also Review after it.
 pub(crate) fn seed(repo: &Path, fake: &Path, review: bool) {
   seed_steps(repo, fake, |builder| {
-    let step = agent_step(builder, "implement", "Implement", "Append one line.", &[]);
-    let mut steps = vec![step.clone()];
+    let mut steps = vec![agent_step(builder, "implement", "Implement", "Append one line.", &[])];
     if review {
-      steps.push(agent_step(builder, "review", "Review", "Append one line.", &["implement"]));
+      steps.push(agent_step(
+        builder,
+        "review",
+        "Review",
+        "Append one line.",
+        &["implement"],
+      ));
     }
     steps
   });
@@ -242,8 +247,9 @@ fn create_and_run_opens_the_task_page_with_the_run_and_its_activity() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
   create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
+  // The page shows the finished run before the transcript opens, so its step starts collapsed.
+  wait_long(&mut desktop, "the finished run on the page", |desktop| {
+    run_finished(desktop.repo()) && shows(desktop, "task-notice", "Every step passed")
   });
   desktop.click("task-tab-activity");
   wait_long(&mut desktop, "the transcript", |desktop| {
