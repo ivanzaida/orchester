@@ -254,3 +254,18 @@ fn pull_request_rows_reach_across_the_diff() {
     assert!((width(&mut desktop, row) - diff).abs() < 0.5, "{row}");
   }
 }
+
+#[test]
+fn pull_request_back_returns_to_the_inbox_and_forward_reopens_it() {
+  let gh = signed_in_with_detail();
+  let mut desktop = open_detail(&gh);
+  let back = lurq::app::events::MouseButton::Other(4);
+  desktop.tree.mouse_up(720.0, 480.0, back);
+  desktop.settle("the inbox", |tree| {
+    tree.get_element_by_id("pull-request").is_none() && tree.get_element_by_id("pull-requests-list").is_some()
+  });
+  desktop
+    .tree
+    .mouse_up(720.0, 480.0, lurq::app::events::MouseButton::Other(5));
+  desktop.wait_for("pull-request");
+}
