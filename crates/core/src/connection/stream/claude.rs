@@ -32,7 +32,7 @@ const EDIT_TOOLS: [&str; 4] = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
 pub struct ClaudeStream {
   /// Tool calls without a result yet, by tool use id.
   calls: HashMap<String, Call>,
-  /// The usage counted for each assistant message so far, by message id.
+  /// The most usage each assistant message reported so far, part by part, by message id.
   messages: HashMap<String, TokenUsage>,
   /// Everything counted so far.
   counted: TokenUsage,
@@ -98,11 +98,13 @@ impl ClaudeStream {
       }
     }
     let usage = message.get("usage").and_then(usage).unwrap_or_default();
-    let before = self.messages.insert(id, usage).unwrap_or_default();
-    if let Some(grown) = growth(usage, before) {
+    let mut seen = self.messages.get(&id).copied().unwrap_or_default();
+    if let Some(grown) = growth(usage, seen) {
+      seen += grown;
       self.counted += grown;
       events.push(AgentEvent::TurnCompleted { usage: grown });
     }
+    self.messages.insert(id, seen);
     Some((events, understood))
   }
 

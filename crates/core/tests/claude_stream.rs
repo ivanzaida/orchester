@@ -230,3 +230,29 @@ fn claude_stream_keeps_what_it_does_not_understand() {
     );
   }
 }
+
+#[test]
+fn claude_stream_never_counts_a_message_twice_when_its_usage_repeats_or_shrinks() {
+  let mut stream = ClaudeStream::default();
+  let line = |usage: &str| {
+    format!(
+      r#"{{"type":"assistant","message":{{"id":"msg_1","content":[{{"type":"text","text":"x"}}],"usage":{usage}}}}}"#
+    )
+  };
+  let mut events = Vec::new();
+  for usage in [
+    r#"{"input_tokens":10,"output_tokens":5}"#,
+    r#"{"input_tokens":0,"output_tokens":0}"#,
+    r#"{"input_tokens":10,"output_tokens":8}"#,
+  ] {
+    events.extend(stream.parse(OutputStream::Stdout, &line(usage)));
+  }
+  assert_eq!(
+    tracked(&events).usage(),
+    TokenUsage {
+      input: 10,
+      cached_input: 0,
+      output: 8
+    }
+  );
+}
