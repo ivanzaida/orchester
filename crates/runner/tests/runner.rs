@@ -1,9 +1,17 @@
-//! End-to-end tests against the real `orchester-runner` binary.
+//! End-to-end tests against the real `orchester-runner` binary. The desktop connection is a
+//! named pipe, which exists on Windows only.
+#![cfg(windows)]
 
 use std::{fs, path::Path, time::Duration};
 
-use orchester_ipc::{Command, Event, LaunchError, RunnerClient, ShutdownMode};
+use orchester_core::{
+  id::{IdempotencyKey, ProjectId, TaskId},
+  name::Name,
+  project::{Project, ProjectKey},
+};
+use orchester_ipc::{Command, Event, LaunchError, Rejection, Reply, Request, RequestId, RunnerClient, ShutdownMode};
 use orchester_runner::lock::RunnerLock;
+use orchester_store::ProjectDb;
 use tempfile::TempDir;
 use tokio::time::timeout;
 
@@ -30,13 +38,32 @@ async fn next_event(client: &mut RunnerClient) -> Option<Event> {
     .expect("read event")
 }
 
+fn request(id: u64, command: Command) -> Request {
+  Request {
+    id: RequestId::new(id),
+    command,
+  }
+}
+
 async fn stop(mode: ShutdownMode) {
   let project = project();
   let mut client = launch(project.path()).await;
 
-  client.send(&Command::Ping { nonce: 7 }).await.expect("ping");
-  assert_eq!(next_event(&mut client).await, Some(Event::Pong { nonce: 7 }));
-  client.send(&Command::Shutdown { mode }).await.expect("shutdown");
+  client
+    .send(&request(1, Command::Ping { nonce: 7 }))
+    .await
+    .expect("ping");
+  assert_eq!(
+    next_event(&mut client).await,
+    Some(Event::Reply {
+      id: RequestId::new(1),
+      reply: Reply::Pong { nonce: 7 }
+    })
+  );
+  client
+    .send(&request(2, Command::Shutdown { mode }))
+    .await
+    .expect("shutdown");
   assert_eq!(next_event(&mut client).await, Some(Event::Stopped { mode }));
 
   let (commands, events, mut process) = client.into_parts();
@@ -164,4 +191,40 @@ async fn runner_logs_to_the_project_log_directory() {
   let name = logs[0].file_name().and_then(|name| name.to_str()).expect("utf-8 name");
   assert!(name.starts_with("runner-") && name.ends_with(".log"), "{name}");
   assert!(!fs::read_to_string(&logs[0]).expect("read log").is_empty());
+}
+
+#[tokio::test]
+async fn runner_answers_attach_and_start_run_requests() {
+  let repo = tempfile::tempdir().expect("temporary directory");
+  fs::create_dir(repo.path().join(".git")).expect("create .git");
+  let project = Project::new(
+    ProjectId::generate(),
+    ProjectKey::new("ORC").expect("key"),
+    Name::new("Kontur").expect("name"),
+  );
+  drop(ProjectDb::create(repo.path(), project).expect("create project"));
+  let mut client = launch(repo.path()).await;
+
+  client.send(&request(1, Command::Attach)).await.expect("attach");
+  assert_eq!(
+    next_event(&mut client).await,
+    Some(Event::Reply {
+      id: RequestId::new(1),
+      reply: Reply::Attached {
+        active_runs: Vec::new()
+      }
+    })
+  );
+  let start = Command::StartRun {
+    key: IdempotencyKey::generate(),
+    task: TaskId::generate(),
+  };
+  client.send(&request(2, start)).await.expect("start run");
+  assert_eq!(
+    next_event(&mut client).await,
+    Some(Event::Reply {
+      id: RequestId::new(2),
+      reply: Reply::Rejected(Rejection::TaskNotFound)
+    })
+  );
 }

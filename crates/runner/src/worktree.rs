@@ -5,15 +5,13 @@
 use std::{
   ffi::OsStr,
   io,
-  os::windows::process::CommandExt,
   path::{Path, PathBuf},
-  process::{Command, Output},
 };
 
 use orchester_core::id::RunId;
 use thiserror::Error;
 
-use crate::CREATE_NO_WINDOW;
+use crate::git::Git;
 
 const WORKTREES_DIR: &str = ".orchester/worktrees";
 
@@ -35,6 +33,8 @@ pub enum WorktreeError {
   BranchExists(String),
   #[error("{0:?} does not name a commit")]
   UnknownBase(String),
+  #[error("git reported {0:?} where a commit id was expected")]
+  UnexpectedRevision(String),
   #[error(".orchester/ is not ignored by git in {0}; a worktree there would show up in the user's checkout")]
   NotExcluded(PathBuf),
   #[error("worktree {0} already exists")]
@@ -157,81 +157,5 @@ impl Worktrees {
     command.push(path.as_os_str());
     Git::new(&self.repo_root).stdout(command)?;
     Ok(())
-  }
-}
-
-/// `git -C <dir> …`.
-struct Git<'a> {
-  dir: &'a Path,
-}
-
-impl<'a> Git<'a> {
-  fn new(dir: &'a Path) -> Self {
-    Self { dir }
-  }
-
-  fn run<I, S>(&self, args: I) -> Result<(String, Output), WorktreeError>
-  where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-  {
-    let args: Vec<_> = args.into_iter().map(|arg| arg.as_ref().to_os_string()).collect();
-    let output = Command::new("git")
-      .arg("-C")
-      .arg(self.dir)
-      .args(&args)
-      .creation_flags(CREATE_NO_WINDOW)
-      .output()
-      .map_err(WorktreeError::GitUnavailable)?;
-    let command = args
-      .iter()
-      .map(|arg| arg.to_string_lossy())
-      .collect::<Vec<_>>()
-      .join(" ");
-    Ok((command, output))
-  }
-
-  /// Whether the command exits with 0. For validations whose every failure means "no".
-  fn succeeds<I, S>(&self, args: I) -> Result<bool, WorktreeError>
-  where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-  {
-    Ok(self.run(args)?.1.status.success())
-  }
-
-  /// A yes/no query answered by exit code 0 or 1; any other exit is a git failure.
-  fn answer<I, S>(&self, args: I) -> Result<bool, WorktreeError>
-  where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-  {
-    let (command, output) = self.run(args)?;
-    match output.status.code() {
-      Some(0) => Ok(true),
-      Some(1) => Ok(false),
-      _ => Err(failure(command, &output)),
-    }
-  }
-
-  /// Trimmed standard output of a command that must succeed.
-  fn stdout<I, S>(&self, args: I) -> Result<String, WorktreeError>
-  where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-  {
-    let (command, output) = self.run(args)?;
-    if !output.status.success() {
-      return Err(failure(command, &output));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
-  }
-}
-
-fn failure(command: String, output: &Output) -> WorktreeError {
-  WorktreeError::Git {
-    command,
-    code: output.status.code(),
-    stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
   }
 }
