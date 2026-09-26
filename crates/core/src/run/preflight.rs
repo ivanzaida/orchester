@@ -2,9 +2,9 @@
 //! configuration, authorization, runner readiness"). Each problem is a typed, visible reason;
 //! a run with any problem does not start.
 //!
-//! This version of the runner executes graphs of agent steps on the Codex CLI — parallel steps,
-//! failure routes and retries included; tool steps, approval gates and other providers are
-//! reported as not supported yet rather than skipped.
+//! This version of the runner executes graphs of agent steps on the Codex and Claude Code CLIs —
+//! parallel steps, failure routes and retries included; tool steps and approval gates are reported
+//! as not supported yet rather than skipped.
 
 use std::collections::BTreeMap;
 
@@ -32,7 +32,7 @@ pub enum PreflightProblem {
   ProfileNotPublished { step: StepKey },
   /// The profile's connection no longer exists.
   ConnectionMissing { step: StepKey },
-  /// The profile runs on a provider other than the Codex CLI, which cannot run yet.
+  /// The profile's connection is not an agent CLI, so it cannot run the step.
   UnsupportedProvider { step: StepKey },
   /// The connection's last check says its CLI cannot be used (not signed in, missing, …).
   ConnectionNotUsable { step: StepKey, status: ConnectionStatus },
@@ -86,17 +86,17 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
       problems.push(PreflightProblem::ProfileNotPublished { step: key() });
       continue;
     };
-    match connection_problem(&connections, profile.body().connection(), key()) {
-      Some(problem) => problems.push(problem),
-      None => problems.extend(permission_problem(step, profile.body())),
+    match usable_provider(&connections, profile.body().connection(), key()) {
+      Ok(provider) => problems.extend(permission_problem(step, profile.body(), provider)),
+      Err(problem) => problems.push(problem),
     }
   }
   problems
 }
 
-/// Whether the Codex CLI enforces the step's effective permissions on this platform. Only
-/// reached for steps on a usable Codex connection.
-fn permission_problem(step: &Step, profile: &AgentProfile) -> Option<PreflightProblem> {
+/// Whether `provider`'s CLI enforces the step's effective permissions on this platform. Only
+/// reached for steps on a usable agent connection.
+fn permission_problem(step: &Step, profile: &AgentProfile, provider: AgentProvider) -> Option<PreflightProblem> {
   let StepKind::Agent {
     repository,
     permissions,
@@ -108,7 +108,7 @@ fn permission_problem(step: &Step, profile: &AgentProfile) -> Option<PreflightPr
   let reason = profile
     .permissions()
     .narrowed(*repository, permissions)
-    .enforced_on(AgentProvider::CodexCli, Platform::current())
+    .enforced_on(provider, Platform::current())
     .err()?;
   Some(PreflightProblem::PermissionsNotEnforceable {
     step: step.key.clone(),
@@ -116,17 +116,21 @@ fn permission_problem(step: &Step, profile: &AgentProfile) -> Option<PreflightPr
   })
 }
 
-fn connection_problem(
+/// The agent CLI of connection `id`, or why the step cannot run on it.
+fn usable_provider(
   connections: &BTreeMap<ConnectionId, &Connection>,
   id: ConnectionId,
   step: StepKey,
-) -> Option<PreflightProblem> {
+) -> Result<AgentProvider, PreflightProblem> {
   let Some(connection) = connections.get(&id) else {
-    return Some(PreflightProblem::ConnectionMissing { step });
+    return Err(PreflightProblem::ConnectionMissing { step });
   };
-  if connection.kind() != &ConnectionKind::Agent(AgentProvider::CodexCli) {
-    return Some(PreflightProblem::UnsupportedProvider { step });
-  }
+  let ConnectionKind::Agent(provider) = connection.kind() else {
+    return Err(PreflightProblem::UnsupportedProvider { step });
+  };
   let status = connection.status();
-  (!status.is_usable()).then_some(PreflightProblem::ConnectionNotUsable { step, status })
+  if !status.is_usable() {
+    return Err(PreflightProblem::ConnectionNotUsable { step, status });
+  }
+  Ok(*provider)
 }

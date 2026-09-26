@@ -184,8 +184,8 @@ impl AgentPermissions {
 
   /// What profiles saved before permissions existed get: read-only, commands confined to the
   /// worktree (which read-only access limits to reading it), network off. Commands are "any in
-  /// the worktree" rather than an empty list because that is what those profiles ran with, and
-  /// the Codex CLI, the only one that runs today, cannot enforce a list.
+  /// the worktree" rather than an empty list because that is what those profiles ran with: only the
+  /// Codex CLI ran then, and it cannot enforce a list.
   pub const fn before_permissions() -> Self {
     Self::new(
       RepositoryAccess::ReadOnly,

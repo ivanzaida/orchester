@@ -7,6 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use lurq::core::Signal;
 use orchester_core::{
+  connection::AgentProvider,
   id::StepExecutionId,
   run::{StepStatus, TokenUsage},
   time::Timestamp,
@@ -48,6 +49,7 @@ pub(super) struct Header {
   pub(super) number: usize,
   pub(super) step: Arc<str>,
   pub(super) agent: Arc<str>,
+  pub(super) provider: Option<AgentProvider>,
   pub(super) model: Arc<str>,
   pub(super) invocations: usize,
   pub(super) started: Option<Timestamp>,
@@ -151,6 +153,7 @@ fn header(run: &RunView, execution: StepExecutionId, status: StepStatus, toggles
     number: step.number,
     step: step.name.clone(),
     agent: step.agent.clone().unwrap_or_else(|| "".into()),
+    provider: step.provider,
     model: step.model.clone().unwrap_or_else(|| "".into()),
     invocations: invocations.len(),
     started: invocations.first().map(|invocation| invocation.started_at),

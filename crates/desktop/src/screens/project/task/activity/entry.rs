@@ -20,6 +20,7 @@ use orchester_core::{
 
 use super::{
   super::heading::step_state,
+  engine,
   rows::{Header, RowKind, TranscriptRow},
 };
 use crate::{
@@ -60,10 +61,11 @@ impl Component for TranscriptRowView {
 fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
   let start = header.started.map(display::clock).unwrap_or_default();
   let count = header.invocations.to_string();
+  let engine = engine(ctx, header.provider, &header.model);
   let meta = match header.ended {
     None => ctx.t_args(
       "runs.activity.headerRunning",
-      [("model", &*header.model), ("count", &count), ("start", &start)],
+      [("engine", &*engine), ("count", &count), ("start", &start)],
     ),
     Some(ended) => {
       let key = if header.invocations == 1 {
@@ -75,7 +77,7 @@ fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
       ctx.t_args(
         key,
         [
-          ("model", &*header.model),
+          ("engine", &*engine),
           ("count", &count),
           ("start", &start),
           ("end", &end),
@@ -300,34 +302,44 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
       "".into(),
       Some(message.clone()),
     ),
+    EntryKind::NotSignedIn(message) => Shown {
+      output: Some(vec![message.clone()]),
+      ..plain(
+        Icon::AlertCircle,
+        ctx.t("runs.activity.notSignedIn"),
+        "".into(),
+        Some(ctx.t("runs.activity.notSignedInDetail")),
+      )
+    },
     EntryKind::Problem(problem) => {
       let (title, body) = problem_text(ctx, problem);
       plain(Icon::AlertCircle, title, "".into(), body)
     }
-    EntryKind::Raw(lines) => {
-      let key = if lines.len() == 1 {
-        "runs.activity.unparsed.one"
-      } else {
-        "runs.activity.unparsed.other"
-      };
-      let text = lines
-        .iter()
-        .map(|(stream, line)| match stream {
-          OutputStream::Stdout => line.clone(),
-          OutputStream::Stderr => ctx.t_args("runs.activity.stderrLine", [("line", &**line)]),
-        })
-        .collect();
-      Shown {
-        output: Some(text),
-        collapsible: !raw_lines,
-        ..plain(
-          Icon::CodeXml,
-          ctx.t_args(key, [("count", lines.len().to_string().as_str())]),
-          ctx.t("runs.activity.rawOutput"),
-          None,
-        )
-      }
-    }
+    EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),
+  }
+}
+
+/// Unparsed lines: collapsed and counted, or shown line by line with *Show raw lines* on.
+fn unparsed(ctx: &Ctx, lines: &[(OutputStream, Arc<str>)], raw_lines: bool) -> Shown {
+  let key = if lines.len() == 1 {
+    "runs.activity.unparsed.one"
+  } else {
+    "runs.activity.unparsed.other"
+  };
+  let text = lines
+    .iter()
+    .map(|(stream, line)| match stream {
+      OutputStream::Stdout => line.clone(),
+      OutputStream::Stderr => ctx.t_args("runs.activity.stderrLine", [("line", &**line)]),
+    })
+    .collect();
+  Shown {
+    glyph: Icon::CodeXml,
+    title: ctx.t_args(key, [("count", lines.len().to_string().as_str())]),
+    meta: ctx.t("runs.activity.rawOutput"),
+    body: None,
+    output: Some(text),
+    collapsible: !raw_lines,
   }
 }
 

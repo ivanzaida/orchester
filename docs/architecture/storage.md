@@ -101,7 +101,12 @@ at work takes one.
   `{outcome: done|failed, summary}`); its summary — or, without one, the final message — is the
   step's output, and the prompts of the steps that depend on it include it with its source (step,
   attempt). A continued session is started without the schema (the probe verified it for new
-  sessions only), so its CLI exit and final message decide.
+  sessions only), so its CLI exit and final message decide. Claude Code runs without a schema
+  (`--json-schema` could not be verified): the prompt asks for the same result as the final
+  message, and when it is not one the CLI's `is_error` and exit decide.
+- **Sessions.** Codex reports its session (`thread.started`); a Claude Code session gets an id
+  Orchester chose (`--session-id`), which the CLI reports back (`system/init`). Continuing a step
+  resumes the session its last invocation reported (`codex exec resume`, `claude --resume`).
 
 ## Storage layout
 

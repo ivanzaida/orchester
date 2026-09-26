@@ -37,14 +37,23 @@ const CLAUDE_EFFORTS: [&str; 4] = ["low", "medium", "high", "max"];
 /// Codex lists models meant for people with this visibility; others are internal.
 const CODEX_LISTED: &str = "list";
 
-/// Checks the CLI at `executable`: its version, whether it is signed in and its models.
+/// Checks the CLI at `executable`: its version, whether it is signed in and its models. The CLI
+/// sees only `environment`, the one agents run with ([`super::invocation::agent_environment`]),
+/// so that the check finds what a run would: variables of an agent host Orchester itself runs in
+/// change the Claude Code CLI's answer.
 pub fn check(
   provider: AgentProvider,
   executable: &Path,
   runner: &impl CommandRunner,
+  environment: &[(String, String)],
   now: Timestamp,
 ) -> ConnectionCheck {
-  let result = match runner.run(&Command::new(executable, VERSION_ARGS.iter().copied())) {
+  let cli = Cli {
+    executable,
+    runner,
+    environment,
+  };
+  let result = match cli.run(VERSION_ARGS) {
     Err(CommandError::NotFound) => CheckResult::ExecutableMissing,
     Err(CommandError::TimedOut | CommandError::Failed(_) | CommandError::UnsafeScriptArgument { .. }) => {
       CheckResult::CouldNotRun
@@ -53,8 +62,8 @@ pub fn check(
       None => CheckResult::NotRecognized,
       Some(version) => CheckResult::Available {
         version,
-        sign_in: sign_in(provider, executable, runner),
-        catalog: catalog(provider, executable, runner),
+        sign_in: sign_in(provider, &cli),
+        catalog: catalog(provider, &cli),
       },
     },
   };
@@ -78,13 +87,27 @@ pub fn parse_version(provider: AgentProvider, output: &CommandOutput) -> Option<
     .map(str::to_owned)
 }
 
-fn sign_in(provider: AgentProvider, executable: &Path, runner: &impl CommandRunner) -> SignIn {
+/// One CLI and the environment it runs with.
+struct Cli<'a, R> {
+  executable: &'a Path,
+  runner: &'a R,
+  environment: &'a [(String, String)],
+}
+
+impl<R: CommandRunner> Cli<'_, R> {
+  fn run(&self, args: &[&str]) -> Result<CommandOutput, CommandError> {
+    let command = Command::new(self.executable, args.iter().copied()).with_environment(self.environment.to_vec());
+    self.runner.run(&command)
+  }
+}
+
+fn sign_in(provider: AgentProvider, cli: &Cli<'_, impl CommandRunner>) -> SignIn {
   let args = match provider {
     AgentProvider::CodexCli => CODEX_SIGN_IN_ARGS,
     AgentProvider::ClaudeCodeCli => CLAUDE_SIGN_IN_ARGS,
   };
   // A status command that cannot run leaves the sign-in unknown, not signed out.
-  let Ok(output) = runner.run(&Command::new(executable, args.iter().copied())) else {
+  let Ok(output) = cli.run(args) else {
     return SignIn::Unknown;
   };
   match provider {
@@ -120,13 +143,13 @@ pub fn parse_claude_auth_status(output: &CommandOutput) -> SignIn {
   }
 }
 
-fn catalog(provider: AgentProvider, executable: &Path, runner: &impl CommandRunner) -> ModelCatalog {
+fn catalog(provider: AgentProvider, cli: &Cli<'_, impl CommandRunner>) -> ModelCatalog {
   match provider {
     AgentProvider::CodexCli => {
       // Without a readable catalog the list stays empty: models can still be entered by hand
       // and are marked as not verified.
-      let models = runner
-        .run(&Command::new(executable, CODEX_CATALOG_ARGS.iter().copied()))
+      let models = cli
+        .run(CODEX_CATALOG_ARGS)
         .ok()
         .filter(|output| output.success)
         .and_then(|output| parse_codex_catalog(&output.stdout))

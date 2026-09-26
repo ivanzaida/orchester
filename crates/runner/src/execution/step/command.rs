@@ -1,14 +1,15 @@
-//! The Codex command of an agent step: its profile's connection and settings, the worktree it works
-//! in, the assembled prompt with the outputs of the steps it runs after and the result schema for a
-//! new session, or the continue prompt for a session that resumes.
+//! The agent CLI command of an agent step, for the provider of its profile's connection (Codex or
+//! Claude Code): the connection and settings, the worktree it works in, the assembled prompt with the
+//! outputs of the steps it runs after (and, for Codex, the result schema) for a new session, or the
+//! continue prompt for a session that resumes.
 
 use std::path::Path;
 
 use orchester_core::{
   command::Command,
   connection::{
-    AgentProvider, REASONING_EFFORT,
-    invocation::{CodexInvocation, Platform},
+    AgentConnection, AgentProvider, REASONING_EFFORT,
+    invocation::{ClaudeInvocation, ClaudeSession, CodexInvocation, InvocationError, Platform},
     stream::RunnerProblem,
   },
   id::{ResourceId, StepExecutionId},
@@ -24,14 +25,14 @@ fn problem(detail: String) -> RunnerProblem {
 }
 
 impl RunTask {
-  /// The command that runs `execution`'s agent, continuing session `resume` when given, or why it
-  /// cannot start.
+  /// The command that runs `execution`'s agent and the CLI it starts, continuing session `resume`
+  /// when given, or why it cannot start.
   pub(super) fn command(
     &self,
     execution: StepExecutionId,
     resume: Option<&str>,
     worktree: &Path,
-  ) -> Result<Command, RunnerProblem> {
+  ) -> Result<(Command, AgentProvider), RunnerProblem> {
     let key = self
       .run
       .execution(execution)
@@ -66,34 +67,50 @@ impl RunTask {
       .connection(body.connection())
       .map_err(|error| problem(error.to_string()))?
       .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?;
+    let connection =
+      AgentConnection::try_from(connection).map_err(|_| problem("the connection is not an agent CLI".to_owned()))?;
     let prompt = match resume {
       Some(_) => CONTINUE_PROMPT.to_owned(),
       None => self.prompt(execution, step, profile.resource, &body)?,
     };
-    // Preflight already refused steps whose permissions Codex cannot enforce; checked again because
-    // an agent never starts with permissions that are not enforced.
+    // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
+    // because an agent never starts with permissions that are not enforced.
     let enforced = body
       .permissions()
       .narrowed(*repository, permissions)
-      .enforced_on(AgentProvider::CodexCli, Platform::current())
+      .enforced_on(connection.provider(), Platform::current())
       .map_err(|error| problem(error.to_string()))?;
     let effort = body
       .settings()
       .iter()
       .find_map(|(name, value)| (name == REASONING_EFFORT).then_some(value));
-    CodexInvocation {
-      executable: connection.executable(),
-      model: model.as_str(),
-      reasoning_effort: effort,
-      access: enforced.permissions().repository(),
-      network: enforced.permissions().network(),
-      worktree,
-      platform: Platform::current(),
-      resume,
-      output_schema: Some(&self.schema_path()),
-    }
-    .command(prompt, std::env::vars_os())
-    .map_err(|error| problem(error.to_string()))
+    let provider = connection.provider();
+    let command = match provider {
+      AgentProvider::CodexCli => CodexInvocation {
+        executable: connection.executable(),
+        model: model.as_str(),
+        reasoning_effort: effort,
+        access: enforced.permissions().repository(),
+        network: enforced.permissions().network(),
+        worktree,
+        platform: Platform::current(),
+        resume,
+        output_schema: Some(&self.schema_path()),
+      }
+      .command(prompt, std::env::vars_os()),
+      AgentProvider::ClaudeCodeCli => ClaudeInvocation {
+        executable: connection.executable(),
+        model: model.as_str(),
+        effort,
+        permissions: &enforced,
+        worktree,
+        session: ClaudeSession::continuing(resume),
+      }
+      .command(prompt, std::env::vars_os()),
+    };
+    command
+      .map(|command| (command, provider))
+      .map_err(|error: InvocationError| problem(error.to_string()))
   }
 
   /// The prompt of a new session: role, step and task, with the run's variables filled in, then the

@@ -443,14 +443,21 @@ fn permissions_map_to_codex_sandbox_arguments_per_platform() {
 
 #[test]
 fn permissions_map_to_claude_arguments_without_bypass_modes() {
+  let claude = |permissions: &AgentPermissions, platform| {
+    permissions
+      .enforced_on(AgentProvider::ClaudeCodeCli, platform)
+      .map(|enforced| claude::permission_args(&enforced))
+  };
   let read_only = permissions(
     RepositoryAccess::ReadOnly,
     allowed(&["git log", "rg"]),
     NetworkAccess::On,
   );
   assert_eq!(
-    claude::permission_args(&read_only, Platform::Windows).expect("enforceable"),
+    claude(&read_only, Platform::Windows).expect("enforceable"),
     [
+      "--tools",
+      "Read,Glob,Grep,TodoWrite,Bash,WebFetch,WebSearch",
       "--permission-mode",
       "dontAsk",
       "--disallowedTools",
@@ -462,19 +469,29 @@ fn permissions_map_to_claude_arguments_without_bypass_modes() {
       "Bash(rg:*)"
     ]
   );
+  // Network off stays on for commands; without commands, Bash is not offered at all.
   let edit = permissions(RepositoryAccess::Write, allowed(&[]), NetworkAccess::Off);
-  let args = claude::permission_args(&edit, Platform::MacOs).expect("enforceable, network stays on");
-  assert_eq!(args, ["--permission-mode", "acceptEdits"]);
+  let args = claude(&edit, Platform::MacOs).expect("enforceable, network stays on");
+  assert_eq!(
+    args,
+    [
+      "--tools",
+      "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit",
+      "--permission-mode",
+      "acceptEdits",
+      "--disallowedTools",
+      "Bash",
+      "WebFetch",
+      "WebSearch"
+    ]
+  );
   let any = permissions(
     RepositoryAccess::Write,
     CommandPermission::AnyInWorktree,
     NetworkAccess::On,
   );
-  assert!(claude::permission_args(&any, Platform::MacOs).is_err());
-  for args in [
-    claude::permission_args(&read_only, Platform::MacOs).expect("enforceable"),
-    args,
-  ] {
+  assert!(claude(&any, Platform::MacOs).is_err());
+  for args in [claude(&read_only, Platform::MacOs).expect("enforceable"), args] {
     assert!(
       args
         .iter()
