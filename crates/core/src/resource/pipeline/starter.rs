@@ -9,7 +9,7 @@
 use std::{collections::BTreeSet, num::NonZeroU32};
 
 use super::{FailureRoute, Pipeline, RepositoryAccess, Step, StepKey, StepKind};
-use crate::{id::ResourceId, name::Name, resource::prompt::PromptText};
+use crate::{id::ResourceId, name::Name, permission::StepPermissions, resource::prompt::PromptText};
 
 /// How often failed checks or requested changes may return to Implement.
 const STARTER_RETRIES: NonZeroU32 = NonZeroU32::new(2).expect("two is not zero");
@@ -128,6 +128,7 @@ pub fn feature_delivery(text: impl Fn(StarterStep) -> StarterStepText, assignmen
             profile: executor,
             repository: starter.repository(),
             model: None,
+            permissions: StepPermissions::default(),
           }
         },
         instructions,

@@ -10,6 +10,7 @@ pub mod id;
 pub mod limits;
 pub mod money;
 pub mod name;
+pub mod permission;
 pub mod project;
 pub mod pull_request;
 pub mod repository;

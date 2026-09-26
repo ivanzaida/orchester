@@ -106,6 +106,7 @@ pub fn change(change: &PipelineChange) -> Message {
     StepChange::Executor => about("pipelines.changes.executor"),
     StepChange::Model => about("pipelines.changes.model"),
     StepChange::RepositoryAccess => about("pipelines.changes.repositoryAccess"),
+    StepChange::Permissions => about("pipelines.changes.permissions"),
     StepChange::Instructions => about("pipelines.changes.instructions"),
     StepChange::Dependencies => about("pipelines.changes.dependencies"),
     StepChange::ApprovalGate { now: true } => about("pipelines.changes.approvalAdded"),

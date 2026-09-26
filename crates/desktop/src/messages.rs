@@ -65,6 +65,10 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::Publish(PublishError::NoSteps | PublishError::UnassignedSteps(_)) => {
       Message::new("pipelines.problems.notPublishable")
     }
+    StoreError::Publish(PublishError::ConnectionMissing) => {
+      Message::new("agents.permissions.publish.connectionMissing")
+    }
+    StoreError::Publish(PublishError::Permissions(_)) => Message::new("agents.permissions.publish.notEnforceable"),
   }
 }
 

@@ -184,6 +184,12 @@ immutable published versions `v1..vN`. Runs pin versions; publishing affects new
 Tool access policy (allowed pipelines and steps, environment, approval mode, access window,
 denied behavior) is part of the tool version body. "Used by" is derived by query, never stored.
 
+Agent permissions (repository access, commands, network) are part of the agent profile version body
+since body schema 2. Bodies of schema 1 are upgraded when read, never rewritten: they get read-only
+access, commands confined to the worktree and network off (`AgentPermissions::before_permissions`).
+A pipeline step body may carry a `permissions` narrowing (commands, network); steps without one run
+with their profile's permissions.
+
 ### Tasks and scheduling
 
 | Table | Purpose |

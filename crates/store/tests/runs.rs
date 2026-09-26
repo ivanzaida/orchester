@@ -8,6 +8,7 @@ use std::{
 use orchester_core::{
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
   name::Name,
+  permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
     AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
@@ -55,6 +56,7 @@ fn step(value: &str, profile: ResourceId, depends_on: &[&str]) -> Step {
       profile: Some(profile),
       repository: RepositoryAccess::Write,
       model: None,
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new("").expect("valid prompt"),
     depends_on: depends_on.iter().map(|dependency| key(dependency)).collect(),
@@ -127,6 +129,7 @@ impl Fixture {
         profile: Some(builder),
         repository: RepositoryAccess::Write,
         model: Some(ModelId::new("model-override").expect("valid model")),
+        permissions: StepPermissions::default(),
       },
       ..step("implement", builder, &["plan"])
     };

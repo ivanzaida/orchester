@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, fs, time::Duration};
 use orchester_core::{
   id::{ConnectionId, IdempotencyKey, ProjectId, StepExecutionId},
   name::Name,
+  permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
@@ -75,6 +76,7 @@ pub fn started_run() -> (TempDir, ProjectDb, Run, StepExecutionId) {
       profile: Some(builder),
       repository: RepositoryAccess::Write,
       model: None,
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new("").expect("prompt"),
     depends_on: Default::default(),

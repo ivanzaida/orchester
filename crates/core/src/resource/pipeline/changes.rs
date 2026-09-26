@@ -27,6 +27,8 @@ pub enum StepChange {
   Executor,
   Model,
   RepositoryAccess,
+  /// The step narrows commands or network differently.
+  Permissions,
   Instructions,
   Dependencies,
   ApprovalGate {
@@ -116,16 +118,19 @@ fn kind_changes(before: &StepKind, after: &StepKind) -> Vec<StepChange> {
         profile,
         repository,
         model,
+        permissions,
       },
       StepKind::Agent {
         profile: new_profile,
         repository: new_repository,
         model: new_model,
+        permissions: new_permissions,
       },
     ) => [
       (profile != new_profile, StepChange::Executor),
       (model != new_model, StepChange::Model),
       (repository != new_repository, StepChange::RepositoryAccess),
+      (permissions != new_permissions, StepChange::Permissions),
     ]
     .into_iter()
     .filter_map(|(changed, change)| changed.then_some(change))

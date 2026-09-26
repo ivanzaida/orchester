@@ -13,6 +13,7 @@ use orchester_core::{
     invocation::{CodexInvocation, Platform, agent_environment},
     rank_installed,
   },
+  permission::NetworkAccess,
   resource::RepositoryAccess,
   run::TokenUsage,
   tokens::compact_tokens,
@@ -24,6 +25,7 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
     model: "gpt-5.5",
     reasoning_effort: Some("low"),
     access,
+    network: NetworkAccess::Off,
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     platform,
     resume: None,
@@ -147,6 +149,25 @@ fn invocation_output_schema_is_given_to_new_sessions_only() {
   assert_eq!(new_args.last().map(String::as_str), Some("-"));
   new.resume = Some("session");
   assert!(!args(&new).contains(&"--output-schema".to_owned()));
+}
+
+#[test]
+fn invocation_network_on_opens_the_workspace_write_sandbox_network_only() {
+  let network = "sandbox_workspace_write.network_access=true";
+  for platform in [Platform::Windows, Platform::MacOs] {
+    let mut write = invocation(RepositoryAccess::Write, platform);
+    assert!(!args(&write).iter().any(|arg| arg == network));
+    write.network = NetworkAccess::On;
+    let new_session = args(&write);
+    let at = new_session.iter().position(|arg| arg == network).expect("network flag");
+    assert_eq!(new_session[at - 1], "-c");
+    write.resume = Some("01a0d831-b556-7730-be9d-2491a9359250");
+    assert!(args(&write).iter().any(|arg| arg == network));
+    // The read-only sandbox has no network setting.
+    let mut read_only = invocation(RepositoryAccess::ReadOnly, platform);
+    read_only.network = NetworkAccess::On;
+    assert!(!args(&read_only).iter().any(|arg| arg.contains("network_access")));
+  }
 }
 
 #[test]

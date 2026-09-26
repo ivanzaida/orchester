@@ -19,6 +19,7 @@ use orchester_core::{
   },
   id::{ConnectionId, IdempotencyKey, ProjectId, RunId, TaskId},
   name::Name,
+  permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   project::{Project, ProjectKey},
   resource::{
     AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
@@ -180,6 +181,7 @@ fn agent_step(key: &str, title: &str, builder: orchester_core::id::ResourceId, s
       profile: Some(builder),
       repository: RepositoryAccess::Write,
       model: None,
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new("Change README.md for {{task.id}}.").expect("prompt"),
     depends_on: BTreeSet::new(),
@@ -197,6 +199,7 @@ fn graph_step(spec: &StepSpec, builder: orchester_core::id::ResourceId) -> Step 
       profile: Some(builder),
       repository: RepositoryAccess::Write,
       model: None,
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new(spec.instructions).expect("prompt"),
     depends_on: spec.after.iter().map(|key| StepKey::new(key).expect("key")).collect(),
@@ -220,7 +223,12 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     connection,
     ModelId::new("gpt-5.5").expect("model"),
     settings,
-  );
+  )
+  .with_permissions(AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::Off,
+  ));
   let builder = db
     .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, now)
     .expect("profile")

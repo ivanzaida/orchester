@@ -11,6 +11,7 @@ use super::pipeline::StepKey;
 use crate::{
   id::{ResourceId, VersionId},
   name::Name,
+  permission::capability::PermissionProblem,
   time::Timestamp,
 };
 
@@ -279,6 +280,12 @@ pub enum PublishError {
   /// Pipeline steps without an agent profile or tool; a run could not execute them.
   #[error("steps {0:?} have no agent profile or tool")]
   UnassignedSteps(Vec<StepKey>),
+  /// An agent profile whose connection no longer exists: what it can enforce is unknown.
+  #[error("the agent profile's connection does not exist")]
+  ConnectionMissing,
+  /// An agent profile's connection cannot enforce its permissions.
+  #[error(transparent)]
+  Permissions(#[from] PermissionProblem),
 }
 
 /// Publishes `draft` as the version after `latest`. The caller persists the version and

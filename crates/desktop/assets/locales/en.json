@@ -590,6 +590,7 @@
       "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
       "unsupportedProvider": "Step “{{step}}” runs on a provider other than Codex; only Codex runs in this version.",
       "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
+      "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
       "notAGitRepository": "The project folder is not a git repository.",
       "noCommits": "The repository has no commit to start the run from."
     },
@@ -908,7 +909,13 @@
     "publish": "Publish v{{version}}",
     "staleTitle": "A newer version was published after this draft was started",
     "staleDetail": "This draft is based on {{basedOn}}, but {{published}} is the latest version. Publishing the draft as is replaces what {{published}} changed.",
-    "keepDraft": "Keep my draft"
+    "keepDraft": "Keep my draft",
+    "permissions": {
+      "publish": {
+        "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing.",
+        "notEnforceable": "The connection cannot enforce these permissions. Change them or the connection before publishing."
+      }
+    }
   },
   "connections": {
     "breadcrumb": "{{project}} / Connections",
@@ -1613,6 +1620,7 @@
       "executor": "{{step}} · agent profile or tool changed",
       "model": "{{step}} · model changed",
       "repositoryAccess": "{{step}} · repository access changed",
+      "permissions": "{{step}} · commands or network narrowed differently",
       "instructions": "{{step}} · instructions edited",
       "dependencies": "{{step}} · runs after different steps",
       "approvalAdded": "{{step}} · now waits for approval",

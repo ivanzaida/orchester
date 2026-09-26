@@ -10,6 +10,10 @@ use orchester_core::{
   },
   id::{ConnectionId, ProjectId, ResourceId, TaskId},
   name::Name,
+  permission::{
+    AllowedCommands, CommandPrefix, StepCommands,
+    capability::{PermissionOption, PermissionProblem, Unavailable},
+  },
   project::{Project, ProjectKey, TaskKey},
   resource::{AgentProfile, Pipeline, PromptText, ProviderSettings, Step, StepKind, Variable, VersionNumber},
   run::{
@@ -262,6 +266,48 @@ fn preflight_reports_approval_gates_and_unusable_connections() {
   );
   let claude = connection(AgentProvider::ClaudeCodeCli, SignIn::SignedIn);
   assert!(problems_with(&claude).contains(&PreflightProblem::UnsupportedProvider { step: key("review") }));
+}
+
+#[test]
+fn preflight_reports_steps_whose_permissions_codex_cannot_enforce() {
+  let config = Config::feature_delivery();
+  let mut steps = config.pipeline_version.body().steps().to_vec();
+  let StepKind::Agent { permissions, .. } = &mut steps[0].kind else {
+    panic!("research is an agent step");
+  };
+  permissions.commands = StepCommands::Only(
+    AllowedCommands::new(vec![CommandPrefix::new("git log").expect("valid command")]).expect("valid list"),
+  );
+  let pipeline = Pipeline::new(steps).expect("valid pipeline");
+  let codex = connection(AgentProvider::CodexCli, SignIn::SignedIn);
+  let mut profiles = config.profiles;
+  for published in profiles.values_mut() {
+    let body = published.body();
+    let moved = AgentProfile::new(
+      body.role().clone(),
+      String::new(),
+      body.instructions().clone(),
+      codex.id(),
+      body.model().clone(),
+      ProviderSettings::default(),
+    );
+    *published = version(published.number().get(), moved);
+  }
+  let problems = preflight(PreflightInput {
+    pipeline: Some(&pipeline),
+    profiles: &profiles,
+    connections: std::slice::from_ref(&codex),
+  });
+  assert!(problems.contains(&PreflightProblem::PermissionsNotEnforceable {
+    step: key("research"),
+    reason: PermissionProblem::NotEnforceable {
+      option: PermissionOption::AllowedCommands,
+      reason: Unavailable::CannotLimitCommands,
+    },
+  }));
+  assert!(!problems.iter().any(
+    |problem| matches!(problem, PreflightProblem::PermissionsNotEnforceable { step, .. } if step != &key("research"))
+  ));
 }
 
 #[test]

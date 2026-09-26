@@ -5,6 +5,7 @@ use std::{fs, time::Duration};
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, ResourceId},
   name::Name,
+  permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{Pipeline, PromptText, RepositoryAccess, Slug, Step, StepKey, StepKind},
   run::TaskPhase,
@@ -176,6 +177,7 @@ fn research_step() -> Step {
       profile: Some(ResourceId::generate()),
       repository: RepositoryAccess::ReadOnly,
       model: None,
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new("").expect("valid prompt"),
     depends_on: Default::default(),

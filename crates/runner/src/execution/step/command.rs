@@ -7,7 +7,7 @@ use std::path::Path;
 use orchester_core::{
   command::Command,
   connection::{
-    REASONING_EFFORT,
+    AgentProvider, REASONING_EFFORT,
     invocation::{CodexInvocation, Platform},
     stream::RunnerProblem,
   },
@@ -43,8 +43,14 @@ impl RunTask {
       .body()
       .step(key)
       .expect("executions name snapshot steps");
-    let (StepKind::Agent { repository, .. }, Some(StepExecutor::Agent { profile, model, .. })) =
-      (&step.kind, self.run.snapshot().step(key).map(|step| step.executor()))
+    let (
+      StepKind::Agent {
+        repository,
+        permissions,
+        ..
+      },
+      Some(StepExecutor::Agent { profile, model, .. }),
+    ) = (&step.kind, self.run.snapshot().step(key).map(|step| step.executor()))
     else {
       return Err(problem(format!("step `{key}` is not an agent step")));
     };
@@ -64,6 +70,13 @@ impl RunTask {
       Some(_) => CONTINUE_PROMPT.to_owned(),
       None => self.prompt(execution, step, profile.resource, &body)?,
     };
+    // Preflight already refused steps whose permissions Codex cannot enforce; checked again because
+    // an agent never starts with permissions that are not enforced.
+    let enforced = body
+      .permissions()
+      .narrowed(*repository, permissions)
+      .enforced_on(AgentProvider::CodexCli, Platform::current())
+      .map_err(|error| problem(error.to_string()))?;
     let effort = body
       .settings()
       .iter()
@@ -72,7 +85,8 @@ impl RunTask {
       executable: connection.executable(),
       model: model.as_str(),
       reasoning_effort: effort,
-      access: *repository,
+      access: enforced.permissions().repository(),
+      network: enforced.permissions().network(),
       worktree,
       platform: Platform::current(),
       resume,
