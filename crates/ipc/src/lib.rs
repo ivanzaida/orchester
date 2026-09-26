@@ -15,6 +15,7 @@ pub mod frame;
 mod handshake;
 mod log_path;
 mod message;
+mod work;
 
 #[cfg(windows)]
 mod client;
@@ -32,6 +33,9 @@ pub use handshake::{Handshake, PROTOCOL_VERSION, handshake};
 #[cfg(windows)]
 pub use job::KillOnCloseJob;
 pub use log_path::{runner_log_dir, runner_log_path, utc_date};
-pub use message::{Command, Event, Rejection, Reply, Request, RequestId, ShutdownMode};
+pub use message::{
+  AttachSession, Command, Event, RefusedRun, Rejection, Reply, Request, RequestId, SessionEnd, ShutdownMode,
+};
 #[cfg(windows)]
 pub use transport::{ClientStream, Endpoint, ServerStream};
+pub use work::{RunWork, WorkState, WorkSummary};
