@@ -107,6 +107,28 @@ impl Places {
     self.0.lock().start = Some(route);
     route
   }
+
+  /// A project was created: it is where the application now starts, and the first-launch and
+  /// unavailable screens no longer apply.
+  fn created(&self, project: OpenProject) -> Route {
+    let route = Route::Project(project.project.id(), Page::Overview);
+    let mut known = self.0.lock();
+    known.projects.insert(project.project.id(), project);
+    known.start = Some(route);
+    known.unavailable = None;
+    route
+  }
+
+  /// Whether `route`, a screen outside any project, still applies: the welcome screen only
+  /// while no project was opened, the unavailable project only while the start reports it.
+  pub fn applies(&self, route: Route) -> bool {
+    match route {
+      Route::Setup => true,
+      Route::Welcome => self.start() == Some(Route::Welcome),
+      Route::Unavailable => self.unavailable().is_some(),
+      Route::Start | Route::Project(..) => false,
+    }
+  }
 }
 
 /// Provided by the root: the workspace, and going between the screens outside a project.
@@ -163,8 +185,7 @@ impl Navigation {
   /// Opens a project that was just created: its overview takes the place of the setup form,
   /// so going back does not return to a form that was already submitted.
   pub fn open_project(&self, project: OpenProject) {
-    let route = Route::Project(project.project.id(), Page::Overview);
-    self.places.add_project(project);
+    let route = self.places.created(project);
     self.router.replace(route.path());
   }
 }

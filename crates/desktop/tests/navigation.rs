@@ -225,4 +225,10 @@ fn route_created_project_takes_the_place_of_setup() {
   assert!(window.router.back());
   assert_eq!(window.path(), Route::Welcome.path(), "setup left no entry");
   assert!(!window.router.can_back());
+  // With a project, the first-launch screen no longer applies: the window shows the project in
+  // its place, and opening it leads to the project.
+  assert!(!window.navigation.places().applies(Route::Welcome));
+  window.router.push(Route::Setup.path());
+  window.router.push(Route::Welcome.path());
+  assert_eq!(window.path(), overview);
 }

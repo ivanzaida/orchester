@@ -76,6 +76,19 @@ fn outside_project(ctx: &mut Ctx) -> Element {
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting screens")
     .show(None);
+  let navigation = ctx
+    .use_context::<Navigation>()
+    .expect("the root provides Navigation before mounting screens");
+  // Going back and forward passes no guard. An entry that no longer applies (the welcome
+  // screen before a project was created) gives way to the start screen, so going back stops
+  // at the project.
+  let places = navigation.places();
+  if Route::parse(&ctx.route_path()).is_some_and(|route| !places.applies(route)) {
+    navigation
+      .router()
+      .replace(places.start().unwrap_or(Route::Start).path());
+    return Element::new();
+  }
   let screen = Outlet::mount(ctx);
   with_status_bar(ctx, screen)
 }
@@ -111,8 +124,7 @@ fn project_guard(places: &Places, matched: &RouteMatch) -> GuardAction {
 
 fn outside_guard(places: &Places, matched: &RouteMatch) -> GuardAction {
   match Route::parse(matched.path()) {
-    Some(Route::Welcome | Route::Setup) => GuardAction::Allow,
-    Some(Route::Unavailable) if places.unavailable().is_some() => GuardAction::Allow,
+    Some(route) if places.applies(route) => GuardAction::Allow,
     _ => to_start(places),
   }
 }
