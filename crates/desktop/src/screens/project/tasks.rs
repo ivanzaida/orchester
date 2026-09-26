@@ -17,10 +17,11 @@ use lurq::{
 };
 
 use super::{
-  ProjectNav, Section, TasksState, page,
+  ProjectNav, TasksState, page,
   task_rows::{QueueRow, table_heading},
 };
 use crate::{
+  navigation::route::Page,
   tasks::{
     data::ProjectTasks,
     list::{self, DraftSummary, TaskTab},
@@ -170,7 +171,7 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
         .icon(Icon::Plus)
         .id("tasks-new-task")
         .size(Dimension::Px(NEW_TASK_WIDTH), Dimension::Px(TOPBAR_BUTTON_HEIGHT))
-        .on_click(move || nav.show(Section::NewTask))
+        .on_click(move || nav.show(Page::NewTask))
         .render(ctx),
     )
     .into()
@@ -200,7 +201,7 @@ fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
     .primary()
     .icon(Icon::Plus)
     .id("empty-new-task")
-    .on_click(move || nav.show(Section::NewTask))
+    .on_click(move || nav.show(Page::NewTask))
     .render(ctx);
   centered(
     RecoveryPanel::new(

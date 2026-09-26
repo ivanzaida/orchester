@@ -17,7 +17,7 @@ use orchester_core::{
 };
 
 use super::{
-  ConnectionTab, ConnectionsScreen, DialogMode, PickAction, PickTarget, Selected,
+  ConnectionsScreen, DialogMode, PickAction, PickTarget, View,
   actions::{self, Work, WorkAction},
   centered,
   github_inspector::{GitHubActions, GitHubInspector},
@@ -28,6 +28,7 @@ use crate::{
   activity::operations,
   connections::data::ProjectConnections,
   messages::Message,
+  navigation::route::{AgentSelection, ConnectionTab, Page},
   theme::ExtraTypography,
   ui::{
     field::{ValueTone, value_box_sized},
@@ -73,19 +74,17 @@ impl ConnectionsScreen {
     ctx: &Ctx,
     open: &OpenProject,
     data: &ProjectConnections,
-    work: &WorkAction,
-    pick: &PickAction,
+    (work, pick): (&WorkAction, &PickAction),
+    view: View,
   ) -> Element {
-    let tab = self.tab.get();
-    let listed = listed(data, tab);
-    let selected_id = self.selected.get().0;
+    let listed = listed(data, view.tab);
     let Some(selected) = listed
       .iter()
       .copied()
-      .find(|listed| Some(listed.id()) == selected_id)
+      .find(|listed| Some(listed.id()) == view.selected)
       .or_else(|| listed.first().copied())
     else {
-      return self.empty(ctx, tab);
+      return self.empty(ctx, view.tab);
     };
     let state = work.state().get();
     let busy = Busy {
@@ -94,7 +93,7 @@ impl ConnectionsScreen {
     };
     let rows: Vec<Element> = listed
       .iter()
-      .map(|listed| self.row(ctx, data, *listed, selected.id(), busy.on))
+      .map(|listed| self.row(ctx, data, *listed, (view, selected.id()), busy.on))
       .collect();
     let details = match selected {
       Listed::Agent(connection) => {
@@ -134,12 +133,12 @@ impl ConnectionsScreen {
     ctx: &Ctx,
     data: &ProjectConnections,
     listed: Listed,
-    selected: ConnectionId,
+    (view, selected): (View, ConnectionId),
     working: Option<ConnectionId>,
   ) -> Element {
     let id = listed.id();
-    let signal = self.selected.clone();
-    let select = move || signal.set(Selected(Some(id)));
+    let nav = self.nav.clone();
+    let select = move || nav.show(view.page(Some(id)));
     match listed {
       Listed::Agent(connection) => {
         let state = RowState {
@@ -176,7 +175,7 @@ impl ConnectionsScreen {
     };
     centered(
       RecoveryPanel::new(glyph, &ctx.t(title), &ctx.t(detail))
-        .action(self.add_button(ctx, "empty-add-connection"))
+        .action(self.add_button(ctx, "empty-add-connection", tab))
         .into(),
     )
   }
@@ -204,7 +203,7 @@ impl ConnectionsScreen {
     InspectorActions {
       check,
       edit: Arc::new(move || dialog.set(DialogMode::EditAgent(editing.clone()))),
-      show_profile: Arc::new(move |profile| nav.show_profile(profile)),
+      show_profile: Arc::new(move |profile| nav.show(Page::Agents(AgentSelection::Profile(profile)))),
     }
   }
 

@@ -5,10 +5,9 @@ use lurq::{
     theme::{PaletteColor, TypographyStyle},
   },
   components::{
-    ChromeBorderPolicy, ChromeTitleBar, Column, Text, WindowChrome, WindowChromeMode, WindowChromeProps,
+    ChromeBorderPolicy, ChromeTitleBar, Column, Router, Text, WindowChrome, WindowChromeMode, WindowChromeProps,
     WindowControlKind, WindowControls,
   },
-  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
@@ -20,16 +19,12 @@ use crate::{
   background,
   close::Lifecycle,
   messages::{self, Message},
-  navigation::{Navigation, Screen},
+  navigation::{self, Navigation, Places, Start, with_history_input},
   programs::Programs,
   screens::{
     close_dialog::CloseConfirmation,
-    project::ProjectShell,
-    setup::ProjectSetup,
     startup_recovery::{StartupRecovery, StartupRecoveryProps},
     status_bar::{StatusBar, StatusBarProps},
-    unavailable,
-    welcome::Welcome,
   },
   theme::{ExtraColor, TITLE_BAR_HEIGHT, WINDOW_CONTROL_WIDTH},
   ui::{
@@ -63,14 +58,14 @@ pub enum Startup {
 impl lurq::app::component::DevtoolsInspectable for Startup {}
 
 pub struct Root {
-  screen: Signal<Option<Screen>>,
+  /// Present once the session started: a failed start has no screens to go between.
+  navigation: Option<Navigation>,
 }
 
 impl Component for Root {
   type Props = Startup;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let screen = ctx.signal(None);
     let startup = ctx.props::<Startup>().clone();
     // Without a session nothing reports activity; the status bar still shows the version.
     let activity = match &startup {
@@ -78,23 +73,29 @@ impl Component for Root {
       Startup::Failed { .. } => Activity::new(),
     };
     ctx.provide(activity);
-    if let Startup::Ready {
+    let Startup::Ready {
       workspace,
       lifecycle,
       programs,
       ..
     } = startup
-    {
-      ctx.provide(programs);
-      ctx.provide(Navigation::new(workspace, screen.clone()));
-      let close = lifecycle.clone();
-      ctx
-        .window()
-        .on_close_requested(move |request| close.on_close_requested(request));
-      ctx.provide(lifecycle.runners().clone());
-      ctx.provide(lifecycle);
+    else {
+      return Self { navigation: None };
+    };
+    let places = Places::default();
+    let router = ctx.router(navigation::routes(&places));
+    let navigation = Navigation::new(workspace, router, places);
+    ctx.provide(programs);
+    ctx.provide(navigation.clone());
+    let close = lifecycle.clone();
+    ctx
+      .window()
+      .on_close_requested(move |request| close.on_close_requested(request));
+    ctx.provide(lifecycle.runners().clone());
+    ctx.provide(lifecycle);
+    Self {
+      navigation: Some(navigation),
     }
-    Self { screen }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -107,29 +108,43 @@ impl Component for Root {
         previous_end,
         session_start,
         ..
-      } => self.workspace(ctx, (workspace, &programs, (previous_end, session_start)), &lifecycle),
+      } => {
+        let navigation = self
+          .navigation
+          .as_ref()
+          .expect("create sets up the navigation of a ready startup");
+        Self::workspace(
+          ctx,
+          navigation,
+          (workspace, &programs, (previous_end, session_start)),
+          &lifecycle,
+        )
+      }
     };
     let screen = Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .background(ExtraColor::Surface.role())
       .child(content);
-    window_chrome(ctx, screen.into())
+    let window = window_chrome(ctx, screen.into());
+    match &self.navigation {
+      Some(navigation) => with_history_input(navigation.router(), window),
+      None => window,
+    }
   }
 }
 
 impl Root {
   fn workspace(
-    &self,
     ctx: &mut Ctx,
+    navigation: &Navigation,
     (workspace, programs, (previous_end, session_start)): (Workspace, &Programs, (SessionEnd, Timestamp)),
     lifecycle: &Lifecycle,
   ) -> Element {
-    let navigation = Navigation::new(workspace.clone(), self.screen.clone());
     let landing = ctx.future(workspace.clone(), |workspace| async move {
       background::run(move || workspace.landing())
         .await?
-        .map(Screen::from)
+        .map(Start::from)
         .map_err(|error| {
           tracing::error!(%error, "cannot read the projects of the workspace");
           messages::store_error(&error)
@@ -139,37 +154,10 @@ impl Root {
     if let Some(error) = landing.error.as_ref() {
       return startup_failed(ctx, error, None);
     }
-    let screen = self.screen.get().or(landing.data);
-    // A project's runner starts as soon as the project is shown, at startup or after setup, and
-    // keeps running in the background when another screen replaces it. Repeating the same
-    // project is a no-op.
-    let project = match &screen {
-      Some(Screen::Project(project)) => Some(project),
-      _ => None,
-    };
-    lifecycle.runners().show(project);
-    // The project shell puts the project's status bar below its sidebar and screen.
-    let content = match screen {
-      // Reading the workspace takes milliseconds; nothing is shown until it is known.
-      None => Column::new().into(),
-      Some(Screen::Project(project)) => ctx.mount_keyed::<ProjectShell>("project", project),
-      Some(Screen::Welcome) => {
-        let welcome = ctx.mount_keyed::<Welcome>("welcome", ());
-        with_status_bar(ctx, welcome)
-      }
-      Some(Screen::Setup) => {
-        let setup = ctx.mount_keyed::<ProjectSetup>("setup", ());
-        with_status_bar(ctx, setup)
-      }
-      Some(Screen::Unavailable {
-        name,
-        repo_root,
-        reason,
-      }) => {
-        let unavailable = unavailable::render(ctx, &navigation, &name, &repo_root, &reason);
-        with_status_bar(ctx, unavailable)
-      }
-    };
+    // Reading the workspace takes milliseconds; the start route shows nothing until it is known.
+    if let Some(start) = landing.data {
+      navigation.arrive(start);
+    }
     let recovery = StartupRecoveryProps {
       workspace,
       programs: programs.clone(),
@@ -180,7 +168,7 @@ impl Root {
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(content)
+      .child(Router::mount(ctx, navigation.router().clone()))
       .child(ctx.mount_keyed::<CloseConfirmation>("close-confirmation", lifecycle.clone()))
       .child(ctx.mount_keyed::<StartupRecovery>("startup-recovery", recovery))
       .into()
@@ -189,7 +177,7 @@ impl Root {
 
 /// A screen without a project above the status bar (`pmOpt`), which then shows only the
 /// activity and the version.
-fn with_status_bar(ctx: &mut Ctx, screen: Element) -> Element {
+pub(crate) fn with_status_bar(ctx: &mut Ctx, screen: Element) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))

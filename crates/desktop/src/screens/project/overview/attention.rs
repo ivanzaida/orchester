@@ -16,6 +16,7 @@ use orchester_core::time::Timestamp;
 use super::super::{ProjectNav, task_rows::status_copy};
 use crate::{
   display,
+  navigation::route::Page,
   tasks::{
     data::ProjectTasks,
     list::TaskRow,
@@ -82,7 +83,7 @@ fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
     [("task", &*row.key), ("detail", &*message_text(ctx, &row.detail))],
   );
   pressable(surface().id(format!("overview-decision-{}", row.key)), move || {
-    nav.show_task(task);
+    nav.show(Page::Task(task));
   })
   .width(Dimension::Pct(100.0))
   .child(
@@ -143,7 +144,7 @@ fn event(ctx: &Ctx, project: &str, run: &RecentRun, now: Timestamp, nav: &Projec
     .child(icon(glyph, IconSize::Event, PaletteColor::TextSecondary));
   let (nav, task) = (nav.clone(), run.task);
   pressable(surface().id(format!("overview-event-{}", run.key)), move || {
-    nav.show_task(task);
+    nav.show(Page::Task(task));
   })
   .width(Dimension::Pct(100.0))
   .child(

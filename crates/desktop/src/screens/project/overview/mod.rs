@@ -23,9 +23,10 @@ use lurq::{
 };
 use orchester_core::time::Timestamp;
 
-use super::{ProjectNav, Section, TasksState, runner::connection_notice};
+use super::{ProjectNav, TasksState, runner::connection_notice};
 use crate::{
   display,
+  navigation::route::Page,
   runner::{Runners, state::RunnerState},
   tasks::{
     overview::{OverviewTab, Pulse},
@@ -179,7 +180,7 @@ fn heading(ctx: &Ctx, open: &OpenProject, nav: &ProjectNav) -> Element {
         .id("new-task")
         .height(Dimension::Px(NEW_TASK_HEIGHT))
         .roomy()
-        .on_click(move || nav.show(Section::NewTask))
+        .on_click(move || nav.show(Page::NewTask))
         .render(ctx),
     )
     .into()

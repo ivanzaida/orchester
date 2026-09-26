@@ -13,9 +13,10 @@ use lurq::{
 };
 use orchester_core::id::ResourceId;
 
-use super::super::{AgentSelection, ProjectNav, page::TOPBAR_BUTTON_HEIGHT};
+use super::super::{ProjectNav, page::TOPBAR_BUTTON_HEIGHT};
 use crate::{
   agents::data::{ProfileEntry, ProjectAgents},
+  navigation::route::{AgentSelection, Page},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -43,12 +44,12 @@ pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selection: ListSelection,
       .id("new-agent")
       .fill_width()
       .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT));
-    let agent = nav.agent.clone();
+    let nav = nav.clone();
     if agents.connections.is_empty() {
       // A profile needs a connection; the empty state says so and links to Connections.
       button.on_click(|| {}).enabled(false)
     } else {
-      button.on_click(move || agent.set(AgentSelection::New))
+      button.on_click(move || nav.show(Page::Agents(AgentSelection::New)))
     }
   };
   let selected = match selection {
@@ -115,8 +116,8 @@ fn item(ctx: &Ctx, agents: &ProjectAgents, entry: &ProfileEntry, selected: bool,
   if selected {
     return item.describe("state", "selected").into();
   }
-  let (agent, id) = (nav.agent.clone(), entry.id);
-  pressable(item, move || agent.set(AgentSelection::Profile(id)))
+  let (nav, id) = (nav.clone(), entry.id);
+  pressable(item, move || nav.show(Page::Agents(AgentSelection::Profile(id))))
     .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
     .into()
 }

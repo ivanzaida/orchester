@@ -31,9 +31,10 @@ use self::{
   controls::{ControlAction, RunControl, control_action, control_buttons},
   notice::Lost,
 };
-use super::{ProjectNav, Section, page, runner::connection_notice};
+use super::{ProjectNav, page, runner::connection_notice};
 use crate::{
   background, messages,
+  navigation::route::Page,
   runner::{Runners, state::RunnerState},
   tasks::detail::TaskDetail,
   theme::ExtraSpacing,
@@ -180,7 +181,7 @@ impl TaskScreen {
   fn topbar(&self, ctx: &Ctx, props: &TaskProps, detail: Option<&TaskDetail>, control: &ControlAction) -> Element {
     let nav = self.nav.clone();
     let key = detail.map_or_else(String::new, |detail| detail.task.key().to_string());
-    let breadcrumb = pressable(surface().id("task-breadcrumb"), move || nav.show(Section::Tasks)).child(
+    let breadcrumb = pressable(surface().id("task-breadcrumb"), move || nav.show(Page::Tasks)).child(
       Text::new(&ctx.t_args(
         "runs.page.breadcrumb",
         [

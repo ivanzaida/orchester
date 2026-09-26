@@ -31,7 +31,7 @@ use crate::{
   activity::{Activity, operations},
   background,
   messages::Message,
-  navigation::{Navigation, Screen},
+  navigation::Navigation,
   project_setup::{CreateFailure, ErrorPlace, NewProject, ProjectDraft, creatable},
   repository::adopt_in,
   screens::github::actions::{
@@ -97,7 +97,7 @@ impl Component for ProjectForm {
     let actions = Actions::of(ctx);
     ctx.watch(&actions.create.state(), move |state| {
       if let Some(project) = state.data.clone() {
-        navigation.show(Screen::Project(project));
+        navigation.open_project(project);
       }
     });
     let form = Self {

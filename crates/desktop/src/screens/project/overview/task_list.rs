@@ -14,8 +14,9 @@ use lurq::{
 };
 use orchester_core::time::Timestamp;
 
-use super::super::{ProjectNav, Section, task_rows::list_row};
+use super::super::{ProjectNav, task_rows::list_row};
 use crate::{
+  navigation::route::Page,
   tasks::{
     data::ProjectTasks,
     overview::{OverviewTab, footer},
@@ -109,7 +110,7 @@ fn list_footer(ctx: &Ctx, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
     .align_items(Alignment::Center)
     .child(Text::new(&message_text(ctx, &footer(&tasks.tasks, &tasks.phases))).variant(TypographyStyle::Caption))
     .child(
-      pressable(surface().id("view-all-tasks"), move || nav.show(Section::Tasks))
+      pressable(surface().id("view-all-tasks"), move || nav.show(Page::Tasks))
         .hovered_style(Style::new().background(PaletteColor::AccentMuted))
         .child(
           Text::new(&ctx.t("overview.viewAllTasks"))

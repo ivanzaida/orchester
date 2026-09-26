@@ -12,8 +12,9 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 
-use super::{ProjectNav, Section, TasksState};
+use super::{ProjectNav, TasksState};
 use crate::{
+  navigation::route::{AgentSelection, Page, SettingsTab},
   theme::{ExtraColor, ExtraSpacing},
   ui::{brand::brand, icon::Icon, nav_item::NavItem},
   workspace::OpenProject,
@@ -26,7 +27,8 @@ const CURRENT_PROJECT_HEIGHT: f32 = 70.0;
 const SELECTOR_HEIGHT: f32 = 42.0;
 const AVATAR_SIZE: f32 = 24.0;
 
-pub fn sidebar(ctx: &Ctx, open: &OpenProject, section: Section, tasks: &TasksState, nav: &ProjectNav) -> Element {
+/// `shown` is the page shown; `None` while the path names no page.
+pub fn sidebar(ctx: &Ctx, open: &OpenProject, shown: Option<Page>, tasks: &TasksState, nav: &ProjectNav) -> Element {
   Column::new()
     .width(Dimension::Px(SIDEBAR_WIDTH))
     .height(Dimension::Pct(100.0))
@@ -34,7 +36,7 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject, section: Section, tasks: &TasksSta
     .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Column::new().padding_horizontal(SpacingSize::Lg).child(brand(ctx)))
     .child(project_selector(open))
-    .child(primary_navigation(ctx, section, tasks, nav))
+    .child(primary_navigation(ctx, shown, tasks, nav))
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
@@ -45,7 +47,7 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject, section: Section, tasks: &TasksSta
         .child(NavItem::new("nav-import", Icon::Download, ctx.t("nav.importResources")).secondary()),
     )
     .child(Spacer::new().flex(1.0))
-    .child(footer(ctx, section, nav))
+    .child(footer(ctx, shown, nav))
     .into()
 }
 
@@ -83,36 +85,41 @@ fn project_selector(open: &OpenProject) -> Element {
     .into()
 }
 
-/// Tasks stays selected while a new task is written (`l2YA4`).
-fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &ProjectNav) -> Element {
-  let open = |target: Section| {
-    let nav = nav.clone();
-    move || nav.show(target)
-  };
+/// Tasks stays selected while a new task is written (`l2YA4`). An item opens its section at its
+/// start (the task list, the library, the first profile, all connections), also from a screen
+/// inside the section; it does nothing on the start itself.
+fn primary_navigation(ctx: &Ctx, shown: Option<Page>, tasks: &TasksState, nav: &ProjectNav) -> Element {
+  let item = |item: NavItem, target: Page| section_item(item, shown, target, nav);
   let items = [
-    NavItem::new("nav-overview", Icon::LayoutDashboard, ctx.t("nav.overview"))
-      .selected(section == Section::Overview)
-      .on_click(open(Section::Overview)),
+    item(
+      NavItem::new("nav-overview", Icon::LayoutDashboard, ctx.t("nav.overview")),
+      Page::Overview,
+    ),
     NavItem::new("nav-orchestrator", Icon::MessagesSquare, ctx.t("nav.orchestrator")),
-    NavItem::new("nav-tasks", Icon::CircleCheck, ctx.t("nav.tasks"))
-      .selected(matches!(section, Section::Tasks | Section::NewTask | Section::Task(_)))
-      .on_click(open(Section::Tasks))
-      .count(tasks.ready().map(|tasks| tasks.tasks.len())),
-    NavItem::new("nav-pull-requests", Icon::GitPullRequest, ctx.t("nav.pullRequests"))
-      .selected(matches!(section, Section::PullRequests | Section::PullRequest(_)))
-      .on_click(open(Section::PullRequests)),
-    NavItem::new("nav-pipelines", Icon::Workflow, ctx.t("nav.pipelines"))
-      .selected(section == Section::Pipelines)
-      .on_click(open(Section::Pipelines)),
+    item(
+      NavItem::new("nav-tasks", Icon::CircleCheck, ctx.t("nav.tasks")),
+      Page::Tasks,
+    )
+    .count(tasks.ready().map(|tasks| tasks.tasks.len())),
+    item(
+      NavItem::new("nav-pull-requests", Icon::GitPullRequest, ctx.t("nav.pullRequests")),
+      Page::PullRequests,
+    ),
+    item(
+      NavItem::new("nav-pipelines", Icon::Workflow, ctx.t("nav.pipelines")),
+      Page::Pipelines,
+    ),
     NavItem::new("nav-instructions", Icon::BookOpen, ctx.t("nav.instructions")),
-    NavItem::new("nav-agents", Icon::Bot, ctx.t("nav.agents"))
-      .selected(section == Section::Agents)
-      .on_click(open(Section::Agents)),
+    item(
+      NavItem::new("nav-agents", Icon::Bot, ctx.t("nav.agents")),
+      Page::Agents(AgentSelection::First),
+    ),
     NavItem::new("nav-tools", Icon::Wrench, ctx.t("nav.tools")),
     NavItem::new("nav-secrets", Icon::KeyRound, ctx.t("nav.secrets")),
-    NavItem::new("nav-connections", Icon::Plug, ctx.t("nav.connections"))
-      .selected(section == Section::Connections)
-      .on_click(open(Section::Connections)),
+    item(
+      NavItem::new("nav-connections", Icon::Plug, ctx.t("nav.connections")),
+      Page::CONNECTIONS,
+    ),
   ];
   Column::new()
     .width(Dimension::Pct(100.0))
@@ -122,18 +129,28 @@ fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &Pro
     .into()
 }
 
-fn footer(ctx: &Ctx, section: Section, nav: &ProjectNav) -> Element {
-  let nav = nav.clone();
+fn footer(ctx: &Ctx, shown: Option<Page>, nav: &ProjectNav) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(ExtraSpacing::Stack.role())
     .padding_horizontal(SpacingSize::Md)
     .padding_bottom(ExtraSpacing::Step.role())
-    .child(
-      NavItem::new("nav-settings", Icon::Settings, ctx.t("nav.projectSettings"))
-        .compact()
-        .selected(section == Section::Settings)
-        .on_click(move || nav.show(Section::Settings)),
-    )
+    .child(section_item(
+      NavItem::new("nav-settings", Icon::Settings, ctx.t("nav.projectSettings")).compact(),
+      shown,
+      Page::Settings(SettingsTab::General),
+      nav,
+    ))
     .into()
+}
+
+/// `item` of the section `target` starts: selected while a page of the section is shown, and
+/// opening `target` unless it is shown.
+fn section_item(item: NavItem, shown: Option<Page>, target: Page, nav: &ProjectNav) -> NavItem {
+  let item = item.selected(shown.map(|page| page.sidebar_item()) == Some(target.sidebar_item()));
+  if shown == Some(target) {
+    return item;
+  }
+  let nav = nav.clone();
+  item.on_click(move || nav.show(target))
 }
