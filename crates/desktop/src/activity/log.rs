@@ -119,6 +119,8 @@ impl Operation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
   Finished,
+  /// Ended without doing what it set out to, and says so without a failure to dismiss.
+  NotDone,
   /// `resolved` once the user opened the failure's object or dismissed it.
   Failed {
     reason: Message,
@@ -170,8 +172,8 @@ impl Event {
 
   /// The same thing happened again, e.g. another save of the same draft.
   fn repeats(&self, other: &Self) -> bool {
-    self.outcome == Outcome::Finished
-      && other.outcome == Outcome::Finished
+    !matches!(self.outcome, Outcome::Failed { .. })
+      && self.outcome == other.outcome
       && self.title == other.title
       && self.target == other.target
       && self.project == other.project
@@ -223,13 +225,14 @@ impl ActivityLog {
     self.finish_event(id, None, target, at);
   }
 
-  /// Finishes with `title` instead of the spec's done title, for work that ended without doing
-  /// what it set out to and says so without a failure the user must dismiss (a pull request sync
+  /// Finishes as not done, with `title` instead of the spec's done title, for work that ended
+  /// without doing what it set out to and says so without a failure the user must dismiss (a pull request sync
   /// GitHub refused, repeated every minute while the screen is open).
   pub fn finish_as(&mut self, id: OperationId, title: Message, at: SystemTime) {
     self.finish_event(id, Some(title), None, at);
   }
 
+  /// A `title` replacing the done title means the work was not done.
   fn finish_event(&mut self, id: OperationId, title: Option<Message>, target: Option<Target>, at: SystemTime) {
     if let Some(operation) = self.take(id) {
       let OperationSpec {
@@ -239,13 +242,18 @@ impl ActivityLog {
         ..
       } = operation.spec;
       let target = target.unwrap_or(planned);
+      let outcome = if title.is_some() {
+        Outcome::NotDone
+      } else {
+        Outcome::Finished
+      };
       self.push(Event {
         id,
         project,
         title: title.unwrap_or(done),
         target,
         at,
-        outcome: Outcome::Finished,
+        outcome,
       });
     }
   }

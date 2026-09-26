@@ -229,7 +229,7 @@ fn activity_work_that_did_not_happen_replaces_its_success_without_a_failure() {
   }
   // The latest event says the sync did not happen; nothing is pinned, and repeats merge.
   assert_eq!(title(&log.slot()), "notSynced");
-  assert!(matches!(log.slot(), Slot::Latest(_)));
+  assert!(matches!(log.slot(), Slot::Latest(event) if event.outcome() == &Outcome::NotDone));
   let recent: Vec<&str> = log.recent().iter().map(|event| event.title().key).collect();
   assert_eq!(recent, ["notSynced", "synced"]);
 }

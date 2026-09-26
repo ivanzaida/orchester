@@ -167,7 +167,9 @@ fn running_row(ctx: &mut Ctx, operation: &Operation, opener: &Opener) -> Element
 fn recent_row(ctx: &Ctx, event: &Event, opener: &Opener) -> Element {
   let icon = match event.outcome() {
     Outcome::Finished => Icon::Check,
-    Outcome::Failed { .. } => Icon::AlertCircle,
+    // No status bar state (`keJ9Z`) shows work that was not done; the alert icon in the row's
+    // muted color says so without the raised fill of a failure (H).
+    Outcome::NotDone | Outcome::Failed { .. } => Icon::AlertCircle,
   };
   let color = if event.is_unresolved() {
     PaletteColor::TextPrimary
