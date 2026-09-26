@@ -8,7 +8,8 @@ use std::fmt;
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  run::PreflightProblem,
+  run::{PreflightProblem, RunLimit},
+  tokens::TokenBudget,
 };
 use serde::{Deserialize, Serialize};
 
@@ -52,6 +53,23 @@ pub enum Command {
   /// a lost reply) answers with the run the first request created. Answered with
   /// [`Reply::RunStarted`] or [`Reply::Rejected`].
   StartRun { key: IdempotencyKey, task: TaskId },
+  /// Pauses run `run` at its next checkpoint: the active agent invocation finishes, its work is
+  /// committed, then the run is paused ("Pausing…" until then, [`Event::RunChanged`] tells when).
+  /// Answered with [`Reply::Accepted`] once the pause is requested; asking again is harmless.
+  PauseRun { run: RunId },
+  /// Continues paused run `run`; a step it stopped in continues the agent's CLI session.
+  /// Answered with [`Reply::Accepted`] once it runs again.
+  ResumeRun { run: RunId },
+  /// Cancels run `run`: its agent's process tree is ended, its worktree and branch stay. Answered
+  /// with [`Reply::Accepted`] once the run is recorded as cancelled.
+  CancelRun { run: RunId },
+  /// Raises the limits of run `run`, stopped at a limit, and continues it. Answered with
+  /// [`Reply::Accepted`] once it runs again.
+  RaiseLimit {
+    run: RunId,
+    budget: TokenBudget,
+    max_duration_ms: u64,
+  },
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes
   /// the connection.
   Shutdown { mode: ShutdownMode },
@@ -97,6 +115,10 @@ pub enum Reply {
   RunStarted {
     run: RunId,
   },
+  /// The run control command for `run` was carried out.
+  Accepted {
+    run: RunId,
+  },
   Rejected(Rejection),
 }
 
@@ -110,6 +132,25 @@ pub enum Rejection {
   /// The run cannot start until these are resolved.
   Preflight {
     problems: Vec<PreflightProblem>,
+  },
+  RunNotFound,
+  /// Pause needs a running run.
+  RunNotRunning,
+  /// Resume and a raised limit need a paused run.
+  RunNotPaused,
+  /// The run has ended; there is nothing to cancel.
+  RunEnded,
+  /// The run stopped at `limit`; it continues only with a raised limit.
+  LimitNotRaised {
+    limit: RunLimit,
+  },
+  /// A raised limit must be above what the run already used.
+  LimitNotAboveUsed {
+    limit: RunLimit,
+  },
+  /// A run budget can be at most the project's maximum run budget.
+  BudgetAboveMaximum {
+    max: TokenBudget,
   },
   /// Starting failed in the runner (database, git worktree); its log has the details.
   Failed {

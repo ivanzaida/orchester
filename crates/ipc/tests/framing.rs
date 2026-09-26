@@ -1,7 +1,8 @@
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   resource::StepKey,
-  run::PreflightProblem,
+  run::{PreflightProblem, RunLimit},
+  tokens::TokenBudget,
 };
 use orchester_ipc::{
   Command, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, Rejection, Reply, Request, RequestId,
@@ -35,6 +36,14 @@ async fn frames_round_trip_every_message() {
       key: IdempotencyKey::generate(),
       task,
     },
+    Command::PauseRun { run },
+    Command::ResumeRun { run },
+    Command::CancelRun { run },
+    Command::RaiseLimit {
+      run,
+      budget: TokenBudget::new(2_000_000).expect("above zero"),
+      max_duration_ms: 1_800_000,
+    },
     Command::Shutdown {
       mode: ShutdownMode::FinishAtCheckpoints,
     },
@@ -57,6 +66,15 @@ async fn frames_round_trip_every_message() {
     reply(Reply::Attached { active_runs: vec![run] }),
     reply(Reply::Pong { nonce: 42 }),
     reply(Reply::RunStarted { run }),
+    reply(Reply::Accepted { run }),
+    reply(Reply::Rejected(Rejection::RunNotFound)),
+    reply(Reply::Rejected(Rejection::LimitNotRaised { limit: RunLimit::Time })),
+    reply(Reply::Rejected(Rejection::LimitNotAboveUsed {
+      limit: RunLimit::Tokens,
+    })),
+    reply(Reply::Rejected(Rejection::BudgetAboveMaximum {
+      max: TokenBudget::new(10_000_000).expect("above zero"),
+    })),
     reply(Reply::Rejected(Rejection::Preflight {
       problems: vec![
         PreflightProblem::ApprovalGate {
