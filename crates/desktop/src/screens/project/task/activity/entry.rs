@@ -315,30 +315,31 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
       let (title, body) = problem_text(ctx, problem);
       plain(Icon::AlertCircle, title, "".into(), body)
     }
-    EntryKind::Raw(lines) => {
-      let key = if lines.len() == 1 {
-        "runs.activity.unparsed.one"
-      } else {
-        "runs.activity.unparsed.other"
-      };
-      let text = lines
-        .iter()
-        .map(|(stream, line)| match stream {
-          OutputStream::Stdout => line.clone(),
-          OutputStream::Stderr => ctx.t_args("runs.activity.stderrLine", [("line", &**line)]),
-        })
-        .collect();
-      Shown {
-        output: Some(text),
-        collapsible: !raw_lines,
-        ..plain(
-          Icon::CodeXml,
-          ctx.t_args(key, [("count", lines.len().to_string().as_str())]),
-          ctx.t("runs.activity.rawOutput"),
-          None,
-        )
-      }
-    }
+    EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),
+  }
+}
+
+/// Unparsed lines: collapsed and counted, or shown line by line with *Show raw lines* on.
+fn unparsed(ctx: &Ctx, lines: &[(OutputStream, Arc<str>)], raw_lines: bool) -> Shown {
+  let key = if lines.len() == 1 {
+    "runs.activity.unparsed.one"
+  } else {
+    "runs.activity.unparsed.other"
+  };
+  let text = lines
+    .iter()
+    .map(|(stream, line)| match stream {
+      OutputStream::Stdout => line.clone(),
+      OutputStream::Stderr => ctx.t_args("runs.activity.stderrLine", [("line", &**line)]),
+    })
+    .collect();
+  Shown {
+    glyph: Icon::CodeXml,
+    title: ctx.t_args(key, [("count", lines.len().to_string().as_str())]),
+    meta: ctx.t("runs.activity.rawOutput"),
+    body: None,
+    output: Some(text),
+    collapsible: !raw_lines,
   }
 }
 

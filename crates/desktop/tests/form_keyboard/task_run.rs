@@ -17,7 +17,7 @@ use orchester_core::{
   connection::{AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
   id::{ConnectionId, ResourceId},
   name::Name,
-  permission::StepPermissions,
+  permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, StepPermissions},
   resource::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
   },
@@ -61,6 +61,13 @@ pub(crate) fn programs() -> (PathBuf, PathBuf) {
     .join("orchester-fake-codex")
     .with_extension(env::consts::EXE_EXTENSION);
   (runner_beside(&profile_dir.join("orchester.exe")), fake)
+}
+
+/// The stand-in for the Claude Code CLI, built by [`programs`] beside the fake Codex CLI.
+pub(crate) fn fake_claude(fake_codex: &Path) -> PathBuf {
+  fake_codex
+    .with_file_name("orchester-fake-claude")
+    .with_extension(env::consts::EXE_EXTENSION)
 }
 
 fn git(repo: &Path, args: &[&str]) {
@@ -123,12 +130,27 @@ pub(crate) fn agent_step(builder: ResourceId, key: &str, name: &str, instruction
 /// A signed-in Codex connection running `fake`, a Builder profile on it and a published pipeline
 /// of the steps `steps` makes for that profile.
 pub(crate) fn seed_steps(repo: &Path, fake: &Path, steps: impl FnOnce(ResourceId) -> Vec<Step>) {
+  seed_agent(repo, fake, AgentProvider::CodexCli, steps);
+}
+
+/// A signed-in connection to `provider`'s CLI running `fake`, a Builder profile on it and a
+/// published pipeline of the steps `steps` makes for that profile.
+pub(crate) fn seed_agent(
+  repo: &Path,
+  fake: &Path,
+  provider: AgentProvider,
+  steps: impl FnOnce(ResourceId) -> Vec<Step>,
+) {
   let mut db = ProjectDb::open(repo).expect("open the project");
   let now = Timestamp::now();
+  let (title, version, model) = match provider {
+    AgentProvider::CodexCli => ("Codex · Kontur", "0.139.0", "gpt-5.5"),
+    AgentProvider::ClaudeCodeCli => ("Claude · Kontur", "2.1.89", "haiku"),
+  };
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
-    Name::new("Codex · Kontur").expect("name"),
-    AgentProvider::CodexCli,
+    Name::new(title).expect("name"),
+    provider,
     fake.to_path_buf(),
     now,
   )
@@ -136,7 +158,7 @@ pub(crate) fn seed_steps(repo: &Path, fake: &Path, steps: impl FnOnce(ResourceId
   connection.record_check(ConnectionCheck {
     at: now,
     result: CheckResult::Available {
-      version: "0.139.0".into(),
+      version: version.into(),
       sign_in: SignIn::SignedIn,
       catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
     },
@@ -148,9 +170,20 @@ pub(crate) fn seed_steps(repo: &Path, fake: &Path, steps: impl FnOnce(ResourceId
     String::new(),
     PromptText::new("Work carefully.").expect("prompt"),
     connection.id(),
-    ModelId::new("gpt-5.5").expect("model"),
+    ModelId::new(model).expect("model"),
     ProviderSettings::new(BTreeMap::new()).expect("settings"),
   );
+  // Claude Code cannot confine any command to the worktree, only run listed ones.
+  let profile = match provider {
+    AgentProvider::CodexCli => profile,
+    AgentProvider::ClaudeCodeCli => profile.with_permissions(AgentPermissions::new(
+      RepositoryAccess::Write,
+      CommandPermission::Allowed(
+        AllowedCommands::new(vec![CommandPrefix::new("git").expect("prefix")]).expect("commands"),
+      ),
+      NetworkAccess::On,
+    )),
+  };
   let name = |value: &str| Name::new(value).expect("name");
   let builder = db
     .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, now)
