@@ -148,7 +148,13 @@ impl Component for StepInspector {
       ))
       .child(step_fields::runs_after(ctx, &props, &self.handle))
       .child(step_fields::route(ctx, &props, &self.fields))
-      .child(step_fields::constraints(ctx, &props, &self.fields, &errors))
+      .child(step_fields::constraints(
+        ctx,
+        &props,
+        &self.fields,
+        &errors,
+        &self.handle,
+      ))
       .child(step_fields::approval(ctx, &props, &self.handle));
     // The scroll viewport starts `FOCUS_ROOM` early on both sides and its content is padded by
     // the same amount, so the fields stay at the designed inset and keep room for focus rings.

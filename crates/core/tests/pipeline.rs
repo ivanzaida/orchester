@@ -3,6 +3,7 @@ use std::{collections::BTreeSet, num::NonZeroU32};
 use orchester_core::{
   id::ResourceId,
   name::Name,
+  permission::StepPermissions,
   resource::{
     FailureRoute, ModelId, Pipeline, PipelineError, PromptText, PublishError, RepositoryAccess, ResourceBody, Step,
     StepKey, StepKind,
@@ -22,6 +23,7 @@ fn step(value: &str, depends_on: &[&str]) -> Step {
       profile: Some(ResourceId::generate()),
       repository: RepositoryAccess::ReadOnly,
       model: None,
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new("").expect("valid prompt"),
     depends_on: depends_on.iter().map(|dependency| key(dependency)).collect(),
@@ -49,6 +51,7 @@ fn feature_delivery() -> Vec<Step> {
       profile: Some(ResourceId::generate()),
       repository: RepositoryAccess::Write,
       model: Some(ModelId::new("opus").expect("valid model")),
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new("Implement {{task.title}}.").expect("valid prompt"),
     budget: Some(TokenBudget::new(400_000).expect("above zero")),

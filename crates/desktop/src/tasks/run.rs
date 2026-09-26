@@ -98,6 +98,9 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::ConnectionMissing { step: key } => step("runs.preflight.connectionMissing", key),
     PreflightProblem::UnsupportedProvider { step: key } => step("runs.preflight.unsupportedProvider", key),
     PreflightProblem::ConnectionNotUsable { step: key, .. } => step("runs.preflight.connectionNotUsable", key),
+    PreflightProblem::PermissionsNotEnforceable { step: key, .. } => {
+      step("runs.preflight.permissionsNotEnforceable", key)
+    }
     PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
     PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),
   }

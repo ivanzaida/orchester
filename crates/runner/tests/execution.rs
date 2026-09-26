@@ -72,9 +72,10 @@ fn assert_transcript(db: &ProjectDb, run: RunId) {
     .iter()
     .find_map(|line| line.strip_prefix("argv: "))
     .expect("argv reported");
+  // The profile has network off, which Codex cannot enforce on Windows: network stays on there.
   let expected = if cfg!(windows) {
     "-a never exec --json --ignore-user-config --ignore-rules -m gpt-5.5 -c model_reasoning_effort=low --sandbox \
-     workspace-write -c windows.sandbox=elevated --output-schema "
+     workspace-write -c windows.sandbox=elevated -c sandbox_workspace_write.network_access=true --output-schema "
   } else {
     "-a never exec --json --ignore-user-config --ignore-rules -m gpt-5.5 -c model_reasoning_effort=low --sandbox \
      workspace-write --output-schema "

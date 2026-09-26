@@ -6,7 +6,7 @@
 use std::collections::BTreeSet;
 
 use super::{Pipeline, PipelineError, RepositoryAccess, Step, StepKey, StepKind, unassigned};
-use crate::{name::Name, resource::prompt::PromptText};
+use crate::{name::Name, permission::StepPermissions, resource::prompt::PromptText};
 
 /// Base of the keys given to added steps: `step`, `step-2`, …
 const ADDED_KEY: &str = "step";
@@ -87,6 +87,7 @@ impl PipelineEdit {
         profile: None,
         repository: RepositoryAccess::ReadOnly,
         model: None,
+        permissions: StepPermissions::default(),
       },
       instructions: PromptText::new("").expect("empty text has no placeholders"),
       depends_on: after.into_iter().cloned().collect(),

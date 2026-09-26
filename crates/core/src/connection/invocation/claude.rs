@@ -1,26 +1,21 @@
 //! How an agent step starts the Claude Code CLI (`.tmp/cli-probe/REPORT.md`, "Recommended argv"):
 //!
 //! `claude -p --output-format stream-json --verbose --model <model> [--effort <e>]
-//!  --strict-mcp-config --setting-sources "" --disable-slash-commands --tools <tools>
-//!  <permissions> (--session-id <new uuid> | --resume <session>)`
+//!  --strict-mcp-config --setting-sources "" --disable-slash-commands <permissions>
+//!  (--session-id <new uuid> | --resume <session>)`
 //!
 //! in the worktree as the process's working directory, with the prompt on standard input.
 //!
 //! - `stream-json` needs `--verbose` in print mode; without it the CLI exits with an error.
 //! - Isolation from the user's own setup: `--strict-mcp-config` loads no MCP server, `--disable-slash-commands` no
 //!   skills, and `--setting-sources ""` no settings file at all. The user's settings carry allow rules that would widen
-//!   the permissions below; a repository's `.claude/settings.json` could do the same, or run hooks, and in a writing
-//!   step the agent could edit that file for the invocations after it.
-//! - `--tools` offers only the built-in tools a step needs, so scheduling, remote triggers, worktree switching and
-//!   sub-agents are not available at all.
-//! - Permissions, from the step's repository access. Read-only runs in `dontAsk` with the tools that change files
-//!   denied, and without `Bash`, which could change them too. Writing runs in `acceptEdits` (file edits are accepted,
-//!   in print mode nothing else is ever asked) and allows only git commands; any other command is denied and the CLI
-//!   reports the denial. Bypass modes are never used. Claude Code's own sandbox is not used: it is not supported on
-//!   Windows. The agent profile permissions (repository access, allowed commands, network) will replace this mapping.
+//!   the permissions; a repository's `.claude/settings.json` could do the same, or run hooks, and in a writing step the
+//!   agent could edit that file for the invocations after it.
+//! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
+//!   offered, permission mode, denied tools, allowed command prefixes). Bypass modes are never used.
 //! - Sessions: a new session gets an id Orchester chose (`--session-id`); a continue after a pause or a limit resumes
-//!   the session the CLI reported (`--resume`). Sessions are kept on disk (no `--no-session-persistence`) so that they
-//!   can be resumed.
+//!   the session the CLI reported (`--resume`), with the permissions given again. Sessions are kept on disk (no
+//!   `--no-session-persistence`) so that they can be resumed.
 //! - No `--json-schema`: its result shape could not be verified (the probe's CLI was not signed in). The prompt asks
 //!   for the step result as the final message, and the CLI's `is_error` decides when it is not one.
 
@@ -29,16 +24,10 @@ use std::{ffi::OsString, path::Path};
 use uuid::Uuid;
 
 use super::{InvocationError, agent_command};
-use crate::{command::Command, resource::RepositoryAccess};
-
-/// Tools a read-only step can use.
-const READ_TOOLS: &str = "Read,Glob,Grep,TodoWrite";
-/// Tools a writing step can use.
-const WRITE_TOOLS: &str = "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash";
-/// Denied to a read-only step, even if a tool list offered them.
-const READ_ONLY_DENIED: [&str; 6] = ["Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Bash"];
-/// Commands a writing step may run: git only, as prefix rules.
-const WRITE_ALLOWED: [&str; 1] = ["Bash(git:*)"];
+use crate::{
+  command::Command,
+  permission::{capability::EnforcedPermissions, claude::permission_args},
+};
 
 /// Which session an invocation works in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,13 +52,15 @@ pub struct ClaudeInvocation<'a> {
   pub model: &'a str,
   /// The profile's effort; `None` leaves the CLI's default.
   pub effort: Option<&'a str>,
-  pub access: RepositoryAccess,
+  /// The step's effective permissions, as Claude Code enforces them.
+  pub permissions: &'a EnforcedPermissions,
   pub worktree: &'a Path,
   pub session: ClaudeSession<'a>,
 }
 
 impl ClaudeInvocation<'_> {
-  /// Arguments after the program, in order. They do not differ between Windows and macOS.
+  /// Arguments after the program, in order. They do not differ between Windows and macOS: the
+  /// platform only decides which permissions are enforceable.
   pub fn args(&self) -> Vec<OsString> {
     let mut args: Vec<String> = [
       "-p",
@@ -90,20 +81,10 @@ impl ClaudeInvocation<'_> {
         "--setting-sources",
         "",
         "--disable-slash-commands",
-        "--tools",
       ]
       .map(str::to_owned),
     );
-    match self.access {
-      RepositoryAccess::ReadOnly => {
-        args.extend([READ_TOOLS, "--permission-mode", "dontAsk", "--disallowedTools"].map(str::to_owned));
-        args.extend(READ_ONLY_DENIED.map(str::to_owned));
-      }
-      RepositoryAccess::Write => {
-        args.extend([WRITE_TOOLS, "--permission-mode", "acceptEdits", "--allowedTools"].map(str::to_owned));
-        args.extend(WRITE_ALLOWED.map(str::to_owned));
-      }
-    }
+    args.extend(permission_args(self.permissions));
     match self.session {
       ClaudeSession::New(id) => args.extend(["--session-id".to_owned(), id.to_string()]),
       ClaudeSession::Resume(session) => args.extend(["--resume".to_owned(), session.to_owned()]),

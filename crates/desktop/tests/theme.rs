@@ -215,6 +215,8 @@ fn agents_and_connections_roles_follow_pencil() {
   let compact = theme.typography_style(ExtraTypography::CompactStatusLabel.role());
   assert_eq!((compact.font_size, compact.weight), (10.0, FontWeight::Medium));
   assert_eq!(theme.spacing_value(ExtraSpacing::Form.role()), Dimension::Px(22.0));
+  // Permission options a connection cannot enforce (`BNliD` in 04.04 `T1rjv`).
+  assert_eq!(theme::UNAVAILABLE_OPTION_OPACITY, 0.5);
 }
 
 #[test]

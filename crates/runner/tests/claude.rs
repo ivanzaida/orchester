@@ -60,7 +60,7 @@ async fn claude_runs_a_step_and_commits_its_changes() {
     argv.starts_with(
       "-p --output-format stream-json --verbose --model haiku --effort low --strict-mcp-config --setting-sources  \
        --disable-slash-commands --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash --permission-mode \
-       acceptEdits --allowedTools Bash(git:*) --session-id "
+       acceptEdits --disallowedTools WebFetch WebSearch --allowedTools Bash(git:*) --session-id "
     ),
     "{argv}"
   );

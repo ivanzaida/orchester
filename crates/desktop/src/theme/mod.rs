@@ -31,6 +31,8 @@ pub const CONNECTOR_STROKE: f32 = tokens::CONNECTOR_STROKE;
 pub const SELECT_CHECK_SLOT: f32 = tokens::SELECT_ICON_SIZE;
 /// Opacity of unparsed CLI lines in the agent transcript (`Ane9j` in `SfXU1`).
 pub const UNPARSED_OPACITY: f32 = tokens::UNPARSED_OPACITY;
+/// Opacity of an option that cannot be chosen (`BNliD` in `T1rjv`).
+pub const UNAVAILABLE_OPTION_OPACITY: f32 = tokens::UNAVAILABLE_OPTION_OPACITY;
 
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),

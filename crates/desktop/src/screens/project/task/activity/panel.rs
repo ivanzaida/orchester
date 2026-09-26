@@ -12,7 +12,7 @@ use lurq::{
 };
 use orchester_core::{run::Invocation, tokens::compact_tokens};
 
-use super::{super::summary::permissions, engine};
+use super::{super::permissions::permissions_value, engine};
 use crate::{
   display,
   tasks::detail::RunView,
@@ -47,7 +47,8 @@ pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView) -> Element {
     .with_children(
       run
         .step_of(invocation.execution)
-        .map(|step| property(&ctx.t("runs.summary.permissions"), &permissions(ctx, step))),
+        .and_then(|step| permissions_value(ctx, step))
+        .map(|value| property(&ctx.t("runs.summary.permissions"), &value)),
     )
     .child(Spacer::new().flex(1.0))
     .child(Text::new(&ctx.t("runs.activity.panel.note")).variant(ExtraTypography::Hint.role()))

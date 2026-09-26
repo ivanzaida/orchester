@@ -11,9 +11,10 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  connection::{Connection, ConnectionKind, ConnectionStatus},
+  connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus, invocation::Platform},
   id::{ConnectionId, ResourceId},
-  resource::{AgentProfile, Pipeline, StepKey, StepKind, Version},
+  permission::capability::PermissionProblem,
+  resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, Version},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -35,6 +36,9 @@ pub enum PreflightProblem {
   UnsupportedProvider { step: StepKey },
   /// The connection's last check says its CLI cannot be used (not signed in, missing, …).
   ConnectionNotUsable { step: StepKey, status: ConnectionStatus },
+  /// The connection's CLI cannot enforce the step's effective permissions (profile ∩ step) on this
+  /// platform; a step never runs with permissions that are not enforced.
+  PermissionsNotEnforceable { step: StepKey, reason: PermissionProblem },
   /// The project folder is not a git repository the runner can branch from.
   NotAGitRepository,
   /// The repository has no commit to start the run's branch from.
@@ -82,24 +86,51 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
       problems.push(PreflightProblem::ProfileNotPublished { step: key() });
       continue;
     };
-    if let Some(problem) = connection_problem(&connections, profile.body().connection(), key()) {
-      problems.push(problem);
+    match usable_provider(&connections, profile.body().connection(), key()) {
+      Ok(provider) => problems.extend(permission_problem(step, profile.body(), provider)),
+      Err(problem) => problems.push(problem),
     }
   }
   problems
 }
 
-fn connection_problem(
+/// Whether `provider`'s CLI enforces the step's effective permissions on this platform. Only
+/// reached for steps on a usable agent connection.
+fn permission_problem(step: &Step, profile: &AgentProfile, provider: AgentProvider) -> Option<PreflightProblem> {
+  let StepKind::Agent {
+    repository,
+    permissions,
+    ..
+  } = &step.kind
+  else {
+    return None;
+  };
+  let reason = profile
+    .permissions()
+    .narrowed(*repository, permissions)
+    .enforced_on(provider, Platform::current())
+    .err()?;
+  Some(PreflightProblem::PermissionsNotEnforceable {
+    step: step.key.clone(),
+    reason,
+  })
+}
+
+/// The agent CLI of connection `id`, or why the step cannot run on it.
+fn usable_provider(
   connections: &BTreeMap<ConnectionId, &Connection>,
   id: ConnectionId,
   step: StepKey,
-) -> Option<PreflightProblem> {
+) -> Result<AgentProvider, PreflightProblem> {
   let Some(connection) = connections.get(&id) else {
-    return Some(PreflightProblem::ConnectionMissing { step });
+    return Err(PreflightProblem::ConnectionMissing { step });
   };
-  if !matches!(connection.kind(), ConnectionKind::Agent(_)) {
-    return Some(PreflightProblem::UnsupportedProvider { step });
-  }
+  let ConnectionKind::Agent(provider) = connection.kind() else {
+    return Err(PreflightProblem::UnsupportedProvider { step });
+  };
   let status = connection.status();
-  (!status.is_usable()).then_some(PreflightProblem::ConnectionNotUsable { step, status })
+  if !status.is_usable() {
+    return Err(PreflightProblem::ConnectionNotUsable { step, status });
+  }
+  Ok(*provider)
 }

@@ -12,7 +12,7 @@ use super::{
   lifecycle::{Slug, SlugError},
   prompt::PromptText,
 };
-use crate::{id::ResourceId, name::Name, tokens::TokenBudget};
+use crate::{id::ResourceId, name::Name, permission::StepPermissions, tokens::TokenBudget};
 
 mod budget;
 mod changes;
@@ -61,8 +61,10 @@ impl From<StepKey> for String {
   }
 }
 
-/// What an agent step may do to the run's working tree.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// What an agent may do to the run's working tree: read it, or edit files inside it. A profile's
+/// permissions hold one; a step's own value can only narrow it
+/// ([`crate::permission::AgentPermissions::narrowed`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RepositoryAccess {
   ReadOnly,
@@ -73,13 +75,17 @@ pub enum RepositoryAccess {
 #[serde(rename_all = "snake_case")]
 pub enum StepKind {
   /// Runs an agent of the selected profile, with the profile's model unless `model`
-  /// overrides it for this step. A draft may leave the profile unset (`None`); publishing
-  /// requires it, see [`Pipeline::unassigned_steps`].
+  /// overrides it for this step, and the profile's permissions narrowed by `repository` and
+  /// `permissions`. A draft may leave the profile unset (`None`); publishing requires it, see
+  /// [`Pipeline::unassigned_steps`].
   Agent {
     profile: Option<ResourceId>,
     repository: RepositoryAccess,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     model: Option<ModelId>,
+    /// Pipelines saved before steps could narrow commands and network have none.
+    #[serde(default, skip_serializing_if = "StepPermissions::is_as_profile")]
+    permissions: StepPermissions,
   },
   /// Calls a project tool under the tool's access policy. Unset (`None`) like an agent step's
   /// profile until a tool is chosen.

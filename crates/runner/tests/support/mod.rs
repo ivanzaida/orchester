@@ -20,6 +20,7 @@ use orchester_core::{
   },
   id::{ConnectionId, IdempotencyKey, ProjectId, RunId, TaskId},
   name::Name,
+  permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, StepPermissions},
   project::{Project, ProjectKey},
   resource::{
     AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
@@ -189,6 +190,7 @@ fn agent_step(key: &str, title: &str, builder: orchester_core::id::ResourceId, s
       profile: Some(builder),
       repository: RepositoryAccess::Write,
       model: None,
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new("Change README.md for {{task.id}}.").expect("prompt"),
     depends_on: BTreeSet::new(),
@@ -206,6 +208,7 @@ fn graph_step(spec: &StepSpec, builder: orchester_core::id::ResourceId) -> Step 
       profile: Some(builder),
       repository: RepositoryAccess::Write,
       model: None,
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new(spec.instructions).expect("prompt"),
     depends_on: spec.after.iter().map(|key| StepKey::new(key).expect("key")).collect(),
@@ -233,7 +236,12 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     })
     .expect("model"),
     settings,
-  );
+  )
+  .with_permissions(AgentPermissions::new(
+    RepositoryAccess::Write,
+    commands(setup.provider),
+    NetworkAccess::Off,
+  ));
   let builder = db
     .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, now)
     .expect("profile")
@@ -268,6 +276,17 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
   task.queue().expect("complete task");
   db.save_task(&task).expect("save task");
   task.id()
+}
+
+/// What the Builder may run: Codex confines any command to the worktree; Claude Code can only
+/// limit commands to a list, here git.
+fn commands(provider: AgentProvider) -> CommandPermission {
+  match provider {
+    AgentProvider::CodexCli => CommandPermission::AnyInWorktree,
+    AgentProvider::ClaudeCodeCli => CommandPermission::Allowed(
+      AllowedCommands::new(vec![CommandPrefix::new("git").expect("valid prefix")]).expect("valid list"),
+    ),
+  }
 }
 
 /// Queues a second task on the project's pipeline, with the same brief as the first.

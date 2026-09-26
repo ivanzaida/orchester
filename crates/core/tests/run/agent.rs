@@ -10,6 +10,10 @@ use orchester_core::{
   },
   id::{ConnectionId, ProjectId, ResourceId, TaskId},
   name::Name,
+  permission::{
+    AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess, StepCommands,
+    capability::{PermissionOption, PermissionProblem, Unavailable},
+  },
   project::{Project, ProjectKey, TaskKey},
   resource::{AgentProfile, Pipeline, PromptText, ProviderSettings, Step, StepKind, Variable, VersionNumber},
   run::{
@@ -224,8 +228,8 @@ fn connection(provider: AgentProvider, sign_in: SignIn) -> Connection {
   connection.into_connection()
 }
 
-/// Preflight of the sample pipeline with every profile on `connection`.
-fn problems_with(connection: &Connection) -> Vec<PreflightProblem> {
+/// Preflight of the sample pipeline with every profile on `connection`, with `permissions`.
+fn problems_with(connection: &Connection, permissions: &AgentPermissions) -> Vec<PreflightProblem> {
   let mut config = Config::feature_delivery();
   for published in config.profiles.values_mut() {
     let body = published.body();
@@ -236,7 +240,8 @@ fn problems_with(connection: &Connection) -> Vec<PreflightProblem> {
       connection.id(),
       body.model().clone(),
       ProviderSettings::default(),
-    );
+    )
+    .with_permissions(permissions.clone());
     *published = version(published.number().get(), moved);
   }
   preflight(PreflightInput {
@@ -248,27 +253,44 @@ fn problems_with(connection: &Connection) -> Vec<PreflightProblem> {
 
 #[test]
 fn preflight_reports_approval_gates_and_unusable_connections() {
+  let before = AgentPermissions::before_permissions();
   let signed_in = connection(AgentProvider::CodexCli, SignIn::SignedIn);
   assert_eq!(
-    problems_with(&signed_in),
+    problems_with(&signed_in, &before),
     [PreflightProblem::ApprovalGate { step: key("plan") }]
   );
   let signed_out = connection(AgentProvider::CodexCli, SignIn::SignedOut);
   assert!(
-    problems_with(&signed_out).contains(&PreflightProblem::ConnectionNotUsable {
+    problems_with(&signed_out, &before).contains(&PreflightProblem::ConnectionNotUsable {
       step: key("research"),
       status: ConnectionStatus::SignInRequired,
     })
   );
-  // Claude Code steps run like Codex ones.
+  // Claude Code steps run like Codex ones, with permissions Claude Code can enforce.
+  let git = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(
+      AllowedCommands::new(vec![CommandPrefix::new("git").expect("valid command")]).expect("valid list"),
+    ),
+    NetworkAccess::On,
+  );
   let claude = connection(AgentProvider::ClaudeCodeCli, SignIn::SignedIn);
   assert_eq!(
-    problems_with(&claude),
+    problems_with(&claude, &git),
     [PreflightProblem::ApprovalGate { step: key("plan") }]
+  );
+  assert!(
+    problems_with(&claude, &before).contains(&PreflightProblem::PermissionsNotEnforceable {
+      step: key("review"),
+      reason: PermissionProblem::NotEnforceable {
+        option: PermissionOption::AnyCommand,
+        reason: Unavailable::CannotConfineCommands,
+      },
+    })
   );
   let claude_signed_out = connection(AgentProvider::ClaudeCodeCli, SignIn::SignedOut);
   assert!(
-    problems_with(&claude_signed_out).contains(&PreflightProblem::ConnectionNotUsable {
+    problems_with(&claude_signed_out, &git).contains(&PreflightProblem::ConnectionNotUsable {
       step: key("review"),
       status: ConnectionStatus::SignInRequired,
     })
@@ -284,7 +306,49 @@ fn preflight_reports_approval_gates_and_unusable_connections() {
     at(1),
   )
   .expect("absolute path");
-  assert!(problems_with(&github).contains(&PreflightProblem::UnsupportedProvider { step: key("review") }));
+  assert!(problems_with(&github, &before).contains(&PreflightProblem::UnsupportedProvider { step: key("review") }));
+}
+
+#[test]
+fn preflight_reports_steps_whose_permissions_codex_cannot_enforce() {
+  let config = Config::feature_delivery();
+  let mut steps = config.pipeline_version.body().steps().to_vec();
+  let StepKind::Agent { permissions, .. } = &mut steps[0].kind else {
+    panic!("research is an agent step");
+  };
+  permissions.commands = StepCommands::Only(
+    AllowedCommands::new(vec![CommandPrefix::new("git log").expect("valid command")]).expect("valid list"),
+  );
+  let pipeline = Pipeline::new(steps).expect("valid pipeline");
+  let codex = connection(AgentProvider::CodexCli, SignIn::SignedIn);
+  let mut profiles = config.profiles;
+  for published in profiles.values_mut() {
+    let body = published.body();
+    let moved = AgentProfile::new(
+      body.role().clone(),
+      String::new(),
+      body.instructions().clone(),
+      codex.id(),
+      body.model().clone(),
+      ProviderSettings::default(),
+    );
+    *published = version(published.number().get(), moved);
+  }
+  let problems = preflight(PreflightInput {
+    pipeline: Some(&pipeline),
+    profiles: &profiles,
+    connections: std::slice::from_ref(&codex),
+  });
+  assert!(problems.contains(&PreflightProblem::PermissionsNotEnforceable {
+    step: key("research"),
+    reason: PermissionProblem::NotEnforceable {
+      option: PermissionOption::AllowedCommands,
+      reason: Unavailable::CannotLimitCommands,
+    },
+  }));
+  assert!(!problems.iter().any(
+    |problem| matches!(problem, PreflightProblem::PermissionsNotEnforceable { step, .. } if step != &key("research"))
+  ));
 }
 
 #[test]

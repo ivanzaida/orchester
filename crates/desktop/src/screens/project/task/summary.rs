@@ -17,7 +17,6 @@ use lurq::{
 use orchester_core::{
   connection::stream::InvocationOutcome,
   limits::ProjectLimits,
-  resource::RepositoryAccess,
   run::{PauseReason, RunFailure, RunLimit, RunStatus},
   time::Timestamp,
   tokens::compact_tokens,
@@ -27,13 +26,14 @@ use super::{
   heading::agent_of,
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
   notice::{Lost, notice},
+  permissions::{RunPermissionsProps, RunPermissionsRow},
   progress::progress_list,
   retry_limit::retry_limit,
 };
 use crate::{
   budget::whole_minutes,
   display,
-  tasks::detail::{RunView, StepView, TaskDetail},
+  tasks::detail::{RunView, TaskDetail},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     message_text,
@@ -128,7 +128,7 @@ fn latest(ctx: &Ctx, run: &RunView) -> Option<Element> {
 }
 
 /// The run's pinned configuration, its limits and usage (`F5Lsi`).
-fn this_run(ctx: &Ctx, run: &RunView) -> Element {
+fn this_run(ctx: &mut Ctx, run: &RunView) -> Element {
   let version = run.version.to_string();
   let pipeline = ctx.t_args(
     "runs.summary.pipelineValue",
@@ -146,7 +146,13 @@ fn this_run(ctx: &Ctx, run: &RunView) -> Element {
   );
   let step = run.current_step();
   let model = step.and_then(|step| step.model.as_deref()).unwrap_or_default();
-  let permissions = step.map(|step| permissions(ctx, step));
+  let permissions = step.and_then(|step| {
+    let props = RunPermissionsProps {
+      permissions: step.permissions.clone()?,
+      step: step.clone(),
+    };
+    Some(ctx.mount_keyed::<RunPermissionsRow>(&format!("task-permissions-{}", step.key), props))
+  });
   let checkpoint = run.run.last_checkpoint().map(|checkpoint| {
     ctx.t_args(
       "runs.summary.checkpointValue",
@@ -182,7 +188,7 @@ fn this_run(ctx: &Ctx, run: &RunView) -> Element {
     .child(property(&ctx.t("runs.cached"), &cached))
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
-    .with_children(permissions.map(|value| property(&ctx.t("runs.summary.permissions"), &value)))
+    .with_children(permissions)
     .child(Spacer::new().flex(1.0))
     .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()))
     .into()
@@ -202,17 +208,5 @@ pub(super) fn budget_value(ctx: &Ctx, run: &RunView) -> Arc<str> {
       ("used", compact_tokens(run.run.used().get()).as_str()),
       ("budget", compact_tokens(run.run.budget().get()).as_str()),
     ],
-  )
-}
-
-/// The step's agent and what it may do to the repository, e.g. "Builder · Edit files".
-pub(super) fn permissions(ctx: &Ctx, step: &StepView) -> std::sync::Arc<str> {
-  let access = match step.access {
-    Some(RepositoryAccess::Write) => ctx.t("runs.permissions.write"),
-    Some(RepositoryAccess::ReadOnly) | None => ctx.t("runs.permissions.readOnly"),
-  };
-  ctx.t_args(
-    "runs.permissions.value",
-    [("agent", agent_of(step)), ("access", &access)],
   )
 }

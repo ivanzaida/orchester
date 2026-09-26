@@ -5,8 +5,9 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ConnectionId, ProjectId, ResourceId},
+  id::{ConnectionId, ProjectId, ResourceId, VersionId},
   name::Name,
+  permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, StepPermissions},
   project::{Project, ProjectKey},
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, DeniedBehavior,
@@ -88,6 +89,7 @@ fn pipeline() -> Pipeline {
       profile: Some(ResourceId::generate()),
       repository: RepositoryAccess::Write,
       model: None,
+      permissions: StepPermissions::default(),
     },
     instructions: PromptText::new("").expect("valid prompt"),
     depends_on: depends_on
@@ -352,6 +354,82 @@ fn resources_revalidate_stored_bodies_on_read() {
       Err(StoreError::Corrupt { .. })
     ));
   }
+}
+
+#[test]
+fn resources_agent_profiles_keep_their_permissions() {
+  let (repo, mut db) = project_repo();
+  let edit = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(
+      AllowedCommands::new(vec![CommandPrefix::new("pnpm test").expect("valid command")]).expect("valid list"),
+    ),
+    NetworkAccess::On,
+  );
+  let body = profile().with_permissions(edit.clone());
+  let id = db
+    .create_resource(slug("builder"), name("Builder"), &body, at(1))
+    .unwrap()
+    .id();
+  db.publish_draft::<AgentProfile>(id, at(2)).unwrap();
+  drop(db);
+  let db = ProjectDb::open(repo.path()).unwrap();
+  let version = db.latest_version::<AgentProfile>(id).unwrap().expect("published");
+  assert_eq!(version.body().permissions(), &edit);
+  let stored: String = raw(repo.path())
+    .query_row("SELECT body FROM resource_versions", [], |row| row.get(0))
+    .unwrap();
+  assert!(stored.contains(r#""schema":2"#), "{stored}");
+}
+
+/// Profiles stored before permissions existed (schema 1) read as read-only, commands confined to
+/// the worktree and network off; published versions are read as they are, not rewritten.
+#[test]
+fn resources_agent_profiles_before_permissions_read_with_the_safest_permissions() {
+  let (repo, mut db) = project_repo();
+  let body = profile();
+  let id = db
+    .create_resource(slug("reviewer"), name("Reviewer"), &body, at(1))
+    .unwrap()
+    .id();
+  let stored: String = raw(repo.path())
+    .query_row("SELECT body FROM resource_drafts", [], |row| row.get(0))
+    .unwrap();
+  let mut document: serde_json::Value = serde_json::from_str(&stored).unwrap();
+  document["schema"] = 1.into();
+  document["body"].as_object_mut().unwrap().remove("permissions");
+  let schema_1 = document.to_string();
+  let raw = raw(repo.path());
+  raw
+    .execute("UPDATE resource_drafts SET body = ?1", [&schema_1])
+    .unwrap();
+  raw
+    .execute(
+      "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, 1, ?3, 1)",
+      rusqlite::params![VersionId::generate().to_string(), id.to_string(), schema_1],
+    )
+    .unwrap();
+  let draft = db.draft::<AgentProfile>(id).unwrap().expect("draft");
+  assert_eq!(draft.body().permissions(), &AgentPermissions::before_permissions());
+  assert_eq!(draft.body().role(), body.role());
+  let version = db.latest_version::<AgentProfile>(id).unwrap().expect("version");
+  assert_eq!(
+    version.body().permissions(),
+    &AgentPermissions::new(
+      RepositoryAccess::ReadOnly,
+      CommandPermission::AnyInWorktree,
+      NetworkAccess::Off
+    )
+  );
+  let unchanged: String = raw
+    .query_row("SELECT body FROM resource_versions", [], |row| row.get(0))
+    .unwrap();
+  assert_eq!(unchanged, schema_1);
+  document["schema"] = 3.into();
+  raw
+    .execute("UPDATE resource_drafts SET body = ?1", [document.to_string()])
+    .unwrap();
+  assert!(matches!(db.draft::<AgentProfile>(id), Err(StoreError::Corrupt { .. })));
 }
 
 #[test]
