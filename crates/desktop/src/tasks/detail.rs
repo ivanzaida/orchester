@@ -6,9 +6,10 @@
 use std::{num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::{AgentProvider, ConnectionKind},
+  connection::{AgentProvider, ConnectionKind, invocation::Platform},
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
-  resource::{AgentProfile, RepositoryAccess, StepKey, StepKind, VersionNumber},
+  permission::AgentPermissions,
+  resource::{AgentProfile, Step, StepKey, StepKind, VersionNumber},
   run::{
     ActivityEntry, Invocation, Run, RunEventKind, RunStatus, StepExecutor, StepFailure, StepOutput, StepStatus,
     TaskPhase, TokenUsage, active_time,
@@ -31,7 +32,9 @@ pub struct StepView {
   /// The agent CLI of the profile version's connection, while that connection exists.
   pub provider: Option<AgentProvider>,
   pub model: Option<Arc<str>>,
-  pub access: Option<RepositoryAccess>,
+  /// What the step's agent may do in this run; `None` for a tool step, or when its profile version
+  /// is gone.
+  pub permissions: Option<RunPermissions>,
   pub execution: Option<StepExecutionId>,
   pub status: Option<StepStatus>,
   /// The attempt of the latest execution.
@@ -40,6 +43,17 @@ pub struct StepView {
   pub failure: Option<StepFailure>,
   /// The step's stage in the pipeline graph, from 0: steps of one stage run beside each other.
   pub stage: usize,
+}
+
+/// A step's permissions in its run: the pinned profile version's, narrowed by the step, as its
+/// connection's CLI runs them on this platform.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunPermissions {
+  pub permissions: AgentPermissions,
+  /// Network off was chosen, but the CLI cannot enforce it, so network stays on.
+  pub network_stays_on: bool,
+  /// The profile version the permissions come from.
+  pub profile: VersionNumber,
 }
 
 /// The latest run of a task.
@@ -173,19 +187,20 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       .unwrap_or_default()
   };
   for (index, step) in run.snapshot().body().steps().iter().enumerate() {
-    let (agent, provider, model) = match run.snapshot().step(&step.key).map(|pinned| pinned.executor()) {
+    let (agent, provider, model, permissions) = match run.snapshot().step(&step.key).map(|pinned| pinned.executor()) {
       Some(StepExecutor::Agent { profile, model, .. }) => {
         let version = db.version::<AgentProfile>(profile.resource, profile.number)?;
         let role = version
           .as_ref()
           .map(|version| Arc::<str>::from(version.body().role().as_str()));
-        let provider = match version {
+        let provider = match &version {
           Some(version) => provider_of(db, version.body().connection())?,
           None => None,
         };
-        (role, provider, Some(Arc::<str>::from(model.as_str())))
+        let permissions = version.map(|version| run_permissions(step, version.body(), provider, profile.number));
+        (role, provider, Some(Arc::<str>::from(model.as_str())), permissions)
       }
-      Some(StepExecutor::Tool { .. }) | None => (None, None, None),
+      Some(StepExecutor::Tool { .. }) | None => (None, None, None, None),
     };
     let latest = run.latest_execution(&step.key);
     let attempt = latest.and_then(|execution| {
@@ -202,10 +217,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       agent,
       provider,
       model,
-      access: match step.kind {
-        StepKind::Agent { repository, .. } => Some(repository),
-        StepKind::Tool { .. } => None,
-      },
+      permissions,
       execution: latest.map(|execution| execution.id()),
       status: latest.map(|execution| execution.status()),
       attempt,
@@ -235,6 +247,32 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     steps,
     run,
   })
+}
+
+/// `profile`'s permissions narrowed by `step`. Network off that `provider` cannot enforce stays
+/// on; permissions it cannot enforce at all never ran (preflight refuses them) and read as chosen.
+fn run_permissions(
+  step: &Step,
+  profile: &AgentProfile,
+  provider: Option<AgentProvider>,
+  version: VersionNumber,
+) -> RunPermissions {
+  let permissions = match &step.kind {
+    StepKind::Agent {
+      repository,
+      permissions,
+      ..
+    } => profile.permissions().narrowed(*repository, permissions),
+    StepKind::Tool { .. } => profile.permissions().clone(),
+  };
+  let network_stays_on = provider
+    .and_then(|provider| permissions.enforced_on(provider, Platform::current()).ok())
+    .is_some_and(|enforced| enforced.network_stays_on().is_some());
+  RunPermissions {
+    permissions,
+    network_stays_on,
+    profile: version,
+  }
 }
 
 fn provider_of(db: &ProjectDb, connection: ConnectionId) -> Result<Option<AgentProvider>, StoreError> {

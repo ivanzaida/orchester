@@ -1,8 +1,12 @@
 //! Agent profile editor (`xT2ex`) with the page around it: the topbar says where the profile
 //! stands in the lifecycle (`X3zkKN`) and offers Save draft and Publish vN (`j5YWqt`). The
-//! fields are in `fields`.
+//! editor has the tabs Profile, Permissions and Used in pipelines (`A7phQ`, see `tabs`); the
+//! profile fields are in `fields`, the permissions in `permissions`.
 
-use std::sync::Arc;
+use std::{
+  ops::{Deref, DerefMut},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -15,14 +19,16 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::AgentConnection,
+  connection::{AgentConnection, invocation::Platform},
   id::ConnectionId,
+  permission::{AgentPermissions, capability::PermissionOption},
   resource::{AgentProfile, VersionNumber},
 };
 
 use super::{
   Editing, EditorContext,
   list::{ListSelection, profile_list},
+  tabs::EditorTab,
 };
 use crate::{
   agents::{
@@ -53,6 +59,32 @@ pub struct EffortChoice(pub Option<String>);
 
 impl lurq::app::component::DevtoolsInspectable for EffortChoice {}
 
+/// The permissions as edited. Derefs to them; a newtype so the signal can be inspected.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PermissionsChoice(pub AgentPermissions);
+
+impl lurq::app::component::DevtoolsInspectable for PermissionsChoice {}
+
+impl Deref for PermissionsChoice {
+  type Target = AgentPermissions;
+
+  fn deref(&self) -> &AgentPermissions {
+    &self.0
+  }
+}
+
+impl DerefMut for PermissionsChoice {
+  fn deref_mut(&mut self) -> &mut AgentPermissions {
+    &mut self.0
+  }
+}
+
+/// Options the last connection change replaced because the new connection cannot enforce them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Resets(pub Vec<PermissionOption>);
+
+impl lurq::app::component::DevtoolsInspectable for Resets {}
+
 pub struct ProfileEditor {
   pub(super) context: EditorContext,
   pub(super) role: Signal<String>,
@@ -62,6 +94,12 @@ pub struct ProfileEditor {
   pub(super) model: Signal<ModelSelection>,
   pub(super) custom_model: Signal<String>,
   pub(super) effort: Signal<EffortChoice>,
+  pub(super) tab: Signal<EditorTab>,
+  pub(super) permissions: Signal<PermissionsChoice>,
+  pub(super) resets: Signal<Resets>,
+  /// The command being added to the allowed commands, as typed.
+  pub(super) new_command: Signal<String>,
+  pub(super) command_error: Signal<Option<Message>>,
 }
 
 /// The form's current values checked against the stored profile.
@@ -84,13 +122,22 @@ impl Component for ProfileEditor {
       Editing::Profile(entry) => Self::seeded(ctx, &context, &entry.profile),
       Editing::New => Self::blank(ctx, &context),
     };
-    // Another connection offers other models; its first one replaces the choice.
+    // Another connection offers other models; its first one replaces the choice. Permissions it
+    // cannot enforce are reset to the most restrictive ones it can, and the reset is shown.
     let (connections, model) = (editor.context.agents.connections.clone(), editor.model.clone());
+    let (permissions, resets) = (editor.permissions.clone(), editor.resets.clone());
     ctx.watch(&editor.connection, move |choice| {
       let connection = choice
         .0
         .and_then(|id| connections.iter().find(|connection| connection.id() == id));
       model.set(first_model(connection));
+      if let Some(connection) = connection {
+        let (fitted, reset) = permissions
+          .get_untracked()
+          .fitted_to(connection.provider(), Platform::current());
+        permissions.set(PermissionsChoice(fitted));
+        resets.set(Resets(reset));
+      }
     });
     let effort = editor.effort.clone();
     ctx.watch(&editor.model, move |_| effort.set(EffortChoice(None)));
@@ -100,20 +147,34 @@ impl Component for ProfileEditor {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let state = self.state();
     let entry = match &self.context.editing {
-      Editing::Profile(entry) => Some(entry),
+      Editing::Profile(entry) => Some(&**entry),
       Editing::New => None,
+    };
+    let content = match self.tab.get() {
+      EditorTab::Profile => {
+        let mut content = self.fields(ctx, &state);
+        content.push(
+          Notice::new(
+            Icon::History,
+            ctx.t("agents.runsKeepTitle"),
+            ctx.t("agents.runsKeepDetail"),
+          )
+          .into(),
+        );
+        content
+      }
+      EditorTab::Permissions => self.permissions_tab(ctx),
+      EditorTab::Usage => vec![self.pipeline_uses(ctx)],
     };
     let body = Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(SpacingSize::Section)
+      .padding_horizontal(SpacingSize::Section)
+      .padding_bottom(SpacingSize::Section)
       .spacing(ExtraSpacing::Form.role())
+      .child(self.tab_strip(ctx))
       .with_children(entry.and_then(|entry| self.stale_notice(ctx, entry.state, &state)))
-      .with_children(self.fields(ctx, &state))
-      .child(Notice::new(
-        Icon::History,
-        ctx.t("agents.runsKeepTitle"),
-        ctx.t("agents.runsKeepDetail"),
-      ));
+      .with_children(self.permission_notices(ctx))
+      .with_children(content);
     let breadcrumb = ctx.t_args(
       "agents.breadcrumbProfile",
       [
@@ -158,11 +219,17 @@ impl ProfileEditor {
       model: ctx.signal(ModelSelection::Listed(profile.model().clone())),
       custom_model: ctx.signal(String::new()),
       effort: ctx.signal(EffortChoice(stored_effort(profile))),
+      tab: ctx.signal(EditorTab::Profile),
+      permissions: ctx.signal(PermissionsChoice(profile.permissions().clone())),
+      resets: ctx.signal(Resets::default()),
+      new_command: ctx.signal(String::new()),
+      command_error: ctx.signal(None),
       context: context.clone(),
     }
   }
 
-  /// A new profile starts on the first usable connection and its first model.
+  /// A new profile starts on the first usable connection and its first model, with the most
+  /// restrictive permissions that connection enforces.
   fn blank(ctx: &mut Ctx, context: &EditorContext) -> Self {
     let connections = &context.agents.connections;
     let connection = connections
@@ -177,6 +244,15 @@ impl ProfileEditor {
       model: ctx.signal(first_model(connection)),
       custom_model: ctx.signal(String::new()),
       effort: ctx.signal(EffortChoice(None)),
+      tab: ctx.signal(EditorTab::Profile),
+      permissions: ctx.signal(PermissionsChoice(
+        connection.map_or_else(AgentPermissions::before_permissions, |connection| {
+          AgentPermissions::most_restrictive(connection.provider(), Platform::current())
+        }),
+      )),
+      resets: ctx.signal(Resets::default()),
+      new_command: ctx.signal(String::new()),
+      command_error: ctx.signal(None),
       context: context.clone(),
     }
   }
@@ -198,7 +274,7 @@ impl ProfileEditor {
       self.instructions.get(),
       self.custom_model.get(),
     );
-    let (model, effort) = (self.model.get(), self.effort.get());
+    let (model, effort, permissions) = (self.model.get(), self.effort.get(), self.permissions.get());
     let profile = ProfileForm {
       role: &role,
       responsibilities: &responsibilities,
@@ -207,6 +283,7 @@ impl ProfileEditor {
       model: &model,
       custom_model: &custom_model,
       effort: effort.0.as_deref(),
+      permissions: &permissions,
     }
     .profile();
     let dirty = match (&self.context.editing, &profile) {
@@ -295,7 +372,7 @@ impl ProfileEditor {
     let Editing::Profile(entry) = &self.context.editing else {
       return button.on_click(|| {}).enabled(false).render(ctx);
     };
-    if !publishable || state.saving {
+    if !publishable || state.saving || self.permission_problem().is_some() {
       return button.on_click(|| {}).enabled(false).render(ctx);
     }
     let (action, repo_root, id) = (

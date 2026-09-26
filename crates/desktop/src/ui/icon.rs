@@ -106,6 +106,7 @@ icons! {
   Search => '\u{e151}',
   ServerOff => '\u{e1ea}',
   Settings => '\u{e245}',
+  Shield => '\u{e158}',
   ShieldCheck => '\u{e1ff}',
   SlidersHorizontal => '\u{e29a}',
   Sparkles => '\u{e412}',

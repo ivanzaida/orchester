@@ -13,6 +13,7 @@ mod publish_dialog;
 mod step_card;
 mod step_fields;
 mod step_inspector;
+mod step_permissions;
 
 use std::{path::PathBuf, sync::Arc};
 

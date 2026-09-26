@@ -1,6 +1,7 @@
 use orchester_core::{
   connection::{AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
   name::Name,
+  permission::AgentPermissions,
   resource::ModelId,
   time::Timestamp,
 };
@@ -118,6 +119,7 @@ fn stored_profile(desktop: &Desktop, role: &str) -> String {
     model: &model,
     custom_model: "",
     effort: None,
+    permissions: &AgentPermissions::before_permissions(),
   }
   .profile()
   .expect("a valid profile");

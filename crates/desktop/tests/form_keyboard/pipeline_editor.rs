@@ -38,14 +38,13 @@ fn step_inspector_tab_follows_the_fields_and_skips_unavailable_ones() {
   desktop.tab_to(NAME, MAX_STOPS);
   // Profile select; the model and Edit profile are unavailable without a profile and skipped;
   // instructions; one "runs after" toggle per other step and the route select; the budget
-  // (the first step has no route, so no retries); repository access, approval, Duplicate
-  // and Remove. The toolbar, the canvas and the status bar take no focus, so Tab wraps to the
-  // name.
+  // (the first step has no route, so no retries); approval, Duplicate and Remove. Without a
+  // profile the step's permissions are one row without a control. The toolbar, the canvas and the
+  // status bar take no focus, so Tab wraps to the name.
   let mut order = vec![None, Some(INSTRUCTIONS)];
   order.extend(std::iter::repeat_n(None, others + 1));
   order.extend([
     Some(BUDGET),
-    None,
     Some("step-approval"),
     Some("step-duplicate"),
     Some("step-remove"),

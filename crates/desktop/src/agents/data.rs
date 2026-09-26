@@ -5,9 +5,11 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::AgentConnection,
+  connection::{AgentConnection, invocation::Platform},
   id::ResourceId,
-  resource::{AgentProfile, Draft, ModelId, Pipeline, ResourceKind, Slug, StepKind, Version, VersionNumber},
+  resource::{
+    AgentProfile, Draft, ModelId, Pipeline, PublishError, ResourceKind, Slug, StepKind, Version, VersionNumber,
+  },
   store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
@@ -197,8 +199,23 @@ pub fn save_draft<S: ResourceStore>(
   store.save_draft(id, &Draft::new(profile, based_on, now)).map(|_| ())
 }
 
-/// Publishes the saved draft as the next version.
-pub fn publish<S: ResourceStore>(store: &mut S, id: ResourceId, now: Timestamp) -> Result<VersionNumber, S::Error> {
+/// Publishes the saved draft as the next version, if its connection's CLI can enforce its
+/// permissions on this platform (`PublishError::Permissions`); a profile whose connection is gone
+/// cannot say what is enforced (`PublishError::ConnectionMissing`).
+pub fn publish<S>(store: &mut S, id: ResourceId, now: Timestamp) -> Result<VersionNumber, StoreError>
+where
+  S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError>,
+{
+  let draft = store.draft::<AgentProfile>(id)?.ok_or(StoreError::NoDraft(id))?;
+  let profile = draft.body();
+  let connection = agent_connections(store.connections()?)
+    .into_iter()
+    .find(|connection| connection.id() == profile.connection())
+    .ok_or(PublishError::ConnectionMissing)?;
+  profile
+    .permissions()
+    .enforced_on(connection.provider(), Platform::current())
+    .map_err(PublishError::from)?;
   Ok(store.publish_draft::<AgentProfile>(id, now)?.number())
 }
 

@@ -1,7 +1,7 @@
-//! Fields of the agent profile editor (`xT2ex`): name and responsibility, connection and
-//! model with what the connection offers, the reasoning effort when the model has any, the
-//! role instructions with their variables checked as they are typed, and the published
-//! pipeline steps that run the profile.
+//! Fields of the agent profile editor's Profile tab (`xT2ex`): name and responsibility,
+//! connection and model with what the connection offers, the reasoning effort when the model has
+//! any and the role instructions with their variables checked as they are typed; and the
+//! published pipeline steps that run the profile, on the Used in pipelines tab.
 
 use std::sync::Arc;
 
@@ -75,7 +75,6 @@ impl ProfileEditor {
     ];
     fields.extend(self.effort_field(ctx, connection));
     fields.push(self.instructions_field(ctx, errors.and_then(|errors| errors.instructions.as_ref())));
-    fields.push(self.pipeline_uses(ctx));
     fields
   }
 
@@ -273,12 +272,12 @@ impl ProfileEditor {
     ctx.t_args("agents.variablesUsed", [("variables", names.join(", ").as_str())])
   }
 
-  /// Published pipeline steps that run the profile (`oalEz`).
-  fn pipeline_uses(&self, ctx: &Ctx) -> Element {
+  /// Published pipeline steps that run the profile (`oalEz`), the Used in pipelines tab.
+  pub(super) fn pipeline_uses(&self, ctx: &Ctx) -> Element {
     let column = Column::new()
+      .id("agent-pipeline-uses")
       .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Stack.role())
-      .child(Text::new(&ctx.t("agents.usedInPipelines")).variant(ExtraTypography::CardTitle.role()));
+      .spacing(ExtraSpacing::Stack.role());
     let Editing::Profile(entry) = &self.context.editing else {
       return column
         .child(Text::new(&ctx.t("agents.notInPipelines")).variant(TypographyStyle::Caption))

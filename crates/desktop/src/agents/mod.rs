@@ -2,3 +2,4 @@
 
 pub mod data;
 pub mod form;
+pub mod permissions;

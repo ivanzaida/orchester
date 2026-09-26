@@ -157,8 +157,8 @@ impl ExtraSpacing {
 /// Pencil radii without a built-in lurq role, registered as `RadiusSize::Extra`.
 #[derive(Clone, Copy)]
 pub enum ExtraRadius {
-  /// Inline notices, the runner status card, the task state tile and the brief field
-  /// (`q5LzI`, `O2Jjjf`, `aqRNL`, `bGakk`).
+  /// Inline notices, the runner status card, the task state tile, the brief field and option
+  /// cards (`q5LzI`, `O2Jjjf`, `aqRNL`, `bGakk`, `lcwsy`).
   Notice,
   /// Bars of the Orchester mark (`DIMZ6`).
   Mark,

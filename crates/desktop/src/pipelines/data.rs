@@ -4,7 +4,9 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
+  connection::{AgentProvider, ConnectionKind},
   id::ResourceId,
+  permission::AgentPermissions,
   resource::{AgentProfile, Draft, DraftSaved, ModelId, Pipeline, ResourceKind, Tool, Version, VersionNumber},
   store::{ConnectionStore, ResourceStore, TaskStore},
   time::Timestamp,
@@ -21,6 +23,10 @@ pub struct ProfileChoice {
   pub model: ModelId,
   /// Name of the connection that runs the profile; `None` if it was removed.
   pub connection: Option<Arc<str>>,
+  /// The CLI of that connection, which decides what a step can narrow the permissions to.
+  pub provider: Option<AgentProvider>,
+  /// The permissions steps narrow.
+  pub permissions: AgentPermissions,
 }
 
 /// A published tool a step can call.
@@ -46,10 +52,15 @@ impl Assignables {
       if let Some(version) = store.latest_version::<AgentProfile>(resource.id())? {
         let connection = connections
           .iter()
-          .find(|connection| connection.id() == version.body().connection())
-          .map(|connection| connection.name().as_str().into());
+          .find(|connection| connection.id() == version.body().connection());
+        let provider = connection.and_then(|connection| match connection.kind() {
+          ConnectionKind::Agent(provider) => Some(*provider),
+          ConnectionKind::GitHub { .. } => None,
+        });
         profiles.push(ProfileChoice {
-          connection,
+          connection: connection.map(|connection| connection.name().as_str().into()),
+          provider,
+          permissions: version.body().permissions().clone(),
           id: resource.id(),
           name: resource.name().as_str().into(),
           version: version.number(),
