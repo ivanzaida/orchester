@@ -118,9 +118,9 @@ pub struct Step {
   /// A person approves the step's result before dependent steps start, e.g. plan approval.
   pub approval_gate: bool,
   pub on_failure: Option<FailureRoute>,
-  /// Most tokens one execution of the step may use; reaching it fails the execution, which then
-  /// takes the step's failure route. Versions published while step budgets were money read as
-  /// having none (see [`budget`]).
+  /// Most tokens one execution of the step may use; reaching it stops the run at its limit until
+  /// the step's budget is raised for that run. Versions published while step budgets were money
+  /// read as having none (see [`budget`]).
   #[serde(default, deserialize_with = "budget::deserialize")]
   pub budget: Option<TokenBudget>,
 }

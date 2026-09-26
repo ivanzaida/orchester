@@ -1,6 +1,7 @@
 //! Pipeline graphs executed end to end against `orchester-fake-codex`: parallel steps in worktrees
 //! of their own merged back into the run's branch, merge conflicts and reported failures taking
-//! failure routes, retry limits, step budgets and the outputs of earlier steps in later prompts.
+//! failure routes, retry limits and the outputs of earlier steps in later prompts. Step budgets are
+//! in `step_budget.rs`.
 //! Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test graph graph`.
 
 mod support;
@@ -11,7 +12,7 @@ use orchester_core::{
   connection::stream::{AgentEvent, RunnerProblem},
   id::IdempotencyKey,
   resource::StepKey,
-  run::{Run, RunFailure, RunStatus, StepFailure, StepOutcome, StepStatus},
+  run::{Run, RunFailure, RunStatus, StepFailure, StepOutcome},
   store::ActivityStore,
 };
 use orchester_ipc::{AttachSession, SessionEnd};
@@ -182,33 +183,6 @@ async fn graph_a_reported_failure_retries_and_then_passes() {
       .iter()
       .any(|line| line == "## Implement (`implement`, attempt 2)"),
     "{prompts:?}"
-  );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn graph_step_budget_stops_the_step_and_fails_it() {
-  let setup = Setup {
-    steps: vec![StepSpec::new("implement", "Implement", "Work in turns.", &[]).budget(1_000)],
-    ..Setup::new("Say hello.")
-  };
-  let (project, run) = run_to_the_end(&setup).await;
-  assert_eq!(
-    run.status(),
-    &RunStatus::Failed(RunFailure::StepFailed(key("implement")))
-  );
-  assert_eq!(failures(&run), [("implement".to_owned(), StepFailure::StepBudget)]);
-  let implement = run.latest_execution(&key("implement")).expect("execution");
-  assert_eq!(implement.status(), StepStatus::Failed);
-  let db = ProjectDb::open(project.repo.path()).expect("open");
-  assert!(problems(&db, &run).contains(&RunnerProblem::StepBudgetReached { budget: 1_000 }));
-  // What the agent wrote before its budget ran out is committed, not discarded.
-  let checkpoint = run.last_checkpoint().expect("the work was committed");
-  assert_eq!(
-    git(
-      project.repo.path(),
-      &["show", &format!("{}:README.md", checkpoint.revision().as_str())]
-    ),
-    "hi\ndraft"
   );
 }
 

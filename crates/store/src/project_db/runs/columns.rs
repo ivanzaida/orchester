@@ -9,22 +9,43 @@ use orchester_core::{
   },
 };
 
-use crate::{StoreError, rows::corrupt};
+use crate::{
+  StoreError,
+  rows::{corrupt, parse},
+};
 
 pub(super) const INTERRUPTED: &str = "interrupted";
 pub(super) const RUNNING: &str = "running";
 
-/// `status`, `status_reason` and `failed_step` of a run row.
-pub(super) fn run_status_columns(status: &RunStatus) -> (&'static str, Option<&'static str>, Option<&str>) {
-  match status {
-    RunStatus::Pending => ("pending", None, None),
-    RunStatus::Running => (RUNNING, None, None),
-    RunStatus::Paused(reason) => ("paused", Some(pause_reason_text(*reason)), None),
-    RunStatus::Interrupted(cause) => (INTERRUPTED, Some(interrupt_cause_text(*cause)), None),
-    RunStatus::Succeeded => ("succeeded", None, None),
-    RunStatus::Failed(RunFailure::StepFailed(step)) => ("failed", Some("step_failed"), Some(step.as_str())),
-    RunStatus::Failed(RunFailure::RetriesExhausted(step)) => ("failed", Some("retries_exhausted"), Some(step.as_str())),
-    RunStatus::Cancelled => ("cancelled", None, None),
+/// `status`, `status_reason`, `failed_step` and `limit_execution` of a run row.
+pub(super) struct StatusColumns<'a> {
+  pub(super) status: &'static str,
+  pub(super) reason: Option<&'static str>,
+  pub(super) failed_step: Option<&'a str>,
+  pub(super) limit_execution: Option<String>,
+}
+
+pub(super) fn run_status_columns(status: &RunStatus) -> StatusColumns<'_> {
+  let (status, reason, failed_step, limit_execution) = match status {
+    RunStatus::Pending => ("pending", None, None, None),
+    RunStatus::Running => (RUNNING, None, None, None),
+    RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) => {
+      ("paused", Some(STEP_BUDGET), None, Some(execution.to_string()))
+    }
+    RunStatus::Paused(reason) => ("paused", Some(pause_reason_text(*reason)), None, None),
+    RunStatus::Interrupted(cause) => (INTERRUPTED, Some(interrupt_cause_text(*cause)), None, None),
+    RunStatus::Succeeded => ("succeeded", None, None, None),
+    RunStatus::Failed(RunFailure::StepFailed(step)) => ("failed", Some("step_failed"), Some(step.as_str()), None),
+    RunStatus::Failed(RunFailure::RetriesExhausted(step)) => {
+      ("failed", Some("retries_exhausted"), Some(step.as_str()), None)
+    }
+    RunStatus::Cancelled => ("cancelled", None, None, None),
+  };
+  StatusColumns {
+    status,
+    reason,
+    failed_step,
+    limit_execution,
   }
 }
 
@@ -32,22 +53,36 @@ pub(super) fn parse_run_status(
   status: &str,
   reason: Option<&str>,
   failed_step: Option<&str>,
+  limit_execution: Option<&str>,
 ) -> Result<RunStatus, StoreError> {
   const WHAT: &str = "run status";
-  Ok(match (status, reason, failed_step) {
-    ("pending", None, None) => RunStatus::Pending,
-    (RUNNING, None, None) => RunStatus::Running,
-    ("paused", Some(reason), None) => RunStatus::Paused(parse_pause_reason(reason)?),
-    (INTERRUPTED, Some(cause), None) => RunStatus::Interrupted(parse_interrupt_cause(cause)?),
-    ("succeeded", None, None) => RunStatus::Succeeded,
-    ("failed", Some("step_failed"), Some(step)) => RunStatus::Failed(RunFailure::StepFailed(step_key(step)?)),
-    ("failed", Some("retries_exhausted"), Some(step)) => {
+  Ok(match (status, reason, failed_step, limit_execution) {
+    ("pending", None, None, None) => RunStatus::Pending,
+    (RUNNING, None, None, None) => RunStatus::Running,
+    ("paused", Some(STEP_BUDGET), None, Some(execution)) => {
+      RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget {
+        execution: parse("step execution id", execution)?,
+      }))
+    }
+    ("paused", Some(reason), None, None) => RunStatus::Paused(parse_pause_reason(reason)?),
+    (INTERRUPTED, Some(cause), None, None) => RunStatus::Interrupted(parse_interrupt_cause(cause)?),
+    ("succeeded", None, None, None) => RunStatus::Succeeded,
+    ("failed", Some("step_failed"), Some(step), None) => RunStatus::Failed(RunFailure::StepFailed(step_key(step)?)),
+    ("failed", Some("retries_exhausted"), Some(step), None) => {
       RunStatus::Failed(RunFailure::RetriesExhausted(step_key(step)?))
     }
-    ("cancelled", None, None) => RunStatus::Cancelled,
-    _ => return Err(corrupt(WHAT, format!("{status} / {reason:?} / {failed_step:?}"))),
+    ("cancelled", None, None, None) => RunStatus::Cancelled,
+    _ => {
+      return Err(corrupt(
+        WHAT,
+        format!("{status} / {reason:?} / {failed_step:?} / {limit_execution:?}"),
+      ));
+    }
   })
 }
+
+/// The pause reason of a run stopped at a step's budget; the execution has a column of its own.
+const STEP_BUDGET: &str = "step_budget";
 
 const fn pause_reason_text(reason: PauseReason) -> &'static str {
   match reason {
@@ -55,6 +90,7 @@ const fn pause_reason_text(reason: PauseReason) -> &'static str {
     PauseReason::LimitReached(RunLimit::Tokens) => "token_limit",
     PauseReason::LimitReached(RunLimit::Time) => "time_limit",
     PauseReason::LimitReached(RunLimit::DailyBudget) => "daily_budget",
+    PauseReason::LimitReached(RunLimit::StepBudget { .. }) => STEP_BUDGET,
   }
 }
 
@@ -163,6 +199,7 @@ pub(super) const fn step_failure_text(failure: StepFailure) -> &'static str {
     StepFailure::AgentFailed => "agent_failed",
     StepFailure::ReportedFailed => "reported_failed",
     StepFailure::NotStarted => "not_started",
+    // Legacy: no longer recorded, still read.
     StepFailure::StepBudget => "step_budget",
     StepFailure::MergeConflict => "merge_conflict",
     StepFailure::CheckpointFailed => "checkpoint_failed",

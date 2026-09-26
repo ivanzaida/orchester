@@ -206,7 +206,7 @@ impl RunTask {
 
   /// Ends every agent once the run's active agent time is used up.
   fn check_time(&mut self) -> Result<(), ExecutionError> {
-    if self.time_left()?.is_zero() && self.pending.limit.is_none() {
+    if self.time_left()?.is_zero() && self.pending.limit.is_none_or(|limit| !limit.is_run_limit()) {
       self.pending.limit = Some(RunLimit::Time);
       self.stop_agents(Stop::Now(StopCause::Limit(RunLimit::Time)));
     }

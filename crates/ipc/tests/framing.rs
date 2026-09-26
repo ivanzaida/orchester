@@ -55,6 +55,10 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
       budget: TokenBudget::new(2_000_000).expect("above zero"),
       max_duration_ms: 1_800_000,
     },
+    Command::RaiseStepBudget {
+      run,
+      budget: TokenBudget::new(600_000).expect("above zero"),
+    },
     Command::Shutdown {
       mode: ShutdownMode::FinishAtCheckpoints,
     },

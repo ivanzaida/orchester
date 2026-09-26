@@ -118,6 +118,12 @@ pub enum RunEventKind {
     #[serde(with = "millis")]
     max_duration: Duration,
   },
+  /// A run stopped at the budget of `step` may use `budget` tokens in each execution of that step
+  /// from now on; it continues with a [`RunEventKind::Resumed`].
+  StepBudgetRaised {
+    step: StepKey,
+    budget: TokenBudget,
+  },
   Interrupted {
     cause: InterruptCause,
   },
@@ -202,6 +208,7 @@ impl RunEventKind {
       Self::Paused { .. } => "paused",
       Self::Resumed => "resumed",
       Self::LimitRaised { .. } => "limit_raised",
+      Self::StepBudgetRaised { .. } => "step_budget_raised",
       Self::Interrupted { .. } => "interrupted",
       Self::Continued { .. } => "continued",
       Self::Succeeded => "succeeded",

@@ -37,9 +37,8 @@ const TURN_GRACE: Duration = Duration::from_secs(5);
 pub(in super::super) enum StopCause {
   /// A cancel or the runner stopping; carried out once every agent of the run has ended.
   Requested,
+  /// A limit of the run, or the budget of this agent's step.
   Limit(RunLimit),
-  /// The execution used its step budget.
-  StepBudget,
   /// Another step failed and its attempt ended; this execution was skipped.
   Abandoned,
 }

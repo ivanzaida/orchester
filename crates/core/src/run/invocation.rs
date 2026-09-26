@@ -10,6 +10,7 @@ use crate::{
   resource::ModelId,
   run::TokenUsage,
   time::Timestamp,
+  tokens::TokensUsed,
 };
 
 /// One launch of an agent CLI, as recorded by the runner.
@@ -45,6 +46,16 @@ impl Invocation {
 pub fn active_time(invocations: &[Invocation], now: Timestamp) -> Duration {
   let millis: i64 = invocations.iter().map(|invocation| invocation.active_millis(now)).sum();
   Duration::from_millis(u64::try_from(millis).expect("active times are never negative"))
+}
+
+/// Tokens `execution` used over all its invocations, as far as they count toward its step's
+/// budget.
+pub fn execution_tokens(invocations: &[Invocation], execution: StepExecutionId) -> TokensUsed {
+  invocations
+    .iter()
+    .filter(|invocation| invocation.execution == execution)
+    .map(|invocation| invocation.usage.counted_tokens())
+    .sum()
 }
 
 /// One stored transcript entry of a run.

@@ -1,4 +1,9 @@
-use std::{collections::BTreeSet, num::NonZeroU32, sync::Arc, time::Duration};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  num::NonZeroU32,
+  sync::Arc,
+  time::Duration,
+};
 
 use super::{
   attempt::{Attempt, Checkpoint, StepExecution},
@@ -7,7 +12,7 @@ use super::{
   event::{EventSequence, RunCreated, RunEvent, RunEventKind},
   number::RunNumber,
   snapshot::RunSnapshot,
-  status::{AttemptReason, RunStatus, StepStatus},
+  status::{AttemptReason, PauseReason, RunLimit, RunStatus, StepStatus},
 };
 use crate::{
   id::{RunId, StepExecutionId, TaskId},
@@ -39,6 +44,8 @@ pub struct StoredRun {
   /// Limits in force, the creation limits or the last raised ones.
   pub budget: TokenBudget,
   pub max_duration: Duration,
+  /// Step budgets raised for this run, in force instead of the snapshot's.
+  pub step_budgets: BTreeMap<StepKey, TokenBudget>,
   pub used: TokensUsed,
   pub pause_requested: bool,
   pub attempts: Vec<Attempt>,
@@ -57,6 +64,7 @@ pub struct Run {
   pub(super) status: RunStatus,
   pub(super) budget: TokenBudget,
   pub(super) max_duration: Duration,
+  pub(super) step_budgets: BTreeMap<StepKey, TokenBudget>,
   pub(super) used: TokensUsed,
   pub(super) pause_requested: bool,
   pub(super) attempts: Vec<Attempt>,
@@ -89,6 +97,7 @@ impl Run {
       id,
       budget: created.budget,
       max_duration: created.max_duration,
+      step_budgets: BTreeMap::new(),
       used: TokensUsed::ZERO,
       pause_requested: false,
       created: Arc::new(created),
@@ -109,6 +118,7 @@ impl Run {
     run.status = stored.status;
     run.budget = stored.budget;
     run.max_duration = stored.max_duration;
+    run.step_budgets = stored.step_budgets;
     run.used = stored.used;
     run.pause_requested = stored.pause_requested;
     run.attempts = stored.attempts;
@@ -136,6 +146,22 @@ impl Run {
       .all(|execution| self.snapshot().step(execution.step()).is_some());
     if !known {
       return Err(RunError::Inconsistent("an execution names a step outside the snapshot"));
+    }
+    if self
+      .step_budgets
+      .keys()
+      .any(|step| self.snapshot().step(step).is_none())
+    {
+      return Err(RunError::Inconsistent(
+        "a raised step budget names a step outside the snapshot",
+      ));
+    }
+    if let RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) = self.status
+      && self.execution(execution).is_none()
+    {
+      return Err(RunError::Inconsistent(
+        "the run stopped at the budget of an unknown execution",
+      ));
     }
     if self
       .executions()
@@ -189,6 +215,21 @@ impl Run {
   /// Tokens used so far, as the CLIs reported them.
   pub const fn used(&self) -> TokensUsed {
     self.used
+  }
+
+  /// The budget in force for each execution of `step`: the one raised for this run, else the
+  /// snapshot's; `None` when the step has none.
+  pub fn step_budget(&self, step: &StepKey) -> Option<TokenBudget> {
+    self
+      .step_budgets
+      .get(step)
+      .copied()
+      .or_else(|| self.snapshot().body().step(step).and_then(|step| step.budget))
+  }
+
+  /// Step budgets raised for this run.
+  pub const fn raised_step_budgets(&self) -> &BTreeMap<StepKey, TokenBudget> {
+    &self.step_budgets
   }
 
   /// Whether the used tokens have reached the budget.
