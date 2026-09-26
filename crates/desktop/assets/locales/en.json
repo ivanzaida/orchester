@@ -414,14 +414,32 @@
     "permissions": {
       "value": "{{agent}} · {{repository}} · {{commands}} · {{network}}",
       "view": "view ↗",
+      "change": "change ↗",
+      "applyingValue": "{{agent}} · Applying at next checkpoint…",
+      "pendingTitle": "Applying new permissions at the next checkpoint…",
+      "pendingDetail": "{{agent}} finishes the command it is running, then stops. Its changes are committed as a checkpoint and {{step}} restarts from it with the new permissions. Nothing in the worktree is lost; the agent’s unsaved reasoning since its last turn is not carried over unless the CLI can resume its session.",
+      "keepForNext": "Keep for next invocation instead",
+      "appliedTitle": "New permissions active since {{time}}",
+      "appliedDetail": "{{agent}} restarted {{step}} from checkpoint {{checkpoint}} (invocation {{invocation}}). The earlier invocation’s transcript stays in Activity.",
+      "appliedDetailNoCheckpoint": "{{agent}} restarted {{step}} as invocation {{invocation}}; nothing had changed since the last checkpoint. The earlier invocation’s transcript stays in Activity.",
+      "savedToProfile": "Also saved to the {{agent}} profile, draft v{{version}}. New runs get it after you publish.",
+      "openProfile": "open ↗",
       "popover": {
         "title": "Permissions for this run",
         "subtitle": "{{agent}} · {{step}} · {{connection}} / {{model}} · from profile {{version}}",
-        "unavailable": "Changing permissions during a run is not available yet. This run keeps the permissions it started with; to use others, change the agent profile and publish it for new runs.",
+        "takesEffect": "Apply from next invocation: the invocation running now keeps its permissions. Apply now: {{agent}} stops at its next checkpoint and {{step}} restarts from it with the new permissions. Both change Run {{run}} only.",
+        "added": "{{commands}} added for this run",
+        "removed": "{{commands}} removed for this run",
         "applyNow": "Apply now",
         "applyNext": "Apply from next invocation",
         "saveToProfile": "Also save to the {{agent}} profile",
-        "saveToProfileDetail": "Adds the change to the profile draft. New runs get it after you publish."
+        "saveToProfileDetail": "Adds the change to draft v{{version}}. New runs get it after you publish."
+      },
+      "errors": {
+        "notEnforceable": "{{step}} can’t run with these permissions on its connection. Choose options the connection can enforce.",
+        "noAgentToRestart": "No agent of this profile is at work now, so none can restart. Apply from the next invocation instead.",
+        "noPending": "The new permissions were already applied; there is no restart left to cancel.",
+        "notSavedToProfile": "The run’s permissions changed, but they could not be saved to the profile draft. Try again, or change the profile in Agents."
       }
     },
     "summary": {

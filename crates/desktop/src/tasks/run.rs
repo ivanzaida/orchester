@@ -128,7 +128,11 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::RunEnded
       | Rejection::LimitNotRaised { .. }
       | Rejection::LimitNotAboveUsed { .. }
-      | Rejection::BudgetAboveMaximum { .. },
+      | Rejection::BudgetAboveMaximum { .. }
+      | Rejection::ProfileNotInRun
+      | Rejection::PermissionsNotEnforceable { .. }
+      | Rejection::NoAgentToRestart
+      | Rejection::NoPendingPermissions,
     ) => vec![Message::new("runs.start.failed")],
   }
 }
@@ -159,8 +163,14 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::BudgetAboveMaximum { max }) => {
       Message::new("tokens.errors.aboveMax").with("max", compact_tokens(max.get()))
     }
+    RunRequestError::Rejected(Rejection::PermissionsNotEnforceable { step, .. }) => {
+      Message::new("runs.permissions.errors.notEnforceable").with("step", step.to_string())
+    }
+    RunRequestError::Rejected(Rejection::NoAgentToRestart) => Message::new("runs.permissions.errors.noAgentToRestart"),
+    RunRequestError::Rejected(Rejection::NoPendingPermissions) => Message::new("runs.permissions.errors.noPending"),
     RunRequestError::Rejected(
       Rejection::RunNotFound
+      | Rejection::ProfileNotInRun
       | Rejection::LimitNotAboveUsed {
         limit: RunLimit::DailyBudget,
       }

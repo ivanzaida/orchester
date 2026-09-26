@@ -9,12 +9,13 @@ use lurq::app::ctx::Ctx;
 use orchester_core::{
   connection::AgentProvider,
   permission::{
-    AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess,
+    AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPermission, CommandPrefix, CommandPrefixError,
+    NetworkAccess, RepositoryAccess,
     capability::{EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Unavailable},
   },
 };
 
-use crate::screens::project::connections::status::program_key;
+use crate::{messages::Message, screens::project::connections::status::program_key};
 
 /// Title of an option (`D2t8u` in `lcwsy`).
 pub const fn option_title(option: PermissionOption) -> &'static str {
@@ -209,4 +210,33 @@ pub fn problem(ctx: &Ctx, problem: &PermissionProblem, provider: AgentProvider) 
       [("cli", &*cli), ("option", &*ctx.t(option_title(*option)))],
     ),
   }
+}
+
+/// `list` with the command `typed` added, or why it cannot be.
+pub fn with_command(list: &AllowedCommands, typed: &str) -> Result<AllowedCommands, Message> {
+  let prefix = CommandPrefix::new(typed).map_err(|error| match error {
+    CommandPrefixError::Blank => Message::new("agents.permissions.commandInvalid.blank"),
+    CommandPrefixError::TooLong => {
+      Message::new("agents.permissions.commandInvalid.tooLong").with("max", CommandPrefix::MAX_CHARS.to_string())
+    }
+    CommandPrefixError::ForbiddenCharacter(character) => {
+      Message::new("agents.permissions.commandInvalid.character").with("character", character.to_string())
+    }
+  })?;
+  let mut entries = list.entries().to_vec();
+  entries.push(prefix);
+  AllowedCommands::new(entries).map_err(|error| match error {
+    AllowedCommandsError::Duplicate(command) => {
+      Message::new("agents.permissions.commandInvalid.duplicate").with("command", command.to_string())
+    }
+    AllowedCommandsError::TooMany => {
+      Message::new("agents.permissions.commandInvalid.tooMany").with("max", AllowedCommands::MAX_ENTRIES.to_string())
+    }
+  })
+}
+
+/// `list` without the command `removed`.
+pub fn without_command(list: &AllowedCommands, removed: &CommandPrefix) -> AllowedCommands {
+  let rest = list.entries().iter().filter(|kept| *kept != removed).cloned().collect();
+  AllowedCommands::new(rest).expect("a shorter list keeps its entries unique")
 }
