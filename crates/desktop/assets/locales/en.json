@@ -174,15 +174,59 @@
     "description": "Everything moving in this project, and what needs you.",
     "newTask": "New task",
     "emptyTitle": "No tasks yet",
-    "emptyDetail": "Create a task to describe what agents should build. Runs and agents are not available in this version yet.",
+    "emptyDetail": "Create a task to describe what agents should build, then start its run with Create & run.",
     "projectKey": "Project key",
     "repository": "Repository",
+    "metrics": {
+      "running": "Running now",
+      "agentsWorking": {
+        "one": "{{count}} agent working",
+        "other": "{{count}} agents working"
+      },
+      "agentsUnknown": "Waiting for the runner to report",
+      "interrupted": {
+        "one": "{{count}} run interrupted",
+        "other": "{{count}} runs interrupted"
+      },
+      "needsInput": "Need your input",
+      "needsInputContext": "Review & decisions",
+      "completed": "Completed today",
+      "completedContext": "Runs with every step passed",
+      "tokens": "Tokens today",
+      "tokensContext": "of {{budget}} daily project budget",
+      "tokensUnknown": "Usage not read yet"
+    },
     "tabs": {
       "running": "Running",
       "needsYou": "Needs you",
       "queued": "Queued"
     },
-    "viewAllTasks": "View all tasks  →"
+    "footer": {
+      "one": "{{active}} active task · {{completed}} completed",
+      "other": "{{active}} active tasks · {{completed}} completed"
+    },
+    "viewAllTasks": "View all tasks  →",
+    "attention": {
+      "title": "Needs you",
+      "empty": "Nothing needs you right now. Plan decisions, questions and approvals appear here.",
+      "needsInput": "NEEDS INPUT",
+      "context": "{{task}} · {{detail}}",
+      "open": "Open task  →"
+    },
+    "activity": {
+      "title": "Recent activity",
+      "empty": "No runs yet. Runs appear here as they start and finish.",
+      "detail": "{{task}} · {{project}} · {{time}}",
+      "queued": "Run #{{run}} is waiting to start",
+      "running": "Run #{{run}} is running",
+      "waiting": "Run #{{run}} needs your input",
+      "paused": "Run #{{run}} paused",
+      "stoppedAtLimit": "Run #{{run}} stopped at its limit",
+      "interrupted": "Run #{{run}} was interrupted",
+      "succeeded": "Run #{{run}} completed",
+      "failed": "Run #{{run}} failed",
+      "cancelled": "Run #{{run}} was cancelled"
+    }
   },
   "tasks": {
     "title": "Tasks",

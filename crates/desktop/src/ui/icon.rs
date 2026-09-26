@@ -74,6 +74,7 @@ icons! {
   GitPullRequestClosed => '\u{e35a}',
   GitPullRequestDraft => '\u{e35b}',
   History => '\u{e1f5}',
+  Inbox => '\u{e0f7}',
   Info => '\u{e0f9}',
   KeyRound => '\u{e4a3}',
   LayoutDashboard => '\u{e1c1}',

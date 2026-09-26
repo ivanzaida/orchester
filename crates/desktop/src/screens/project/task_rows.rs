@@ -44,7 +44,7 @@ const STATE_TILE_SIZE: f32 = 32.0;
 const TIME_WIDTH: f32 = 60.0;
 
 /// The task status label (`DeizF`), as its variants in `P3HONM` draw it.
-fn status_copy(phase: TaskPhase) -> (Icon, &'static str) {
+pub(super) fn status_copy(phase: TaskPhase) -> (Icon, &'static str) {
   match phase {
     TaskPhase::Draft => (Icon::Pencil, "tasks.status.draft"),
     TaskPhase::Queued => (Icon::Clock3, "tasks.status.queued"),
@@ -193,6 +193,7 @@ pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> E
         .child(
           Text::new(&row.title)
             .variant(TypographyStyle::Label)
+            .width(Dimension::Pct(100.0))
             .nowrap()
             .text_overflow(TextOverflow::Elipsis),
         )

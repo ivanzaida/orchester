@@ -32,11 +32,13 @@ use orchester_core::{
   id::{ResourceId, TaskId},
   time::Timestamp,
 };
+use orchester_ipc::WorkSummary;
 
 use self::{
   agents::AgentsScreen,
   connections::ConnectionsScreen,
   new_task::{NewTaskForm, NewTaskProps},
+  overview::{OverviewProps, OverviewScreen},
   pipelines::{PipelinesProps, PipelinesScreen},
   pull_requests::{PullRequestProps, PullRequestScreen, PullRequestsScreen},
   settings::SettingsScreen,
@@ -224,7 +226,7 @@ impl Component for ProjectShell {
       tasks: &tasks,
       usage,
     };
-    let content = self.screen(ctx, &shown, &runners, section);
+    let content = self.screen(ctx, &shown, section);
     let bar = ProjectBar {
       repo_root: open.repo_root.clone(),
       runner: status.clone(),
@@ -259,14 +261,21 @@ struct Shown<'a> {
 
 impl ProjectShell {
   /// The screen of `section`.
-  fn screen(&self, ctx: &mut Ctx, shown: &Shown<'_>, runners: &Runners, section: Section) -> Element {
+  fn screen(&self, ctx: &mut Ctx, shown: &Shown<'_>, section: Section) -> Element {
     let open = shown.open;
     let limits = shown.usage.map(|usage| usage.limits);
     match section {
-      Section::Overview => {
-        let notice = runner::connection_notice(ctx, shown.runner, shown.status.trouble_since(), runners);
-        overview::overview(ctx, open, notice, shown.tasks, &self.nav)
-      }
+      Section::Overview => ctx.mount_keyed::<OverviewScreen>(
+        "overview",
+        OverviewProps {
+          open: open.clone(),
+          tasks: shown.tasks.clone(),
+          usage: shown.usage,
+          runner: shown.runner.clone(),
+          runner_since: shown.status.trouble_since(),
+          agents_working: shown.status.work().map(WorkSummary::agents_working),
+        },
+      ),
       Section::Tasks => ctx.mount_keyed::<TasksScreen>(
         "tasks",
         TasksProps {
