@@ -184,13 +184,23 @@ fn run_limits(ctx: &Ctx, form: &NewTaskForm, state: &FormState, limits: ProjectL
   });
   let time_readback =
     (time_error.is_none() && !form.time_limit.get().trim().is_empty()).then(|| ctx.t("tasks.new.timeLimitReadBack"));
-  let budget = UnitInput::new("task-budget", form.budget.clone(), ctx.t("tokens.unit"))
-    .tokens(separator)
-    .compact()
-    .invalid(budget_error.is_some());
-  let time = UnitInput::new("task-time-limit", form.time_limit.clone(), ctx.t("tasks.new.minutes"))
-    .compact()
-    .invalid(time_error.is_some());
+  let budget = UnitInput::new(
+    "task-budget",
+    form.budget.clone(),
+    ctx.t("tokens.unit"),
+    form.focused_input.clone(),
+  )
+  .tokens(separator)
+  .compact()
+  .invalid(budget_error.is_some());
+  let time = UnitInput::new(
+    "task-time-limit",
+    form.time_limit.clone(),
+    ctx.t("tasks.new.minutes"),
+    form.focused_input.clone(),
+  )
+  .compact()
+  .invalid(time_error.is_some());
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(ExtraSpacing::Step.role())

@@ -6,12 +6,12 @@ use std::{collections::HashMap, sync::Arc};
 use orchester_core::{
   id::{ResourceId, TaskId},
   resource::VersionNumber,
-  run::TaskPhase,
+  run::{PauseReason, Run, RunLimit, RunStatus, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
 };
 
-use crate::{messages::Message, tasks::data::PipelineChoice};
+use crate::{display, messages::Message, tasks::data::PipelineChoice};
 
 /// Tabs of the task list. Only tabs whose tasks can be told apart today are available;
 /// queueing, review and completion do not exist yet.
@@ -57,6 +57,49 @@ impl TaskTab {
     self
       .is_available()
       .then(|| tasks.iter().filter(|task| self.includes(task)).count())
+  }
+}
+
+/// Where a task's latest run stands, for its row's status and its dependency / readiness cell.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LatestRun {
+  pub phase: TaskPhase,
+  /// Stopped by the project's daily budget rather than its own limit.
+  pub daily_budget: bool,
+  /// Its last checkpoint, as people read a revision.
+  pub checkpoint: Option<Arc<str>>,
+}
+
+impl LatestRun {
+  pub fn of(task: &Task, run: &Run) -> Self {
+    Self {
+      phase: TaskPhase::of(task, Some(run)),
+      daily_budget: run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)),
+      checkpoint: run
+        .last_checkpoint()
+        .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).into()),
+    }
+  }
+
+  /// What the run means for the task now: "Paused at 4b92ad0", "Last checkpoint 1b8e5c2".
+  pub fn message(&self) -> Message {
+    let with_checkpoint = |key: &'static str, without: &'static str| match &self.checkpoint {
+      Some(checkpoint) => Message::new(key).with("checkpoint", checkpoint.to_string()),
+      None => Message::new(without),
+    };
+    match self.phase {
+      TaskPhase::Draft => Message::new("tasks.readiness.ready"),
+      TaskPhase::Queued => Message::new("tasks.progress.queued"),
+      TaskPhase::Running => Message::new("tasks.progress.running"),
+      TaskPhase::Waiting => Message::new("tasks.progress.waiting"),
+      TaskPhase::Paused => with_checkpoint("tasks.progress.paused", "tasks.progress.pausedNoCheckpoint"),
+      TaskPhase::StoppedAtLimit if self.daily_budget => Message::new("tasks.progress.stoppedDaily"),
+      TaskPhase::StoppedAtLimit => Message::new("tasks.progress.stoppedAtLimit"),
+      TaskPhase::Interrupted => with_checkpoint("tasks.progress.interrupted", "tasks.progress.interruptedNoCheckpoint"),
+      TaskPhase::Succeeded => Message::new("tasks.progress.succeeded"),
+      TaskPhase::Failed => Message::new("tasks.progress.failed"),
+      TaskPhase::Cancelled => Message::new("tasks.progress.cancelled"),
+    }
   }
 }
 
@@ -152,31 +195,38 @@ pub struct TaskRow {
   pub pipeline: PipelineLabel,
   /// Where the task stands, from its latest run.
   pub phase: TaskPhase,
-  pub readiness: Readiness,
+  /// The dependency / readiness cell: what the task needs before it can be queued, or once it
+  /// is queued or has run, where it stands.
+  pub detail: Message,
   pub created_at: Timestamp,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskRow {}
 
-/// The phase of each task that has a run; a task without one is a draft or queued.
-pub type Phases = HashMap<TaskId, TaskPhase>;
+/// The latest run of each task that has one; a task without one is a draft or queued.
+pub type Phases = HashMap<TaskId, LatestRun>;
 
 fn phase_of(task: &Task, phases: &Phases) -> TaskPhase {
   phases
     .get(&task.id())
-    .copied()
-    .unwrap_or_else(|| TaskPhase::of(task, None))
+    .map_or_else(|| TaskPhase::of(task, None), |latest| latest.phase)
 }
 
 impl TaskRow {
-  pub fn new(task: &Task, published: &[PipelineChoice], phase: TaskPhase) -> Self {
+  pub fn new(task: &Task, published: &[PipelineChoice], latest: Option<&LatestRun>) -> Self {
+    let phase = latest.map_or_else(|| TaskPhase::of(task, None), |latest| latest.phase);
+    let detail = match (latest, task.status()) {
+      (Some(latest), _) => latest.message(),
+      (None, TaskStatus::Queued) => Message::new("tasks.progress.queued"),
+      (None, TaskStatus::Draft) => Readiness::of(task).message(),
+    };
     Self {
       id: task.id(),
       key: task.key().to_string().into(),
       title: task.details().title.as_str().into(),
       pipeline: PipelineLabel::of(task.details().pipeline, published),
       phase,
-      readiness: Readiness::of(task),
+      detail,
       created_at: task.created_at(),
     }
   }
@@ -187,7 +237,7 @@ pub fn rows(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, tab: 
   tasks
     .iter()
     .filter(|task| tab.includes(task))
-    .map(|task| TaskRow::new(task, published, phase_of(task, phases)))
+    .map(|task| TaskRow::new(task, published, phases.get(&task.id())))
     .collect()
 }
 
@@ -197,7 +247,7 @@ pub fn recent(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, lim
     .iter()
     .rev()
     .take(limit)
-    .map(|task| TaskRow::new(task, published, phase_of(task, phases)))
+    .map(|task| TaskRow::new(task, published, phases.get(&task.id())))
     .collect()
 }
 

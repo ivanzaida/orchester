@@ -78,6 +78,7 @@ fn open_chevron() -> Element {
 fn opens(nav: &ProjectNav, row: &TaskRow, content: Row) -> Element {
   let (nav, task) = (nav.clone(), row.id);
   pressable(surface(), move || nav.show_task(task))
+    .id(format!("task-row-{}", row.key))
     .width(Dimension::Pct(100.0))
     .describe("task", row.key.clone())
     .child(content)
@@ -155,10 +156,7 @@ impl Component for QueueRow {
         column_label(&message_text(ctx, &row.pipeline.message())).text_overflow(TextOverflow::Elipsis),
       ))
       .child(cell(STATUS_WIDTH, status_label(glyph, &ctx.t(status))))
-      .child(cell(
-        READINESS_WIDTH,
-        column_label(&message_text(ctx, &row.readiness.message())),
-      ))
+      .child(cell(READINESS_WIDTH, column_label(&message_text(ctx, &row.detail))))
       .child(open_chevron());
     opens(&self.nav, &row, content)
   }
@@ -179,7 +177,7 @@ pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> E
     .spacing(SpacingSize::Xs)
     .child(Text::new(&row.key).variant(TypographyStyle::Caption).nowrap())
     .child(Text::new(&ctx.t("common.separator")).variant(TypographyStyle::Caption))
-    .child(Text::new(&message_text(ctx, &row.readiness.message())).variant(TypographyStyle::Caption));
+    .child(Text::new(&message_text(ctx, &row.detail)).variant(TypographyStyle::Caption));
   let content = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(LIST_ROW_HEIGHT))

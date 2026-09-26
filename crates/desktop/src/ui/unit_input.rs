@@ -1,6 +1,8 @@
 //! A single-line input with its unit inside the frame: the token budget field (`sN3du`, whole
-//! tokens with a muted `tokens` unit) and the time limit field (whole minutes). An invalid value
-//! gets the error stroke, 1.5px `$text`, like every other error (`T1n5BA`).
+//! tokens with a muted `tokens` unit) and the time limit field (whole minutes). The frame, not the
+//! text inside it, is the field: while the input has the focus it shows the focused field stroke
+//! (`o8Oug`, 1.5px `$text`), and an invalid value gets the same stroke, like every other error
+//! (`T1n5BA`).
 
 use std::sync::Arc;
 
@@ -28,9 +30,32 @@ pub enum UnitSize {
   Compact,
 }
 
+/// Which input of a screen has the focus, by id; each screen keeps one for its unit inputs.
+pub type FocusedInput = Signal<Option<&'static str>>;
+
+/// The frame's stroke: the field stroke, the focused field stroke (`o8Oug`) or the error stroke.
+/// Focused and invalid are both 1.5px `$text`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldStroke {
+  Default,
+  Focused,
+  Invalid,
+}
+
+impl FieldStroke {
+  pub const fn of(invalid: bool, focused: bool) -> Self {
+    match (invalid, focused) {
+      (true, _) => Self::Invalid,
+      (false, true) => Self::Focused,
+      (false, false) => Self::Default,
+    }
+  }
+}
+
 pub struct UnitInput {
   id: &'static str,
   value: Signal<String>,
+  focused: FocusedInput,
   unit: Arc<str>,
   invalid: bool,
   size: UnitSize,
@@ -45,10 +70,12 @@ pub struct UnitInput {
 }
 
 impl UnitInput {
-  pub fn new(id: &'static str, value: Signal<String>, unit: Arc<str>) -> Self {
+  /// `focused` is the screen's record of its focused input, which this input keeps up to date.
+  pub fn new(id: &'static str, value: Signal<String>, unit: Arc<str>, focused: FocusedInput) -> Self {
     Self {
       id,
       value,
+      focused,
       unit,
       invalid: false,
       size: UnitSize::Field,
@@ -99,10 +126,11 @@ impl UnitInput {
       UnitSize::Field => (TypographyStyle::FieldLabel, TypographyStyle::Caption),
       UnitSize::Compact => (TypographyStyle::Caption, ExtraTypography::Hint.role()),
     };
-    let border = if self.invalid {
-      Border::inside(BorderSize::Md, PaletteColor::TextPrimary)
-    } else {
-      Border::inside(BorderSize::Sm, input.border.clone())
+    let focused = self.focused.get() == Some(self.id);
+    let border = match FieldStroke::of(self.invalid, focused) {
+      FieldStroke::Invalid => Border::inside(BorderSize::Md, PaletteColor::TextPrimary),
+      FieldStroke::Focused => Border::inside(BorderSize::Md, input.border_focus.clone()),
+      FieldStroke::Default => Border::inside(BorderSize::Sm, input.border.clone()),
     };
     let mut field: TextInput = styled_input(ctx, self.value.clone(), value_style)
       .id(self.id)
@@ -112,9 +140,17 @@ impl UnitInput {
     if let Some(reference) = self.focus {
       field = field.ref_element(reference);
     }
-    if let Some(blur) = self.blur {
-      field = field.on_blur(move || blur());
-    }
+    let (id, gained, lost) = (self.id, self.focused.clone(), self.focused.clone());
+    field = field.on_focus(move || gained.set(Some(id)));
+    let blur = self.blur;
+    field = field.on_blur(move || {
+      if lost.get_untracked() == Some(id) {
+        lost.set(None);
+      }
+      if let Some(blur) = &blur {
+        blur();
+      }
+    });
     if let Some(separator) = self.group_separator {
       field = field.on_input(group_while_typing(self.value.clone(), separator));
     }
@@ -128,6 +164,7 @@ impl UnitInput {
       .border(border)
       .rounded(input.radius)
       .describe("state", if self.invalid { "invalid" } else { "valid" })
+      .describe("focused", if focused { "true" } else { "false" })
       .child(field)
       .child(
         Text::new(&self.unit)

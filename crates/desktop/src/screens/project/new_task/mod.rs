@@ -55,6 +55,7 @@ use crate::{
     form::{Submit, form},
     icon::{Icon, IconSize, icon},
     pressable::{pressable, surface},
+    unit_input::FocusedInput,
   },
   workspace::OpenProject,
 };
@@ -129,6 +130,8 @@ pub struct NewTaskForm {
   pipeline: Signal<PipelineSelection>,
   budget: Signal<String>,
   time_limit: Signal<String>,
+  /// Which limit input has the focus, for its focused stroke.
+  focused_input: FocusedInput,
   /// The limits were filled in from the project's defaults; they are filled in once.
   seeded: Signal<bool>,
   /// Generated once per form: every save attempt of this form uses it.
@@ -172,6 +175,7 @@ impl Component for NewTaskForm {
       pipeline: ctx.signal(PipelineSelection(None)),
       budget: ctx.signal(String::new()),
       time_limit: ctx.signal(String::new()),
+      focused_input: ctx.signal(None),
       seeded: ctx.signal(false),
       batch: IdempotencyKey::generate(),
       run: IdempotencyKey::generate(),
