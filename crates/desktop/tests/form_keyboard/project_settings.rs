@@ -94,6 +94,17 @@ fn limits_tab(desktop: &mut Desktop) {
   });
 }
 
+/// The labels of the time limit select and the one chosen.
+fn time_limit(desktop: &mut Desktop) -> (Vec<String>, Vec<String>) {
+  let select = desktop
+    .tree
+    .get_element_by_id_mut(TIME_LIMIT)
+    .and_then(|element| element.as_select())
+    .expect("the time limit select");
+  let strings = |labels: Vec<std::sync::Arc<str>>| labels.iter().map(|label| label.to_string()).collect();
+  (strings(select.labels()), strings(select.selected_labels()))
+}
+
 fn stored_limits(repo: &Path) -> ProjectLimits {
   ProjectDb::open(repo)
     .expect("open the project")
@@ -110,7 +121,9 @@ fn project_settings_limits_show_the_defaults_and_their_fields_in_order() {
   assert_eq!(desktop.value(MAX_BUDGET), "10,000,000");
   assert_eq!(desktop.value(DEFAULT_BUDGET), "1,400,000");
   assert_eq!(desktop.value(DAILY_BUDGET), "20,000,000");
-  assert_eq!(desktop.value(TIME_LIMIT), "30");
+  let (choices, chosen) = time_limit(&mut desktop);
+  assert_eq!(chosen, ["30 minutes"]);
+  assert_eq!(choices.first().map(String::as_str), Some("15 minutes"));
   assert!(shows(&mut desktop, "settings-limits", "= 10M tokens · default"));
   assert!(shows(&mut desktop, "settings-save-status", "All changes saved"));
   assert!(desktop.tree.get_element_by_id("settings-limits-notice").is_some());
@@ -161,6 +174,24 @@ fn project_settings_limits_save_a_valid_change_when_its_field_is_left() {
       .get_element_by_id("settings-save-status")
       .is_some_and(|status| contains_text(status, "All changes saved"))
   });
+}
+
+#[test]
+fn project_settings_limits_save_a_time_limit_when_it_is_chosen() {
+  let mut desktop = Desktop::with_project();
+  limits_tab(&mut desktop);
+  desktop.tab_to(DAILY_BUDGET, 10);
+  desktop.tab();
+  // The select opens on the chosen 30 minutes; Down moves to 45 and Enter chooses it.
+  desktop.enter();
+  desktop.key("ArrowDown", "ArrowDown");
+  desktop.enter();
+  assert_eq!(time_limit(&mut desktop).1, ["45 minutes"]);
+  let repo = desktop.repo().to_path_buf();
+  desktop.settle("the saved time limit", |_| {
+    stored_limits(&repo).default_time_limit() == std::time::Duration::from_secs(45 * 60)
+  });
+  assert!(shows(&mut desktop, "settings-limits", "active agent time"));
 }
 
 #[test]

@@ -1128,6 +1128,10 @@
       "timeLimit": "Default time limit",
       "timeLimitDetail": "Counts active agent time only. Time paused or waiting for you (plan approval, questions, permission requests) doesn’t count.",
       "activeTime": "active agent time",
+      "minutesOption": {
+        "one": "{{count}} minute",
+        "other": "{{count}} minutes"
+      },
       "changesTitle": "Changes apply to new runs",
       "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum."
     },
