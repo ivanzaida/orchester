@@ -6,13 +6,17 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   resource::{Pipeline, ResourceKind, VersionNumber},
+  run::RunEvent,
   store::{ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, RunStoreError, StoreError};
+use orchester_store::{ProjectDb, StoreError};
 
-use super::list::{LatestRun, Phases};
+use super::{
+  detail::run_store_error,
+  list::{LatestRun, Phases},
+};
 
 /// A pipeline a task can use: one with a published version.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,6 +35,8 @@ pub struct ProjectTasks {
   pub pipelines: Arc<Vec<PipelineChoice>>,
   /// The phase of each task that has a run, from its latest run.
   pub phases: Arc<Phases>,
+  /// Runs started in the project, of every task.
+  pub runs: usize,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProjectTasks {}
@@ -40,22 +46,24 @@ impl ProjectTasks {
     let db = ProjectDb::open(repo_root)?;
     let tasks = db.tasks()?;
     let mut phases = Phases::new();
+    let mut count = 0;
     for task in &tasks {
-      let runs = db.runs_of_task(task.id()).map_err(|error| match error {
-        RunStoreError::Store(error) => error,
-        other => StoreError::Corrupt {
-          what: "run",
-          detail: other.to_string(),
-        },
-      })?;
+      let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
+      count += runs.len();
       if let Some(latest) = runs.last() {
-        phases.insert(task.id(), LatestRun::of(task, latest));
+        let updated_at = db
+          .events(latest.id())
+          .map_err(run_store_error)?
+          .last()
+          .map_or_else(|| latest.created_at(), RunEvent::at);
+        phases.insert(task.id(), LatestRun::of(task, latest, updated_at));
       }
     }
     Ok(Self {
       tasks: Arc::new(tasks),
       pipelines: Arc::new(published_pipelines(&db)?),
       phases: Arc::new(phases),
+      runs: count,
     })
   }
 }

@@ -263,8 +263,18 @@
       "other": "{{count}} tasks"
     },
     "footer": {
-      "one": "{{count}} task · no runs started",
-      "other": "{{count}} tasks · no runs started"
+      "noRuns": {
+        "one": "{{count}} task · no runs started",
+        "other": "{{count}} tasks · no runs started"
+      },
+      "oneRun": {
+        "one": "{{count}} task · {{runs}} run started",
+        "other": "{{count}} tasks · {{runs}} run started"
+      },
+      "runs": {
+        "one": "{{count}} task · {{runs}} runs started",
+        "other": "{{count}} tasks · {{runs}} runs started"
+      }
     },
     "new": {
       "breadcrumb": "{{project}} / Tasks / New task",
