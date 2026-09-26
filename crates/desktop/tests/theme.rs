@@ -97,6 +97,10 @@ fn getting_started_roles_follow_pencil() {
   // Rows of the status bar operations popover (`E1msJS`).
   assert_eq!(theme.spacing_value(ExtraSpacing::Hair.role()), Dimension::Px(2.0));
   assert_eq!(
+    theme.spacing_value(ExtraSpacing::DialogMargin.role()),
+    Dimension::Px(32.0)
+  );
+  assert_eq!(
     theme.typography_style(ExtraTypography::DialogTitle.role()).font_size,
     20.0
   );

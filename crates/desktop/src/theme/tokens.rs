@@ -94,6 +94,7 @@ pub const SPACE_FIELD: f32 = 9.0;
 pub const SPACE_PROPERTY: f32 = 15.0;
 pub const SPACE_DIVIDER: f32 = 18.0;
 pub const SPACE_SELECT_MENU: f32 = 4.0;
+pub const SPACE_DIALOG_MARGIN: f32 = 32.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;
@@ -102,6 +103,9 @@ pub const CONNECTOR_STROKE: f32 = 1.25;
 pub const TITLE_BAR_HEIGHT: f32 = 32.0;
 /// Width of each Windows window control (`QQmsI`).
 pub const WINDOW_CONTROL_WIDTH: f32 = 46.0;
+/// Width of the lifecycle dialogs at most: close with active work, waiting and start-up
+/// recovery (`um9B1`, `KS2RU`, `BovYZ`).
+pub const LIFECYCLE_DIALOG_WIDTH: f32 = 880.0;
 
 /// Drop shadow of the status bar operations popover (`E1msJS`): outer, x 0, y 8, blur 24,
 /// no spread. The only shadow in the design.

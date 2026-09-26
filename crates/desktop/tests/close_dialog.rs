@@ -82,21 +82,41 @@ impl Presses {
   }
 }
 
-fn mount(stage: CloseStage, saves: Vec<SaveState>, presses: &Arc<Presses>) -> Tree {
+fn app() -> App {
   let mut app = App::new();
   theme::install(&mut app);
   i18n::install(&app).expect("bundled locales load");
+  app
+}
+
+fn props(stage: CloseStage, saves: Vec<SaveState>, presses: &Arc<Presses>) -> CloseDialogProps {
+  CloseDialogProps {
+    stage,
+    work: work(),
+    saves: saves.into(),
+    actions: presses.actions(),
+  }
+}
+
+fn mount(stage: CloseStage, saves: Vec<SaveState>, presses: &Arc<Presses>) -> Tree {
   let mut tree = Tree::new();
-  tree.mount_root::<CloseDialog>(
-    &mut app,
-    CloseDialogProps {
-      stage,
-      work: work(),
-      saves: saves.into(),
-      actions: presses.actions(),
-    },
-  );
+  tree.mount_root::<CloseDialog>(&mut app(), props(stage, saves, presses));
   tree
+}
+
+/// Width and left edge of the confirm dialog laid out in a window `width` wide.
+fn dialog_bounds(width: u32) -> (f32, f32) {
+  let mut app = app();
+  let mut tree = Tree::new();
+  tree.resize(width, 700);
+  let presses = Arc::new(Presses::default());
+  tree.mount_root::<CloseDialog>(&mut app, props(CloseStage::Confirm, Vec::new(), &presses));
+  tree.pass_headless(&mut app);
+  let bounds = tree
+    .get_element_by_id_mut("close-dialog")
+    .and_then(|element| element.bounds())
+    .expect("the close dialog is laid out");
+  (bounds.x, bounds.width)
 }
 
 fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
@@ -160,4 +180,14 @@ fn close_dialog_waiting_shows_each_run_saving_or_saved_and_keeps_only_quit_now()
 
   tree.get_element_by_id_mut("close-quit-now").expect("quit now").click();
   assert_eq!(presses.count(1), 1);
+}
+
+#[test]
+fn close_dialog_shares_the_lifecycle_width_and_keeps_its_side_margins() {
+  assert_eq!(
+    dialog_bounds(1440),
+    ((1440.0 - 880.0) / 2.0, theme::LIFECYCLE_DIALOG_WIDTH)
+  );
+  assert_eq!(dialog_bounds(960).1, 880.0);
+  assert_eq!(dialog_bounds(800), (32.0, 800.0 - 2.0 * 32.0));
 }

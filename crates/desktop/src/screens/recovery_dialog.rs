@@ -12,7 +12,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -23,7 +23,7 @@ use crate::{
   display,
   recovery::{InterruptedRun, WorktreeState},
   screens::project::connections::status::short_key as provider_short_key,
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, LIFECYCLE_DIALOG_WIDTH},
   ui::{
     backdrop::backdrop,
     button::ActionButton,
@@ -32,16 +32,15 @@ use crate::{
   },
 };
 
-/// Dialog width (`BovYZ`), header icon tile (`Ivo7b`), header row and action bar heights
-/// (`EkIqH`, `bJD3f`) and the fixed table columns (`ZvJv8`, `LQdz1`, `vAi6i`, `uM7WA`).
-const DIALOG_WIDTH: f32 = 1120.0;
+/// Header icon tile (`Ivo7b`), header row and action bar heights (`EkIqH`, `bJD3f`) and the
+/// fixed table columns (`ZvJv8`, `LQdz1`, `vAi6i`, `uM7WA`); the task column takes the rest.
 const ICON_TILE: f32 = 36.0;
 const HEADER_ROW_HEIGHT: f32 = 36.0;
 const ACTIONS_HEIGHT: f32 = 76.0;
-const DURING_WIDTH: f32 = 150.0;
-const REASON_WIDTH: f32 = 180.0;
-const CHECKPOINT_WIDTH: f32 = 120.0;
-const WORKTREE_WIDTH: f32 = 190.0;
+const DURING_WIDTH: f32 = 140.0;
+const REASON_WIDTH: f32 = 150.0;
+const CHECKPOINT_WIDTH: f32 = 88.0;
+const WORKTREE_WIDTH: f32 = 160.0;
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
@@ -94,7 +93,8 @@ impl Component for RecoveryDialog {
     let dialog = Column::new()
       .id("recovery-dialog")
       .describe("runs", props.runs.len().to_string())
-      .width(Dimension::Px(DIALOG_WIDTH))
+      .width(Dimension::Pct(100.0))
+      .max_width(Dimension::Px(LIFECYCLE_DIALOG_WIDTH))
       .background(ExtraColor::Surface.role())
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .rounded(RadiusSize::Lg)
@@ -225,12 +225,24 @@ fn run_row(ctx: &Ctx, run: &InterruptedRun) -> Element {
     .child(
       Text::new(&run.task_title)
         .variant(ExtraTypography::NoticeHeading.role())
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
         .flex(1.0),
     );
   cells(Row::new())
     .id(format!("recovery-run-{}", run.run))
     .padding_vertical(ExtraSpacing::Group.role())
-    .child(stacked(None, title, Some(caption(&project_run))))
+    .child(stacked(
+      None,
+      title,
+      Some(
+        Text::new(&project_run)
+          .variant(TypographyStyle::Caption)
+          .nowrap()
+          .text_overflow(TextOverflow::Elipsis)
+          .into(),
+      ),
+    ))
     .child(during(ctx, run))
     .child(stacked(
       Some(REASON_WIDTH),
@@ -313,11 +325,18 @@ fn worktree(ctx: &Ctx, state: WorktreeState) -> Element {
       PaletteColor::TextSecondary,
     ),
   };
+  // A label longer than the column wraps beside the icon instead of being cut.
   let state = Row::new()
+    .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Tight.role())
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Small, color.clone()))
-    .child(Text::new(&text).variant(TypographyStyle::Caption).color(color));
+    .child(
+      Text::new(&text)
+        .variant(TypographyStyle::Caption)
+        .color(color)
+        .flex(1.0),
+    );
   stacked(Some(WORKTREE_WIDTH), state, None)
 }
 
