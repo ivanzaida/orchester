@@ -272,7 +272,8 @@
       "paused": "Paused",
       "passed": "Done",
       "failed": "Failed",
-      "skipped": "Skipped"
+      "skipped": "Skipped",
+      "cancelled": "Cancelled"
     },
     "permissions": {
       "value": "{{agent}} · {{access}}",
@@ -427,6 +428,7 @@
       "tokensUsed": "Used {{used}} of {{limit}}",
       "tokensUsedMidStep": "Used {{used}} of {{limit}} · {{step}} stopped mid-step",
       "timeUsed": "Used {{used}} of {{limit}} min of active agent time",
+      "timeUsedMidStep": "Used {{used}} of {{limit}} min of active agent time · {{step}} stopped mid-step",
       "timeLeft": "{{left}} min left · pauses don’t count",
       "minutes": "minutes",
       "continueMidStep": "Continue starts a new {{agent}} invocation from checkpoint {{checkpoint}} and repeats the unfinished part of {{step}}. The new limit applies to Run {{run}} only.",
@@ -434,6 +436,7 @@
       "continueNextStep": "Continue starts the next step. The new limit applies to Run {{run}} only.",
       "continue": "Continue",
       "continueWith": "Continue with {{count}} tokens",
+      "continueWithMinutes": "Continue with {{minutes}} minutes",
       "continuing": "Continuing…",
       "notRaised": "The run stopped at its limit. Raise the limit to continue.",
       "tokensNotAboveUsed": "The new budget must be above the tokens this run already used.",

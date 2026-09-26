@@ -74,6 +74,7 @@ fn step_row(ctx: &Ctx, step: &StepView, run: &RunStatus) -> Element {
   // A step a paused run stopped in is not running (`tSDux` in 02.A).
   let (glyph, state) = match (run, step.status) {
     (RunStatus::Paused(_), Some(StepStatus::Running)) => (Icon::Pause, "runs.step.paused"),
+    (RunStatus::Cancelled, Some(StepStatus::Skipped)) => (Icon::Square, "runs.step.cancelled"),
     _ => step_state(step.status),
   };
   let state = ctx.t(state);

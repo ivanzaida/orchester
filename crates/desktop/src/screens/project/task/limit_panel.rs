@@ -88,8 +88,12 @@ impl RaiseLimitProps {
     }
   }
 
-  /// The budget offered to continue with: half again the current one, within the maximum.
+  /// The budget offered to continue with: after a token stop half again the current one, within
+  /// the maximum; else unchanged.
   fn suggested_budget(&self) -> u64 {
+    if self.limit == RunLimit::Time {
+      return self.budget.get();
+    }
     let raised = self.budget.get().saturating_add(self.budget.get() / 2);
     let rounded = raised.div_ceil(SUGGESTION_STEP).saturating_mul(SUGGESTION_STEP);
     rounded.min(self.max_budget.get()).max(self.budget.get())
@@ -172,7 +176,12 @@ impl Component for RaiseLimitPanel {
           .width(Dimension::Pct(100.0)),
       )
       .with_children(failure.map(|error| field_error(&error)))
-      .child(continue_button(ctx, budget.as_ref().ok(), pending, submit.clone()));
+      .child(continue_button(
+        ctx,
+        &props,
+        (budget.as_ref().ok(), time.as_ref().ok()),
+        (pending, submit.clone()),
+      ));
     form(submit, content)
   }
 }
@@ -217,7 +226,7 @@ impl RaiseLimitPanel {
     separator: &Arc<str>,
   ) -> Element {
     let (used, of) = (compact_tokens(props.used.get()), compact_tokens(props.budget.get()));
-    let current = match &props.stopped {
+    let current = match props.stopped.as_ref().filter(|_| props.limit == RunLimit::Tokens) {
       Some((step, _)) => ctx.t_args(
         "runs.limit.tokensUsedMidStep",
         [("used", used.as_str()), ("limit", of.as_str()), ("step", step)],
@@ -240,21 +249,29 @@ impl RaiseLimitPanel {
 
   /// "Time limit · Used 24 of 30 min of active agent time" beside its input.
   fn time_row(&self, ctx: &Ctx, props: &RaiseLimitProps, time: &Result<Duration, Message>) -> Element {
-    let current = ctx.t_args(
-      "runs.limit.timeUsed",
-      [
-        ("used", whole_minutes(props.active).to_string().as_str()),
-        ("limit", whole_minutes(props.max_duration).to_string().as_str()),
-      ],
-    );
+    let (used, of) = (whole_minutes(props.active), whole_minutes(props.max_duration));
+    let (used, of) = (used.to_string(), of.to_string());
+    let current = match props.stopped.as_ref().filter(|_| props.limit == RunLimit::Time) {
+      Some((step, _)) => ctx.t_args(
+        "runs.limit.timeUsedMidStep",
+        [("used", used.as_str()), ("limit", of.as_str()), ("step", step)],
+      ),
+      None => ctx.t_args("runs.limit.timeUsed", [("used", used.as_str()), ("limit", of.as_str())]),
+    };
     let note = match time {
-      Ok(limit) => Ok(ctx.t_args(
-        "runs.limit.timeLeft",
-        [(
-          "left",
-          whole_minutes(limit.saturating_sub(props.active)).to_string().as_str(),
-        )],
-      )),
+      // Minutes left of the new limit, counted like the minutes used.
+      Ok(limit) => Ok(
+        ctx.t_args(
+          "runs.limit.timeLeft",
+          [(
+            "left",
+            whole_minutes(*limit)
+              .saturating_sub(whole_minutes(props.active))
+              .to_string()
+              .as_str(),
+          )],
+        ),
+      ),
       Err(error) => Err(message_text(ctx, error)),
     };
     let input = UnitInput::new("raise-limit-time", self.minutes.clone(), ctx.t("runs.limit.minutes"))
@@ -345,15 +362,25 @@ fn explanation(ctx: &Ctx, props: &RaiseLimitProps) -> Arc<str> {
   }
 }
 
-/// "Continue with 2M tokens" (`V5TTG`), the panel's one action.
-fn continue_button(ctx: &Ctx, budget: Option<&TokenBudget>, pending: bool, submit: Submit) -> Element {
-  let label = match (pending, budget) {
-    (true, _) => ctx.t("runs.limit.continuing"),
-    (false, Some(budget)) => ctx.t_args(
+/// "Continue with 2M tokens" (`V5TTG`), the panel's one action; it names the new value of the
+/// limit that was hit.
+fn continue_button(
+  ctx: &Ctx,
+  props: &RaiseLimitProps,
+  (budget, time): (Option<&TokenBudget>, Option<&Duration>),
+  (pending, submit): (bool, Submit),
+) -> Element {
+  let label = match (pending, props.limit, budget, time) {
+    (true, ..) => ctx.t("runs.limit.continuing"),
+    (false, RunLimit::Tokens, Some(budget), _) => ctx.t_args(
       "runs.limit.continueWith",
       [("count", compact_tokens(budget.get()).as_str())],
     ),
-    (false, None) => ctx.t("runs.limit.continue"),
+    (false, RunLimit::Time, _, Some(time)) => ctx.t_args(
+      "runs.limit.continueWithMinutes",
+      [("minutes", whole_minutes(*time).to_string().as_str())],
+    ),
+    (false, ..) => ctx.t("runs.limit.continue"),
   };
   let button = ActionButton::new(label)
     .primary()

@@ -209,21 +209,21 @@ impl LimitsTab {
         id: "limits-max-run-budget",
         keys: ("settings.limits.max", "settings.limits.maxDetail"),
         value: &self.max,
-        default: defaults.max_run_budget().get(),
+        default: Some(defaults.max_run_budget().get()),
         error: errors.max_run_budget.as_ref(),
       },
       BudgetSetting {
         id: "limits-default-run-budget",
         keys: ("settings.limits.default", "settings.limits.defaultDetail"),
         value: &self.default,
-        default: defaults.default_run_budget().get(),
+        default: None,
         error: errors.default_run_budget.as_ref(),
       },
       BudgetSetting {
         id: "limits-daily-budget",
         keys: ("settings.limits.daily", "settings.limits.dailyDetail"),
         value: &self.daily,
-        default: defaults.daily_budget().get(),
+        default: None,
         error: errors.daily_budget.as_ref(),
       },
     ]
@@ -260,8 +260,8 @@ struct BudgetSetting<'a> {
   /// Name and description.
   keys: (&'static str, &'static str),
   value: &'a Signal<String>,
-  /// The design's default, which the read-back names.
-  default: u64,
+  /// The design's default, which the read-back names (for the maximum, as in `SkKCa`).
+  default: Option<u64>,
   error: Option<&'a Message>,
 }
 
@@ -275,7 +275,7 @@ impl BudgetSetting<'_> {
           .ok()
           .map(|budget| budget.get());
         let count = budget.map(compact_tokens).unwrap_or_default();
-        let key = if budget == Some(self.default) {
+        let key = if budget.is_some() && budget == self.default {
           "tokens.readBackDefault"
         } else {
           "tokens.readBack"
