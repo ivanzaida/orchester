@@ -1,6 +1,7 @@
 //! Projects for the execution tests: a git repository with one commit, a signed-in Codex
-//! connection running `orchester-fake-codex`, a published pipeline of agent steps and a queued
-//! task, and a scheduler whose notifications the test reads.
+//! connection running `orchester-fake-codex` (or a Claude Code one running `orchester-fake-claude`),
+//! a published pipeline of agent steps and a queued task, and a scheduler whose notifications the
+//! test reads.
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
@@ -19,7 +20,7 @@ use orchester_core::{
   },
   id::{ConnectionId, IdempotencyKey, ProjectId, RunId, TaskId},
   name::Name,
-  permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
+  permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, StepPermissions},
   project::{Project, ProjectKey},
   resource::{
     AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
@@ -38,6 +39,7 @@ use tempfile::TempDir;
 use tokio::sync::mpsc;
 
 pub const FAKE_CODEX: &str = env!("CARGO_BIN_EXE_orchester-fake-codex");
+pub const FAKE_CLAUDE: &str = env!("CARGO_BIN_EXE_orchester-fake-claude");
 pub const PATIENCE: Duration = Duration::from_secs(30);
 
 pub fn git(dir: &Path, args: &[&str]) -> String {
@@ -110,6 +112,8 @@ pub struct Setup {
   pub max_duration: Duration,
   /// A pipeline graph instead of Implement (and Review).
   pub steps: Vec<StepSpec>,
+  /// The CLI the Builder profile runs on.
+  pub provider: AgentProvider,
 }
 
 impl Setup {
@@ -119,6 +123,7 @@ impl Setup {
       approval_gate: false,
       review: false,
       steps: Vec::new(),
+      provider: AgentProvider::CodexCli,
       budget: 1_400_000,
       max_duration: Duration::from_secs(30 * 60),
     }
@@ -147,25 +152,29 @@ pub fn project(setup: &Setup) -> TestProject {
     name("Kontur"),
   );
   let mut db = ProjectDb::create(root, project).expect("create project");
-  let connection = codex_connection();
+  let connection = agent_connection(setup.provider);
   db.create_connection(&connection).expect("connection");
   let task = queued_task(&mut db, connection.id(), setup);
   TestProject { repo, task }
 }
 
-fn codex_connection() -> orchester_core::connection::Connection {
+fn agent_connection(provider: AgentProvider) -> orchester_core::connection::Connection {
+  let (title, fake, version) = match provider {
+    AgentProvider::CodexCli => ("Codex · Kontur", FAKE_CODEX, "0.139.0"),
+    AgentProvider::ClaudeCodeCli => ("Claude · Kontur", FAKE_CLAUDE, "2.1.89"),
+  };
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
-    name("Codex · Kontur"),
-    AgentProvider::CodexCli,
-    PathBuf::from(FAKE_CODEX),
+    name(title),
+    provider,
+    PathBuf::from(fake),
     Timestamp::now(),
   )
   .expect("absolute path");
   connection.record_check(ConnectionCheck {
     at: Timestamp::now(),
     result: CheckResult::Available {
-      version: "0.139.0".into(),
+      version: version.into(),
       sign_in: SignIn::SignedIn,
       catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
     },
@@ -221,12 +230,16 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     "Implements tasks.".into(),
     PromptText::new("Work carefully.").expect("prompt"),
     connection,
-    ModelId::new("gpt-5.5").expect("model"),
+    ModelId::new(match setup.provider {
+      AgentProvider::CodexCli => "gpt-5.5",
+      AgentProvider::ClaudeCodeCli => "haiku",
+    })
+    .expect("model"),
     settings,
   )
   .with_permissions(AgentPermissions::new(
     RepositoryAccess::Write,
-    CommandPermission::AnyInWorktree,
+    commands(setup.provider),
     NetworkAccess::Off,
   ));
   let builder = db
@@ -263,6 +276,17 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
   task.queue().expect("complete task");
   db.save_task(&task).expect("save task");
   task.id()
+}
+
+/// What the Builder may run: Codex confines any command to the worktree; Claude Code can only
+/// limit commands to a list, here git.
+fn commands(provider: AgentProvider) -> CommandPermission {
+  match provider {
+    AgentProvider::CodexCli => CommandPermission::AnyInWorktree,
+    AgentProvider::ClaudeCodeCli => CommandPermission::Allowed(
+      AllowedCommands::new(vec![CommandPrefix::new("git").expect("valid prefix")]).expect("valid list"),
+    ),
+  }
 }
 
 /// Queues a second task on the project's pipeline, with the same brief as the first.

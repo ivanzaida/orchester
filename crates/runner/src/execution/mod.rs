@@ -1,6 +1,6 @@
 //! Executing runs: creating a run for a queued task, its worktree, and driving its agent steps on
-//! the Codex CLI; pausing, resuming, cancelling and continuing a run stopped
-//! at a limit. Every state change is recorded in the project database first; the desktop is only
+//! their agent CLIs (Codex or Claude Code); pausing, resuming, cancelling and continuing a run
+//! stopped at a limit. Every state change is recorded in the project database first; the desktop is only
 //! told *that* something changed ([`Event::RunChanged`], [`Event::AgentActivity`]) and reads the
 //! database.
 //!

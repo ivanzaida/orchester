@@ -26,7 +26,7 @@ use lurq::{
   },
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::id::StepExecutionId;
+use orchester_core::{connection::AgentProvider, id::StepExecutionId};
 use parking_lot::Mutex;
 
 use self::{
@@ -38,6 +38,7 @@ use crate::{
   background, messages,
   messages::Message,
   runner::Runners,
+  screens::project::connections::status::short_key as provider_short_key,
   tasks::{
     detail::{RunView, TaskDetail, activity_in},
     transcript::{Entry, entries},
@@ -346,5 +347,17 @@ impl ActivityTab {
       &ctx.t("runs.activity.failedDetail"),
       actions,
     )
+  }
+}
+
+/// The CLI and model an agent runs on, as the design writes it ("Codex / Sol"); the model alone
+/// once the profile's connection is gone.
+fn engine(ctx: &Ctx, provider: Option<AgentProvider>, model: &str) -> Arc<str> {
+  match provider {
+    Some(provider) => ctx.t_args(
+      "runs.activity.engine",
+      [("provider", &*ctx.t(provider_short_key(provider))), ("model", model)],
+    ),
+    None => model.into(),
   }
 }

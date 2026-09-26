@@ -20,6 +20,12 @@ name = "orchester-fake-codex"
 path = "tests/support/fake_codex.rs"
 required-features = ["test-agent"]
 
+# The same for the Claude Code CLI.
+[[bin]]
+name = "orchester-fake-claude"
+path = "tests/support/fake_claude.rs"
+required-features = ["test-agent"]
+
 [[test]]
 name = "execution"
 required-features = ["test-agent"]
@@ -42,6 +48,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "run_permissions"
+required-features = ["test-agent"]
+
+[[test]]
+name = "claude"
 required-features = ["test-agent"]
 
 [features]

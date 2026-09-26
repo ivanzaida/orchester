@@ -1,6 +1,6 @@
-//! The invocation panel beside the transcript (`n0cEOG`): the step and attempt, agent and model
-//! and start of the latest agent launch, its reported tokens, the run's total, and the agent's
-//! permissions. Token counts are what the CLI reported; cached input is not counted.
+//! The invocation panel beside the transcript (`n0cEOG`): the step and attempt, agent, provider,
+//! model and start of the latest agent launch, its reported tokens, the run's total, and the
+//! agent's permissions. Token counts are what the CLI reported; cached input is not counted.
 
 use lurq::{
   app::{
@@ -12,7 +12,7 @@ use lurq::{
 };
 use orchester_core::{run::Invocation, tokens::compact_tokens};
 
-use super::super::permissions::permissions_value;
+use super::{super::permissions::permissions_value, engine};
 use crate::{
   display,
   tasks::detail::RunView,
@@ -74,11 +74,12 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
       ("attempt", attempt.as_str()),
     ],
   );
+  let engine = engine(ctx, step.provider, invocation.model.as_str());
   let agent = ctx.t_args(
     "runs.activity.panel.agentValue",
     [
       ("agent", step.agent.as_deref().unwrap_or_default()),
-      ("model", invocation.model.as_str()),
+      ("engine", &*engine),
     ],
   );
   let started = display::clock(invocation.started_at);
