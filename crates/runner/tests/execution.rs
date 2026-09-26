@@ -74,12 +74,14 @@ fn assert_transcript(db: &ProjectDb, run: RunId) {
     .expect("argv reported");
   let expected = if cfg!(windows) {
     "-a never exec --json --ignore-user-config --ignore-rules -m gpt-5.5 -c model_reasoning_effort=low --sandbox \
-     workspace-write -c windows.sandbox=elevated -C "
+     workspace-write -c windows.sandbox=elevated --output-schema "
   } else {
     "-a never exec --json --ignore-user-config --ignore-rules -m gpt-5.5 -c model_reasoning_effort=low --sandbox \
-     workspace-write -C "
+     workspace-write --output-schema "
   };
   assert!(argv.starts_with(expected), "{argv}");
+  // The step result schema is read from next to the project database, outside the worktree.
+  assert!(argv.contains("step-result.schema.json -C "), "{argv}");
   assert!(argv.ends_with(" -"), "{argv}");
   let environment = stderr
     .iter()

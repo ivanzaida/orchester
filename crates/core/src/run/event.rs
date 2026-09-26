@@ -9,7 +9,9 @@ use super::{
   branch::BranchName,
   number::RunNumber,
   snapshot::RunSnapshot,
-  status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, PlanDecision, RunFailure, WaitReason},
+  status::{
+    AttemptReason, ContinueTrigger, InterruptCause, PauseReason, PlanDecision, RunFailure, StepFailure, WaitReason,
+  },
 };
 use crate::{
   id::{AttemptId, CheckpointId, RunId, StepExecutionId, TaskId},
@@ -157,6 +159,9 @@ pub enum RunEventKind {
   },
   StepFailed {
     execution: StepExecutionId,
+    /// Logs written before failures had reasons have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reason: Option<StepFailure>,
   },
   StepSkipped {
     execution: StepExecutionId,
@@ -181,7 +186,7 @@ impl RunEventKind {
       | Self::StepResumed { execution }
       | Self::PlanDecided { execution, .. }
       | Self::StepPassed { execution }
-      | Self::StepFailed { execution }
+      | Self::StepFailed { execution, .. }
       | Self::StepSkipped { execution }
       | Self::CheckpointRecorded { execution, .. } => Some(*execution),
       _ => None,

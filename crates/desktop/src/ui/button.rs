@@ -104,6 +104,11 @@ impl ActionButton {
     self
   }
 
+  pub fn width(mut self, width: impl Into<Dimension>) -> Self {
+    self.width = Some(width.into());
+    self
+  }
+
   pub fn height(mut self, height: impl Into<Dimension>) -> Self {
     self.height = Some(height.into());
     self

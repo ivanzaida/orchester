@@ -32,6 +32,10 @@ required-features = ["test-agent"]
 name = "lifecycle"
 required-features = ["test-agent"]
 
+[[test]]
+name = "graph"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

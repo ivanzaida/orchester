@@ -137,6 +137,12 @@ impl Run {
     if !known {
       return Err(RunError::Inconsistent("an execution names a step outside the snapshot"));
     }
+    if self
+      .executions()
+      .any(|execution| execution.failure().is_some() && execution.status() != StepStatus::Failed)
+    {
+      return Err(RunError::Inconsistent("only a failed execution has a failure reason"));
+    }
     match &self.last_checkpoint {
       Some(checkpoint) if self.execution(checkpoint.execution()).is_none() => {
         Err(RunError::Inconsistent("the last checkpoint names an unknown execution"))

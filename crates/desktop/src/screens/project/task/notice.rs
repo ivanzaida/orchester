@@ -93,6 +93,15 @@ fn run_notice(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
       "runs.summary.notice.pausingTitle",
       "runs.summary.notice.pausingDetail",
     ),
+    RunStatus::Running if run.working_steps().count() > 1 => {
+      let steps: Vec<&str> = run.working_steps().map(|step| &*step.name).collect();
+      let steps = steps.join(&ctx.t("runs.progress.together"));
+      (
+        Icon::Loader,
+        ctx.t_args("runs.summary.notice.runningParallelTitle", [("steps", steps.as_str())]),
+        ctx.t_args("runs.summary.notice.runningDetail", args),
+      )
+    }
     RunStatus::Running => plain(
       Icon::Loader,
       "runs.summary.notice.runningTitle",

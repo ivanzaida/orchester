@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, node::Element};
-use orchester_core::run::{PauseReason, RunLimit, RunStatus, StepStatus, TaskPhase};
+use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, TaskPhase};
 
 use super::super::page;
 use crate::{
@@ -31,6 +31,8 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     .current_attempt()
     .map_or_else(String::new, |attempt| attempt.number().to_string());
   let step = run.current_step();
+  let working: Vec<&str> = run.working_steps().map(|step| &*step.name).collect();
+  let parallel = working.join(&ctx.t("runs.progress.together"));
   let step_name = step.map_or("", |step| &step.name);
   let agent = step.and_then(|step| step.agent.as_deref()).unwrap_or_default();
   let time = run.paused_at.map(display::clock).unwrap_or_default();
@@ -40,11 +42,13 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     ("step", step_name),
     ("agent", agent),
     ("time", time.as_str()),
+    ("steps", parallel.as_str()),
   ];
   let key = match (run.run.status(), step) {
     (RunStatus::Running, _) if lost => "runs.page.describe.interrupted",
     (RunStatus::Pending, _) => "runs.page.describe.pending",
     (RunStatus::Running, _) if run.run.pause_requested() => "runs.page.describe.pausing",
+    (RunStatus::Running, Some(_)) if working.len() > 1 => "runs.page.describe.workingParallel",
     (RunStatus::Running, Some(_)) => "runs.page.describe.working",
     (RunStatus::Running, None) => "runs.page.describe.starting",
     (RunStatus::Paused(PauseReason::Requested), _) => "runs.page.describe.paused",
@@ -53,6 +57,7 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)), _) => "runs.page.describe.dailyBudget",
     (RunStatus::Interrupted(_), _) => "runs.page.describe.interrupted",
     (RunStatus::Succeeded, _) => "runs.page.describe.succeeded",
+    (RunStatus::Failed(RunFailure::RetriesExhausted(_)), _) => "runs.page.describe.retriesExhausted",
     (RunStatus::Failed(_), _) => "runs.page.describe.failed",
     (RunStatus::Cancelled, _) => "runs.page.describe.cancelled",
   };

@@ -2,13 +2,13 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   id::ResourceId,
-  money::{Currency, Money},
   name::Name,
   resource::{
     EditProblem, FailureRoute, Pipeline, PipelineChange, PipelineEdit, PipelineError, PromptText, PublishError,
     RepositoryAccess, ResourceBody, StarterAssignments, StarterStep, StarterStepText, StepChange, StepKey, StepKind,
     changes, feature_delivery,
   },
+  tokens::TokenBudget,
 };
 
 fn key(value: &str) -> StepKey {
@@ -274,7 +274,7 @@ fn changes_list_edited_added_and_removed_steps() {
       max_retries: NonZeroU32::new(3).expect("positive"),
       ..route
     });
-    step.budget = Some(Money::from_micros(1_500_000, Currency::USD));
+    step.budget = Some(TokenBudget::new(400_000).expect("above zero"));
   });
   edit.remove_step(&key("research"));
   let added = edit.add_step(name("Audit"), Some(&key("review")));
@@ -296,7 +296,7 @@ fn changes_list_edited_added_and_removed_steps() {
         "review".to_owned(),
         StepChange::Budget {
           from: None,
-          to: Some(Money::from_micros(1_500_000, Currency::USD))
+          to: Some(TokenBudget::new(400_000).expect("above zero"))
         }
       ),
       (added.as_str().to_owned(), StepChange::Added),

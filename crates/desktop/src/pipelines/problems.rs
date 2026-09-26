@@ -1,9 +1,8 @@
 //! User-facing messages for what blocks publishing a pipeline, for field values that cannot be
 //! used, and for failed saves and publishes. Steps are named by their names, not their keys.
 
-use orchester_core::{
-  money::MoneyError,
-  resource::{EditProblem, PipelineEdit, PipelineError, PromptError, PublishError, StepKey, StepKind, VersionNumber},
+use orchester_core::resource::{
+  EditProblem, PipelineEdit, PipelineError, PromptError, PublishError, StepKey, StepKind, VersionNumber,
 };
 use orchester_store::StoreError;
 
@@ -79,7 +78,7 @@ pub fn problem_view(edit: &PipelineEdit, problem: &EditProblem, then: &str) -> P
 
 fn rule_step(error: &PipelineError) -> Option<&StepKey> {
   match error {
-    PipelineError::DuplicateStep(key) | PipelineError::Cycle(key) | PipelineError::NonPositiveBudget(key) => Some(key),
+    PipelineError::DuplicateStep(key) | PipelineError::Cycle(key) => Some(key),
     PipelineError::UnknownDependency { step, .. }
     | PipelineError::UnknownRetryTarget { step, .. }
     | PipelineError::RetryTargetNotUpstream { step, .. } => Some(step),
@@ -97,7 +96,6 @@ fn rule_message(edit: &PipelineEdit, error: &PipelineError) -> Message {
     PipelineError::RetryTargetNotUpstream { step, target } => Message::new("pipelines.problems.retryTargetNotUpstream")
       .with("step", name(step))
       .with("target", name(target)),
-    PipelineError::NonPositiveBudget(key) => about(key, "pipelines.problems.nonPositiveBudget"),
   }
 }
 
@@ -124,11 +122,5 @@ pub fn prompt_error(error: &PromptError) -> Message {
     PromptError::UnknownVariable { name, .. } => {
       Message::new("pipelines.problems.unknownVariable").with("name", name.clone())
     }
-  }
-}
-
-pub fn budget_error(error: &MoneyError) -> Message {
-  match error {
-    MoneyError::InvalidCurrency(_) | MoneyError::InvalidAmount(_) => Message::new("pipelines.problems.invalidBudget"),
   }
 }

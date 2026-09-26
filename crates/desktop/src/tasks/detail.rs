@@ -3,15 +3,15 @@
 //! invocations. Read from the project database, which the runner writes; blocks on SQLite, so
 //! the UI calls it off the UI thread.
 
-use std::{path::Path, sync::Arc};
+use std::{num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
   connection::{AgentProvider, ConnectionKind},
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   resource::{AgentProfile, RepositoryAccess, StepKey, StepKind, VersionNumber},
   run::{
-    ActivityEntry, Invocation, Run, RunEventKind, RunStatus, StepExecutor, StepStatus, TaskPhase, TokenUsage,
-    active_time,
+    ActivityEntry, Invocation, Run, RunEventKind, RunStatus, StepExecutor, StepFailure, StepOutput, StepStatus,
+    TaskPhase, TokenUsage, active_time,
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
   task::Task,
@@ -34,6 +34,12 @@ pub struct StepView {
   pub access: Option<RepositoryAccess>,
   pub execution: Option<StepExecutionId>,
   pub status: Option<StepStatus>,
+  /// The attempt of the latest execution.
+  pub attempt: Option<NonZeroU32>,
+  /// Why the latest execution failed, when it did and its log says.
+  pub failure: Option<StepFailure>,
+  /// The step's stage in the pipeline graph, from 0: steps of one stage run beside each other.
+  pub stage: usize,
 }
 
 /// The latest run of a task.
@@ -48,6 +54,8 @@ pub struct RunView {
   pub paused_at: Option<Timestamp>,
   /// The run's work was committed as a checkpoint right before it paused.
   pub saved_at_pause: bool,
+  /// What its step executions left for the steps after them.
+  pub outputs: Vec<StepOutput>,
 }
 
 impl RunView {
@@ -93,6 +101,19 @@ impl RunView {
   /// The step a run stopped at its limit was working on, if it stopped mid-step.
   pub fn stopped_step(&self) -> Option<&StepView> {
     self.steps.iter().find(|step| step.status == Some(StepStatus::Running))
+  }
+
+  /// Steps an agent works on now, in pipeline order.
+  pub fn working_steps(&self) -> impl Iterator<Item = &StepView> {
+    self
+      .steps
+      .iter()
+      .filter(|step| matches!(step.status, Some(StepStatus::Running | StepStatus::Waiting(_))))
+  }
+
+  /// The output `execution` left, if any.
+  pub fn output(&self, execution: StepExecutionId) -> Option<&StepOutput> {
+    self.outputs.iter().find(|output| output.execution == execution)
   }
 
   /// Invocations of `execution`, in launch order.
@@ -144,6 +165,13 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     .resource(pinned.resource)?
     .map_or_else(|| Arc::from(""), |resource| resource.name().as_str().into());
   let mut steps = Vec::new();
+  let stages = run.snapshot().body().stages();
+  let stage_of = |key: &StepKey| {
+    stages
+      .iter()
+      .position(|stage| stage.iter().any(|step| step.key == *key))
+      .unwrap_or_default()
+  };
   for (index, step) in run.snapshot().body().steps().iter().enumerate() {
     let (agent, provider, model) = match run.snapshot().step(&step.key).map(|pinned| pinned.executor()) {
       Some(StepExecutor::Agent { profile, model, .. }) => {
@@ -160,6 +188,13 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       Some(StepExecutor::Tool { .. }) | None => (None, None, None),
     };
     let latest = run.latest_execution(&step.key);
+    let attempt = latest.and_then(|execution| {
+      run
+        .attempts()
+        .iter()
+        .find(|attempt| attempt.execution(execution.id()).is_some())
+        .map(orchester_core::run::Attempt::number)
+    });
     steps.push(StepView {
       number: index + 1,
       key: step.key.clone(),
@@ -173,6 +208,9 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       },
       execution: latest.map(|execution| execution.id()),
       status: latest.map(|execution| execution.status()),
+      attempt,
+      failure: latest.and_then(|execution| execution.failure()),
+      stage: stage_of(&step.key),
     });
   }
   let (paused_at, saved_at_pause) = match run.status() {
@@ -189,6 +227,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   };
   Ok(RunView {
     invocations: db.invocations(run.id())?,
+    outputs: db.step_outputs(run.id())?,
     paused_at,
     saved_at_pause,
     pipeline,

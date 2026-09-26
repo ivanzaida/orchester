@@ -5,10 +5,7 @@ use std::{
   time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use orchester_core::{
-  money::{Currency, Money},
-  time::Timestamp,
-};
+use orchester_core::time::Timestamp;
 
 use crate::messages::Message;
 
@@ -49,29 +46,6 @@ pub fn shorten_path(path: &Path, max_chars: usize) -> String {
 pub fn remote_address(url: &str) -> &str {
   let address = url.split_once("://").map_or(url, |(_, rest)| rest);
   address.strip_suffix(".git").unwrap_or(address)
-}
-
-/// `amount` as a decimal with at least two places, e.g. `1.50`, `0.125`; a currency sign is
-/// added by the message that shows it ([`money`]).
-pub fn amount(amount: Money) -> String {
-  let micros = amount.micros();
-  let units = micros / 1_000_000;
-  let fraction = format!("{:06}", (micros % 1_000_000).abs());
-  let trimmed = fraction.trim_end_matches('0');
-  let places = if trimmed.len() < 2 { &fraction[..2] } else { trimmed };
-  format!("{units}.{places}")
-}
-
-/// `amount` with its currency: `$1.50` for US dollars, `1.50 EUR` otherwise.
-pub fn money(amount: Money) -> Message {
-  let key = if amount.currency() == Currency::USD {
-    "money.usd"
-  } else {
-    "money.other"
-  };
-  Message::new(key)
-    .with("amount", self::amount(amount))
-    .with("currency", amount.currency().code().to_owned())
 }
 
 const MINUTE_MILLIS: i64 = 60_000;

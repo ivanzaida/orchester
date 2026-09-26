@@ -1,5 +1,6 @@
 use orchester_core::run::{
-  AttemptReason, AttemptStatus, PlanDecision, RunError, RunEventKind, RunFailure, RunStatus, StepStatus, WaitReason,
+  AttemptReason, AttemptStatus, PlanDecision, RunError, RunEventKind, RunFailure, RunStatus, StepFailure, StepStatus,
+  WaitReason,
 };
 
 use crate::fixture::{Logged, at, key};
@@ -22,7 +23,7 @@ fn fail_checks(logged: &mut Logged) {
   let review = logged.exec("review");
   logged.apply(|run| run.start_step(checks, at(40)));
   logged.apply(|run| run.start_step(review, at(40)));
-  logged.apply(|run| run.fail_step(checks, at(41)));
+  logged.apply(|run| run.fail_step(checks, StepFailure::AgentFailed, at(41)));
 }
 
 #[test]
@@ -182,7 +183,7 @@ fn run_steps_failure_without_a_route_fails_the_run() {
   let mut logged = Logged::started();
   let research = logged.exec("research");
   logged.apply(|run| run.start_step(research, at(12)));
-  logged.apply(|run| run.fail_step(research, at(13)));
+  logged.apply(|run| run.fail_step(research, StepFailure::AgentFailed, at(13)));
   assert_eq!(
     logged.run.status(),
     &RunStatus::Failed(RunFailure::StepFailed(key("research")))
@@ -196,7 +197,7 @@ fn run_steps_pending_step_cannot_fail() {
   let mut logged = Logged::started();
   let research = logged.exec("research");
   assert!(matches!(
-    logged.run.fail_step(research, at(12)),
+    logged.run.fail_step(research, StepFailure::AgentFailed, at(12)),
     Err(RunError::InvalidStepTransition {
       status: StepStatus::Pending,
       ..

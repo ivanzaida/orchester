@@ -13,8 +13,8 @@ use orchester_core::{
   project::{Project, ProjectKey, TaskKey},
   resource::{AgentProfile, Pipeline, PromptText, ProviderSettings, Step, StepKind, Variable, VersionNumber},
   run::{
-    BranchName, PipelineInfo, PreflightInput, PreflightProblem, PromptAssemblyError, PromptInput, PromptSource,
-    TaskPhase, preflight,
+    BranchName, DependencyOutput, PipelineInfo, PreflightInput, PreflightProblem, PromptAssemblyError, PromptInput,
+    PromptSource, StepFailure, TaskPhase, preflight,
   },
   task::{Task, TaskDetails, TaskStatus},
 };
@@ -86,6 +86,7 @@ fn assemble(profile: &AgentProfile, step: &Step, task: &Task) -> Result<String, 
     step,
     profile_id: ResourceId::generate(),
     profile,
+    dependencies: &[],
   }
   .assemble()
 }
@@ -104,7 +105,9 @@ fn prompt_assembles_role_step_and_task_in_order() {
   let expected = "# Your role: Builder\n\nImplements the approved plan.\n\nKeep commits small for ORC-12.\n\n# Current \
                   step: implement\n\nWork on orchester/orc-129, attempt 1. Literal {{task.title}}.\n\n# Task ORC-12: \
                   Add GitHub sign-in\n\nUsers sign in with GitHub.\n\n## Acceptance criteria\n- Sign-in works\n- \
-                  Cancel shows an error\n";
+                  Cancel shows an error\n\n# When you finish\n\nEnd with your result: the outcome `done` when the \
+                  step is complete, or `failed` when you could not complete it, and a short summary of what you did \
+                  for the steps that run after this one.\n";
   assert_eq!(prompt, expected);
 }
 
@@ -125,6 +128,74 @@ fn prompt_names_a_variable_without_a_value_instead_of_leaving_it_empty() {
   // The budget in force, as a whole number of tokens.
   let prompt = assemble(&builder("Budget {{run.budget}}"), &step_with(""), &task("Brief.", &[]));
   assert!(prompt.expect("run.budget is known").contains("Budget 1400000"));
+}
+
+#[test]
+fn prompt_lists_the_outputs_of_the_steps_it_runs_after_with_their_sources() {
+  let config = Config::feature_delivery();
+  let body = config.pipeline_version.body();
+  let (checks, review) = (
+    body.step(&key("checks")).expect("step"),
+    body.step(&key("review")).expect("step"),
+  );
+  let pr = body.step(&key("pr")).expect("step");
+  let logged = Logged::started();
+  let (project, task, profile) = (project(), task("Brief.", &[]), builder("Fine."));
+  let attempt = NonZeroU32::new(2).expect("positive");
+  let dependencies = [
+    DependencyOutput {
+      step: checks,
+      attempt,
+      text: "All 38 tests pass.",
+    },
+    DependencyOutput {
+      step: review,
+      attempt,
+      text: " ",
+    },
+  ];
+  let prompt = PromptInput {
+    project: &project,
+    task: &task,
+    run: &logged.run,
+    execution: logged.exec("pr"),
+    pipeline: PipelineInfo {
+      id: ResourceId::generate(),
+      name: "Feature delivery",
+      version: VersionNumber::new(NonZeroU32::new(3).expect("positive")),
+    },
+    step: pr,
+    profile_id: ResourceId::generate(),
+    profile: &profile,
+    dependencies: &dependencies,
+  }
+  .assemble()
+  .expect("every variable has a value");
+  let results = prompt.find("# Results of earlier steps").expect("results section");
+  assert!(results > prompt.find("# Task ORC-12").expect("task section"));
+  assert!(prompt.contains(
+    "
+Sources: checks (`checks`, attempt 2), review (`review`, attempt 2)
+"
+  ));
+  assert!(prompt.contains(
+    "
+## checks (`checks`, attempt 2)
+
+All 38 tests pass.
+"
+  ));
+  assert!(prompt.contains(
+    "
+## review (`review`, attempt 2)
+
+(no output)
+"
+  ));
+  assert!(prompt.ends_with(
+    "for the steps that run after this one.
+"
+  ));
 }
 
 #[test]
@@ -237,7 +308,7 @@ fn task_phase_follows_the_task_and_its_latest_run() {
   );
   let research = logged.exec("research");
   logged.apply(|run| run.start_step(research, at(12)));
-  logged.apply(|run| run.fail_step(research, at(13)));
+  logged.apply(|run| run.fail_step(research, StepFailure::AgentFailed, at(13)));
   assert_eq!(TaskPhase::of(&queued, Some(&logged.run)), TaskPhase::Failed);
   assert_eq!(TaskPhase::Failed.without_runner(), TaskPhase::Failed);
   assert_eq!(TaskPhase::Waiting.without_runner(), TaskPhase::Waiting);

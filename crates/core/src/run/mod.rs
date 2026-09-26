@@ -14,6 +14,8 @@ mod number;
 mod phase;
 mod preflight;
 mod prompt;
+mod result;
+mod schedule;
 mod snapshot;
 mod state;
 mod status;
@@ -30,12 +32,13 @@ pub use self::{
   number::RunNumber,
   phase::TaskPhase,
   preflight::{PreflightInput, PreflightProblem, preflight},
-  prompt::{CONTINUE_PROMPT, PipelineInfo, PromptAssemblyError, PromptInput, PromptSource},
+  prompt::{CONTINUE_PROMPT, DependencyOutput, PipelineInfo, PromptAssemblyError, PromptInput, PromptSource},
+  result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
   state::{NewRun, Run, StoredRun},
   status::{
     AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, PlanDecision, RunFailure, RunLimit,
-    RunStatus, StepStatus, WaitReason,
+    RunStatus, StepFailure, StepStatus, WaitReason,
   },
   transition::RaisedLimits,
   usage::TokenUsage,

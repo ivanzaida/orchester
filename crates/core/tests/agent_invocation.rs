@@ -27,6 +27,7 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     platform,
     resume: None,
+    output_schema: None,
   }
 }
 
@@ -129,6 +130,23 @@ fn invocation_resume_continues_the_session_with_the_sandbox_as_configuration() {
   );
   let command = resume.command("Continue.".to_owned(), Vec::new()).expect("unicode");
   assert_eq!(command.current_dir(), Some(Path::new("/repo/.orchester/worktrees/run")));
+}
+
+#[test]
+fn invocation_output_schema_is_given_to_new_sessions_only() {
+  let schema = Path::new("/repo/.orchester/step-result.schema.json");
+  let mut new = invocation(RepositoryAccess::ReadOnly, Platform::MacOs);
+  new.output_schema = Some(schema);
+  let new_args = args(&new);
+  let at = new_args
+    .iter()
+    .position(|arg| arg == "--output-schema")
+    .expect("a new session reports its result in the schema");
+  assert_eq!(new_args[at + 1], "/repo/.orchester/step-result.schema.json");
+  assert!(at < new_args.iter().position(|arg| arg == "-C").expect("worktree"));
+  assert_eq!(new_args.last().map(String::as_str), Some("-"));
+  new.resume = Some("session");
+  assert!(!args(&new).contains(&"--output-schema".to_owned()));
 }
 
 #[test]

@@ -19,5 +19,6 @@ mod project_setup;
 mod pull_request_detail;
 mod pull_requests;
 mod selection_focus;
+mod task_graph;
 mod task_run;
 mod window;

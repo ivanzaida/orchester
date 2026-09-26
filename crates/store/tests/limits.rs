@@ -67,6 +67,9 @@ fn limits_daily_usage_counts_completed_turns_since_the_day_began() {
 const MONEY_SCHEMA: &str = r#"
 PRAGMA foreign_keys = OFF;
 BEGIN;
+DROP TABLE step_outputs;
+DROP TABLE money_step_budgets_before_tokens;
+ALTER TABLE step_executions DROP COLUMN failure;
 DROP TABLE project_limits;
 DROP TABLE money_budgets_before_tokens;
 DROP INDEX agent_events_by_kind;
@@ -200,5 +203,5 @@ fn limits_migration_converts_money_budgets_to_tokens_and_keeps_the_money_amounts
   let version: u32 = connection
     .pragma_query_value(None, "user_version", |row| row.get(0))
     .expect("version");
-  assert_eq!(version, 9);
+  assert_eq!(version, 10);
 }

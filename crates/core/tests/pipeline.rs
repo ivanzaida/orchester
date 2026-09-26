@@ -2,12 +2,12 @@ use std::{collections::BTreeSet, num::NonZeroU32};
 
 use orchester_core::{
   id::ResourceId,
-  money::{Currency, Money},
   name::Name,
   resource::{
     FailureRoute, ModelId, Pipeline, PipelineError, PromptText, PublishError, RepositoryAccess, ResourceBody, Step,
     StepKey, StepKind,
   },
+  tokens::TokenBudget,
 };
 
 fn key(value: &str) -> StepKey {
@@ -51,7 +51,7 @@ fn feature_delivery() -> Vec<Step> {
       model: Some(ModelId::new("opus").expect("valid model")),
     },
     instructions: PromptText::new("Implement {{task.title}}.").expect("valid prompt"),
-    budget: Some(Money::from_micros(2_000_000, Currency::USD)),
+    budget: Some(TokenBudget::new(400_000).expect("above zero")),
     ..step("implement", &["plan"])
   };
   let checks = Step {
@@ -83,6 +83,27 @@ fn pipeline_accepts_parallel_steps_gates_and_upstream_retries() {
   let join = pipeline.step(&key("create-pull-request")).unwrap();
   assert_eq!(join.depends_on, BTreeSet::from([key("review"), key("run-checks")]));
   assert_eq!(pipeline.steps()[0].key, key("research"));
+}
+
+#[test]
+fn pipeline_stages_group_steps_that_can_run_beside_each_other() {
+  let pipeline = Pipeline::new(feature_delivery()).expect("valid pipeline");
+  let stages: Vec<Vec<&str>> = pipeline
+    .stages()
+    .iter()
+    .map(|stage| stage.iter().map(|step| step.key.as_str()).collect())
+    .collect();
+  assert_eq!(
+    stages,
+    [
+      vec!["research"],
+      vec!["plan"],
+      vec!["implement"],
+      vec!["run-checks", "review"],
+      vec!["create-pull-request"],
+    ]
+  );
+  assert!(Pipeline::new(Vec::new()).expect("empty").stages().is_empty());
 }
 
 #[test]
@@ -171,13 +192,21 @@ fn pipeline_rejects_retry_targets_that_do_not_precede_the_step() {
 }
 
 #[test]
-fn pipeline_rejects_non_positive_step_budgets() {
-  let mut steps = feature_delivery();
-  steps[0].budget = Some(Money::from_micros(0, Currency::USD));
-  assert_eq!(
-    Pipeline::new(steps),
-    Err(PipelineError::NonPositiveBudget(key("research")))
-  );
+fn pipeline_step_budgets_are_tokens_and_money_budgets_read_as_none() {
+  let pipeline = Pipeline::new(feature_delivery()).expect("valid pipeline");
+  let json = serde_json::to_value(&pipeline).expect("serializable");
+  assert_eq!(json["steps"][2]["budget"], serde_json::json!(400_000));
+  let mut legacy = json.clone();
+  legacy["steps"][2]["budget"] = serde_json::json!({ "micros": 2_000_000, "currency": "USD" });
+  let read: Pipeline = serde_json::from_value(legacy).expect("a published money budget still reads");
+  assert_eq!(read.step(&key("implement")).and_then(|step| step.budget), None);
+  let mut without = json;
+  without["steps"][2]
+    .as_object_mut()
+    .expect("a step is an object")
+    .remove("budget");
+  let read: Pipeline = serde_json::from_value(without).expect("a step without a budget reads");
+  assert_eq!(read.step(&key("implement")).and_then(|step| step.budget), None);
 }
 
 #[test]

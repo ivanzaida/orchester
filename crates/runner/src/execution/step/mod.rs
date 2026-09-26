@@ -1,51 +1,119 @@
-//! One agent step: the invocation record, the Codex CLI in the run's worktree (a new session, or
-//! the step's earlier session continued), its output parsed into the transcript as it arrives,
-//! its usage checked against the run's limits, and a checkpoint commit of what it changed.
+//! Starting agent steps: which ready executions start (as agent slots allow), where each works
+//! ([`super::workspace`]), its invocation record and the Codex CLI in its worktree — a new session,
+//! or the step's earlier session continued — handed to a [`worker::Worker`] of its own.
 
 mod command;
-mod stream;
-
-use std::time::Duration;
+mod end;
+pub(super) mod worker;
 
 use orchester_core::{
-  connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
+  connection::stream::{InvocationOutcome, RunnerProblem},
   id::StepExecutionId,
   resource::ModelId,
-  revision::Revision,
-  run::{Invocation, RunLimit, StepExecutor},
+  run::{Invocation, StepExecutor, StepFailure, StepStatus},
   store::ActivityStore,
   time::Timestamp,
+  tokens::{TokenBudget, TokensUsed},
 };
+use tokio::sync::mpsc;
 
-use self::stream::Stop;
+use self::worker::{Stop, Worker};
 use super::{
-  checkpoint,
   run::{ExecutionError, RunTask},
+  workspace::{Start, Workspace},
 };
 use crate::supervisor::Supervised;
 
-/// How a step's work ended.
-pub(super) enum StepEnd {
-  /// The agent finished; `checkpoint` is the commit of its changes, if it changed anything.
-  Passed {
-    checkpoint: Option<Revision>,
-  },
-  Failed,
-  /// A cancel or the runner stopping ended the agent; the request is still to be carried out.
-  Stopped,
-  /// The run reached this limit while the agent worked; the agent was ended mid-step.
-  Limit(RunLimit),
+/// An agent at work on one execution of the run.
+pub(super) struct Active {
+  stops: mpsc::UnboundedSender<Stop>,
+  pub(super) workspace: Workspace,
+  /// The invocation as it started, for reporting problems around it.
+  pub(super) invocation: Invocation,
+  /// The step's budget and what the execution used of it, over all its invocations.
+  budget: Option<TokenBudget>,
+  used: TokensUsed,
+  budget_reached: bool,
+  /// Another step failed and ended the attempt; this agent is being ended and its end changes
+  /// nothing.
+  pub(super) abandoned: bool,
+}
+
+impl Active {
+  pub(super) fn tell(&self, stop: Stop) {
+    // The agent may have exited already; its end is on its way to the run.
+    if self.stops.send(stop).is_err() {
+      tracing::debug!(execution = %self.invocation.execution, "the agent has already ended");
+    }
+  }
+
+  /// Counts `tokens` toward the step's budget; `true` once when they use it up.
+  pub(super) fn count(&mut self, tokens: TokensUsed) -> bool {
+    self.used += tokens;
+    let reached = self.budget.is_some_and(|budget| self.used.reached(budget));
+    let first = reached && !self.budget_reached;
+    self.budget_reached |= reached;
+    first
+  }
+
+  pub(super) fn abandon(&mut self) {
+    self.abandoned = true;
+    self.tell(Stop::Now(worker::StopCause::Abandoned));
+  }
+
+  pub(super) const fn budget(&self) -> Option<TokenBudget> {
+    self.budget
+  }
 }
 
 impl RunTask {
-  /// Runs `execution`'s agent: continuing session `resume` when given, for at most `time_left`
-  /// of active time.
-  pub(super) async fn execute(
-    &mut self,
-    execution: StepExecutionId,
-    resume: Option<String>,
-    time_left: Duration,
-  ) -> Result<StepEnd, ExecutionError> {
+  /// Starts executions stopped mid-step, then ready ones, while slots are free and nothing asks the
+  /// run to stop. `true` when an execution could run but no agent slot is free.
+  pub(super) fn start_ready(&mut self) -> Result<bool, ExecutionError> {
+    if !self.may_start() {
+      return Ok(false);
+    }
+    let continuing: Vec<StepExecutionId> = self
+      .run
+      .running_executions()
+      .into_iter()
+      .filter(|execution| !self.agents.contains_key(execution))
+      .collect();
+    for execution in continuing {
+      if !self.start(execution, Start::Continues)? {
+        return Ok(true);
+      }
+    }
+    let ready = self.run.executions_to_start(usize::MAX);
+    let start = if self.agents.is_empty() && ready.len() == 1 {
+      Start::Alone
+    } else {
+      Start::BesideOthers
+    };
+    for execution in ready {
+      if !self.may_start() {
+        return Ok(false);
+      }
+      // A step that failed to start may have ended the attempt the others belonged to.
+      if self.run.execution(execution).map(|execution| execution.status()) != Some(StepStatus::Pending) {
+        continue;
+      }
+      if !self.start(execution, start)? {
+        return Ok(true);
+      }
+    }
+    Ok(false)
+  }
+
+  /// Starts `execution`'s agent in a slot of its own; `false` when no slot is free. An agent that
+  /// cannot start fails its step.
+  fn start(&mut self, execution: StepExecutionId, start: Start) -> Result<bool, ExecutionError> {
+    let work = self.work(execution)?;
+    if !self.board.take(self.run.id(), execution, work) {
+      return Ok(false);
+    }
+    let workspace = Workspace::of(&self.root, &self.run, &self.worktree, execution, start);
+    let resume = self.begin_step(execution)?;
     let model = self.model(execution)?;
     let mut invocation = self
       .db
@@ -54,9 +122,22 @@ impl RunTask {
       invocation.session.clone_from(&resume);
       self.db.save_invocation(&invocation)?;
     }
-    let command = match self.command(execution, resume.as_deref()) {
+    let workspace = match workspace {
+      Ok(workspace) => workspace,
+      Err(error) => {
+        let problem = RunnerProblem::CheckpointFailed {
+          detail: error.to_string(),
+        };
+        self.not_started(execution, &mut invocation, problem, StepFailure::CheckpointFailed)?;
+        return Ok(true);
+      }
+    };
+    let command = match self.command(execution, resume.as_deref(), workspace.path()) {
       Ok(command) => command,
-      Err(problem) => return self.not_started(&mut invocation, problem),
+      Err(problem) => {
+        self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted)?;
+        return Ok(true);
+      }
     };
     let process = match Supervised::start(&command) {
       Ok(process) => process,
@@ -64,31 +145,75 @@ impl RunTask {
         let problem = RunnerProblem::CouldNotStart {
           detail: error.to_string(),
         };
-        return self.not_started(&mut invocation, problem);
+        self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted)?;
+        return Ok(true);
       }
     };
-    let (outcome, stop) = self.stream(&mut invocation, process, time_left).await?;
-    let succeeded = outcome.is_success();
-    self.finish(&mut invocation, outcome)?;
-    match stop {
-      Some(Stop::Requested) => return Ok(StepEnd::Stopped),
-      Some(Stop::Limit(limit)) => return Ok(StepEnd::Limit(limit)),
-      None if !succeeded => return Ok(StepEnd::Failed),
-      None => {}
+    self.spawn(execution, invocation, process, workspace)?;
+    Ok(true)
+  }
+
+  fn spawn(
+    &mut self,
+    execution: StepExecutionId,
+    invocation: Invocation,
+    process: Supervised,
+    workspace: Workspace,
+  ) -> Result<(), ExecutionError> {
+    let used = self
+      .db
+      .invocations(self.run.id())?
+      .iter()
+      .filter(|earlier| earlier.execution == execution)
+      .map(|earlier| earlier.usage.counted_tokens())
+      .sum();
+    let (stops, stopped) = mpsc::unbounded_channel();
+    let worker = Worker {
+      root: self.root.clone(),
+      invocation: invocation.clone(),
+      process,
+      notifier: self.notifier.clone(),
+      events: self.worker_events.clone(),
+      stops: stopped,
+    };
+    tokio::spawn(worker.work());
+    let budget = self
+      .run
+      .execution(execution)
+      .and_then(|execution| self.run.snapshot().body().step(execution.step()))
+      .and_then(|step| step.budget);
+    self.agents.insert(
+      execution,
+      Active {
+        stops,
+        workspace,
+        invocation,
+        budget,
+        used,
+        budget_reached: false,
+        abandoned: false,
+      },
+    );
+    Ok(())
+  }
+
+  /// Starts `execution` if it has not started. One that was stopped mid-step continues: the
+  /// session of its last invocation, if the CLI reported one, is resumed.
+  fn begin_step(&mut self, execution: StepExecutionId) -> Result<Option<String>, ExecutionError> {
+    let status = self.run.execution(execution).map(|execution| execution.status());
+    if status == Some(StepStatus::Pending) {
+      self.transition(|run, now| run.start_step(execution, now))?;
+      return Ok(None);
     }
-    match checkpoint::commit(&self.worktree, &self.commit_message(execution)) {
-      Ok(checkpoint) => Ok(StepEnd::Passed { checkpoint }),
-      Err(error) => {
-        let problem = RunnerProblem::CheckpointFailed {
-          detail: error.to_string(),
-        };
-        self.record_activity(
-          &invocation,
-          &[(Timestamp::now(), AgentEvent::RunnerProblem { problem })],
-        )?;
-        Ok(StepEnd::Failed)
-      }
-    }
+    Ok(
+      self
+        .db
+        .invocations(self.run.id())?
+        .into_iter()
+        .rev()
+        .find(|invocation| invocation.execution == execution)
+        .and_then(|invocation| invocation.session),
+    )
   }
 
   fn model(&self, execution: StepExecutionId) -> Result<ModelId, ExecutionError> {
@@ -102,26 +227,19 @@ impl RunTask {
     }
   }
 
-  fn not_started(&mut self, invocation: &mut Invocation, problem: RunnerProblem) -> Result<StepEnd, ExecutionError> {
-    tracing::warn!(run = %self.run.id(), ?problem, "the agent did not start");
-    self.record_activity(invocation, &[(Timestamp::now(), AgentEvent::RunnerProblem { problem })])?;
-    self.finish(invocation, InvocationOutcome::NotStarted)?;
-    Ok(StepEnd::Failed)
-  }
-
-  fn finish(&mut self, invocation: &mut Invocation, outcome: InvocationOutcome) -> Result<(), ExecutionError> {
+  /// The agent did not start: the problem is reported, the invocation ends and the step fails.
+  fn not_started(
+    &mut self,
+    execution: StepExecutionId,
+    invocation: &mut Invocation,
+    problem: RunnerProblem,
+    failure: StepFailure,
+  ) -> Result<(), ExecutionError> {
+    self.report(invocation, problem)?;
     invocation.ended_at = Some(Timestamp::now());
-    invocation.outcome = Some(outcome);
-    Ok(self.db.save_invocation(invocation)?)
-  }
-
-  /// "ORC-129: Implement (run 128)".
-  fn commit_message(&self, execution: StepExecutionId) -> String {
-    let step = self
-      .run
-      .execution(execution)
-      .and_then(|execution| self.run.snapshot().body().step(execution.step()))
-      .map_or_else(String::new, |step| step.name.as_str().to_owned());
-    format!("{}: {step} (run {})", self.task.key(), self.run.number())
+    invocation.outcome = Some(InvocationOutcome::NotStarted);
+    self.db.save_invocation(invocation)?;
+    self.board.release(execution);
+    self.fail(execution, failure)
   }
 }

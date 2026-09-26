@@ -385,6 +385,24 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       ctx.t("runs.activity.problem.checkpointFailed"),
       Some(detail.as_str().into()),
     ),
+    RunnerProblem::MergeConflict { branch, files } => (
+      ctx.t_args("runs.activity.problem.mergeConflict", [("branch", branch.as_str())]),
+      Some(
+        files
+          .join(
+            "
+",
+          )
+          .into(),
+      ),
+    ),
+    RunnerProblem::StepBudgetReached { budget } => (
+      ctx.t_args(
+        "runs.activity.problem.stepBudgetReached",
+        [("budget", compact_tokens(*budget).as_str())],
+      ),
+      None,
+    ),
   }
 }
 

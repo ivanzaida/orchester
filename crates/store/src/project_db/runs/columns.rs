@@ -4,7 +4,8 @@
 use orchester_core::{
   resource::StepKey,
   run::{
-    AttemptReason, AttemptStatus, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, WaitReason,
+    AttemptReason, AttemptStatus, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus, StepFailure,
+    StepStatus, WaitReason,
   },
 };
 
@@ -153,6 +154,30 @@ pub(super) fn parse_step_status(status: &str, wait_reason: Option<&str>) -> Resu
     ("failed", None) => StepStatus::Failed,
     ("skipped", None) => StepStatus::Skipped,
     _ => return Err(corrupt("step status", format!("{status} / {wait_reason:?}"))),
+  })
+}
+
+/// `failure` of a failed step execution row.
+pub(super) const fn step_failure_text(failure: StepFailure) -> &'static str {
+  match failure {
+    StepFailure::AgentFailed => "agent_failed",
+    StepFailure::ReportedFailed => "reported_failed",
+    StepFailure::NotStarted => "not_started",
+    StepFailure::StepBudget => "step_budget",
+    StepFailure::MergeConflict => "merge_conflict",
+    StepFailure::CheckpointFailed => "checkpoint_failed",
+  }
+}
+
+pub(super) fn parse_step_failure(value: &str) -> Result<StepFailure, StoreError> {
+  Ok(match value {
+    "agent_failed" => StepFailure::AgentFailed,
+    "reported_failed" => StepFailure::ReportedFailed,
+    "not_started" => StepFailure::NotStarted,
+    "step_budget" => StepFailure::StepBudget,
+    "merge_conflict" => StepFailure::MergeConflict,
+    "checkpoint_failed" => StepFailure::CheckpointFailed,
+    other => return Err(corrupt("step failure", other)),
   })
 }
 
