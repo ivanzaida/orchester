@@ -41,6 +41,15 @@ pub fn recheck(connection: &Connection) -> LastCheck {
   }
 }
 
+/// Installed copies of the agent CLI of `provider` on the `PATH`, newest version first; copies
+/// whose version cannot be read come last. Each copy is asked for its version only.
+pub fn detect_agent(provider: AgentProvider) -> Vec<PathBuf> {
+  connection::rank_installed(provider, detect(provider.program_name()), &RUNNER)
+    .into_iter()
+    .map(|installed| installed.executable)
+    .collect()
+}
+
 /// Installed copies of `program` (see `ConnectionKind::program_name`) found on the `PATH`, in
 /// search order.
 pub fn detect(program: &str) -> Vec<PathBuf> {
