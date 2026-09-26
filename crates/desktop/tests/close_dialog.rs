@@ -152,7 +152,7 @@ fn close_dialog_waiting_shows_each_run_saving_or_saved_and_keeps_only_quit_now()
   assert!(has_text(&mut tree, "Saving at next checkpoint…"));
   assert!(has_text(&mut tree, "Step still running"));
   assert!(has_text(&mut tree, "Paused at 9d07b3f"));
-  assert!(has_text(&mut tree, "Paused · nothing new to save"));
+  assert!(has_text(&mut tree, "Paused"));
   assert!(has_text(&mut tree, "Closes after 1 more run"));
   assert!(tree.get_element_by_id("close-waiting").is_some());
   assert!(tree.get_element_by_id("close-cancel").is_none());

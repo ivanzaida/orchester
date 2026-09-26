@@ -66,6 +66,8 @@ pub struct LatestRun {
   pub phase: TaskPhase,
   /// Stopped by the project's daily budget rather than its own limit.
   pub daily_budget: bool,
+  /// Running, with a pause requested: it pauses at its next checkpoint.
+  pub pausing: bool,
   /// Its last checkpoint, as people read a revision.
   pub checkpoint: Option<Arc<str>>,
 }
@@ -75,6 +77,7 @@ impl LatestRun {
     Self {
       phase: TaskPhase::of(task, Some(run)),
       daily_budget: run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)),
+      pausing: run.status() == &RunStatus::Running && run.pause_requested(),
       checkpoint: run
         .last_checkpoint()
         .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).into()),
@@ -90,6 +93,7 @@ impl LatestRun {
     match self.phase {
       TaskPhase::Draft => Message::new("tasks.readiness.ready"),
       TaskPhase::Queued => Message::new("tasks.progress.queued"),
+      TaskPhase::Running if self.pausing => Message::new("tasks.progress.pausing"),
       TaskPhase::Running => Message::new("tasks.progress.running"),
       TaskPhase::Waiting => Message::new("tasks.progress.waiting"),
       TaskPhase::Paused => with_checkpoint("tasks.progress.paused", "tasks.progress.pausedNoCheckpoint"),

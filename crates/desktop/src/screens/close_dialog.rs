@@ -10,7 +10,7 @@ use lurq::{
     ctx::{Ctx, StreamEmitter},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Modal, ModalTarget, Row, Spacer, Text},
+  components::{Column, Modal, ModalTarget, Row, Spacer, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -239,7 +239,7 @@ fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork, save: Option<&SaveS
       "lifecycle.close.pausedAt",
       [("checkpoint", display::short_revision(revision))],
     ),
-    (CloseStage::Waiting, Some(SaveState::Saved { checkpoint: None })) => ctx.t("lifecycle.close.pausedNothingNew"),
+    (CloseStage::Waiting, Some(SaveState::Saved { checkpoint: None })) => ctx.t("lifecycle.close.paused"),
     (CloseStage::Waiting, _) => ctx.t("lifecycle.close.stepStillRunning"),
   };
   let step = ctx.t_args(
@@ -285,6 +285,7 @@ fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork, save: Option<&SaveS
       Text::new(&last)
         .variant(ExtraTypography::Footnote.role())
         .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
         .width(Dimension::Px(MODEL_WIDTH)),
     )
     .into()

@@ -4,7 +4,7 @@
 
 use std::num::NonZeroU32;
 
-use orchester_core::run::Run;
+use orchester_core::run::{Run, RunStatus};
 use orchester_ipc::{Event, RunWork, WorkState, WorkSummary};
 use parking_lot::Mutex;
 
@@ -67,11 +67,12 @@ impl Board {
     });
   }
 
-  /// `run` no longer executes. While the runner stops at checkpoints it stays listed as saved,
-  /// at its last checkpoint; otherwise it leaves the list.
+  /// `run` no longer executes. While the runner stops at checkpoints a run that settled stays
+  /// listed as saved, at its last checkpoint; otherwise it leaves the list. A run still recorded
+  /// as running did not settle (its task failed), so it is never shown as saved.
   pub(super) fn settled(&self, run: &Run) {
     self.change(|state| {
-      if !state.stopping {
+      if !state.stopping || run.status() == &RunStatus::Running {
         state.runs.retain(|listed| listed.run != run.id());
         return;
       }

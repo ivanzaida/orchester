@@ -1,7 +1,9 @@
 //! The runs the previous session left at work, for the start-up recovery (02.E `o8DCd`,
 //! `docs/architecture/storage.md`, "Lifecycle"): after Quit now or a crash, every run of the
-//! registered projects that is interrupted, or still recorded as running because no runner was
-//! left to record its end. Nothing continues on its own; the user continues all of them or none.
+//! registered projects still recorded as running because no runner was left to record its end,
+//! or recorded as interrupted by a runner of this session when it attached. Runs interrupted
+//! earlier, e.g. ones not continued at an earlier start, are not this end's and are not listed.
+//! Nothing continues on its own; the user continues all of them or none.
 //! Blocks on SQLite and git; the UI calls it off the UI thread.
 
 use std::{
@@ -13,7 +15,7 @@ use orchester_core::{
   command::Command,
   connection::AgentProvider,
   id::{RunId, TaskId},
-  run::{InterruptCause, Run, RunStatus},
+  run::{InterruptCause, Run, RunEvent, RunStatus},
   store::{RunStore, TaskStore},
   time::Timestamp,
 };
@@ -68,12 +70,14 @@ pub fn reports(previous: SessionEnd) -> bool {
 }
 
 /// The runs `previous`, the end of the last session, left interrupted in the registered
-/// projects. A project whose database cannot be read is skipped and logged; it shows as
-/// unavailable when opened, and its runner records the interruption when it starts.
+/// projects; this session started at `since`. A project whose database cannot be read is
+/// skipped and logged; it shows as unavailable when opened, and its runner records the
+/// interruption when it starts.
 pub fn interrupted_runs(
   workspace: &Workspace,
   programs: &Programs,
   previous: SessionEnd,
+  since: Timestamp,
 ) -> Result<Vec<InterruptedRun>, StoreError> {
   let stale_cause = orchester_ipc::AttachSession::Fresh { previous_end: previous }.interrupt_cause();
   let mut found = Vec::new();
@@ -86,7 +90,7 @@ pub fn interrupted_runs(
       }
     };
     let name: Arc<str> = project.name.as_str().into();
-    for run in left_at_work(&db)? {
+    for run in left_at_work(&db, since)? {
       let cause = match run.status() {
         RunStatus::Interrupted(cause) => *cause,
         _ => stale_cause,
@@ -97,10 +101,20 @@ pub fn interrupted_runs(
   Ok(found)
 }
 
-/// Runs that are interrupted or still recorded as running, ordered by number.
-fn left_at_work(db: &ProjectDb) -> Result<Vec<Run>, StoreError> {
-  let mut runs = db.interrupted_runs().map_err(detail::run_store_error)?;
-  runs.extend(db.running_runs().map_err(detail::run_store_error)?);
+/// Runs still recorded as running, and runs recorded as interrupted since `since` (by this
+/// session's runner when it attached), ordered by number.
+fn left_at_work(db: &ProjectDb, since: Timestamp) -> Result<Vec<Run>, StoreError> {
+  let mut runs = db.running_runs().map_err(detail::run_store_error)?;
+  for run in db.interrupted_runs().map_err(detail::run_store_error)? {
+    let interrupted_at = db
+      .events(run.id())
+      .map_err(detail::run_store_error)?
+      .last()
+      .map(RunEvent::at);
+    if interrupted_at.is_some_and(|at| at >= since) {
+      runs.push(run);
+    }
+  }
   runs.sort_by_key(|run| run.number());
   Ok(runs)
 }

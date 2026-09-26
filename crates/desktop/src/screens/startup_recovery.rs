@@ -14,7 +14,7 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::id::RunId;
+use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::SessionEnd;
 
 use super::recovery_dialog::{RecoveryActions, RecoveryDialog, RecoveryDialogProps};
@@ -35,6 +35,8 @@ pub struct StartupRecoveryProps {
   pub programs: Programs,
   /// How the previous session ended.
   pub previous: SessionEnd,
+  /// When this session started.
+  pub session_start: Timestamp,
 }
 
 impl lurq::app::component::DevtoolsInspectable for StartupRecoveryProps {}
@@ -110,9 +112,14 @@ impl StartupRecovery {
   /// The interrupted runs, once read; none while they are read or when reading failed (logged:
   /// the runs stay interrupted and each can be continued from its task page).
   fn runs(&self, ctx: &mut Ctx, props: &StartupRecoveryProps) -> Arc<[InterruptedRun]> {
-    let deps = (props.workspace.clone(), props.programs.clone(), props.previous);
-    let load = ctx.future(deps, |(workspace, programs, previous)| async move {
-      background::run(move || recovery::interrupted_runs(&workspace, &programs, previous))
+    let deps = (
+      props.workspace.clone(),
+      props.programs.clone(),
+      props.previous,
+      props.session_start,
+    );
+    let load = ctx.future(deps, |(workspace, programs, previous, since)| async move {
+      background::run(move || recovery::interrupted_runs(&workspace, &programs, previous, since))
         .await?
         .map(|runs| InterruptedRuns(runs.into()))
         .map_err(|error| {

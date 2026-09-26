@@ -99,6 +99,7 @@ fn startup(session: &Result<AppSession, StartupError>, runtime: &Runtime) -> Sta
         activity,
         programs: Programs::processes(),
         previous_end: session.previous_end(),
+        session_start: session.started_at(),
       }
     }
     Err(error) => {

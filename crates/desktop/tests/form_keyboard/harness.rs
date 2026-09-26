@@ -138,6 +138,7 @@ impl Desktop {
       activity: activity.clone(),
       programs,
       previous_end: session.previous_end(),
+      session_start: session.started_at(),
     };
     let mut tree = Tree::new();
     tree.resize(WIDTH, HEIGHT);

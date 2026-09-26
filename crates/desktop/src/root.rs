@@ -12,6 +12,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
+use orchester_core::time::Timestamp;
 use orchester_ipc::SessionEnd;
 
 use crate::{
@@ -52,6 +53,8 @@ pub enum Startup {
     /// How the previous session ended: after Quit now or a crash, the start-up recovery asks
     /// about the runs it left interrupted (02.E `o8DCd`).
     previous_end: SessionEnd,
+    /// When this session started.
+    session_start: Timestamp,
   },
   /// The application database cannot be used; `path` is the file involved, if known.
   Failed { message: Message, path: Option<String> },
@@ -102,8 +105,9 @@ impl Component for Root {
         lifecycle,
         programs,
         previous_end,
+        session_start,
         ..
-      } => self.workspace(ctx, (workspace, &programs, previous_end), &lifecycle),
+      } => self.workspace(ctx, (workspace, &programs, (previous_end, session_start)), &lifecycle),
     };
     let screen = Column::new()
       .width(Dimension::Pct(100.0))
@@ -118,7 +122,7 @@ impl Root {
   fn workspace(
     &self,
     ctx: &mut Ctx,
-    (workspace, programs, previous_end): (Workspace, &Programs, SessionEnd),
+    (workspace, programs, (previous_end, session_start)): (Workspace, &Programs, (SessionEnd, Timestamp)),
     lifecycle: &Lifecycle,
   ) -> Element {
     let navigation = Navigation::new(workspace.clone(), self.screen.clone());
@@ -170,6 +174,7 @@ impl Root {
       workspace,
       programs: programs.clone(),
       previous: previous_end,
+      session_start,
     };
     // The confirmation is a modal, so it takes no space in this column.
     Column::new()

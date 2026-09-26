@@ -315,3 +315,28 @@ async fn lifecycle_daily_budget_stops_the_run_and_refuses_new_work() {
   wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Running).await;
   scheduler.stop_all(InterruptCause::QuitNow).await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lifecycle_two_runs_of_one_project_both_settle_at_their_checkpoints() {
+  let project = project(&Setup {
+    review: true,
+    ..Setup::new("Work slowly.")
+  });
+  let root = project.repo.path();
+  let other = support::queue_another_task(root);
+  let (scheduler, mut events) = scheduler(root);
+  scheduler.attach(fresh(SessionEnd::Clean), slots(2)).expect("attached");
+  let runs = [start(&scheduler, project.task), start(&scheduler, other)];
+  for run in runs {
+    wait_for_turns(root, &mut events, run, 1).await;
+  }
+  tokio::time::timeout(PATIENCE, scheduler.finish_at_checkpoints())
+    .await
+    .expect("both settle in time");
+  let db = ProjectDb::open(root).expect("open");
+  for run in runs {
+    let run = db.run(run).expect("read").expect("run");
+    assert_eq!(run.status(), &RunStatus::Paused(PauseReason::Requested));
+    assert!(run.last_checkpoint().is_some(), "each run's work is committed");
+  }
+}

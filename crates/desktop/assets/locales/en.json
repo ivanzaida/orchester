@@ -107,7 +107,7 @@
       "saved": "Saved",
       "stepStillRunning": "Step still running",
       "pausedAt": "Paused at {{checkpoint}}",
-      "pausedNothingNew": "Paused · nothing new to save",
+      "paused": "Paused",
       "waitForAgents": "Wait for agents to save",
       "waitForAgentsDetail": "No new steps or tool calls start. Each agent continues to its next checkpoint, the runs are marked paused, then Orchester closes. This can take a few minutes. Resume the runs as usual next time.",
       "quitNow": "Quit now",
@@ -235,6 +235,7 @@
       "queued": "Waiting for its run to start",
       "running": "Agent at work",
       "waiting": "Waiting for you",
+      "pausing": "Pausing at the next checkpoint",
       "paused": "Paused at {{checkpoint}}",
       "pausedNoCheckpoint": "Paused before its first checkpoint",
       "stoppedAtLimit": "Raise the limit to continue",
@@ -1101,7 +1102,7 @@
       "default": "Default run budget",
       "defaultDetail": "Prefilled in New task. Must not exceed the maximum.",
       "daily": "Daily project budget",
-      "dailyDetail": "Tokens all runs in this project may use per day, shown in the status bar. Once they are used up, new runs wait and running runs stop at their next turn until tomorrow or until you raise the budget.",
+      "dailyDetail": "Tokens all runs in this project may use per day. Shown in the status bar; new work waits once it is used up.",
       "time": "Time",
       "timeLimit": "Default time limit",
       "timeLimitDetail": "Counts active agent time only. Time paused or waiting for you (plan approval, questions, permission requests) doesn’t count.",
@@ -1516,8 +1517,14 @@
       "stopping": "Stopping runner…",
       "stopped": "Runner stopped",
       "offline": "Runner offline",
-      "attemptsSince": "{{attempts}} attempts since {{time}}",
-      "attempts": "{{attempts}} attempts",
+      "attemptsSince": {
+        "one": "{{attempts}} attempt since {{time}}",
+        "other": "{{attempts}} attempts since {{time}}"
+      },
+      "attempts": {
+        "one": "{{attempts}} attempt",
+        "other": "{{attempts}} attempts"
+      },
       "notStarted": "did not start"
     },
     "activity": {

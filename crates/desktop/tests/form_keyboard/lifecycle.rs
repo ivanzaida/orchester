@@ -245,6 +245,16 @@ fn lifecycle_runs_not_continued_wait_until_their_task_page_continues_them() {
   wait_long(&mut desktop, "the interrupted run", |desktop| {
     latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Interrupted(InterruptCause::Crashed))
   });
+  // Runs not continued are not this session's to recover: the next abnormal end does not list
+  // them again.
+  let mut desktop = desktop.crash_and_restart();
+  wait_long(&mut desktop, "the project", |desktop| has(desktop, "nav-tasks"));
+  for _ in 0..100 {
+    desktop.tree.tick_futures();
+    desktop.pass();
+    std::thread::sleep(Duration::from_millis(20));
+  }
+  assert!(!has(&mut desktop, "recovery-dialog"));
   desktop.click("nav-tasks");
   wait_long(&mut desktop, "the task row", |desktop| {
     text_of(desktop, "task-row-KON-1", "Interrupted") && text_of(desktop, "task-row-KON-1", "No checkpoint yet")

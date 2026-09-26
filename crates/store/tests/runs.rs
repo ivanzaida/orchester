@@ -456,3 +456,31 @@ fn runs_stopped_by_the_daily_budget_round_trip_and_resume() {
   fixture.apply(&mut run, |run| run.resume(at(17)));
   assert_eq!(run.status(), &RunStatus::Running);
 }
+
+/// Two runners' worth of writers (each run's task has its own connection) record transitions of
+/// their runs at the same time: every write waits for the other instead of failing as locked.
+#[test]
+fn runs_concurrent_writers_on_one_project_wait_for_each_other() {
+  let mut fixture = Fixture::new();
+  let runs = [fixture.implementing(), fixture.implementing()];
+  let root = fixture.repo.path().to_path_buf();
+  let writers: Vec<_> = runs
+    .into_iter()
+    .map(|mut run| {
+      let root = root.clone();
+      std::thread::spawn(move || {
+        let mut db = ProjectDb::open(&root).expect("open");
+        for tick in 0..200 {
+          let events = run
+            .record_usage(TokensUsed::new(1), at(100 + tick))
+            .expect("usage is recorded");
+          db.append_events(&run, &events)
+            .expect("the write waits for the other writer");
+        }
+      })
+    })
+    .collect();
+  for writer in writers {
+    writer.join().expect("the writer finishes");
+  }
+}
