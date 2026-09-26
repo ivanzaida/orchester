@@ -14,7 +14,7 @@ Date: 2026-09-23. Status: agreed direction for the local (single-user) version; 
 | Large content | content-addressed blob files |
 | Secrets | OS keychain only; databases store references |
 | Execution | separate runner process; agents are runner child processes |
-| Agent worktrees | inside the repository, `<repo>/.orchester/worktrees/` |
+| Agent worktrees | inside the repository, `<repo>/.orchester/worktrees/`; a step running beside other steps of its run has its own, merged back when it passes |
 | Closing with active runs | confirmation listing the runs: wait for checkpoints, or quit now |
 | Quit now or crash | next start reports the abnormal end and offers to continue from the last checkpoint |
 | Logs and transcripts | kept in full, no retention limit |
@@ -69,6 +69,34 @@ keeps work running is a possible later improvement, not part of this version.)
 lurq already supports vetoable close requests whose decision can be held for an asynchronous
 dialog (`on_close_requested` / `CloseRequest`), which is what the wait path needs.
 
+### Step graphs
+
+The runner starts every step execution whose dependencies have passed, as far as the agent slots
+allow; the slots (an application setting, 4 by default) are shared by all runs of the runner, and each agent
+at work takes one.
+
+- **Where a step works.** A step that starts alone — no other step of the run is running or ready —
+  works in the run's worktree on the run's branch, as a sequential pipeline always has; nothing else
+  can start while it runs, since only a passing step makes another one ready. A step that starts
+  beside others, read-only or writing, gets a worktree of its own on `<run-branch>--<step>-<attempt>`,
+  created from the run's branch as it is then (it holds every step it depends on). Parallel writes
+  in one worktree would overwrite each other, and a merge would change files under an agent at work.
+- **Joining.** When such a step passes, its work is committed on its branch and merged into the
+  run's branch in the run's worktree, one merge at a time, with the repository's git identity (fast
+  forward when possible, else a merge commit); its worktree and branch are then removed. A conflict
+  is undone, the step fails with *merge conflict* (the files are named in the transcript) and its
+  failure route decides: retry from the route's target, or fail the run. Its branch and worktree stay.
+- **Failures.** A step fails when its agent fails, when its structured result says `failed`, when it
+  cannot start, when its step budget is used (the agent is ended after its turn, like at the run's
+  token limit) or when its work cannot be committed or merged. A failure ends its attempt: agents of
+  the attempt still at work are ended and their executions skipped. What a failed step changed is
+  committed as a checkpoint of its execution, never discarded.
+- **Outputs.** A new agent session ends with a structured result (Codex `--output-schema`,
+  `{outcome: done|failed, summary}`); its summary — or, without one, the final message — is the
+  step's output, and the prompts of the steps that depend on it include it with its source (step,
+  attempt). A continued session is started without the schema (the probe verified it for new
+  sessions only), so its CLI exit and final message decide.
+
 ## Storage layout
 
 ```
@@ -80,7 +108,9 @@ dialog (`on_close_requested` / `CloseRequest`), which is what the wait path need
 <repo>/.orchester/             excluded through .git/info/exclude (the project's .gitignore is not touched)
   orchester.db                 project database
   blobs/<aa>/<sha256>          zstd-compressed content
-  worktrees/<run-id>/          agent git worktrees
+  worktrees/<run-id>/          agent git worktrees: the run's, on its branch
+  worktrees/<execution-id>/    a step running beside others, on `<run-branch>--<step>-<attempt>`
+  step-result.schema.json      the JSON schema new agent sessions end with (Codex `--output-schema`)
   logs/runner-<YYYY-MM-DD>.log runner process log (UTC date), kept in full
   runner.lock                  one runner per project
 ```
@@ -95,8 +125,9 @@ when an installer exists.
   keys (`ORC-129`, run `#128`) come from per-project counters and are never used as references.
 - **Time:** UTC, milliseconds since the Unix epoch.
 - **Budgets:** whole numbers of tokens (input + output as the CLIs report it; cached input is not
-  counted). Pipeline step budgets are still money until pipelines move to tokens: integer
-  micro-units plus an ISO currency code, never floating point.
+  counted), step budgets included. Published pipeline versions from before step budgets were tokens
+  keep their money amounts in their bodies (they are immutable); such a step reads as having no step
+  budget, and the amount is kept in `money_step_budgets_before_tokens`.
 - **Time limits:** milliseconds of active agent time (the time agent CLIs ran); pauses, stops at a
   limit and waits for a person do not count.
 - **Revisions:** full 40-character commit SHA.
@@ -134,6 +165,7 @@ open at the next start means the previous session crashed.
 | `counters` | next task number, next run number |
 | `project_limits` | at most one row: maximum run budget, default run budget, daily project budget, default time limit; without it the defaults apply (10M, 1.4M, 20M tokens, 30 min) |
 | `money_budgets_before_tokens` | the money budgets tasks and runs had before budgets became tokens, kept by the migration that replaced them with the default run budget |
+| `money_step_budgets_before_tokens` | the money step budgets of published pipeline versions and drafts from before step budgets became tokens, per version or draft and step |
 | `repository_link` | at most one row: GitHub connection, git remote, host / owner / name, default branch, permission, expected login, checked at |
 
 ### Versioned configuration
@@ -167,7 +199,8 @@ denied behavior) is part of the tool version body. "Used by" is derived by query
 | --- | --- |
 | `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit), branch, base revision, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
 | `attempts` | run, number, status, reason |
-| `step_executions` | attempt, pipeline step, agent profile version, effective model, status |
+| `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, step budget, merge conflict, checkpoint failed) |
+| `step_outputs` | step execution, run, step, outcome (done, failed, or none when the final message was not a structured result), text — what the step left for the steps after it, read into their prompts with its source; append-only |
 | `plans` | run, version, body blob, decision (proposed, approved, changes requested) |
 | `checkpoints` | run, step execution, revision, agent state blob |
 | `run_events` | run, sequence, time, kind, payload — append-only |
