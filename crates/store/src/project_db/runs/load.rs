@@ -7,11 +7,12 @@ use std::{
 };
 
 use orchester_core::{
-  id::RunId,
+  id::{ResourceId, RunId},
   resource::StepKey,
   revision::Revision,
   run::{
-    Attempt, BranchName, Checkpoint, EventSequence, Run, RunCreated, RunEvent, RunEventKind, StepExecution, StoredRun,
+    Attempt, BranchName, Checkpoint, EventSequence, Run, RunCreated, RunEvent, RunEventKind, RunPermissions,
+    StepExecution, StoredRun,
   },
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -19,7 +20,7 @@ use orchester_core::{
 use rusqlite::{Connection, OptionalExtension, Params, Row};
 
 use super::{
-  EVENT_SCHEMA, SNAPSHOT_SCHEMA,
+  EVENT_SCHEMA, PERMISSIONS_SCHEMA, SNAPSHOT_SCHEMA,
   columns::{
     parse_attempt_reason, parse_attempt_status, parse_run_status, parse_step_failure, parse_step_status, step_key,
   },
@@ -117,6 +118,22 @@ fn load_step_budgets(connection: &Connection, run: &str) -> Result<BTreeMap<Step
   rows
     .into_iter()
     .map(|(step, budget)| Ok((step_key(&step)?, budget_value("step budget", budget)?)))
+    .collect()
+}
+
+fn load_permissions(connection: &Connection, run: &str) -> Result<BTreeMap<ResourceId, RunPermissions>, StoreError> {
+  let mut statement = connection.prepare("SELECT profile_id, body FROM run_permissions WHERE run_id = ?1")?;
+  let rows = statement
+    .query_map([run], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+    .collect::<Result<Vec<_>, _>>()?;
+  rows
+    .into_iter()
+    .map(|(profile, body)| {
+      Ok((
+        parse("profile id", &profile)?,
+        decode_json("run permissions", PERMISSIONS_SCHEMA, &body)?,
+      ))
+    })
     .collect()
 }
 
@@ -260,6 +277,7 @@ impl RunRow {
       budget: budget_value("run budget", budget)?,
       max_duration: duration_value("run time limit", duration)?,
       step_budgets: load_step_budgets(connection, &self.id)?,
+      permissions: load_permissions(connection, &self.id)?,
       used: TokensUsed::new(u64::try_from(self.used_tokens).map_err(|_| corrupt("run usage", self.used_tokens))?),
       pause_requested: self.pause_requested,
       attempts: load_attempts(connection, &self.id)?,
