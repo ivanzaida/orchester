@@ -2,7 +2,7 @@
 //! surface. Used for empty and failure states.
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   components::{Column, Text},
   node::{Element, dimension::Dimension},
 };
@@ -63,7 +63,8 @@ impl From<RecoveryPanel> for Element {
       .rounded(RadiusSize::Lg)
       .child(icon(panel.icon, IconSize::Panel, PaletteColor::TextSecondary))
       .child(Text::new(&panel.title).variant(ExtraTypography::Subheading.role()))
-      .child(Text::new(&panel.explanation).variant(TypographyStyle::Description))
+      // 12 muted at 1.6, as the dialog explanation (`VSkhh`).
+      .child(Text::new(&panel.explanation).variant(ExtraTypography::Explanation.role()))
       .with_children(panel.details);
     if let Some(action) = panel.action {
       column = column.child(Column::new().padding_top(SpacingSize::Sm).child(action));
