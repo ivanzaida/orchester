@@ -1,3 +1,4 @@
+mod activity;
 mod blobs;
 mod connections;
 mod pull_request_diffs;

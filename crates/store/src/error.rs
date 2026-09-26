@@ -1,7 +1,7 @@
 use std::{io, path::PathBuf};
 
 use orchester_core::{
-  id::{ConnectionId, ResourceId, RunId, TaskId},
+  id::{ConnectionId, InvocationId, ResourceId, RunId, TaskId},
   resource::{PublishError, ResourceKind},
   run::RunError,
 };
@@ -51,6 +51,8 @@ pub enum StoreError {
   ConnectionNotFound(ConnectionId),
   #[error("connection {0} is not a GitHub connection")]
   NotAGitHubConnection(ConnectionId),
+  #[error("invocation {0} does not exist")]
+  InvocationNotFound(InvocationId),
 }
 
 impl StoreError {

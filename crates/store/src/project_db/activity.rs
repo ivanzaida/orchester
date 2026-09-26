@@ -1,0 +1,246 @@
+//! Agent CLI invocations and the transcript of their events, written by the runner.
+
+use orchester_core::{
+  connection::stream::{AgentEvent, InvocationOutcome},
+  id::{InvocationId, RunId, StepExecutionId},
+  resource::ModelId,
+  run::{ActivityEntry, Invocation, TokenUsage},
+  store::ActivityStore,
+  time::Timestamp,
+};
+use rusqlite::{Connection, OptionalExtension, Row, params};
+
+use super::ProjectDb;
+use crate::{
+  StoreError,
+  rows::{corrupt, decode_json, encode_json, parse},
+};
+
+const EVENT_SCHEMA: u32 = 1;
+const OUTCOME_SCHEMA: u32 = 1;
+
+const SELECT_INVOCATIONS: &str = "SELECT id, run_id, step_execution_id, number, model, session_id, started_at, \
+                                  ended_at, input_tokens, cached_input_tokens, output_tokens, outcome FROM invocations";
+
+impl ActivityStore for ProjectDb {
+  type Error = StoreError;
+
+  fn start_invocation(
+    &mut self,
+    run: RunId,
+    execution: StepExecutionId,
+    model: &ModelId,
+    now: Timestamp,
+  ) -> Result<Invocation, StoreError> {
+    let transaction = self.connection.transaction()?;
+    let previous: i64 = transaction.query_row(
+      "SELECT COALESCE(MAX(number), 0) FROM invocations WHERE step_execution_id = ?1",
+      [execution.to_string()],
+      |row| row.get(0),
+    )?;
+    let invocation = Invocation {
+      id: InvocationId::generate(),
+      run,
+      execution,
+      number: u32::try_from(previous + 1).map_err(|_| corrupt("invocation number", previous))?,
+      model: model.clone(),
+      session: None,
+      started_at: now,
+      ended_at: None,
+      usage: TokenUsage::default(),
+      outcome: None,
+    };
+    transaction.execute(
+      "INSERT INTO invocations (id, run_id, step_execution_id, number, model, started_at, input_tokens, \
+       cached_input_tokens, output_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, 0)",
+      params![
+        invocation.id.to_string(),
+        run.to_string(),
+        execution.to_string(),
+        invocation.number,
+        model.as_str(),
+        now.unix_millis(),
+      ],
+    )?;
+    transaction.commit()?;
+    Ok(invocation)
+  }
+
+  fn save_invocation(&mut self, invocation: &Invocation) -> Result<(), StoreError> {
+    let outcome = invocation
+      .outcome
+      .as_ref()
+      .map(|outcome| encode_json("invocation outcome", OUTCOME_SCHEMA, outcome))
+      .transpose()?;
+    let changed = self.connection.execute(
+      "UPDATE invocations SET session_id = ?2, ended_at = ?3, input_tokens = ?4, cached_input_tokens = ?5, \
+       output_tokens = ?6, outcome = ?7 WHERE id = ?1",
+      params![
+        invocation.id.to_string(),
+        invocation.session,
+        invocation.ended_at.map(Timestamp::unix_millis),
+        count_column(invocation.usage.input)?,
+        count_column(invocation.usage.cached_input)?,
+        count_column(invocation.usage.output)?,
+        outcome,
+      ],
+    )?;
+    if changed == 0 {
+      return Err(StoreError::InvocationNotFound(invocation.id));
+    }
+    Ok(())
+  }
+
+  fn invocations(&self, run: RunId) -> Result<Vec<Invocation>, StoreError> {
+    let mut statement = self.connection.prepare(&format!(
+      "{SELECT_INVOCATIONS} WHERE run_id = ?1 ORDER BY started_at, rowid"
+    ))?;
+    let rows = statement
+      .query_map([run.to_string()], InvocationRow::read)?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows.into_iter().map(InvocationRow::into_invocation).collect()
+  }
+
+  fn append_activity(
+    &mut self,
+    invocation: &Invocation,
+    events: &[(Timestamp, AgentEvent)],
+  ) -> Result<u64, StoreError> {
+    let transaction = self.connection.transaction()?;
+    let mut last = last_sequence(&transaction, invocation.run)?;
+    {
+      let mut insert = transaction.prepare_cached(
+        "INSERT INTO agent_events (run_id, sequence, step_execution_id, invocation_id, at, kind, payload) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+      )?;
+      for (at, event) in events {
+        last += 1;
+        insert.execute(params![
+          invocation.run.to_string(),
+          sequence_column(last)?,
+          invocation.execution.to_string(),
+          invocation.id.to_string(),
+          at.unix_millis(),
+          event.name(),
+          encode_json("agent event", EVENT_SCHEMA, event)?,
+        ])?;
+      }
+    }
+    transaction.commit()?;
+    Ok(last)
+  }
+
+  fn activity(&self, run: RunId, after: u64) -> Result<Vec<ActivityEntry>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT sequence, step_execution_id, invocation_id, at, kind, payload FROM agent_events \
+       WHERE run_id = ?1 AND sequence > ?2 ORDER BY sequence",
+    )?;
+    let rows = statement
+      .query_map(params![run.to_string(), sequence_column(after)?], |row| {
+        Ok((
+          row.get::<_, i64>(0)?,
+          row.get::<_, String>(1)?,
+          row.get::<_, String>(2)?,
+          row.get::<_, i64>(3)?,
+          row.get::<_, String>(4)?,
+          row.get::<_, String>(5)?,
+        ))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(sequence, execution, invocation, at, kind, payload)| {
+        let event: AgentEvent = decode_json("agent event", EVENT_SCHEMA, &payload)?;
+        if event.name() != kind {
+          return Err(corrupt(
+            "agent event",
+            format!("kind `{kind}` holds a `{}` payload", event.name()),
+          ));
+        }
+        Ok(ActivityEntry {
+          sequence: u64::try_from(sequence).map_err(|_| corrupt("agent event sequence", sequence))?,
+          execution: parse("step execution id", &execution)?,
+          invocation: parse("invocation id", &invocation)?,
+          at: Timestamp::from_unix_millis(at),
+          event,
+        })
+      })
+      .collect()
+  }
+}
+
+fn last_sequence(connection: &Connection, run: RunId) -> Result<u64, StoreError> {
+  let last: Option<i64> = connection
+    .query_row(
+      "SELECT MAX(sequence) FROM agent_events WHERE run_id = ?1",
+      [run.to_string()],
+      |row| row.get(0),
+    )
+    .optional()?
+    .flatten();
+  let last = last.unwrap_or(0);
+  u64::try_from(last).map_err(|_| corrupt("agent event sequence", last))
+}
+
+fn sequence_column(sequence: u64) -> Result<i64, StoreError> {
+  i64::try_from(sequence).map_err(|_| StoreError::Unrepresentable("agent event sequence"))
+}
+
+fn count_column(count: u64) -> Result<i64, StoreError> {
+  i64::try_from(count).map_err(|_| StoreError::Unrepresentable("token count"))
+}
+
+struct InvocationRow {
+  id: String,
+  run: String,
+  execution: String,
+  number: i64,
+  model: String,
+  session: Option<String>,
+  started_at: i64,
+  ended_at: Option<i64>,
+  tokens: [i64; 3],
+  outcome: Option<String>,
+}
+
+impl InvocationRow {
+  fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
+    Ok(Self {
+      id: row.get(0)?,
+      run: row.get(1)?,
+      execution: row.get(2)?,
+      number: row.get(3)?,
+      model: row.get(4)?,
+      session: row.get(5)?,
+      started_at: row.get(6)?,
+      ended_at: row.get(7)?,
+      tokens: [row.get(8)?, row.get(9)?, row.get(10)?],
+      outcome: row.get(11)?,
+    })
+  }
+
+  fn into_invocation(self) -> Result<Invocation, StoreError> {
+    let count = |value: i64| u64::try_from(value).map_err(|_| corrupt("token count", value));
+    let outcome: Option<InvocationOutcome> = self
+      .outcome
+      .as_deref()
+      .map(|text| decode_json("invocation outcome", OUTCOME_SCHEMA, text))
+      .transpose()?;
+    Ok(Invocation {
+      id: parse("invocation id", &self.id)?,
+      run: parse("run id", &self.run)?,
+      execution: parse("step execution id", &self.execution)?,
+      number: u32::try_from(self.number).map_err(|_| corrupt("invocation number", self.number))?,
+      model: ModelId::new(&self.model).map_err(|error| corrupt("invocation model", error))?,
+      session: self.session,
+      started_at: Timestamp::from_unix_millis(self.started_at),
+      ended_at: self.ended_at.map(Timestamp::from_unix_millis),
+      usage: TokenUsage {
+        input: count(self.tokens[0])?,
+        cached_input: count(self.tokens[1])?,
+        output: count(self.tokens[2])?,
+      },
+      outcome,
+    })
+  }
+}
