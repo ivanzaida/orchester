@@ -91,6 +91,22 @@ pub enum AgentEvent {
     stream: OutputStream,
     line: String,
   },
+  /// Something went wrong around the CLI rather than in it, reported by the runner.
+  RunnerProblem {
+    problem: RunnerProblem,
+  },
+}
+
+/// A problem the runner hit while running a step's agent.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "problem", rename_all = "snake_case")]
+pub enum RunnerProblem {
+  /// The prompt uses a variable that has no value in this run; the CLI was not started.
+  UnavailableVariable { variable: String },
+  /// The CLI could not be started.
+  CouldNotStart { detail: String },
+  /// The step's changes could not be committed as a checkpoint.
+  CheckpointFailed { detail: String },
 }
 
 impl AgentEvent {
@@ -108,6 +124,7 @@ impl AgentEvent {
       Self::Error { .. } => "error",
       Self::TurnFailed { .. } => "turn_failed",
       Self::Raw { .. } => "raw",
+      Self::RunnerProblem { .. } => "runner_problem",
     }
   }
 }
@@ -126,6 +143,8 @@ pub enum InvocationOutcome {
   NoResult,
   /// The runner stopped the CLI.
   Terminated,
+  /// The CLI was not started; a [`RunnerProblem`] says why.
+  NotStarted,
 }
 
 impl InvocationOutcome {

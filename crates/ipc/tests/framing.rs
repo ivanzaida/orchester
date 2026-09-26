@@ -1,6 +1,11 @@
+use orchester_core::{
+  id::{IdempotencyKey, RunId, TaskId},
+  resource::StepKey,
+  run::PreflightProblem,
+};
 use orchester_ipc::{
-  Command, Event, FrameError, Handshake, IpcError, OutputStream, PROTOCOL_VERSION, ProcessEvent, ProcessExit,
-  ProcessId, ShutdownMode,
+  Command, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, Rejection, Reply, Request, RequestId,
+  ShutdownMode,
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
   handshake,
 };
@@ -22,46 +27,64 @@ fn connection() -> ((Reader, Writer), (Reader, Writer)) {
 #[tokio::test]
 async fn frames_round_trip_every_message() {
   let ((mut reader, _), (_, mut writer)) = connection();
+  let (run, task) = (RunId::generate(), TaskId::generate());
   let commands = [
+    Command::Attach,
     Command::Ping { nonce: 42 },
+    Command::StartRun {
+      key: IdempotencyKey::generate(),
+      task,
+    },
     Command::Shutdown {
       mode: ShutdownMode::FinishAtCheckpoints,
     },
     Command::Shutdown {
       mode: ShutdownMode::Immediate,
     },
-  ];
-  let process = ProcessId::new(3);
+  ]
+  .into_iter()
+  .enumerate()
+  .map(|(index, command)| Request {
+    id: RequestId::new(index as u64 + 1),
+    command,
+  })
+  .collect::<Vec<_>>();
+  let reply = |reply| Event::Reply {
+    id: RequestId::new(7),
+    reply,
+  };
   let events = [
-    Event::Pong { nonce: 42 },
+    reply(Reply::Attached { active_runs: vec![run] }),
+    reply(Reply::Pong { nonce: 42 }),
+    reply(Reply::RunStarted { run }),
+    reply(Reply::Rejected(Rejection::Preflight {
+      problems: vec![
+        PreflightProblem::ApprovalGate {
+          step: StepKey::new("plan").expect("key"),
+        },
+        PreflightProblem::NoCommits,
+      ],
+    })),
+    reply(Reply::Rejected(Rejection::Failed {
+      detail: "héllo \"quoted\"\n inner".to_owned(),
+    })),
     Event::Stopped {
       mode: ShutdownMode::Immediate,
     },
-    Event::Process(ProcessEvent::Output {
-      process,
-      stream: OutputStream::Stderr,
-      line: "héllo \"quoted\"\n inner".to_owned(),
-    }),
-    Event::Process(ProcessEvent::Exited {
-      process,
-      exit: ProcessExit::Exited { code: Some(-1) },
-    }),
-    Event::Process(ProcessEvent::Exited {
-      process,
-      exit: ProcessExit::Terminated,
-    }),
+    Event::RunChanged { run, task },
+    Event::AgentActivity { run, sequence: 12 },
   ];
 
-  for command in &commands {
-    writer.write(command).await.expect("write command");
+  for request in &commands {
+    writer.write(request).await.expect("write request");
   }
   for event in &events {
     writer.write(event).await.expect("write event");
   }
   drop(writer);
 
-  for command in commands {
-    assert_eq!(reader.read::<Command>().await.expect("read command"), Some(command));
+  for request in commands {
+    assert_eq!(reader.read::<Request>().await.expect("read request"), Some(request));
   }
   for event in events {
     assert_eq!(reader.read::<Event>().await.expect("read event"), Some(event));
@@ -80,7 +103,7 @@ async fn frames_reject_oversized_and_truncated_input() {
     .await
     .expect("write header");
   assert!(matches!(
-    reader.read::<Command>().await,
+    reader.read::<Request>().await,
     Err(FrameError::TooLarge { .. })
   ));
 
@@ -91,7 +114,7 @@ async fn frames_reject_oversized_and_truncated_input() {
   raw.write_all(&10_u32.to_be_bytes()).await.expect("write header");
   raw.write_all(b"{\"ty").await.expect("write partial body");
   drop(raw);
-  assert!(matches!(reader.read::<Command>().await, Err(FrameError::Truncated)));
+  assert!(matches!(reader.read::<Request>().await, Err(FrameError::Truncated)));
 }
 
 #[tokio::test]
