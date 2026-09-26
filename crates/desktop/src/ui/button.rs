@@ -84,6 +84,12 @@ impl ActionButton {
     self
   }
 
+  /// A button that cannot be pressed now, e.g. while the request it makes is under way.
+  pub fn disabled(mut self) -> Self {
+    self.state = State::Disabled;
+    self
+  }
+
   /// When not `enabled`, an available button renders disabled.
   pub fn enabled(mut self, enabled: bool) -> Self {
     if !enabled && matches!(self.state, State::Enabled(_)) {

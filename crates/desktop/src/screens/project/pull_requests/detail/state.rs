@@ -15,7 +15,6 @@ use orchester_core::{
 
 use super::super::{notice::server_error, view::minutes_until};
 use crate::{
-  display,
   pull_requests::detail::LinkedDetail,
   screens::github::status::status_label,
   ui::{icon::Icon, notice::Notice, panel::RecoveryPanel},
@@ -59,7 +58,7 @@ pub fn loading_panel(ctx: &Ctx) -> RecoveryPanel {
 /// writes numbers ("20,000").
 pub fn too_large_panel(ctx: &Ctx, pull_request: Option<&PullRequest>) -> RecoveryPanel {
   let separator = ctx.t("number.groupSeparator");
-  let number = |value: u32| display::grouped(u64::from(value), &separator);
+  let number = |value: u32| orchester_core::tokens::grouped(u64::from(value), &separator);
   let (max_files, max_lines) = (number(MAX_DIFF_FILES), number(MAX_DIFF_LINES));
   let limits = [("maxFiles", max_files.as_str()), ("maxLines", max_lines.as_str())];
   let detail = match pull_request.map(PullRequest::changes) {

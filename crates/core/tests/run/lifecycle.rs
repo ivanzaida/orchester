@@ -1,12 +1,14 @@
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, time::Duration};
 
 use orchester_core::{
   id::RunId,
-  money::{Currency, Money},
-  run::{AttemptReason, AttemptStatus, Run, RunError, RunEventKind, RunNumber, RunStatus, StepStatus},
+  run::{AttemptReason, AttemptStatus, PauseReason, Run, RunError, RunEventKind, RunNumber, RunStatus, StepStatus},
+  tokens::TokensUsed,
 };
 
-use crate::fixture::{Config, Logged, at, new_run, revision, usd};
+use crate::fixture::{Config, Logged, at, new_run, revision};
+
+const PAUSED: RunStatus = RunStatus::Paused(PauseReason::Requested);
 
 #[test]
 fn run_lifecycle_start_opens_attempt_one_with_every_step_pending() {
@@ -32,13 +34,13 @@ fn run_lifecycle_start_opens_attempt_one_with_every_step_pending() {
 }
 
 #[test]
-fn run_lifecycle_create_rejects_a_non_positive_budget() {
+fn run_lifecycle_create_rejects_a_zero_time_limit() {
   let mut new = new_run(Config::feature_delivery().snapshot());
-  new.budget = usd(0);
+  new.max_duration = Duration::ZERO;
   let number = RunNumber::new(NonZeroU32::MIN);
   assert_eq!(
     Run::create(RunId::generate(), number, new, at(1)).map(|_| ()),
-    Err(RunError::NonPositiveBudget)
+    Err(RunError::ZeroDuration)
   );
 }
 
@@ -58,7 +60,7 @@ fn run_lifecycle_start_is_only_valid_for_a_pending_run() {
 fn run_lifecycle_pause_and_resume_alternate() {
   let mut logged = Logged::started();
   logged.apply(|run| run.pause(at(12)));
-  assert_eq!(logged.run.status(), &RunStatus::Paused);
+  assert_eq!(logged.run.status(), &PAUSED);
   assert!(matches!(
     logged.run.pause(at(13)),
     Err(RunError::InvalidRunTransition { .. })
@@ -92,10 +94,7 @@ fn run_lifecycle_steps_do_not_move_while_paused() {
   logged.apply(|run| run.pause(at(12)));
   assert!(matches!(
     logged.run.start_step(research, at(13)),
-    Err(RunError::InvalidRunTransition {
-      status: RunStatus::Paused,
-      ..
-    })
+    Err(RunError::InvalidRunTransition { status: PAUSED, .. })
   ));
 }
 
@@ -131,18 +130,13 @@ fn run_lifecycle_pending_run_can_be_cancelled() {
 }
 
 #[test]
-fn run_lifecycle_spend_accumulates_in_the_budget_currency() {
+fn run_lifecycle_usage_accumulates_in_every_status() {
   let mut logged = Logged::started();
-  logged.apply(|run| run.record_spend(usd(1_250_000), at(12)));
-  logged.apply(|run| run.record_spend(usd(250_000), at(13)));
-  assert_eq!(logged.run.spent(), usd(1_500_000));
-  let euro = Money::from_micros(1, Currency::new("EUR").expect("valid currency"));
-  assert!(matches!(
-    logged.run.record_spend(euro, at(14)),
-    Err(RunError::CurrencyMismatch { .. })
-  ));
-  assert_eq!(logged.run.record_spend(usd(-1), at(14)), Err(RunError::NegativeSpend));
-  assert_eq!(logged.run.spent(), usd(1_500_000));
+  logged.apply(|run| run.record_usage(TokensUsed::new(250_000), at(12)));
+  logged.apply(|run| run.pause(at(13)));
+  logged.apply(|run| run.record_usage(TokensUsed::new(12_480), at(14)));
+  assert_eq!(logged.run.used(), TokensUsed::new(262_480));
+  assert!(!logged.run.token_limit_reached());
 }
 
 #[test]
@@ -183,7 +177,7 @@ fn run_lifecycle_replay_rebuilds_the_state_from_events() {
   let implement = logged.exec("implement");
   logged.apply(|run| run.start_step(implement, at(30)));
   logged.apply(|run| run.record_checkpoint(implement, revision('c'), at(31)));
-  logged.apply(|run| run.record_spend(usd(42), at(32)));
+  logged.apply(|run| run.record_usage(TokensUsed::new(42), at(32)));
   logged.apply(|run| run.interrupt(orchester_core::run::InterruptCause::QuitNow, at(33)));
   assert_eq!(Run::replay(&logged.log), Ok(logged.run));
 }

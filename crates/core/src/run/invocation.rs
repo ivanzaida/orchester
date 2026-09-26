@@ -2,6 +2,8 @@
 //! (the first, a retry, a continue); each keeps the CLI's session id, the usage it reported and
 //! how it ended. The transcript is the invocation's [`AgentEvent`]s in order.
 
+use std::time::Duration;
+
 use crate::{
   connection::stream::{AgentEvent, InvocationOutcome},
   id::{InvocationId, RunId, StepExecutionId},
@@ -35,6 +37,14 @@ impl Invocation {
     let end = self.ended_at.unwrap_or(now);
     (end.unix_millis() - self.started_at.unix_millis()).max(0)
   }
+}
+
+/// Active agent time of a run: the time its agent CLIs ran, up to `now` for one that still
+/// runs. Time paused, stopped at a limit or waiting for a person has no invocation running, so it
+/// does not count (`docs/design/orchester-workspace.md`, "Stopped at limit").
+pub fn active_time(invocations: &[Invocation], now: Timestamp) -> Duration {
+  let millis: i64 = invocations.iter().map(|invocation| invocation.active_millis(now)).sum();
+  Duration::from_millis(u64::try_from(millis).expect("active times are never negative"))
 }
 
 /// One stored transcript entry of a run.

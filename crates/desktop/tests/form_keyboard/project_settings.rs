@@ -2,6 +2,11 @@
 //! settings form's buttons take Tab stops; the tabs are pointer-only. Buttons that run `gh` or
 //! `git` are not pressed: the tests never run the real programs.
 
+use std::path::Path;
+
+use orchester_core::{limits::ProjectLimits, store::SettingsStore, tokens::TokenBudget};
+use orchester_store::ProjectDb;
+
 use crate::{
   github::{ReplayGh, SIGNED_IN, VERSION, contains_text, github_connection, link, shows},
   harness::{Desktop, expected},
@@ -73,19 +78,89 @@ fn project_settings_without_a_link_offer_detection() {
   assert_eq!(desktop.stops(2, false), expected(&[Some(DETECT), Some(DETECT)]));
 }
 
-#[test]
-fn project_settings_limits_are_unavailable() {
-  let mut desktop = Desktop::with_project();
-  settings(&mut desktop);
+const MAX_BUDGET: &str = "limits-max-run-budget";
+const DEFAULT_BUDGET: &str = "limits-default-run-budget";
+const DAILY_BUDGET: &str = "limits-daily-budget";
+const TIME_LIMIT: &str = "limits-default-time-limit";
+
+fn limits_tab(desktop: &mut Desktop) {
+  settings(desktop);
   desktop.click("settings-tab-limits");
-  desktop.wait_for("settings-limits-unavailable");
+  desktop.settle("the stored limits", |tree| {
+    tree
+      .get_element_by_id_mut(MAX_BUDGET)
+      .and_then(|element| element.as_text_input())
+      .is_some_and(|input| !input.value().is_empty())
+  });
+}
+
+fn stored_limits(repo: &Path) -> ProjectLimits {
+  ProjectDb::open(repo)
+    .expect("open the project")
+    .project_limits()
+    .expect("limits")
+}
+
+#[test]
+fn project_settings_limits_show_the_defaults_and_their_fields_in_order() {
+  let mut desktop = Desktop::with_project();
+  limits_tab(&mut desktop);
   let description = "Defaults and limits for Kontur. They apply to new tasks and runs in this project.";
   assert!(desktop.tree.root().is_some_and(|root| contains_text(root, description)));
+  assert_eq!(desktop.value(MAX_BUDGET), "10,000,000");
+  assert_eq!(desktop.value(DEFAULT_BUDGET), "1,400,000");
+  assert_eq!(desktop.value(DAILY_BUDGET), "20,000,000");
+  assert_eq!(desktop.value(TIME_LIMIT), "30");
+  assert!(shows(&mut desktop, "settings-limits", "= 10M tokens · default"));
+  assert!(shows(&mut desktop, "settings-save-status", "All changes saved"));
+  assert!(desktop.tree.get_element_by_id("settings-limits-notice").is_some());
+  assert_eq!(
+    desktop.stops(5, false),
+    expected(&[
+      Some(MAX_BUDGET),
+      Some(DEFAULT_BUDGET),
+      Some(DAILY_BUDGET),
+      Some(TIME_LIMIT),
+      Some(MAX_BUDGET)
+    ])
+  );
+}
+
+#[test]
+fn project_settings_limits_save_a_valid_change_when_its_field_is_left() {
+  let mut desktop = Desktop::with_project();
+  limits_tab(&mut desktop);
+  desktop.tab_to(DEFAULT_BUDGET, 10);
+  for _ in 0.."1,400,000".len() {
+    desktop.key("Backspace", "Backspace");
+  }
+  desktop.type_text("12000000");
   assert!(shows(
     &mut desktop,
-    "settings-limits-unavailable",
-    "Limits arrive with task runs"
+    "settings-limits",
+    "The default can be at most the maximum run budget, 10M tokens."
   ));
+  // Leaving an invalid field saves nothing.
+  desktop.tab();
+  assert_eq!(stored_limits(desktop.repo()), ProjectLimits::DEFAULT);
+  desktop.shift_tab();
+  desktop.key("Backspace", "Backspace");
+  assert_eq!(desktop.value(DEFAULT_BUDGET), "1,200,000");
+  desktop.tab();
+  let expected_limits = ProjectLimits::new(
+    ProjectLimits::DEFAULT.max_run_budget(),
+    TokenBudget::new(1_200_000).expect("above zero"),
+    ProjectLimits::DEFAULT.daily_budget(),
+    ProjectLimits::DEFAULT.default_time_limit(),
+  )
+  .expect("valid limits");
+  let repo = desktop.repo().to_path_buf();
+  desktop.settle("the saved default", |_| stored_limits(&repo) == expected_limits);
+  desktop.settle("the saved status", |tree| {
+    tree
+      .get_element_by_id("settings-save-status")
+      .is_some_and(|status| contains_text(status, "All changes saved"))
+  });
 }
 
 #[test]

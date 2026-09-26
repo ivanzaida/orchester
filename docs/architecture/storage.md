@@ -94,7 +94,11 @@ when an installer exists.
 - **Identity:** UUIDv7 for every row id (time-ordered, merge-safe for a future server). Display
   keys (`ORC-129`, run `#128`) come from per-project counters and are never used as references.
 - **Time:** UTC, milliseconds since the Unix epoch.
-- **Money:** integer micro-units plus an ISO currency code; never floating point.
+- **Budgets:** whole numbers of tokens (input + output as the CLIs report it; cached input is not
+  counted). Pipeline step budgets are still money until pipelines move to tokens: integer
+  micro-units plus an ISO currency code, never floating point.
+- **Time limits:** milliseconds of active agent time (the time agent CLIs ran); pauses, stops at a
+  limit and waits for a person do not count.
 - **Revisions:** full 40-character commit SHA.
 - **Structured bodies:** JSON columns with a `schema` field for resource bodies, so a body can
   evolve without a table migration.
@@ -128,6 +132,8 @@ open at the next start means the previous session crashed.
 | `meta` | schema version, project id |
 | `project` | key (`ORC`), name, repository, default branch |
 | `counters` | next task number, next run number |
+| `project_limits` | at most one row: maximum run budget, default run budget, daily project budget, default time limit; without it the defaults apply (10M, 1.4M, 20M tokens, 30 min) |
+| `money_budgets_before_tokens` | the money budgets tasks and runs had before budgets became tokens, kept by the migration that replaced them with the default run budget |
 | `repository_link` | at most one row: GitHub connection, git remote, host / owner / name, default branch, permission, expected login, checked at |
 
 ### Versioned configuration
@@ -159,7 +165,7 @@ denied behavior) is part of the tool version body. "Used by" is derived by query
 
 | Table | Purpose |
 | --- | --- |
-| `runs` | task, number, group, version snapshot, status, branch, base revision, worktree, budget cap, spent |
+| `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit), branch, base revision, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
 | `attempts` | run, number, status, reason |
 | `step_executions` | attempt, pipeline step, agent profile version, effective model, status |
 | `plans` | run, version, body blob, decision (proposed, approved, changes requested) |
@@ -215,7 +221,10 @@ SQLite serializes writes between the two processes; ownership keeps meaning unam
   merged / done; any active state → paused, cancelled, failed. Blocked is derived from
   dependencies, not stored.
 - **Run:** pending → running ⇄ paused → succeeded / failed / cancelled; running → interrupted
-  (session ended) → running on continue. Interrupted keeps its last checkpoint.
+  (session ended) → running on continue. Interrupted keeps its last checkpoint. A pause is
+  requested first and recorded as paused once the active agent invocation ended and its work was
+  committed. A run that reaches its token budget or time limit is paused as stopped at limit
+  after its agent was ended and its work committed; raising the limit continues it.
 - **Step execution:** pending → running → waiting (approval, plan, message) → passed / failed /
   skipped.
 - **Message:** draft (desktop only) → queued → delivered → acknowledged; failed keeps the draft.

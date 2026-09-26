@@ -9,6 +9,7 @@ pub mod execution;
 mod git;
 pub mod lock;
 pub mod log_file;
+pub mod notify;
 #[cfg(windows)]
 pub mod server;
 pub mod supervisor;

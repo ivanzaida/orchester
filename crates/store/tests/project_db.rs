@@ -2,7 +2,6 @@ use std::{fs, path::Path, time::Duration};
 
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, ResourceId},
-  money::{Currency, Money},
   name::Name,
   project::{Project, ProjectKey},
   store::TaskStore,
@@ -37,8 +36,8 @@ fn details(title: &str) -> TaskDetails {
 }
 
 fn complete(title: &str) -> TaskDetails {
-  let limits =
-    TaskLimits::new(Money::from_micros(5_000_000, Currency::USD), Duration::from_secs(1800)).expect("positive limits");
+  let budget = orchester_core::tokens::TokenBudget::new(1_400_000).expect("above zero");
+  let limits = TaskLimits::new(budget, Duration::from_secs(1800)).expect("positive limits");
   TaskDetails {
     brief: "Let users switch repositories.".into(),
     acceptance_criteria: vec!["Lists repositories.".into(), "Remembers the choice.".into()],

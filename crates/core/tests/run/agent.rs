@@ -122,14 +122,9 @@ fn prompt_names_a_variable_without_a_value_instead_of_leaving_it_empty() {
       part: PromptSource::StepInstructions,
     })
   );
-  let error = assemble(&builder("Budget {{run.budget}}"), &step_with(""), &task("Brief.", &[]));
-  assert_eq!(
-    error,
-    Err(PromptAssemblyError::UnavailableVariable {
-      variable: Variable::RunBudget,
-      part: PromptSource::RoleInstructions,
-    })
-  );
+  // The budget in force, as a whole number of tokens.
+  let prompt = assemble(&builder("Budget {{run.budget}}"), &step_with(""), &task("Brief.", &[]));
+  assert!(prompt.expect("run.budget is known").contains("Budget 1400000"));
 }
 
 #[test]

@@ -4,7 +4,7 @@
 
 use super::{
   state::Run,
-  status::{RunStatus, StepStatus},
+  status::{PauseReason, RunStatus, StepStatus},
 };
 use crate::task::{Task, TaskStatus};
 
@@ -17,6 +17,8 @@ pub enum TaskPhase {
   /// Running, with a step waiting for a person (an approval, a plan decision or a message).
   Waiting,
   Paused,
+  /// Reached its token or time limit and waits for the limit to be raised.
+  StoppedAtLimit,
   /// Stopped without settling; its last checkpoint is kept.
   Interrupted,
   /// Every step passed.
@@ -38,7 +40,8 @@ impl TaskPhase {
       RunStatus::Pending => Self::Queued,
       RunStatus::Running if waiting(run) => Self::Waiting,
       RunStatus::Running => Self::Running,
-      RunStatus::Paused => Self::Paused,
+      RunStatus::Paused(PauseReason::Requested) => Self::Paused,
+      RunStatus::Paused(PauseReason::LimitReached(_)) => Self::StoppedAtLimit,
       RunStatus::Interrupted(_) => Self::Interrupted,
       RunStatus::Succeeded => Self::Succeeded,
       RunStatus::Failed(_) => Self::Failed,

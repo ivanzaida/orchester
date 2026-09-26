@@ -86,6 +86,7 @@ icons! {
   MessageSquare => '\u{e117}',
   MessagesSquare => '\u{e40d}',
   Minus => '\u{e11c}',
+  OctagonPause => '\u{e21b}',
   Pause => '\u{e12e}',
   Pencil => '\u{e1f9}',
   Pin => '\u{e259}',

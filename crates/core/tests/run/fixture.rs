@@ -5,7 +5,6 @@ use std::{
 
 use orchester_core::{
   id::{ConnectionId, ResourceId, RunId, StepExecutionId, TaskId, VersionId},
-  money::{Currency, Money},
   name::Name,
   resource::{
     AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Step, StepKey,
@@ -14,6 +13,7 @@ use orchester_core::{
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunEvent, RunNumber, RunSnapshot},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 
 pub fn at(millis: i64) -> Timestamp {
@@ -32,8 +32,8 @@ pub fn revision(hex_digit: char) -> Revision {
   Revision::new(&hex_digit.to_string().repeat(40)).expect("valid revision")
 }
 
-pub fn usd(micros: i64) -> Money {
-  Money::from_micros(micros, Currency::USD)
+pub fn tokens(count: u64) -> TokenBudget {
+  TokenBudget::new(count).expect("a budget above zero")
 }
 
 pub fn version<B>(number: u32, body: B) -> Version<B> {
@@ -134,7 +134,8 @@ pub fn new_run(snapshot: RunSnapshot) -> NewRun {
     snapshot,
     branch: BranchName::new("orchester/orc-129").expect("valid branch"),
     base: revision('a'),
-    budget: usd(5_000_000),
+    budget: tokens(1_400_000),
+    max_duration: std::time::Duration::from_secs(30 * 60),
   }
 }
 
@@ -153,7 +154,7 @@ impl Logged {
       new_run(Config::feature_delivery().snapshot()),
       at(10),
     )
-    .expect("positive budget");
+    .expect("positive time limit");
     Self {
       run,
       log: vec![created],

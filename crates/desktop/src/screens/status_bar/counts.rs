@@ -1,6 +1,7 @@
-//! Right side of the bar (`doeZn`): the project's counts and the application version. Zero
-//! counts stay visible in `$subtle`; a count that is not measured shows a dash. The budget
-//! item (`Kzi83`) is left out: usage accounting does not exist.
+//! Right side of the bar (`doeZn`): the project's counts, today's tokens against the daily
+//! project budget (`Kzi83`) and the application version. Zero counts stay visible in `$subtle`;
+//! a count that is not measured shows a dash. The tokens item is not interactive: a usage screen
+//! does not exist, so its hint says what it counts.
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
@@ -8,6 +9,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
+use orchester_core::tokens::{compact_tokens, grouped};
 
 use super::{
   ProjectBar,
@@ -15,7 +17,7 @@ use super::{
   item::{clickable, glyph, item, label, separator, value},
   open::Opener,
 };
-use crate::ui::icon::Icon;
+use crate::{tasks::usage::ProjectUsage, ui::icon::Icon};
 
 pub fn counts(ctx: &Ctx, project: Option<&ProjectBar>, opener: &Opener, hints: &Hints) -> Element {
   let mut row = Row::new().height(Dimension::Pct(100.0)).align_items(Alignment::Center);
@@ -42,6 +44,7 @@ pub fn counts(ctx: &Ctx, project: Option<&ProjectBar>, opener: &Opener, hints: &
       .child(open_tasks(agents, opener))
       .child(open_tasks(queued, opener))
       .child(needs_you)
+      .child(tokens(ctx, project.usage.as_ref(), &unknown, hints))
       .child(separator());
   }
   row.child(version(ctx, hints)).into()
@@ -67,6 +70,45 @@ fn count(count: Option<usize>, unknown: &str) -> Element {
       value(&count.to_string(), color)
     }
   }
+}
+
+/// `Kzi83`: counted tokens of all runs today against the daily project budget, compact
+/// (`3.8M / 20M`).
+fn tokens(ctx: &Ctx, usage: Option<&ProjectUsage>, unknown: &str, hints: &Hints) -> Element {
+  let value = match usage {
+    Some(usage) => value(
+      &ctx.t_args(
+        "statusBar.counts.tokensValue",
+        [
+          ("used", compact_tokens(usage.today.get()).as_str()),
+          ("budget", compact_tokens(usage.limits.daily_budget().get()).as_str()),
+        ],
+      ),
+      PaletteColor::TextPrimary,
+    ),
+    None => value(unknown, PaletteColor::TextMuted),
+  };
+  let row = item("status-tokens")
+    .child(glyph(Icon::Gauge, PaletteColor::TextSecondary))
+    .child(label(&ctx.t("statusBar.counts.tokens"), PaletteColor::TextSecondary))
+    .child(value);
+  let exact = usage.map_or_else(
+    || ctx.t("statusBar.hints.tokensUnknown"),
+    |usage| {
+      let separator = ctx.t("number.groupSeparator");
+      ctx.t_args(
+        "statusBar.hints.tokens",
+        [
+          ("used", grouped(usage.today.get(), &separator).as_str()),
+          (
+            "budget",
+            grouped(usage.limits.daily_budget().get(), &separator).as_str(),
+          ),
+        ],
+      )
+    },
+  );
+  hints.attach(row, HintAnchor::Tokens, exact).into()
 }
 
 /// `jyUjc`: the crate version; the hint names the build.

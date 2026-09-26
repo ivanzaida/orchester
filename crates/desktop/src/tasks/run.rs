@@ -8,10 +8,11 @@ use std::{collections::BTreeMap, path::Path};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   resource::{AgentProfile, Pipeline, ResourceKind, Version},
-  run::{PreflightInput, PreflightProblem, preflight},
+  run::{PreflightInput, PreflightProblem, RunLimit, preflight},
   store::{ConnectionStore, ResourceStore, TaskStore},
   task::{QueueError, Task, TaskDetails, TaskStatus},
   time::Timestamp,
+  tokens::compact_tokens,
 };
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
@@ -19,7 +20,7 @@ use orchester_store::{ProjectDb, StoreError};
 use super::data::save_draft;
 use crate::{
   messages::{self, Message},
-  runner::{RequestError, StartRunError},
+  runner::{RequestError, RunRequestError},
 };
 
 /// Why the task was not queued for a run.
@@ -103,13 +104,51 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
 }
 
 /// What a person reads when the runner did not start the run.
-pub fn start_messages(error: &StartRunError) -> Vec<Message> {
+pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
   match error {
-    StartRunError::Request(RequestError::NotConnected) => vec![Message::new("runs.start.runnerUnavailable")],
-    StartRunError::Request(RequestError::Lost) => vec![Message::new("runs.start.lost")],
-    StartRunError::Rejected(Rejection::Preflight { problems }) => problems.iter().map(preflight_message).collect(),
-    StartRunError::Rejected(Rejection::TaskNotFound) => vec![Message::new("runs.start.taskMissing")],
-    StartRunError::Rejected(Rejection::TaskNotQueued) => vec![Message::new("runs.start.notQueued")],
-    StartRunError::Rejected(Rejection::Failed { .. }) => vec![Message::new("runs.start.failed")],
+    RunRequestError::Request(RequestError::NotConnected) => vec![Message::new("runs.start.runnerUnavailable")],
+    RunRequestError::Request(RequestError::Lost) => vec![Message::new("runs.start.lost")],
+    RunRequestError::Rejected(Rejection::Preflight { problems }) => problems.iter().map(preflight_message).collect(),
+    RunRequestError::Rejected(Rejection::TaskNotFound) => vec![Message::new("runs.start.taskMissing")],
+    RunRequestError::Rejected(Rejection::TaskNotQueued) => vec![Message::new("runs.start.notQueued")],
+    RunRequestError::Rejected(
+      Rejection::Failed { .. }
+      | Rejection::RunNotFound
+      | Rejection::RunNotRunning
+      | Rejection::RunNotPaused
+      | Rejection::RunEnded
+      | Rejection::LimitNotRaised { .. }
+      | Rejection::LimitNotAboveUsed { .. }
+      | Rejection::BudgetAboveMaximum { .. },
+    ) => vec![Message::new("runs.start.failed")],
+  }
+}
+
+/// What a person reads when the runner did not pause, resume or cancel a run, or raise its
+/// limits.
+pub fn control_message(error: &RunRequestError) -> Message {
+  match error {
+    RunRequestError::Request(RequestError::NotConnected) => Message::new("runs.control.runnerUnavailable"),
+    RunRequestError::Request(RequestError::Lost) => Message::new("runs.control.lost"),
+    RunRequestError::Rejected(Rejection::RunNotRunning) => Message::new("runs.control.notRunning"),
+    RunRequestError::Rejected(Rejection::RunNotPaused) => Message::new("runs.control.notPaused"),
+    RunRequestError::Rejected(Rejection::RunEnded) => Message::new("runs.control.ended"),
+    RunRequestError::Rejected(Rejection::LimitNotRaised { .. }) => Message::new("runs.limit.notRaised"),
+    RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
+      limit: RunLimit::Tokens,
+    }) => Message::new("runs.limit.tokensNotAboveUsed"),
+    RunRequestError::Rejected(Rejection::LimitNotAboveUsed { limit: RunLimit::Time }) => {
+      Message::new("runs.limit.timeNotAboveUsed")
+    }
+    RunRequestError::Rejected(Rejection::BudgetAboveMaximum { max }) => {
+      Message::new("tokens.errors.aboveMax").with("max", compact_tokens(max.get()))
+    }
+    RunRequestError::Rejected(
+      Rejection::RunNotFound
+      | Rejection::TaskNotFound
+      | Rejection::TaskNotQueued
+      | Rejection::Preflight { .. }
+      | Rejection::Failed { .. },
+    ) => Message::new("runs.control.failed"),
   }
 }

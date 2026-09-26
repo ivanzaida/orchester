@@ -31,7 +31,8 @@ use crate::{
 const SELECT_WIDTH: f32 = 18.0;
 const KEY_WIDTH: f32 = 72.0;
 const PIPELINE_WIDTH: f32 = 136.0;
-const STATUS_WIDTH: f32 = 112.0;
+/// Wider than `B5FaIC`'s 112, so the longest status, "Stopped at limit" (`BHqwT`), fits.
+const STATUS_WIDTH: f32 = 128.0;
 const READINESS_WIDTH: f32 = 146.0;
 const OPEN_WIDTH: f32 = 14.0;
 const HEADING_HEIGHT: f32 = 28.0;
@@ -49,6 +50,7 @@ fn status_copy(phase: TaskPhase) -> (Icon, &'static str) {
     TaskPhase::Running => (Icon::Loader, "tasks.status.running"),
     TaskPhase::Waiting => (Icon::Clock3, "tasks.status.waiting"),
     TaskPhase::Paused => (Icon::Pause, "tasks.status.paused"),
+    TaskPhase::StoppedAtLimit => (Icon::OctagonPause, "tasks.status.stoppedAtLimit"),
     TaskPhase::Interrupted => (Icon::Pause, "tasks.status.interrupted"),
     TaskPhase::Succeeded => (Icon::CircleCheck, "tasks.status.succeeded"),
     TaskPhase::Failed => (Icon::AlertCircle, "tasks.status.failed"),

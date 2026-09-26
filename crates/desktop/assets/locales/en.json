@@ -165,6 +165,7 @@
       "running": "Running",
       "waiting": "Needs you",
       "paused": "Paused",
+      "stoppedAtLimit": "Stopped at limit",
       "interrupted": "Interrupted",
       "succeeded": "Finished",
       "failed": "Failed",
@@ -213,7 +214,8 @@
       "noPipelines": "No published pipelines in this project",
       "budget": "Run budget",
       "timeLimit": "Time limit",
-      "minutes": "min",
+      "timeLimitReadBack": "Active agent time · pauses and waiting for you don’t count",
+      "minutes": "minutes",
       "createAndRun": "Create & run",
       "saveDraft": "Save as draft",
       "limitsBlockSave": "Correct the run budget and time limit to save the draft.",
@@ -232,7 +234,11 @@
     "page": {
       "breadcrumb": "{{project}} / Tasks / {{task}}",
       "pause": "Pause run",
+      "pausing": "Pausing…",
+      "resume": "Resume run",
+      "resuming": "Resuming…",
       "cancel": "Cancel run",
+      "cancelling": "Cancelling…",
       "loading": "Loading the task",
       "loadingDetail": "Reading the task and its latest run.",
       "loadFailed": "The task cannot be read",
@@ -242,7 +248,10 @@
         "pending": "Run {{run}} · starting",
         "starting": "Run {{run}} · Attempt {{attempt}} · starting",
         "working": "Run {{run}} · Attempt {{attempt}} · {{step}} · {{agent}} working",
-        "paused": "Run {{run}} · Attempt {{attempt}} · paused at {{step}}",
+        "pausing": "Run {{run}} · Attempt {{attempt}} · {{step}} · pausing at the next checkpoint",
+        "paused": "Run {{run}} · Attempt {{attempt}} · Paused by you at {{time}}",
+        "tokenLimit": "Run {{run}} · Attempt {{attempt}} · Stopped at the token limit at {{time}}",
+        "timeLimit": "Run {{run}} · Attempt {{attempt}} · Stopped at the time limit at {{time}}",
         "interrupted": "Run {{run}} · Attempt {{attempt}} · interrupted at {{step}}",
         "succeeded": "Run {{run}} · Attempt {{attempt}} · every step passed",
         "failed": "Run {{run}} · Attempt {{attempt}} · failed at {{step}}",
@@ -260,9 +269,11 @@
       "pending": "Waiting",
       "running": "Running",
       "waiting": "Needs you",
+      "paused": "Paused",
       "passed": "Done",
       "failed": "Failed",
-      "skipped": "Skipped"
+      "skipped": "Skipped",
+      "cancelled": "Cancelled"
     },
     "permissions": {
       "value": "{{agent}} · {{access}}",
@@ -280,9 +291,13 @@
       "pipelineValue": "{{name}} · {{version}}",
       "branch": "Branch",
       "base": "Base",
+      "checkpoint": "Last checkpoint",
+      "checkpointValue": "{{revision}} · {{time}}",
       "model": "Model",
-      "tokens": "Tokens used",
+      "budget": "Budget",
       "time": "Active agent time",
+      "timeLimit": "Time limit",
+      "timeLimitValue": "{{minutes}} min active agent time",
       "permissions": "Permissions",
       "snapshotNote": "Configuration updates do not change this run’s saved versions.",
       "notice": {
@@ -291,7 +306,12 @@
         "queuedTitle": "The run has not started",
         "queuedDetail": "The task is queued. Its run starts when the runner accepts it; Create & run on the new task form retries without starting a second run.",
         "runningTitle": "{{step}} is running",
-        "runningDetail": "The agent works in the run’s own worktree and branch; your checkout is not touched. Pausing and cancelling come in a later version.",
+        "runningDetail": "The agent works in the run’s own worktree and branch; your checkout is not touched.",
+        "pausingTitle": "Pausing at the next checkpoint",
+        "pausingDetail": "The agent finishes the invocation it is running and its work is committed as a checkpoint; then the run pauses. Nothing in the worktree is lost.",
+        "pausedTitle": "Paused at checkpoint {{checkpoint}}",
+        "pausedNoCheckpointTitle": "Paused",
+        "pausedDetail": "Work is preserved. No new steps or tool calls start until you resume this run.",
         "interruptedTitle": "The run was interrupted at {{step}}",
         "interruptedDetail": "Its agent was stopped when the runner stopped. The run keeps its last checkpoint; continuing it comes in a later version.",
         "succeededTitle": "Every step passed",
@@ -391,6 +411,44 @@
       "taskMissing": "The task no longer exists.",
       "notQueued": "The task is not queued for a run.",
       "failed": "The runner could not start the run. The runner log says why."
+    },
+    "limit": {
+      "tokenTitle": "Stopped at the token limit",
+      "tokenTitleCheckpoint": "Stopped at the token limit · checkpoint {{checkpoint}}",
+      "timeTitle": "Stopped at the time limit",
+      "timeTitleCheckpoint": "Stopped at the time limit · checkpoint {{checkpoint}}",
+      "tokenDetail": "Run {{run}} used {{used}} of its {{limit}} tokens. {{agent}} was stopped and its work was committed as a checkpoint. Nothing runs until you raise the limit.",
+      "tokenDetailUnsaved": "Run {{run}} used {{used}} of its {{limit}} tokens. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the limit.",
+      "timeDetail": "Run {{run}} used {{used}} of its {{limit}} minutes of active agent time. {{agent}} was stopped and its work was committed as a checkpoint. Nothing runs until you raise the limit.",
+      "timeDetailUnsaved": "Run {{run}} used {{used}} of its {{limit}} minutes of active agent time. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the limit.",
+      "theAgent": "The agent",
+      "raiseTitle": "Raise the limit to continue",
+      "tokenBudget": "Token budget",
+      "timeLimit": "Time limit",
+      "tokensUsed": "Used {{used}} of {{limit}}",
+      "tokensUsedMidStep": "Used {{used}} of {{limit}} · {{step}} stopped mid-step",
+      "timeUsed": "Used {{used}} of {{limit}} min of active agent time",
+      "timeUsedMidStep": "Used {{used}} of {{limit}} min of active agent time · {{step}} stopped mid-step",
+      "timeLeft": "{{left}} min left · pauses don’t count",
+      "minutes": "minutes",
+      "continueMidStep": "Continue starts a new {{agent}} invocation from checkpoint {{checkpoint}} and repeats the unfinished part of {{step}}. The new limit applies to Run {{run}} only.",
+      "continueMidStepNoCheckpoint": "Continue starts a new {{agent}} invocation and repeats the unfinished part of {{step}}. The new limit applies to Run {{run}} only.",
+      "continueNextStep": "Continue starts the next step. The new limit applies to Run {{run}} only.",
+      "continue": "Continue",
+      "continueWith": "Continue with {{count}} tokens",
+      "continueWithMinutes": "Continue with {{minutes}} minutes",
+      "continuing": "Continuing…",
+      "notRaised": "The run stopped at its limit. Raise the limit to continue.",
+      "tokensNotAboveUsed": "The new budget must be above the tokens this run already used.",
+      "timeNotAboveUsed": "The new time limit must be above the active agent time this run already used."
+    },
+    "control": {
+      "runnerUnavailable": "The runner is not connected. Try again once it is online.",
+      "lost": "The connection to the runner ended before it answered. Check the run’s state and try again.",
+      "notRunning": "The run is not running anymore.",
+      "notPaused": "The run is not paused.",
+      "ended": "The run has already ended.",
+      "failed": "The runner could not do this; its log has the details."
     }
   },
   "pullRequests": {
@@ -945,8 +1003,21 @@
     },
     "limits": {
       "description": "Defaults and limits for {{project}}. They apply to new tasks and runs in this project.",
-      "unavailable": "Limits arrive with task runs",
-      "unavailableDetail": "Run and daily token budgets are set here once tasks can run."
+      "saved": "All changes saved",
+      "saving": "Saving…",
+      "tokenBudgets": "Token budgets",
+      "max": "Maximum run budget",
+      "maxDetail": "The largest token budget a task, a run or a raised limit may have. Budget fields reject larger values and name this maximum. There is no minimum beyond more than 0.",
+      "default": "Default run budget",
+      "defaultDetail": "Prefilled in New task. Must not exceed the maximum.",
+      "daily": "Daily project budget",
+      "dailyDetail": "Tokens all runs in this project may use per day, shown in the status bar. New work is not held back when it is used up yet.",
+      "time": "Time",
+      "timeLimit": "Default time limit",
+      "timeLimitDetail": "Counts active agent time only. Time paused or waiting for you (plan approval, questions, permission requests) doesn’t count.",
+      "activeTime": "active agent time",
+      "changesTitle": "Changes apply to new runs",
+      "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum."
     },
     "general": {
       "project": "Project",
@@ -1007,9 +1078,6 @@
     "runnerStartFailed": "The runner could not be started. The log has the details.",
     "runnerLost": "The runner stopped unexpectedly and could not be reconnected. The log has the details.",
     "titleRequired": "Enter a title to save the draft.",
-    "budgetRequired": "Enter a budget too, or clear the time limit.",
-    "budgetInvalid": "Enter an amount such as 5 or 5.50.",
-    "budgetNotPositive": "The budget must be more than zero.",
     "timeLimitRequired": "Enter a time limit too, or clear the budget.",
     "timeLimitInvalid": "Enter whole minutes, such as 30.",
     "timeLimitZero": "The time limit must be at least one minute.",
@@ -1032,7 +1100,9 @@
     "githubUnavailable": "gh could not be used. Check the connection again.",
     "repositoryNotLinked": "The project’s repository is no longer linked through this connection.",
     "repositoryNotLinkable": "The detected repository can’t be linked. Check again first.",
-    "openInBrowser": "The address could not be handed to the browser. The log has the details."
+    "openInBrowser": "The address could not be handed to the browser. The log has the details.",
+    "timeLimitEmpty": "Enter a time limit in whole minutes.",
+    "timeLimitNotAboveUsed": "Enter more than the {{used}} minutes this run already used."
   },
   "number": {
     "groupSeparator": ","
@@ -1367,11 +1437,15 @@
       "agents": "Agents",
       "queued": "Queued",
       "needsYou": "Needs you",
+      "tokens": "Tokens today",
+      "tokensValue": "{{used}} / {{budget}}",
       "unknown": "—"
     },
     "hints": {
       "agents": "Agent slots are not reported by the runner yet",
       "needsYou": "Not available yet: plan approvals, questions and reviews do not exist in this version",
+      "tokens": "{{used}} of {{budget}} tokens today: input + output of all runs in this project, against the daily project budget",
+      "tokensUnknown": "Reading today’s token usage",
       "debugBuild": "Orchester {{version}} · development build",
       "releaseBuild": "Orchester {{version}} · release build"
     },
@@ -1514,6 +1588,24 @@
       "connections": "Open connections",
       "settings": "Open settings",
       "pullRequests": "Open pull requests"
+    }
+  },
+  "tokens": {
+    "unit": "tokens",
+    "readBack": "= {{count}} tokens",
+    "readBackDefault": "= {{count}} tokens · default",
+    "readBackRun": "= {{count}} tokens · input + output · max {{max}} per run",
+    "readBackMore": "= {{count}} tokens · {{difference}} more than now",
+    "readBackLess": "= {{count}} tokens · {{difference}} less than now",
+    "usedOfBudget": "{{used}} / {{budget}} tokens",
+    "usedOfBudgetReached": "{{used}} / {{budget}} tokens · limit reached",
+    "errors": {
+      "empty": "Enter a token budget.",
+      "digits": "Use digits only, for example {{example}}.",
+      "zero": "Enter a budget above 0 tokens.",
+      "aboveMax": "A run budget can be at most {{max}} tokens (project setting).",
+      "defaultAboveMax": "The default can be at most the maximum run budget, {{max}} tokens.",
+      "notAboveUsed": "Enter more than the {{used}} tokens this run already used."
     }
   }
 }

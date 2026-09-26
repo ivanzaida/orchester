@@ -55,7 +55,8 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::NoDraft(_)
     | StoreError::ConnectionNotFound(_)
     | StoreError::NotAGitHubConnection(_)
-    | StoreError::InvocationNotFound(_) => Message::new("errors.storage"),
+    | StoreError::InvocationNotFound(_)
+    | StoreError::MigrationBrokeReferences(_) => Message::new("errors.storage"),
     StoreError::Publish(PublishError::StaleDraft { latest, .. }) => Message::new("errors.staleDraft").with(
       "version",
       latest.map_or_else(String::new, |version| version.to_string()),

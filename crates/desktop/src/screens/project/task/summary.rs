@@ -1,6 +1,9 @@
-//! The Summary tab (`Nlcnu` in 02.10 `RD4pc`): what the run is doing in a notice, the pipeline's
-//! steps with their state (`mBkeJ` rows), the latest agent launch, and the run's pinned
-//! configuration and usage in the "This run" panel (`F5Lsi`).
+//! The Summary tab (`Nlcnu` in 02.10 `RD4pc`): what the run is doing in a notice, for a run
+//! stopped at a limit the panel that raises it (02.L `ZUYM0`), the pipeline's steps with their
+//! state (`mBkeJ` rows), the latest agent launch, and the run's pinned configuration, limits and
+//! usage in the "This run" panel (`F5Lsi`).
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -12,21 +15,26 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
+  limits::ProjectLimits,
   resource::RepositoryAccess,
-  run::{RunStatus, compact_tokens},
-  task::TaskStatus,
+  run::{PauseReason, RunStatus, StepStatus},
   time::Timestamp,
+  tokens::compact_tokens,
 };
 
-use super::heading::{agent_of, step_state};
+use super::{
+  heading::{agent_of, step_state},
+  limit_panel::{RaiseLimitPanel, RaiseLimitProps},
+  notice::notice,
+};
 use crate::{
+  budget::whole_minutes,
   display,
   tasks::detail::{RunView, StepView, TaskDetail},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
-    notice::Notice,
     property::{ValueStyle, property, styled_property},
   },
 };
@@ -36,7 +44,8 @@ const PANEL_WIDTH: f32 = 336.0;
 const STEP_ROW_HEIGHT: f32 = 64.0;
 const GLYPH_SIZE: f32 = 28.0;
 
-pub(super) fn summary(ctx: &Ctx, detail: &TaskDetail) -> Element {
+pub(super) fn summary(ctx: &mut Ctx, detail: &TaskDetail, limits: Option<ProjectLimits>) -> Element {
+  let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
   let mut progress = Column::new()
     .id("task-progress")
     .flex(1.0)
@@ -44,10 +53,11 @@ pub(super) fn summary(ctx: &Ctx, detail: &TaskDetail) -> Element {
     .padding(SpacingSize::Section)
     .spacing(ExtraSpacing::Form.role())
     .child(notice(ctx, detail))
+    .with_children(raise)
     .child(Text::new(&ctx.t("runs.summary.execution")).variant(ExtraTypography::SectionHeading.role()));
   if let Some(run) = &detail.run {
     progress = progress
-      .with_children(run.steps.iter().map(|step| step_row(ctx, step)))
+      .with_children(run.steps.iter().map(|step| step_row(ctx, step, run.run.status())))
       .child(Spacer::new().flex(1.0))
       .with_children(latest(ctx, run));
   }
@@ -59,60 +69,14 @@ pub(super) fn summary(ctx: &Ctx, detail: &TaskDetail) -> Element {
     .into()
 }
 
-/// Where the task stands and what that means (`m3kjHT`).
-fn notice(ctx: &Ctx, detail: &TaskDetail) -> Element {
-  let branch = detail.run.as_ref().map_or("", |run| run.run.branch().as_str());
-  let step = detail
-    .run
-    .as_ref()
-    .and_then(RunView::current_step)
-    .map_or("", |step| &*step.name);
-  let (glyph, title, text) = match detail.run.as_ref().map(|run| run.run.status()) {
-    None if detail.task.status() == TaskStatus::Draft => (
-      Icon::Pencil,
-      "runs.summary.notice.draftTitle",
-      "runs.summary.notice.draftDetail",
-    ),
-    None | Some(RunStatus::Pending) => (
-      Icon::Clock3,
-      "runs.summary.notice.queuedTitle",
-      "runs.summary.notice.queuedDetail",
-    ),
-    Some(RunStatus::Running) => (
-      Icon::Loader,
-      "runs.summary.notice.runningTitle",
-      "runs.summary.notice.runningDetail",
-    ),
-    Some(RunStatus::Paused | RunStatus::Interrupted(_)) => (
-      Icon::Pause,
-      "runs.summary.notice.interruptedTitle",
-      "runs.summary.notice.interruptedDetail",
-    ),
-    Some(RunStatus::Succeeded) => (
-      Icon::CircleCheck,
-      "runs.summary.notice.succeededTitle",
-      "runs.summary.notice.succeededDetail",
-    ),
-    Some(RunStatus::Failed(_)) => (
-      Icon::AlertCircle,
-      "runs.summary.notice.failedTitle",
-      "runs.summary.notice.failedDetail",
-    ),
-    Some(RunStatus::Cancelled) => (
-      Icon::Square,
-      "runs.summary.notice.cancelledTitle",
-      "runs.summary.notice.cancelledDetail",
-    ),
-  };
-  let args = [("step", step), ("branch", branch)];
-  Notice::new(glyph, ctx.t_args(title, args), ctx.t_args(text, args))
-    .id("task-notice")
-    .into()
-}
-
 /// One step and its state (`mBkeJ` as in `NBmWz`).
-fn step_row(ctx: &Ctx, step: &StepView) -> Element {
-  let (glyph, state) = step_state(step.status);
+fn step_row(ctx: &Ctx, step: &StepView, run: &RunStatus) -> Element {
+  // A step a paused run stopped in is not running (`tSDux` in 02.A).
+  let (glyph, state) = match (run, step.status) {
+    (RunStatus::Paused(_), Some(StepStatus::Running)) => (Icon::Pause, "runs.step.paused"),
+    (RunStatus::Cancelled, Some(StepStatus::Skipped)) => (Icon::Square, "runs.step.cancelled"),
+    _ => step_state(step.status),
+  };
   let state = ctx.t(state);
   let detail = if step.agent.is_some() {
     ctx.t_args(
@@ -150,6 +114,18 @@ fn step_row(ctx: &Ctx, step: &StepView) -> Element {
     .into()
 }
 
+/// Raise the limit to continue (`ZUYM0`), for a run stopped at a limit.
+fn raise_panel(ctx: &mut Ctx, run: &RunView, limits: Option<ProjectLimits>) -> Option<Element> {
+  let RunStatus::Paused(PauseReason::LimitReached(limit)) = run.run.status() else {
+    return None;
+  };
+  let props = RaiseLimitProps::of(run, *limit, limits?);
+  Some(ctx.mount_keyed::<RaiseLimitPanel>(
+    &format!("raise-limit-{}-{}", run.id(), run.run.last_sequence().get()),
+    props,
+  ))
+}
+
 /// The latest agent launch (`AY4k5`, `P3P5R`).
 fn latest(ctx: &Ctx, run: &RunView) -> Option<Element> {
   let invocation = run.invocations.last()?;
@@ -179,7 +155,7 @@ fn latest(ctx: &Ctx, run: &RunView) -> Option<Element> {
   )
 }
 
-/// The run's pinned configuration, its usage and its time (`F5Lsi`).
+/// The run's pinned configuration, its limits and usage (`F5Lsi`).
 fn this_run(ctx: &Ctx, run: &RunView) -> Element {
   let version = run.version.to_string();
   let pipeline = ctx.t_args(
@@ -187,21 +163,27 @@ fn this_run(ctx: &Ctx, run: &RunView) -> Element {
     [("name", &*run.pipeline), ("version", &version)],
   );
   let usage = run.usage();
-  let tokens = ctx.t_args("runs.tokens", [("count", compact_tokens(usage.counted()).as_str())]);
   let cached = ctx.t_args(
     "runs.cachedValue",
     [("count", compact_tokens(usage.cached_input).as_str())],
   );
-  // Active time is never negative; a clock set back reads as none.
-  let time = message_text(
-    ctx,
-    &display::duration(std::time::Duration::from_millis(
-      u64::try_from(run.active_millis(Timestamp::now())).unwrap_or_default(),
-    )),
+  let time = message_text(ctx, &display::duration(run.active_time(Timestamp::now())));
+  let time_limit = ctx.t_args(
+    "runs.summary.timeLimitValue",
+    [("minutes", whole_minutes(run.run.max_duration()).to_string().as_str())],
   );
   let step = run.current_step();
   let model = step.and_then(|step| step.model.as_deref()).unwrap_or_default();
   let permissions = step.map(|step| permissions(ctx, step));
+  let checkpoint = run.run.last_checkpoint().map(|checkpoint| {
+    ctx.t_args(
+      "runs.summary.checkpointValue",
+      [
+        ("revision", display::short_revision(checkpoint.revision().as_str())),
+        ("time", display::clock(checkpoint.created_at()).as_str()),
+      ],
+    )
+  });
   Column::new()
     .id("task-this-run")
     .width(Dimension::Px(PANEL_WIDTH))
@@ -222,14 +204,33 @@ fn this_run(ctx: &Ctx, run: &RunView) -> Element {
       display::short_revision(run.run.base().as_str()),
       ValueStyle::Mono,
     ))
+    .with_children(checkpoint.map(|value| property(&ctx.t("runs.summary.checkpoint"), &value)))
     .child(styled_property(&ctx.t("runs.summary.model"), model, ValueStyle::Mono))
-    .child(property(&ctx.t("runs.summary.tokens"), &tokens))
+    .child(property(&ctx.t("runs.summary.budget"), &budget_value(ctx, run)))
     .child(property(&ctx.t("runs.cached"), &cached))
+    .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
     .with_children(permissions.map(|value| property(&ctx.t("runs.summary.permissions"), &value)))
     .child(Spacer::new().flex(1.0))
     .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()))
     .into()
+}
+
+/// Spend reads used / budget in the compact form: "412k / 1.4M tokens", and says when the budget
+/// is used up.
+pub(super) fn budget_value(ctx: &Ctx, run: &RunView) -> Arc<str> {
+  let key = if run.run.token_limit_reached() {
+    "tokens.usedOfBudgetReached"
+  } else {
+    "tokens.usedOfBudget"
+  };
+  ctx.t_args(
+    key,
+    [
+      ("used", compact_tokens(run.run.used().get()).as_str()),
+      ("budget", compact_tokens(run.run.budget().get()).as_str()),
+    ],
+  )
 }
 
 /// The step's agent and what it may do to the repository, e.g. "Builder · Edit files".

@@ -17,7 +17,6 @@ use orchester_core::pull_request::diff::LineKind;
 
 use super::rows::{DiffRow, FileNote, LineRow};
 use crate::{
-  display,
   pull_requests::highlight::TokenKind,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::icon::{Icon, IconSize, icon},
@@ -206,7 +205,7 @@ fn note_row(ctx: &Ctx, note: &FileNote, width: Dimension) -> Element {
     FileNote::Unchanged => ctx.t("pullRequests.diff.unchanged"),
     FileNote::Empty => ctx.t("pullRequests.diff.empty"),
     FileNote::Omitted(lines) => {
-      let count = display::grouped(u64::from(*lines), &ctx.t("number.groupSeparator"));
+      let count = orchester_core::tokens::grouped(u64::from(*lines), &ctx.t("number.groupSeparator"));
       ctx.t_args("pullRequests.diff.omitted", [("count", count.as_str())])
     }
   };

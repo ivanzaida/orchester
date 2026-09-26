@@ -15,13 +15,13 @@ use lurq::{
 };
 use orchester_core::{repository::RepositoryLink, task::MissingDetail};
 
-use super::{FOCUS_ROOM, FormState, NewTaskForm, error_note, missing_note};
+use super::{FOCUS_ROOM, FormState, NewTaskForm, missing_note};
 use crate::{
   display,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
-    field::{styled_input, text_input},
+    field::{styled_input, text_input, wrapping_field_error},
     github_mark::github_mark,
     icon::{Icon, IconSize, icon},
     message_text,
@@ -175,7 +175,7 @@ fn title_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
   .height(Dimension::Px(TITLE_HEIGHT))
   .placeholder(&ctx.t("tasks.new.titlePlaceholder"));
   labelled(ctx, "tasks.new.taskTitle", input)
-    .with_children(error.map(|error| error_note(&error)))
+    .with_children(error.map(|error| wrapping_field_error(&error)))
     .into()
 }
 

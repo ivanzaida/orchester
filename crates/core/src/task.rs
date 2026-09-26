@@ -7,39 +7,35 @@ use thiserror::Error;
 
 use crate::{
   id::{ResourceId, TaskId},
-  money::Money,
   name::Name,
   project::TaskKey,
   time::Timestamp,
+  tokens::TokenBudget,
 };
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum LimitsError {
-  #[error("budget must be greater than zero")]
-  NonPositiveBudget,
   #[error("run time limit must be greater than zero")]
   ZeroDuration,
 }
 
-/// Per-task budget cap and run time limit.
+/// Per-task token budget and time limit on active agent time; each run of the task starts with
+/// them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TaskLimits {
-  budget: Money,
+  budget: TokenBudget,
   max_duration: Duration,
 }
 
 impl TaskLimits {
-  pub fn new(budget: Money, max_duration: Duration) -> Result<Self, LimitsError> {
-    if budget.micros() <= 0 {
-      return Err(LimitsError::NonPositiveBudget);
-    }
+  pub fn new(budget: TokenBudget, max_duration: Duration) -> Result<Self, LimitsError> {
     if max_duration.is_zero() {
       return Err(LimitsError::ZeroDuration);
     }
     Ok(Self { budget, max_duration })
   }
 
-  pub const fn budget(self) -> Money {
+  pub const fn budget(self) -> TokenBudget {
     self.budget
   }
 

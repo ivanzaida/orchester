@@ -1,5 +1,5 @@
 //! Execution of a task: a run pins its configuration in a [`RunSnapshot`], executes the
-//! pipeline in attempts of step executions, records checkpoints and spending, and changes only
+//! pipeline in attempts of step executions, records checkpoints and token usage, and changes only
 //! through typed transitions. Every accepted transition yields the [`RunEvent`]s to append;
 //! the event log is the source of truth and the current state is derivable from it
 //! ([`Run::replay`]). See `docs/architecture/storage.md` (Execution, State machines).
@@ -26,16 +26,17 @@ pub use self::{
   branch::{BranchName, BranchNameError},
   error::RunError,
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
-  invocation::{ActivityEntry, Invocation},
+  invocation::{ActivityEntry, Invocation, active_time},
   number::RunNumber,
   phase::TaskPhase,
   preflight::{PreflightInput, PreflightProblem, preflight},
-  prompt::{PipelineInfo, PromptAssemblyError, PromptInput, PromptSource},
+  prompt::{CONTINUE_PROMPT, PipelineInfo, PromptAssemblyError, PromptInput, PromptSource},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
   state::{NewRun, Run, StoredRun},
   status::{
-    AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PlanDecision, RunFailure, RunStatus, StepStatus,
-    WaitReason,
+    AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, PlanDecision, RunFailure, RunLimit,
+    RunStatus, StepStatus, WaitReason,
   },
-  usage::{TokenUsage, compact_tokens},
+  transition::RaisedLimits,
+  usage::TokenUsage,
 };

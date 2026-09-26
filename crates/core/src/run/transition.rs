@@ -1,19 +1,29 @@
 //! Run-level transitions: pending → running ⇄ paused → succeeded / failed / cancelled;
-//! running → interrupted → running on continue. Each returns the events to append.
+//! running → interrupted → running on continue; running → stopped at a limit → running once the
+//! limit is raised. Each returns the events to append.
+
+use std::time::Duration;
 
 use super::{
   attempt::Checkpoint,
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
   state::Run,
-  status::{AttemptReason, ContinueTrigger, InterruptCause, RunStatus},
+  status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, RunLimit, RunStatus},
 };
 use crate::{
   id::{AttemptId, CheckpointId, StepExecutionId},
-  money::Money,
   revision::Revision,
   time::Timestamp,
+  tokens::{TokenBudget, TokensUsed},
 };
+
+/// New limits for a run stopped at a limit; they apply to that run only.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RaisedLimits {
+  pub budget: TokenBudget,
+  pub max_duration: Duration,
+}
 
 impl Run {
   /// Starts a pending run with attempt 1, which executes every step.
@@ -39,13 +49,62 @@ impl Run {
     })
   }
 
+  /// Records that a person asked to pause. The run keeps working until its active step reaches
+  /// a checkpoint, then the runner records [`Run::pause`]. Asking again changes nothing.
+  pub fn request_pause(&mut self, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+    if self.pause_requested && self.status == RunStatus::Running {
+      return Ok(Vec::new());
+    }
+    self.transition(now, |transition| transition.record(RunEventKind::PauseRequested))
+  }
+
   /// Records that the run settled at a safe checkpoint and stopped scheduling. The runner calls
   /// this only after active steps reached their checkpoint.
   pub fn pause(&mut self, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
-    self.transition(now, |transition| transition.record(RunEventKind::Paused))
+    self.transition(now, |transition| {
+      transition.record(RunEventKind::Paused {
+        reason: PauseReason::Requested,
+      })
+    })
   }
 
-  /// Continues a paused run with the same snapshot.
+  /// Records that the run reached `limit`: its agent was ended and its work committed as a
+  /// checkpoint, so the run waits as "Stopped at limit" until the limit is raised.
+  pub fn stop_at_limit(&mut self, limit: RunLimit, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+    self.transition(now, |transition| {
+      transition.record(RunEventKind::Paused {
+        reason: PauseReason::LimitReached(limit),
+      })
+    })
+  }
+
+  /// Raises the limits of a run stopped at a limit and continues it. Each new limit must be
+  /// above what the run already used (`active` agent time so far), and the budget at most
+  /// `max`, the project's maximum run budget.
+  pub fn continue_with_limits(
+    &mut self,
+    limits: RaisedLimits,
+    active: Duration,
+    max: TokenBudget,
+    now: Timestamp,
+  ) -> Result<Vec<RunEvent>, RunError> {
+    if limits.budget > max {
+      return Err(RunError::BudgetAboveMaximum { max });
+    }
+    if limits.max_duration <= active {
+      return Err(RunError::LimitNotAboveUsed(RunLimit::Time));
+    }
+    self.transition(now, |transition| {
+      transition.record(RunEventKind::LimitRaised {
+        budget: limits.budget,
+        max_duration: limits.max_duration,
+      })?;
+      transition.record(RunEventKind::Resumed)
+    })
+  }
+
+  /// Continues a paused run with the same snapshot. A run stopped at a limit continues only
+  /// through [`Run::continue_with_limits`].
   pub fn resume(&mut self, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
     self.transition(now, |transition| transition.record(RunEventKind::Resumed))
   }
@@ -109,11 +168,10 @@ impl Run {
     })
   }
 
-  /// Adds money the run spent. Spending is a fact, so it is recorded in every status; it
-  /// must be in the budget's currency.
-  pub fn record_spend(&mut self, amount: Money, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+  /// Adds tokens an agent CLI reported. Usage is a fact, so it is recorded in every status.
+  pub fn record_usage(&mut self, tokens: TokensUsed, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
     self.transition(now, |transition| {
-      transition.record(RunEventKind::SpendRecorded { amount })
+      transition.record(RunEventKind::UsageRecorded { tokens })
     })
   }
 }

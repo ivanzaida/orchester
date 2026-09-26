@@ -1,11 +1,14 @@
-//! A task and its latest run (02.10 `RD4pc`): the topbar with the way back to the task list and
-//! the run controls, the heading, the tabs, and the Summary (`uVIxb`, `F5Lsi`) or Activity
-//! (02.I `SfXU1`) tab. The run is read from the project database and read again whenever the
-//! runner reports a change. Conversation, Changes and Artifacts, and Pause and Cancel run, come
-//! in later milestones and are shown unavailable.
+//! A task and its latest run (02.10 `RD4pc`, paused 02.A `Oqmog`, stopped at limit 02.L
+//! `D6Nwxz`): the topbar with the way back to the task list and the run controls, the heading,
+//! the tabs, and the Summary (`uVIxb`, `F5Lsi`) or Activity (02.I `SfXU1`) tab. The run is read
+//! from the project database and read again whenever the runner reports a change. Conversation,
+//! Changes and Artifacts come in later milestones and are shown unavailable.
 
 mod activity;
+mod controls;
 mod heading;
+mod limit_panel;
+mod notice;
 mod summary;
 
 use std::sync::Arc;
@@ -21,16 +24,19 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::id::TaskId;
+use orchester_core::{id::TaskId, limits::ProjectLimits};
 
-use self::activity::{ActivityProps, ActivityTab};
+use self::{
+  activity::{ActivityProps, ActivityTab},
+  controls::{ControlAction, RunControl, control_action, control_buttons},
+};
 use super::{ProjectNav, Section, page};
 use crate::{
   background, messages,
   tasks::detail::TaskDetail,
   theme::ExtraSpacing,
   ui::{
-    button::ActionButton,
+    field::field_error,
     icon::Icon,
     message_text,
     panel::RecoveryPanel,
@@ -49,6 +55,8 @@ pub struct TaskProps {
   pub task: TaskId,
   /// Changes when tasks were saved or the runner changed a run: the task is read again.
   pub revision: (u64, u64),
+  /// The project's limits, once read: the most a raised limit may be.
+  pub limits: Option<ProjectLimits>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskProps {}
@@ -69,6 +77,8 @@ impl lurq::app::component::DevtoolsInspectable for TaskTab {}
 
 pub struct TaskScreen {
   tab: Signal<TaskTab>,
+  /// The last run control requested; under way while the control action is pending.
+  requested: Signal<Option<RunControl>>,
   nav: ProjectNav,
 }
 
@@ -76,8 +86,10 @@ impl Component for TaskScreen {
   type Props = TaskProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    control_action(ctx);
     Self {
       tab: ctx.signal(TaskTab::Summary),
+      requested: ctx.signal(None),
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
@@ -86,6 +98,7 @@ impl Component for TaskScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TaskProps>().clone();
+    let control = control_action(ctx);
     let deps = (props.project.repo_root.clone(), props.task, props.revision);
     let load = ctx.future(deps, |(repo_root, task, _)| async move {
       background::run(move || TaskDetail::load_in(&repo_root, task))
@@ -115,12 +128,12 @@ impl Component for TaskScreen {
         ),
       };
       return column
-        .child(self.topbar(ctx, &props, None))
+        .child(self.topbar(ctx, &props, None, &control))
         .child(centered(panel.into()));
     };
     let tab = self.tab.get();
     let body = match tab {
-      TaskTab::Summary => summary::summary(ctx, &detail),
+      TaskTab::Summary => summary::summary(ctx, &detail, props.limits),
       TaskTab::Activity => ctx.mount_keyed::<ActivityTab>(
         "task-activity",
         ActivityProps {
@@ -130,18 +143,24 @@ impl Component for TaskScreen {
         },
       ),
     };
+    let control_error = control
+      .state()
+      .get()
+      .error
+      .filter(|_| !control.state().get().is_pending())
+      .map(|error| control_error_row(&message_text(ctx, &error)));
     column
-      .child(self.topbar(ctx, &props, Some(&detail)))
+      .child(self.topbar(ctx, &props, Some(&detail), &control))
       .child(heading::heading(ctx, &detail))
+      .with_children(control_error)
       .child(self.tabs(ctx))
       .child(body)
   }
 }
 
 impl TaskScreen {
-  /// The breadcrumb back to the task list, then Pause run and Cancel run, which come with a
-  /// later milestone (`ctwcG`).
-  fn topbar(&self, ctx: &Ctx, props: &TaskProps, detail: Option<&TaskDetail>) -> Element {
+  /// The breadcrumb back to the task list, then the run controls (`ctwcG`).
+  fn topbar(&self, ctx: &Ctx, props: &TaskProps, detail: Option<&TaskDetail>, control: &ControlAction) -> Element {
     let nav = self.nav.clone();
     let key = detail.map_or_else(String::new, |detail| detail.task.key().to_string());
     let breadcrumb = pressable(surface().id("task-breadcrumb"), move || nav.show(Section::Tasks)).child(
@@ -155,15 +174,11 @@ impl TaskScreen {
       .variant(TypographyStyle::Description)
       .nowrap(),
     );
-    let pause = ActionButton::new(ctx.t("runs.page.pause"))
-      .icon(Icon::Pause)
-      .id("task-pause-run")
-      .height(Dimension::Px(page::TOPBAR_BUTTON_HEIGHT));
-    let cancel = ActionButton::new(ctx.t("runs.page.cancel"))
-      .icon(Icon::Square)
-      .id("task-cancel-run")
-      .height(Dimension::Px(page::TOPBAR_BUTTON_HEIGHT));
-    page::topbar_with(breadcrumb.into(), [pause.render(ctx), cancel.render(ctx)])
+    let buttons = detail
+      .and_then(|detail| detail.run.as_ref())
+      .map(|run| control_buttons(ctx, run, control, &self.requested))
+      .unwrap_or_default();
+    page::topbar_with(breadcrumb.into(), buttons)
   }
 
   /// Summary and Activity; the others need later milestones (`X7jYe`).
@@ -191,6 +206,16 @@ impl TaskScreen {
       ],
     )
   }
+}
+
+/// Why the runner did not carry out a run control (`field-error` below the heading).
+fn control_error_row(text: &str) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_horizontal(SpacingSize::Section)
+    .padding_bottom(SpacingSize::Md)
+    .child(field_error(text))
+    .into()
 }
 
 fn centered(content: Element) -> Element {

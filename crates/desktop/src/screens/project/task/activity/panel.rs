@@ -10,7 +10,7 @@ use lurq::{
   components::{Column, Row, Spacer, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::run::{Invocation, compact_tokens};
+use orchester_core::{run::Invocation, tokens::compact_tokens};
 
 use super::super::summary::permissions;
 use crate::{

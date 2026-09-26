@@ -1,4 +1,7 @@
-use crate::harness::{Desktop, expected};
+use crate::{
+  github::shows,
+  harness::{Desktop, expected},
+};
 
 const TITLE: &str = "task-title";
 const BRIEF: &str = "task-brief";
@@ -87,7 +90,7 @@ fn new_task_enter_saves_only_a_valid_draft() {
   desktop.type_text("Add switcher");
   desktop.tab_to(BUDGET, MAX_STOPS);
   desktop.type_text("x");
-  assert_eq!(desktop.value(BUDGET), "x");
+  assert_eq!(desktop.value(BUDGET), "1,400,000x");
   // The budget is not a number: Save as draft is disabled and Enter saves nothing.
   desktop.enter();
   desktop.settle("the form to stay", |tree| tree.get_element_by_id(TITLE).is_some());
@@ -97,4 +100,48 @@ fn new_task_enter_saves_only_a_valid_draft() {
   desktop.settle("the saved draft in the task list", |tree| {
     tree.get_element_by_id(TITLE).is_none() && tree.get_element_by_id("tasks-new-task").is_some()
   });
+}
+
+#[test]
+fn new_task_budget_starts_at_the_project_default_and_groups_digits_while_typing() {
+  let mut desktop = new_task();
+  desktop.settle("the default budget", |tree| {
+    tree
+      .get_element_by_id_mut(BUDGET)
+      .and_then(|element| element.as_text_input())
+      .is_some_and(|input| input.value() == "1,400,000")
+  });
+  assert_eq!(desktop.value(TIME_LIMIT), "30");
+  assert!(shows(
+    &mut desktop,
+    "task-budget-readback",
+    "= 1.4M tokens · input + output · max 10M per run"
+  ));
+  assert!(shows(
+    &mut desktop,
+    "task-time-readback",
+    "Active agent time · pauses and waiting for you don’t count"
+  ));
+  desktop.tab_to(BUDGET, MAX_STOPS);
+  for _ in 0.."1,400,000".len() {
+    desktop.key("Backspace", "Backspace");
+  }
+  assert!(shows(&mut desktop, "execution-plan", "Enter a token budget."));
+  desktop.type_text("25000000");
+  assert_eq!(desktop.value(BUDGET), "25,000,000");
+  assert!(shows(
+    &mut desktop,
+    "execution-plan",
+    "A run budget can be at most 10M tokens (project setting)."
+  ));
+  desktop.key("Backspace", "Backspace");
+  assert_eq!(desktop.value(BUDGET), "2,500,000");
+  assert!(shows(&mut desktop, "task-budget-readback", "= 2.5M tokens"));
+  desktop.type_text("k");
+  assert_eq!(desktop.value(BUDGET), "2,500,000k");
+  assert!(shows(
+    &mut desktop,
+    "execution-plan",
+    "Use digits only, for example 1,400,000."
+  ));
 }

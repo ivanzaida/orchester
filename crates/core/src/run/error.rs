@@ -1,10 +1,10 @@
 use thiserror::Error;
 
-use super::status::{InterruptCause, RunStatus, StepStatus};
+use super::status::{InterruptCause, RunLimit, RunStatus, StepStatus};
 use crate::{
   id::{CheckpointId, RunId, StepExecutionId},
-  money::Currency,
   resource::StepKey,
+  tokens::TokenBudget,
 };
 
 /// A rejected run transition or an event log that does not describe a valid run.
@@ -41,14 +41,14 @@ pub enum RunError {
   },
   #[error("the run was interrupted by {0:?} and continues only when a person asks")]
   NeedsExplicitContinue(InterruptCause),
-  #[error("the budget must be greater than zero")]
-  NonPositiveBudget,
-  #[error("spending in {spent:?} does not match the budget currency {budget:?}")]
-  CurrencyMismatch { budget: Currency, spent: Currency },
-  #[error("a recorded spend cannot be negative")]
-  NegativeSpend,
-  #[error("the total spent no longer fits in micro-units")]
-  SpendOverflow,
+  #[error("the time limit must be greater than zero")]
+  ZeroDuration,
+  #[error("the run stopped at its {0:?} limit and continues only with a raised limit")]
+  LimitNotRaised(RunLimit),
+  #[error("the new {0:?} limit must be above what the run already used")]
+  LimitNotAboveUsed(RunLimit),
+  #[error("a run budget can be at most {max} tokens")]
+  BudgetAboveMaximum { max: TokenBudget },
   #[error("a run log starts with exactly one creation event at sequence 1")]
   Creation,
   #[error("event of run {found} appears in the log of run {expected}")]

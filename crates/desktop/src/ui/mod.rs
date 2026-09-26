@@ -17,6 +17,7 @@ pub mod status_label;
 pub mod summary_step;
 pub mod switch;
 pub mod tab;
+pub mod unit_input;
 
 use std::sync::Arc;
 

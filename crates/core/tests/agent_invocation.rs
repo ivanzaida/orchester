@@ -14,7 +14,8 @@ use orchester_core::{
     rank_installed,
   },
   resource::RepositoryAccess,
-  run::{TokenUsage, compact_tokens},
+  run::TokenUsage,
+  tokens::compact_tokens,
 };
 
 fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'static> {
@@ -25,6 +26,7 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
     access,
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     platform,
+    resume: None,
   }
 }
 
@@ -87,6 +89,46 @@ fn invocation_never_uses_bypass_flags_and_puts_the_approval_flag_before_exec() {
     );
     assert_eq!(&args[..3], ["-a", "never", "exec"]);
   }
+}
+
+#[test]
+fn invocation_resume_continues_the_session_with_the_sandbox_as_configuration() {
+  let session = "01a0d831-b556-7730-be9d-2491a9359250";
+  let mut resume = invocation(RepositoryAccess::Write, Platform::Windows);
+  resume.resume = Some(session);
+  assert_eq!(
+    args(&resume),
+    [
+      "-a",
+      "never",
+      "exec",
+      "resume",
+      "--json",
+      "--ignore-user-config",
+      "--ignore-rules",
+      "-m",
+      "gpt-5.5",
+      "-c",
+      "model_reasoning_effort=low",
+      "-c",
+      "sandbox_mode=workspace-write",
+      "-c",
+      "windows.sandbox=elevated",
+      session,
+      "-",
+    ]
+  );
+  let mut read_only = invocation(RepositoryAccess::ReadOnly, Platform::MacOs);
+  read_only.resume = Some(session);
+  let read_only = args(&read_only);
+  assert!(read_only.contains(&"sandbox_mode=read-only".to_owned()));
+  assert!(
+    !read_only
+      .iter()
+      .any(|arg| arg == "-C" || arg == "--sandbox" || arg.contains("dangerously"))
+  );
+  let command = resume.command("Continue.".to_owned(), Vec::new()).expect("unicode");
+  assert_eq!(command.current_dir(), Some(Path::new("/repo/.orchester/worktrees/run")));
 }
 
 #[test]

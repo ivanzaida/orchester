@@ -7,6 +7,8 @@ use std::ops::AddAssign;
 
 use serde::{Deserialize, Serialize};
 
+use crate::tokens::TokensUsed;
+
 /// Usage one CLI invocation or turn reported, or the sum of several.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TokenUsage {
@@ -19,6 +21,11 @@ pub struct TokenUsage {
 }
 
 impl TokenUsage {
+  /// What counts toward a budget, as [`TokensUsed`].
+  pub const fn counted_tokens(self) -> TokensUsed {
+    TokensUsed::new(self.counted())
+  }
+
   /// Input that counts toward a budget: input without the cached part.
   pub const fn counted_input(self) -> u64 {
     self.input.saturating_sub(self.cached_input)
@@ -44,43 +51,5 @@ impl std::iter::Sum for TokenUsage {
       total += usage;
       total
     })
-  }
-}
-
-/// A token count in the compact form of the display rule (specimen `T1n5BA`): the exact number
-/// below 1,000, then `k`, `M` and `B`, with one decimal while the scaled value is below 100 and a
-/// trailing `.0` dropped. Rounds half up; a value that rounds to 1,000 of a unit moves to the next
-/// unit (`999,960` → `1M`). Unit letters are not translated.
-pub fn compact_tokens(count: u64) -> String {
-  const UNITS: [(u64, &str); 3] = [(1_000, "k"), (1_000_000, "M"), (1_000_000_000, "B")];
-  if count < 1_000 {
-    return count.to_string();
-  }
-  let mut index = UNITS
-    .iter()
-    .rposition(|(size, _)| count >= *size)
-    .expect("count is at least 1,000");
-  loop {
-    let (size, letter) = UNITS[index];
-    // Tenths of the unit, rounded half up, in integer arithmetic.
-    let tenths = (u128::from(count) * 10 + u128::from(size) / 2) / u128::from(size);
-    let (whole, fraction) = (tenths / 10, tenths % 10);
-    if whole >= 1_000 && index + 1 < UNITS.len() {
-      index += 1;
-      continue;
-    }
-    if whole >= 100 {
-      let rounded = (u128::from(count) + u128::from(size) / 2) / u128::from(size);
-      if rounded >= 1_000 && index + 1 < UNITS.len() {
-        index += 1;
-        continue;
-      }
-      return format!("{rounded}{letter}");
-    }
-    return if fraction == 0 {
-      format!("{whole}{letter}")
-    } else {
-      format!("{whole}.{fraction}{letter}")
-    };
   }
 }

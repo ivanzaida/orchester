@@ -7,6 +7,7 @@ use orchester_core::{
   run::{ActivityEntry, Invocation, TokenUsage},
   store::ActivityStore,
   time::Timestamp,
+  tokens::TokensUsed,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -166,6 +167,28 @@ impl ActivityStore for ProjectDb {
         })
       })
       .collect()
+  }
+
+  fn tokens_used_since(&self, since: Timestamp) -> Result<TokensUsed, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT payload FROM agent_events WHERE kind = 'turn_completed' AND at >= ?1")?;
+    let payloads = statement
+      .query_map([since.unix_millis()], |row| row.get::<_, String>(0))?
+      .collect::<Result<Vec<_>, _>>()?;
+    let mut used = TokensUsed::ZERO;
+    for payload in payloads {
+      match decode_json("agent event", EVENT_SCHEMA, &payload)? {
+        AgentEvent::TurnCompleted { usage } => used += usage.counted_tokens(),
+        other => {
+          return Err(corrupt(
+            "agent event",
+            format!("a `turn_completed` row holds `{}`", other.name()),
+          ));
+        }
+      }
+    }
+    Ok(used)
   }
 }
 
