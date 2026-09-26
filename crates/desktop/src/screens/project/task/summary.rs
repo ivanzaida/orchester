@@ -82,11 +82,13 @@ pub(super) fn summary(
 /// Raise the limit to continue (`ZUYM0`), for a run stopped at a limit.
 fn raise_panel(ctx: &mut Ctx, run: &RunView, limits: Option<ProjectLimits>) -> Option<Element> {
   // A daily budget stop continues with a plain resume: the run's own limits were not reached.
-  let RunStatus::Paused(PauseReason::LimitReached(limit @ (RunLimit::Tokens | RunLimit::Time))) = run.run.status()
-  else {
+  let RunStatus::Paused(PauseReason::LimitReached(limit)) = run.run.status() else {
     return None;
   };
-  let props = RaiseLimitProps::of(run, *limit, limits?);
+  if *limit == RunLimit::DailyBudget {
+    return None;
+  }
+  let props = RaiseLimitProps::of(run, *limit, limits?)?;
   Some(ctx.mount_keyed::<RaiseLimitPanel>(
     &format!("raise-limit-{}-{}", run.id(), run.run.last_sequence().get()),
     props,
