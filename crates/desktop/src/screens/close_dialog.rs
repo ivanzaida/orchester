@@ -20,7 +20,7 @@ use crate::{
   display,
   runner::{ActiveWork, Runners, SaveState},
   screens::project::connections::status::short_key as provider_short_key,
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, LIFECYCLE_DIALOG_WIDTH},
   ui::{
     backdrop::backdrop,
     button::ActionButton,
@@ -28,9 +28,8 @@ use crate::{
   },
 };
 
-/// Dialog width (`um9B1`), action bar and task row heights (`anyo4`, `uHX7b`), status label
+/// Action bar and task row heights (`anyo4`, `uHX7b`), status label
 /// height (`JIbWj`) and the fixed row cells (`F4NwB`, `c2rkx`, `VizsW`, `S2kP9L`).
-const DIALOG_WIDTH: f32 = 880.0;
 const ACTIONS_HEIGHT: f32 = 76.0;
 const ROW_HEIGHT: f32 = 48.0;
 const STATUS_HEIGHT: f32 = 26.0;
@@ -95,7 +94,8 @@ impl Component for CloseDialog {
     let dialog = Column::new()
       .id("close-dialog")
       .describe("stage", stage_name(props.stage))
-      .width(Dimension::Px(DIALOG_WIDTH))
+      .width(Dimension::Pct(100.0))
+      .max_width(Dimension::Px(LIFECYCLE_DIALOG_WIDTH))
       .background(ExtraColor::Surface.role())
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .rounded(RadiusSize::Lg)

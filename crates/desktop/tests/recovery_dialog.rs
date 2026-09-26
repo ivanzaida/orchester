@@ -11,6 +11,7 @@ use std::{
 
 use lurq::{
   app::{App, Tree},
+  core::ElementRect,
   node::element::ElementRef,
 };
 use orchester_core::{
@@ -70,22 +71,50 @@ impl Presses {
   }
 }
 
-fn mount(previous: SessionEnd, runs: Vec<InterruptedRun>, continuing: bool, presses: &Arc<Presses>) -> Tree {
+fn props(
+  previous: SessionEnd,
+  runs: Vec<InterruptedRun>,
+  continuing: bool,
+  presses: &Arc<Presses>,
+) -> RecoveryDialogProps {
+  RecoveryDialogProps {
+    previous,
+    runs: runs.into(),
+    continuing,
+    error: None,
+    actions: presses.actions(),
+  }
+}
+
+fn app() -> App {
   let mut app = App::new();
   theme::install(&mut app);
   i18n::install(&app).expect("bundled locales load");
+  app
+}
+
+fn mount(previous: SessionEnd, runs: Vec<InterruptedRun>, continuing: bool, presses: &Arc<Presses>) -> Tree {
   let mut tree = Tree::new();
-  tree.mount_root::<RecoveryDialog>(
-    &mut app,
-    RecoveryDialogProps {
-      previous,
-      runs: runs.into(),
-      continuing,
-      error: None,
-      actions: presses.actions(),
-    },
-  );
+  tree.mount_root::<RecoveryDialog>(&mut app(), props(previous, runs, continuing, presses));
   tree
+}
+
+/// The dialog laid out in a window of `width` x `height`.
+fn laid_out(runs: Vec<InterruptedRun>, width: u32, height: u32) -> Tree {
+  let mut app = app();
+  let mut tree = Tree::new();
+  tree.resize(width, height);
+  let presses = Arc::new(Presses::default());
+  tree.mount_root::<RecoveryDialog>(&mut app, props(SessionEnd::QuitNow, runs, false, &presses));
+  tree.pass_headless(&mut app);
+  tree
+}
+
+fn bounds(tree: &mut Tree, id: &str) -> ElementRect {
+  tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
 }
 
 fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
@@ -180,6 +209,41 @@ fn recovery_dialog_after_a_crash_names_one_run_and_shows_continuing() {
     .click();
   assert_eq!(presses.count(2), 0);
   assert_eq!(presses.count(1), 0);
+}
+
+#[test]
+fn recovery_dialog_is_as_wide_as_the_close_dialogs_in_the_design_window() {
+  let mut long = run("Kontur", "ORC-131", InterruptCause::QuitNow, WorktreeState::Clean);
+  long.task_title = "Rework the canvas zoom and pan handling for trackpads, mice and touch screens".into();
+  let row = format!("recovery-run-{}", long.run);
+  let mut tree = laid_out(vec![long], 1440, 960);
+
+  let dialog = bounds(&mut tree, "recovery-dialog");
+  assert_eq!(dialog.width, theme::LIFECYCLE_DIALOG_WIDTH);
+  assert_eq!(dialog.width, 880.0);
+  assert_eq!(dialog.x, (1440.0 - 880.0) / 2.0, "centred");
+  // A long task title ends in an ellipsis instead of widening the table past the body padding.
+  let row = bounds(&mut tree, &row);
+  assert_eq!(row.x, dialog.x + 28.0);
+  assert_eq!(row.width, 880.0 - 2.0 * 28.0);
+}
+
+#[test]
+fn recovery_dialog_keeps_its_side_margins_in_a_narrow_window() {
+  let runs = vec![run(
+    "Kontur",
+    "ORC-125",
+    InterruptCause::QuitNow,
+    WorktreeState::Uncommitted(3),
+  )];
+  // At the smallest window the app allows, 960, the dialog keeps its full width.
+  let mut tree = laid_out(runs.clone(), 960, 700);
+  assert_eq!(bounds(&mut tree, "recovery-dialog").width, 880.0);
+  // Narrower than 880 plus two 32px margins, it shrinks and keeps 32 from either edge.
+  let mut tree = laid_out(runs, 800, 700);
+  let dialog = bounds(&mut tree, "recovery-dialog");
+  assert_eq!(dialog.x, 32.0);
+  assert_eq!(dialog.width, 800.0 - 2.0 * 32.0);
 }
 
 #[test]

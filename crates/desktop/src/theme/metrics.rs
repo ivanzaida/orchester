@@ -5,10 +5,10 @@ use lurq::{
 
 use super::tokens::{
   FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_PILL, RADIUS_SELECT_MENU,
-  SPACE_COLUMNS, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM,
-  SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK,
-  SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK,
-  SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
+  SPACE_COLUMNS, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR,
+  SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG,
+  SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION, SPACE_SELECT_MENU,
+  SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -61,10 +61,13 @@ pub enum ExtraSpacing {
   Divider,
   /// Padding of an open select menu around its options (`u0ByM`).
   SelectMenu,
+  /// Least room between a dialog and the left and right window edges when the window is
+  /// narrower than the dialog (design doc, "Lifecycle dialog width").
+  DialogMargin,
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 22] = [
+  const ALL: [Self; 23] = [
     Self::Hair,
     Self::Mark,
     Self::Tight,
@@ -87,6 +90,7 @@ impl ExtraSpacing {
     Self::Property,
     Self::Divider,
     Self::SelectMenu,
+    Self::DialogMargin,
   ];
 
   fn name(self) -> &'static str {
@@ -113,6 +117,7 @@ impl ExtraSpacing {
       Self::Property => "property",
       Self::Divider => "divider",
       Self::SelectMenu => "select-menu",
+      Self::DialogMargin => "dialog-margin",
     }
   }
 
@@ -140,6 +145,7 @@ impl ExtraSpacing {
       Self::Property => SPACE_PROPERTY,
       Self::Divider => SPACE_DIVIDER,
       Self::SelectMenu => SPACE_SELECT_MENU,
+      Self::DialogMargin => SPACE_DIALOG_MARGIN,
     }
   }
 
