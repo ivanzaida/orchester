@@ -43,17 +43,18 @@ const LIST_ROW_HEIGHT: f32 = 78.0;
 const STATE_TILE_SIZE: f32 = 32.0;
 const TIME_WIDTH: f32 = 60.0;
 
+/// The task status label (`DeizF`), as its variants in `P3HONM` draw it.
 fn status_copy(phase: TaskPhase) -> (Icon, &'static str) {
   match phase {
     TaskPhase::Draft => (Icon::Pencil, "tasks.status.draft"),
     TaskPhase::Queued => (Icon::Clock3, "tasks.status.queued"),
     TaskPhase::Running => (Icon::Loader, "tasks.status.running"),
-    TaskPhase::Waiting => (Icon::Clock3, "tasks.status.waiting"),
+    TaskPhase::Waiting => (Icon::MessageCircle, "tasks.status.waiting"),
     TaskPhase::Paused => (Icon::Pause, "tasks.status.paused"),
     TaskPhase::StoppedAtLimit => (Icon::OctagonPause, "tasks.status.stoppedAtLimit"),
     TaskPhase::Interrupted => (Icon::Pause, "tasks.status.interrupted"),
     TaskPhase::Succeeded => (Icon::CircleCheck, "tasks.status.succeeded"),
-    TaskPhase::Failed => (Icon::AlertCircle, "tasks.status.failed"),
+    TaskPhase::Failed => (Icon::CircleX, "tasks.status.failed"),
     TaskPhase::Cancelled => (Icon::Square, "tasks.status.cancelled"),
   }
 }

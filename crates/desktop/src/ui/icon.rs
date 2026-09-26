@@ -47,6 +47,7 @@ icons! {
   CircleDot => '\u{e345}',
   CircleHelp => '\u{e082}',
   CircleMinus => '\u{e07e}',
+  CircleX => '\u{e084}',
   Clock3 => '\u{e250}',
   CloudOff => '\u{e08d}',
   Code => '\u{e093}',

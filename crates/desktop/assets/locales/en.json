@@ -222,11 +222,11 @@
       "draft": "Draft",
       "queued": "Queued",
       "running": "Running",
-      "waiting": "Needs you",
+      "waiting": "Needs input",
       "paused": "Paused",
       "stoppedAtLimit": "Stopped at limit",
       "interrupted": "Interrupted",
-      "succeeded": "Finished",
+      "succeeded": "Completed",
       "failed": "Failed",
       "cancelled": "Cancelled"
     },
