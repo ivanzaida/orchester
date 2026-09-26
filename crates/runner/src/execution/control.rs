@@ -1,0 +1,25 @@
+//! Requests the scheduler hands to the task that executes a run. The task owns the run's state,
+//! so every change to an executing run goes through it.
+
+use orchester_core::run::InterruptCause;
+use orchester_ipc::Rejection;
+use tokio::sync::oneshot;
+
+/// Answers a request once it is carried out.
+pub(super) type Ack = oneshot::Sender<Result<(), Rejection>>;
+
+pub(super) enum Control {
+  /// Pause at the next checkpoint; answered once the request is recorded.
+  Pause(Ack),
+  /// Cancel now; answered once the run is recorded as cancelled.
+  Cancel(Ack),
+  /// The runner stops: end the agent and record the run as interrupted.
+  Interrupt(InterruptCause),
+}
+
+/// Answers `ack`; the requester may have stopped waiting, and then the answer is not needed.
+pub(super) fn answer(ack: Ack, result: Result<(), Rejection>) {
+  if ack.send(result).is_err() {
+    tracing::debug!("nobody waits for the answer anymore");
+  }
+}

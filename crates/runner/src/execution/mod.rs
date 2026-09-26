@@ -1,12 +1,17 @@
 //! Executing runs: creating a run for a queued task, its worktree, and driving its agent steps
-//! one after another on the Codex CLI. Every state change is recorded in the project database
-//! first; the desktop is only told *that* something changed ([`Event::RunChanged`],
-//! [`Event::AgentActivity`]) and reads the database.
+//! one after another on the Codex CLI; pausing, resuming, cancelling and continuing a run stopped
+//! at a limit. Every state change is recorded in the project database first; the desktop is only
+//! told *that* something changed ([`Event::RunChanged`], [`Event::AgentActivity`]) and reads the
+//! database.
 //!
 //! This version executes pipelines of agent steps sequentially, in dependency order, without
 //! approval gates or tool steps (the preflight refuses those).
 
+mod checkpoint;
+mod control;
+mod idle;
 mod prepare;
+mod record;
 mod run;
 mod step;
 
@@ -19,40 +24,28 @@ use std::{
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  run::InterruptCause,
+  run::{InterruptCause, RaisedLimits},
 };
 use orchester_ipc::{Event, Rejection};
 use orchester_store::ProjectDb;
 use parking_lot::Mutex;
 use tokio::{
-  sync::{mpsc, watch},
+  sync::{mpsc, oneshot},
   task::JoinHandle,
 };
 
-use self::run::RunTask;
+use self::{
+  control::Control,
+  prepare::Prepared,
+  run::{RunTask, TaskContext},
+};
+pub use crate::notify::Notifier;
 
 /// How long stopping waits for each run to end its agent and record the interruption.
 const STOP_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Where the runner's change notifications go: the connected desktop.
-#[derive(Clone)]
-pub struct Notifier(mpsc::UnboundedSender<Event>);
-
-impl Notifier {
-  pub fn new(events: mpsc::UnboundedSender<Event>) -> Self {
-    Self(events)
-  }
-
-  fn send(&self, event: Event) {
-    // Without a desktop listening nobody needs the notification; the database has the change.
-    if self.0.send(event).is_err() {
-      tracing::debug!("no desktop is listening for notifications");
-    }
-  }
-}
-
 struct ActiveRun {
-  stop: watch::Sender<Option<InterruptCause>>,
+  control: mpsc::UnboundedSender<Control>,
   task: JoinHandle<()>,
 }
 
@@ -91,25 +84,58 @@ impl Scheduler {
   /// started and its first step is scheduled.
   pub fn start_run(&self, key: IdempotencyKey, task: TaskId) -> Result<RunId, Rejection> {
     let root = &self.inner.project_root;
-    let mut db = ProjectDb::open(root).map_err(|error| failed("cannot open the project database", &error))?;
+    let mut db = self.open()?;
     let prepared = prepare::prepare(&mut db, root, key, task)?;
     let run = prepared.run.id();
     self.inner.notifier.send(Event::RunChanged {
       run,
       task: prepared.run.task(),
     });
-    if !prepared.execute {
-      return Ok(run);
+    if prepared.execute {
+      self.spawn(db, prepared);
     }
-    let mut active = self.inner.active.lock();
-    if active.get(&run).is_some_and(|active| !active.task.is_finished()) {
-      return Ok(run);
-    }
-    let (stop, stopped) = watch::channel(None);
-    let task = RunTask::new(db, prepared, self.inner.notifier.clone(), stopped);
-    let task = tokio::spawn(task.drive());
-    active.insert(run, ActiveRun { stop, task });
     Ok(run)
+  }
+
+  /// Pauses `run` at its next checkpoint. Returns once the request is recorded; the run is
+  /// paused when its active agent invocation has ended and its work is committed.
+  pub async fn pause_run(&self, run: RunId) -> Result<(), Rejection> {
+    match self.ask(run, Control::Pause) {
+      Some(answer) => match answer.await {
+        Ok(result) => result,
+        Err(_) => idle::pause(&mut self.open()?, run),
+      },
+      None => idle::pause(&mut self.open()?, run),
+    }
+  }
+
+  /// Cancels `run`: ends its agent, keeps its worktree and branch. Returns once the run is
+  /// recorded as cancelled.
+  pub async fn cancel_run(&self, run: RunId) -> Result<(), Rejection> {
+    let asked = match self.ask(run, Control::Cancel) {
+      Some(answer) => answer.await.ok(),
+      None => None,
+    };
+    // Without an answer the run's task ended before it read the request: the run is idle now.
+    if let Some(result) = asked {
+      return result;
+    }
+    let cancelled = idle::cancel(&mut self.open()?, run)?;
+    self.inner.notifier.send(Event::RunChanged {
+      run,
+      task: cancelled.task(),
+    });
+    Ok(())
+  }
+
+  /// Continues paused run `run`; a step it stopped in continues the agent's CLI session.
+  pub fn resume_run(&self, run: RunId) -> Result<(), Rejection> {
+    self.continue_idle(run, |db, root| idle::resume(db, root, run))
+  }
+
+  /// Raises the limits of `run`, stopped at a limit, and continues it.
+  pub fn raise_limit(&self, run: RunId, limits: RaisedLimits) -> Result<(), Rejection> {
+    self.continue_idle(run, |db, root| idle::raise(db, root, run, limits))
   }
 
   /// Ends the agents of every active run and records the runs as interrupted by `cause`,
@@ -118,13 +144,71 @@ impl Scheduler {
     let active: Vec<(RunId, ActiveRun)> = self.inner.active.lock().drain().collect();
     for (run, active) in active {
       // A run that already ended has dropped its receiver; there is nothing to stop.
-      let _ = active.stop.send(Some(cause));
+      if active.control.send(Control::Interrupt(cause)).is_err() {
+        tracing::debug!(%run, "the run had already ended");
+      }
       let mut task = active.task;
       if tokio::time::timeout(STOP_TIMEOUT, &mut task).await.is_err() {
         tracing::warn!(%run, "the run did not stop within {STOP_TIMEOUT:?}; ending it");
         task.abort();
       }
     }
+  }
+
+  fn open(&self) -> Result<ProjectDb, Rejection> {
+    ProjectDb::open(&self.inner.project_root).map_err(|error| failed("cannot open the project database", &error))
+  }
+
+  /// Hands `control` to the task executing `run`, if one does; `None` when the run is idle.
+  fn ask<T>(&self, run: RunId, control: impl FnOnce(oneshot::Sender<T>) -> Control) -> Option<oneshot::Receiver<T>> {
+    let active = self.inner.active.lock();
+    let active = active.get(&run).filter(|active| !active.task.is_finished())?;
+    let (answer, answered) = oneshot::channel();
+    active.control.send(control(answer)).ok()?;
+    Some(answered)
+  }
+
+  /// Applies `transition` to idle run `run` and executes it again.
+  fn continue_idle(
+    &self,
+    run: RunId,
+    transition: impl FnOnce(&mut ProjectDb, &Path) -> Result<Prepared, Rejection>,
+  ) -> Result<(), Rejection> {
+    if self.is_active(run) {
+      return Err(Rejection::RunNotPaused);
+    }
+    let mut db = self.open()?;
+    let prepared = transition(&mut db, &self.inner.project_root)?;
+    self.inner.notifier.send(Event::RunChanged {
+      run,
+      task: prepared.run.task(),
+    });
+    self.spawn(db, prepared);
+    Ok(())
+  }
+
+  fn is_active(&self, run: RunId) -> bool {
+    self
+      .inner
+      .active
+      .lock()
+      .get(&run)
+      .is_some_and(|active| !active.task.is_finished())
+  }
+
+  fn spawn(&self, db: ProjectDb, prepared: Prepared) {
+    let mut active = self.inner.active.lock();
+    let run = prepared.run.id();
+    if active.get(&run).is_some_and(|active| !active.task.is_finished()) {
+      return;
+    }
+    let (control, controls) = mpsc::unbounded_channel();
+    let context = TaskContext {
+      notifier: self.inner.notifier.clone(),
+      controls,
+    };
+    let task = tokio::spawn(RunTask::new(db, prepared, context).drive());
+    active.insert(run, ActiveRun { control, task });
   }
 }
 

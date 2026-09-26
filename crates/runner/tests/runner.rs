@@ -5,9 +5,10 @@
 use std::{fs, path::Path, time::Duration};
 
 use orchester_core::{
-  id::{IdempotencyKey, ProjectId, TaskId},
+  id::{IdempotencyKey, ProjectId, RunId, TaskId},
   name::Name,
   project::{Project, ProjectKey},
+  tokens::TokenBudget,
 };
 use orchester_ipc::{Command, Event, LaunchError, Rejection, Reply, Request, RequestId, RunnerClient, ShutdownMode};
 use orchester_runner::lock::RunnerLock;
@@ -227,4 +228,25 @@ async fn runner_answers_attach_and_start_run_requests() {
       reply: Reply::Rejected(Rejection::TaskNotFound)
     })
   );
+  let run = RunId::generate();
+  let controls = [
+    Command::PauseRun { run },
+    Command::ResumeRun { run },
+    Command::CancelRun { run },
+    Command::RaiseLimit {
+      run,
+      budget: TokenBudget::new(2_000_000).expect("above zero"),
+      max_duration_ms: 60_000,
+    },
+  ];
+  for (id, command) in (3..).zip(controls) {
+    client.send(&request(id, command)).await.expect("run control");
+    assert_eq!(
+      next_event(&mut client).await,
+      Some(Event::Reply {
+        id: RequestId::new(id),
+        reply: Reply::Rejected(Rejection::RunNotFound)
+      })
+    );
+  }
 }

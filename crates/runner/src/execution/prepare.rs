@@ -70,12 +70,14 @@ pub(super) fn prepare(
     .ok()
     .and_then(NonZeroU32::new)
     .expect("fewer than 2^32 runs of one task");
+  let limits = task.details().limits.expect("a queued task has limits");
   let new = NewRun {
     task: task_id,
     snapshot,
     branch: BranchName::for_run(task.key(), ordinal),
     base,
-    budget: task.details().limits.expect("a queued task has limits").budget(),
+    budget: limits.budget(),
+    max_duration: limits.max_duration(),
   };
   let mut run = db
     .create_run(key, new, Timestamp::now())
@@ -106,6 +108,29 @@ pub(super) fn prepare(
     worktree,
     execute: true,
   })
+}
+
+impl Prepared {
+  /// A recorded run that continues in its existing worktree: resumed or with raised limits.
+  pub(super) fn continuing(db: &ProjectDb, root: &Path, run: Run) -> Result<Self, Rejection> {
+    let task = db
+      .task(run.task())
+      .map_err(|error| failed("cannot read the run's task", &error))?
+      .ok_or(Rejection::TaskNotFound)?;
+    let worktree = Worktrees::new(root)
+      .map_err(|error| failed("cannot find the worktrees", &error))?
+      .path(run.id());
+    if !worktree.is_dir() {
+      let missing = std::io::Error::new(std::io::ErrorKind::NotFound, worktree.display().to_string());
+      return Err(failed("the run's worktree is missing", &missing));
+    }
+    Ok(Self {
+      run,
+      task,
+      worktree,
+      execute: true,
+    })
+  }
 }
 
 fn preflight_failed(problem: PreflightProblem) -> Rejection {
