@@ -17,14 +17,14 @@ use lurq::{
 };
 use orchester_core::{limits::ProjectLimits, task::MissingDetail, tokens::compact_tokens};
 
-use super::{FormState, NewTaskForm, PipelineSelection, error_note, missing_note};
+use super::{FormState, NewTaskForm, PipelineSelection, missing_note};
 use crate::{
   budget::read_budget,
   tasks::data::PipelineChoice,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, SKIPPED_BY_TAB},
-    field::{ValueTone, select_style, value_box_sized},
+    field::{ValueTone, select_style, value_box_sized, wrapping_field_error},
     form::Submit,
     icon::Icon,
     message_text,
@@ -150,7 +150,7 @@ fn run_status(ctx: &Ctx, state: &FormState) -> Vec<Element> {
     return problems
       .0
       .iter()
-      .map(|problem| error_note(&message_text(ctx, problem)))
+      .map(|problem| wrapping_field_error(&message_text(ctx, problem)))
       .collect();
   }
   if state.missing.is_empty() {
@@ -197,10 +197,10 @@ fn run_limits(ctx: &Ctx, form: &NewTaskForm, state: &FormState, limits: ProjectL
     .spacing(ExtraSpacing::Group.role())
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(limit_row(ctx, "tasks.new.budget", budget))
-    .with_children(budget_error.map(|error| error_note(&error)))
+    .with_children(budget_error.map(|error| wrapping_field_error(&error)))
     .with_children(budget_readback.map(|text| read_back("task-budget-readback", &text)))
     .child(limit_row(ctx, "tasks.new.timeLimit", time))
-    .with_children(time_error.map(|error| error_note(&error)))
+    .with_children(time_error.map(|error| wrapping_field_error(&error)))
     .with_children(time_readback.map(|text| read_back("task-time-readback", &text)))
     .with_children(missing_note(ctx, state, MissingDetail::Limits))
     .into()
@@ -242,7 +242,7 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element
   let status: Option<Element> = state
     .save_error
     .as_ref()
-    .map(|error| error_note(&message_text(ctx, error)));
+    .map(|error| wrapping_field_error(&message_text(ctx, error)));
   let run_status = run_status(ctx, state);
   // Full width, so a long reason wraps inside the panel instead of running past its edge.
   let reasons: Vec<Text> = state

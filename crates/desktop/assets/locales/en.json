@@ -269,6 +269,7 @@
       "pending": "Waiting",
       "running": "Running",
       "waiting": "Needs you",
+      "paused": "Paused",
       "passed": "Done",
       "failed": "Failed",
       "skipped": "Skipped"

@@ -429,20 +429,3 @@ fn missing_note(ctx: &Ctx, state: &FormState, detail: MissingDetail) -> Option<E
       .into()
   })
 }
-
-/// Why a value or the save was not accepted; a long reason wraps within its column.
-fn error_note(text: &str) -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Xs)
-    .align_items(Alignment::Center)
-    .describe("role", "field-error")
-    .child(icon(Icon::AlertCircle, IconSize::Small, PaletteColor::TextPrimary))
-    .child(
-      Text::new(text)
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary)
-        .flex(1.0),
-    )
-    .into()
-}

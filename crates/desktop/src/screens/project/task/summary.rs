@@ -17,7 +17,7 @@ use lurq::{
 use orchester_core::{
   limits::ProjectLimits,
   resource::RepositoryAccess,
-  run::{PauseReason, RunStatus},
+  run::{PauseReason, RunStatus, StepStatus},
   time::Timestamp,
   tokens::compact_tokens,
 };
@@ -33,7 +33,7 @@ use crate::{
   tasks::detail::{RunView, StepView, TaskDetail},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
-    icon::{IconSize, icon},
+    icon::{Icon, IconSize, icon},
     message_text,
     property::{ValueStyle, property, styled_property},
   },
@@ -57,7 +57,7 @@ pub(super) fn summary(ctx: &mut Ctx, detail: &TaskDetail, limits: Option<Project
     .child(Text::new(&ctx.t("runs.summary.execution")).variant(ExtraTypography::SectionHeading.role()));
   if let Some(run) = &detail.run {
     progress = progress
-      .with_children(run.steps.iter().map(|step| step_row(ctx, step)))
+      .with_children(run.steps.iter().map(|step| step_row(ctx, step, run.run.status())))
       .child(Spacer::new().flex(1.0))
       .with_children(latest(ctx, run));
   }
@@ -70,8 +70,12 @@ pub(super) fn summary(ctx: &mut Ctx, detail: &TaskDetail, limits: Option<Project
 }
 
 /// One step and its state (`mBkeJ` as in `NBmWz`).
-fn step_row(ctx: &Ctx, step: &StepView) -> Element {
-  let (glyph, state) = step_state(step.status);
+fn step_row(ctx: &Ctx, step: &StepView, run: &RunStatus) -> Element {
+  // A step a paused run stopped in is not running (`tSDux` in 02.A).
+  let (glyph, state) = match (run, step.status) {
+    (RunStatus::Paused(_), Some(StepStatus::Running)) => (Icon::Pause, "runs.step.paused"),
+    _ => step_state(step.status),
+  };
   let state = ctx.t(state);
   let detail = if step.agent.is_some() {
     ctx.t_args(

@@ -33,7 +33,7 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
-    field::field_error,
+    field::{field_error, wrapping_field_error},
     form::{Submit, form},
     icon::Icon,
     message_text,
@@ -46,6 +46,7 @@ const INPUT_WIDTH: f32 = 220.0;
 const INPUT_HEIGHT: f32 = 36.0;
 /// A suggested budget is the current one and half again, rounded up to this.
 const SUGGESTION_STEP: u64 = 100_000;
+const MINUTE: Duration = Duration::from_secs(60);
 
 /// The stopped run as the panel needs it; compared to remount the panel when the run changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,12 +95,18 @@ impl RaiseLimitProps {
     rounded.min(self.max_budget.get()).max(self.budget.get())
   }
 
-  /// The time limit offered: after a time stop half again the current one, else unchanged.
+  /// The time limit offered, in whole minutes above the active time: after a time stop half
+  /// again the current one, else unchanged.
   fn suggested_time(&self) -> Duration {
-    match self.limit {
+    let limit = match self.limit {
       RunLimit::Time => self.max_duration + self.max_duration / 2,
       RunLimit::Tokens => self.max_duration,
-    }
+    };
+    let minutes = limit
+      .as_secs()
+      .div_ceil(MINUTE.as_secs())
+      .max(whole_minutes(self.active) + 1);
+    MINUTE * u32::try_from(minutes).unwrap_or(u32::MAX)
   }
 }
 
@@ -286,7 +293,7 @@ fn limit_row(ctx: &Ctx, (name, current): (&str, &str), input: UnitInput, note: R
       .variant(ExtraTypography::Hint.role())
       .color(PaletteColor::TextMuted)
       .into(),
-    Err(error) => field_error(&error),
+    Err(error) => wrapping_field_error(&error),
   };
   Row::new()
     .width(Dimension::Pct(100.0))

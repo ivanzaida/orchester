@@ -56,6 +56,23 @@ pub fn field_error(text: &str) -> Element {
     .into()
 }
 
+/// [`field_error`] in a narrow column: the reason wraps within the column's width.
+pub fn wrapping_field_error(text: &str) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Xs)
+    .align_items(Alignment::Center)
+    .describe("role", "field-error")
+    .child(icon(Icon::AlertCircle, IconSize::Small, PaletteColor::TextPrimary))
+    .child(
+      Text::new(text)
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::TextPrimary)
+        .flex(1.0),
+    )
+    .into()
+}
+
 /// A single-line text input bound to `value` in `typography`; an `invalid` input gets a
 /// stronger border. Callers adjust it further, e.g. its height or placeholder.
 pub fn text_input(
