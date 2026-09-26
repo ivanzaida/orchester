@@ -99,9 +99,10 @@ impl Component for StatusBar {
       left = left.child(runner_item(ctx, project, &opener, &hints));
     }
     let slot = bar::activity_slot(runner.as_ref(), &log);
+    let interrupted = props.project.as_ref().map_or(0, |project| project.runner.interrupted());
     left = left.with_children(activity_slot(
       ctx,
-      &slot,
+      (&slot, interrupted),
       &log,
       &opener,
       &hints,

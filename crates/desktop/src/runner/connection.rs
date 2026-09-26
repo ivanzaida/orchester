@@ -10,7 +10,7 @@ use std::{
 };
 
 use orchester_ipc::{
-  Command, CommandSender, Event, IpcError, LaunchError, Reply, RunnerClient, RunnerProcess, ShutdownMode,
+  AttachSession, Command, CommandSender, Event, IpcError, LaunchError, Reply, RunnerClient, RunnerProcess, ShutdownMode,
 };
 use tokio::{
   runtime::Handle,
@@ -19,7 +19,7 @@ use tokio::{
 };
 
 use super::{
-  ShutdownOutcome,
+  AGENT_SLOTS, ShutdownOutcome,
   report::Reporter,
   requests::{Pending, ReplySender, RequestError},
   state::{RunnerEvent, RunnerFailure},
@@ -47,28 +47,26 @@ impl Drop for Connection {
 }
 
 impl Connection {
-  /// Starts the runner for `project` once `previous` (another project's runner) has stopped.
+  /// Starts the runner for `project`. Its first attach is for `session`; every runner started
+  /// after a drop attaches as a reconnect.
   pub(super) fn spawn(
     runtime: &Handle,
     runner_exe: PathBuf,
     project: PathBuf,
     reporter: Reporter,
-    previous: Option<Connection>,
+    session: AttachSession,
   ) -> Self {
     let (control, requests) = mpsc::unbounded_channel();
-    let task = runtime.spawn(async move {
-      if let Some(previous) = previous {
-        previous.stop(Some(super::QUIET_STOP_TIMEOUT)).await;
-      }
+    let task = runtime.spawn(
       Supervisor {
         runner_exe,
         project,
         reporter,
         requests,
+        session,
       }
-      .run()
-      .await;
-    });
+      .run(),
+    );
     Self { control, task }
   }
 
@@ -111,6 +109,8 @@ struct Supervisor {
   project: PathBuf,
   reporter: Reporter,
   requests: mpsc::UnboundedReceiver<Control>,
+  /// How the next runner attaches.
+  session: AttachSession,
 }
 
 impl Supervisor {
@@ -129,7 +129,13 @@ impl Supervisor {
       if self.reporter.report(RunnerEvent::Launched).is_none() {
         return;
       }
-      match Session::start(client).serve(&mut self.requests, &self.reporter).await {
+      let session = self.session;
+      // Whatever happens to this runner, the next one replaces it after a drop.
+      self.session = AttachSession::Reconnect;
+      match Session::start(client)
+        .serve(session, &mut self.requests, &self.reporter)
+        .await
+      {
         Served::Dropped(failure) => {
           if !self.retry_after(RunnerEvent::Dropped(failure)).await {
             return;
@@ -263,13 +269,35 @@ impl Session {
     }
   }
 
-  async fn serve(mut self, requests: &mut mpsc::UnboundedReceiver<Control>, reporter: &Reporter) -> Served {
-    // Nobody waits for the attach reply: it only lists the runs the runner already executes.
-    if !self.send(Command::Attach, None).await {
+  async fn serve(
+    mut self,
+    session: AttachSession,
+    requests: &mut mpsc::UnboundedReceiver<Control>,
+    reporter: &Reporter,
+  ) -> Served {
+    let (reply, mut attached) = oneshot::channel();
+    let attach = Command::Attach {
+      session,
+      agent_slots: AGENT_SLOTS,
+    };
+    if !self.send(attach, Some(reply)).await {
       return Served::Dropped(RunnerFailure::Lost);
     }
+    let mut attaching = true;
     loop {
       tokio::select! {
+        answer = &mut attached, if attaching => {
+          attaching = false;
+          match answer {
+            Ok(Ok(Reply::Attached { continued, .. })) => {
+              reporter.attached(session == AttachSession::Reconnect, continued.len());
+            }
+            other => {
+              tracing::warn!(?other, "the runner did not attach");
+              return Served::Dropped(RunnerFailure::Lost);
+            }
+          }
+        }
         item = self.events.recv() => {
           if !self.handle(item, reporter) {
             return Served::Dropped(RunnerFailure::Lost);
@@ -320,6 +348,10 @@ impl Session {
       }
       Some(Ok(Some(Event::RunChanged { .. } | Event::AgentActivity { .. }))) => {
         reporter.runs_changed();
+        true
+      }
+      Some(Ok(Some(Event::WorkSummary(summary)))) => {
+        reporter.work(summary);
         true
       }
       Some(Ok(Some(Event::Stopped { mode }))) => {

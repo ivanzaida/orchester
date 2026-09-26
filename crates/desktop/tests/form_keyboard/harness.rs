@@ -40,6 +40,9 @@ pub struct Desktop {
   pub repo: PathBuf,
   /// The session's background operations, shown in the status bar.
   pub activity: Activity,
+  /// The application's runners, as the root has them.
+  pub runners: Runners,
+  runner: PathBuf,
   app: App,
   _session: AppSession,
   _runtime: Runtime,
@@ -107,23 +110,34 @@ impl Desktop {
     if let Some(seed) = seed {
       seed(&repo);
     }
+    let runner = if runner.is_absolute() {
+      runner
+    } else {
+      dir.path().join(runner)
+    };
+    Self::launch(dir, repo, session, programs, runner)
+  }
+
+  /// Mounts the application on the session's database, as `main` does.
+  fn launch(dir: TempDir, repo: PathBuf, session: AppSession, programs: Programs, runner: PathBuf) -> Self {
     let runtime = Runtime::new().expect("tokio runtime");
     let mut app = App::new();
     app.set_tokio_handle(runtime.handle().clone());
     theme::install(&mut app);
     i18n::install(&app).expect("bundled locales load");
     let activity = Activity::new();
-    let runner = if runner.is_absolute() {
-      runner
-    } else {
-      dir.path().join(runner)
-    };
-    let runners = Runners::new(runner, runtime.handle().clone(), activity.clone());
+    let runners = Runners::new(
+      runner.clone(),
+      runtime.handle().clone(),
+      activity.clone(),
+      session.previous_end(),
+    );
     let startup = Startup::Ready {
       workspace: session.workspace().clone(),
-      lifecycle: Lifecycle::new(runners, runtime.handle().clone()),
+      lifecycle: Lifecycle::new(runners.clone(), runtime.handle().clone()),
       activity: activity.clone(),
       programs,
+      previous_end: session.previous_end(),
     };
     let mut tree = Tree::new();
     tree.resize(WIDTH, HEIGHT);
@@ -132,11 +146,36 @@ impl Desktop {
       tree,
       repo,
       activity,
+      runners,
+      runner,
       app,
       _session: session,
       _runtime: runtime,
       _dir: dir,
     }
+  }
+
+  /// The application ends without recording its end, as when its process is killed: its
+  /// runners and their agents are terminated with it. Then it starts again on the same database,
+  /// which reports the crash.
+  pub fn crash_and_restart(self) -> Self {
+    let Self {
+      tree,
+      repo,
+      runner,
+      app,
+      _session: session,
+      _runtime: runtime,
+      _dir: dir,
+      ..
+    } = self;
+    drop(tree);
+    drop(app);
+    // Ending the runtime drops the runner connections, which terminates the runners.
+    runtime.shutdown_timeout(Duration::from_secs(5));
+    drop(session);
+    let session = AppSession::start_at(&dir.path().join("orchester.db")).expect("session starts again");
+    Self::launch(dir, repo, session, Programs::processes(), runner)
   }
 
   pub fn repo(&self) -> &Path {

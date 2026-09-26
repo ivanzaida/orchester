@@ -1,7 +1,9 @@
 //! Run controls in the task page's topbar (`ctwcG` in 02.10, `ZcYUg` in 02.A, `EGcA7` in 02.L):
-//! Pause run while the run works, Resume run while it is paused, Cancel run until it ends. A
-//! request shows that it is under way ("Pausing…", "Resuming…", "Cancelling…"); a pause stays
-//! "Pausing…" until the run has settled at its checkpoint, as the runner records it.
+//! Pause run while the run works, Resume run while it is paused or stopped by the daily budget,
+//! Continue run while it is interrupted (the task-level continue after a session ended, which
+//! `o8DCd` leaves undesigned; it takes Resume's place and look), Cancel run until it ends. A
+//! request shows that it is under way ("Pausing…", "Resuming…", "Continuing…", "Cancelling…");
+//! a pause stays "Pausing…" until the run has settled at its checkpoint, as the runner records it.
 
 use lurq::{
   app::ctx::{Ctx, FutureAction},
@@ -10,7 +12,7 @@ use lurq::{
 };
 use orchester_core::{
   id::RunId,
-  run::{PauseReason, RunStatus},
+  run::{PauseReason, RunLimit, RunStatus},
 };
 use orchester_ipc::Command;
 
@@ -26,6 +28,8 @@ use crate::{
 pub(super) enum RunControl {
   Pause,
   Resume,
+  /// Continue an interrupted run from its last checkpoint.
+  Continue,
   Cancel,
 }
 
@@ -40,12 +44,13 @@ pub(super) fn control_action(ctx: &mut Ctx) -> ControlAction {
   ctx.future_action(move |(run, control): (RunId, RunControl)| {
     let runners = runners.clone();
     async move {
-      let command = match control {
-        RunControl::Pause => Command::PauseRun { run },
-        RunControl::Resume => Command::ResumeRun { run },
-        RunControl::Cancel => Command::CancelRun { run },
+      let result = match control {
+        RunControl::Pause => runners.control_run(Command::PauseRun { run }).await,
+        RunControl::Resume => runners.control_run(Command::ResumeRun { run }).await,
+        RunControl::Continue => runners.continue_run(run).await,
+        RunControl::Cancel => runners.control_run(Command::CancelRun { run }).await,
       };
-      runners.control_run(command).await.map(|()| control).map_err(|error| {
+      result.map(|()| control).map_err(|error| {
         tracing::warn!(%error, ?control, "the runner did not carry out the request");
         control_message(&error)
       })
@@ -98,15 +103,30 @@ pub(super) fn control_buttons(
         .on_click(press(RunControl::Pause))
         .enabled(!busy),
     ),
-    RunStatus::Paused(PauseReason::Requested) if pending == Some(RunControl::Resume) => Some(
-      button("runs.page.resuming", Icon::Loader, "task-resume-run")
-        .primary()
-        .disabled(),
-    ),
-    RunStatus::Paused(PauseReason::Requested) => Some(
+    RunStatus::Paused(PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget))
+      if pending == Some(RunControl::Resume) =>
+    {
+      Some(
+        button("runs.page.resuming", Icon::Loader, "task-resume-run")
+          .primary()
+          .disabled(),
+      )
+    }
+    RunStatus::Paused(PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget)) => Some(
       button("runs.page.resume", Icon::Play, "task-resume-run")
         .primary()
         .on_click(press(RunControl::Resume))
+        .enabled(!busy),
+    ),
+    RunStatus::Interrupted(_) if pending == Some(RunControl::Continue) => Some(
+      button("runs.page.continuing", Icon::Loader, "task-continue-run")
+        .primary()
+        .disabled(),
+    ),
+    RunStatus::Interrupted(_) => Some(
+      button("runs.page.continue", Icon::Play, "task-continue-run")
+        .primary()
+        .on_click(press(RunControl::Continue))
         .enabled(!busy),
     ),
     _ => None,

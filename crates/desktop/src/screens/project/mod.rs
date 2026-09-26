@@ -6,7 +6,7 @@
 //! tasks once and hands them to the sidebar, the screen and the status bar.
 
 mod agents;
-mod connections;
+pub(crate) mod connections;
 mod new_task;
 mod overview;
 mod page;
@@ -28,7 +28,10 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::id::{ResourceId, TaskId};
+use orchester_core::{
+  id::{ResourceId, TaskId},
+  time::Timestamp,
+};
 
 use self::{
   agents::AgentsScreen,
@@ -43,7 +46,7 @@ use self::{
 };
 use super::status_bar::{ProjectBar, StatusBar, StatusBarProps};
 use crate::{
-  background, display,
+  background,
   messages::{self, Message},
   runner::{RunnerStatus, Runners},
   tasks::{data::ProjectTasks, list, usage::ProjectUsage},
@@ -299,7 +302,7 @@ impl ProjectShell {
   /// The project's limits and today's usage, read again whenever settings or runs changed. `None`
   /// until read; a failed read is logged and leaves it unknown.
   fn usage(&self, ctx: &mut Ctx, open: &OpenProject, runs: u64) -> Option<ProjectUsage> {
-    let day_start = display::local_day_start(std::time::SystemTime::now());
+    let day_start = Timestamp::now().local_day_start();
     let deps = (open.repo_root.clone(), self.nav.revision.get(), runs, day_start);
     let load = ctx.future(deps, |(repo_root, _, _, day_start)| async move {
       background::run(move || ProjectUsage::load(&repo_root, day_start))

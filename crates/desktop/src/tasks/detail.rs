@@ -6,13 +6,14 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  id::{InvocationId, RunId, StepExecutionId, TaskId},
+  connection::{AgentProvider, ConnectionKind},
+  id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   resource::{AgentProfile, RepositoryAccess, StepKey, StepKind, VersionNumber},
   run::{
     ActivityEntry, Invocation, Run, RunEventKind, RunStatus, StepExecutor, StepStatus, TaskPhase, TokenUsage,
     active_time,
   },
-  store::{ActivityStore, ResourceStore, RunStore, TaskStore},
+  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
   task::Task,
   time::Timestamp,
 };
@@ -27,6 +28,8 @@ pub struct StepView {
   pub name: Arc<str>,
   /// The agent role of the step's profile version; `None` for a tool step.
   pub agent: Option<Arc<str>>,
+  /// The agent CLI of the profile version's connection, while that connection exists.
+  pub provider: Option<AgentProvider>,
   pub model: Option<Arc<str>>,
   pub access: Option<RepositoryAccess>,
   pub execution: Option<StepExecutionId>,
@@ -127,21 +130,27 @@ impl TaskDetail {
   }
 }
 
-fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
+/// `run` with its steps and invocations, as the task page shows it.
+pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   let pinned = run.snapshot().pipeline();
   let pipeline = db
     .resource(pinned.resource)?
     .map_or_else(|| Arc::from(""), |resource| resource.name().as_str().into());
   let mut steps = Vec::new();
   for (index, step) in run.snapshot().body().steps().iter().enumerate() {
-    let (agent, model) = match run.snapshot().step(&step.key).map(|pinned| pinned.executor()) {
+    let (agent, provider, model) = match run.snapshot().step(&step.key).map(|pinned| pinned.executor()) {
       Some(StepExecutor::Agent { profile, model, .. }) => {
-        let role = db
-          .version::<AgentProfile>(profile.resource, profile.number)?
+        let version = db.version::<AgentProfile>(profile.resource, profile.number)?;
+        let role = version
+          .as_ref()
           .map(|version| Arc::<str>::from(version.body().role().as_str()));
-        (role, Some(Arc::<str>::from(model.as_str())))
+        let provider = match version {
+          Some(version) => provider_of(db, version.body().connection())?,
+          None => None,
+        };
+        (role, provider, Some(Arc::<str>::from(model.as_str())))
       }
-      Some(StepExecutor::Tool { .. }) | None => (None, None),
+      Some(StepExecutor::Tool { .. }) | None => (None, None, None),
     };
     let latest = run.latest_execution(&step.key);
     steps.push(StepView {
@@ -149,6 +158,7 @@ fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       key: step.key.clone(),
       name: step.name.as_str().into(),
       agent,
+      provider,
       model,
       access: match step.kind {
         StepKind::Agent { repository, .. } => Some(repository),
@@ -181,12 +191,21 @@ fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   })
 }
 
+fn provider_of(db: &ProjectDb, connection: ConnectionId) -> Result<Option<AgentProvider>, StoreError> {
+  Ok(
+    match db.connection(connection)?.map(|connection| connection.kind().clone()) {
+      Some(ConnectionKind::Agent(provider)) => Some(provider),
+      Some(ConnectionKind::GitHub { .. }) | None => None,
+    },
+  )
+}
+
 /// The transcript of `run` as stored.
 pub fn activity_in(repo_root: &Path, run: RunId) -> Result<Vec<ActivityEntry>, StoreError> {
   ProjectDb::open(repo_root)?.activity(run, 0)
 }
 
-fn run_store_error(error: orchester_store::RunStoreError) -> StoreError {
+pub(crate) fn run_store_error(error: orchester_store::RunStoreError) -> StoreError {
   match error {
     orchester_store::RunStoreError::Store(error) => error,
     other => StoreError::Corrupt {

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     component::Component,
-    ctx::Ctx,
+    ctx::{Ctx, StreamEmitter},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Modal, ModalTarget, Row, Spacer, Text},
@@ -17,7 +17,9 @@ use lurq::{
 
 use crate::{
   close::{ClosePhase, Lifecycle},
-  runner::ActiveWork,
+  display,
+  runner::{ActiveWork, Runners, SaveState},
+  screens::project::connections::status::short_key as provider_short_key,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     backdrop::backdrop,
@@ -60,6 +62,8 @@ pub struct CloseActions {
 pub struct CloseDialogProps {
   pub stage: CloseStage,
   pub work: Arc<[ActiveWork]>,
+  /// While waiting: where each run of `work` stands, in the same order.
+  pub saves: Arc<[SaveState]>,
   pub actions: CloseActions,
 }
 
@@ -67,6 +71,7 @@ impl PartialEq for CloseDialogProps {
   fn eq(&self, other: &Self) -> bool {
     self.stage == other.stage
       && self.work == other.work
+      && self.saves == other.saves
       && Arc::ptr_eq(&self.actions.wait_for_agents, &other.actions.wait_for_agents)
       && Arc::ptr_eq(&self.actions.quit_now, &other.actions.quit_now)
       && Arc::ptr_eq(&self.actions.cancel, &other.actions.cancel)
@@ -95,8 +100,8 @@ impl Component for CloseDialog {
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .rounded(RadiusSize::Lg)
       .child(header(ctx, props.stage))
-      .child(body(ctx, props.stage, &props.work))
-      .child(actions(ctx, props.stage, &props.actions));
+      .child(body(ctx, props.stage, &props.work, &props.saves))
+      .child(actions(ctx, props.stage, &props.saves, &props.actions));
     backdrop(dialog)
   }
 }
@@ -125,25 +130,8 @@ fn header(ctx: &Ctx, stage: CloseStage) -> Element {
     .into()
 }
 
-/// The runs at work and what each choice does (`b8tUT3`, `TUufp`).
-fn body(ctx: &Ctx, stage: CloseStage, work: &[ActiveWork]) -> Element {
-  let project = work.first().map_or("", ActiveWork::project);
-  let heading = match stage {
-    CloseStage::Confirm => ctx.t_args("lifecycle.close.inProgress", [("project", project)]),
-    CloseStage::Waiting => {
-      let key = if work.len() == 1 {
-        "lifecycle.close.savingRuns.one"
-      } else {
-        "lifecycle.close.savingRuns.other"
-      };
-      let count = work.len().to_string();
-      ctx.t_args(key, [("count", count.as_str()), ("project", project)])
-    }
-  };
-  let rows = Column::new()
-    .width(Dimension::Pct(100.0))
-    .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .with_children(work.iter().map(|work| work_row(ctx, stage, work)));
+/// The runs at work, one group per project, and what each choice does (`b8tUT3`, `TUufp`).
+fn body(ctx: &Ctx, stage: CloseStage, work: &[ActiveWork], saves: &[SaveState]) -> Element {
   let closing = match stage {
     CloseStage::Confirm => choices(ctx),
     CloseStage::Waiting => Text::new(&ctx.t("lifecycle.close.waitingNote"))
@@ -157,21 +145,102 @@ fn body(ctx: &Ctx, stage: CloseStage, work: &[ActiveWork]) -> Element {
     .padding_horizontal(ExtraSpacing::Rail.role())
     .padding_bottom(SpacingSize::Lg)
     .spacing(SpacingSize::Md)
-    .child(
-      Text::new(&heading)
-        .variant(TypographyStyle::Link)
-        .color(PaletteColor::TextSecondary),
-    )
-    .child(rows)
+    .with_children(projects(work).into_iter().flat_map(|project| {
+      let rows: Vec<(&ActiveWork, Option<&SaveState>)> = work
+        .iter()
+        .enumerate()
+        .filter(|(_, work)| work.project() == project)
+        .map(|(index, work)| (work, saves.get(index)))
+        .collect();
+      project_group(ctx, stage, project, &rows)
+    }))
     .child(closing)
     .into()
 }
 
-/// A task row (`clVjO` as in `uHX7b`): key, title, step · agent, status, provider · model.
-fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork) -> Element {
-  let (status_icon, status, status_width) = match stage {
-    CloseStage::Confirm => (Icon::Loader, "lifecycle.close.running", STATUS_WIDTH),
-    CloseStage::Waiting => (Icon::Loader, "lifecycle.close.saving", SAVING_STATUS_WIDTH),
+/// The projects of `work`, in the order they first appear.
+fn projects(work: &[ActiveWork]) -> Vec<&str> {
+  let mut projects: Vec<&str> = Vec::new();
+  for work in work {
+    if !projects.contains(&work.project()) {
+      projects.push(work.project());
+    }
+  }
+  projects
+}
+
+/// "In progress · Kontur" or "1 of 2 runs saved · Kontur", then the project's rows.
+fn project_group(
+  ctx: &Ctx,
+  stage: CloseStage,
+  project: &str,
+  rows: &[(&ActiveWork, Option<&SaveState>)],
+) -> [Element; 2] {
+  let heading = match stage {
+    CloseStage::Confirm => ctx.t_args("lifecycle.close.inProgress", [("project", project)]),
+    CloseStage::Waiting => {
+      let key = if rows.len() == 1 {
+        "lifecycle.close.savedRuns.one"
+      } else {
+        "lifecycle.close.savedRuns.other"
+      };
+      let saved = rows
+        .iter()
+        .filter(|(_, save)| matches!(save, Some(SaveState::Saved { .. })))
+        .count()
+        .to_string();
+      let count = rows.len().to_string();
+      ctx.t_args(
+        key,
+        [
+          ("saved", saved.as_str()),
+          ("count", count.as_str()),
+          ("project", project),
+        ],
+      )
+    }
+  };
+  let table = Column::new()
+    .width(Dimension::Pct(100.0))
+    .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .with_children(rows.iter().map(|(work, save)| work_row(ctx, stage, work, *save)));
+  [
+    Text::new(&heading)
+      .variant(TypographyStyle::Link)
+      .color(PaletteColor::TextSecondary)
+      .into(),
+    table.into(),
+  ]
+}
+
+/// A task row (`clVjO` as in `uHX7b`): key, title, step · agent, status, provider · model. While
+/// waiting (`EjBmm`, `x0H09A`) the status says whether the run is saved and the last cell where it
+/// paused.
+fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork, save: Option<&SaveState>) -> Element {
+  let (status_icon, status, status_width) = match (stage, save) {
+    (CloseStage::Confirm, _) => (Icon::Loader, "lifecycle.close.running", STATUS_WIDTH),
+    (CloseStage::Waiting, Some(SaveState::Saved { .. })) => (Icon::Check, "lifecycle.close.saved", SAVING_STATUS_WIDTH),
+    (CloseStage::Waiting, _) => (Icon::Loader, "lifecycle.close.saving", SAVING_STATUS_WIDTH),
+  };
+  let last = match (stage, save) {
+    (CloseStage::Confirm, _) => ctx.t_args(
+      "lifecycle.close.providerModel",
+      [
+        ("provider", &*ctx.t(provider_short_key(work.provider()))),
+        ("model", work.model()),
+      ],
+    ),
+    (
+      CloseStage::Waiting,
+      Some(SaveState::Saved {
+        checkpoint: Some(revision),
+      }),
+    ) => ctx.t_args(
+      "lifecycle.close.pausedAt",
+      [("checkpoint", display::short_revision(revision))],
+    ),
+    (CloseStage::Waiting, Some(SaveState::Saved { checkpoint: None })) => ctx.t("lifecycle.close.pausedNothingNew"),
+    (CloseStage::Waiting, _) => ctx.t("lifecycle.close.stepStillRunning"),
   };
   let step = ctx.t_args(
     "lifecycle.close.stepAgent",
@@ -213,7 +282,7 @@ fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork) -> Element {
     )
     .child(Row::new().width(Dimension::Px(status_width)).child(status))
     .child(
-      Text::new(work.model())
+      Text::new(&last)
         .variant(ExtraTypography::Footnote.role())
         .nowrap()
         .width(Dimension::Px(MODEL_WIDTH)),
@@ -261,7 +330,7 @@ fn choice(ctx: &Ctx, glyph: Icon, title: &str, detail: &str) -> Element {
 
 /// Quit now on the left, Cancel and Wait for agents to save on the right (`anyo4`); while
 /// waiting, Cancel is gone and the primary becomes an indicator (`ZLe7v`).
-fn actions(ctx: &Ctx, stage: CloseStage, actions: &CloseActions) -> Element {
+fn actions(ctx: &Ctx, stage: CloseStage, saves: &[SaveState], actions: &CloseActions) -> Element {
   let quit = actions.quit_now.clone();
   let mut row = Row::new()
     .width(Dimension::Pct(100.0))
@@ -302,13 +371,25 @@ fn actions(ctx: &Ctx, stage: CloseStage, actions: &CloseActions) -> Element {
             .render(ctx),
         );
     }
-    CloseStage::Waiting => row = row.child(waiting_indicator(ctx)),
+    CloseStage::Waiting => {
+      let saving = saves
+        .iter()
+        .filter(|save| !matches!(save, SaveState::Saved { .. }))
+        .count();
+      row = row.child(waiting_indicator(ctx, saving));
+    }
   }
   row.into()
 }
 
-/// "Closes when every run is saved": shaped like a secondary button, but not one (`coL8l`).
-fn waiting_indicator(ctx: &Ctx) -> Element {
+/// "Closes after 1 more run": shaped like a secondary button, but not one (`coL8l`).
+fn waiting_indicator(ctx: &Ctx, saving: usize) -> Element {
+  let key = if saving == 1 {
+    "lifecycle.close.closesAfter.one"
+  } else {
+    "lifecycle.close.closesAfter.other"
+  };
+  let saving = saving.to_string();
   let form = ctx.theme().form();
   let height = form.button.secondary.height;
   drop(form);
@@ -323,7 +404,7 @@ fn waiting_indicator(ctx: &Ctx) -> Element {
     .rounded(RadiusSize::Md)
     .child(icon(Icon::Loader, IconSize::Button, PaletteColor::TextSecondary))
     .child(
-      Text::new(&ctx.t("lifecycle.close.closesWhenSaved"))
+      Text::new(&ctx.t_args(key, [("count", saving.as_str())]))
         .variant(TypographyStyle::Button)
         .color(PaletteColor::TextSecondary)
         .nowrap(),
@@ -348,10 +429,22 @@ impl Component for CloseConfirmation {
       ClosePhase::Waiting(work) => (CloseStage::Waiting, work),
       ClosePhase::Open | ClosePhase::Closing => return Modal::new(Column::new()).open_when(false),
     };
+    let saves: Arc<[SaveState]> = match stage {
+      CloseStage::Confirm => Arc::from([]),
+      CloseStage::Waiting => {
+        // Follows the runners' reports while they stop at checkpoints.
+        work_changes(ctx, lifecycle.runners());
+        work
+          .iter()
+          .map(|work| lifecycle.runners().save_state(work.run()).unwrap_or(SaveState::Saving))
+          .collect()
+      }
+    };
     let (wait, quit, cancel) = (lifecycle.clone(), lifecycle.clone(), lifecycle);
     let props = CloseDialogProps {
       stage,
       work,
+      saves,
       actions: CloseActions {
         wait_for_agents: Arc::new(move || wait.wait_for_agents()),
         quit_now: Arc::new(move || quit.quit_now()),
@@ -362,4 +455,18 @@ impl Component for CloseConfirmation {
       .target(ModalTarget::Root)
       .dismiss_on_escape(false)
   }
+}
+
+/// The runners' work revision; reading it re-renders the confirmation whenever a runner reports.
+fn work_changes(ctx: &mut Ctx, runners: &Runners) -> u64 {
+  let changes = ctx.stream(runners.clone(), |runners, emitter: StreamEmitter<u64, ()>| async move {
+    let mut updates = runners.work_changes();
+    loop {
+      let revision = *updates.borrow_and_update();
+      if !emitter.emit(revision) || updates.changed().await.is_err() {
+        return;
+      }
+    }
+  });
+  changes.state().get().data.unwrap_or(0)
 }

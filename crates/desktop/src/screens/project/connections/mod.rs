@@ -15,7 +15,7 @@ mod inspector;
 mod launch;
 mod library;
 mod list;
-mod status;
+pub(crate) mod status;
 
 use std::{path::PathBuf, sync::Arc};
 

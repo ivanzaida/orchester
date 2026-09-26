@@ -96,19 +96,71 @@
       "waitingTitle": "Saving before closing",
       "waitingDetail": "No new steps or tool calls will start. Each agent is finishing its current work up to the next checkpoint. Orchester closes when every run is saved and paused.",
       "inProgress": "In progress · {{project}}",
-      "savingRuns": {
-        "one": "Saving {{count}} run · {{project}}",
-        "other": "Saving {{count}} runs · {{project}}"
+      "savedRuns": {
+        "one": "{{saved}} of {{count}} run saved · {{project}}",
+        "other": "{{saved}} of {{count}} runs saved · {{project}}"
       },
       "stepAgent": "{{step}} · {{agent}}",
+      "providerModel": "{{provider}} · {{model}}",
       "running": "Running",
       "saving": "Saving at next checkpoint…",
+      "saved": "Saved",
+      "stepStillRunning": "Step still running",
+      "pausedAt": "Paused at {{checkpoint}}",
+      "pausedNothingNew": "Paused · nothing new to save",
       "waitForAgents": "Wait for agents to save",
       "waitForAgentsDetail": "No new steps or tool calls start. Each agent continues to its next checkpoint, the runs are marked paused, then Orchester closes. This can take a few minutes. Resume the runs as usual next time.",
       "quitNow": "Quit now",
       "quitNowDetail": "Stops the runner and agents immediately. Work after each run's last checkpoint is not recorded as progress. Uncommitted changes stay in the worktree and are shown on next start.",
       "waitingNote": "Taking too long? Quit now stops the remaining agents. Their runs keep the last checkpoint they already saved; work after it is not recorded as progress.",
-      "closesWhenSaved": "Closes when every run is saved"
+      "closesAfter": {
+        "one": "Closes after {{count}} more run",
+        "other": "Closes after {{count}} more runs"
+      }
+    },
+    "recovery": {
+      "title": "The last session ended before agents could save",
+      "quitNow": {
+        "one": "Orchester was closed with Quit now and 1 run was interrupted. Nothing has been restarted. Continue it from its last checkpoint, or leave it interrupted; work after a checkpoint is not counted as done.",
+        "other": "Orchester was closed with Quit now and {{count}} runs were interrupted. Nothing has been restarted. Continue all of them from their last checkpoints, or none; work after a checkpoint is not counted as done."
+      },
+      "crashed": {
+        "one": "Orchester stopped unexpectedly and 1 run was interrupted. Nothing has been restarted. Continue it from its last checkpoint, or leave it interrupted; work after a checkpoint is not counted as done.",
+        "other": "Orchester stopped unexpectedly and {{count}} runs were interrupted. Nothing has been restarted. Continue all of them from their last checkpoints, or none; work after a checkpoint is not counted as done."
+      },
+      "columns": {
+        "task": "Task",
+        "during": "Interrupted during",
+        "reason": "Reason",
+        "checkpoint": "Last checkpoint",
+        "worktree": "Worktree"
+      },
+      "projectRun": "{{project}} · Run #{{number}}",
+      "agent": "{{agent}} · {{provider}} · {{model}}",
+      "noStep": "Before its first step",
+      "reason": {
+        "quitNow": "Stopped with the app",
+        "crashed": "Orchester stopped unexpectedly",
+        "runnerLost": "The runner stopped unexpectedly"
+      },
+      "checkpointSaved": "Saved {{time}}",
+      "noCheckpoint": "No checkpoint yet",
+      "worktree": {
+        "clean": "No uncommitted changes",
+        "uncommitted": {
+          "one": "{{count}} file not committed",
+          "other": "{{count}} files not committed"
+        },
+        "unknown": "Could not read the worktree"
+      },
+      "note": "Uncommitted changes are kept in each run’s worktree and are never discarded silently. If you don’t continue now, you can continue each run later from its task page.",
+      "dontContinue": "Don't continue",
+      "continueAll": {
+        "one": "Continue from checkpoint",
+        "other": "Continue all {{count}} from checkpoints"
+      },
+      "continuing": "Continuing…",
+      "notContinued": "Not every run continued: {{reason}} The others stay interrupted; continue them later from their task pages."
     }
   },
   "overview": {
@@ -179,6 +231,20 @@
       "missingLimits": "Needs a budget and time limit",
       "missingCount": "Needs {{count}} details"
     },
+    "progress": {
+      "queued": "Waiting for its run to start",
+      "running": "Agent at work",
+      "waiting": "Waiting for you",
+      "paused": "Paused at {{checkpoint}}",
+      "pausedNoCheckpoint": "Paused before its first checkpoint",
+      "stoppedAtLimit": "Raise the limit to continue",
+      "stoppedDaily": "Waits for the daily token budget",
+      "interrupted": "Last checkpoint {{checkpoint}}",
+      "interruptedNoCheckpoint": "No checkpoint yet",
+      "succeeded": "Every step passed",
+      "failed": "Run failed",
+      "cancelled": "Run cancelled"
+    },
     "pipeline": {
       "notChosen": "No pipeline",
       "published": "{{name}} · {{version}}",
@@ -237,6 +303,8 @@
       "pausing": "Pausing…",
       "resume": "Resume run",
       "resuming": "Resuming…",
+      "continue": "Continue run",
+      "continuing": "Continuing…",
       "cancel": "Cancel run",
       "cancelling": "Cancelling…",
       "loading": "Loading the task",
@@ -252,6 +320,7 @@
         "paused": "Run {{run}} · Attempt {{attempt}} · Paused by you at {{time}}",
         "tokenLimit": "Run {{run}} · Attempt {{attempt}} · Stopped at the token limit at {{time}}",
         "timeLimit": "Run {{run}} · Attempt {{attempt}} · Stopped at the time limit at {{time}}",
+        "dailyBudget": "Run {{run}} · Attempt {{attempt}} · Stopped at the daily project budget at {{time}}",
         "interrupted": "Run {{run}} · Attempt {{attempt}} · interrupted at {{step}}",
         "succeeded": "Run {{run}} · Attempt {{attempt}} · every step passed",
         "failed": "Run {{run}} · Attempt {{attempt}} · failed at {{step}}",
@@ -286,6 +355,8 @@
       "latest": "Latest activity",
       "latestStarted": "{{time}}  {{step}} · {{agent}} started",
       "latestEnded": "{{time}}  {{step}} · {{agent}} finished",
+      "latestStopped": "{{time}}  {{step}} · {{agent}} stopped",
+      "latestFailed": "{{time}}  {{step}} · {{agent}} failed",
       "thisRun": "This run",
       "pipeline": "Pipeline",
       "pipelineValue": "{{name}} · {{version}}",
@@ -313,7 +384,7 @@
         "pausedNoCheckpointTitle": "Paused",
         "pausedDetail": "Work is preserved. No new steps or tool calls start until you resume this run.",
         "interruptedTitle": "The run was interrupted at {{step}}",
-        "interruptedDetail": "Its agent was stopped when the runner stopped. The run keeps its last checkpoint; continuing it comes in a later version.",
+        "interruptedDetail": "Its agent was stopped when the runner or Orchester stopped. The run keeps its last checkpoint; Continue run starts it again from there and repeats the unfinished part of the step. Work after the checkpoint is not counted as done.",
         "succeededTitle": "Every step passed",
         "succeededDetail": "The run’s changes are committed on {{branch}}.",
         "failedTitle": "The run failed at {{step}}",
@@ -417,10 +488,20 @@
       "tokenTitleCheckpoint": "Stopped at the token limit · checkpoint {{checkpoint}}",
       "timeTitle": "Stopped at the time limit",
       "timeTitleCheckpoint": "Stopped at the time limit · checkpoint {{checkpoint}}",
+      "dailyTitle": "Stopped at the daily project budget",
+      "dailyTitleCheckpoint": "Stopped at the daily project budget · checkpoint {{checkpoint}}",
       "tokenDetail": "Run {{run}} used {{used}} of its {{limit}} tokens. {{agent}} was stopped and its work was committed as a checkpoint. Nothing runs until you raise the limit.",
       "tokenDetailUnsaved": "Run {{run}} used {{used}} of its {{limit}} tokens. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the limit.",
-      "timeDetail": "Run {{run}} used {{used}} of its {{limit}} minutes of active agent time. {{agent}} was stopped and its work was committed as a checkpoint. Nothing runs until you raise the limit.",
-      "timeDetailUnsaved": "Run {{run}} used {{used}} of its {{limit}} minutes of active agent time. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the limit.",
+      "timeDetail": {
+        "one": "Run {{run}} used {{used}} of its {{limit}} minute of active agent time. {{agent}} was stopped and its work was committed as a checkpoint. Nothing runs until you raise the limit.",
+        "other": "Run {{run}} used {{used}} of its {{limit}} minutes of active agent time. {{agent}} was stopped and its work was committed as a checkpoint. Nothing runs until you raise the limit."
+      },
+      "timeDetailUnsaved": {
+        "one": "Run {{run}} used {{used}} of its {{limit}} minute of active agent time. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the limit.",
+        "other": "Run {{run}} used {{used}} of its {{limit}} minutes of active agent time. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the limit."
+      },
+      "dailyDetail": "This project’s runs used today’s token budget. {{agent}} was stopped and its work was committed as a checkpoint. Resume the run tomorrow, or raise the daily budget in Project settings and resume it now.",
+      "dailyDetailUnsaved": "This project’s runs used today’s token budget. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Resume the run tomorrow, or raise the daily budget in Project settings and resume it now.",
       "theAgent": "The agent",
       "raiseTitle": "Raise the limit to continue",
       "tokenBudget": "Token budget",
@@ -436,11 +517,19 @@
       "continueNextStep": "Continue starts the next step. The new limit applies to Run {{run}} only.",
       "continue": "Continue",
       "continueWith": "Continue with {{count}} tokens",
-      "continueWithMinutes": "Continue with {{minutes}} minutes",
+      "continueWithMinutes": {
+        "one": "Continue with {{minutes}} minute",
+        "other": "Continue with {{minutes}} minutes"
+      },
       "continuing": "Continuing…",
       "notRaised": "The run stopped at its limit. Raise the limit to continue.",
       "tokensNotAboveUsed": "The new budget must be above the tokens this run already used.",
       "timeNotAboveUsed": "The new time limit must be above the active agent time this run already used."
+    },
+    "capacity": {
+      "dailyBudgetUsed": "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.",
+      "noAgentSlot": "All {{slots}} agent slots are in use. Try again when a running run settles.",
+      "shuttingDown": "Orchester is closing; no new work starts."
     },
     "control": {
       "runnerUnavailable": "The runner is not connected. Try again once it is online.",
@@ -448,6 +537,7 @@
       "notRunning": "The run is not running anymore.",
       "notPaused": "The run is not paused.",
       "ended": "The run has already ended.",
+      "notInterrupted": "The run is not interrupted.",
       "failed": "The runner could not do this; its log has the details."
     }
   },
@@ -1011,7 +1101,7 @@
       "default": "Default run budget",
       "defaultDetail": "Prefilled in New task. Must not exceed the maximum.",
       "daily": "Daily project budget",
-      "dailyDetail": "Tokens all runs in this project may use per day, shown in the status bar. New work is not held back when it is used up yet.",
+      "dailyDetail": "Tokens all runs in this project may use per day, shown in the status bar. Once they are used up, new runs wait and running runs stop at their next turn until tomorrow or until you raise the budget.",
       "time": "Time",
       "timeLimit": "Default time limit",
       "timeLimitDetail": "Counts active agent time only. Time paused or waiting for you (plan approval, questions, permission requests) doesn’t count.",
@@ -1102,7 +1192,10 @@
     "repositoryNotLinkable": "The detected repository can’t be linked. Check again first.",
     "openInBrowser": "The address could not be handed to the browser. The log has the details.",
     "timeLimitEmpty": "Enter a time limit in whole minutes.",
-    "timeLimitNotAboveUsed": "Enter more than the {{used}} minutes this run already used."
+    "timeLimitNotAboveUsed": {
+      "one": "Enter more than the {{used}} minute this run already used.",
+      "other": "Enter more than the {{used}} minutes this run already used."
+    }
   },
   "number": {
     "groupSeparator": ","
@@ -1431,10 +1524,23 @@
       "running": "{{title}}…",
       "several": "{{count}} operations · {{title}}…",
       "failure": "{{title}} · {{reason}}",
-      "runnerReconnected": "Runner reconnected"
+      "runnerReconnected": "Runner reconnected",
+      "runnerReconnectedContinued": {
+        "one": "Runner reconnected · 1 interrupted run continued",
+        "other": "Runner reconnected · {{count}} interrupted runs continued"
+      },
+      "interruptedReconnecting": {
+        "one": "1 run interrupted · it continues from its last checkpoint",
+        "other": "{{count}} runs interrupted · they continue from their last checkpoint"
+      },
+      "interruptedOffline": {
+        "one": "1 run interrupted · nothing runs until the runner starts",
+        "other": "{{count}} runs interrupted · nothing runs until the runner starts"
+      }
     },
     "counts": {
       "agents": "Agents",
+      "agentsValue": "{{working}}/{{slots}}",
       "queued": "Queued",
       "needsYou": "Needs you",
       "tokens": "Tokens today",
@@ -1442,7 +1548,8 @@
       "unknown": "—"
     },
     "hints": {
-      "agents": "Agent slots are not reported by the runner yet",
+      "agents": "{{working}} agents at work of {{slots}} agent slots in this project’s runner",
+      "agentsUnknown": "Agent slots are known once the runner is online",
       "needsYou": "Not available yet: plan approvals, questions and reviews do not exist in this version",
       "tokens": "{{used}} of {{budget}} tokens today: input + output of all runs in this project, against the daily project budget",
       "tokensUnknown": "Reading today’s token usage",

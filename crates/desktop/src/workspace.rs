@@ -60,6 +60,11 @@ impl Workspace {
     })
   }
 
+  /// Known projects, most recently opened first.
+  pub fn projects(&self) -> Result<Vec<RegisteredProject>, StoreError> {
+    self.db.lock().projects()
+  }
+
   /// Opens a known project and records it as the most recently used one.
   pub fn open(&self, registered: &RegisteredProject) -> Result<OpenProject, StoreError> {
     let db = ProjectDb::open(&registered.repo_root)?;
