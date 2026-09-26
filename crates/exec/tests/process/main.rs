@@ -85,3 +85,35 @@ fn long_running() -> Command {
 fn long_running() -> Command {
   Command::new(Path::new("sleep"), ["30"])
 }
+
+/// Prints the environment the program sees, one `NAME=value` per line.
+fn print_environment() -> Command {
+  if cfg!(windows) {
+    Command::new(Path::new("cmd"), ["/C", "set"])
+  } else {
+    Command::new(Path::new("/usr/bin/env"), Vec::<String>::new())
+  }
+}
+
+#[test]
+fn process_with_an_explicit_environment_sees_nothing_else() {
+  let mut variables: Vec<(String, String)> = std::env::vars()
+    .filter(|(name, _)| name.eq_ignore_ascii_case("SYSTEMROOT"))
+    .collect();
+  variables.push(("ORCHESTER_PROBE".into(), "yes".into()));
+  let output = RUNNER
+    .run(&print_environment().with_environment(variables))
+    .expect("the program runs");
+  let names: Vec<&str> = output
+    .stdout
+    .lines()
+    .filter_map(|line| line.split_once('=').map(|(name, _)| name))
+    .collect();
+  assert!(names.contains(&"ORCHESTER_PROBE"), "{names:?}");
+  // cmd.exe adds a few variables of its own (PROMPT, COMSPEC, PATHEXT); the parent's are gone.
+  assert!(!names.iter().any(|name| name.eq_ignore_ascii_case("PATH")), "{names:?}");
+  assert!(
+    !names.iter().any(|name| name.eq_ignore_ascii_case("CARGO")),
+    "{names:?}"
+  );
+}

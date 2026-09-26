@@ -53,9 +53,23 @@ impl CommandRunner for ProcessRunner {
 }
 
 fn spawn(command: &Command) -> Result<Child, CommandError> {
+  prepare(command)?.spawn().map_err(|error| match error.kind() {
+    io::ErrorKind::NotFound => CommandError::NotFound,
+    _ => CommandError::Failed(error.to_string()),
+  })
+}
+
+/// The process that runs `command`, ready to start: launched through what [`launch::resolve`]
+/// finds, with its arguments, directory and environment, standard input piped when the command
+/// has input (otherwise empty), output piped and no console window. For callers that stream a
+/// program's output instead of waiting for it, such as the runner with agent CLIs.
+pub fn prepare(command: &Command) -> Result<Process, CommandError> {
   let launch = launch::resolve(command.program());
   launch.check_args(command.args())?;
   let mut process = Process::new(launch.program());
+  if !command.inherits_env() {
+    process.env_clear();
+  }
   process
     .args(launch.leading_args())
     .args(command.args())
@@ -74,10 +88,7 @@ fn spawn(command: &Command) -> Result<Child, CommandError> {
     process.current_dir(directory);
   }
   console::hide_window(&mut process);
-  process.spawn().map_err(|error| match error.kind() {
-    io::ErrorKind::NotFound => CommandError::NotFound,
-    _ => CommandError::Failed(error.to_string()),
-  })
+  Ok(process)
 }
 
 fn wait(child: &mut Child, command: &Command, timeout: Duration) -> Result<ExitStatus, CommandError> {
