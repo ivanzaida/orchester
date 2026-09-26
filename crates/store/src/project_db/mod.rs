@@ -8,6 +8,7 @@ mod repository;
 mod resources;
 mod runs;
 mod schema;
+mod step_outputs;
 mod tasks;
 
 use std::{

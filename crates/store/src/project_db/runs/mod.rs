@@ -13,7 +13,7 @@ use orchester_core::{
 use rusqlite::{OptionalExtension, Transaction, params};
 
 use self::{
-  columns::{attempt_reason_columns, attempt_status_text, run_status_columns, step_status_columns},
+  columns::{attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text, step_status_columns},
   load::{load_checkpoint, load_events, load_runs},
 };
 use super::ProjectDb;
@@ -199,9 +199,10 @@ fn write_attempts(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreE
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (id) DO UPDATE SET status = excluded.status",
   )?;
   let mut execution_statement = transaction.prepare_cached(
-    "INSERT INTO step_executions (id, attempt_id, step_key, profile_version_id, model, status, wait_reason) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \
-     ON CONFLICT (id) DO UPDATE SET status = excluded.status, wait_reason = excluded.wait_reason",
+    "INSERT INTO step_executions (id, attempt_id, step_key, profile_version_id, model, status, wait_reason, failure) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
+     ON CONFLICT (id) DO UPDATE SET status = excluded.status, wait_reason = excluded.wait_reason, \
+     failure = excluded.failure",
   )?;
   for attempt in run.attempts() {
     let (reason, failed_step, return_to) = attempt_reason_columns(attempt.reason());
@@ -228,6 +229,7 @@ fn write_attempts(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreE
         model,
         status,
         wait_reason,
+        execution.failure().map(step_failure_text),
       ])?;
     }
   }

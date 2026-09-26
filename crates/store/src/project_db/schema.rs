@@ -365,4 +365,52 @@ CREATE TABLE project_limits (
 -- The project's token usage per day is read from the turns of every transcript.
 CREATE INDEX agent_events_by_kind ON agent_events (kind, at);
 ",
+  r"
+-- Parallel step graphs (M4). Each step execution may leave an output for the steps that run after
+-- it: the summary of its structured result, else its final message. Append-only.
+CREATE TABLE step_outputs (
+  step_execution_id TEXT PRIMARY KEY REFERENCES step_executions (id),
+  run_id TEXT NOT NULL REFERENCES runs (id),
+  step_key TEXT NOT NULL,
+  outcome TEXT CHECK (outcome IN ('done', 'failed')),
+  text TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+) STRICT;
+CREATE INDEX step_outputs_by_run ON step_outputs (run_id, created_at);
+CREATE TRIGGER step_outputs_no_update BEFORE UPDATE ON step_outputs
+BEGIN SELECT RAISE(ABORT, 'step outputs are append-only'); END;
+CREATE TRIGGER step_outputs_no_delete BEFORE DELETE ON step_outputs
+BEGIN SELECT RAISE(ABORT, 'step outputs are append-only'); END;
+
+-- Why a failed execution failed; executions that failed before reasons were recorded have none.
+ALTER TABLE step_executions ADD COLUMN failure TEXT
+  CHECK (failure IN ('agent_failed', 'reported_failed', 'not_started', 'step_budget', 'merge_conflict',
+    'checkpoint_failed'));
+
+-- Step budgets are tokens (user decision 2026-09-25). Published pipeline versions are immutable,
+-- so their bodies are not rewritten: a step budget stored as money reads as no step budget (the
+-- run budget still bounds the step). Every such amount, from versions and drafts, is kept here.
+CREATE TABLE money_step_budgets_before_tokens (
+  owner TEXT NOT NULL CHECK (owner IN ('version', 'draft')),
+  owner_id TEXT NOT NULL,
+  step_key TEXT NOT NULL,
+  micros INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  PRIMARY KEY (owner, owner_id, step_key)
+) STRICT;
+INSERT INTO money_step_budgets_before_tokens (owner, owner_id, step_key, micros, currency)
+  SELECT 'version', versions.id, json_extract(step.value, '$.key'), json_extract(step.value, '$.budget.micros'),
+    json_extract(step.value, '$.budget.currency')
+  FROM resource_versions AS versions
+    JOIN resources ON resources.id = versions.resource_id AND resources.kind = 'pipeline',
+    json_each(versions.body, '$.body.steps') AS step
+  WHERE json_type(step.value, '$.budget') = 'object';
+INSERT INTO money_step_budgets_before_tokens (owner, owner_id, step_key, micros, currency)
+  SELECT 'draft', drafts.resource_id, json_extract(step.value, '$.key'), json_extract(step.value, '$.budget.micros'),
+    json_extract(step.value, '$.budget.currency')
+  FROM resource_drafts AS drafts
+    JOIN resources ON resources.id = drafts.resource_id AND resources.kind = 'pipeline',
+    json_each(drafts.body, '$.body.steps') AS step
+  WHERE json_type(step.value, '$.budget') = 'object';
+",
 ];

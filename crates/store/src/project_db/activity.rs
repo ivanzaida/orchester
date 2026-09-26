@@ -4,14 +4,14 @@ use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome},
   id::{InvocationId, RunId, StepExecutionId},
   resource::ModelId,
-  run::{ActivityEntry, Invocation, TokenUsage},
+  run::{ActivityEntry, Invocation, StepOutput, TokenUsage},
   store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::ProjectDb;
+use super::{ProjectDb, step_outputs};
 use crate::{
   StoreError,
   rows::{corrupt, decode_json, encode_json, parse},
@@ -189,6 +189,14 @@ impl ActivityStore for ProjectDb {
       }
     }
     Ok(used)
+  }
+
+  fn save_step_output(&mut self, output: &StepOutput) -> Result<(), StoreError> {
+    step_outputs::save(&self.connection, output)
+  }
+
+  fn step_outputs(&self, run: RunId) -> Result<Vec<StepOutput>, StoreError> {
+    step_outputs::of_run(&self.connection, run)
   }
 }
 

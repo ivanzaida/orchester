@@ -16,7 +16,7 @@ use orchester_core::{
   revision::Revision,
   run::{
     BranchName, InterruptCause, NewRun, PauseReason, PlanDecision, PublishedVersions, Run, RunEvent, RunLimit,
-    RunSnapshot, RunStatus, StepExecutor, StepStatus,
+    RunSnapshot, RunStatus, StepExecutor, StepFailure, StepStatus,
   },
   store::{ResourceStore, RunStore, TaskStore},
   task::TaskDetails,
@@ -289,8 +289,13 @@ fn runs_replaying_stored_events_reproduces_the_stored_state() {
   fixture.apply(&mut run, |run| run.complete_step(implement, at(21)));
   let checks = Fixture::exec(&run, "checks");
   fixture.apply(&mut run, |run| run.start_step(checks, at(22)));
-  fixture.apply(&mut run, |run| run.fail_step(checks, at(23)));
+  fixture.apply(&mut run, |run| {
+    run.fail_step(checks, StepFailure::MergeConflict, at(23))
+  });
   assert_eq!(run.attempts().len(), 2);
+  let loaded = fixture.db.run(run.id()).expect("load").expect("exists");
+  let failed = loaded.attempts()[0].execution(checks).expect("checks");
+  assert_eq!(failed.failure(), Some(StepFailure::MergeConflict));
   fixture.apply(&mut run, |run| run.interrupt(InterruptCause::Crashed, at(24)));
   let stored = fixture.db.run(run.id()).expect("load").expect("exists");
   let events = fixture.db.events(run.id()).expect("events");
