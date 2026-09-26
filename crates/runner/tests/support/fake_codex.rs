@@ -21,7 +21,8 @@
 //! "Finished <step>"), else "Done.". The step is read from the prompt's "# Current step:" line.
 //!
 //! `exec resume <session> -` continues session `fake-thread-1` in its working directory: it appends `continued` to
-//! `README.md` and completes its turn. A new session works in the `-C` directory.
+//! `README.md` and completes its turn, once no `fake-hold` lies next to the worktrees (a test holds a continued session
+//! at work with it). A new session works in the `-C` directory.
 //!
 //! On standard error it reports what it was given: its arguments, the names of its environment
 //! variables and the first line of the prompt, so tests can check how it was started, and the
@@ -101,6 +102,7 @@ fn main() -> ExitCode {
     own_file: prompt.contains("Write own file"),
   };
   if resumed {
+    wait_while_held(&worktree);
     return finish(&worktree, "continued", &result);
   }
   if prompt.contains("Keep working") {
@@ -215,6 +217,18 @@ fn before_finishing(worktree: &std::path::Path, prompt: &str) {
   if prompt.contains("Work slowly") {
     flush();
     thread::sleep(Duration::from_millis(1_500));
+  }
+}
+
+/// Waits while the test holds continued sessions with `fake-hold` next to the worktrees.
+fn wait_while_held(worktree: &std::path::Path) {
+  let hold = worktree
+    .parent()
+    .and_then(std::path::Path::parent)
+    .map(|orchester| orchester.join("fake-hold"));
+  flush();
+  while hold.as_ref().is_some_and(|hold| hold.exists()) {
+    thread::sleep(Duration::from_millis(50));
   }
 }
 

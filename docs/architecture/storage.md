@@ -199,7 +199,11 @@ Agent permissions (repository access, commands, network) are part of the agent p
 since body schema 2. Bodies of schema 1 are upgraded when read, never rewritten: they get read-only
 access, commands confined to the worktree and network off (`AgentPermissions::before_permissions`).
 A pipeline step body may carry a `permissions` narrowing (commands, network); steps without one run
-with their profile's permissions.
+with their profile's permissions. A run can change one profile's permissions for itself (02.J): from the next invocation of each of
+the profile's steps, or now, when the profile's agents at work finish the command they run, their work
+is committed as a checkpoint and each step continues as a new invocation that resumes its CLI session.
+The connection's CLI must enforce the change for every step of the profile; the published profile
+keeps its permissions unless the change is also saved to its draft.
 
 ### Tasks and scheduling
 
@@ -216,6 +220,7 @@ with their profile's permissions.
 | --- | --- |
 | `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it), branch, base revision, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
 | `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step |
+| `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
 | `attempts` | run, number, status, reason |
 | `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, merge conflict, checkpoint failed; step budget only in records of earlier versions) |
 | `step_outputs` | step execution, run, step, outcome (done, failed, or none when the final message was not a structured result), text — what the step left for the steps after it, read into their prompts with its source; append-only |
