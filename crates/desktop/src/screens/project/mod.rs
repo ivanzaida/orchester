@@ -43,10 +43,10 @@ use self::{
 };
 use super::status_bar::{ProjectBar, StatusBar, StatusBarProps};
 use crate::{
-  background,
+  background, display,
   messages::{self, Message},
   runner::{RunnerStatus, Runners},
-  tasks::{data::ProjectTasks, list},
+  tasks::{data::ProjectTasks, list, usage::ProjectUsage},
   workspace::OpenProject,
 };
 
@@ -200,6 +200,7 @@ impl Component for ProjectShell {
     let runner = status.state_for(&open.repo_root);
     let runs = run_changes(ctx, &runners);
     let tasks = self.tasks(ctx, &open, runs);
+    let usage = self.usage(ctx, &open, runs);
     let section = self.nav.section.get();
     let content = match section {
       Section::Overview => {
@@ -228,6 +229,7 @@ impl Component for ProjectShell {
         NewTaskProps {
           project: open.clone(),
           pipelines: tasks.ready().map(|tasks| tasks.pipelines.clone()),
+          limits: usage.map(|usage| usage.limits),
         },
       ),
       Section::Task(task) => ctx.mount_keyed::<TaskScreen>(
@@ -236,6 +238,7 @@ impl Component for ProjectShell {
           project: open.clone(),
           task,
           revision: (self.nav.revision.get(), runs),
+          limits: usage.map(|usage| usage.limits),
         },
       ),
       Section::PullRequests => ctx.mount_keyed::<PullRequestsScreen>("pull-requests", open.clone()),
@@ -250,12 +253,11 @@ impl Component for ProjectShell {
       Section::Connections => ctx.mount_keyed::<ConnectionsScreen>("connections", open.clone()),
       Section::Settings => ctx.mount_keyed::<SettingsScreen>("settings", open.clone()),
     };
-    let bar = StatusBarProps {
-      project: Some(ProjectBar {
-        repo_root: open.repo_root.clone(),
-        runner: status,
-        queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
-      }),
+    let bar = ProjectBar {
+      repo_root: open.repo_root.clone(),
+      runner: status,
+      queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
+      usage,
     };
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -267,7 +269,7 @@ impl Component for ProjectShell {
           .child(sidebar(ctx, &open, section, &tasks, &self.nav))
           .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(content)),
       )
-      .child(ctx.mount_keyed::<StatusBar>("status-bar", bar))
+      .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
   }
 }
 
@@ -290,6 +292,24 @@ impl ProjectShell {
       (Some(tasks), None) => TasksState::Ready(tasks),
       (None, None) => TasksState::Loading,
     }
+  }
+}
+
+impl ProjectShell {
+  /// The project's limits and today's usage, read again whenever settings or runs changed. `None`
+  /// until read; a failed read is logged and leaves it unknown.
+  fn usage(&self, ctx: &mut Ctx, open: &OpenProject, runs: u64) -> Option<ProjectUsage> {
+    let day_start = display::local_day_start(std::time::SystemTime::now());
+    let deps = (open.repo_root.clone(), self.nav.revision.get(), runs, day_start);
+    let load = ctx.future(deps, |(repo_root, _, _, day_start)| async move {
+      background::run(move || ProjectUsage::load(&repo_root, day_start))
+        .await?
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the project's limits and usage");
+          messages::store_error(&error)
+        })
+    });
+    load.state().get().data
   }
 }
 

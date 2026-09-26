@@ -4,10 +4,11 @@
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, node::Element};
-use orchester_core::run::{RunStatus, StepStatus, TaskPhase};
+use orchester_core::run::{PauseReason, RunLimit, RunStatus, StepStatus, TaskPhase};
 
 use super::super::page;
 use crate::{
+  display,
   tasks::detail::{StepView, TaskDetail},
   ui::icon::Icon,
 };
@@ -31,17 +32,22 @@ fn description(ctx: &Ctx, detail: &TaskDetail) -> Arc<str> {
   let step = run.current_step();
   let step_name = step.map_or("", |step| &step.name);
   let agent = step.and_then(|step| step.agent.as_deref()).unwrap_or_default();
+  let time = run.paused_at.map(display::clock).unwrap_or_default();
   let args = [
     ("run", number.as_str()),
     ("attempt", attempt.as_str()),
     ("step", step_name),
     ("agent", agent),
+    ("time", time.as_str()),
   ];
   let key = match (run.run.status(), step) {
     (RunStatus::Pending, _) => "runs.page.describe.pending",
+    (RunStatus::Running, _) if run.run.pause_requested() => "runs.page.describe.pausing",
     (RunStatus::Running, Some(_)) => "runs.page.describe.working",
     (RunStatus::Running, None) => "runs.page.describe.starting",
-    (RunStatus::Paused, _) => "runs.page.describe.paused",
+    (RunStatus::Paused(PauseReason::Requested), _) => "runs.page.describe.paused",
+    (RunStatus::Paused(PauseReason::LimitReached(RunLimit::Tokens)), _) => "runs.page.describe.tokenLimit",
+    (RunStatus::Paused(PauseReason::LimitReached(RunLimit::Time)), _) => "runs.page.describe.timeLimit",
     (RunStatus::Interrupted(_), _) => "runs.page.describe.interrupted",
     (RunStatus::Succeeded, _) => "runs.page.describe.succeeded",
     (RunStatus::Failed(_), _) => "runs.page.describe.failed",

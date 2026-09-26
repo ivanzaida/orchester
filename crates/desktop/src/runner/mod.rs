@@ -106,12 +106,12 @@ impl ActiveWork {
 
 impl lurq::app::component::DevtoolsInspectable for ActiveWork {}
 
-/// Why a run did not start.
+/// Why the runner did not do what a request about a run asked.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum StartRunError {
+pub enum RunRequestError {
   #[error(transparent)]
   Request(#[from] RequestError),
-  #[error("the runner refused to start the run: {0:?}")]
+  #[error("the runner refused the request: {0:?}")]
   Rejected(Rejection),
 }
 
@@ -251,21 +251,37 @@ impl Runners {
 
   /// Asks the open project's runner to start a run of queued task `task`. Idempotent by `key`:
   /// retrying after a lost reply answers with the run the first request created.
-  pub async fn start_run(&self, key: IdempotencyKey, task: TaskId) -> Result<RunId, StartRunError> {
-    let answer = match self.inner.current.lock().as_ref() {
-      Some(connection) => connection.request(Command::StartRun { key, task }),
-      None => return Err(StartRunError::Request(RequestError::NotConnected)),
-    };
-    // The task ended without answering, e.g. when the project closed meanwhile.
-    let reply = answer.await.unwrap_or(Err(RequestError::Lost))?;
-    match reply {
+  pub async fn start_run(&self, key: IdempotencyKey, task: TaskId) -> Result<RunId, RunRequestError> {
+    match self.ask(Command::StartRun { key, task }).await? {
       Reply::RunStarted { run } => Ok(run),
-      Reply::Rejected(rejection) => Err(StartRunError::Rejected(rejection)),
+      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
       other => {
         tracing::error!(?other, "unexpected reply to StartRun");
-        Err(StartRunError::Request(RequestError::Lost))
+        Err(RunRequestError::Request(RequestError::Lost))
       }
     }
+  }
+
+  /// Asks the open project's runner to pause, resume or cancel a run, or to raise its limits
+  /// (`command`); returns once the runner has carried it out.
+  pub async fn control_run(&self, command: Command) -> Result<(), RunRequestError> {
+    match self.ask(command).await? {
+      Reply::Accepted { .. } => Ok(()),
+      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
+      other => {
+        tracing::error!(?other, "unexpected reply to a run control request");
+        Err(RunRequestError::Request(RequestError::Lost))
+      }
+    }
+  }
+
+  async fn ask(&self, command: Command) -> Result<Reply, RequestError> {
+    let answer = match self.inner.current.lock().as_ref() {
+      Some(connection) => connection.request(command),
+      None => return Err(RequestError::NotConnected),
+    };
+    // The task ended without answering, e.g. when the project closed meanwhile.
+    answer.await.unwrap_or(Err(RequestError::Lost))
   }
 
   /// Work that closing would interrupt. The runner protocol does not list active work yet, so

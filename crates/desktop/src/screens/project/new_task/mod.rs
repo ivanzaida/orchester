@@ -27,9 +27,11 @@ use lurq::{
 };
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, TaskId},
+  limits::ProjectLimits,
   repository::RepositoryLink,
   store::RepositoryStore,
   task::{MissingDetail, TaskDetails},
+  tokens::grouped,
 };
 use orchester_store::ProjectDb;
 
@@ -37,7 +39,9 @@ use self::brief::Criterion;
 use super::{ProjectNav, Section};
 use crate::{
   activity::{Activity, operations},
-  background, messages,
+  background,
+  budget::minutes_text,
+  messages,
   messages::Message,
   runner::Runners,
   tasks::{
@@ -63,6 +67,8 @@ pub struct NewTaskProps {
   pub project: OpenProject,
   /// Published pipelines, once the project's data is read.
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
+  /// The project's limits, once read: the defaults the form starts with and the maximum budget.
+  pub limits: Option<ProjectLimits>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for NewTaskProps {}
@@ -123,6 +129,8 @@ pub struct NewTaskForm {
   pipeline: Signal<PipelineSelection>,
   budget: Signal<String>,
   time_limit: Signal<String>,
+  /// The limits were filled in from the project's defaults; they are filled in once.
+  seeded: Signal<bool>,
   /// Generated once per form: every save attempt of this form uses it.
   batch: IdempotencyKey,
   /// Generated once per form: every Create & run attempt of this form starts this run.
@@ -164,6 +172,7 @@ impl Component for NewTaskForm {
       pipeline: ctx.signal(PipelineSelection(None)),
       budget: ctx.signal(String::new()),
       time_limit: ctx.signal(String::new()),
+      seeded: ctx.signal(false),
       batch: IdempotencyKey::generate(),
       run: IdempotencyKey::generate(),
       nav,
@@ -175,7 +184,10 @@ impl Component for NewTaskForm {
     let save = save_action(ctx);
     let run = run_action(ctx);
     let link = repository_link(ctx, &props.project);
-    let state = self.state(&save, &run);
+    let limits = props.limits.unwrap_or_default();
+    self.seed(ctx, props.limits);
+    let separator = ctx.t("number.groupSeparator");
+    let state = self.state(&save, &run, &separator, limits);
     let submit = self
       .save_handler(&save, &props.project, state.ready.clone())
       .filter(|_| !state.saving && !state.starting);
@@ -198,7 +210,7 @@ impl Component for NewTaskForm {
       .child(plan::execution_plan(
         ctx,
         self,
-        props.pipelines.as_deref(),
+        (props.pipelines.as_deref(), limits),
         &state,
         submit.clone(),
         start,
@@ -213,7 +225,23 @@ impl Component for NewTaskForm {
 }
 
 impl NewTaskForm {
-  fn state(&self, save: &SaveAction, run: &RunAction) -> FormState {
+  /// Fills in the project's default run budget and time limit once they are read, unless
+  /// something was typed there already.
+  fn seed(&self, ctx: &Ctx, limits: Option<ProjectLimits>) {
+    let Some(limits) = limits.filter(|_| !self.seeded.get_untracked()) else {
+      return;
+    };
+    self.seeded.set(true);
+    if self.budget.get_untracked().is_empty() {
+      let separator = ctx.t("number.groupSeparator");
+      self.budget.set(grouped(limits.default_run_budget().get(), &separator));
+    }
+    if self.time_limit.get_untracked().is_empty() {
+      self.time_limit.set(minutes_text(limits.default_time_limit()));
+    }
+  }
+
+  fn state(&self, save: &SaveAction, run: &RunAction, separator: &str, limits: ProjectLimits) -> FormState {
     let criteria: Vec<String> = self
       .criteria
       .get()
@@ -233,6 +261,8 @@ impl NewTaskForm {
       pipeline: self.pipeline.get().0,
       budget: &budget,
       time_limit: &time_limit,
+      separator,
+      max_budget: limits.max_run_budget(),
     };
     let saving = save.state().get();
     let (ready, errors) = match form.details() {

@@ -13,7 +13,7 @@ use orchester_desktop::{
   app_paths::runner_beside,
   close::{CloseKind, session_end},
   runner::{
-    QUIET_STOP_TIMEOUT, RequestError, RunnerStatus, Runners, ShutdownOutcome, StartRunError,
+    QUIET_STOP_TIMEOUT, RequestError, RunRequestError, RunnerStatus, Runners, ShutdownOutcome,
     state::{RunnerFailure, RunnerState},
   },
 };
@@ -116,7 +116,7 @@ async fn runner_process_answers_start_run_requests() {
   let (key, task) = (IdempotencyKey::generate(), TaskId::generate());
   assert_eq!(
     runners.start_run(key, task).await,
-    Err(StartRunError::Request(RequestError::NotConnected))
+    Err(RunRequestError::Request(RequestError::NotConnected))
   );
   let mut updates = runners.subscribe();
   runners.show(Some(repo.path()));
@@ -125,6 +125,6 @@ async fn runner_process_answers_start_run_requests() {
   let answer = timeout(PATIENCE, runners.start_run(key, task))
     .await
     .expect("answer in time");
-  assert_eq!(answer, Err(StartRunError::Rejected(Rejection::TaskNotFound)));
+  assert_eq!(answer, Err(RunRequestError::Rejected(Rejection::TaskNotFound)));
   runners.shutdown(Some(QUIET_STOP_TIMEOUT)).await;
 }

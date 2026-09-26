@@ -5,7 +5,7 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   id::ResourceId,
-  money::Money,
+  money::{Currency, Money},
   name::Name,
   resource::{FailureRoute, ModelId, PromptText, RepositoryAccess, Step, StepKey, StepKind},
 };
@@ -14,8 +14,11 @@ use super::problems::{budget_error, prompt_error};
 use crate::{
   display,
   messages::{self, Message},
-  tasks::form::BUDGET_CURRENCY,
 };
+
+/// Currency of step budgets. Task and run budgets are tokens now; step budgets are still money
+/// until pipelines move to token budgets too.
+const BUDGET_CURRENCY: Currency = Currency::USD;
 
 /// Retries a new failure route allows until the user changes it.
 const DEFAULT_RETRIES: NonZeroU32 = NonZeroU32::MIN;

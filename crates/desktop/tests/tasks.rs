@@ -2,19 +2,19 @@ use std::{fs, time::Duration};
 
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, ResourceId},
-  money::Money,
   name::Name,
   project::{Project, ProjectKey},
   resource::{Pipeline, PromptText, RepositoryAccess, Slug, Step, StepKey, StepKind},
   store::{ResourceStore, TaskStore},
   task::{MissingDetail, Task, TaskDetails},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 use orchester_desktop::{
   display,
   tasks::{
     data::{ProjectTasks, published_pipelines, save_draft},
-    form::{BUDGET_CURRENCY, TaskForm},
+    form::TaskForm,
     list::{self, DraftSummary, PipelineLabel, Readiness, TaskTab},
   },
 };
@@ -29,6 +29,8 @@ fn form<'a>(title: &'a str, criteria: &'a [String], budget: &'a str, time_limit:
     pipeline: None,
     budget,
     time_limit,
+    separator: ",",
+    max_budget: TokenBudget::new(10_000_000).expect("above zero"),
   }
 }
 
@@ -61,14 +63,14 @@ fn now() -> Timestamp {
 #[test]
 fn form_maps_entered_values_to_task_details() {
   let criteria = vec!["  Filters as you type. ".to_owned(), "   ".to_owned()];
-  let details = form(" Add task search ", &criteria, "5.50", "30")
+  let details = form(" Add task search ", &criteria, "1,400,000", "30")
     .details()
     .expect("valid form");
   assert_eq!(details.title.as_str(), "Add task search");
   assert_eq!(details.brief, "Let people find a task.");
   assert_eq!(details.acceptance_criteria, vec!["Filters as you type.".to_owned()]);
   let limits = details.limits.expect("both limits entered");
-  assert_eq!(limits.budget(), Money::from_micros(5_500_000, BUDGET_CURRENCY));
+  assert_eq!(limits.budget().get(), 1_400_000);
   assert_eq!(limits.max_duration(), Duration::from_secs(30 * 60));
 }
 
@@ -116,12 +118,13 @@ fn form_rejects_invalid_and_half_entered_limits() {
     )
   };
   assert_eq!(error_keys("5", ""), (None, Some("errors.timeLimitRequired")));
-  assert_eq!(error_keys("", "30"), (Some("errors.budgetRequired"), None));
+  assert_eq!(error_keys("", "30"), (Some("tokens.errors.empty"), None));
   assert_eq!(
-    error_keys("five", "half an hour"),
-    (Some("errors.budgetInvalid"), Some("errors.timeLimitInvalid"))
+    error_keys("1.4M", "half an hour"),
+    (Some("tokens.errors.digits"), Some("errors.timeLimitInvalid"))
   );
-  assert_eq!(error_keys("0", "30"), (Some("errors.budgetNotPositive"), None));
+  assert_eq!(error_keys("0", "30"), (Some("tokens.errors.zero"), None));
+  assert_eq!(error_keys("12,000,000", "30"), (Some("tokens.errors.aboveMax"), None));
   assert_eq!(error_keys("5", "0"), (None, Some("errors.timeLimitZero")));
 }
 
@@ -230,7 +233,7 @@ fn stored_tasks() -> Vec<Task> {
     acceptance_criteria: vec!["Works.".into()],
     pipeline: Some(ResourceId::generate()),
     limits: Some(
-      orchester_core::task::TaskLimits::new(Money::from_micros(1, BUDGET_CURRENCY), Duration::from_secs(60))
+      orchester_core::task::TaskLimits::new(TokenBudget::new(1).expect("above zero"), Duration::from_secs(60))
         .expect("positive limits"),
     ),
     ..details("To queue")

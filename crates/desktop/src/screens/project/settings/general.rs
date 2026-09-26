@@ -348,6 +348,11 @@ fn account_row(
 
 /// A setting (`l2808`): its name and description, and its value column on the right.
 fn setting_row(name: &str, description: &str, value: Vec<Element>) -> Element {
+  sized_setting_row(VALUE_WIDTH, name, description, value)
+}
+
+/// A setting's name and description beside its value column of `value_width`.
+pub(super) fn sized_setting_row(value_width: f32, name: &str, description: &str, value: Vec<Element>) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .overflow_visible()
@@ -367,7 +372,7 @@ fn setting_row(name: &str, description: &str, value: Vec<Element>) -> Element {
     )
     .child(
       Column::new()
-        .width(Dimension::Px(VALUE_WIDTH))
+        .width(Dimension::Px(value_width))
         // A full-width button's focus ring reaches past the column.
         .overflow_visible()
         .spacing(ExtraSpacing::Tight.role())
@@ -377,7 +382,7 @@ fn setting_row(name: &str, description: &str, value: Vec<Element>) -> Element {
 }
 
 /// What a value means now (`fMdmA`, `Toxzz`, `rKHJw`).
-fn readback(text: &str) -> Element {
+pub(super) fn readback(text: &str) -> Element {
   Text::new(text)
     .variant(ExtraTypography::Footnote.role())
     .color(PaletteColor::TextMuted)

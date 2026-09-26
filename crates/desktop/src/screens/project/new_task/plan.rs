@@ -15,19 +15,21 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::task::MissingDetail;
+use orchester_core::{limits::ProjectLimits, task::MissingDetail, tokens::compact_tokens};
 
 use super::{FormState, NewTaskForm, PipelineSelection, error_note, missing_note};
 use crate::{
-  tasks::{data::PipelineChoice, form::BUDGET_CURRENCY},
+  budget::read_budget,
+  tasks::data::PipelineChoice,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, SKIPPED_BY_TAB},
-    field::{ValueTone, select_style, styled_input, value_box_sized},
+    field::{ValueTone, select_style, value_box_sized},
     form::Submit,
     icon::Icon,
     message_text,
     pressable::{Ring, keyboard_stop},
+    unit_input::UnitInput,
   },
 };
 
@@ -36,14 +38,14 @@ use crate::{
 const PLAN_WIDTH: f32 = 336.0;
 const SELECTOR_HEIGHT: f32 = 42.0;
 const STEP_HEIGHT: f32 = 34.0;
-const LIMIT_INPUT_WIDTH: f32 = 124.0;
+const LIMIT_INPUT_WIDTH: f32 = 150.0;
 const LIMIT_INPUT_HEIGHT: f32 = 32.0;
 const CREATE_AND_RUN_HEIGHT: f32 = 42.0;
 
 pub fn execution_plan(
   ctx: &Ctx,
   form: &NewTaskForm,
-  pipelines: Option<&Vec<PipelineChoice>>,
+  (pipelines, limits): (Option<&Vec<PipelineChoice>>, ProjectLimits),
   state: &FormState,
   save: Submit,
   start: Submit,
@@ -65,7 +67,7 @@ pub fn execution_plan(
     .child(pipeline_selector(ctx, &form.pipeline, pipelines))
     .with_children(steps)
     .with_children(missing_note(ctx, state, MissingDetail::Pipeline))
-    .child(limits(ctx, form, state))
+    .child(run_limits(ctx, form, state, limits))
     .child(Spacer::new().flex(1.0))
     .child(actions(ctx, state, save, start))
     .into()
@@ -165,69 +167,72 @@ fn run_status(ctx: &Ctx, state: &FormState) -> Vec<Element> {
   ]
 }
 
-/// Run budget and time limit (`iuFln`).
-fn limits(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
+/// Run budget and time limit (`iuFln`), each with its read-back or its error (`RgvJX`, `d6zYDZ`).
+fn run_limits(ctx: &Ctx, form: &NewTaskForm, state: &FormState, limits: ProjectLimits) -> Element {
   let budget_error = state.errors.budget.as_ref().map(|error| message_text(ctx, error));
   let time_error = state.errors.time_limit.as_ref().map(|error| message_text(ctx, error));
+  let separator = ctx.t("number.groupSeparator");
+  let max = limits.max_run_budget();
+  let budget_readback = read_budget(&form.budget.get(), &separator, max).ok().map(|budget| {
+    ctx.t_args(
+      "tokens.readBackRun",
+      [
+        ("count", compact_tokens(budget.get()).as_str()),
+        ("max", compact_tokens(max.get()).as_str()),
+      ],
+    )
+  });
+  let time_readback =
+    (time_error.is_none() && !form.time_limit.get().trim().is_empty()).then(|| ctx.t("tasks.new.timeLimitReadBack"));
+  let budget = UnitInput::new("task-budget", form.budget.clone(), ctx.t("tokens.unit"))
+    .tokens(separator)
+    .compact()
+    .invalid(budget_error.is_some());
+  let time = UnitInput::new("task-time-limit", form.time_limit.clone(), ctx.t("tasks.new.minutes"))
+    .compact()
+    .invalid(time_error.is_some());
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(ExtraSpacing::Step.role())
     .spacing(ExtraSpacing::Group.role())
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(limit_row(
-      ctx,
-      "tasks.new.budget",
-      "task-budget",
-      &form.budget,
-      BUDGET_CURRENCY.code(),
-      budget_error.is_some(),
-    ))
+    .child(limit_row(ctx, "tasks.new.budget", budget))
     .with_children(budget_error.map(|error| error_note(&error)))
-    .child(limit_row(
-      ctx,
-      "tasks.new.timeLimit",
-      "task-time-limit",
-      &form.time_limit,
-      &ctx.t("tasks.new.minutes"),
-      time_error.is_some(),
-    ))
+    .with_children(budget_readback.map(|text| read_back("task-budget-readback", &text)))
+    .child(limit_row(ctx, "tasks.new.timeLimit", time))
     .with_children(time_error.map(|error| error_note(&error)))
+    .with_children(time_readback.map(|text| read_back("task-time-readback", &text)))
     .with_children(missing_note(ctx, state, MissingDetail::Limits))
     .into()
 }
 
-/// A limit label beside a small input with its unit (`hWeBp`).
-fn limit_row(ctx: &Ctx, label: &str, id: &'static str, value: &Signal<String>, unit: &str, invalid: bool) -> Element {
-  let input = ctx.theme().form().input.clone();
-  let border = if invalid {
-    PaletteColor::BorderStrong
-  } else {
-    input.border.clone()
-  };
-  let field = Row::new()
-    .width(Dimension::Px(LIMIT_INPUT_WIDTH))
-    .height(Dimension::Px(LIMIT_INPUT_HEIGHT))
-    .padding_custom(input.padding)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .background(input.background.clone())
-    .border(Border::inside(BorderSize::Sm, border))
-    .rounded(input.radius)
-    .child(
-      styled_input(ctx, value.clone(), TypographyStyle::Caption)
-        .id(id)
-        .single_line()
-        .flex(1.0)
-        .caret_color(PaletteColor::TextPrimary),
-    )
-    .child(Text::new(unit).variant(TypographyStyle::Caption).nowrap());
+/// A limit label beside its input (`hWeBp`).
+fn limit_row(ctx: &Ctx, label: &str, input: UnitInput) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Stack.role())
     .justify(Justify::SpaceBetween)
     .align_items(Alignment::Center)
     .child(Text::new(&ctx.t(label)).variant(TypographyStyle::FieldLabel))
-    .child(field)
+    .child(
+      input
+        .size(Dimension::Px(LIMIT_INPUT_WIDTH), Dimension::Px(LIMIT_INPUT_HEIGHT))
+        .render(ctx),
+    )
+    .into()
+}
+
+/// The value read back under a limit, right-aligned (`RgvJX`).
+fn read_back(id: &'static str, text: &str) -> Element {
+  Row::new()
+    .id(id)
+    .width(Dimension::Pct(100.0))
+    .justify(Justify::End)
+    .child(
+      Text::new(text)
+        .variant(ExtraTypography::Hint.role())
+        .color(PaletteColor::TextMuted),
+    )
     .into()
 }
 

@@ -15,7 +15,7 @@ use lurq::{
 };
 use orchester_core::{
   connection::stream::{CommandStatus, FileChangeKind, OutputStream, RunnerProblem},
-  run::compact_tokens,
+  tokens::compact_tokens,
 };
 
 use super::{

@@ -51,20 +51,6 @@ pub fn remote_address(url: &str) -> &str {
   address.strip_suffix(".git").unwrap_or(address)
 }
 
-/// `value` with its digits grouped by thousands with `separator`, the locale's
-/// `number.groupSeparator`: `20,000` in English.
-pub fn grouped(value: u64, separator: &str) -> String {
-  let digits = value.to_string();
-  let mut grouped = String::with_capacity(digits.len() + digits.len() / 3 * separator.len());
-  for (position, digit) in digits.chars().enumerate() {
-    if position > 0 && (digits.len() - position).is_multiple_of(3) {
-      grouped.push_str(separator);
-    }
-    grouped.push(digit);
-  }
-  grouped
-}
-
 /// `amount` as a decimal with at least two places, e.g. `1.50`, `0.125`; a currency sign is
 /// added by the message that shows it ([`money`]).
 pub fn amount(amount: Money) -> String {
@@ -129,6 +115,19 @@ pub fn clock(at: Timestamp) -> String {
   // Stored times are after 1970; an earlier one reads as the epoch rather than failing.
   let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
   clock_time(UNIX_EPOCH + Duration::from_millis(millis))
+}
+
+/// The start of the local day `now` falls in, as "today" counts it (the status bar's tokens).
+/// On a day whose midnight does not exist locally (a daylight saving change at 00:00) usage is
+/// counted from `now` rather than guessed.
+pub fn local_day_start(now: SystemTime) -> Timestamp {
+  let local = chrono::DateTime::<chrono::Local>::from(now);
+  let start = local
+    .date_naive()
+    .and_hms_opt(0, 0, 0)
+    .and_then(|midnight| midnight.and_local_timezone(chrono::Local).earliest())
+    .unwrap_or(local);
+  Timestamp::from_unix_millis(start.timestamp_millis())
 }
 
 /// A revision as people read it: its first seven characters.

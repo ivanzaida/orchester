@@ -8,7 +8,10 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   id::{InvocationId, RunId, StepExecutionId, TaskId},
   resource::{AgentProfile, RepositoryAccess, StepKey, StepKind, VersionNumber},
-  run::{ActivityEntry, Invocation, Run, StepExecutor, StepStatus, TaskPhase, TokenUsage},
+  run::{
+    ActivityEntry, Invocation, Run, RunEventKind, RunStatus, StepExecutor, StepStatus, TaskPhase, TokenUsage,
+    active_time,
+  },
   store::{ActivityStore, ResourceStore, RunStore, TaskStore},
   task::Task,
   time::Timestamp,
@@ -38,6 +41,10 @@ pub struct RunView {
   pub version: VersionNumber,
   pub steps: Vec<StepView>,
   pub invocations: Vec<Invocation>,
+  /// When a paused run paused or stopped at its limit.
+  pub paused_at: Option<Timestamp>,
+  /// The run's work was committed as a checkpoint right before it paused.
+  pub saved_at_pause: bool,
 }
 
 impl RunView {
@@ -75,13 +82,14 @@ impl RunView {
     self.invocations.iter().map(|invocation| invocation.usage).sum()
   }
 
-  /// Active agent time of the run so far, in milliseconds.
-  pub fn active_millis(&self, now: Timestamp) -> i64 {
-    self
-      .invocations
-      .iter()
-      .map(|invocation| invocation.active_millis(now))
-      .sum()
+  /// Active agent time of the run so far: pauses and waits for a person do not count.
+  pub fn active_time(&self, now: Timestamp) -> std::time::Duration {
+    active_time(&self.invocations, now)
+  }
+
+  /// The step a run stopped at its limit was working on, if it stopped mid-step.
+  pub fn stopped_step(&self) -> Option<&StepView> {
+    self.steps.iter().find(|step| step.status == Some(StepStatus::Running))
   }
 
   /// Invocations of `execution`, in launch order.
@@ -150,8 +158,22 @@ fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       status: latest.map(|execution| execution.status()),
     });
   }
+  let (paused_at, saved_at_pause) = match run.status() {
+    RunStatus::Paused(_) => {
+      let events = db.events(run.id()).map_err(run_store_error)?;
+      let paused = events
+        .iter()
+        .rposition(|event| matches!(event.kind(), RunEventKind::Paused { .. }));
+      let saved = paused
+        .is_some_and(|index| index > 0 && matches!(events[index - 1].kind(), RunEventKind::CheckpointRecorded { .. }));
+      (paused.map(|index| events[index].at()), saved)
+    }
+    _ => (None, false),
+  };
   Ok(RunView {
     invocations: db.invocations(run.id())?,
+    paused_at,
+    saved_at_pause,
     pipeline,
     version: pinned.number,
     steps,

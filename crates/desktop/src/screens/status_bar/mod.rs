@@ -35,6 +35,7 @@ use self::{
 use crate::{
   activity::{Activity, ActivityLog, bar},
   runner::RunnerStatus,
+  tasks::usage::ProjectUsage,
   theme::ExtraColor,
 };
 
@@ -50,6 +51,8 @@ pub struct ProjectBar {
   pub runner: RunnerStatus,
   /// Queued tasks; `None` while the tasks are read.
   pub queued: Option<usize>,
+  /// The project's limits and today's usage; `None` while they are read.
+  pub usage: Option<ProjectUsage>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

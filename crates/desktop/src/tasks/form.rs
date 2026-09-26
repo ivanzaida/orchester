@@ -1,22 +1,18 @@
 //! New task form (02.09 `l2YA4`) values as entered, and their mapping to `TaskDetails`.
 //! Everything except the title may be left out of a draft; what is entered must be valid.
 
-use std::time::Duration;
-
 use orchester_core::{
   id::ResourceId,
-  money::{Currency, Money},
   name::{Name, NameError},
   task::{LimitsError, MissingDetail, TaskDetails, TaskLimits},
+  tokens::TokenBudget,
 };
 
-use crate::messages::Message;
+use crate::{
+  budget::{read_budget, read_minutes},
+  messages::Message,
+};
 
-/// Currency of task budgets. Projects have no currency setting yet, and the design states
-/// every budget in US dollars.
-pub const BUDGET_CURRENCY: Currency = Currency::USD;
-
-const SECONDS_PER_MINUTE: u64 = 60;
 const UNTITLED: &str = "untitled";
 
 /// Field values of the new task form, as entered.
@@ -26,10 +22,14 @@ pub struct TaskForm<'a> {
   /// One entry per criterion row; blank rows are not saved.
   pub criteria: &'a [String],
   pub pipeline: Option<ResourceId>,
-  /// Amount in [`BUDGET_CURRENCY`], e.g. `5` or `5.50`.
+  /// Whole tokens, grouped with `separator` or not, e.g. `1,400,000`.
   pub budget: &'a str,
-  /// Whole minutes.
+  /// Whole minutes of active agent time.
   pub time_limit: &'a str,
+  /// The locale's group separator.
+  pub separator: &'a str,
+  /// The project's maximum run budget.
+  pub max_budget: TokenBudget,
 }
 
 /// Why the form cannot be saved yet, per place on the form.
@@ -109,19 +109,14 @@ impl TaskForm<'_> {
       return Ok(None);
     }
     let budget = if budget.is_empty() {
-      Err(Message::new("errors.budgetRequired"))
+      Err(Message::new("tokens.errors.empty"))
     } else {
-      Money::parse(budget, BUDGET_CURRENCY).map_err(|_| Message::new("errors.budgetInvalid"))
+      read_budget(budget, self.separator, self.max_budget)
     };
     let time_limit = if time_limit.is_empty() {
       Err(Message::new("errors.timeLimitRequired"))
     } else {
-      time_limit
-        .parse::<u64>()
-        .ok()
-        .and_then(|minutes| minutes.checked_mul(SECONDS_PER_MINUTE))
-        .map(Duration::from_secs)
-        .ok_or_else(|| Message::new("errors.timeLimitInvalid"))
+      read_minutes(time_limit)
     };
     let (budget, time_limit) = match (budget, time_limit) {
       (Ok(budget), Ok(time_limit)) => (budget, time_limit),
@@ -129,10 +124,7 @@ impl TaskForm<'_> {
     };
     TaskLimits::new(budget, time_limit)
       .map(Some)
-      .map_err(|error| match error {
-        LimitsError::NonPositiveBudget => (Some(Message::new("errors.budgetNotPositive")), None),
-        LimitsError::ZeroDuration => (None, Some(Message::new("errors.timeLimitZero"))),
-      })
+      .map_err(|LimitsError::ZeroDuration| (None, Some(Message::new("errors.timeLimitZero"))))
   }
 }
 

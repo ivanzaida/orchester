@@ -1,23 +1,31 @@
 //! Project settings (02.N `QV1af` General, 02.M `c7e729` Limits): the project's name and
 //! folder, its GitHub repository and the account it expects, with *Check again*, linking a
-//! repository detected later and *Use signed-in account*. Limits are not available yet: budgets
-//! arrive with task runs.
+//! repository detected later and *Use signed-in account*; its token budgets and default time
+//! limit.
 
 mod general;
+mod limits;
 mod work;
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{component::Component, ctx::Ctx, theme::SpacingSize},
-  components::{Column, Modal, ModalTarget},
+  app::{
+    component::Component,
+    ctx::Ctx,
+    theme::{SpacingSize, TypographyStyle},
+  },
+  components::{Column, Modal, ModalTarget, Text},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::id::ConnectionId;
 
-use self::work::{SettingsWork, WorkAction, work_action};
+use self::{
+  limits::{LimitsProps, LimitsSave, LimitsTab},
+  work::{SettingsWork, WorkAction, work_action},
+};
 use super::{ProjectNav, page};
 use crate::{
   background,
@@ -33,7 +41,6 @@ use crate::{
     command_row::Copied,
     icon::Icon,
     message_text,
-    notice::Notice,
     panel::RecoveryPanel,
     tab::{Tab, tab_row},
   },
@@ -77,6 +84,8 @@ impl Actions {
 
 pub struct SettingsScreen {
   tab: Signal<SettingsTab>,
+  /// Whether the Limits tab's changes are stored.
+  limits_status: Signal<LimitsSave>,
   /// Bumped after a change, to read the project's connections and link again.
   revision: Signal<u64>,
   /// A `gh` chosen for github.com while the project has no connection there.
@@ -98,6 +107,7 @@ impl Component for SettingsScreen {
   fn create(ctx: &mut Ctx) -> Self {
     let screen = Self {
       tab: ctx.signal(SettingsTab::General),
+      limits_status: ctx.signal(LimitsSave::Saved),
       revision: ctx.signal(0_u64),
       program: ctx.signal(None),
       program_for: ctx.signal(None),
@@ -128,7 +138,13 @@ impl Component for SettingsScreen {
       [("project", open.project.name().as_str()), ("tab", &ctx.t(tab_key))],
     );
     let body = match (&loaded, tab) {
-      (_, SettingsTab::Limits) => limits(ctx),
+      (_, SettingsTab::Limits) => ctx.mount_keyed::<LimitsTab>(
+        "settings-limits",
+        LimitsProps {
+          open: open.clone(),
+          status: self.limits_status.clone(),
+        },
+      ),
       (Loaded::Loading, SettingsTab::General) => Column::new().flex(1.0).into(),
       (Loaded::Failed(error), SettingsTab::General) => centered(
         RecoveryPanel::new(
@@ -147,7 +163,7 @@ impl Component for SettingsScreen {
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(page::topbar(&breadcrumb, []))
+      .child(page::topbar(&breadcrumb, self.save_status(ctx, tab)))
       .child(page::heading(
         &ctx.t("settings.title"),
         &ctx.t_args(description_key, [("project", open.project.name().as_str())]),
@@ -226,6 +242,24 @@ impl SettingsScreen {
     }
   }
 
+  /// "All changes saved" in the topbar of the Limits tab (`ZtaAU`).
+  fn save_status(&self, ctx: &Ctx, tab: SettingsTab) -> Option<Element> {
+    if tab != SettingsTab::Limits {
+      return None;
+    }
+    let text = match self.limits_status.get() {
+      LimitsSave::Saved => ctx.t("settings.limits.saved"),
+      LimitsSave::Saving => ctx.t("settings.limits.saving"),
+      LimitsSave::Failed(error) => message_text(ctx, &error),
+    };
+    Some(
+      Text::new(&text)
+        .variant(TypographyStyle::Caption)
+        .id("settings-save-status")
+        .into(),
+    )
+  }
+
   /// Settings tabs (`z1vSun`); tabs are pointer-only.
   fn tabs(&self, ctx: &Ctx, selected: SettingsTab) -> Element {
     let height = Dimension::Pct(100.0);
@@ -297,23 +331,6 @@ impl SettingsScreen {
       .dismiss_on_escape(false)
       .into()
   }
-}
-
-/// Limits (02.M `c7e729`): budgets need task runs, which do not exist yet.
-fn limits(ctx: &Ctx) -> Element {
-  Column::new()
-    .width(Dimension::Px(general::CONTENT_WIDTH))
-    .padding_vertical(SpacingSize::Lg)
-    .padding_horizontal(SpacingSize::Section)
-    .child(
-      Notice::new(
-        Icon::Lock,
-        ctx.t("settings.limits.unavailable"),
-        ctx.t("settings.limits.unavailableDetail"),
-      )
-      .id("settings-limits-unavailable"),
-    )
-    .into()
 }
 
 fn centered(content: Element) -> Element {
