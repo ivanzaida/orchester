@@ -462,6 +462,29 @@ fn runs_stopped_by_the_daily_budget_round_trip_and_resume() {
   assert_eq!(run.status(), &RunStatus::Running);
 }
 
+#[test]
+fn runs_stopped_at_a_step_budget_round_trip_with_the_raised_budget() {
+  let mut fixture = Fixture::new();
+  let mut run = fixture.implementing();
+  let implement = Fixture::exec(&run, "implement");
+  let limit = RunLimit::StepBudget { execution: implement };
+  fixture.apply(&mut run, |run| run.stop_at_limit(limit, at(16)));
+  let stored = fixture.db.run(run.id()).expect("load").expect("exists");
+  assert_eq!(stored.status(), &RunStatus::Paused(PauseReason::LimitReached(limit)));
+  assert_eq!(stored, run);
+  let budget = TokenBudget::new(600_000).expect("above zero");
+  let max = TokenBudget::new(10_000_000).expect("above zero");
+  fixture.apply(&mut run, |run| {
+    run.raise_step_budget(budget, TokensUsed::new(400_000), max, at(17))
+  });
+  let stored = fixture.db.run(run.id()).expect("load").expect("exists");
+  assert_eq!(stored.status(), &RunStatus::Running);
+  assert_eq!(stored.step_budget(&key("implement")), Some(budget));
+  assert_eq!(stored, run);
+  let events = fixture.db.events(run.id()).expect("events");
+  assert_eq!(Run::replay(&events), Ok(run));
+}
+
 /// Two runners' worth of writers (each run's task has its own connection) record transitions of
 /// their runs at the same time: every write waits for the other instead of failing as locked.
 #[test]

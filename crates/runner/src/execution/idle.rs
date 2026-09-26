@@ -5,7 +5,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::RunId,
-  run::{PauseReason, RaisedLimits, Run, RunError, RunEvent, RunLimit, RunStatus, active_time},
+  run::{PauseReason, RaisedLimits, Run, RunError, RunEvent, RunLimit, RunStatus, active_time, execution_tokens},
   store::{ActivityStore, RunStore, SettingsStore},
   time::Timestamp,
   tokens::TokenBudget,
@@ -52,7 +52,7 @@ pub(super) fn resume(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Prep
 /// continues it.
 pub(super) fn raise(db: &mut ProjectDb, root: &Path, run: RunId, limits: RaisedLimits) -> Result<Prepared, Rejection> {
   let mut run = load(db, run)?;
-  if !matches!(run.status(), RunStatus::Paused(PauseReason::LimitReached(_))) {
+  if !matches!(run.status(), RunStatus::Paused(PauseReason::LimitReached(limit)) if limit.is_run_limit()) {
     return Err(Rejection::RunNotPaused);
   }
   let now = Timestamp::now();
@@ -65,6 +65,33 @@ pub(super) fn raise(db: &mut ProjectDb, root: &Path, run: RunId, limits: RaisedL
     .max_run_budget();
   let events = run
     .continue_with_limits(limits, active_time(&invocations, now), max, now)
+    .map_err(rejection)?;
+  store(db, &run, &events)?;
+  Prepared::continuing(db, root, run)
+}
+
+/// Raises the budget of the step a run stopped at, within the project's maximum run budget and
+/// above what the stopped execution used, and continues the run.
+pub(super) fn raise_step_budget(
+  db: &mut ProjectDb,
+  root: &Path,
+  run: RunId,
+  budget: TokenBudget,
+) -> Result<Prepared, Rejection> {
+  let mut run = load(db, run)?;
+  let RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) = *run.status() else {
+    return Err(Rejection::RunNotPaused);
+  };
+  let invocations = db
+    .invocations(run.id())
+    .map_err(|error| failed("cannot read the run's invocations", &error))?;
+  let max = db
+    .project_limits()
+    .map_err(|error| failed("cannot read the project's limits", &error))?
+    .max_run_budget();
+  let used = execution_tokens(&invocations, execution);
+  let events = run
+    .raise_step_budget(budget, used, max, Timestamp::now())
     .map_err(rejection)?;
   store(db, &run, &events)?;
   Prepared::continuing(db, root, run)

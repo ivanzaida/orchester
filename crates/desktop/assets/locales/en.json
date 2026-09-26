@@ -383,6 +383,7 @@
         "tokenLimit": "Run {{run}} · Attempt {{attempt}} · Stopped at the token limit at {{time}}",
         "timeLimit": "Run {{run}} · Attempt {{attempt}} · Stopped at the time limit at {{time}}",
         "dailyBudget": "Run {{run}} · Attempt {{attempt}} · Stopped at the daily project budget at {{time}}",
+        "stepBudget": "Run {{run}} · Attempt {{attempt}} · Stopped at the step budget of {{step}} at {{time}}",
         "interrupted": "Run {{run}} · Attempt {{attempt}} · interrupted at {{step}}",
         "succeeded": "Run {{run}} · Attempt {{attempt}} · every step passed",
         "failed": "Run {{run}} · Attempt {{attempt}} · failed at {{step}}",
@@ -620,8 +621,14 @@
       },
       "dailyDetail": "This project’s runs used today’s token budget. {{agent}} was stopped and its work was committed as a checkpoint. Resume the run tomorrow, or raise the daily budget in Project settings and resume it now.",
       "dailyDetailUnsaved": "This project’s runs used today’s token budget. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Resume the run tomorrow, or raise the daily budget in Project settings and resume it now.",
+      "stepTitle": "Stopped at the step budget of {{step}}",
+      "stepTitleCheckpoint": "Stopped at the step budget of {{step}} · checkpoint {{checkpoint}}",
+      "stepDetail": "{{step}} used {{used}} of its {{limit}}-token step budget in Run {{run}}. {{agent}} was stopped after its turn and its work was committed as a checkpoint. Nothing runs until you raise the step budget.",
+      "stepDetailUnsaved": "{{step}} used {{used}} of its {{limit}}-token step budget in Run {{run}}. {{agent}} was stopped after its turn; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the step budget.",
       "theAgent": "The agent",
       "raiseTitle": "Raise the limit to continue",
+      "raiseStepTitle": "Raise the step budget to continue",
+      "stepBudget": "Step budget",
       "tokenBudget": "Token budget",
       "timeLimit": "Time limit",
       "tokensUsed": "Used {{used}} of {{limit}}",
@@ -633,6 +640,8 @@
       "continueMidStep": "Continue starts a new {{agent}} invocation from checkpoint {{checkpoint}} and repeats the unfinished part of {{step}}. The new limit applies to Run {{run}} only.",
       "continueMidStepNoCheckpoint": "Continue starts a new {{agent}} invocation and repeats the unfinished part of {{step}}. The new limit applies to Run {{run}} only.",
       "continueNextStep": "Continue starts the next step. The new limit applies to Run {{run}} only.",
+      "continueStepBudget": "Continue starts a new {{agent}} invocation in the same session from checkpoint {{checkpoint}} and repeats the unfinished part of {{step}}. The new step budget applies to Run {{run}} only; the pipeline keeps its own.",
+      "continueStepBudgetNoCheckpoint": "Continue starts a new {{agent}} invocation in the same session and repeats the unfinished part of {{step}}. The new step budget applies to Run {{run}} only; the pipeline keeps its own.",
       "continue": "Continue",
       "continueWith": "Continue with {{count}} tokens",
       "continueWithMinutes": {
@@ -642,7 +651,8 @@
       "continuing": "Continuing…",
       "notRaised": "The run stopped at its limit. Raise the limit to continue.",
       "tokensNotAboveUsed": "The new budget must be above the tokens this run already used.",
-      "timeNotAboveUsed": "The new time limit must be above the active agent time this run already used."
+      "timeNotAboveUsed": "The new time limit must be above the active agent time this run already used.",
+      "stepNotAboveUsed": "The new step budget must be above the tokens the step already used."
     },
     "capacity": {
       "dailyBudgetUsed": "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.",
@@ -1834,7 +1844,9 @@
       "zero": "Enter a budget above 0 tokens.",
       "aboveMax": "A run budget can be at most {{max}} tokens (project setting).",
       "defaultAboveMax": "The default can be at most the maximum run budget, {{max}} tokens.",
-      "notAboveUsed": "Enter more than the {{used}} tokens this run already used."
+      "notAboveUsed": "Enter more than the {{used}} tokens this run already used.",
+      "stepNotAboveUsed": "Enter more than the {{used}} tokens {{step}} already used.",
+      "stepAboveMax": "A step budget can be at most {{max}} tokens, the maximum run budget (project setting)."
     }
   }
 }

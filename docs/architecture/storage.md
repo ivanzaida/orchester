@@ -87,10 +87,16 @@ at work takes one.
   is undone, the step fails with *merge conflict* (the files are named in the transcript) and its
   failure route decides: retry from the route's target, or fail the run. Its branch and worktree stay.
 - **Failures.** A step fails when its agent fails, when its structured result says `failed`, when it
-  cannot start, when its step budget is used (the agent is ended after its turn, like at the run's
-  token limit) or when its work cannot be committed or merged. A failure ends its attempt: agents of
+  cannot start or when its work cannot be committed or merged. A failure ends its attempt: agents of
   the attempt still at work are ended and their executions skipped. What a failed step changed is
-  committed as a checkpoint of its execution, never discarded.
+  committed as a checkpoint of its execution, never discarded. Failures for a used step budget,
+  recorded by earlier versions, are still read.
+- **Step budgets.** A step whose execution uses its budget does not fail: its agent is ended after
+  its turn, its work is committed as a checkpoint in its worktree, and the run stops at its limit
+  (*Stopped at limit*, naming the execution). Agents of other steps finish their invocations, as at a
+  pause, and nothing new starts; no retry is taken. Raising that step's budget for the run (above
+  what the execution used, at most the project's maximum run budget) continues the stopped agent's
+  CLI session. The raised budget applies to this run only; the published pipeline keeps its own.
 - **Outputs.** A new agent session ends with a structured result (Codex `--output-schema`,
   `{outcome: done|failed, summary}`); its summary — or, without one, the final message — is the
   step's output, and the prompts of the steps that depend on it include it with its source (step,
@@ -197,9 +203,10 @@ denied behavior) is part of the tool version body. "Used by" is derived by query
 
 | Table | Purpose |
 | --- | --- |
-| `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit), branch, base revision, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
+| `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it), branch, base revision, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
+| `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step |
 | `attempts` | run, number, status, reason |
-| `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, step budget, merge conflict, checkpoint failed) |
+| `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, merge conflict, checkpoint failed; step budget only in records of earlier versions) |
 | `step_outputs` | step execution, run, step, outcome (done, failed, or none when the final message was not a structured result), text — what the step left for the steps after it, read into their prompts with its source; append-only |
 | `plans` | run, version, body blob, decision (proposed, approved, changes requested) |
 | `checkpoints` | run, step execution, revision, agent state blob |

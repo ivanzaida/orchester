@@ -28,7 +28,7 @@ pub use self::{
   branch::{BranchName, BranchNameError},
   error::RunError,
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
-  invocation::{ActivityEntry, Invocation, active_time},
+  invocation::{ActivityEntry, Invocation, active_time, execution_tokens},
   number::RunNumber,
   phase::TaskPhase,
   preflight::{PreflightInput, PreflightProblem, preflight},

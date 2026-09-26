@@ -199,6 +199,7 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
       };
       accepted(run, scheduler.raise_limit(run, limits))
     }
+    Command::RaiseStepBudget { run, budget } => accepted(run, scheduler.raise_step_budget(run, budget)),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
   };
   Answer::Reply(Event::Reply { id, reply })

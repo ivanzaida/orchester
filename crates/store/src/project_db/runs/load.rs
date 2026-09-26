@@ -1,16 +1,20 @@
 //! Reading runs back. Rows are rebuilt through [`Run::restore`] and events through the domain
 //! deserializers, so a damaged row surfaces as `StoreError::Corrupt`.
 
-use std::num::{NonZeroU32, NonZeroU64};
+use std::{
+  collections::BTreeMap,
+  num::{NonZeroU32, NonZeroU64},
+};
 
 use orchester_core::{
   id::RunId,
+  resource::StepKey,
   revision::Revision,
   run::{
     Attempt, BranchName, Checkpoint, EventSequence, Run, RunCreated, RunEvent, RunEventKind, StepExecution, StoredRun,
   },
   time::Timestamp,
-  tokens::TokensUsed,
+  tokens::{TokenBudget, TokensUsed},
 };
 use rusqlite::{Connection, OptionalExtension, Params, Row};
 
@@ -29,7 +33,7 @@ use crate::{
 
 const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_revision, initial_budget_tokens, \
                            initial_max_duration_ms, budget_tokens, max_duration_ms, used_tokens, pause_requested, \
-                           status, status_reason, failed_step, last_sequence, created_at FROM runs";
+                           status, status_reason, failed_step, limit_execution, last_sequence, created_at FROM runs";
 
 pub(super) fn load_runs(connection: &Connection, clause: &str, params: impl Params) -> Result<Vec<Run>, StoreError> {
   let mut statement = connection.prepare(&format!("{SELECT_RUNS} {clause}"))?;
@@ -103,6 +107,17 @@ pub(super) fn load_checkpoint(connection: &Connection, run: RunId) -> Result<Opt
     Revision::new(&revision).map_err(|error| corrupt("checkpoint revision", error))?,
     Timestamp::from_unix_millis(created_at),
   )))
+}
+
+fn load_step_budgets(connection: &Connection, run: &str) -> Result<BTreeMap<StepKey, TokenBudget>, StoreError> {
+  let mut statement = connection.prepare("SELECT step_key, budget_tokens FROM run_step_budgets WHERE run_id = ?1")?;
+  let rows = statement
+    .query_map([run], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
+    .collect::<Result<Vec<_>, _>>()?;
+  rows
+    .into_iter()
+    .map(|(step, budget)| Ok((step_key(&step)?, budget_value("step budget", budget)?)))
+    .collect()
 }
 
 fn load_attempts(connection: &Connection, run: &str) -> Result<Vec<Attempt>, StoreError> {
@@ -194,6 +209,7 @@ struct RunRow {
   status: String,
   status_reason: Option<String>,
   failed_step: Option<String>,
+  limit_execution: Option<String>,
   last_sequence: i64,
   created_at: i64,
 }
@@ -213,8 +229,9 @@ impl RunRow {
       status: row.get(12)?,
       status_reason: row.get(13)?,
       failed_step: row.get(14)?,
-      last_sequence: row.get(15)?,
-      created_at: row.get(16)?,
+      limit_execution: row.get(15)?,
+      last_sequence: row.get(16)?,
+      created_at: row.get(17)?,
     })
   }
 
@@ -234,9 +251,15 @@ impl RunRow {
       id,
       created,
       created_at: Timestamp::from_unix_millis(self.created_at),
-      status: parse_run_status(&self.status, self.status_reason.as_deref(), self.failed_step.as_deref())?,
+      status: parse_run_status(
+        &self.status,
+        self.status_reason.as_deref(),
+        self.failed_step.as_deref(),
+        self.limit_execution.as_deref(),
+      )?,
       budget: budget_value("run budget", budget)?,
       max_duration: duration_value("run time limit", duration)?,
+      step_budgets: load_step_budgets(connection, &self.id)?,
       used: TokensUsed::new(u64::try_from(self.used_tokens).map_err(|_| corrupt("run usage", self.used_tokens))?),
       pause_requested: self.pause_requested,
       attempts: load_attempts(connection, &self.id)?,

@@ -1,11 +1,14 @@
 //! How a running run stops: requests (pause, cancel, the runner stopping) and limits (tokens,
 //! active time, the project's daily budget, a step's budget). A pause lets every agent finish its
-//! invocation; a cancel or the runner stopping ends them; a reached limit ends them once their
-//! turn is over (time: at once). The run settles only after its last agent has ended.
+//! invocation; a cancel or the runner stopping ends them; a reached run limit ends them once their
+//! turn is over (time: at once). A step's budget ends only that step's agent once its turn is
+//! over and lets the others finish their invocations, like a pause. The run settles only after its
+//! last agent has ended, and then stops at the limit it reached.
 
 use orchester_core::{
   id::StepExecutionId,
-  run::{RunLimit, RunStatus},
+  run::{RunLimit, RunStatus, execution_tokens},
+  store::ActivityStore,
   tokens::TokensUsed,
 };
 use orchester_ipc::Rejection;
@@ -75,7 +78,7 @@ impl RunTask {
       self.transition(|run, now| run.interrupt(cause, now))?;
       return Ok(true);
     }
-    let limit = match self.pending.limit.take() {
+    let limit = match self.pending.limit.take().filter(|limit| self.still_applies(*limit)) {
       Some(limit) => Some(limit),
       None => self.reached_limit()?,
     };
@@ -90,7 +93,9 @@ impl RunTask {
     Ok(false)
   }
 
-  /// A run limit the run has reached, checked before anything new starts.
+  /// A limit the run has reached, checked before anything new starts: its own limits, the daily
+  /// budget, or the budget of a step it continues (a step budget stays used up when the run's own
+  /// limit was raised instead).
   fn reached_limit(&self) -> Result<Option<RunLimit>, ExecutionError> {
     Ok(if self.run.token_limit_reached() {
       Some(RunLimit::Tokens)
@@ -99,16 +104,45 @@ impl RunTask {
     } else if idle::daily_budget_used(&self.db)? {
       Some(RunLimit::DailyBudget)
     } else {
-      None
+      self
+        .used_step_budget()?
+        .map(|execution| RunLimit::StepBudget { execution })
     })
   }
 
+  /// A running execution of the current attempt that has used its step's budget.
+  fn used_step_budget(&self) -> Result<Option<StepExecutionId>, ExecutionError> {
+    let invocations = self.db.invocations(self.run.id())?;
+    Ok(self.run.running_executions().into_iter().find(|execution| {
+      let step = self.run.execution(*execution).map(|execution| execution.step());
+      step
+        .and_then(|step| self.run.step_budget(step))
+        .is_some_and(|budget| execution_tokens(&invocations, *execution).reached(budget))
+    }))
+  }
+
+  /// Whether `limit`, reached while agents worked, still stops the run: a step's budget does only
+  /// while its execution still runs (its agent may have finished the step in the turn that used
+  /// the budget, or another step's failure may have ended the attempt).
+  fn still_applies(&self, limit: RunLimit) -> bool {
+    match limit {
+      RunLimit::StepBudget { execution } => self.run.running_executions().contains(&execution),
+      _ => true,
+    }
+  }
+
   /// A turn of `execution`'s agent completed with `tokens`: they count toward the run's budget,
-  /// the project's daily budget and the step's budget. A budget it used up ends the agents it
-  /// bounds once their turn is over.
+  /// the project's daily budget and the step's budget. A run limit they used up ends every agent
+  /// once its turn is over. A used-up step budget ends that step's agent once its turn is over;
+  /// the others finish their invocations as for a pause and nothing new starts, so the run stops
+  /// at the step's limit once they are done.
   pub(super) fn on_usage(&mut self, execution: StepExecutionId, tokens: TokensUsed) -> Result<(), ExecutionError> {
     self.transition(|run, now| run.record_usage(tokens, now))?;
-    if self.pending.limit.is_none() {
+    let step_budget_used = self
+      .agents
+      .get_mut(&execution)
+      .is_some_and(|active| active.count(tokens));
+    if self.pending.limit.is_none_or(|limit| !limit.is_run_limit()) {
       let limit = if self.run.token_limit_reached() {
         Some(RunLimit::Tokens)
       } else if idle::daily_budget_used(&self.db)? {
@@ -119,12 +153,13 @@ impl RunTask {
       if let Some(limit) = limit {
         self.pending.limit = Some(limit);
         self.stop_agents(Stop::AfterTurn(StopCause::Limit(limit)));
+        return Ok(());
       }
     }
-    if let Some(active) = self.agents.get_mut(&execution)
-      && active.count(tokens)
-    {
-      active.tell(Stop::AfterTurn(StopCause::StepBudget));
+    if step_budget_used && let Some(active) = self.agents.get(&execution) {
+      let limit = RunLimit::StepBudget { execution };
+      active.tell(Stop::AfterTurn(StopCause::Limit(limit)));
+      self.pending.limit.get_or_insert(limit);
     }
     Ok(())
   }

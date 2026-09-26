@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::resource::StepKey;
+use crate::{id::StepExecutionId, resource::StepKey};
 
 /// Why a running run stopped without a checkpoint-safe pause.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -33,8 +33,8 @@ pub enum RunFailure {
   RetriesExhausted(StepKey),
 }
 
-/// A limit of a run: its token budget, its time limit on active agent time, or the project's
-/// daily token budget that all its runs share.
+/// A limit of a run: its token budget, its time limit on active agent time, the project's daily
+/// token budget that all its runs share, or the budget of one of its steps.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunLimit {
@@ -43,6 +43,19 @@ pub enum RunLimit {
   /// The project's runs used today's token budget. The run continues with a plain resume once
   /// the day has room again (tomorrow, or a raised daily budget).
   DailyBudget,
+  /// `execution` used its step's budget. The run continues once that step's budget is raised for
+  /// the run ([`super::Run::raise_step_budget`]); the published pipeline stays as it is.
+  StepBudget {
+    execution: StepExecutionId,
+  },
+}
+
+impl RunLimit {
+  /// Whether this is a limit of the whole run, which a raised run budget or time limit lifts, as
+  /// opposed to a step's budget.
+  pub const fn is_run_limit(self) -> bool {
+    !matches!(self, Self::StepBudget { .. })
+  }
 }
 
 /// Why a run is paused.
@@ -115,7 +128,8 @@ pub enum StepFailure {
   ReportedFailed,
   /// The agent could not be started.
   NotStarted,
-  /// The execution used the step's token budget; its agent was ended.
+  /// Legacy: versions before step budgets stopped the run at its limit failed an execution that
+  /// used its step's budget. Such failures are still read; none is recorded any more.
   StepBudget,
   /// The step's changes conflict with what other steps changed on the run's branch.
   MergeConflict,

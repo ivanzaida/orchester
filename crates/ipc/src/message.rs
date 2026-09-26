@@ -80,6 +80,10 @@ pub enum Command {
     budget: TokenBudget,
     max_duration_ms: u64,
   },
+  /// Raises, for run `run` only, the budget of the step it stopped at to `budget`, and continues
+  /// it: the stopped agent's CLI session continues. Answered with [`Reply::Accepted`] once it
+  /// runs again.
+  RaiseStepBudget { run: RunId, budget: TokenBudget },
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes
   /// the connection.
   Shutdown { mode: ShutdownMode },
@@ -209,7 +213,8 @@ pub enum Rejection {
   RunNotFound,
   /// Pause needs a running run.
   RunNotRunning,
-  /// Resume and a raised limit need a paused run.
+  /// Resume and a raised limit need a paused run; a raised step budget one stopped at a step's
+  /// budget.
   RunNotPaused,
   /// Continuing from a checkpoint needs an interrupted run.
   RunNotInterrupted,

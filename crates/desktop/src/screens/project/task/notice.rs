@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{
+  id::StepExecutionId,
   run::{PauseReason, RunLimit, RunStatus},
   task::TaskStatus,
   time::Timestamp,
@@ -109,6 +110,9 @@ fn run_notice(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
     ),
     RunStatus::Paused(PauseReason::Requested) => paused(ctx, run),
     RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)) => stopped_by_daily_budget(ctx, run),
+    RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) => {
+      stopped_at_step_budget(ctx, run, *execution)
+    }
     RunStatus::Paused(PauseReason::LimitReached(limit)) => stopped_at_limit(ctx, run, *limit),
     RunStatus::Interrupted(_) => plain(
       Icon::CirclePause,
@@ -174,12 +178,53 @@ fn stopped_by_daily_budget(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str
   (Icon::OctagonPause, title, ctx.t_args(key, [("agent", &*agent)]))
 }
 
+/// "Stopped at the step budget of Implement · checkpoint 7c1e9f2", the `EzWLg` notice for a step's
+/// budget: the step's use, and whether the work at the limit was committed.
+fn stopped_at_step_budget(ctx: &Ctx, run: &RunView, execution: StepExecutionId) -> (Icon, Arc<str>, Arc<str>) {
+  let checkpoint = saved_checkpoint(run);
+  let step = run.step_of(execution);
+  let name = step.map(|step| step.name.clone()).unwrap_or_default();
+  let title = match &checkpoint {
+    Some(checkpoint) => ctx.t_args(
+      "runs.limit.stepTitleCheckpoint",
+      [("step", &*name), ("checkpoint", checkpoint.as_str())],
+    ),
+    None => ctx.t_args("runs.limit.stepTitle", [("step", &*name)]),
+  };
+  let agent = step
+    .and_then(|step| step.agent.clone())
+    .unwrap_or_else(|| ctx.t("runs.limit.theAgent"));
+  let (used, budget) = run
+    .step_budget_use(execution)
+    .map(|(used, budget)| (compact_tokens(used.get()), compact_tokens(budget.get())))
+    .unwrap_or_default();
+  let key = if checkpoint.is_some() {
+    "runs.limit.stepDetail"
+  } else {
+    "runs.limit.stepDetailUnsaved"
+  };
+  let number = run.run.number().get().to_string();
+  let text = ctx.t_args(
+    key,
+    [
+      ("step", &*name),
+      ("used", used.as_str()),
+      ("limit", budget.as_str()),
+      ("run", number.as_str()),
+      ("agent", &agent),
+    ],
+  );
+  (Icon::OctagonPause, title, text)
+}
+
 /// "Stopped at the token limit · checkpoint 7c1e9f2" (`EzWLg`): what was used, and whether the
 /// work at the limit was committed.
 fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str>, Arc<str>) {
   let checkpoint = saved_checkpoint(run);
   let (title, titled) = match limit {
-    RunLimit::Tokens | RunLimit::DailyBudget => ("runs.limit.tokenTitle", "runs.limit.tokenTitleCheckpoint"),
+    RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => {
+      ("runs.limit.tokenTitle", "runs.limit.tokenTitleCheckpoint")
+    }
     RunLimit::Time => ("runs.limit.timeTitle", "runs.limit.timeTitleCheckpoint"),
   };
   let title = match &checkpoint {
@@ -192,7 +237,7 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
     .and_then(|step| step.agent.clone())
     .unwrap_or_else(|| ctx.t("runs.limit.theAgent"));
   let (used, of) = match limit {
-    RunLimit::Tokens | RunLimit::DailyBudget => (
+    RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => (
       compact_tokens(run.run.used().get()),
       compact_tokens(run.run.budget().get()),
     ),
@@ -204,8 +249,10 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
   // The time limit's count decides the plural: "of its 1 minute", "of its 30 minutes".
   let one = of == "1";
   let key = match (limit, checkpoint.is_some(), one) {
-    (RunLimit::Tokens | RunLimit::DailyBudget, true, _) => "runs.limit.tokenDetail",
-    (RunLimit::Tokens | RunLimit::DailyBudget, false, _) => "runs.limit.tokenDetailUnsaved",
+    (RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. }, true, _) => "runs.limit.tokenDetail",
+    (RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. }, false, _) => {
+      "runs.limit.tokenDetailUnsaved"
+    }
     (RunLimit::Time, true, true) => "runs.limit.timeDetail.one",
     (RunLimit::Time, true, false) => "runs.limit.timeDetail.other",
     (RunLimit::Time, false, true) => "runs.limit.timeDetailUnsaved.one",

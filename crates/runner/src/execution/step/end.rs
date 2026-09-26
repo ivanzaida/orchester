@@ -42,19 +42,19 @@ impl RunTask {
     match finished.stopped {
       // Carried out once every agent has ended; the work stays uncommitted in the worktree.
       Some(StopCause::Requested | StopCause::Abandoned) => Ok(()),
+      // The execution stays open: it continues where it stopped once the run continues.
       Some(StopCause::Limit(limit)) => {
         let label = match limit {
-          RunLimit::Tokens => "token",
-          RunLimit::Time => "time",
-          RunLimit::DailyBudget => "daily budget",
+          RunLimit::Tokens => "the token limit",
+          RunLimit::Time => "the time limit",
+          RunLimit::DailyBudget => "the daily budget limit",
+          RunLimit::StepBudget { .. } => {
+            let budget = active.budget().map_or(0, |budget| budget.get());
+            self.report(&active.invocation, RunnerProblem::StepBudgetReached { budget })?;
+            "the step budget"
+          }
         };
-        self.save(execution, &active, &format!("work in progress at the {label} limit"))
-      }
-      Some(StopCause::StepBudget) => {
-        let budget = active.budget().map_or(0, |budget| budget.get());
-        self.report(&active.invocation, RunnerProblem::StepBudgetReached { budget })?;
-        self.save(execution, &active, "work in progress at the step budget")?;
-        self.fail(execution, StepFailure::StepBudget)
+        self.save(execution, &active, &format!("work in progress at {label}"))
       }
       None => self.finish(execution, &active, finished),
     }

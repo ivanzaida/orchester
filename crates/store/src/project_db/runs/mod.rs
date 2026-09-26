@@ -141,12 +141,12 @@ fn check_events(run: &Run, events: &[RunEvent]) -> Result<(), RunStoreError> {
 }
 
 fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(), StoreError> {
-  let (status, reason, failed_step) = run_status_columns(run.status());
+  let columns = run_status_columns(run.status());
   transaction.execute(
     "INSERT INTO runs (id, number, idempotency_key, task_id, pipeline_version_id, snapshot, branch, base_revision, \
      initial_budget_tokens, initial_max_duration_ms, budget_tokens, max_duration_ms, used_tokens, pause_requested, \
-     status, status_reason, failed_step, last_sequence, created_at) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+     status, status_reason, failed_step, limit_execution, last_sequence, created_at) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
     params![
       run.id().to_string(),
       run.number().get(),
@@ -162,9 +162,10 @@ fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(),
       millis_column("run time limit", run.max_duration())?,
       tokens_column("run usage", run.used().get())?,
       run.pause_requested(),
-      status,
-      reason,
-      failed_step,
+      columns.status,
+      columns.reason,
+      columns.failed_step,
+      columns.limit_execution,
       sequence_column(run.last_sequence().get())?,
       run.created_at().unix_millis(),
     ],
@@ -173,15 +174,16 @@ fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(),
 }
 
 fn update_run(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError> {
-  let (status, reason, failed_step) = run_status_columns(run.status());
+  let columns = run_status_columns(run.status());
   transaction.execute(
-    "UPDATE runs SET status = ?2, status_reason = ?3, failed_step = ?4, budget_tokens = ?5, max_duration_ms = ?6, \
-     used_tokens = ?7, pause_requested = ?8, last_sequence = ?9 WHERE id = ?1",
+    "UPDATE runs SET status = ?2, status_reason = ?3, failed_step = ?4, limit_execution = ?5, budget_tokens = ?6, \
+     max_duration_ms = ?7, used_tokens = ?8, pause_requested = ?9, last_sequence = ?10 WHERE id = ?1",
     params![
       run.id().to_string(),
-      status,
-      reason,
-      failed_step,
+      columns.status,
+      columns.reason,
+      columns.failed_step,
+      columns.limit_execution,
       tokens_column("run budget", run.budget().get())?,
       millis_column("run time limit", run.max_duration())?,
       tokens_column("run usage", run.used().get())?,
@@ -189,6 +191,17 @@ fn update_run(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError
       sequence_column(run.last_sequence().get())?,
     ],
   )?;
+  let mut step_budget = transaction.prepare_cached(
+    "INSERT INTO run_step_budgets (run_id, step_key, budget_tokens) VALUES (?1, ?2, ?3) \
+     ON CONFLICT (run_id, step_key) DO UPDATE SET budget_tokens = excluded.budget_tokens",
+  )?;
+  for (step, budget) in run.raised_step_budgets() {
+    step_budget.execute(params![
+      run.id().to_string(),
+      step.as_str(),
+      tokens_column("step budget", budget.get())?
+    ])?;
+  }
   Ok(())
 }
 

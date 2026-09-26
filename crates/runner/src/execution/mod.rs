@@ -34,6 +34,7 @@ use std::{
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   run::{InterruptCause, RaisedLimits},
+  tokens::TokenBudget,
 };
 use orchester_ipc::{Event, Rejection};
 use orchester_store::ProjectDb;
@@ -150,6 +151,12 @@ impl Scheduler {
   /// Raises the limits of `run`, stopped at a limit, and continues it.
   pub fn raise_limit(&self, run: RunId, limits: RaisedLimits) -> Result<(), Rejection> {
     self.continue_idle(run, |db, root| idle::raise(db, root, run, limits))
+  }
+
+  /// Raises, for `run` only, the budget of the step it stopped at, and continues the run: the
+  /// stopped agent's CLI session continues.
+  pub fn raise_step_budget(&self, run: RunId, budget: TokenBudget) -> Result<(), Rejection> {
+    self.continue_idle(run, |db, root| idle::raise_step_budget(db, root, run, budget))
   }
 
   /// "Wait for agents to save": starts no new work, asks every active run to pause at its next

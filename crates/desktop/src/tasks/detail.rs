@@ -10,12 +10,13 @@ use orchester_core::{
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   resource::{AgentProfile, RepositoryAccess, StepKey, StepKind, VersionNumber},
   run::{
-    ActivityEntry, Invocation, Run, RunEventKind, RunStatus, StepExecutor, StepFailure, StepOutput, StepStatus,
-    TaskPhase, TokenUsage, active_time,
+    ActivityEntry, Invocation, PauseReason, Run, RunEventKind, RunLimit, RunStatus, StepExecutor, StepFailure,
+    StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
   task::Task,
   time::Timestamp,
+  tokens::{TokenBudget, TokensUsed},
 };
 use orchester_store::{ProjectDb, StoreError};
 
@@ -98,9 +99,28 @@ impl RunView {
     active_time(&self.invocations, now)
   }
 
-  /// The step a run stopped at its limit was working on, if it stopped mid-step.
+  /// The step a run stopped at its limit was working on, if it stopped mid-step: after a step's
+  /// budget, that step.
   pub fn stopped_step(&self) -> Option<&StepView> {
+    if let Some(execution) = self.stopped_execution() {
+      return self.step_of(execution);
+    }
     self.steps.iter().find(|step| step.status == Some(StepStatus::Running))
+  }
+
+  /// The execution whose step budget the run stopped at, if it did.
+  pub fn stopped_execution(&self) -> Option<StepExecutionId> {
+    match self.run.status() {
+      RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) => Some(*execution),
+      _ => None,
+    }
+  }
+
+  /// What `execution` used of its step's budget in force for the run, over all its invocations;
+  /// `None` when its step has no budget.
+  pub fn step_budget_use(&self, execution: StepExecutionId) -> Option<(TokensUsed, TokenBudget)> {
+    let budget = self.run.step_budget(self.run.execution(execution)?.step())?;
+    Some((execution_tokens(&self.invocations, execution), budget))
   }
 
   /// Steps an agent works on now, in pipeline order.

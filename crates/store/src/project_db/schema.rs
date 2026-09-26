@@ -413,4 +413,17 @@ INSERT INTO money_step_budgets_before_tokens (owner, owner_id, step_key, micros,
     json_each(drafts.body, '$.body.steps') AS step
   WHERE json_type(step.value, '$.budget') = 'object';
 ",
+  r"
+-- A step that uses its budget stops the run at its limit (user decision 2026-09-26) instead of
+-- failing: the run is paused with reason `step_budget` and names the execution that used it.
+-- Raising that step's budget applies to the run only; published pipeline versions stay as they are.
+ALTER TABLE runs ADD COLUMN limit_execution TEXT
+  CHECK ((status_reason IS 'step_budget') = (limit_execution IS NOT NULL));
+CREATE TABLE run_step_budgets (
+  run_id TEXT NOT NULL REFERENCES runs (id),
+  step_key TEXT NOT NULL,
+  budget_tokens INTEGER NOT NULL CHECK (budget_tokens > 0),
+  PRIMARY KEY (run_id, step_key)
+) STRICT;
+",
 ];

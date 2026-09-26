@@ -8,7 +8,6 @@ pub mod connection;
 pub mod github;
 pub mod id;
 pub mod limits;
-pub mod money;
 pub mod name;
 pub mod project;
 pub mod pull_request;

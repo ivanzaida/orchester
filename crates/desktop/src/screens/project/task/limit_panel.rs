@@ -2,6 +2,10 @@
 //! for the new limit with its read-back, what continuing does, and the one action that says the
 //! result ("Continue with 2M tokens"). The input of the limit that was hit is focused. The new
 //! limits apply to this run only; the budget is at most the project's maximum run budget.
+//!
+//! After a step's budget the panel raises that step's budget instead (*Raise the step budget to
+//! continue*): what the stopped execution used of it and one token input. The published pipeline
+//! keeps its budget; the raised one is at most the project's maximum run budget too.
 
 use std::{sync::Arc, time::Duration};
 
@@ -21,12 +25,12 @@ use orchester_core::{
   limits::ProjectLimits,
   run::{RaisedLimits, RunLimit},
   time::Timestamp,
-  tokens::{TokenBudget, TokensUsed, compact_tokens, grouped},
+  tokens::{BudgetInputError, TokenBudget, TokensUsed, compact_tokens, grouped, parse_budget},
 };
 use orchester_ipc::Command;
 
 use crate::{
-  budget::{minutes_text, read_budget, read_minutes, whole_minutes},
+  budget::{budget_error, minutes_text, read_budget, read_minutes, whole_minutes},
   messages::Message,
   runner::Runners,
   tasks::{detail::RunView, run::control_message},
@@ -54,6 +58,7 @@ pub struct RaiseLimitProps {
   run: RunId,
   number: u32,
   limit: RunLimit,
+  /// Tokens used of, and the budget of, the run; after a step's budget, of that step's execution.
   used: TokensUsed,
   budget: TokenBudget,
   max_duration: Duration,
@@ -67,13 +72,18 @@ pub struct RaiseLimitProps {
 impl lurq::app::component::DevtoolsInspectable for RaiseLimitProps {}
 
 impl RaiseLimitProps {
-  pub fn of(run: &RunView, limit: RunLimit, limits: ProjectLimits) -> Self {
-    Self {
+  /// `None` for a stop at a step's budget when the step has none, which no runner records.
+  pub fn of(run: &RunView, limit: RunLimit, limits: ProjectLimits) -> Option<Self> {
+    let (used, budget) = match limit {
+      RunLimit::StepBudget { execution } => run.step_budget_use(execution)?,
+      RunLimit::Tokens | RunLimit::Time | RunLimit::DailyBudget => (run.run.used(), run.run.budget()),
+    };
+    Some(Self {
       run: run.id(),
       number: run.run.number().get(),
       limit,
-      used: run.run.used(),
-      budget: run.run.budget(),
+      used,
+      budget,
       max_duration: run.run.max_duration(),
       active: run.active_time(Timestamp::now()),
       max_budget: limits.max_run_budget(),
@@ -85,7 +95,11 @@ impl RaiseLimitProps {
         .run
         .last_checkpoint()
         .map(|checkpoint| crate::display::short_revision(checkpoint.revision().as_str()).to_owned()),
-    }
+    })
+  }
+
+  const fn raises_step_budget(&self) -> bool {
+    matches!(self.limit, RunLimit::StepBudget { .. })
   }
 
   /// The budget offered to continue with: after a token stop half again the current one, within
@@ -104,7 +118,7 @@ impl RaiseLimitProps {
   fn suggested_time(&self) -> Duration {
     let limit = match self.limit {
       RunLimit::Time => self.max_duration + self.max_duration / 2,
-      RunLimit::Tokens | RunLimit::DailyBudget => self.max_duration,
+      RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => self.max_duration,
     };
     let minutes = limit
       .as_secs()
@@ -114,7 +128,14 @@ impl RaiseLimitProps {
   }
 }
 
-type RaiseAction = FutureAction<(RunId, RaisedLimits), (), Message>;
+/// What continuing raises: the run's own limits, or the budget of the step it stopped at.
+#[derive(Clone, Copy, Debug)]
+enum Raise {
+  Limits(RaisedLimits),
+  StepBudget(TokenBudget),
+}
+
+type RaiseAction = FutureAction<(RunId, Raise), (), Message>;
 
 pub struct RaiseLimitPanel {
   budget: Signal<String>,
@@ -150,18 +171,24 @@ impl Component for RaiseLimitPanel {
     let time = self.read_time(&props);
     let state = action.state().get();
     let pending = state.is_pending();
-    let submit: Submit = match (&budget, &time) {
-      (Ok(budget), Ok(max_duration)) if !pending => {
-        let run = props.run;
-        let limits = RaisedLimits {
-          budget: *budget,
-          max_duration: *max_duration,
-        };
-        Some(Arc::new(move || action.run((run, limits))))
-      }
+    let raise = match (&budget, &time) {
+      (Ok(budget), _) if props.raises_step_budget() => Some(Raise::StepBudget(*budget)),
+      (Ok(budget), Ok(max_duration)) => Some(Raise::Limits(RaisedLimits {
+        budget: *budget,
+        max_duration: *max_duration,
+      })),
       _ => None,
     };
+    let run = props.run;
+    let submit: Submit = raise
+      .filter(|_| !pending)
+      .map(|raise| Arc::new(move || action.run((run, raise))) as Arc<dyn Fn() + Send + Sync>);
     let failure = state.error.filter(|_| !pending).map(|error| message_text(ctx, &error));
+    let title = if props.raises_step_budget() {
+      "runs.limit.raiseStepTitle"
+    } else {
+      "runs.limit.raiseTitle"
+    };
     let content = Column::new()
       .id("raise-limit")
       .width(Dimension::Pct(100.0))
@@ -170,9 +197,9 @@ impl Component for RaiseLimitPanel {
       .background(PaletteColor::SurfacePanel)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
-      .child(Text::new(&ctx.t("runs.limit.raiseTitle")).variant(ExtraTypography::CardTitle.role()))
+      .child(Text::new(&ctx.t(title)).variant(ExtraTypography::CardTitle.role()))
       .child(self.budget_row(ctx, &props, &budget, &separator))
-      .child(self.time_row(ctx, &props, &time))
+      .with_children((!props.raises_step_budget()).then(|| self.time_row(ctx, &props, &time)))
       .child(
         Text::new(&explanation(ctx, &props))
           .variant(ExtraTypography::Detail.role())
@@ -199,15 +226,37 @@ impl RaiseLimitPanel {
     self.budget.set(grouped(props.suggested_budget(), separator));
     self.minutes.set(minutes_text(props.suggested_time()));
     ctx.focus(match props.limit {
-      RunLimit::Tokens | RunLimit::DailyBudget => &self.budget_input,
+      RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => &self.budget_input,
       RunLimit::Time => &self.time_input,
     });
   }
 
   fn read_budget(&self, props: &RaiseLimitProps, separator: &str) -> Result<TokenBudget, Message> {
-    let budget = read_budget(&self.budget.get(), separator, props.max_budget)?;
+    let used = compact_tokens(props.used.get());
+    if !props.raises_step_budget() {
+      let budget = read_budget(&self.budget.get(), separator, props.max_budget)?;
+      if props.used.reached(budget) {
+        return Err(Message::new("tokens.errors.notAboveUsed").with("used", used));
+      }
+      return Ok(budget);
+    }
+    let budget = parse_budget(&self.budget.get(), separator, props.max_budget).map_err(|error| match error {
+      BudgetInputError::AboveMaximum { max } => {
+        Message::new("tokens.errors.stepAboveMax").with("max", compact_tokens(max.get()))
+      }
+      other => budget_error(other, separator),
+    })?;
     if props.used.reached(budget) {
-      return Err(Message::new("tokens.errors.notAboveUsed").with("used", compact_tokens(props.used.get())));
+      let step = props
+        .stopped
+        .as_ref()
+        .map(|(step, _)| step.to_string())
+        .unwrap_or_default();
+      return Err(
+        Message::new("tokens.errors.stepNotAboveUsed")
+          .with("used", used)
+          .with("step", step),
+      );
     }
     Ok(budget)
   }
@@ -235,7 +284,11 @@ impl RaiseLimitPanel {
     separator: &Arc<str>,
   ) -> Element {
     let (used, of) = (compact_tokens(props.used.get()), compact_tokens(props.budget.get()));
-    let current = match props.stopped.as_ref().filter(|_| props.limit == RunLimit::Tokens) {
+    let stopped = props
+      .stopped
+      .as_ref()
+      .filter(|_| props.limit == RunLimit::Tokens || props.raises_step_budget());
+    let current = match stopped {
       Some((step, _)) => ctx.t_args(
         "runs.limit.tokensUsedMidStep",
         [("used", used.as_str()), ("limit", of.as_str()), ("step", step)],
@@ -258,7 +311,12 @@ impl RaiseLimitPanel {
     .tokens(separator.clone())
     .focus_ref(self.budget_input.clone())
     .invalid(budget.is_err());
-    limit_row(ctx, (&ctx.t("runs.limit.tokenBudget"), &current), input, note)
+    let name = if props.raises_step_budget() {
+      ctx.t("runs.limit.stepBudget")
+    } else {
+      ctx.t("runs.limit.tokenBudget")
+    };
+    limit_row(ctx, (&name, &current), input, note)
   }
 
   /// "Time limit · Used 24 of 30 min of active agent time" beside its input.
@@ -363,9 +421,17 @@ fn limit_row(ctx: &Ctx, (name, current): (&str, &str), input: UnitInput, note: R
 fn explanation(ctx: &Ctx, props: &RaiseLimitProps) -> Arc<str> {
   let number = props.number.to_string();
   let checkpoint = props.checkpoint.as_deref().unwrap_or_default();
+  let (with_checkpoint, without) = if props.raises_step_budget() {
+    (
+      "runs.limit.continueStepBudget",
+      "runs.limit.continueStepBudgetNoCheckpoint",
+    )
+  } else {
+    ("runs.limit.continueMidStep", "runs.limit.continueMidStepNoCheckpoint")
+  };
   match (&props.stopped, props.checkpoint.is_some()) {
     (Some((step, agent)), true) => ctx.t_args(
-      "runs.limit.continueMidStep",
+      with_checkpoint,
       [
         ("agent", &**agent),
         ("checkpoint", checkpoint),
@@ -373,10 +439,7 @@ fn explanation(ctx: &Ctx, props: &RaiseLimitProps) -> Arc<str> {
         ("run", &number),
       ],
     ),
-    (Some((step, agent)), false) => ctx.t_args(
-      "runs.limit.continueMidStepNoCheckpoint",
-      [("agent", &**agent), ("step", step), ("run", &number)],
-    ),
+    (Some((step, agent)), false) => ctx.t_args(without, [("agent", &**agent), ("step", step), ("run", &number)]),
     (None, _) => ctx.t_args("runs.limit.continueNextStep", [("run", &number)]),
   }
 }
@@ -391,7 +454,7 @@ fn continue_button(
 ) -> Element {
   let label = match (pending, props.limit, budget, time) {
     (true, ..) => ctx.t("runs.limit.continuing"),
-    (false, RunLimit::Tokens, Some(budget), _) => ctx.t_args(
+    (false, RunLimit::Tokens | RunLimit::StepBudget { .. }, Some(budget), _) => ctx.t_args(
       "runs.limit.continueWith",
       [("count", compact_tokens(budget.get()).as_str())],
     ),
@@ -427,14 +490,17 @@ fn raise_action(ctx: &mut Ctx) -> RaiseAction {
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting screens");
-  ctx.future_action(move |(run, limits): (RunId, RaisedLimits)| {
+  ctx.future_action(move |(run, raise): (RunId, Raise)| {
     let runners = runners.clone();
     async move {
-      let command = Command::RaiseLimit {
-        run,
-        budget: limits.budget,
-        // Limits are whole minutes; one beyond u64 milliseconds is as good as no limit.
-        max_duration_ms: u64::try_from(limits.max_duration.as_millis()).unwrap_or(u64::MAX),
+      let command = match raise {
+        Raise::Limits(limits) => Command::RaiseLimit {
+          run,
+          budget: limits.budget,
+          // Limits are whole minutes; one beyond u64 milliseconds is as good as no limit.
+          max_duration_ms: u64::try_from(limits.max_duration.as_millis()).unwrap_or(u64::MAX),
+        },
+        Raise::StepBudget(budget) => Command::RaiseStepBudget { run, budget },
       };
       runners.control_run(command).await.map_err(|error| {
         tracing::warn!(%error, "the runner did not raise the run's limits");

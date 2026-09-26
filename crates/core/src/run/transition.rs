@@ -78,7 +78,7 @@ impl Run {
     })
   }
 
-  /// Raises the limits of a run stopped at a limit and continues it. Each new limit must be
+  /// Raises the limits of a run stopped at a limit of its own (tokens, time) and continues it. Each new limit must be
   /// above what the run already used (`active` agent time so far), and the budget at most
   /// `max`, the project's maximum run budget.
   pub fn continue_with_limits(
@@ -99,6 +99,40 @@ impl Run {
         budget: limits.budget,
         max_duration: limits.max_duration,
       })?;
+      transition.record(RunEventKind::Resumed)
+    })
+  }
+
+  /// Raises the budget of the step a run stopped at to `budget` for this run and continues it;
+  /// the published pipeline keeps its budget. `used` is what the stopped execution used over all
+  /// its invocations: the new budget must be above it, and at most `max`, the project's maximum
+  /// run budget.
+  pub fn raise_step_budget(
+    &mut self,
+    budget: TokenBudget,
+    used: TokensUsed,
+    max: TokenBudget,
+    now: Timestamp,
+  ) -> Result<Vec<RunEvent>, RunError> {
+    let RunStatus::Paused(PauseReason::LimitReached(limit @ RunLimit::StepBudget { execution })) = self.status else {
+      return Err(RunError::InvalidRunTransition {
+        status: self.status.clone(),
+        event: "step_budget_raised",
+      });
+    };
+    if budget > max {
+      return Err(RunError::BudgetAboveMaximum { max });
+    }
+    if used.reached(budget) {
+      return Err(RunError::LimitNotAboveUsed(limit));
+    }
+    let step = self
+      .execution(execution)
+      .expect("a restored or replayed run stopped at the budget of one of its executions")
+      .step()
+      .clone();
+    self.transition(now, |transition| {
+      transition.record(RunEventKind::StepBudgetRaised { step, budget })?;
       transition.record(RunEventKind::Resumed)
     })
   }

@@ -10,7 +10,7 @@ use orchester_core::{
   connection::stream::{InvocationOutcome, RunnerProblem},
   id::StepExecutionId,
   resource::ModelId,
-  run::{Invocation, StepExecutor, StepFailure, StepStatus},
+  run::{Invocation, StepExecutor, StepFailure, StepStatus, execution_tokens},
   store::ActivityStore,
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -160,13 +160,7 @@ impl RunTask {
     process: Supervised,
     workspace: Workspace,
   ) -> Result<(), ExecutionError> {
-    let used = self
-      .db
-      .invocations(self.run.id())?
-      .iter()
-      .filter(|earlier| earlier.execution == execution)
-      .map(|earlier| earlier.usage.counted_tokens())
-      .sum();
+    let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);
     let (stops, stopped) = mpsc::unbounded_channel();
     let worker = Worker {
       root: self.root.clone(),
@@ -177,11 +171,12 @@ impl RunTask {
       stops: stopped,
     };
     tokio::spawn(worker.work());
+    // The budget in force: one raised for the run after it stopped at the step's limit, else the
+    // pipeline's.
     let budget = self
       .run
       .execution(execution)
-      .and_then(|execution| self.run.snapshot().body().step(execution.step()))
-      .and_then(|step| step.budget);
+      .and_then(|execution| self.run.step_budget(execution.step()));
     self.agents.insert(
       execution,
       Active {

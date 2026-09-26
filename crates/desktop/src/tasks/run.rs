@@ -150,6 +150,9 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::LimitNotAboveUsed { limit: RunLimit::Time }) => {
       Message::new("runs.limit.timeNotAboveUsed")
     }
+    RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
+      limit: RunLimit::StepBudget { .. },
+    }) => Message::new("runs.limit.stepNotAboveUsed"),
     RunRequestError::Rejected(Rejection::BudgetAboveMaximum { max }) => {
       Message::new("tokens.errors.aboveMax").with("max", compact_tokens(max.get()))
     }

@@ -23,6 +23,7 @@ use orchester_core::{
   run::RunStatus,
   store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 use orchester_desktop::app_paths::runner_beside;
 use orchester_store::ProjectDb;
@@ -296,6 +297,60 @@ fn run_controls_raise_the_limit_of_a_run_stopped_at_it_and_continue() {
   wait_long(&mut desktop, "the run controls to go", |desktop| {
     !has(desktop, "raise-limit") && !has(desktop, "task-cancel-run")
   });
+}
+
+#[test]
+fn run_controls_raise_the_step_budget_of_a_run_stopped_at_it_and_continue() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_steps(repo, &fake, |builder| {
+      let implement = agent_step(builder, "implement", "Implement", "Work in turns.", &[]);
+      vec![Step {
+        budget: Some(TokenBudget::new(1_000).expect("above zero")),
+        ..implement
+      }]
+    });
+  });
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  wait_long(&mut desktop, "the raise-limit panel", |desktop| {
+    has(desktop, "raise-limit")
+  });
+  assert!(shows(
+    &mut desktop,
+    "task-notice",
+    "Stopped at the step budget of Implement · checkpoint"
+  ));
+  assert!(shows(&mut desktop, "raise-limit", "Raise the step budget to continue"));
+  assert!(shows(
+    &mut desktop,
+    "raise-limit",
+    "Used 9.7k of 1k · Implement stopped mid-step"
+  ));
+  // Only the step's budget is raised: the run's time limit is not offered.
+  assert!(!has(&mut desktop, "raise-limit-time"));
+  assert!(has(&mut desktop, "task-cancel-run"));
+  assert!(!has(&mut desktop, "task-resume-run"));
+  assert_eq!(desktop.focused().as_deref(), Some("raise-limit-tokens"));
+  assert_eq!(desktop.value("raise-limit-tokens"), "100,000");
+  set_text(&mut desktop, "raise-limit-tokens", "5000");
+  assert!(shows(
+    &mut desktop,
+    "raise-limit",
+    "Enter more than the 9.7k tokens Implement already used."
+  ));
+  set_text(&mut desktop, "raise-limit-tokens", "30000");
+  assert!(shows(&mut desktop, "raise-limit", "= 30k tokens · 29k more than now"));
+  assert!(shows(&mut desktop, "raise-limit-continue", "Continue with 30k tokens"));
+  desktop.click("raise-limit-continue");
+  wait_long(&mut desktop, "the run to finish", |desktop| {
+    run_finished(desktop.repo())
+  });
+  let run = latest_run(desktop.repo()).expect("run");
+  assert_eq!(run.attempts().len(), 1);
+  assert_eq!(
+    run.step_budget(&StepKey::new("implement").expect("key")),
+    TokenBudget::new(30_000).ok()
+  );
 }
 
 #[test]

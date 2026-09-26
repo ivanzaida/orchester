@@ -16,6 +16,7 @@ use super::{
 };
 use crate::{
   id::{CheckpointId, StepExecutionId},
+  resource::StepKey,
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -80,9 +81,16 @@ impl Run {
       RunEventKind::PauseRequested => {
         self.expect_status(kind, self.status == RunStatus::Running && !self.pause_requested)
       }
-      RunEventKind::Paused { .. } | RunEventKind::Interrupted { .. } => {
-        self.expect_status(kind, self.status == RunStatus::Running)
+      RunEventKind::Paused { reason } => {
+        self.expect_status(kind, self.status == RunStatus::Running)?;
+        match reason {
+          PauseReason::LimitReached(RunLimit::StepBudget { execution }) => {
+            self.expect_step(kind, *execution, StepStatus::is_open)
+          }
+          _ => Ok(()),
+        }
       }
+      RunEventKind::Interrupted { .. } => self.expect_status(kind, self.status == RunStatus::Running),
       RunEventKind::Resumed => match self.status {
         // The daily project budget is shared; a run stopped by it continues once the day has
         // room again, which the runner checks, not with limits of its own.
@@ -91,6 +99,7 @@ impl Run {
         _ => self.expect_status(kind, false),
       },
       RunEventKind::LimitRaised { budget, .. } => self.check_raise(kind, *budget),
+      RunEventKind::StepBudgetRaised { step, .. } => self.check_step_raise(kind, step),
       RunEventKind::Continued { trigger, from } => self.check_continue(kind, *trigger, *from),
       RunEventKind::Succeeded => {
         self.expect_status(kind, self.status == RunStatus::Running)?;
@@ -284,18 +293,28 @@ impl Run {
     }
   }
 
-  /// A raised limit applies to a run stopped at a limit, and its budget is above what the run
-  /// used. The time limit is checked against active time by [`Run::continue_with_limits`],
+  /// A raised limit applies to a run stopped at a limit of its own, and its budget is above what
+  /// the run used. The time limit is checked against active time by [`Run::continue_with_limits`],
   /// which knows it.
   fn check_raise(&self, kind: &RunEventKind, budget: TokenBudget) -> Result<(), RunError> {
     self.expect_status(
       kind,
-      matches!(self.status, RunStatus::Paused(PauseReason::LimitReached(_))),
+      matches!(self.status, RunStatus::Paused(PauseReason::LimitReached(limit)) if limit.is_run_limit()),
     )?;
     if self.used.reached(budget) {
       return Err(RunError::LimitNotAboveUsed(RunLimit::Tokens));
     }
     Ok(())
+  }
+
+  /// A raised step budget applies to a run stopped at the budget of that step. Whether it is above
+  /// what the execution used is checked by [`Run::raise_step_budget`], which knows it.
+  fn check_step_raise(&self, kind: &RunEventKind, step: &StepKey) -> Result<(), RunError> {
+    let stopped = match self.status {
+      RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) => self.execution(execution),
+      _ => None,
+    };
+    self.expect_status(kind, stopped.is_some_and(|execution| execution.step() == step))
   }
 
   /// Changes the state for an event [`Run::check`] accepted.
@@ -318,6 +337,10 @@ impl Run {
       RunEventKind::LimitRaised { budget, max_duration } => {
         self.budget = *budget;
         self.max_duration = *max_duration;
+        self.status = RunStatus::Paused(PauseReason::Requested);
+      }
+      RunEventKind::StepBudgetRaised { step, budget } => {
+        self.step_budgets.insert(step.clone(), *budget);
         self.status = RunStatus::Paused(PauseReason::Requested);
       }
       RunEventKind::Succeeded => self.end(RunStatus::Succeeded, AttemptStatus::Succeeded),
