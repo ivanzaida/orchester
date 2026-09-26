@@ -84,7 +84,14 @@
     "connection": {
       "notStartedTitle": "Could not start the runner",
       "notRestartedTitle": "Could not restart the runner",
-      "notRestartedDetail": "Tried {{attempts}} times. Nothing runs until the runner starts.",
+      "notRestartedSince": {
+        "one": "Tried {{attempts}} time since {{time}}. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts.",
+        "other": "Tried {{attempts}} times since {{time}}. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts."
+      },
+      "notRestarted": {
+        "one": "Tried {{attempts}} time. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts.",
+        "other": "Tried {{attempts}} times. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts."
+      },
       "openLog": "Open runner log",
       "restart": "Restart runner"
     }

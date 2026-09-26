@@ -10,6 +10,7 @@ use orchester_core::{connection::AgentProvider, id::RunId};
 use orchester_desktop::{
   app_paths::runner_beside,
   close::{CloseKind, ClosePlan, close_plan, session_end},
+  messages::{Message, runner_not_restarted},
   runner::{
     ActiveWork, ActiveWorkFields, ShutdownOutcome,
     state::{RECONNECT_LIMIT, RunnerEvent, RunnerFailure, RunnerState, reconnect_delay},
@@ -68,7 +69,7 @@ fn runner_state_drop_reconnects_then_goes_online() {
 #[test]
 fn runner_state_reconnect_delays_back_off_up_to_eight_seconds() {
   let delays: Vec<Duration> = (1..=RECONNECT_LIMIT).map(reconnect_delay).collect();
-  let expected = [500, 1000, 2000, 4000, 8000, 8000].map(Duration::from_millis);
+  let expected = [500, 1000, 2000, 4000, 8000].map(Duration::from_millis);
   assert_eq!(delays, expected);
 
   let mut state = RunnerState::Online.apply(RunnerEvent::Dropped(RunnerFailure::Lost));
@@ -96,6 +97,42 @@ fn runner_state_gives_up_after_the_reconnect_limit() {
   );
   assert!(state.can_restart());
   assert_eq!(state.reconnect_delay(), None);
+}
+
+#[test]
+fn runner_state_gives_up_after_five_attempts_as_designed() {
+  // "attempt 2 of 5" (`keJ9Z` E) and "Tried 5 times since 14:02" (02.H `EFY7I`).
+  let dropped = RunnerState::Online.apply(RunnerEvent::Dropped(RunnerFailure::Lost));
+  let failed = (0..5).fold(dropped, |state, _| {
+    assert!(matches!(state, RunnerState::Reconnecting { .. }));
+    state.apply(RunnerEvent::LaunchFailed(RunnerFailure::StartFailed))
+  });
+  assert_eq!(
+    failed,
+    RunnerState::Failed {
+      cause: RunnerFailure::StartFailed,
+      attempts: 5
+    }
+  );
+}
+
+#[test]
+fn runner_not_restarted_names_the_attempts_and_since_when() {
+  // "Tried 5 times since 14:02." (02.H `EFY7I`)
+  assert_eq!(
+    runner_not_restarted(5, Some("14:02")),
+    Message::new("runner.connection.notRestartedSince.other")
+      .with("attempts", "5".to_owned())
+      .with("time", "14:02".to_owned())
+  );
+  assert_eq!(
+    runner_not_restarted(1, Some("09:30")).key,
+    "runner.connection.notRestartedSince.one"
+  );
+  assert_eq!(
+    runner_not_restarted(5, None),
+    Message::new("runner.connection.notRestarted.other").with("attempts", "5".to_owned())
+  );
 }
 
 #[test]

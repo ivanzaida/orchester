@@ -207,7 +207,7 @@ impl Component for ProjectShell {
     let section = self.nav.section.get();
     let content = match section {
       Section::Overview => {
-        let notice = runner::connection_notice(ctx, &runner, &runners);
+        let notice = runner::connection_notice(ctx, &runner, status.trouble_since(), &runners);
         overview::overview(ctx, &open, notice, &tasks, &self.nav)
       }
       Section::Tasks => ctx.mount_keyed::<TasksScreen>(
