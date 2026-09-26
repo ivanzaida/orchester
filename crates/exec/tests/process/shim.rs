@@ -1,0 +1,154 @@
+//! Windows command scripts: npm launchers are replaced by the Node.js script they start, and any
+//! other script only gets arguments that `cmd.exe` passes on unchanged. The launcher texts are
+//! copies of the ones npm (`codex.cmd`, via `cmd-shim`) and corepack (`pnpm.cmd`) installed; the
+//! programs they start are not needed.
+
+use std::{
+  fs,
+  path::{Path, PathBuf},
+};
+
+use orchester_core::{
+  command::{Command, CommandError, CommandRunner},
+  connection::GitHubHost,
+  pull_request::gh_check_rollups_command,
+  repository::GitHubRepo,
+  revision::Revision,
+};
+use orchester_exec::launch::{self, Via, node_shim_script, passes_through_cmd};
+
+use super::RUNNER;
+
+const CODEX_SHIM: &str = include_str!("../fixtures/shims/codex.cmd");
+const PNPM_SHIM: &str = include_str!("../fixtures/shims/pnpm.cmd");
+const NPM_SHIM: &str = include_str!("../fixtures/shims/npm.cmd");
+/// A script that is no npm launcher: it prints its arguments, then its standard input.
+const ECHO_SCRIPT: &str = "@echo off\r\necho ARGS %*\r\nfindstr \"^\"\r\n";
+const QUERY: &str = "query($owner:String!){repository(owner:$owner,name:\"x\"){id}}";
+
+fn relative(path: &str) -> PathBuf {
+  path.split('/').collect()
+}
+
+#[test]
+fn process_shim_scripts_of_npm_launchers_are_recognised() {
+  assert_eq!(
+    node_shim_script(CODEX_SHIM),
+    Some(relative("node_modules/@openai/codex/bin/codex.js"))
+  );
+  assert_eq!(
+    node_shim_script(PNPM_SHIM),
+    Some(relative("node_modules/corepack/dist/pnpm.js"))
+  );
+  assert_eq!(
+    node_shim_script(&CODEX_SHIM.replace("\r\n", "\n")),
+    node_shim_script(CODEX_SHIM)
+  );
+}
+
+#[test]
+fn process_shim_scripts_of_other_scripts_are_not_guessed() {
+  // npm's own launcher picks its script at run time.
+  assert_eq!(node_shim_script(NPM_SHIM), None);
+  assert_eq!(node_shim_script(ECHO_SCRIPT), None);
+  // `%_prog%` that is not Node.js, and two different scripts.
+  let other_program = CODEX_SHIM.replace("SET \"_prog=%dp0%\\node.exe\"", "SET \"_prog=%dp0%\\bun.exe\"");
+  assert_eq!(node_shim_script(&other_program), None);
+  let two = PNPM_SHIM.replacen("pnpm.js", "yarn.js", 1);
+  assert_eq!(node_shim_script(&two), None);
+}
+
+/// `codex.cmd` next to its script, with or without Node.js beside it.
+fn installed_codex(folder: &Path, local_node: bool) -> PathBuf {
+  let script = folder.join(relative("node_modules/@openai/codex/bin/codex.js"));
+  fs::create_dir_all(script.parent().expect("a folder")).expect("script folder");
+  fs::write(&script, "").expect("script");
+  if local_node {
+    fs::write(folder.join("node.exe"), "").expect("node");
+  }
+  let shim = folder.join("codex.cmd");
+  fs::write(&shim, CODEX_SHIM).expect("launcher");
+  shim
+}
+
+#[test]
+fn process_shim_launch_runs_node_with_the_script() {
+  let folder = tempfile::tempdir().expect("temporary directory");
+  let shim = installed_codex(folder.path(), true);
+  let script = folder.path().join(relative("node_modules/@openai/codex/bin/codex.js"));
+  let launch = launch::resolve(&shim);
+  assert_eq!(launch.program(), folder.path().join("node.exe"));
+  assert_eq!(launch.leading_args(), [script.to_string_lossy()]);
+  assert_eq!(launch.via(), &Via::NodeScript { script });
+  fs::remove_file(folder.path().join("node.exe")).expect("node removed");
+  assert_eq!(launch::resolve(&shim).program(), Path::new("node"));
+}
+
+#[test]
+fn process_shim_without_its_script_runs_through_cmd() {
+  let folder = tempfile::tempdir().expect("temporary directory");
+  let shim = folder.path().join("codex.cmd");
+  fs::write(&shim, CODEX_SHIM).expect("launcher");
+  assert_eq!(launch::resolve(&shim).via(), &Via::CommandScript);
+  assert_eq!(launch::resolve(Path::new("C:/tools/gh.exe")).via(), &Via::Direct);
+}
+
+#[test]
+fn process_shim_arguments_that_cmd_would_change_are_refused() {
+  for safe in [
+    "--version",
+    "api",
+    "owner=ivanzaida",
+    "Accept: application/vnd.github.diff",
+    "a...b",
+  ] {
+    assert!(passes_through_cmd(safe), "{safe}");
+  }
+  for unsafe_arg in [
+    "",
+    "a\"b",
+    "50%",
+    "a&b",
+    "a|b",
+    "a^b",
+    "(x)",
+    "wow!",
+    "a\nb",
+    "C:\\dir\\",
+    QUERY,
+  ] {
+    assert!(!passes_through_cmd(unsafe_arg), "{unsafe_arg}");
+  }
+  let folder = tempfile::tempdir().expect("temporary directory");
+  let script = folder.path().join("gh.cmd");
+  fs::write(&script, ECHO_SCRIPT).expect("script");
+  let raw_query = Command::new(&script, ["api", "graphql", "-f", &format!("query={QUERY}")]);
+  assert_eq!(
+    RUNNER.run(&raw_query),
+    Err(CommandError::UnsafeScriptArgument { position: 3 })
+  );
+  let output = RUNNER
+    .run(&Command::new(&script, ["--version"]))
+    .expect("the script runs");
+  assert_eq!(output.stdout.trim(), "ARGS --version");
+}
+
+#[test]
+fn process_shim_gets_the_graphql_query_on_standard_input() {
+  let folder = tempfile::tempdir().expect("temporary directory");
+  let gh = folder.path().join("gh.cmd");
+  fs::write(&gh, ECHO_SCRIPT).expect("script");
+  let repo = GitHubRepo::new(GitHubHost::github_com(), "ivanzaida", "kontur").expect("a repository");
+  let head = Revision::new(&"8f3a2c1d".repeat(5)).expect("a revision");
+  let command = gh_check_rollups_command(&gh, &repo, &[head]);
+  let output = RUNNER.run(&command).expect("the arguments pass through cmd.exe");
+  assert!(output.success, "{}", output.stderr);
+  let mut lines = output.stdout.lines();
+  assert_eq!(
+    lines.next().map(str::trim_end),
+    Some("ARGS api graphql --hostname github.com --input -")
+  );
+  let body = lines.collect::<String>();
+  assert!(body.contains("repository(owner:$owner,name:$name)"), "{body}");
+  assert!(body.contains("\"owner\":\"ivanzaida\""), "{body}");
+}
