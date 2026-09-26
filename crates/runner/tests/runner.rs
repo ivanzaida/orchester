@@ -2,7 +2,7 @@
 //! named pipe, which exists on Windows only.
 #![cfg(windows)]
 
-use std::{fs, path::Path, time::Duration};
+use std::{fs, num::NonZeroU32, path::Path, time::Duration};
 
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, RunId, TaskId},
@@ -10,7 +10,10 @@ use orchester_core::{
   project::{Project, ProjectKey},
   tokens::TokenBudget,
 };
-use orchester_ipc::{Command, Event, LaunchError, Rejection, Reply, Request, RequestId, RunnerClient, ShutdownMode};
+use orchester_ipc::{
+  AttachSession, Command, Event, LaunchError, Rejection, Reply, Request, RequestId, RunnerClient, SessionEnd,
+  ShutdownMode, WorkSummary,
+};
 use orchester_runner::lock::RunnerLock;
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
@@ -206,15 +209,30 @@ async fn runner_answers_attach_and_start_run_requests() {
   drop(ProjectDb::create(repo.path(), project).expect("create project"));
   let mut client = launch(repo.path()).await;
 
-  client.send(&request(1, Command::Attach)).await.expect("attach");
+  let attach = Command::Attach {
+    session: AttachSession::Fresh {
+      previous_end: SessionEnd::Clean,
+    },
+    agent_slots: NonZeroU32::new(2).expect("above zero"),
+  };
+  client.send(&request(1, attach)).await.expect("attach");
   assert_eq!(
     next_event(&mut client).await,
     Some(Event::Reply {
       id: RequestId::new(1),
       reply: Reply::Attached {
-        active_runs: Vec::new()
+        active_runs: Vec::new(),
+        interrupted: Vec::new(),
+        continued: Vec::new(),
       }
     })
+  );
+  assert_eq!(
+    next_event(&mut client).await,
+    Some(Event::WorkSummary(WorkSummary {
+      agent_slots: NonZeroU32::new(2).expect("above zero"),
+      runs: Vec::new(),
+    }))
   );
   let start = Command::StartRun {
     key: IdempotencyKey::generate(),

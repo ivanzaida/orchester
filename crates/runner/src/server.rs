@@ -37,12 +37,12 @@ pub async fn serve(project_root: &Path) -> Result<(), IpcError> {
   let mut writer = FrameWriter::new(write);
   handshake(&mut reader, &mut writer).await?;
   tracing::info!("desktop connected");
-  let (notifications, mut outgoing) = mpsc::unbounded_channel();
+  let (notifications, outgoing) = mpsc::unbounded_channel();
   // Replies of requests answered later travel with the notifications.
   let replies = notifications.clone();
   let scheduler = Scheduler::new(project_root, Notifier::new(notifications));
   // A frame read cannot be interrupted without losing data, so requests are read on their own task.
-  let (incoming, mut requests) = mpsc::unbounded_channel::<Incoming>();
+  let (incoming, requests) = mpsc::unbounded_channel::<Incoming>();
   let reading = tokio::spawn(async move {
     loop {
       let request = reader.read::<Request>().await.map_err(IpcError::from);
@@ -52,47 +52,104 @@ pub async fn serve(project_root: &Path) -> Result<(), IpcError> {
       }
     }
   });
-  let result = loop {
-    tokio::select! {
-      request = requests.recv() => match request {
-        Some(Ok(Some(request))) => match answer(&scheduler, &replies, &request) {
-          Answer::Reply(event) => writer.write(&event).await?,
-          Answer::Later => {}
-          Answer::Shutdown(mode) => {
-            tracing::info!("shutdown requested: {mode:?}");
-            scheduler.stop_all(InterruptCause::QuitNow).await;
-            while let Ok(event) = outgoing.try_recv() {
-              writer.write(&event).await?;
-            }
-            writer.write(&Event::Stopped { mode }).await?;
-            wait_for_disconnect(&mut requests).await;
-            break Ok(());
+  let result = Session {
+    scheduler,
+    replies,
+    writer,
+    outgoing,
+    requests,
+    finishing: None,
+  }
+  .run()
+  .await;
+  reading.abort();
+  result
+}
+
+/// A served connection: requests in, replies and notifications out.
+struct Session<W> {
+  scheduler: Scheduler,
+  replies: mpsc::UnboundedSender<Event>,
+  writer: FrameWriter<W>,
+  outgoing: mpsc::UnboundedReceiver<Event>,
+  requests: mpsc::UnboundedReceiver<Incoming>,
+  /// "Wait for agents to save" runs while events keep flowing; it ends the connection when done.
+  finishing: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
+  async fn run(mut self) -> Result<(), IpcError> {
+    loop {
+      tokio::select! {
+        request = self.requests.recv() => {
+          if let Some(end) = self.on_request(request).await? {
+            return end;
           }
-        },
-        Some(Err(error)) => {
-          tracing::warn!("desktop connection failed: {error}");
-          scheduler.stop_all(InterruptCause::RunnerLost).await;
-          break Err(error);
         }
-        Some(Ok(None)) | None => {
-          tracing::info!("desktop disconnected");
-          scheduler.stop_all(InterruptCause::RunnerLost).await;
-          break Ok(());
-        }
-      },
-      Some(event) = outgoing.recv() => {
-        let mut waiting = vec![event];
-        while let Ok(event) = outgoing.try_recv() {
-          waiting.push(event);
-        }
-        for event in coalesce(waiting) {
-          writer.write(&event).await?;
+        Some(event) = self.outgoing.recv() => self.write_waiting(vec![event]).await?,
+        finished = async { self.finishing.as_mut().expect("polled only while finishing").await }, if self.finishing.is_some() => {
+          if let Err(error) = finished {
+            tracing::error!(%error, "finishing at checkpoints failed");
+          }
+          return self.stopped(ShutdownMode::FinishAtCheckpoints).await;
         }
       }
     }
-  };
-  reading.abort();
-  result
+  }
+
+  /// Handles what the desktop sent; `Some` once the connection is over.
+  async fn on_request(&mut self, request: Option<Incoming>) -> Result<Option<Result<(), IpcError>>, IpcError> {
+    let request = match request {
+      Some(Ok(Some(request))) => request,
+      Some(Err(error)) => {
+        tracing::warn!("desktop connection failed: {error}");
+        self.scheduler.stop_all(InterruptCause::RunnerLost).await;
+        return Ok(Some(Err(error)));
+      }
+      Some(Ok(None)) | None => {
+        tracing::info!("desktop disconnected");
+        self.scheduler.stop_all(InterruptCause::RunnerLost).await;
+        return Ok(Some(Ok(())));
+      }
+    };
+    match answer(&self.scheduler, &self.replies, &request) {
+      Answer::Reply(event) => self.writer.write(&event).await?,
+      Answer::Later => {}
+      Answer::Shutdown(ShutdownMode::FinishAtCheckpoints) => {
+        tracing::info!("shutdown requested: finishing at checkpoints");
+        if self.finishing.is_none() {
+          let scheduler = self.scheduler.clone();
+          self.finishing = Some(tokio::spawn(async move { scheduler.finish_at_checkpoints().await }));
+        }
+      }
+      Answer::Shutdown(ShutdownMode::Immediate) => {
+        tracing::info!("shutdown requested: immediately");
+        self.scheduler.stop_all(InterruptCause::QuitNow).await;
+        return Ok(Some(self.stopped(ShutdownMode::Immediate).await));
+      }
+    }
+    Ok(None)
+  }
+
+  /// Writes `waiting` and every event queued behind it, coalesced.
+  async fn write_waiting(&mut self, mut waiting: Vec<Event>) -> Result<(), IpcError> {
+    while let Ok(event) = self.outgoing.try_recv() {
+      waiting.push(event);
+    }
+    for event in coalesce(waiting) {
+      self.writer.write(&event).await?;
+    }
+    Ok(())
+  }
+
+  /// The runner has stopped all work: the events still waiting, then [`Event::Stopped`], then
+  /// the desktop's disconnect.
+  async fn stopped(&mut self, mode: ShutdownMode) -> Result<(), IpcError> {
+    self.write_waiting(Vec::new()).await?;
+    self.writer.write(&Event::Stopped { mode }).await?;
+    wait_for_disconnect(&mut self.requests).await;
+    Ok(())
+  }
 }
 
 enum Answer {
@@ -105,9 +162,18 @@ enum Answer {
 fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request: &Request) -> Answer {
   let id = request.id;
   let reply = match request.command {
-    Command::Attach => Reply::Attached {
-      active_runs: scheduler.active_runs(),
+    Command::Attach { session, agent_slots } => match scheduler.attach(session, agent_slots) {
+      Ok(attached) => Reply::Attached {
+        active_runs: scheduler.active_runs(),
+        interrupted: attached.interrupted,
+        continued: attached.continued,
+      },
+      Err(rejection) => Reply::Rejected(rejection),
     },
+    Command::ContinueRuns { ref runs } => {
+      let (continued, refused) = scheduler.continue_runs(runs);
+      Reply::Continued { continued, refused }
+    }
     Command::Ping { nonce } => Reply::Pong { nonce },
     Command::StartRun { key, task } => match scheduler.start_run(key, task) {
       Ok(run) => Reply::RunStarted { run },

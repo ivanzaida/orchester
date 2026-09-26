@@ -13,7 +13,10 @@ use orchester_core::{
 };
 use tokio::time::{Instant, sleep};
 
-use super::super::run::{ExecutionError, RunTask};
+use super::super::{
+  idle,
+  run::{ExecutionError, RunTask},
+};
 use crate::supervisor::{ProcessEvent, ProcessExit, Supervised};
 
 /// Transcript entries are written at least this often while the CLI prints…
@@ -36,8 +39,8 @@ struct Watch {
   tracker: InvocationTracker,
   pending: Vec<(Timestamp, AgentEvent)>,
   stop: Option<Stop>,
-  /// The last turn used up the budget.
-  over_budget: bool,
+  /// The limit a turn used up: the run's budget or the project's daily budget.
+  over: Option<RunLimit>,
 }
 
 impl RunTask {
@@ -53,7 +56,7 @@ impl RunTask {
       tracker: InvocationTracker::default(),
       pending: Vec::new(),
       stop: None,
-      over_budget: false,
+      over: None,
     };
     let mut flush = tokio::time::interval(FLUSH_INTERVAL);
     let limit = sleep(time_left);
@@ -65,9 +68,11 @@ impl RunTask {
         event = process.next() => match event {
           Some(ProcessEvent::Output { stream, line }) => {
             let event = parse_codex_line(stream, &line);
-            if self.observe(invocation, &mut watch, event)? && limit.deadline() > Instant::now() + TURN_GRACE {
+            if let Some(reached) = self.observe(invocation, &mut watch, event)?
+              && limit.deadline() > Instant::now() + TURN_GRACE
+            {
               limit.as_mut().reset(Instant::now() + TURN_GRACE);
-              limit_reason = RunLimit::Tokens;
+              limit_reason = reached;
             }
             if watch.stop.is_some() {
               process.terminate();
@@ -102,14 +107,14 @@ impl RunTask {
   }
 
   /// Takes in one event. Usage is added to the run as each turn completes; a turn that uses up
-  /// the budget starts the grace for the CLI to end (`true`), and a new turn after it ends the
-  /// agent.
+  /// the run's budget or the project's daily budget starts the grace for the CLI to end (the
+  /// limit it reached), and a new turn after it ends the agent.
   fn observe(
     &mut self,
     invocation: &mut Invocation,
     watch: &mut Watch,
     event: AgentEvent,
-  ) -> Result<bool, ExecutionError> {
+  ) -> Result<Option<RunLimit>, ExecutionError> {
     watch.tracker.observe(&event);
     let usage = match &event {
       AgentEvent::TurnCompleted { usage } => Some(*usage),
@@ -120,16 +125,27 @@ impl RunTask {
     if watch.pending.len() >= FLUSH_BATCH || usage.is_some() {
       self.flush(invocation, watch)?;
     }
-    if new_turn && watch.over_budget && watch.stop.is_none() {
-      watch.stop = Some(Stop::Limit(RunLimit::Tokens));
+    if new_turn
+      && let Some(limit) = watch.over
+      && watch.stop.is_none()
+    {
+      watch.stop = Some(Stop::Limit(limit));
     }
     let Some(usage) = usage else {
-      return Ok(false);
+      return Ok(None);
     };
     self.transition(|run, now| run.record_usage(usage.counted_tokens(), now))?;
-    let reached = self.run.token_limit_reached() && !watch.over_budget;
-    watch.over_budget |= reached;
-    Ok(reached)
+    if watch.over.is_some() {
+      return Ok(None);
+    }
+    watch.over = if self.run.token_limit_reached() {
+      Some(RunLimit::Tokens)
+    } else if idle::daily_budget_used(&self.db)? {
+      Some(RunLimit::DailyBudget)
+    } else {
+      None
+    };
+    Ok(watch.over)
   }
 
   fn flush(&mut self, invocation: &mut Invocation, watch: &mut Watch) -> Result<(), ExecutionError> {

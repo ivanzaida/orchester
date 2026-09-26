@@ -191,6 +191,21 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
   task.id()
 }
 
+/// Queues a second task on the project's pipeline, with the same brief as the first.
+pub fn queue_another_task(root: &Path) -> TaskId {
+  let mut db = ProjectDb::open(root).expect("open");
+  let first = db.tasks().expect("tasks").remove(0);
+  let mut details = first.details().clone();
+  details.title = name("Say hello again");
+  let mut task = db
+    .create_tasks(IdempotencyKey::generate(), vec![details], Timestamp::now())
+    .expect("task")[0]
+    .clone();
+  task.queue().expect("complete task");
+  db.save_task(&task).expect("save task");
+  task.id()
+}
+
 pub fn scheduler(root: &Path) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
   let (sender, events) = mpsc::unbounded_channel();
   (Scheduler::new(root, Notifier::new(sender)), events)

@@ -5,12 +5,12 @@ use std::path::Path;
 
 use orchester_core::{
   id::RunId,
-  run::{PauseReason, RaisedLimits, Run, RunError, RunEvent, RunStatus, active_time},
+  run::{PauseReason, RaisedLimits, Run, RunError, RunEvent, RunLimit, RunStatus, active_time},
   store::{ActivityStore, RunStore, SettingsStore},
   time::Timestamp,
 };
 use orchester_ipc::Rejection;
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 
 use super::{failed, prepare::Prepared};
 
@@ -33,11 +33,12 @@ pub(super) fn cancel(db: &mut ProjectDb, run: RunId) -> Result<Run, Rejection> {
   Ok(run)
 }
 
-/// Resumes a paused run; a run stopped at a limit needs [`raise`] instead.
+/// Resumes a paused run; a run stopped at its own limit needs [`raise`] instead. One stopped by
+/// the daily budget resumes as it is once the day has room, which the scheduler checked.
 pub(super) fn resume(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Prepared, Rejection> {
   let mut run = load(db, run)?;
   match run.status() {
-    RunStatus::Paused(PauseReason::Requested) => {}
+    RunStatus::Paused(PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget)) => {}
     RunStatus::Paused(PauseReason::LimitReached(limit)) => return Err(Rejection::LimitNotRaised { limit: *limit }),
     _ => return Err(Rejection::RunNotPaused),
   }
@@ -66,6 +67,48 @@ pub(super) fn raise(db: &mut ProjectDb, root: &Path, run: RunId, limits: RaisedL
     .map_err(rejection)?;
   store(db, &run, &events)?;
   Prepared::continuing(db, root, run)
+}
+
+/// Continues an interrupted run from its last checkpoint because a person asked to.
+pub(super) fn continue_interrupted(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Prepared, Rejection> {
+  let mut run = load(db, run)?;
+  if !matches!(run.status(), RunStatus::Interrupted(_)) {
+    return Err(Rejection::RunNotInterrupted);
+  }
+  let events = run.continue_run(Timestamp::now()).map_err(rejection)?;
+  store(db, &run, &events)?;
+  Prepared::continuing(db, root, run)
+}
+
+/// Continues a run the previous runner's loss interrupted, from its last checkpoint.
+pub(super) fn continue_after_reconnect(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Prepared, Rejection> {
+  let mut run = load(db, run)?;
+  let events = run.continue_after_reconnect(Timestamp::now()).map_err(rejection)?;
+  if events.is_empty() {
+    return Err(Rejection::RunNotInterrupted);
+  }
+  store(db, &run, &events)?;
+  Prepared::continuing(db, root, run)
+}
+
+/// Refuses new or continued work while the project's runs have used today's token budget.
+pub(super) fn check_daily_budget(db: &ProjectDb) -> Result<(), Rejection> {
+  let limits = db
+    .project_limits()
+    .map_err(|error| failed("cannot read the project's limits", &error))?;
+  if daily_budget_used(db).map_err(|error| failed("cannot read today's token usage", &error))? {
+    return Err(Rejection::DailyBudgetUsed {
+      budget: limits.daily_budget(),
+    });
+  }
+  Ok(())
+}
+
+/// Whether the project's runs used today's token budget: today starts at local midnight.
+pub(super) fn daily_budget_used(db: &ProjectDb) -> Result<bool, StoreError> {
+  let limits = db.project_limits()?;
+  let today = db.tokens_used_since(Timestamp::now().local_day_start())?;
+  Ok(limits.daily_budget_used(today))
 }
 
 fn load(db: &ProjectDb, run: RunId) -> Result<Run, Rejection> {

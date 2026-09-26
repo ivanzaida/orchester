@@ -3,7 +3,7 @@
 //! transition is appended to the run's log and announced. Requests for the run (pause, cancel,
 //! the runner stopping) arrive as [`Control`]s, between steps and while an agent works.
 
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use orchester_core::{
   connection::stream::{AgentEvent, RunnerProblem},
@@ -20,8 +20,11 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 
 use super::{
-  Notifier, checkpoint,
+  Notifier,
+  board::Board,
+  checkpoint,
   control::{Ack, Control, answer},
+  idle,
   prepare::Prepared,
   record::{RecordError, record},
   step::StepEnd,
@@ -41,6 +44,7 @@ pub(super) enum ExecutionError {
 /// requests arrive.
 pub(super) struct TaskContext {
   pub(super) notifier: Notifier,
+  pub(super) board: Arc<Board>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
 }
 
@@ -58,6 +62,7 @@ pub(super) struct RunTask {
   pub(super) project: Project,
   pub(super) worktree: PathBuf,
   pub(super) notifier: Notifier,
+  pub(super) board: Arc<Board>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   pub(super) pending: Pending,
 }
@@ -72,6 +77,7 @@ impl RunTask {
       project,
       worktree: prepared.worktree,
       notifier: context.notifier,
+      board: context.board,
       controls: context.controls,
       pending: Pending::default(),
     }
@@ -83,7 +89,9 @@ impl RunTask {
   pub(super) async fn drive(mut self) {
     let run = self.run.id();
     tracing::info!(%run, "run executing");
-    match self.steps().await {
+    let result = self.steps().await;
+    self.board.settled(&self.run);
+    match result {
       Ok(()) => tracing::info!(%run, status = ?self.run.status(), "run settled"),
       Err(error) => {
         tracing::error!(%run, %error, "the run could not continue");
@@ -111,6 +119,9 @@ impl RunTask {
         return Ok(());
       };
       let resume = self.begin_step(execution)?;
+      if let Some(work) = self.work(execution)? {
+        self.board.working(work);
+      }
       let time_left = self.time_left()?;
       let end = self.execute(execution, resume, time_left).await?;
       match end {
@@ -161,6 +172,10 @@ impl RunTask {
       self.stop_at_limit(RunLimit::Time)?;
       return Ok(true);
     }
+    if idle::daily_budget_used(&self.db)? {
+      self.stop_at_limit(RunLimit::DailyBudget)?;
+      return Ok(true);
+    }
     Ok(false)
   }
 
@@ -201,6 +216,7 @@ impl RunTask {
         match limit {
           RunLimit::Tokens => "token",
           RunLimit::Time => "time",
+          RunLimit::DailyBudget => "daily budget",
         },
         self.run.number()
       );
