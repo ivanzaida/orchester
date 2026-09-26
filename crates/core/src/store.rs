@@ -2,14 +2,14 @@
 //! will implement the same traits later, so domain code depends only on these.
 
 use crate::{
-  connection::Connection,
-  id::{ConnectionId, IdempotencyKey, ResourceId, RunId, TaskId},
+  connection::{Connection, stream::AgentEvent},
+  id::{ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   name::Name,
   pull_request::{PullRequest, RevisionDiff, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
-  resource::{Draft, DraftSaved, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
+  resource::{Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   revision::Revision,
-  run::{Checkpoint, NewRun, Run, RunEvent},
+  run::{ActivityEntry, Checkpoint, Invocation, NewRun, Run, RunEvent},
   task::{Task, TaskDetails},
   time::Timestamp,
 };
@@ -173,4 +173,37 @@ pub trait RunStore {
 
   /// Interrupted runs of the project, ordered by number, for recovery.
   fn interrupted_runs(&self) -> Result<Vec<Run>, Self::Error>;
+}
+
+/// Agent CLI invocations and their transcripts, written by the runner. Transcript entries are
+/// append-only.
+pub trait ActivityStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Records a new launch of the agent CLI for `execution` of `run`, numbered after the
+  /// execution's earlier ones.
+  fn start_invocation(
+    &mut self,
+    run: RunId,
+    execution: StepExecutionId,
+    model: &ModelId,
+    now: Timestamp,
+  ) -> Result<Invocation, Self::Error>;
+
+  /// Stores the session, usage, end and outcome of an existing invocation.
+  fn save_invocation(&mut self, invocation: &Invocation) -> Result<(), Self::Error>;
+
+  /// Invocations of a run, in launch order.
+  fn invocations(&self, run: RunId) -> Result<Vec<Invocation>, Self::Error>;
+
+  /// Appends `events` of `invocation` to its run's transcript, atomically, and returns the
+  /// sequence of the last one (of the transcript so far when `events` is empty).
+  fn append_activity(
+    &mut self,
+    invocation: &Invocation,
+    events: &[(Timestamp, AgentEvent)],
+  ) -> Result<u64, Self::Error>;
+
+  /// Transcript entries of a run after sequence `after` (0: from the start), in order.
+  fn activity(&self, run: RunId, after: u64) -> Result<Vec<ActivityEntry>, Self::Error>;
 }

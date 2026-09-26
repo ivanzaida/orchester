@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"01a0d837-ac7e-7f62-9379-9aa18a398b57"}
+{"type":"turn.started"}
+{"type":"error","message":"{\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'no-such-model-probe' model is not supported when using Codex with a ChatGPT account.\"}}"}
+{"type":"turn.failed","error":{"message":"{\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'no-such-model-probe' model is not supported when using Codex with a ChatGPT account.\"}}"}}

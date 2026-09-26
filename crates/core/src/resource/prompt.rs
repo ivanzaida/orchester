@@ -43,6 +43,37 @@ impl PromptText {
   pub fn is_blank(&self) -> bool {
     self.text.trim().is_empty()
   }
+
+  /// The text with every placeholder replaced by `value(variable)` and `\{{` escapes turned
+  /// into `{{`. The first variable without a value is returned instead: a prompt never goes
+  /// out with a placeholder silently left empty.
+  pub fn render(&self, mut value: impl FnMut(Variable) -> Option<String>) -> Result<String, Variable> {
+    let text = &self.text;
+    let mut rendered = String::with_capacity(text.len());
+    let mut start = 0;
+    while let Some(open) = text[start..].find(OPEN) {
+      let offset = start + open;
+      let inner_start = offset + OPEN.len();
+      if text[..offset].ends_with(ESCAPE) {
+        rendered.push_str(&text[start..offset - ESCAPE.len_utf8()]);
+        rendered.push_str(OPEN);
+        start = inner_start;
+        continue;
+      }
+      let inner_len = text[inner_start..]
+        .find(CLOSE)
+        .expect("construction checked that every placeholder is closed");
+      let variable = text[inner_start..inner_start + inner_len]
+        .trim()
+        .parse::<Variable>()
+        .expect("construction checked that every placeholder names a variable");
+      rendered.push_str(&text[start..offset]);
+      rendered.push_str(&value(variable).ok_or(variable)?);
+      start = inner_start + inner_len + CLOSE.len();
+    }
+    rendered.push_str(&text[start..]);
+    Ok(rendered)
+  }
 }
 
 impl TryFrom<String> for PromptText {

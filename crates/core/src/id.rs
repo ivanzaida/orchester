@@ -83,3 +83,7 @@ define_id!(
   /// A persisted point a run can continue from after a pause or an interruption.
   CheckpointId
 );
+define_id!(
+  /// One launch of an agent CLI for a step execution: the first, or a retry or continue.
+  InvocationId
+);

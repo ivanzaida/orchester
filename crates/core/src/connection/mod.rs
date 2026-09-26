@@ -7,7 +7,10 @@
 mod adapter;
 mod agent;
 mod catalog;
+mod discovery;
 mod github;
+pub mod invocation;
+pub mod stream;
 
 use std::path::{Path, PathBuf};
 
@@ -21,6 +24,7 @@ pub use self::{
   },
   agent::{AgentConnection, CheckResult, ConnectionCheck},
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
+  discovery::{Installed, compare_versions, rank_installed},
   github::{
     GH_PROGRAM, GhAdvice, GhAuthStatus, GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin,
     GitHubNameError, GitHubState, REQUIRED_SCOPE, check_github, gh_auth_status_command, gh_version_command,
@@ -90,7 +94,8 @@ pub enum SignIn {
 }
 
 /// State of a connection, derived from its last check.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ConnectionStatus {
   NotChecked,
   Connected,
