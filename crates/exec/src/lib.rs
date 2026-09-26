@@ -5,6 +5,8 @@
 //! thread.
 
 mod console;
+
+pub use console::hide_window;
 pub mod launch;
 
 use std::{

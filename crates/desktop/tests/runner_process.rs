@@ -7,15 +7,17 @@ use std::{
   time::Duration,
 };
 
+use orchester_core::id::{IdempotencyKey, TaskId};
 use orchester_desktop::{
   activity::Activity,
   app_paths::runner_beside,
   close::{CloseKind, session_end},
   runner::{
-    QUIET_STOP_TIMEOUT, RunnerStatus, Runners, ShutdownOutcome,
+    QUIET_STOP_TIMEOUT, RequestError, RunnerStatus, Runners, ShutdownOutcome, StartRunError,
     state::{RunnerFailure, RunnerState},
   },
 };
+use orchester_ipc::Rejection;
 use orchester_store::SessionEnd;
 use tempfile::TempDir;
 use tokio::{runtime::Handle, sync::watch, time::timeout};
@@ -98,4 +100,31 @@ async fn runner_process_missing_program_fails_visibly() {
     runners.shutdown(Some(QUIET_STOP_TIMEOUT)).await,
     ShutdownOutcome::NoRunner
   );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runner_process_answers_start_run_requests() {
+  let repo = tempfile::tempdir().expect("temporary directory");
+  fs::create_dir(repo.path().join(".git")).expect("create .git");
+  let project = orchester_core::project::Project::new(
+    orchester_core::id::ProjectId::generate(),
+    orchester_core::project::ProjectKey::new("ORC").expect("key"),
+    orchester_core::name::Name::new("Kontur").expect("name"),
+  );
+  drop(orchester_store::ProjectDb::create(repo.path(), project).expect("create project"));
+  let runners = Runners::new(runner_program(), Handle::current(), Activity::new());
+  let (key, task) = (IdempotencyKey::generate(), TaskId::generate());
+  assert_eq!(
+    runners.start_run(key, task).await,
+    Err(StartRunError::Request(RequestError::NotConnected))
+  );
+  let mut updates = runners.subscribe();
+  runners.show(Some(repo.path()));
+  wait_for(&mut updates, repo.path(), |state| *state == RunnerState::Online).await;
+
+  let answer = timeout(PATIENCE, runners.start_run(key, task))
+    .await
+    .expect("answer in time");
+  assert_eq!(answer, Err(StartRunError::Rejected(Rejection::TaskNotFound)));
+  runners.shutdown(Some(QUIET_STOP_TIMEOUT)).await;
 }

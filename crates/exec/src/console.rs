@@ -5,7 +5,7 @@
 use std::process::Command;
 
 #[cfg(windows)]
-pub(crate) fn hide_window(process: &mut Command) {
+pub fn hide_window(process: &mut Command) {
   use std::os::windows::process::CommandExt;
 
   const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -13,4 +13,4 @@ pub(crate) fn hide_window(process: &mut Command) {
 }
 
 #[cfg(not(windows))]
-pub(crate) fn hide_window(_process: &mut Command) {}
+pub fn hide_window(_process: &mut Command) {}
