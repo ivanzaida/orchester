@@ -1,4 +1,5 @@
 use lurq::node::element::ElementRef;
+use orchester_desktop::pipelines::{data::OpenedPipeline, library::library_in};
 
 use crate::harness::{Desktop, expected};
 
@@ -131,4 +132,33 @@ fn pipeline_inspector_description_is_reached_by_tab() {
   desktop.tab_to(DESCRIPTION, MAX_STOPS);
   desktop.type_text("Ships changes");
   assert!(desktop.value(DESCRIPTION).ends_with("Ships changes"));
+}
+
+/// Whether some element of the window shows `text`.
+fn window_shows(desktop: &mut Desktop, text: &str) -> bool {
+  desktop
+    .tree
+    .root()
+    .is_some_and(|root| crate::github::contains_text(root, text))
+}
+
+#[test]
+fn step_budget_is_whole_tokens_grouped_while_typed_and_saved_as_tokens() {
+  let mut desktop = starter();
+  desktop.tab_to(BUDGET, MAX_STOPS);
+  desktop.type_text("400000");
+  assert_eq!(desktop.value(BUDGET), "400,000");
+  assert!(window_shows(&mut desktop, "Step budget"));
+  let repo = desktop.repo().to_path_buf();
+  let stored_budget = move || {
+    let pipeline = library_in(&repo).expect("the library loads")[0].id;
+    let opened = OpenedPipeline::load_in(&repo, pipeline).expect("the pipeline opens");
+    opened.body.steps()[0].budget.map(|budget| budget.get())
+  };
+  desktop.settle("the step budget saved in tokens", |_| stored_budget() == Some(400_000));
+  // A decimal or a unit is not a token count; the field says how to write one and the step keeps
+  // its last budget.
+  desktop.type_text(".5");
+  assert!(window_shows(&mut desktop, "Use digits only, for example 1,400,000."));
+  assert_eq!(stored_budget(), Some(400_000));
 }

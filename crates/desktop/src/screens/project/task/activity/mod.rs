@@ -286,14 +286,28 @@ impl ActivityTab {
     let options = std::iter::once((StepFilter(None), all)).chain(executions.iter().filter_map(|execution| {
       let step = run.step_of(*execution)?;
       let number = format!("{:02}", step.number);
-      let label = ctx.t_args(
-        "runs.activity.stepOption",
-        [
-          ("number", number.as_str()),
-          ("step", &*step.name),
-          ("agent", step.agent.as_deref().unwrap_or_default()),
-        ],
-      );
+      let args = [
+        ("number", number.as_str()),
+        ("step", &*step.name),
+        ("agent", step.agent.as_deref().unwrap_or_default()),
+      ];
+      // A step a failure route re-executed has an execution per attempt, which the attempt tells apart.
+      let label = match run
+        .run
+        .attempts()
+        .iter()
+        .find(|attempt| attempt.execution(*execution).is_some())
+      {
+        Some(attempt) if run.run.attempts().len() > 1 => {
+          let attempt = attempt.number().to_string();
+          let [number, step, agent] = args;
+          ctx.t_args(
+            "runs.activity.stepOptionAttempt",
+            [number, step, agent, ("attempt", attempt.as_str())],
+          )
+        }
+        _ => ctx.t_args("runs.activity.stepOption", args),
+      };
       Some((StepFilter(Some(*execution)), label))
     }));
     Element::from(

@@ -34,6 +34,7 @@ use crate::{
     icon::{Icon, IconSize, icon},
     message_text,
     pressable::{Ring, keyboard_stop},
+    unit_input::UnitInput,
   },
 };
 
@@ -355,13 +356,7 @@ pub fn constraints(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, error
       errors.retries.as_ref(),
     ));
   }
-  column = column.child(property_input(
-    ctx,
-    "pipelines.inspector.budget",
-    "step-budget",
-    &fields.budget,
-    errors.budget.as_ref(),
-  ));
+  column = column.child(budget_input(ctx, fields, errors.budget.as_ref()));
   if matches!(props.step.kind, StepKind::Agent { .. }) {
     let options = [RepositoryAccess::ReadOnly, RepositoryAccess::Write]
       .into_iter()
@@ -380,6 +375,35 @@ pub fn constraints(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, error
     );
   }
   column.into()
+}
+
+/// The step budget (`Jufa2`): whole tokens typed in place with the `tokens` unit inside the field
+/// (`sN3du`), grouped for the locale while typed; empty for no step budget.
+fn budget_input(ctx: &Ctx, fields: &Fields, error: Option<&Message>) -> Element {
+  let input = UnitInput::new(
+    "step-budget",
+    fields.budget.clone(),
+    ctx.t("tokens.unit"),
+    fields.focused.clone(),
+  )
+  .tokens(ctx.t("number.groupSeparator"))
+  .compact()
+  .invalid(error.is_some())
+  .size(
+    Dimension::Px(VALUE_WIDTH + VALUE_WIDTH / 2.0),
+    Dimension::Px(SMALL_BUTTON_HEIGHT),
+  );
+  let row = Row::new()
+    .width(Dimension::Pct(100.0))
+    .align_items(Alignment::Center)
+    .child(label(ctx, "pipelines.inspector.budget").flex(1.0))
+    .child(input.render(ctx));
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Xs)
+    .child(row)
+    .with_children(error.map(|error| field_error(&message_text(ctx, error))))
+    .into()
 }
 
 /// A key/value property (`tfGRt`) whose value is typed in place.

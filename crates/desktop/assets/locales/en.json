@@ -386,7 +386,9 @@
         "interrupted": "Run {{run}} · Attempt {{attempt}} · interrupted at {{step}}",
         "succeeded": "Run {{run}} · Attempt {{attempt}} · every step passed",
         "failed": "Run {{run}} · Attempt {{attempt}} · failed at {{step}}",
-        "cancelled": "Run {{run}} · Attempt {{attempt}} · cancelled"
+        "cancelled": "Run {{run}} · Attempt {{attempt}} · cancelled",
+        "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
+        "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted"
       },
       "tabs": {
         "summary": "Summary",
@@ -413,7 +415,6 @@
       "write": "Edits files in the run worktree"
     },
     "summary": {
-      "execution": "Execution",
       "stepDetail": "{{agent}} · {{state}}",
       "latest": "Latest activity",
       "latestStarted": "{{time}}  {{step}} · {{agent}} started",
@@ -459,6 +460,53 @@
         "cancelledDetail": "Completed work stays on {{branch}}."
       }
     },
+    "progress": {
+      "stepAgent": "{{step}} · {{agent}}",
+      "together": " + ",
+      "detail": "{{state}} · attempt {{attempt}} · {{tokens}} tokens · {{duration}}",
+      "state": {
+        "waiting": "Waiting",
+        "working": "Working",
+        "needsYou": "Needs you",
+        "paused": "Paused",
+        "interrupted": "Interrupted",
+        "complete": "Complete",
+        "failed": "Failed",
+        "skipped": "Skipped",
+        "cancelled": "Cancelled"
+      },
+      "failure": {
+        "reported": "Reported failed",
+        "notStarted": "Could not start",
+        "stepBudget": "Step budget reached",
+        "mergeConflict": "Merge conflict",
+        "checkpointFailed": "Commit failed"
+      }
+    },
+    "retryLimit": {
+      "title": {
+        "one": "{{step}} still fails after {{retries}} retry",
+        "other": "{{step}} still fails after {{retries}} retries"
+      },
+      "detail": "Automatic execution has stopped. Review what the latest attempt left behind.",
+      "latest": "Latest attempt · {{revision}}",
+      "latestWithoutCheckpoint": "Latest attempt {{attempt}}",
+      "reported": "What {{step}} reported",
+      "openReport": "Open verification report",
+      "preservedTitle": "Changes and messages are preserved",
+      "preservedDetail": "The work of every step stays committed on {{branch}}. Nothing was merged into your branch.",
+      "allowTitle": "Allow another attempt",
+      "used": "Tokens used",
+      "remaining": "Remaining budget",
+      "remainingValue": "{{count}} tokens",
+      "additional": "Additional attempts",
+      "additionalValue": "1 additional attempt",
+      "resumeFrom": "Resume from",
+      "resumeValue": "{{step}} · latest checkpoint",
+      "unavailable": "Allowing another attempt is not available in this version yet. The run stays failed and its work stays on its branch.",
+      "allow": "Allow 1 retry & continue",
+      "revisePlan": "Revise plan first"
+    },
     "activity": {
       "allSteps": {
         "one": "All steps · {{count}} execution",
@@ -491,7 +539,9 @@
       "problem": {
         "unavailableVariable": "The prompt uses {{variable}}, which has no value in this run",
         "couldNotStart": "The agent could not be started",
-        "checkpointFailed": "The step’s changes could not be committed"
+        "checkpointFailed": "The step’s changes could not be committed",
+        "mergeConflict": "The step’s changes conflict with the run’s branch; they stay on {{branch}}",
+        "stepBudgetReached": "The step used its budget of {{budget}} tokens and was stopped"
       },
       "unparsed": {
         "one": "{{count}} unparsed line",
@@ -527,7 +577,8 @@
         "counted": "Counted",
         "runTotal": "Run total",
         "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget."
-      }
+      },
+      "stepOptionAttempt": "{{number}} · {{step}} · {{agent}} · attempt {{attempt}}"
     },
     "preflight": {
       "pipelineNotPublished": "The task’s pipeline has no published version.",
@@ -1270,10 +1321,6 @@
   "number": {
     "groupSeparator": ","
   },
-  "money": {
-    "usd": "${{amount}}",
-    "other": "{{amount}} {{currency}}"
-  },
   "pipelines": {
     "flow": {
       "then": "→",
@@ -1443,14 +1490,12 @@
       "unknownDependency": "{{step}} runs after a step that no longer exists",
       "unknownRetryTarget": "{{step}} returns to a step that no longer exists",
       "retryTargetNotUpstream": "{{step}} returns to {{target}}, which does not run before it",
-      "nonPositiveBudget": "The budget of {{step}} must be more than zero",
       "staleDraft": "This draft started from {{basedOn}}, but {{latest}} was published since. Publishing it would discard the changes in {{latest}}.",
       "notPublishable": "The draft has problems that block publishing.",
       "versionLimit": "This pipeline has reached the highest version number.",
       "noDraft": "There is no saved draft to publish.",
       "unclosedPlaceholder": "A placeholder is opened with two braces but never closed.",
       "unknownVariable": "{{name}} is not a variable in the catalog.",
-      "invalidBudget": "Enter an amount in US dollars, e.g. 1.50.",
       "invalidRetries": "Enter a whole number of retries, at least 1."
     },
     "canvas": {
@@ -1510,7 +1555,7 @@
       "routeFail": "Fail the run",
       "routeReturn": "Return to {{step}}",
       "maxRetries": "Maximum retries",
-      "budget": "Step budget (USD)",
+      "budget": "Step budget",
       "none": "None",
       "repositoryAccess": "Repository access",
       "readOnly": "Read-only",
@@ -1573,7 +1618,7 @@
       "approvalRemoved": "{{step}} · no longer waits for approval",
       "failureRoute": "{{step}} · when changes are requested changed",
       "maxRetries": "{{step}} · maximum retries {{from}} → {{to}}",
-      "budget": "{{step}} · step budget {{from}} → {{to}}"
+      "budget": "{{step}} · step budget {{from}} → {{to}} tokens"
     }
   },
   "statusBar": {

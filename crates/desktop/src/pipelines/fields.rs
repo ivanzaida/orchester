@@ -5,20 +5,16 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   id::ResourceId,
-  money::{Currency, Money},
   name::Name,
   resource::{FailureRoute, ModelId, PromptText, RepositoryAccess, Step, StepKey, StepKind},
+  tokens::{TokenBudget, grouped},
 };
 
-use super::problems::{budget_error, prompt_error};
+use super::problems::prompt_error;
 use crate::{
-  display,
+  budget::{read_budget, unbounded},
   messages::{self, Message},
 };
-
-/// Currency of step budgets. Task and run budgets are tokens now; step budgets are still money
-/// until pipelines move to token budgets too.
-const BUDGET_CURRENCY: Currency = Currency::USD;
 
 /// Retries a new failure route allows until the user changes it.
 const DEFAULT_RETRIES: NonZeroU32 = NonZeroU32::MIN;
@@ -139,18 +135,20 @@ pub fn parse_instructions(text: &str) -> Result<PromptText, Message> {
   PromptText::new(text).map_err(|error| prompt_error(&error))
 }
 
-/// Empty text means no budget.
-pub fn parse_budget(text: &str) -> Result<Option<Money>, Message> {
+/// A step budget field's text, whole tokens grouped with `separator` (the budget input rule);
+/// empty text means no step budget.
+pub fn parse_budget(text: &str, separator: &str) -> Result<Option<TokenBudget>, Message> {
   if text.trim().is_empty() {
     return Ok(None);
   }
-  Money::parse(text, BUDGET_CURRENCY)
-    .map(Some)
-    .map_err(|error| budget_error(&error))
+  read_budget(text, separator, unbounded()).map(Some)
 }
 
-pub fn budget_text(budget: Option<Money>) -> String {
-  budget.map(display::amount).unwrap_or_default()
+/// A step budget in its field, grouped for the locale; empty without one.
+pub fn budget_text(budget: Option<TokenBudget>, separator: &str) -> String {
+  budget
+    .map(|budget| grouped(budget.get(), separator))
+    .unwrap_or_default()
 }
 
 pub fn parse_retries(text: &str) -> Result<NonZeroU32, Message> {

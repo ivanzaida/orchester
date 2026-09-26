@@ -1,32 +1,34 @@
 //! The Summary tab (`Nlcnu` in 02.10 `RD4pc`): what the run is doing in a notice, for a run
-//! stopped at a limit the panel that raises it (02.L `ZUYM0`), the pipeline's steps with their
-//! state (`mBkeJ` rows), the latest agent launch, and the run's pinned configuration, limits and
-//! usage in the "This run" panel (`F5Lsi`).
+//! stopped at a limit the panel that raises it (02.L `ZUYM0`), the run's progress per step
+//! (`qB7mj` in 02.12, `l3hyb` rows), the latest agent launch, and the run's pinned configuration,
+//! limits and usage in the "This run" panel (`F5Lsi`). A run whose step used up its retries shows
+//! 02.B (`J3JZaT`) instead.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
-  layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   connection::stream::InvocationOutcome,
   limits::ProjectLimits,
   resource::RepositoryAccess,
-  run::{PauseReason, RunLimit, RunStatus, StepStatus},
+  run::{PauseReason, RunFailure, RunLimit, RunStatus},
   time::Timestamp,
   tokens::compact_tokens,
 };
 
 use super::{
-  heading::{agent_of, step_state},
+  heading::agent_of,
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
   notice::{Lost, notice},
+  progress::progress_list,
+  retry_limit::retry_limit,
 };
 use crate::{
   budget::whole_minutes,
@@ -34,16 +36,13 @@ use crate::{
   tasks::detail::{RunView, StepView, TaskDetail},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
-    icon::{Icon, IconSize, icon},
     message_text,
     property::{ValueStyle, property, styled_property},
   },
 };
 
-/// "This run" panel width, step row height and its glyph tile (`F5Lsi`, `NBmWz`, `tWFDE`).
+/// "This run" panel width (`F5Lsi`).
 const PANEL_WIDTH: f32 = 336.0;
-const STEP_ROW_HEIGHT: f32 = 64.0;
-const GLYPH_SIZE: f32 = 28.0;
 
 /// `lost`: the run is recorded as running but has no runner, and why.
 pub(super) fn summary(
@@ -52,6 +51,11 @@ pub(super) fn summary(
   limits: Option<ProjectLimits>,
   lost: Option<Lost>,
 ) -> Element {
+  if let Some(run) = &detail.run
+    && let RunStatus::Failed(RunFailure::RetriesExhausted(step)) = run.run.status()
+  {
+    return retry_limit(ctx, run, step);
+  }
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
   let mut progress = Column::new()
     .id("task-progress")
@@ -60,16 +64,10 @@ pub(super) fn summary(
     .padding(SpacingSize::Section)
     .spacing(ExtraSpacing::Form.role())
     .child(notice(ctx, detail, lost))
-    .with_children(raise)
-    .child(Text::new(&ctx.t("runs.summary.execution")).variant(ExtraTypography::SectionHeading.role()));
+    .with_children(raise);
   if let Some(run) = &detail.run {
     progress = progress
-      .with_children(
-        run
-          .steps
-          .iter()
-          .map(|step| step_row(ctx, step, run.run.status(), lost.is_some())),
-      )
+      .child(progress_list(ctx, run, lost.is_some()))
       .child(Spacer::new().flex(1.0))
       .with_children(latest(ctx, run));
   }
@@ -78,53 +76,6 @@ pub(super) fn summary(
     .flex(1.0)
     .child(progress)
     .with_children(detail.run.as_ref().map(|run| this_run(ctx, run)))
-    .into()
-}
-
-/// One step and its state (`mBkeJ` as in `NBmWz`). `lost`: the run lost its runner.
-fn step_row(ctx: &Ctx, step: &StepView, run: &RunStatus, lost: bool) -> Element {
-  // A step a paused run stopped in is not running (`tSDux` in 02.A), and neither is one whose
-  // runner is gone.
-  let (glyph, state) = match (run, step.status) {
-    (RunStatus::Paused(_), Some(StepStatus::Running)) => (Icon::Pause, "runs.step.paused"),
-    (RunStatus::Running, Some(StepStatus::Running)) if lost => (Icon::CirclePause, "runs.step.interrupted"),
-    (RunStatus::Cancelled, Some(StepStatus::Skipped)) => (Icon::Square, "runs.step.cancelled"),
-    _ => step_state(step.status),
-  };
-  let state = ctx.t(state);
-  let detail = if step.agent.is_some() {
-    ctx.t_args(
-      "runs.summary.stepDetail",
-      [("agent", agent_of(step)), ("state", &state)],
-    )
-  } else {
-    state
-  };
-  let tile = Row::new()
-    .size(Dimension::Px(GLYPH_SIZE), Dimension::Px(GLYPH_SIZE))
-    .background(PaletteColor::SurfaceRaised)
-    .rounded(RadiusSize::Md)
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .child(icon(glyph, IconSize::Event, PaletteColor::TextSecondary));
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(STEP_ROW_HEIGHT))
-    .spacing(ExtraSpacing::Stack.role())
-    .describe("step", step.name.to_string())
-    .describe("state", format!("{:?}", step.status))
-    .child(tile)
-    .child(
-      Column::new()
-        .flex(1.0)
-        .spacing(ExtraSpacing::Tight.role())
-        .child(
-          Text::new(&step.name)
-            .variant(TypographyStyle::FieldLabel)
-            .color(PaletteColor::TextPrimary),
-        )
-        .child(Text::new(&detail).variant(TypographyStyle::Caption)),
-    )
     .into()
 }
 

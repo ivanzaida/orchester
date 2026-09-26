@@ -3,6 +3,7 @@
 pub mod backdrop;
 pub mod brand;
 pub mod button;
+pub mod check_row;
 pub mod command_row;
 pub mod field;
 pub mod form;

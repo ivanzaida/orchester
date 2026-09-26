@@ -25,6 +25,7 @@ use crate::{
       parse_retries,
     },
   },
+  ui::unit_input::FocusedInput,
 };
 
 /// Field names for [`EditorHandle::set_field_invalid`].
@@ -84,6 +85,8 @@ pub struct Fields {
   pub access: Signal<AccessChoice>,
   /// Remove asks once more before it removes the step.
   pub confirm_remove: Signal<bool>,
+  /// Which of the inspector's unit inputs has the focus.
+  pub focused: FocusedInput,
 }
 
 pub struct StepInspector {
@@ -109,20 +112,22 @@ impl Component for StepInspector {
       route: ctx.signal(RouteChoice(None)),
       access: ctx.signal(AccessChoice(RepositoryAccess::ReadOnly)),
       confirm_remove: ctx.signal(false),
+      focused: ctx.signal(None),
     };
     watch_fields(ctx, &fields, &handle);
+    watch_budget(ctx, &fields, &handle);
     Self { fields, handle }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<StepInspectorProps>().clone();
     if self.fields.key.get().0.is_none() {
-      self.seed(&props.step);
+      self.seed(&props.step, &ctx.t("number.groupSeparator"));
     }
     let errors = FieldErrors {
       name: parse_name(&self.fields.name.get()).err(),
       instructions: parse_instructions(&self.fields.instructions.get()).err(),
-      budget: parse_budget(&self.fields.budget.get()).err(),
+      budget: parse_budget(&self.fields.budget.get(), &ctx.t("number.groupSeparator")).err(),
       retries: props
         .step
         .on_failure
@@ -169,11 +174,11 @@ impl Component for StepInspector {
 impl StepInspector {
   /// Fills the fields from the step when the inspector opens; the watches ignore it because
   /// the values are the step's own.
-  fn seed(&self, step: &Step) {
+  fn seed(&self, step: &Step, separator: &str) {
     let fields = &self.fields;
     fields.name.set(step.name.as_str().to_owned());
     fields.instructions.set(step.instructions.as_str().to_owned());
-    fields.budget.set(budget_text(step.budget));
+    fields.budget.set(budget_text(step.budget, separator));
     fields.retries.set(
       step
         .on_failure
@@ -223,10 +228,6 @@ fn watch_fields(ctx: &mut Ctx, fields: &Fields, handle: &EditorHandle) {
     step.instructions = parse_instructions(text)?;
     Ok(())
   });
-  typed(ctx, &fields.budget, BUDGET, |text, step| {
-    step.budget = parse_budget(text)?;
-    Ok(())
-  });
   typed(ctx, &fields.retries, RETRIES, |text, step| {
     if let Some(route) = &mut step.on_failure {
       route.max_retries = parse_retries(text)?;
@@ -239,6 +240,28 @@ fn watch_fields(ctx: &mut Ctx, fields: &Fields, handle: &EditorHandle) {
   });
   watch_route(ctx, fields, handle);
   chosen(ctx, &fields.access, fields, handle, |choice, step| choice.apply(step));
+}
+
+/// Applies the step budget as typed: whole tokens grouped for the locale, which the watch reads
+/// when the text changes.
+fn watch_budget(ctx: &mut Ctx, fields: &Fields, handle: &EditorHandle) {
+  let (key, handle) = (fields.key.clone(), handle.clone());
+  let separator = ctx.t("number.groupSeparator");
+  ctx.watch(&fields.budget, move |text| {
+    let Inspected(Some(step)) = key.get() else {
+      return;
+    };
+    let budget = parse_budget(text, &separator);
+    let applied = handle.edit(|edit| {
+      let mut result = Ok(());
+      edit.update(&step, |target| match &budget {
+        Ok(budget) => target.budget = *budget,
+        Err(error) => result = Err(error.clone()),
+      });
+      result
+    });
+    handle.set_field_invalid(&step, BUDGET, matches!(applied, Some(Err(_))));
+  });
 }
 
 /// A new route shows the retries it allows, so the field is not left empty.

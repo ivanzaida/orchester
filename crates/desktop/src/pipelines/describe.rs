@@ -1,9 +1,12 @@
 //! What the pipeline screens say about a step, a version or a change, as messages.
 
-use orchester_core::resource::{PipelineChange, RepositoryAccess, Step, StepChange, StepKind};
+use orchester_core::{
+  resource::{PipelineChange, RepositoryAccess, Step, StepChange, StepKind},
+  tokens::compact_tokens,
+};
 
 use super::{data::Assignables, library::VersionState};
-use crate::{display, messages::Message};
+use crate::messages::Message;
 
 /// Second line of a step card: who runs it (`K4DMy` in `ajikA`).
 pub fn executor_line(step: &Step, assignables: &Assignables) -> Message {
@@ -117,6 +120,7 @@ pub fn change(change: &PipelineChange) -> Message {
   }
 }
 
-fn budget_text(budget: Option<orchester_core::money::Money>) -> String {
-  budget.map_or_else(|| "—".to_owned(), display::amount)
+/// A step budget in the compact form (`400k`); the message adds "tokens".
+fn budget_text(budget: Option<orchester_core::tokens::TokenBudget>) -> String {
+  budget.map_or_else(|| "—".to_owned(), |budget| compact_tokens(budget.get()))
 }

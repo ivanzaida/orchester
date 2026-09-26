@@ -1,0 +1,123 @@
+//! The run's progress as the task page lists it (`qB7mj` in 02.12 `FjbKY`, `l3hyb` rows): one row
+//! per step in stage order, with where its latest execution stands, its attempt, the tokens it
+//! used and its active agent time. Steps of one stage that have not started are shown together in
+//! one row ("Checks + Review · Waiting"), as the design does for parallel steps; once they start,
+//! each has its own row, next to each other.
+
+use std::{num::NonZeroU32, sync::Arc, time::Duration};
+
+use orchester_core::{
+  run::{RunStatus, StepFailure, StepStatus},
+  time::Timestamp,
+};
+
+use super::detail::{RunView, StepView};
+
+/// Where a step stands, as its row says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProgressState {
+  Waiting,
+  Working,
+  /// Waiting for a person: an approval, a plan decision or a message.
+  NeedsYou,
+  /// The run paused or stopped at a limit while the step's agent worked.
+  Paused,
+  /// The run lost its agent (no runner) or was interrupted mid-step.
+  Interrupted,
+  Complete,
+  Failed(Option<StepFailure>),
+  Skipped,
+  Cancelled,
+}
+
+/// What an execution of the step used.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExecutionUsage {
+  pub attempt: NonZeroU32,
+  /// Counted tokens of all its invocations.
+  pub tokens: u64,
+  /// Active agent time of all its invocations.
+  pub active: Duration,
+}
+
+/// One row of the progress list.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProgressRow {
+  /// Stable id of the row: its steps' keys.
+  pub id: Arc<str>,
+  /// "Implement · Builder", or "Checks + Review" for steps of one stage shown together.
+  pub steps: Vec<(Arc<str>, Option<Arc<str>>)>,
+  pub state: ProgressState,
+  pub usage: Option<ExecutionUsage>,
+}
+
+/// The progress rows of `run` at `now`. `lost`: the run is recorded as running but has no runner.
+pub fn progress(run: &RunView, lost: bool, now: Timestamp) -> Vec<ProgressRow> {
+  let mut ordered: Vec<&StepView> = run.steps.iter().collect();
+  ordered.sort_by_key(|step| (step.stage, step.number));
+  let mut rows = Vec::new();
+  let mut stage_start = 0;
+  while stage_start < ordered.len() {
+    let stage = ordered[stage_start].stage;
+    let end = ordered[stage_start..]
+      .iter()
+      .position(|step| step.stage != stage)
+      .map_or(ordered.len(), |offset| stage_start + offset);
+    let steps = &ordered[stage_start..end];
+    let waiting = steps.len() > 1
+      && steps
+        .iter()
+        .all(|step| state(run, step, lost) == ProgressState::Waiting);
+    if waiting {
+      rows.push(ProgressRow {
+        id: steps
+          .iter()
+          .map(|step| step.key.as_str())
+          .collect::<Vec<_>>()
+          .join("+")
+          .into(),
+        steps: steps.iter().map(|step| (step.name.clone(), None)).collect(),
+        state: ProgressState::Waiting,
+        usage: None,
+      });
+    } else {
+      rows.extend(steps.iter().map(|step| ProgressRow {
+        id: step.key.as_str().into(),
+        steps: vec![(step.name.clone(), step.agent.clone())],
+        state: state(run, step, lost),
+        usage: usage(run, step, now),
+      }));
+    }
+    stage_start = end;
+  }
+  rows
+}
+
+fn state(run: &RunView, step: &StepView, lost: bool) -> ProgressState {
+  match (run.run.status(), step.status) {
+    (_, None | Some(StepStatus::Pending)) => ProgressState::Waiting,
+    (RunStatus::Paused(_), Some(StepStatus::Running)) => ProgressState::Paused,
+    (RunStatus::Interrupted(_), Some(StepStatus::Running)) => ProgressState::Interrupted,
+    (RunStatus::Running, Some(StepStatus::Running)) if lost => ProgressState::Interrupted,
+    (_, Some(StepStatus::Running)) => ProgressState::Working,
+    (_, Some(StepStatus::Waiting(_))) => ProgressState::NeedsYou,
+    (_, Some(StepStatus::Passed)) => ProgressState::Complete,
+    (_, Some(StepStatus::Failed)) => ProgressState::Failed(step.failure),
+    (RunStatus::Cancelled, Some(StepStatus::Skipped)) => ProgressState::Cancelled,
+    (_, Some(StepStatus::Skipped)) => ProgressState::Skipped,
+  }
+}
+
+fn usage(run: &RunView, step: &StepView, now: Timestamp) -> Option<ExecutionUsage> {
+  let execution = step.execution?;
+  let invocations: Vec<_> = run.invocations_of(execution).collect();
+  if invocations.is_empty() {
+    return None;
+  }
+  let millis: i64 = invocations.iter().map(|invocation| invocation.active_millis(now)).sum();
+  Some(ExecutionUsage {
+    attempt: step.attempt?,
+    tokens: invocations.iter().map(|invocation| invocation.usage.counted()).sum(),
+    active: Duration::from_millis(u64::try_from(millis).unwrap_or_default()),
+  })
+}

@@ -15,7 +15,7 @@ use std::{
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
-  id::ConnectionId,
+  id::{ConnectionId, ResourceId},
   name::Name,
   resource::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
@@ -84,6 +84,37 @@ pub(crate) fn init_repository(repo: &Path) {
 /// A signed-in Codex connection running `fake`, a Builder profile on it and a published
 /// pipeline: Implement, and with `review` also Review after it.
 pub(crate) fn seed(repo: &Path, fake: &Path, review: bool) {
+  seed_steps(repo, fake, |builder| {
+    let step = agent_step(builder, "implement", "Implement", "Append one line.", &[]);
+    let mut steps = vec![step.clone()];
+    if review {
+      steps.push(agent_step(builder, "review", "Review", "Append one line.", &["implement"]));
+    }
+    steps
+  });
+}
+
+/// A write step on `builder` that runs after `after`, doing what `instructions` tell the fake CLI.
+pub(crate) fn agent_step(builder: ResourceId, key: &str, name: &str, instructions: &str, after: &[&str]) -> Step {
+  Step {
+    key: StepKey::new(key).expect("key"),
+    name: Name::new(name).expect("name"),
+    kind: StepKind::Agent {
+      profile: Some(builder),
+      repository: RepositoryAccess::Write,
+      model: None,
+    },
+    instructions: PromptText::new(instructions).expect("prompt"),
+    depends_on: after.iter().map(|key| StepKey::new(key).expect("key")).collect(),
+    approval_gate: false,
+    on_failure: None,
+    budget: None,
+  }
+}
+
+/// A signed-in Codex connection running `fake`, a Builder profile on it and a published pipeline
+/// of the steps `steps` makes for that profile.
+pub(crate) fn seed_steps(repo: &Path, fake: &Path, steps: impl FnOnce(ResourceId) -> Vec<Step>) {
   let mut db = ProjectDb::open(repo).expect("open the project");
   let now = Timestamp::now();
   let mut connection = AgentConnection::new(
@@ -118,30 +149,7 @@ pub(crate) fn seed(repo: &Path, fake: &Path, review: bool) {
     .expect("profile")
     .id();
   db.publish_draft::<AgentProfile>(builder, now).expect("publish profile");
-  let step = Step {
-    key: StepKey::new("implement").expect("key"),
-    name: name("Implement"),
-    kind: StepKind::Agent {
-      profile: Some(builder),
-      repository: RepositoryAccess::Write,
-      model: None,
-    },
-    instructions: PromptText::new("Append one line.").expect("prompt"),
-    depends_on: Default::default(),
-    approval_gate: false,
-    on_failure: None,
-    budget: None,
-  };
-  let mut steps = vec![step.clone()];
-  if review {
-    steps.push(Step {
-      key: StepKey::new("review").expect("key"),
-      name: name("Review"),
-      depends_on: [step.key].into(),
-      ..step
-    });
-  }
-  let pipeline = Pipeline::new(steps).expect("pipeline");
+  let pipeline = Pipeline::new(steps(builder)).expect("pipeline");
   let id = db
     .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, now)
     .expect("pipeline")
