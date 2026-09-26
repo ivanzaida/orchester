@@ -1,6 +1,6 @@
 //! Task rows: the task table row of the task list (`clVjO`) with its heading (`B5FaIC`), and
-//! the task list row of the overview (`zemhy`). Task details do not exist yet, so rows do not
-//! open anything; where the design has the open chevron they show a lock instead.
+//! the task list row of the overview (`zemhy`). A row opens the task's page; rows are outside a
+//! form, so they are pointer-only.
 
 use lurq::{
   app::{
@@ -10,10 +10,11 @@ use lurq::{
   },
   components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::{task::TaskStatus, time::Timestamp};
+use orchester_core::{run::TaskPhase, time::Timestamp};
 
+use super::ProjectNav;
 use crate::{
   display,
   tasks::list::TaskRow,
@@ -21,6 +22,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
+    pressable::{pressable, surface},
     status_label::status_label,
   },
 };
@@ -40,10 +42,17 @@ const LIST_ROW_HEIGHT: f32 = 78.0;
 const STATE_TILE_SIZE: f32 = 32.0;
 const TIME_WIDTH: f32 = 60.0;
 
-fn status_copy(status: TaskStatus) -> (Icon, &'static str) {
-  match status {
-    TaskStatus::Draft => (Icon::Pencil, "tasks.status.draft"),
-    TaskStatus::Queued => (Icon::Clock3, "tasks.status.queued"),
+fn status_copy(phase: TaskPhase) -> (Icon, &'static str) {
+  match phase {
+    TaskPhase::Draft => (Icon::Pencil, "tasks.status.draft"),
+    TaskPhase::Queued => (Icon::Clock3, "tasks.status.queued"),
+    TaskPhase::Running => (Icon::Loader, "tasks.status.running"),
+    TaskPhase::Waiting => (Icon::Clock3, "tasks.status.waiting"),
+    TaskPhase::Paused => (Icon::Pause, "tasks.status.paused"),
+    TaskPhase::Interrupted => (Icon::Pause, "tasks.status.interrupted"),
+    TaskPhase::Succeeded => (Icon::CircleCheck, "tasks.status.succeeded"),
+    TaskPhase::Failed => (Icon::AlertCircle, "tasks.status.failed"),
+    TaskPhase::Cancelled => (Icon::Square, "tasks.status.cancelled"),
   }
 }
 
@@ -55,9 +64,22 @@ fn cell(width: f32, content: impl Into<Element>) -> Element {
     .into()
 }
 
-/// Rows cannot be opened yet: a lock where the design has the open chevron.
-fn not_openable() -> Element {
-  cell(OPEN_WIDTH, icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))
+/// The open chevron (`B1lur`).
+fn open_chevron() -> Element {
+  cell(
+    OPEN_WIDTH,
+    icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted),
+  )
+}
+
+/// `row` as a surface that opens the task's page.
+fn opens(nav: &ProjectNav, row: &TaskRow, content: Row) -> Element {
+  let (nav, task) = (nav.clone(), row.id);
+  pressable(surface(), move || nav.show_task(task))
+    .width(Dimension::Pct(100.0))
+    .describe("task", row.key.clone())
+    .child(content)
+    .into()
 }
 
 fn column_label(text: &str) -> Text {
@@ -83,29 +105,34 @@ pub fn table_heading(ctx: &Ctx) -> Element {
 }
 
 /// One row of the task table (`clVjO`), mounted by the virtualized task list.
-pub struct QueueRow;
+pub struct QueueRow {
+  nav: ProjectNav,
+}
 
 impl Component for QueueRow {
   type Props = TaskRow;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      nav: ctx
+        .use_context::<ProjectNav>()
+        .expect("the project shell provides ProjectNav"),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let row = ctx.props::<TaskRow>().clone();
-    let (glyph, status) = status_copy(row.status);
+    let (glyph, status) = status_copy(row.phase);
     // Selecting tasks for a run is not available yet (`R7idX`).
     let select = icon(Icon::Square, IconSize::Option, PaletteColor::TextMuted);
-    Row::new()
+    let content = Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(TABLE_ROW_HEIGHT))
       .padding_horizontal(ExtraSpacing::Stack.role())
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .describe("task", row.key.clone())
-      .cursor(CursorIcon::NotAllowed)
+      .hovered_style(Style::new().background(PaletteColor::AccentMuted))
       .child(cell(SELECT_WIDTH, select))
       .child(cell(
         KEY_WIDTH,
@@ -130,14 +157,15 @@ impl Component for QueueRow {
         READINESS_WIDTH,
         column_label(&message_text(ctx, &row.readiness.message())),
       ))
-      .child(not_openable())
+      .child(open_chevron());
+    opens(&self.nav, &row, content)
   }
 }
 
 /// A task in the overview's task list (`zemhy`): state tile, title with key and readiness,
 /// status, age.
-pub fn list_row(ctx: &Ctx, row: &TaskRow, now: Timestamp) -> Element {
-  let (glyph, status) = status_copy(row.status);
+pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> Element {
+  let (glyph, status) = status_copy(row.phase);
   let tile = Row::new()
     .size(Dimension::Px(STATE_TILE_SIZE), Dimension::Px(STATE_TILE_SIZE))
     .background(PaletteColor::SurfaceRaised)
@@ -150,14 +178,12 @@ pub fn list_row(ctx: &Ctx, row: &TaskRow, now: Timestamp) -> Element {
     .child(Text::new(&row.key).variant(TypographyStyle::Caption).nowrap())
     .child(Text::new(&ctx.t("common.separator")).variant(TypographyStyle::Caption))
     .child(Text::new(&message_text(ctx, &row.readiness.message())).variant(TypographyStyle::Caption));
-  Row::new()
+  let content = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(LIST_ROW_HEIGHT))
     .spacing(ExtraSpacing::Group.role())
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .describe("task", row.key.clone())
-    .cursor(CursorIcon::NotAllowed)
     .child(tile)
     .child(
       Column::new()
@@ -179,6 +205,6 @@ pub fn list_row(ctx: &Ctx, row: &TaskRow, now: Timestamp) -> Element {
           .nowrap(),
       ),
     )
-    .child(not_openable())
-    .into()
+    .child(open_chevron());
+  opens(nav, row, content)
 }

@@ -332,3 +332,25 @@ fn select_menu_roles_follow_pencil() {
   assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
   assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
 }
+
+#[test]
+fn activity_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  // Command output `mMUyR`: Geist Mono 11 muted, line height 1.6.
+  let output = theme.typography_style(ExtraTypography::Output.role());
+  assert_eq!(
+    (&*output.font_family, output.font_size, output.line_height),
+    ("Geist Mono", 11.0, 1.6)
+  );
+  assert_eq!(output.color, Color::from_hex("#A3A3A3"));
+  // Entry glyph `DQmo9` 13, event glyph `xQYdP` 14, state icon `qgZru` 20, all lucide.
+  let size = |role: ExtraTypography| theme.typography_style(role.role()).font_size;
+  assert_eq!(size(ExtraTypography::IconEntry), 13.0);
+  assert_eq!(size(ExtraTypography::IconEvent), 14.0);
+  assert_eq!(size(ExtraTypography::IconState), 20.0);
+  // Switch `K8ItM`: radius 8.
+  assert_eq!(theme.radius_value(ExtraRadius::Pill.role()), 8.0);
+  // Unparsed lines `Ane9j`: 60 %.
+  assert_eq!(theme::UNPARSED_OPACITY, 0.6);
+}

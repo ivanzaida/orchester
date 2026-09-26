@@ -26,6 +26,8 @@ pub const CONNECTOR_STROKE: f32 = tokens::CONNECTOR_STROKE;
 /// Width of the check slot every select option reserves, the size of the check (`ClxwV` in
 /// `L20XvS`).
 pub const SELECT_CHECK_SLOT: f32 = tokens::SELECT_ICON_SIZE;
+/// Opacity of unparsed CLI lines in the agent transcript (`Ane9j` in `SfXU1`).
+pub const UNPARSED_OPACITY: f32 = tokens::UNPARSED_OPACITY;
 
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),

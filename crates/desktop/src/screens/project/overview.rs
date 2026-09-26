@@ -134,7 +134,7 @@ fn heading(ctx: &Ctx, open: &OpenProject, nav: &ProjectNav) -> Element {
 /// no runs to count and are unavailable.
 fn task_list(ctx: &Ctx, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
   let now = Timestamp::now();
-  let rows = list::recent(&tasks.tasks, &tasks.pipelines, RECENT_TASKS);
+  let rows = list::recent(&tasks.tasks, &tasks.pipelines, &tasks.phases, RECENT_TASKS);
   let pipeline_filter = Row::new()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
@@ -181,7 +181,7 @@ fn task_list(ctx: &Ctx, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
         .child(pipeline_filter),
     )
     .child(tabs)
-    .with_children(rows.iter().map(|row| list_row(ctx, row, now)))
+    .with_children(rows.iter().map(|row| list_row(ctx, nav, row, now)))
     .child(list_footer(ctx, tasks.tasks.len(), nav))
     .into()
 }

@@ -119,10 +119,18 @@ pub enum ExtraTypography {
   /// Code of a diff line and its change mark (`DQMrs`, `K3NKFG` in `vEZ42`); tokens take their
   /// `ExtraColor::Code*` color.
   Code,
+  /// Output of a command in the agent transcript (`mMUyR` in `N4SlQq`).
+  Output,
+  /// Glyph of an agent transcript entry (`DQmo9` in `N4SlQq`), 13px.
+  IconEntry,
+  /// Glyph of an activity event, e.g. a run's step (`xQYdP` in `mBkeJ`), 14px.
+  IconEvent,
+  /// Icon of an empty, loading or failed state of a tab (`qgZru` in `hig8O`), 20px.
+  IconState,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 53] = [
+  const ALL: [Self; 57] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -176,6 +184,10 @@ impl ExtraTypography {
     Self::DiffPath,
     Self::DiffLineNumber,
     Self::Code,
+    Self::Output,
+    Self::IconEntry,
+    Self::IconEvent,
+    Self::IconState,
   ];
 
   fn name(self) -> &'static str {
@@ -233,6 +245,10 @@ impl ExtraTypography {
       Self::DiffPath => "diff-path",
       Self::DiffLineNumber => "diff-line-number",
       Self::Code => "code",
+      Self::Output => "output",
+      Self::IconEntry => "icon-entry",
+      Self::IconEvent => "icon-event",
+      Self::IconState => "icon-state",
     }
   }
 
@@ -346,6 +362,10 @@ impl ExtraTypography {
       },
       Self::DiffLineNumber => mono(11.0, CODE_COMMENT),
       Self::Code => leading(1.6, mono(12.0, CODE_TEXT)),
+      Self::Output => leading(1.6, mono(11.0, MUTED)),
+      Self::IconEntry => icon(13.0),
+      Self::IconEvent => icon(14.0),
+      Self::IconState => icon(20.0),
     }
   }
 }

@@ -1,7 +1,9 @@
 //! New task (02.09 `l2YA4`): brief and acceptance criteria on the left, pipeline and limits
 //! on the right. The task is saved as a draft, incomplete if need be, under a key generated
 //! when the form opens: a failed save keeps the form, and retrying cannot create a second task.
-//! Running a task does not exist yet, so Create & run is unavailable.
+//! Create & run checks that the run can start, saves and queues the task and asks the runner to
+//! start its run under a second key generated when the form opens, so a retry after a failure
+//! never starts a second run; it then opens the task page.
 
 mod brief;
 mod plan;
@@ -24,7 +26,7 @@ use lurq::{
   node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  id::{IdempotencyKey, ResourceId},
+  id::{IdempotencyKey, ResourceId, TaskId},
   repository::RepositoryLink,
   store::RepositoryStore,
   task::{MissingDetail, TaskDetails},
@@ -37,10 +39,12 @@ use crate::{
   activity::{Activity, operations},
   background, messages,
   messages::Message,
+  runner::Runners,
   tasks::{
     data::{PipelineChoice, save_draft_in},
     form::{FormErrors, TaskForm},
     list::missing_key,
+    run::{queue_in, start_messages},
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
@@ -78,6 +82,22 @@ impl lurq::app::component::DevtoolsInspectable for SavedTask {}
 type SaveArgs = (PathBuf, IdempotencyKey, TaskDetails);
 type SaveAction = FutureAction<SaveArgs, SavedTask, Message>;
 
+/// The task whose run started.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StartedTask(TaskId);
+
+impl lurq::app::component::DevtoolsInspectable for StartedTask {}
+
+/// Why Create & run did not start the run, one message per reason.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunProblems(pub(super) Arc<[Message]>);
+
+impl lurq::app::component::DevtoolsInspectable for RunProblems {}
+
+/// The form's two keys: the task batch and the run.
+type RunArgs = (PathBuf, IdempotencyKey, IdempotencyKey, TaskDetails);
+type RunAction = FutureAction<RunArgs, StartedTask, RunProblems>;
+
 /// Everything a part of the form needs to know about the current values.
 struct FormState {
   errors: FormErrors,
@@ -85,6 +105,9 @@ struct FormState {
   ready: Option<TaskDetails>,
   saving: bool,
   save_error: Option<Message>,
+  /// Create & run is under way.
+  starting: bool,
+  run_problems: Option<RunProblems>,
 }
 
 impl FormState {
@@ -102,6 +125,8 @@ pub struct NewTaskForm {
   time_limit: Signal<String>,
   /// Generated once per form: every save attempt of this form uses it.
   batch: IdempotencyKey,
+  /// Generated once per form: every Create & run attempt of this form starts this run.
+  run: IdempotencyKey,
   nav: ProjectNav,
 }
 
@@ -120,6 +145,18 @@ impl Component for NewTaskForm {
         saved.show(Section::Tasks);
       }
     });
+    let run = run_action(ctx);
+    let started = nav.clone();
+    ctx.watch(&run.state(), move |state| {
+      if state.is_pending() {
+        return;
+      }
+      // The task may have been saved and queued even when the run did not start.
+      started.tasks_changed();
+      if let Some(StartedTask(task)) = state.data {
+        started.show(Section::Task(task));
+      }
+    });
     Self {
       title: ctx.signal(String::new()),
       brief: ctx.signal(String::new()),
@@ -128,6 +165,7 @@ impl Component for NewTaskForm {
       budget: ctx.signal(String::new()),
       time_limit: ctx.signal(String::new()),
       batch: IdempotencyKey::generate(),
+      run: IdempotencyKey::generate(),
       nav,
     }
   }
@@ -135,11 +173,15 @@ impl Component for NewTaskForm {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<NewTaskProps>().clone();
     let save = save_action(ctx);
+    let run = run_action(ctx);
     let link = repository_link(ctx, &props.project);
-    let state = self.state(&save);
+    let state = self.state(&save, &run);
     let submit = self
       .save_handler(&save, &props.project, state.ready.clone())
-      .filter(|_| !state.saving);
+      .filter(|_| !state.saving && !state.starting);
+    let start = self
+      .run_handler(&run, &props.project, state.ready.clone())
+      .filter(|_| !state.saving && !state.starting && state.missing.is_empty());
     // The brief's scroll viewport starts `FOCUS_ROOM` early and its content is padded by the
     // same amount, so the content stays at the designed inset and keeps room for focus rings.
     let brief_left = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0)
@@ -159,23 +201,19 @@ impl Component for NewTaskForm {
         props.pipelines.as_deref(),
         &state,
         submit.clone(),
+        start,
       ));
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(topbar(
-        ctx,
-        props.project.project.name().as_str(),
-        &self.nav,
-        state.saving,
-      ))
+      .child(topbar(ctx, props.project.project.name().as_str(), &self.nav, &state))
       .child(heading(ctx))
       .child(form(submit, content))
   }
 }
 
 impl NewTaskForm {
-  fn state(&self, save: &SaveAction) -> FormState {
+  fn state(&self, save: &SaveAction, run: &RunAction) -> FormState {
     let criteria: Vec<String> = self
       .criteria
       .get()
@@ -201,12 +239,15 @@ impl NewTaskForm {
       Ok(details) => (Some(details), FormErrors::default()),
       Err(errors) => (None, errors),
     };
+    let starting = run.state().get();
     FormState {
       errors,
       missing: form.missing(),
       ready,
       saving: saving.is_pending(),
       save_error: saving.error.clone().filter(|_| !saving.is_pending()),
+      starting: starting.is_pending(),
+      run_problems: starting.error.clone().filter(|_| !starting.is_pending()),
     }
   }
 
@@ -218,6 +259,20 @@ impl NewTaskForm {
     let batch = self.batch;
     Some(Arc::new(move || {
       save.run((repo_root.clone(), batch, details.clone()));
+    }))
+  }
+}
+
+impl NewTaskForm {
+  /// Queues the complete form and starts its run under the form's keys; `None` while the form
+  /// is not valid.
+  fn run_handler(&self, run: &RunAction, project: &OpenProject, ready: Option<TaskDetails>) -> Submit {
+    let details = ready?;
+    let run = run.clone();
+    let repo_root = project.repo_root.clone();
+    let (batch, key) = (self.batch, self.run);
+    Some(Arc::new(move || {
+      run.run((repo_root.clone(), batch, key, details.clone()));
     }))
   }
 }
@@ -262,15 +317,41 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
   })
 }
 
-/// Back to the task list, the breadcrumb and the save state (`dWjfr`). Nothing is saved
-/// until Save as draft, so the state says so rather than claiming a saved draft.
-fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, saving: bool) -> Element {
+fn run_action(ctx: &mut Ctx) -> RunAction {
+  let runners = ctx
+    .use_context::<Runners>()
+    .expect("the root provides Runners before mounting screens");
+  ctx.future_action(move |(repo_root, batch, key, details): RunArgs| {
+    let runners = runners.clone();
+    async move {
+      let problems = |messages: Vec<Message>| RunProblems(messages.into());
+      let queued = background::run(move || queue_in(&repo_root, batch, details))
+        .await
+        .map_err(|error| problems(vec![error]))?;
+      let task = queued.map_err(|failure| {
+        tracing::warn!(?failure, "the task was not queued for a run");
+        problems(failure.messages())
+      })?;
+      runners.start_run(key, task.id()).await.map_err(|error| {
+        tracing::warn!(%error, "the run did not start");
+        problems(start_messages(&error))
+      })?;
+      Ok(StartedTask(task.id()))
+    }
+  })
+}
+
+/// Back to the task list, the breadcrumb and the save state (`dWjfr`). Nothing is saved until
+/// Save as draft or Create & run, so the state says so rather than claiming a saved draft.
+fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, form: &FormState) -> Element {
   let nav = nav.clone();
   let back = pressable(surface().id("new-task-back"), move || nav.show(Section::Tasks))
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));
-  let state = if saving {
+  let state = if form.starting {
+    ctx.t("tasks.new.starting")
+  } else if form.saving {
     ctx.t("tasks.new.saving")
   } else {
     ctx.t("tasks.new.notSaved")

@@ -95,7 +95,7 @@ fn primary_navigation(ctx: &Ctx, section: Section, tasks: &TasksState, nav: &Pro
       .on_click(open(Section::Overview)),
     NavItem::new("nav-orchestrator", Icon::MessagesSquare, ctx.t("nav.orchestrator")),
     NavItem::new("nav-tasks", Icon::CircleCheck, ctx.t("nav.tasks"))
-      .selected(matches!(section, Section::Tasks | Section::NewTask))
+      .selected(matches!(section, Section::Tasks | Section::NewTask | Section::Task(_)))
       .on_click(open(Section::Tasks))
       .count(tasks.ready().map(|tasks| tasks.tasks.len())),
     NavItem::new("nav-pull-requests", Icon::GitPullRequest, ctx.t("nav.pullRequests"))

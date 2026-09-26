@@ -1,11 +1,12 @@
 //! The task list (02.03 `J9467`) and the overview's task card (02.08 `Twtqc`): tabs, which
 //! tasks each shows, and what a row says about a task.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use orchester_core::{
   id::{ResourceId, TaskId},
   resource::VersionNumber,
+  run::TaskPhase,
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
 };
@@ -146,21 +147,32 @@ pub struct TaskRow {
   pub key: Arc<str>,
   pub title: Arc<str>,
   pub pipeline: PipelineLabel,
-  pub status: TaskStatus,
+  /// Where the task stands, from its latest run.
+  pub phase: TaskPhase,
   pub readiness: Readiness,
   pub created_at: Timestamp,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskRow {}
 
+/// The phase of each task that has a run; a task without one is a draft or queued.
+pub type Phases = HashMap<TaskId, TaskPhase>;
+
+fn phase_of(task: &Task, phases: &Phases) -> TaskPhase {
+  phases
+    .get(&task.id())
+    .copied()
+    .unwrap_or_else(|| TaskPhase::of(task, None))
+}
+
 impl TaskRow {
-  pub fn new(task: &Task, published: &[PipelineChoice]) -> Self {
+  pub fn new(task: &Task, published: &[PipelineChoice], phase: TaskPhase) -> Self {
     Self {
       id: task.id(),
       key: task.key().to_string().into(),
       title: task.details().title.as_str().into(),
       pipeline: PipelineLabel::of(task.details().pipeline, published),
-      status: task.status(),
+      phase,
       readiness: Readiness::of(task),
       created_at: task.created_at(),
     }
@@ -168,21 +180,21 @@ impl TaskRow {
 }
 
 /// Rows of `tab`, in task number order.
-pub fn rows(tasks: &[Task], published: &[PipelineChoice], tab: TaskTab) -> Vec<TaskRow> {
+pub fn rows(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, tab: TaskTab) -> Vec<TaskRow> {
   tasks
     .iter()
     .filter(|task| tab.includes(task))
-    .map(|task| TaskRow::new(task, published))
+    .map(|task| TaskRow::new(task, published, phase_of(task, phases)))
     .collect()
 }
 
 /// The newest `limit` tasks, newest first, for the overview.
-pub fn recent(tasks: &[Task], published: &[PipelineChoice], limit: usize) -> Vec<TaskRow> {
+pub fn recent(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, limit: usize) -> Vec<TaskRow> {
   tasks
     .iter()
     .rev()
     .take(limit)
-    .map(|task| TaskRow::new(task, published))
+    .map(|task| TaskRow::new(task, published, phase_of(task, phases)))
     .collect()
 }
 

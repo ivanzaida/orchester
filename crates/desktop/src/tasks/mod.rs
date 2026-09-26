@@ -3,5 +3,8 @@
 //! `orchester_core::task`; this module only maps between them and what is on screen.
 
 pub mod data;
+pub mod detail;
 pub mod form;
 pub mod list;
+pub mod run;
+pub mod transcript;
