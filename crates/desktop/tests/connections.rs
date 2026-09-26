@@ -249,3 +249,28 @@ fn github_use_this_account_records_the_account_gh_uses_now() {
   let stored = db.connection(id).expect("read").expect("stored");
   assert_eq!(stored.status(), ConnectionStatus::SignInRequired);
 }
+
+/// An npm launcher (`claude.cmd`) is shown as the Node.js script it starts; a program file is
+/// what runs itself.
+#[cfg(windows)]
+#[test]
+fn connections_know_what_their_launcher_scripts_start() {
+  use orchester_exec::launch::Via;
+
+  let (repo, mut db) = project_db();
+  let script = repo.path().join("node_modules").join("cli.js");
+  fs::create_dir_all(script.parent().expect("a folder")).expect("script folder");
+  fs::write(&script, "").expect("script");
+  let shim = repo.path().join("claude.cmd");
+  fs::write(&shim, "@SETLOCAL\r\nnode  \"%~dp0\\node_modules\\cli.js\" %*\r\n").expect("launcher");
+  let launcher = ConnectionDraft {
+    executable: shim,
+    ..draft(&repo, "Claude", signed_out())
+  };
+  let launched = save(&mut db, launcher, now()).expect("saved");
+  let direct = save(&mut db, draft(&repo, "Claude direct", signed_out()), now()).expect("saved");
+  let connections = ProjectConnections::load(&db).expect("load");
+  let via = |id| connections.launch_of(id).map(|launch| launch.via().clone());
+  assert_eq!(via(launched), Some(Via::NodeScript { script }));
+  assert_eq!(via(direct), Some(Via::Direct));
+}

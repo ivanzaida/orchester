@@ -531,7 +531,13 @@
       "executable": "Program file",
       "execution": "Execution",
       "authentication": "Authentication",
-      "lastChecked": "Last checked"
+      "lastChecked": "Last checked",
+      "version": "Version",
+      "runs": "Runs"
+    },
+    "runs": {
+      "nodeScript": "Node.js · {{script}}",
+      "commandScript": "cmd.exe · {{script}}"
     },
     "thisComputer": "This computer",
     "cliLogin": "CLI login",

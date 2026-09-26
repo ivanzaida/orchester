@@ -20,8 +20,9 @@ use orchester_core::{
   repository::RepositoryLink,
   time::Timestamp,
 };
+use orchester_exec::launch::Launch;
 
-use super::status::CHECKING;
+use super::{launch::launch_property, status::CHECKING};
 use crate::{
   display,
   messages::Message,
@@ -65,6 +66,8 @@ pub struct GitHubInspector<'a> {
   /// Why the last action on the connection failed.
   pub error: Option<Message>,
   pub copied: &'a Signal<Copied>,
+  /// What starts when `gh` runs.
+  pub launch: Option<&'a Launch>,
 }
 
 impl GitHubInspector<'_> {
@@ -137,6 +140,7 @@ impl GitHubInspector<'_> {
       property(&ctx.t("connections.property.program"), &program),
       path_property(ctx, &display::shorten_path(connection.executable(), PATH_CHARS)),
     ];
+    rows.extend(launch_property(ctx, self.launch, PATH_CHARS));
     if let Some(GitHubCheckResult::Available { account, scopes, .. }) = result {
       let account = match (state, account) {
         (GitHubState::NotSignedIn, _) | (_, None) => ctx.t("github.connection.notSignedIn"),

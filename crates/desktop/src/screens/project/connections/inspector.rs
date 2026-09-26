@@ -18,8 +18,12 @@ use orchester_core::{
   id::ResourceId,
   time::Timestamp,
 };
+use orchester_exec::launch::Launch;
 
-use super::status::{CHECKING, status_detail_key, status_label, vendor_key};
+use super::{
+  launch::launch_property,
+  status::{CHECKING, status_detail_key, status_label, vendor_key},
+};
 use crate::{
   connections::data::ProfileUse,
   display,
@@ -46,6 +50,8 @@ pub struct InspectorState<'a> {
   pub checking: bool,
   /// Why the last check could not be stored.
   pub check_error: Option<Message>,
+  /// What starts when the program runs.
+  pub launch: Option<&'a Launch>,
 }
 
 pub fn inspector(
@@ -66,7 +72,7 @@ pub fn inspector(
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Text::new(connection.name().as_str()).variant(ExtraTypography::InspectorTitle.role()))
     .child(label(status_icon, &ctx.t(status_key)))
-    .with_children(properties(ctx, connection))
+    .with_children(properties(ctx, connection, state.launch))
     .child(models(ctx, connection))
     .child(button(
       ctx,
@@ -95,19 +101,29 @@ pub fn inspector(
     .into()
 }
 
-/// The design's properties (`CRVwa`…`X4Sz0`) plus the program file; the version is in the row.
-fn properties(ctx: &Ctx, connection: &AgentConnection) -> Vec<Element> {
+/// The design's properties (`CRVwa`…`X4Sz0`) plus the program file, its version and, when it
+/// is a launcher script, what it starts.
+fn properties(ctx: &Ctx, connection: &AgentConnection, launch: Option<&Launch>) -> Vec<Element> {
   let provider = connection.provider();
   let checked = connection.last_check().map_or_else(
     || ctx.t("connections.notCheckedYet"),
     |check| message_text(ctx, &display::elapsed(Timestamp::now(), check.at)),
   );
-  vec![
+  let version = match (connection.version(), connection.last_check()) {
+    (Some(version), _) => version.into(),
+    (None, None) => ctx.t("connections.notCheckedYet"),
+    (None, Some(_)) => ctx.t("github.connection.unknown"),
+  };
+  let mut rows = vec![
     property(&ctx.t("connections.property.provider"), &ctx.t(vendor_key(provider))),
     property(
       &ctx.t("connections.property.executable"),
       &display::shorten_path(connection.executable(), PATH_CHARS),
     ),
+  ];
+  rows.extend(launch_property(ctx, launch, PATH_CHARS));
+  rows.extend([
+    property(&ctx.t("connections.property.version"), &version),
     property(
       &ctx.t("connections.property.execution"),
       &ctx.t("connections.thisComputer"),
@@ -117,7 +133,8 @@ fn properties(ctx: &Ctx, connection: &AgentConnection) -> Vec<Element> {
       &ctx.t("connections.cliLogin"),
     ),
     property(&ctx.t("connections.property.lastChecked"), &checked),
-  ]
+  ]);
+  rows
 }
 
 /// Models of the last check (`o5BqGF`, `JoYhX`) and where the list comes from.

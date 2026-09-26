@@ -102,6 +102,7 @@ impl ConnectionsScreen {
           uses: data.used_by(connection.id()).collect(),
           checking: busy.on == Some(connection.id()),
           check_error: busy.error,
+          launch: data.launch_of(connection.id()),
         };
         let actions = self.agent_actions(open, connection, work, busy.on.is_some());
         inspector(ctx, connection, &state, &actions)
@@ -115,6 +116,7 @@ impl ConnectionsScreen {
           checking: busy.on == Some(connection.id()),
           error: busy.error,
           copied: &self.copied,
+          launch: data.launch_of(connection.id()),
         }
         .render(ctx, &actions)
       }
