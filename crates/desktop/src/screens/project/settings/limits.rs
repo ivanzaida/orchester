@@ -1,7 +1,7 @@
 //! Project settings / Limits (02.M `c7e729`): the maximum run budget, the default run budget, the
-//! daily project budget and the default time limit of active agent time. A setting saves when its
-//! field is left or Enter is pressed, once every field is valid; the topbar says whether all
-//! changes are saved. Changes apply to new runs.
+//! daily project budget and the default time limit of active agent time. A budget saves when its
+//! field is left or Enter is pressed, and a time limit when it is chosen, once every field is
+//! valid; the topbar says whether all changes are saved. Changes apply to new runs.
 
 use std::sync::Arc;
 
@@ -11,7 +11,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::SpacingSize,
   },
-  components::{Column, ScrollVertical, Text},
+  components::{Column, ScrollVertical, Select, Text},
   core::Signal,
   node::{Element, dimension::Dimension},
 };
@@ -26,12 +26,12 @@ use super::{
 };
 use crate::{
   background,
-  budget::{LimitsErrors, LimitsForm, minutes_text, read_budget, unbounded},
+  budget::{LimitsErrors, LimitsForm, minutes_text, read_budget, time_limit_choices, unbounded},
   messages::{self, Message},
   tasks::usage::{ProjectUsage, save_limits_in},
   theme::ExtraTypography,
   ui::{
-    field::field_error,
+    field::{field_error, select_style},
     form::form,
     icon::Icon,
     message_text,
@@ -78,6 +78,8 @@ impl lurq::app::component::DevtoolsInspectable for Stored {}
 
 type SaveAction = FutureAction<(std::path::PathBuf, ProjectLimits), Stored, Message>;
 
+/// Cloned by the save it commits, which reads the fields when it runs.
+#[derive(Clone)]
 pub struct LimitsTab {
   max: Signal<String>,
   default: Signal<String>,
@@ -107,6 +109,13 @@ impl Component for LimitsTab {
       nav,
     };
     let save = save_action(ctx);
+    // A chosen time limit saves at once, as a text field does when it is left.
+    let commit = tab.commit(
+      save.clone(),
+      &ctx.props::<LimitsProps>().open,
+      ctx.t("number.groupSeparator"),
+    );
+    ctx.watch(&tab.time, move |_| commit());
     let status = ctx.props::<LimitsProps>().status.clone();
     let (stored, nav) = (tab.stored.clone(), tab.nav.clone());
     ctx.watch(&save.state(), move |state| {
@@ -133,20 +142,12 @@ impl Component for LimitsTab {
     let save = save_action(ctx);
     let separator = ctx.t("number.groupSeparator");
     self.load(ctx, &props.open, &separator);
-    let entered = LimitsForm {
-      max_run_budget: &self.max.get(),
-      default_run_budget: &self.default.get(),
-      daily_budget: &self.daily.get(),
-      default_time_limit: &self.time.get(),
-      separator: &separator,
-    }
-    .limits();
-    let errors = entered
-      .as_ref()
+    let errors = self
+      .entered(&separator, Signal::get)
       .err()
-      .map(|errors| (**errors).clone())
+      .map(|errors| *errors)
       .unwrap_or_default();
-    let commit = self.commit(save, &props.open, entered.ok());
+    let commit = self.commit(save, &props.open, separator.clone());
     let field = |id, value: &Signal<String>, unit: Arc<str>, error: Option<&Message>| {
       UnitInput::new(id, value.clone(), unit, self.focused.clone())
         .invalid(error.is_some())
@@ -161,12 +162,7 @@ impl Component for LimitsTab {
         setting.render(ctx, input, &separator)
       })
       .collect();
-    let time = field(
-      "limits-default-time-limit",
-      &self.time,
-      ctx.t("runs.limit.minutes"),
-      errors.default_time_limit.as_ref(),
-    );
+    let time = time_select(ctx, &self.time);
     let content = Column::new()
       .id("settings-limits")
       .width(Dimension::Px(CONTENT_WIDTH))
@@ -193,19 +189,34 @@ impl Component for LimitsTab {
 }
 
 impl LimitsTab {
-  /// Saves `entered`, when every field is valid and it differs from what is stored.
-  fn commit(
+  /// The limits as entered, each field read with `read`.
+  fn entered(
     &self,
-    save: SaveAction,
-    open: &OpenProject,
-    entered: Option<ProjectLimits>,
-  ) -> Arc<dyn Fn() + Send + Sync> {
-    let (stored, repo_root) = (self.stored.clone(), open.repo_root.clone());
+    separator: &str,
+    read: impl Fn(&Signal<String>) -> String,
+  ) -> Result<ProjectLimits, Box<LimitsErrors>> {
+    LimitsForm {
+      max_run_budget: &read(&self.max),
+      default_run_budget: &read(&self.default),
+      daily_budget: &read(&self.daily),
+      default_time_limit: &read(&self.time),
+      separator,
+    }
+    .limits()
+  }
+
+  /// Saves the limits as entered, when every field is valid and they differ from what is stored.
+  fn commit(&self, save: SaveAction, open: &OpenProject, separator: Arc<str>) -> Arc<dyn Fn() + Send + Sync> {
+    let fields = self.clone();
+    let repo_root = open.repo_root.clone();
     Arc::new(move || {
-      let Some(limits) = entered else {
+      let Ok(limits) = fields.entered(&separator, Signal::get_untracked) else {
         return;
       };
-      let changed = stored.get_untracked().is_some_and(|Stored(stored)| stored != limits);
+      let changed = fields
+        .stored
+        .get_untracked()
+        .is_some_and(|Stored(stored)| stored != limits);
       if changed && !save.state().get_untracked().is_pending() {
         save.run((repo_root.clone(), limits));
       }
@@ -303,8 +314,9 @@ impl BudgetSetting<'_> {
   }
 }
 
-/// Default time limit (`F8BPR`): whole minutes of active agent time.
-fn time_row(ctx: &Ctx, input: UnitInput, error: Option<&Message>) -> Element {
+/// Default time limit (`F8BPR`): whole minutes of active agent time, chosen in a select
+/// (`bPPG9`) that saves at once.
+fn time_row(ctx: &Ctx, select: Element, error: Option<&Message>) -> Element {
   let note = match error {
     Some(error) => field_error(&message_text(ctx, error)),
     None => readback(&ctx.t("settings.limits.activeTime")),
@@ -313,8 +325,32 @@ fn time_row(ctx: &Ctx, input: UnitInput, error: Option<&Message>) -> Element {
     VALUE_WIDTH,
     &ctx.t("settings.limits.timeLimit"),
     &ctx.t("settings.limits.timeLimitDetail"),
-    vec![input.render(ctx), note],
+    vec![select, note],
   )
+}
+
+/// The time limit select (`bPPG9`): "30 minutes". Its value is the limit's whole minutes as
+/// the Limits form reads them.
+fn time_select(ctx: &Ctx, time: &Signal<String>) -> Element {
+  let current = time.get().trim().parse::<u64>().ok();
+  let options = time_limit_choices(current).into_iter().map(|minutes| {
+    let count = minutes.to_string();
+    let key = if minutes == 1 {
+      "settings.limits.minutesOption.one"
+    } else {
+      "settings.limits.minutesOption.other"
+    };
+    let label = ctx.t_args(key, [("count", count.as_str())]);
+    (count, label)
+  });
+  Element::from(
+    Select::new(time.clone())
+      .options(options)
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(INPUT_HEIGHT))
+      .style(select_style(ctx, INPUT_HEIGHT)),
+  )
+  .id("limits-default-time-limit")
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {

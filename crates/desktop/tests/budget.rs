@@ -3,7 +3,9 @@
 use std::time::Duration;
 
 use orchester_core::{limits::ProjectLimits, tokens::TokenBudget};
-use orchester_desktop::budget::{LimitsForm, budget_error, read_budget, read_minutes};
+use orchester_desktop::budget::{
+  LimitsForm, TIME_LIMIT_CHOICES, budget_error, read_budget, read_minutes, time_limit_choices,
+};
 
 fn limits<'a>(max: &'a str, default: &'a str, daily: &'a str, time: &'a str) -> LimitsForm<'a> {
   LimitsForm {
@@ -91,4 +93,18 @@ fn budget_limits_form_keeps_the_default_within_the_maximum() {
     errors.default_time_limit.map(|error| error.key),
     Some("errors.timeLimitZero")
   );
+}
+
+#[test]
+fn time_limit_choices_include_the_default_and_the_stored_limit() {
+  let default = ProjectLimits::DEFAULT.default_time_limit().as_secs() / 60;
+  assert!(TIME_LIMIT_CHOICES.contains(&default));
+  assert!(
+    TIME_LIMIT_CHOICES.len() <= 8,
+    "the menu shows 8 options without scrolling"
+  );
+  assert_eq!(time_limit_choices(Some(30)), TIME_LIMIT_CHOICES);
+  assert_eq!(time_limit_choices(None), TIME_LIMIT_CHOICES);
+  assert_eq!(time_limit_choices(Some(25)), [15, 25, 30, 45, 60, 90, 120, 180, 240]);
+  assert_eq!(time_limit_choices(Some(600)).last(), Some(&600));
 }

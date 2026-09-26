@@ -84,7 +84,14 @@
     "connection": {
       "notStartedTitle": "Could not start the runner",
       "notRestartedTitle": "Could not restart the runner",
-      "notRestartedDetail": "Tried {{attempts}} times. Nothing runs until the runner starts.",
+      "notRestartedSince": {
+        "one": "Tried {{attempts}} time since {{time}}. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts.",
+        "other": "Tried {{attempts}} times since {{time}}. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts."
+      },
+      "notRestarted": {
+        "one": "Tried {{attempts}} time. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts.",
+        "other": "Tried {{attempts}} times. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts."
+      },
       "openLog": "Open runner log",
       "restart": "Restart runner"
     }
@@ -167,15 +174,59 @@
     "description": "Everything moving in this project, and what needs you.",
     "newTask": "New task",
     "emptyTitle": "No tasks yet",
-    "emptyDetail": "Create a task to describe what agents should build. Runs and agents are not available in this version yet.",
+    "emptyDetail": "Create a task to describe what agents should build, then start its run with Create & run.",
     "projectKey": "Project key",
     "repository": "Repository",
+    "metrics": {
+      "running": "Running now",
+      "agentsWorking": {
+        "one": "{{count}} agent working",
+        "other": "{{count}} agents working"
+      },
+      "agentsUnknown": "Waiting for the runner to report",
+      "interrupted": {
+        "one": "{{count}} run interrupted",
+        "other": "{{count}} runs interrupted"
+      },
+      "needsInput": "Need your input",
+      "needsInputContext": "Review & decisions",
+      "completed": "Completed today",
+      "completedContext": "Runs with every step passed",
+      "tokens": "Tokens today",
+      "tokensContext": "of {{budget}} daily project budget",
+      "tokensUnknown": "Usage not read yet"
+    },
     "tabs": {
       "running": "Running",
       "needsYou": "Needs you",
       "queued": "Queued"
     },
-    "viewAllTasks": "View all tasks  →"
+    "footer": {
+      "one": "{{active}} active task · {{completed}} completed",
+      "other": "{{active}} active tasks · {{completed}} completed"
+    },
+    "viewAllTasks": "View all tasks  →",
+    "attention": {
+      "title": "Needs you",
+      "empty": "Nothing needs you right now. Plan decisions, questions and approvals appear here.",
+      "needsInput": "NEEDS INPUT",
+      "context": "{{task}} · {{detail}}",
+      "open": "Open task  →"
+    },
+    "activity": {
+      "title": "Recent activity",
+      "empty": "No runs yet. Runs appear here as they start and finish.",
+      "detail": "{{task}} · {{project}} · {{time}}",
+      "queued": "Run #{{run}} is waiting to start",
+      "running": "Run #{{run}} is running",
+      "waiting": "Run #{{run}} needs your input",
+      "paused": "Run #{{run}} paused",
+      "stoppedAtLimit": "Run #{{run}} stopped at its limit",
+      "interrupted": "Run #{{run}} was interrupted",
+      "succeeded": "Run #{{run}} completed",
+      "failed": "Run #{{run}} failed",
+      "cancelled": "Run #{{run}} was cancelled"
+    }
   },
   "tasks": {
     "title": "Tasks",
@@ -215,11 +266,11 @@
       "draft": "Draft",
       "queued": "Queued",
       "running": "Running",
-      "waiting": "Needs you",
+      "waiting": "Needs input",
       "paused": "Paused",
       "stoppedAtLimit": "Stopped at limit",
       "interrupted": "Interrupted",
-      "succeeded": "Finished",
+      "succeeded": "Completed",
       "failed": "Failed",
       "cancelled": "Cancelled"
     },
@@ -256,8 +307,18 @@
       "other": "{{count}} tasks"
     },
     "footer": {
-      "one": "{{count}} task · no runs started",
-      "other": "{{count}} tasks · no runs started"
+      "noRuns": {
+        "one": "{{count}} task · no runs started",
+        "other": "{{count}} tasks · no runs started"
+      },
+      "oneRun": {
+        "one": "{{count}} task · {{runs}} run started",
+        "other": "{{count}} tasks · {{runs}} run started"
+      },
+      "runs": {
+        "one": "{{count}} task · {{runs}} runs started",
+        "other": "{{count}} tasks · {{runs}} runs started"
+      }
     },
     "new": {
       "breadcrumb": "{{project}} / Tasks / New task",
@@ -340,6 +401,7 @@
       "running": "Running",
       "waiting": "Needs you",
       "paused": "Paused",
+      "interrupted": "Interrupted",
       "passed": "Done",
       "failed": "Failed",
       "skipped": "Skipped",
@@ -386,6 +448,9 @@
         "pausedDetail": "Work is preserved. No new steps or tool calls start until you resume this run.",
         "interruptedTitle": "The run was interrupted at {{step}}",
         "interruptedDetail": "Its agent was stopped when the runner or Orchester stopped. The run keeps its last checkpoint; Continue run starts it again from there and repeats the unfinished part of the step. Work after the checkpoint is not counted as done.",
+        "reconnectingDetail": "The runner stopped unexpectedly and Orchester is reconnecting to it. The run keeps its last checkpoint and continues from it automatically once the runner is back; work after the checkpoint is not counted as done.",
+        "offlineDetail": "Orchester could not restart the runner, so nothing runs. The run keeps its last checkpoint and continues from it once the runner is restarted; work after the checkpoint is not counted as done.",
+        "notConnectedDetail": "The runner is not connected, so its agent is not working. The run keeps its last checkpoint; work after the checkpoint is not counted as done.",
         "succeededTitle": "Every step passed",
         "succeededDetail": "The run’s changes are committed on {{branch}}.",
         "failedTitle": "The run failed at {{step}}",
@@ -1107,6 +1172,10 @@
       "timeLimit": "Default time limit",
       "timeLimitDetail": "Counts active agent time only. Time paused or waiting for you (plan approval, questions, permission requests) doesn’t count.",
       "activeTime": "active agent time",
+      "minutesOption": {
+        "one": "{{count}} minute",
+        "other": "{{count}} minutes"
+      },
       "changesTitle": "Changes apply to new runs",
       "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum."
     },

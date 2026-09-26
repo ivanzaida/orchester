@@ -11,7 +11,7 @@ mod limit_panel;
 mod notice;
 mod summary;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::SystemTime};
 
 use lurq::{
   app::{
@@ -24,16 +24,18 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{id::TaskId, limits::ProjectLimits};
+use orchester_core::{id::TaskId, limits::ProjectLimits, run::TaskPhase};
 
 use self::{
   activity::{ActivityProps, ActivityTab},
   controls::{ControlAction, RunControl, control_action, control_buttons},
+  notice::Lost,
 };
-use super::{ProjectNav, page};
+use super::{ProjectNav, page, runner::connection_notice};
 use crate::{
   background, messages,
   navigation::route::Page,
+  runner::{Runners, state::RunnerState},
   tasks::detail::TaskDetail,
   theme::ExtraSpacing,
   ui::{
@@ -58,6 +60,10 @@ pub struct TaskProps {
   pub revision: (u64, u64),
   /// The project's limits, once read: the most a raised limit may be.
   pub limits: Option<ProjectLimits>,
+  /// The project's runner, and since when it has had trouble: a run recorded as running is
+  /// interrupted while it is not online, and 02.H (`EFY7I`) shows while it could not restart.
+  pub runner: RunnerState,
+  pub runner_since: Option<SystemTime>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskProps {}
@@ -81,6 +87,7 @@ pub struct TaskScreen {
   /// The last run control requested; under way while the control action is pending.
   requested: Signal<Option<RunControl>>,
   nav: ProjectNav,
+  runners: Runners,
 }
 
 impl Component for TaskScreen {
@@ -94,6 +101,9 @@ impl Component for TaskScreen {
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
+      runners: ctx
+        .use_context::<Runners>()
+        .expect("the root provides Runners before mounting screens"),
     }
   }
 
@@ -132,18 +142,22 @@ impl Component for TaskScreen {
         .child(self.topbar(ctx, &props, None, &control))
         .child(centered(panel.into()));
     };
+    let online = props.runner == RunnerState::Online;
+    let lost = detail.lost_its_runner(online).then(|| Lost::of(&props.runner));
     let tab = self.tab.get();
     let body = match tab {
-      TaskTab::Summary => summary::summary(ctx, &detail, props.limits),
+      TaskTab::Summary => summary::summary(ctx, &detail, props.limits, lost),
       TaskTab::Activity => ctx.mount_keyed::<ActivityTab>(
         "task-activity",
         ActivityProps {
           repo_root: props.project.repo_root.clone(),
           detail: detail.clone(),
           revision: props.revision,
+          live: detail.phase() == TaskPhase::Running && lost.is_none(),
         },
       ),
     };
+    let runner_notice = connection_notice(ctx, &props.runner, props.runner_since, &self.runners).map(padded);
     let control_error = control
       .state()
       .get()
@@ -152,7 +166,8 @@ impl Component for TaskScreen {
       .map(|error| control_error_row(&message_text(ctx, &error)));
     column
       .child(self.topbar(ctx, &props, Some(&detail), &control))
-      .child(heading::heading(ctx, &detail))
+      .with_children(runner_notice)
+      .child(heading::heading(ctx, &detail, lost.is_some()))
       .with_children(control_error)
       .child(self.tabs(ctx))
       .child(body)
@@ -160,7 +175,9 @@ impl Component for TaskScreen {
 }
 
 impl TaskScreen {
-  /// The breadcrumb back to the task list, then the run controls (`ctwcG`).
+  /// The breadcrumb back to the task list, then the run controls (`ctwcG`). A run that lost
+  /// its runner has none: nothing can pause, cancel or continue it until a runner is back, and
+  /// the runner notice offers Restart runner.
   fn topbar(&self, ctx: &Ctx, props: &TaskProps, detail: Option<&TaskDetail>, control: &ControlAction) -> Element {
     let nav = self.nav.clone();
     let key = detail.map_or_else(String::new, |detail| detail.task.key().to_string());
@@ -175,7 +192,9 @@ impl TaskScreen {
       .variant(TypographyStyle::Description)
       .nowrap(),
     );
+    let online = props.runner == RunnerState::Online;
     let buttons = detail
+      .filter(|detail| !detail.lost_its_runner(online))
       .and_then(|detail| detail.run.as_ref())
       .map(|run| control_buttons(ctx, run, control, &self.requested))
       .unwrap_or_default();
@@ -216,6 +235,17 @@ fn control_error_row(text: &str) -> Element {
     .padding_horizontal(SpacingSize::Section)
     .padding_bottom(SpacingSize::Md)
     .child(field_error(text))
+    .into()
+}
+
+/// The runner notice (02.H `EFY7I`) above the heading, 32 below the topbar as on the overview
+/// (`c7qiCh`).
+fn padded(notice: Element) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_horizontal(SpacingSize::Section)
+    .padding_top(SpacingSize::Section)
+    .child(notice)
     .into()
 }
 

@@ -3,23 +3,23 @@
 
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::id::ResourceId;
+use orchester_ipc::WorkSummary;
 
 use super::{
-  ProjectNav, TasksState,
+  TasksState,
   agents::AgentsScreen,
   connections::ConnectionsScreen,
   new_task::{NewTaskForm, NewTaskProps},
-  overview,
+  overview::{OverviewProps, OverviewScreen},
   pipelines::{PipelinesProps, PipelinesScreen},
   pull_requests::{PullRequestProps, PullRequestScreen, PullRequestsScreen},
-  runner,
   settings::SettingsScreen,
   task::{TaskProps, TaskScreen},
   tasks::{TasksProps, TasksScreen},
 };
 use crate::{
   navigation::route::{Page, Route},
-  runner::{Runners, state::RunnerState},
+  runner::{RunnerStatus, state::RunnerState},
   tasks::usage::ProjectUsage,
   workspace::OpenProject,
 };
@@ -28,6 +28,7 @@ use crate::{
 #[derive(Clone)]
 pub struct Shown {
   pub open: OpenProject,
+  pub status: RunnerStatus,
   /// The state of this project's runner.
   pub runner: RunnerState,
   /// Changes when tasks were saved or the runner changed a run.
@@ -49,16 +50,17 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
   let open = shown.open.clone();
   let limits = shown.usage.map(|usage| usage.limits);
   match page {
-    Page::Overview => {
-      let runners = ctx
-        .use_context::<Runners>()
-        .expect("the root provides Runners before mounting screens");
-      let nav = ctx
-        .use_context::<ProjectNav>()
-        .expect("the project shell provides ProjectNav");
-      let notice = runner::connection_notice(ctx, &shown.runner, &runners);
-      overview::overview(ctx, &open, notice, &shown.tasks, &nav)
-    }
+    Page::Overview => ctx.mount_keyed::<OverviewScreen>(
+      "overview",
+      OverviewProps {
+        open,
+        tasks: shown.tasks,
+        usage: shown.usage,
+        runner: shown.runner,
+        runner_since: shown.status.trouble_since(),
+        agents_working: shown.status.work().map(WorkSummary::agents_working),
+      },
+    ),
     Page::Tasks => ctx.mount_keyed::<TasksScreen>(
       "tasks",
       TasksProps {
@@ -81,6 +83,8 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         task,
         revision: shown.revision,
         limits,
+        runner: shown.runner,
+        runner_since: shown.status.trouble_since(),
       },
     ),
     Page::PullRequests => ctx.mount_keyed::<PullRequestsScreen>("pull-requests", open),

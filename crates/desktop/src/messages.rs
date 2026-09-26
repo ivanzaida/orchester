@@ -83,3 +83,20 @@ pub fn runner_failure(failure: &RunnerFailure) -> Message {
     RunnerFailure::Lost => Message::new("errors.runnerLost"),
   }
 }
+
+/// The detail of 02.H (`Rw6xK` in `EFY7I`): "Tried 5 times since 14:02. Interrupted runs keep
+/// their last checkpoint. Nothing runs until the runner starts." `since` is the local time the
+/// runner dropped, when known.
+pub fn runner_not_restarted(attempts: u32, since: Option<&str>) -> Message {
+  let key = match (attempts, since) {
+    (1, Some(_)) => "runner.connection.notRestartedSince.one",
+    (_, Some(_)) => "runner.connection.notRestartedSince.other",
+    (1, None) => "runner.connection.notRestarted.one",
+    (_, None) => "runner.connection.notRestarted.other",
+  };
+  let message = Message::new(key).with("attempts", attempts.to_string());
+  match since {
+    Some(time) => message.with("time", time.to_owned()),
+    None => message,
+  }
+}

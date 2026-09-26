@@ -43,7 +43,7 @@ use crate::{
     Navigation, PROJECT_PARAM,
     route::{Page, Route},
   },
-  runner::{RunnerStatus, Runners},
+  runner::{RunnerStatus, Runners, state::RunnerState},
   tasks::{data::ProjectTasks, list, usage::ProjectUsage},
   workspace::OpenProject,
 };
@@ -103,6 +103,15 @@ pub enum TasksState {
 impl lurq::app::component::DevtoolsInspectable for TasksState {}
 
 impl TasksState {
+  /// The tasks as they stand while the project's runner is `online` or not: without a runner,
+  /// runs recorded as running are interrupted.
+  fn without_runner(self, online: bool) -> Self {
+    match self {
+      Self::Ready(tasks) if !online => Self::Ready(tasks.without_runner()),
+      other => other,
+    }
+  }
+
   pub fn ready(&self) -> Option<&ProjectTasks> {
     match self {
       Self::Ready(tasks) => Some(tasks),
@@ -161,13 +170,17 @@ impl Component for ProjectShell {
       .use_context::<Runners>()
       .expect("the root provides Runners before mounting screens");
     let status = runner_status(ctx, &runners);
+    let runner = status.state_for(&open.repo_root);
     let runs = run_changes(ctx, &runners);
-    let tasks = self.tasks(ctx, &open, runs);
+    let tasks = self
+      .tasks(ctx, &open, runs)
+      .without_runner(runner == RunnerState::Online);
     let usage = self.usage(ctx, &open, runs);
     let item = Route::current_page(ctx).map(|page| page.sidebar_item());
     ctx.provide(Shown {
       open: open.clone(),
-      runner: status.state_for(&open.repo_root),
+      status: status.clone(),
+      runner,
       revision: (self.nav.revision.get(), runs),
       tasks: tasks.clone(),
       usage,
@@ -177,6 +190,7 @@ impl Component for ProjectShell {
       runner: status,
       queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
       usage,
+      lost_to_runner: tasks.ready().map(|tasks| tasks.lost_to_runner),
     };
     Column::new()
       .width(Dimension::Pct(100.0))

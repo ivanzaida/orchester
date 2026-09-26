@@ -241,7 +241,7 @@ fn library(ctx: &mut Ctx, tasks: &ProjectTasks, tab: TaskTab) -> Element {
         .child(table_heading(ctx))
         .child(table),
     )
-    .child(footer(ctx, tasks.tasks.len()))
+    .child(footer(ctx, tasks))
     .into()
 }
 
@@ -324,17 +324,15 @@ fn selection_bar(ctx: &Ctx, summary: DraftSummary) -> Element {
     .into()
 }
 
-/// Task count (`Bpth7`); no task has a run yet.
-fn footer(ctx: &Ctx, count: usize) -> Element {
-  let key = if count == 1 {
-    "tasks.footer.one"
-  } else {
-    "tasks.footer.other"
-  };
+/// Task and run counts (`Bpth7`).
+fn footer(ctx: &Ctx, tasks: &ProjectTasks) -> Element {
   Row::new()
+    .id("tasks-footer")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(FOOTER_HEIGHT))
     .align_items(Alignment::Center)
-    .child(Text::new(&ctx.t_args(key, [("count", count.to_string().as_str())])).variant(TypographyStyle::Caption))
+    .child(
+      Text::new(&message_text(ctx, &list::footer(tasks.tasks.len(), tasks.runs))).variant(TypographyStyle::Caption),
+    )
     .into()
 }
