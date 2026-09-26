@@ -12,9 +12,13 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 pub(crate) fn open(path: &Path, migrations: &[&str]) -> Result<Connection, StoreError> {
   let mut connection = Connection::open(path)?;
   connection.pragma_update_and_check(None, "journal_mode", "WAL", |_| Ok(()))?;
-  connection.pragma_update(None, "foreign_keys", true)?;
   connection.busy_timeout(BUSY_TIMEOUT)?;
+  // A migration that rebuilds a table must not have the drop cascade into the rows that refer
+  // to it, so foreign keys are enforced only after migrating; the migrated database is checked
+  // for violations before it is committed instead.
+  connection.pragma_update(None, "foreign_keys", false)?;
   apply(&mut connection, migrations)?;
+  connection.pragma_update(None, "foreign_keys", true)?;
   Ok(connection)
 }
 
@@ -30,6 +34,10 @@ fn apply(connection: &mut Connection, migrations: &[&str]) -> Result<(), StoreEr
   let transaction = connection.transaction()?;
   for migration in &migrations[found as usize..] {
     transaction.execute_batch(migration)?;
+  }
+  let violations: i64 = transaction.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| row.get(0))?;
+  if violations > 0 {
+    return Err(StoreError::MigrationBrokeReferences(violations));
   }
   transaction.pragma_update(None, "user_version", supported)?;
   transaction.commit()?;

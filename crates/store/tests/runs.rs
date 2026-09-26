@@ -7,7 +7,6 @@ use std::{
 
 use orchester_core::{
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
-  money::{Currency, Money},
   name::Name,
   project::{Project, ProjectKey},
   resource::{
@@ -22,6 +21,7 @@ use orchester_core::{
   store::{ResourceStore, RunStore, TaskStore},
   task::TaskDetails,
   time::Timestamp,
+  tokens::{TokenBudget, TokensUsed},
 };
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 use rusqlite::Connection;
@@ -163,7 +163,8 @@ impl Fixture {
       snapshot: self.snapshot.clone(),
       branch: BranchName::new("orchester/orc-1").expect("valid branch"),
       base: revision('a'),
-      budget: Money::from_micros(5_000_000, Currency::USD),
+      budget: TokenBudget::new(1_400_000).expect("above zero"),
+      max_duration: std::time::Duration::from_secs(1_800),
     }
   }
 
@@ -250,9 +251,7 @@ fn runs_state_and_checkpoints_round_trip() {
   let mut run = fixture.implementing();
   let implement = Fixture::exec(&run, "implement");
   fixture.apply(&mut run, |run| run.record_checkpoint(implement, revision('b'), at(16)));
-  fixture.apply(&mut run, |run| {
-    run.record_spend(Money::from_micros(700, Currency::USD), at(17))
-  });
+  fixture.apply(&mut run, |run| run.record_usage(TokensUsed::new(700), at(17)));
   let stored = fixture.db.run(run.id()).expect("load").expect("exists");
   assert_eq!(stored, run);
   assert_eq!(

@@ -3,7 +3,9 @@
 
 use orchester_core::{
   resource::StepKey,
-  run::{AttemptReason, AttemptStatus, InterruptCause, RunFailure, RunStatus, StepStatus, WaitReason},
+  run::{
+    AttemptReason, AttemptStatus, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, WaitReason,
+  },
 };
 
 use crate::{StoreError, rows::corrupt};
@@ -15,7 +17,7 @@ pub(super) fn run_status_columns(status: &RunStatus) -> (&'static str, Option<&'
   match status {
     RunStatus::Pending => ("pending", None, None),
     RunStatus::Running => ("running", None, None),
-    RunStatus::Paused => ("paused", None, None),
+    RunStatus::Paused(reason) => ("paused", Some(pause_reason_text(*reason)), None),
     RunStatus::Interrupted(cause) => (INTERRUPTED, Some(interrupt_cause_text(*cause)), None),
     RunStatus::Succeeded => ("succeeded", None, None),
     RunStatus::Failed(RunFailure::StepFailed(step)) => ("failed", Some("step_failed"), Some(step.as_str())),
@@ -33,7 +35,7 @@ pub(super) fn parse_run_status(
   Ok(match (status, reason, failed_step) {
     ("pending", None, None) => RunStatus::Pending,
     ("running", None, None) => RunStatus::Running,
-    ("paused", None, None) => RunStatus::Paused,
+    ("paused", Some(reason), None) => RunStatus::Paused(parse_pause_reason(reason)?),
     (INTERRUPTED, Some(cause), None) => RunStatus::Interrupted(parse_interrupt_cause(cause)?),
     ("succeeded", None, None) => RunStatus::Succeeded,
     ("failed", Some("step_failed"), Some(step)) => RunStatus::Failed(RunFailure::StepFailed(step_key(step)?)),
@@ -43,6 +45,23 @@ pub(super) fn parse_run_status(
     ("cancelled", None, None) => RunStatus::Cancelled,
     _ => return Err(corrupt(WHAT, format!("{status} / {reason:?} / {failed_step:?}"))),
   })
+}
+
+const fn pause_reason_text(reason: PauseReason) -> &'static str {
+  match reason {
+    PauseReason::Requested => "requested",
+    PauseReason::LimitReached(RunLimit::Tokens) => "token_limit",
+    PauseReason::LimitReached(RunLimit::Time) => "time_limit",
+  }
+}
+
+fn parse_pause_reason(value: &str) -> Result<PauseReason, StoreError> {
+  match value {
+    "requested" => Ok(PauseReason::Requested),
+    "token_limit" => Ok(PauseReason::LimitReached(RunLimit::Tokens)),
+    "time_limit" => Ok(PauseReason::LimitReached(RunLimit::Time)),
+    other => Err(corrupt("pause reason", other)),
+  }
 }
 
 const fn interrupt_cause_text(cause: InterruptCause) -> &'static str {

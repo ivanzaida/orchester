@@ -1,8 +1,9 @@
 //! Conversions between stored columns and domain values. Reads re-validate through the domain
 //! constructors, so a damaged row surfaces as `StoreError::Corrupt` instead of a bad value.
 
-use std::{fmt::Display, path::Path, str::FromStr};
+use std::{fmt::Display, path::Path, str::FromStr, time::Duration};
 
+use orchester_core::tokens::TokenBudget;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
@@ -23,6 +24,29 @@ pub(crate) fn corrupt(what: &'static str, detail: impl Display) -> StoreError {
   }
 }
 
+/// A token count or budget as an `INTEGER` column.
+pub(crate) fn tokens_column(what: &'static str, tokens: u64) -> Result<i64, StoreError> {
+  i64::try_from(tokens).map_err(|_| StoreError::Unrepresentable(what))
+}
+
+pub(crate) fn budget_value(what: &'static str, tokens: i64) -> Result<TokenBudget, StoreError> {
+  u64::try_from(tokens)
+    .ok()
+    .and_then(|tokens| TokenBudget::new(tokens).ok())
+    .ok_or_else(|| corrupt(what, tokens))
+}
+
+/// A duration as whole milliseconds in an `INTEGER` column.
+pub(crate) fn millis_column(what: &'static str, duration: Duration) -> Result<i64, StoreError> {
+  i64::try_from(duration.as_millis()).map_err(|_| StoreError::Unrepresentable(what))
+}
+
+pub(crate) fn duration_value(what: &'static str, millis: i64) -> Result<Duration, StoreError> {
+  u64::try_from(millis)
+    .map(Duration::from_millis)
+    .map_err(|_| corrupt(what, millis))
+}
+
 pub(crate) fn path_text<'a>(what: &'static str, path: &'a Path) -> Result<&'a str, StoreError> {
   path.to_str().ok_or(StoreError::Unrepresentable(what))
 }
@@ -36,17 +60,33 @@ pub(crate) fn encode_json<T: Serialize>(what: &'static str, schema: u32, body: &
 
 /// Reads a value written by [`encode_json`] back through the domain constructors.
 pub(crate) fn decode_json<T: DeserializeOwned>(what: &'static str, schema: u32, text: &str) -> Result<T, StoreError> {
-  let mut document: Value = serde_json::from_str(text).map_err(|error| corrupt(what, error))?;
-  let found = document.get("schema").and_then(Value::as_u64);
-  if found != Some(u64::from(schema)) {
+  let (found, body) = decode_document(what, text)?;
+  if found != schema {
     return Err(corrupt(
       what,
-      format!("schema {found:?} is not the supported schema {schema}"),
+      format!("schema {found} is not the supported schema {schema}"),
     ));
   }
+  decode_body(what, body)
+}
+
+/// The schema and the body of a document written by [`encode_json`], for values whose earlier
+/// schemas are upgraded when read.
+pub(crate) fn decode_document(what: &'static str, text: &str) -> Result<(u32, Value), StoreError> {
+  let mut document: Value = serde_json::from_str(text).map_err(|error| corrupt(what, error))?;
+  let schema = document
+    .get("schema")
+    .and_then(Value::as_u64)
+    .and_then(|schema| u32::try_from(schema).ok())
+    .ok_or_else(|| corrupt(what, "the schema is missing"))?;
   let body = document
     .get_mut("body")
     .map(Value::take)
     .ok_or_else(|| corrupt(what, "the body is missing"))?;
+  Ok((schema, body))
+}
+
+/// A body read by [`decode_document`], through the domain constructors.
+pub(crate) fn decode_body<T: DeserializeOwned>(what: &'static str, body: Value) -> Result<T, StoreError> {
   serde_json::from_value(body).map_err(|error| corrupt(what, error))
 }

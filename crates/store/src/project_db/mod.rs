@@ -1,6 +1,7 @@
 mod activity;
 mod blobs;
 mod connections;
+mod limits;
 mod pull_request_diffs;
 mod pull_requests;
 mod repository;

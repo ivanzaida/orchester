@@ -1,8 +1,7 @@
-use std::{num::NonZeroU32, time::Duration};
+use std::num::NonZeroU32;
 
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
-  money::{Currency, Money},
   name::Name,
   project::{ProjectKey, TaskKey},
   store::TaskStore,
@@ -14,11 +13,11 @@ use rusqlite::{Connection, Params, Row, Transaction, params};
 use super::ProjectDb;
 use crate::{
   StoreError,
-  rows::{corrupt, parse},
+  rows::{budget_value, corrupt, duration_value, millis_column, parse, tokens_column},
 };
 
-const SELECT_TASKS: &str = "SELECT id, number, title, brief, pipeline_id, budget_micros, budget_currency, \
-                            max_duration_ms, status, created_at FROM tasks";
+const SELECT_TASKS: &str =
+  "SELECT id, number, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, created_at FROM tasks";
 
 impl TaskStore for ProjectDb {
   type Error = StoreError;
@@ -69,18 +68,17 @@ impl TaskStore for ProjectDb {
 
   fn save_task(&mut self, task: &Task) -> Result<(), StoreError> {
     let details = task.details();
-    let (budget_micros, budget_currency, max_duration_ms) = limit_columns(details.limits)?;
+    let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
     let transaction = self.connection.transaction()?;
     let updated = transaction.execute(
-      "UPDATE tasks SET title = ?2, brief = ?3, pipeline_id = ?4, budget_micros = ?5, budget_currency = ?6, \
-       max_duration_ms = ?7, status = ?8 WHERE id = ?1",
+      "UPDATE tasks SET title = ?2, brief = ?3, pipeline_id = ?4, budget_tokens = ?5, max_duration_ms = ?6, \
+       status = ?7 WHERE id = ?1",
       params![
         task.id().to_string(),
         details.title.as_str(),
         details.brief,
         details.pipeline.map(|id| id.to_string()),
-        budget_micros,
-        budget_currency,
+        budget_tokens,
         max_duration_ms,
         status_text(task.status()),
       ],
@@ -96,10 +94,10 @@ impl TaskStore for ProjectDb {
 
 fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &str) -> Result<(), StoreError> {
   let details = task.details();
-  let (budget_micros, budget_currency, max_duration_ms) = limit_columns(details.limits)?;
+  let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
   transaction.execute(
-    "INSERT INTO tasks (id, number, batch_key, title, brief, pipeline_id, budget_micros, budget_currency, \
-     max_duration_ms, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+    "INSERT INTO tasks (id, number, batch_key, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, \
+     created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
     params![
       task.id().to_string(),
       task.key().number().get(),
@@ -107,8 +105,7 @@ fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &str) -> Resul
       details.title.as_str(),
       details.brief,
       details.pipeline.map(|id| id.to_string()),
-      budget_micros,
-      budget_currency,
+      budget_tokens,
       max_duration_ms,
       status_text(task.status()),
       task.created_at().unix_millis(),
@@ -161,8 +158,7 @@ struct TaskRow {
   title: String,
   brief: String,
   pipeline: Option<String>,
-  budget_micros: Option<i64>,
-  budget_currency: Option<String>,
+  budget_tokens: Option<i64>,
   max_duration_ms: Option<i64>,
   status: String,
   created_at: i64,
@@ -176,11 +172,10 @@ impl TaskRow {
       title: row.get(2)?,
       brief: row.get(3)?,
       pipeline: row.get(4)?,
-      budget_micros: row.get(5)?,
-      budget_currency: row.get(6)?,
-      max_duration_ms: row.get(7)?,
-      status: row.get(8)?,
-      created_at: row.get(9)?,
+      budget_tokens: row.get(5)?,
+      max_duration_ms: row.get(6)?,
+      status: row.get(7)?,
+      created_at: row.get(8)?,
     })
   }
 
@@ -207,34 +202,25 @@ impl TaskRow {
   }
 
   fn limits(&self) -> Result<Option<TaskLimits>, StoreError> {
-    let (Some(micros), Some(currency), Some(duration_ms)) = (
-      self.budget_micros,
-      self.budget_currency.as_deref(),
-      self.max_duration_ms,
-    ) else {
+    let (Some(tokens), Some(duration_ms)) = (self.budget_tokens, self.max_duration_ms) else {
       return Ok(None);
     };
-    let currency = Currency::new(currency).map_err(|error| corrupt("task budget currency", error))?;
-    let duration_ms = u64::try_from(duration_ms).map_err(|error| corrupt("task run time limit", error))?;
-    TaskLimits::new(Money::from_micros(micros, currency), Duration::from_millis(duration_ms))
-      .map(Some)
-      .map_err(|error| corrupt("task limits", error))
+    TaskLimits::new(
+      budget_value("task budget", tokens)?,
+      duration_value("task time limit", duration_ms)?,
+    )
+    .map(Some)
+    .map_err(|error| corrupt("task limits", error))
   }
 }
 
-type LimitColumns = (Option<i64>, Option<String>, Option<i64>);
-
-fn limit_columns(limits: Option<TaskLimits>) -> Result<LimitColumns, StoreError> {
+fn limit_columns(limits: Option<TaskLimits>) -> Result<(Option<i64>, Option<i64>), StoreError> {
   let Some(limits) = limits else {
-    return Ok((None, None, None));
+    return Ok((None, None));
   };
-  let duration_ms =
-    i64::try_from(limits.max_duration().as_millis()).map_err(|_| StoreError::Unrepresentable("task run time limit"))?;
-  let budget = limits.budget();
   Ok((
-    Some(budget.micros()),
-    Some(budget.currency().code().to_owned()),
-    Some(duration_ms),
+    Some(tokens_column("task budget", limits.budget().get())?),
+    Some(millis_column("task time limit", limits.max_duration())?),
   ))
 }
 

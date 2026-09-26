@@ -5,27 +5,29 @@ use std::num::{NonZeroU32, NonZeroU64};
 
 use orchester_core::{
   id::RunId,
-  money::{Currency, Money},
   revision::Revision,
   run::{
     Attempt, BranchName, Checkpoint, EventSequence, Run, RunCreated, RunEvent, RunEventKind, StepExecution, StoredRun,
   },
   time::Timestamp,
+  tokens::TokensUsed,
 };
 use rusqlite::{Connection, OptionalExtension, Params, Row};
 
 use super::{
   EVENT_SCHEMA, SNAPSHOT_SCHEMA,
   columns::{parse_attempt_reason, parse_attempt_status, parse_run_status, parse_step_status, step_key},
+  legacy::{self, CreationLimits},
   run_number,
 };
 use crate::{
   StoreError,
-  rows::{corrupt, decode_json, parse},
+  rows::{budget_value, corrupt, decode_body, decode_document, decode_json, duration_value, parse},
 };
 
-const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_revision, currency, budget_micros, \
-                           spent_micros, status, status_reason, failed_step, last_sequence, created_at FROM runs";
+const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_revision, initial_budget_tokens, \
+                           initial_max_duration_ms, budget_tokens, max_duration_ms, used_tokens, pause_requested, \
+                           status, status_reason, failed_step, last_sequence, created_at FROM runs";
 
 pub(super) fn load_runs(connection: &Connection, clause: &str, params: impl Params) -> Result<Vec<Run>, StoreError> {
   let mut statement = connection.prepare(&format!("{SELECT_RUNS} {clause}"))?;
@@ -48,10 +50,23 @@ pub(super) fn load_events(connection: &Connection, run: RunId) -> Result<Vec<Run
       ))
     })?
     .collect::<Result<Vec<_>, _>>()?;
+  let mut creation = None;
   rows
     .into_iter()
     .map(|(sequence, at, kind, payload)| {
-      let decoded: RunEventKind = decode_json("run event", EVENT_SCHEMA, &payload)?;
+      let (schema, body) = decode_document("run event", &payload)?;
+      let body = match schema {
+        EVENT_SCHEMA => body,
+        legacy::MONEY_SCHEMA => {
+          let limits = match &mut creation {
+            Some(limits) => limits,
+            None => creation.insert(CreationLimits::of(connection, &run.to_string())?),
+          };
+          legacy::upgrade(&kind, body, limits)?
+        }
+        other => return Err(corrupt("run event", format!("schema {other} is not supported"))),
+      };
+      let decoded: RunEventKind = decode_body("run event", body)?;
       if decoded.name() != kind {
         return Err(corrupt(
           "run event",
@@ -164,9 +179,10 @@ struct RunRow {
   snapshot: String,
   branch: String,
   base: String,
-  currency: String,
-  budget_micros: i64,
-  spent_micros: i64,
+  /// Creation budget and time limit, then the ones in force.
+  limits: [i64; 4],
+  used_tokens: i64,
+  pause_requested: bool,
   status: String,
   status_reason: Option<String>,
   failed_step: Option<String>,
@@ -183,34 +199,38 @@ impl RunRow {
       snapshot: row.get(3)?,
       branch: row.get(4)?,
       base: row.get(5)?,
-      currency: row.get(6)?,
-      budget_micros: row.get(7)?,
-      spent_micros: row.get(8)?,
-      status: row.get(9)?,
-      status_reason: row.get(10)?,
-      failed_step: row.get(11)?,
-      last_sequence: row.get(12)?,
-      created_at: row.get(13)?,
+      limits: [row.get(6)?, row.get(7)?, row.get(8)?, row.get(9)?],
+      used_tokens: row.get(10)?,
+      pause_requested: row.get(11)?,
+      status: row.get(12)?,
+      status_reason: row.get(13)?,
+      failed_step: row.get(14)?,
+      last_sequence: row.get(15)?,
+      created_at: row.get(16)?,
     })
   }
 
   fn into_run(self, connection: &Connection) -> Result<Run, StoreError> {
     let id: RunId = parse("run id", &self.id)?;
-    let currency = Currency::new(&self.currency).map_err(|error| corrupt("run currency", error))?;
+    let [initial_budget, initial_duration, budget, duration] = self.limits;
     let created = RunCreated {
       task: parse("task id", &self.task)?,
       number: run_number(self.number)?,
       snapshot: decode_json("run snapshot", SNAPSHOT_SCHEMA, &self.snapshot)?,
       branch: BranchName::new(&self.branch).map_err(|error| corrupt("run branch", error))?,
       base: Revision::new(&self.base).map_err(|error| corrupt("run base revision", error))?,
-      budget: Money::from_micros(self.budget_micros, currency),
+      budget: budget_value("run budget", initial_budget)?,
+      max_duration: duration_value("run time limit", initial_duration)?,
     };
     let stored = StoredRun {
       id,
       created,
       created_at: Timestamp::from_unix_millis(self.created_at),
       status: parse_run_status(&self.status, self.status_reason.as_deref(), self.failed_step.as_deref())?,
-      spent: Money::from_micros(self.spent_micros, currency),
+      budget: budget_value("run budget", budget)?,
+      max_duration: duration_value("run time limit", duration)?,
+      used: TokensUsed::new(u64::try_from(self.used_tokens).map_err(|_| corrupt("run usage", self.used_tokens))?),
+      pause_requested: self.pause_requested,
       attempts: load_attempts(connection, &self.id)?,
       last_checkpoint: load_checkpoint(connection, id)?,
       last_sequence: sequence_value(self.last_sequence)?,
