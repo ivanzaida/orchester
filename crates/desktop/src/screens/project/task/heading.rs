@@ -13,11 +13,12 @@ use crate::{
   ui::icon::Icon,
 };
 
-pub(super) fn heading(ctx: &Ctx, detail: &TaskDetail) -> Element {
-  page::heading(detail.task.details().title.as_str(), &description(ctx, detail))
+/// `lost`: the run is recorded as running but no runner is connected, so it is interrupted.
+pub(super) fn heading(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Element {
+  page::heading(detail.task.details().title.as_str(), &description(ctx, detail, lost))
 }
 
-fn description(ctx: &Ctx, detail: &TaskDetail) -> Arc<str> {
+fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
   let Some(run) = &detail.run else {
     return match detail.phase() {
       TaskPhase::Draft => ctx.t("runs.page.draft"),
@@ -41,6 +42,7 @@ fn description(ctx: &Ctx, detail: &TaskDetail) -> Arc<str> {
     ("time", time.as_str()),
   ];
   let key = match (run.run.status(), step) {
+    (RunStatus::Running, _) if lost => "runs.page.describe.interrupted",
     (RunStatus::Pending, _) => "runs.page.describe.pending",
     (RunStatus::Running, _) if run.run.pause_requested() => "runs.page.describe.pausing",
     (RunStatus::Running, Some(_)) => "runs.page.describe.working",

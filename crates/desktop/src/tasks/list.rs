@@ -91,6 +91,18 @@ impl LatestRun {
     }
   }
 
+  /// The run while no runner is connected: a running run is interrupted, and a requested pause
+  /// cannot settle.
+  #[must_use]
+  pub fn without_runner(&self) -> Self {
+    let phase = self.phase.without_runner();
+    Self {
+      phase,
+      pausing: self.pausing && phase == TaskPhase::Running,
+      ..self.clone()
+    }
+  }
+
   /// What the run means for the task now: "Paused at 4b92ad0", "Last checkpoint 1b8e5c2".
   pub fn message(&self) -> Message {
     let with_checkpoint = |key: &'static str, without: &'static str| match &self.checkpoint {

@@ -17,6 +17,7 @@ use orchester_desktop::{
   display,
   tasks::{
     data::{ProjectTasks, published_pipelines, save_draft},
+    detail::TaskDetail,
     form::TaskForm,
     list::{self, DraftSummary, PipelineLabel, Readiness, TaskTab},
   },
@@ -361,7 +362,7 @@ fn task_list_footer_counts_tasks_and_started_runs() {
 }
 
 #[test]
-fn task_list_reads_run_counts_and_latest_runs() {
+fn task_list_reads_run_counts_and_interrupts_running_runs_without_a_runner() {
   let mut fixture = support::Fixture::new();
   let first = fixture.task("Add login", support::at(10));
   let second = fixture.task("Fix zoom", support::at(11));
@@ -379,4 +380,30 @@ fn task_list_reads_run_counts_and_latest_runs() {
   assert_eq!(latest.phase, TaskPhase::Running);
   assert_eq!(latest.number.get(), 2);
   assert_eq!(latest.updated_at, support::at(40));
+
+  let away = loaded.without_runner();
+  assert_eq!(away.phases[&first].phase, TaskPhase::Interrupted);
+  assert_eq!(away.phases[&second].phase, TaskPhase::Interrupted);
+  assert_eq!(
+    away.phases[&first].message().key,
+    "tasks.progress.interruptedNoCheckpoint"
+  );
+  assert_eq!(away.runs, 3);
+}
+
+#[test]
+fn task_page_run_recorded_running_lost_its_agent_without_a_runner() {
+  let mut fixture = support::Fixture::new();
+  let running = fixture.task("Fix zoom", support::at(10));
+  fixture.started_run(running, support::at(20));
+  let done = fixture.task("Add login", support::at(30));
+  let mut run = fixture.started_run(done, support::at(40));
+  fixture.succeed(&mut run, support::at(50));
+
+  let detail = TaskDetail::load_in(fixture.repo.path(), running).expect("read the task");
+  assert!(!detail.lost_its_runner(true));
+  assert!(detail.lost_its_runner(false));
+  let settled = TaskDetail::load_in(fixture.repo.path(), done).expect("read the task");
+  assert_eq!(settled.phase(), TaskPhase::Succeeded);
+  assert!(!settled.lost_its_runner(false));
 }

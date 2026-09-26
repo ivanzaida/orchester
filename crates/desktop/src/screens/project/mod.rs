@@ -48,7 +48,7 @@ use super::status_bar::{ProjectBar, StatusBar, StatusBarProps};
 use crate::{
   background,
   messages::{self, Message},
-  runner::{RunnerStatus, Runners},
+  runner::{RunnerStatus, Runners, state::RunnerState},
   tasks::{data::ProjectTasks, list, usage::ProjectUsage},
   workspace::OpenProject,
 };
@@ -164,6 +164,15 @@ pub enum TasksState {
 impl lurq::app::component::DevtoolsInspectable for TasksState {}
 
 impl TasksState {
+  /// The tasks as they stand while the project's runner is `online` or not: without a runner,
+  /// runs recorded as running are interrupted.
+  fn without_runner(self, online: bool) -> Self {
+    match self {
+      Self::Ready(tasks) if !online => Self::Ready(tasks.without_runner()),
+      other => other,
+    }
+  }
+
   pub fn ready(&self) -> Option<&ProjectTasks> {
     match self {
       Self::Ready(tasks) => Some(tasks),
@@ -202,19 +211,67 @@ impl Component for ProjectShell {
     let status = runner_status(ctx, &runners);
     let runner = status.state_for(&open.repo_root);
     let runs = run_changes(ctx, &runners);
-    let tasks = self.tasks(ctx, &open, runs);
+    let tasks = self
+      .tasks(ctx, &open, runs)
+      .without_runner(runner == RunnerState::Online);
     let usage = self.usage(ctx, &open, runs);
     let section = self.nav.section.get();
-    let content = match section {
+    let shown = Shown {
+      open: &open,
+      status: &status,
+      runner: &runner,
+      runs,
+      tasks: &tasks,
+      usage,
+    };
+    let content = self.screen(ctx, &shown, &runners, section);
+    let bar = ProjectBar {
+      repo_root: open.repo_root.clone(),
+      runner: status.clone(),
+      queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
+      usage,
+    };
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .child(
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .child(sidebar(ctx, &open, section, &tasks, &self.nav))
+          .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(content)),
+      )
+      .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
+  }
+}
+
+/// What the shell read about the open project, for its screens.
+struct Shown<'a> {
+  open: &'a OpenProject,
+  status: &'a RunnerStatus,
+  /// The state of this project's runner.
+  runner: &'a RunnerState,
+  /// Counts the runner's run changes.
+  runs: u64,
+  tasks: &'a TasksState,
+  usage: Option<ProjectUsage>,
+}
+
+impl ProjectShell {
+  /// The screen of `section`.
+  fn screen(&self, ctx: &mut Ctx, shown: &Shown<'_>, runners: &Runners, section: Section) -> Element {
+    let open = shown.open;
+    let limits = shown.usage.map(|usage| usage.limits);
+    match section {
       Section::Overview => {
-        let notice = runner::connection_notice(ctx, &runner, status.trouble_since(), &runners);
-        overview::overview(ctx, &open, notice, &tasks, &self.nav)
+        let notice = runner::connection_notice(ctx, shown.runner, shown.status.trouble_since(), runners);
+        overview::overview(ctx, open, notice, shown.tasks, &self.nav)
       }
       Section::Tasks => ctx.mount_keyed::<TasksScreen>(
         "tasks",
         TasksProps {
           project: open.project.name().as_str().into(),
-          tasks: tasks.clone(),
+          tasks: shown.tasks.clone(),
         },
       ),
       Section::Pipelines => {
@@ -231,8 +288,8 @@ impl Component for ProjectShell {
         "new-task",
         NewTaskProps {
           project: open.clone(),
-          pipelines: tasks.ready().map(|tasks| tasks.pipelines.clone()),
-          limits: usage.map(|usage| usage.limits),
+          pipelines: shown.tasks.ready().map(|tasks| tasks.pipelines.clone()),
+          limits,
         },
       ),
       Section::Task(task) => ctx.mount_keyed::<TaskScreen>(
@@ -240,8 +297,10 @@ impl Component for ProjectShell {
         TaskProps {
           project: open.clone(),
           task,
-          revision: (self.nav.revision.get(), runs),
-          limits: usage.map(|usage| usage.limits),
+          revision: (self.nav.revision.get(), shown.runs),
+          limits,
+          runner: shown.runner.clone(),
+          runner_since: shown.status.trouble_since(),
         },
       ),
       Section::PullRequests => ctx.mount_keyed::<PullRequestsScreen>("pull-requests", open.clone()),
@@ -255,24 +314,7 @@ impl Component for ProjectShell {
       Section::Agents => ctx.mount_keyed::<AgentsScreen>("agents", open.clone()),
       Section::Connections => ctx.mount_keyed::<ConnectionsScreen>("connections", open.clone()),
       Section::Settings => ctx.mount_keyed::<SettingsScreen>("settings", open.clone()),
-    };
-    let bar = ProjectBar {
-      repo_root: open.repo_root.clone(),
-      runner: status,
-      queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
-      usage,
-    };
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .flex(1.0)
-          .child(sidebar(ctx, &open, section, &tasks, &self.nav))
-          .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(content)),
-      )
-      .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
+    }
   }
 }
 

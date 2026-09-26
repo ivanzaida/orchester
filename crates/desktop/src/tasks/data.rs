@@ -66,6 +66,21 @@ impl ProjectTasks {
       runs: count,
     })
   }
+
+  /// The tasks as they stand while no runner is connected: runs recorded as running are
+  /// interrupted ([`orchester_core::run::TaskPhase::without_runner`]).
+  #[must_use]
+  pub fn without_runner(&self) -> Self {
+    let phases = self
+      .phases
+      .iter()
+      .map(|(task, latest)| (*task, latest.without_runner()))
+      .collect();
+    Self {
+      phases: Arc::new(phases),
+      ..self.clone()
+    }
+  }
 }
 
 /// Pipelines with a published version, ordered by slug. Drafts that were never published

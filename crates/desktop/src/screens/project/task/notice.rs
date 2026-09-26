@@ -14,12 +14,40 @@ use orchester_core::{
 use crate::{
   budget::whole_minutes,
   display,
+  runner::state::RunnerState,
   tasks::detail::{RunView, TaskDetail},
   ui::{icon::Icon, notice::Notice},
 };
 
-pub(super) fn notice(ctx: &Ctx, detail: &TaskDetail) -> Element {
-  let (glyph, title, text) = match &detail.run {
+/// Why a run recorded as running has no agent: the runner dropped and is reconnecting (`MAn7V`),
+/// could not be restarted (`EFY7I`), or is not connected otherwise (starting or stopping).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Lost {
+  Reconnecting,
+  Offline,
+  NotConnected,
+}
+
+impl Lost {
+  pub(super) fn of(runner: &RunnerState) -> Self {
+    match runner {
+      RunnerState::Reconnecting { .. } => Self::Reconnecting,
+      RunnerState::Failed { .. } => Self::Offline,
+      _ => Self::NotConnected,
+    }
+  }
+}
+
+pub(super) fn notice(ctx: &Ctx, detail: &TaskDetail, lost: Option<Lost>) -> Element {
+  let (glyph, title, text) = match (&detail.run, lost) {
+    (Some(run), Some(lost)) => lost_runner(ctx, run, lost),
+    (run, _) => settled(ctx, detail, run.as_ref()),
+  };
+  Notice::new(glyph, title, text).id("task-notice").into()
+}
+
+fn settled(ctx: &Ctx, detail: &TaskDetail, run: Option<&RunView>) -> (Icon, Arc<str>, Arc<str>) {
+  match run {
     None if detail.task.status() == TaskStatus::Draft => (
       Icon::Pencil,
       ctx.t("runs.summary.notice.draftTitle"),
@@ -31,8 +59,22 @@ pub(super) fn notice(ctx: &Ctx, detail: &TaskDetail) -> Element {
       ctx.t("runs.summary.notice.queuedDetail"),
     ),
     Some(run) => run_notice(ctx, run),
+  }
+}
+
+/// The run lost its agent with the runner: it is interrupted and keeps its last checkpoint.
+fn lost_runner(ctx: &Ctx, run: &RunView, lost: Lost) -> (Icon, Arc<str>, Arc<str>) {
+  let step = run.current_step().map_or("", |step| &*step.name);
+  let detail = match lost {
+    Lost::Reconnecting => "runs.summary.notice.reconnectingDetail",
+    Lost::Offline => "runs.summary.notice.offlineDetail",
+    Lost::NotConnected => "runs.summary.notice.notConnectedDetail",
   };
-  Notice::new(glyph, title, text).id("task-notice").into()
+  (
+    Icon::Pause,
+    ctx.t_args("runs.summary.notice.interruptedTitle", [("step", step)]),
+    ctx.t(detail),
+  )
 }
 
 fn run_notice(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {

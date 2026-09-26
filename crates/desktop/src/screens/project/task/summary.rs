@@ -26,7 +26,7 @@ use orchester_core::{
 use super::{
   heading::{agent_of, step_state},
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
-  notice::notice,
+  notice::{Lost, notice},
 };
 use crate::{
   budget::whole_minutes,
@@ -45,7 +45,13 @@ const PANEL_WIDTH: f32 = 336.0;
 const STEP_ROW_HEIGHT: f32 = 64.0;
 const GLYPH_SIZE: f32 = 28.0;
 
-pub(super) fn summary(ctx: &mut Ctx, detail: &TaskDetail, limits: Option<ProjectLimits>) -> Element {
+/// `lost`: the run is recorded as running but has no runner, and why.
+pub(super) fn summary(
+  ctx: &mut Ctx,
+  detail: &TaskDetail,
+  limits: Option<ProjectLimits>,
+  lost: Option<Lost>,
+) -> Element {
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
   let mut progress = Column::new()
     .id("task-progress")
@@ -53,12 +59,17 @@ pub(super) fn summary(ctx: &mut Ctx, detail: &TaskDetail, limits: Option<Project
     .height(Dimension::Pct(100.0))
     .padding(SpacingSize::Section)
     .spacing(ExtraSpacing::Form.role())
-    .child(notice(ctx, detail))
+    .child(notice(ctx, detail, lost))
     .with_children(raise)
     .child(Text::new(&ctx.t("runs.summary.execution")).variant(ExtraTypography::SectionHeading.role()));
   if let Some(run) = &detail.run {
     progress = progress
-      .with_children(run.steps.iter().map(|step| step_row(ctx, step, run.run.status())))
+      .with_children(
+        run
+          .steps
+          .iter()
+          .map(|step| step_row(ctx, step, run.run.status(), lost.is_some())),
+      )
       .child(Spacer::new().flex(1.0))
       .with_children(latest(ctx, run));
   }
@@ -70,11 +81,13 @@ pub(super) fn summary(ctx: &mut Ctx, detail: &TaskDetail, limits: Option<Project
     .into()
 }
 
-/// One step and its state (`mBkeJ` as in `NBmWz`).
-fn step_row(ctx: &Ctx, step: &StepView, run: &RunStatus) -> Element {
-  // A step a paused run stopped in is not running (`tSDux` in 02.A).
+/// One step and its state (`mBkeJ` as in `NBmWz`). `lost`: the run lost its runner.
+fn step_row(ctx: &Ctx, step: &StepView, run: &RunStatus, lost: bool) -> Element {
+  // A step a paused run stopped in is not running (`tSDux` in 02.A), and neither is one whose
+  // runner is gone.
   let (glyph, state) = match (run, step.status) {
     (RunStatus::Paused(_), Some(StepStatus::Running)) => (Icon::Pause, "runs.step.paused"),
+    (RunStatus::Running, Some(StepStatus::Running)) if lost => (Icon::Pause, "runs.step.interrupted"),
     (RunStatus::Cancelled, Some(StepStatus::Skipped)) => (Icon::Square, "runs.step.cancelled"),
     _ => step_state(step.status),
   };

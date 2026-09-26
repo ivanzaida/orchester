@@ -231,8 +231,15 @@ fn task_phase_follows_the_task_and_its_latest_run() {
   logged.apply(|run| run.start(at(11)));
   assert_eq!(TaskPhase::of(&queued, Some(&logged.run)), TaskPhase::Running);
   assert!(TaskPhase::of(&queued, Some(&logged.run)).is_active());
+  assert_eq!(
+    TaskPhase::of(&queued, Some(&logged.run)).without_runner(),
+    TaskPhase::Interrupted
+  );
   let research = logged.exec("research");
   logged.apply(|run| run.start_step(research, at(12)));
   logged.apply(|run| run.fail_step(research, at(13)));
   assert_eq!(TaskPhase::of(&queued, Some(&logged.run)), TaskPhase::Failed);
+  assert_eq!(TaskPhase::Failed.without_runner(), TaskPhase::Failed);
+  assert_eq!(TaskPhase::Waiting.without_runner(), TaskPhase::Waiting);
+  assert_eq!(TaskPhase::Queued.without_runner(), TaskPhase::Queued);
 }
