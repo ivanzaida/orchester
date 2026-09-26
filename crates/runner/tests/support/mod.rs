@@ -21,7 +21,8 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
   resource::{
-    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
+    AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
+    StepKind,
   },
   run::Run,
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
@@ -57,6 +58,46 @@ fn name(value: &str) -> Name {
   Name::new(value).expect("valid name")
 }
 
+/// A step of a test pipeline graph; what its agent does is in its instructions.
+#[derive(Clone, Debug)]
+pub struct StepSpec {
+  pub key: &'static str,
+  pub name: &'static str,
+  pub instructions: &'static str,
+  pub after: &'static [&'static str],
+  /// Where a failure returns to, and how often.
+  pub retry: Option<(&'static str, u32)>,
+  pub budget: Option<u64>,
+}
+
+impl StepSpec {
+  pub const fn new(
+    key: &'static str,
+    name: &'static str,
+    instructions: &'static str,
+    after: &'static [&'static str],
+  ) -> Self {
+    Self {
+      key,
+      name,
+      instructions,
+      after,
+      retry: None,
+      budget: None,
+    }
+  }
+
+  pub const fn retry(mut self, to: &'static str, times: u32) -> Self {
+    self.retry = Some((to, times));
+    self
+  }
+
+  pub const fn budget(mut self, tokens: u64) -> Self {
+    self.budget = Some(tokens);
+    self
+  }
+}
+
 /// What the test project runs.
 pub struct Setup {
   /// The task's brief, which tells the fake CLI what to do.
@@ -66,6 +107,8 @@ pub struct Setup {
   pub review: bool,
   pub budget: u64,
   pub max_duration: Duration,
+  /// A pipeline graph instead of Implement (and Review).
+  pub steps: Vec<StepSpec>,
 }
 
 impl Setup {
@@ -74,6 +117,7 @@ impl Setup {
       brief,
       approval_gate: false,
       review: false,
+      steps: Vec::new(),
       budget: 1_400_000,
       max_duration: Duration::from_secs(30 * 60),
     }
@@ -145,6 +189,26 @@ fn agent_step(key: &str, title: &str, builder: orchester_core::id::ResourceId, s
   }
 }
 
+fn graph_step(spec: &StepSpec, builder: orchester_core::id::ResourceId) -> Step {
+  Step {
+    key: StepKey::new(spec.key).expect("key"),
+    name: name(spec.name),
+    kind: StepKind::Agent {
+      profile: Some(builder),
+      repository: RepositoryAccess::Write,
+      model: None,
+    },
+    instructions: PromptText::new(spec.instructions).expect("prompt"),
+    depends_on: spec.after.iter().map(|key| StepKey::new(key).expect("key")).collect(),
+    approval_gate: false,
+    on_failure: spec.retry.map(|(to, times)| FailureRoute {
+      return_to: StepKey::new(to).expect("key"),
+      max_retries: std::num::NonZeroU32::new(times).expect("above zero"),
+    }),
+    budget: spec.budget.map(|tokens| TokenBudget::new(tokens).expect("above zero")),
+  }
+}
+
 fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> TaskId {
   let now = Timestamp::now();
   let settings =
@@ -163,7 +227,9 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     .id();
   db.publish_draft::<AgentProfile>(builder, now).expect("publish profile");
   let mut steps = vec![agent_step("implement", "Implement", builder, setup)];
-  if setup.review {
+  if !setup.steps.is_empty() {
+    steps = setup.steps.iter().map(|spec| graph_step(spec, builder)).collect();
+  } else if setup.review {
     let mut review = agent_step("review", "Review", builder, setup);
     review.depends_on = BTreeSet::from([StepKey::new("implement").expect("key")]);
     steps.push(review);

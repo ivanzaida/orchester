@@ -1,6 +1,8 @@
 //! Git worktrees for runs under `<repo>/.orchester/worktrees/<run-id>/`, driven through the
 //! `git` CLI. Creating one adds a new branch without touching the user's checkout; removing one
-//! refuses to discard uncommitted work unless forced, and always keeps the run's branch.
+//! refuses to discard uncommitted work unless forced, and always keeps the run's branch. A step
+//! that runs beside other steps of its run works in a worktree of its own,
+//! `<repo>/.orchester/worktrees/<step-execution-id>/`, on a branch off the run's branch.
 
 use std::{
   ffi::OsStr,
@@ -8,7 +10,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use orchester_core::id::RunId;
+use orchester_core::id::{RunId, StepExecutionId};
 use thiserror::Error;
 
 use crate::git::Git;
@@ -94,9 +96,22 @@ impl Worktrees {
     self.repo_root.join(WORKTREES_DIR).join(run.to_string())
   }
 
+  /// The worktree of step execution `execution`, when it runs beside other steps.
+  pub fn step_path(&self, execution: StepExecutionId) -> PathBuf {
+    self.repo_root.join(WORKTREES_DIR).join(execution.to_string())
+  }
+
   /// Creates the run's worktree on a new `branch` starting at `base` (any commit-ish).
   pub fn create(&self, run: RunId, branch: &str, base: &str) -> Result<Worktree, WorktreeError> {
-    let path = self.path(run);
+    self.create_at(self.path(run), branch, base)
+  }
+
+  /// Creates the worktree of step execution `execution` on a new `branch` starting at `base`.
+  pub fn create_step(&self, execution: StepExecutionId, branch: &str, base: &str) -> Result<Worktree, WorktreeError> {
+    self.create_at(self.step_path(execution), branch, base)
+  }
+
+  fn create_at(&self, path: PathBuf, branch: &str, base: &str) -> Result<Worktree, WorktreeError> {
     if path.exists() {
       return Err(WorktreeError::AlreadyExists(path));
     }
@@ -139,7 +154,20 @@ impl Worktrees {
 
   /// Removes the run's worktree directory. The branch and its commits are kept.
   pub fn remove(&self, run: RunId, mode: RemoveMode) -> Result<(), WorktreeError> {
-    let path = self.path(run);
+    self.remove_at(self.path(run), mode)
+  }
+
+  /// Removes the clean worktree of a step execution whose branch was merged into the run's
+  /// branch, and that branch: its commits are part of the run's branch now.
+  pub fn remove_merged_step(&self, execution: StepExecutionId, branch: &str) -> Result<(), WorktreeError> {
+    self.remove_at(self.step_path(execution), RemoveMode::RefuseIfDirty)?;
+    // `-d` would compare with the user's checked-out branch, not the run's branch it was merged
+    // into; the caller merged it, so nothing is lost.
+    Git::new(&self.repo_root).stdout(["branch", "--quiet", "-D", branch])?;
+    Ok(())
+  }
+
+  fn remove_at(&self, path: PathBuf, mode: RemoveMode) -> Result<(), WorktreeError> {
     if !path.is_dir() {
       return Err(WorktreeError::NotFound(path));
     }

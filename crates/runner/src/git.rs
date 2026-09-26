@@ -61,6 +61,22 @@ impl<'a> Git<'a> {
     }
   }
 
+  /// Trimmed standard output of a command that succeeded, or its trimmed standard error when it
+  /// exited with a failure. For commands whose failure is an answer (a merge that conflicts).
+  pub(crate) fn attempt<I, S>(&self, args: I) -> Result<Result<String, String>, WorktreeError>
+  where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+  {
+    let (_, output) = self.run(args)?;
+    let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).trim().to_owned();
+    Ok(if output.status.success() {
+      Ok(text(&output.stdout))
+    } else {
+      Err(text(&output.stderr))
+    })
+  }
+
   /// Trimmed standard output of a command that must succeed.
   pub(crate) fn stdout<I, S>(&self, args: I) -> Result<String, WorktreeError>
   where

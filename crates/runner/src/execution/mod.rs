@@ -1,24 +1,28 @@
-//! Executing runs: creating a run for a queued task, its worktree, and driving its agent steps
-//! one after another on the Codex CLI; pausing, resuming, cancelling and continuing a run stopped
+//! Executing runs: creating a run for a queued task, its worktree, and driving its agent steps on
+//! the Codex CLI; pausing, resuming, cancelling and continuing a run stopped
 //! at a limit. Every state change is recorded in the project database first; the desktop is only
 //! told *that* something changed ([`Event::RunChanged`], [`Event::AgentActivity`]) and reads the
 //! database.
 //!
-//! This version executes pipelines of agent steps sequentially, in dependency order, without
-//! approval gates or tool steps (the preflight refuses those). Each executing run has one agent
-//! at work, so the desktop's agent slots bound how many runs execute at once; the project's
-//! daily token budget holds new and continued work back once today's runs used it.
+//! This version executes pipeline graphs of agent steps: every step whose dependencies have passed
+//! runs, beside the others (see `workspace` for where each works), with failure routes and retries,
+//! step budgets and the outputs of earlier steps in later prompts. Approval gates and tool steps
+//! are refused by the preflight. Every agent at work takes one of the desktop's agent slots, which
+//! all runs share; the project's daily token budget holds new and continued work back once today's
+//! runs used it.
 
 mod attach;
 mod board;
 mod checkpoint;
 mod control;
+mod halt;
 mod idle;
 mod prepare;
 mod record;
 mod run;
 mod step;
 mod work;
+mod workspace;
 
 use std::{
   collections::HashMap,
@@ -212,8 +216,10 @@ impl Scheduler {
     if self.inner.board.is_stopping() {
       return Err(Rejection::ShuttingDown);
     }
+    // Each executing run has at least one agent at work or about to be, and its parallel steps
+    // take further slots while they are free.
     if let Some(slots) = self.inner.board.slots()
-      && self.active_runs().len() >= slots.get() as usize
+      && (self.active_runs().len() >= slots.get() as usize || !self.inner.board.has_free_slot())
     {
       return Err(Rejection::NoAgentSlot { slots });
     }
@@ -257,6 +263,7 @@ impl Scheduler {
     }
     let (control, controls) = mpsc::unbounded_channel();
     let context = TaskContext {
+      root: self.inner.project_root.clone(),
       notifier: self.inner.notifier.clone(),
       board: self.inner.board.clone(),
       controls,

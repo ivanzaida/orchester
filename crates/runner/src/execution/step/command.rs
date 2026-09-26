@@ -1,5 +1,8 @@
-//! The Codex command of an agent step: its profile's connection and settings, the assembled prompt
-//! for a new session, or the continue prompt for a session that resumes.
+//! The Codex command of an agent step: its profile's connection and settings, the worktree it works
+//! in, the assembled prompt with the outputs of the steps it runs after and the result schema for a
+//! new session, or the continue prompt for a session that resumes.
+
+use std::path::Path;
 
 use orchester_core::{
   command::Command,
@@ -10,8 +13,8 @@ use orchester_core::{
   },
   id::{ResourceId, StepExecutionId},
   resource::{AgentProfile, Step, StepKind},
-  run::{CONTINUE_PROMPT, PipelineInfo, PromptAssemblyError, PromptInput, StepExecutor},
-  store::{ConnectionStore, ResourceStore},
+  run::{CONTINUE_PROMPT, DependencyOutput, PipelineInfo, PromptAssemblyError, PromptInput, StepExecutor},
+  store::{ActivityStore, ConnectionStore, ResourceStore},
 };
 
 use super::super::run::RunTask;
@@ -23,7 +26,12 @@ fn problem(detail: String) -> RunnerProblem {
 impl RunTask {
   /// The command that runs `execution`'s agent, continuing session `resume` when given, or why it
   /// cannot start.
-  pub(super) fn command(&self, execution: StepExecutionId, resume: Option<&str>) -> Result<Command, RunnerProblem> {
+  pub(super) fn command(
+    &self,
+    execution: StepExecutionId,
+    resume: Option<&str>,
+    worktree: &Path,
+  ) -> Result<Command, RunnerProblem> {
     let key = self
       .run
       .execution(execution)
@@ -65,15 +73,17 @@ impl RunTask {
       model: model.as_str(),
       reasoning_effort: effort,
       access: *repository,
-      worktree: &self.worktree,
+      worktree,
       platform: Platform::current(),
       resume,
+      output_schema: Some(&self.schema_path()),
     }
     .command(prompt, std::env::vars_os())
     .map_err(|error| problem(error.to_string()))
   }
 
-  /// The prompt of a new session: role, step and task, with the run's variables filled in.
+  /// The prompt of a new session: role, step and task, with the run's variables filled in, then the
+  /// outputs of the passed executions of the steps it depends on.
   fn prompt(
     &self,
     execution: StepExecutionId,
@@ -88,6 +98,35 @@ impl RunTask {
       .map_err(|error| problem(error.to_string()))?
       .map(|resource| resource.name().as_str().to_owned())
       .ok_or_else(|| problem("the run's pipeline no longer exists".to_owned()))?;
+    let outputs = self
+      .db
+      .step_outputs(self.run.id())
+      .map_err(|error| problem(error.to_string()))?;
+    let dependencies: Vec<DependencyOutput<'_>> = self
+      .run
+      .snapshot()
+      .body()
+      .steps()
+      .iter()
+      .filter(|dependency| step.depends_on.contains(&dependency.key))
+      .filter_map(|dependency| {
+        let passed = self.run.latest_execution(&dependency.key)?;
+        let attempt = self
+          .run
+          .attempts()
+          .iter()
+          .find(|attempt| attempt.execution(passed.id()).is_some())?;
+        let text = outputs
+          .iter()
+          .find(|output| output.execution == passed.id())
+          .map_or("", |output| output.text.as_str());
+        Some(DependencyOutput {
+          step: dependency,
+          attempt: attempt.number(),
+          text,
+        })
+      })
+      .collect();
     PromptInput {
       project: &self.project,
       task: &self.task,
@@ -101,6 +140,7 @@ impl RunTask {
       step,
       profile_id,
       profile,
+      dependencies: &dependencies,
     }
     .assemble()
     .map_err(

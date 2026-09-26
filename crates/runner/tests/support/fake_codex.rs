@@ -7,8 +7,15 @@
 //! - "Work in turns": appends `draft` to `README.md`, completes a turn that used 9,739 counted tokens, starts another
 //!   one and waits until it is ended;
 //! - "Work slowly": waits a moment, then works as below;
+//! - "Report failure": works as below, but its result says it failed;
+//! - "Fail once": the first time a step works on it, the result says it failed; later it works as below;
+//! - "Write own file": writes `<step>.txt` instead of appending to `README.md`;
+//! - "Sign the line": appends `hello from <step>` instead of `hello`;
 //! - anything else: appends `hello` to `README.md` in its worktree, reports the command, the file change and the usage,
 //!   and exits with 0.
+//!
+//! Its final message is the step result when it was given `--output-schema` (`{"outcome", "summary"}`, the summary
+//! "Finished <step>"), else "Done.". The step is read from the prompt's "# Current step:" line.
 //!
 //! `exec resume <session> -` continues session `fake-thread-1` in its working directory: it appends `continued` to
 //! `README.md` and completes its turn. A new session works in the `-C` directory.
@@ -56,6 +63,9 @@ fn main() -> ExitCode {
   eprintln!("argv: {}", args.join(" "));
   eprintln!("env: {}", names.join(","));
   eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
+  for line in prompt.lines() {
+    eprintln!("prompt| {line}");
+  }
   eprintln!("pid: {}", std::process::id());
   if prompt.contains("Please fail") {
     print!("{FAILED_TURN}");
@@ -77,8 +87,18 @@ fn main() -> ExitCode {
   };
   println!(r#"{{"type":"thread.started","thread_id":"fake-thread-1"}}"#);
   println!(r#"{{"type":"turn.started"}}"#);
+  let result = StepReport {
+    step: prompt
+      .lines()
+      .find_map(|line| line.strip_prefix("# Current step: "))
+      .unwrap_or("the step")
+      .to_owned(),
+    structured: args.iter().any(|arg| arg == "--output-schema"),
+    failed: prompt.contains("Report failure") || (prompt.contains("Fail once") && first_time(&worktree, &prompt)),
+    own_file: prompt.contains("Write own file"),
+  };
   if resumed {
-    return finish(&worktree, "continued");
+    return finish(&worktree, "continued", &result);
   }
   if prompt.contains("Keep working") {
     match start_helper() {
@@ -100,16 +120,63 @@ fn main() -> ExitCode {
     flush();
     thread::sleep(Duration::from_millis(1_500));
   }
-  finish(&worktree, "hello")
+  let line = if prompt.contains("Sign the line") {
+    format!("hello from {}", result.step)
+  } else {
+    "hello".to_owned()
+  };
+  finish(&worktree, &line, &result)
 }
 
-/// Appends `line` to `README.md`, reports it as a command and a file change, then the usage.
-fn finish(worktree: &std::path::Path, line: &str) -> ExitCode {
-  if let Err(error) = append(worktree, line) {
-    eprintln!("cannot write README.md: {error}");
+/// What the step's final message reports.
+struct StepReport {
+  step: String,
+  structured: bool,
+  failed: bool,
+  own_file: bool,
+}
+
+/// Whether this is the first time a step with this prompt's step name works: a marker next to the worktrees
+/// (`<repo>/.orchester/`) remembers it across attempts and worktrees.
+fn first_time(worktree: &std::path::Path, prompt: &str) -> bool {
+  let step = prompt
+    .lines()
+    .find_map(|line| line.strip_prefix("# Current step: "))
+    .unwrap_or("step");
+  let Some(orchester) = worktree.parent().and_then(std::path::Path::parent) else {
+    return false;
+  };
+  let marker = orchester.join(format!("fake-failed-{step}"));
+  if marker.exists() {
+    return false;
+  }
+  std::fs::write(&marker, "failed once").is_ok()
+}
+
+/// Appends `line` to `README.md` (or writes the step's own file), reports it as a command and a file change, then
+/// the final message and the usage.
+fn finish(worktree: &std::path::Path, line: &str, result: &StepReport) -> ExitCode {
+  let file = if result.own_file {
+    format!("{}.txt", result.step.to_lowercase().replace(' ', "-"))
+  } else {
+    "README.md".to_owned()
+  };
+  let written = if result.own_file {
+    std::fs::write(
+      worktree.join(&file),
+      format!(
+        "{line}
+"
+      ),
+    )
+  } else {
+    append(worktree, line)
+  };
+  if let Err(error) = written {
+    eprintln!("cannot write {file}: {error}");
     return ExitCode::from(2);
   }
-  let command = format!("echo {line} >> README.md");
+  let command = format!("echo {line} >> {file}");
   println!(
     r#"{{"type":"item.completed","item":{{"id":"item_0","type":"agent_message","text":"Appending the line."}}}}"#
   );
@@ -120,10 +187,19 @@ fn finish(worktree: &std::path::Path, line: &str) -> ExitCode {
     r#"{{"type":"item.completed","item":{{"id":"item_1","type":"command_execution","command":"{command}","aggregated_output":"","exit_code":0,"status":"completed"}}}}"#
   );
   println!(
-    r#"{{"type":"item.completed","item":{{"id":"item_2","type":"file_change","changes":[{{"path":"README.md","kind":"update"}}],"status":"completed"}}}}"#
+    r#"{{"type":"item.completed","item":{{"id":"item_2","type":"file_change","changes":[{{"path":"{file}","kind":"update"}}],"status":"completed"}}}}"#
   );
   println!("a line that is not JSON");
-  println!(r#"{{"type":"item.completed","item":{{"id":"item_3","type":"agent_message","text":"Done."}}}}"#);
+  let text = if result.structured {
+    let outcome = if result.failed { "failed" } else { "done" };
+    format!(
+      r#"{{\"outcome\":\"{outcome}\",\"summary\":\"Finished {}\"}}"#,
+      result.step
+    )
+  } else {
+    "Done.".to_owned()
+  };
+  println!(r#"{{"type":"item.completed","item":{{"id":"item_3","type":"agent_message","text":"{text}"}}}}"#);
   println!("{USAGE}");
   ExitCode::SUCCESS
 }
