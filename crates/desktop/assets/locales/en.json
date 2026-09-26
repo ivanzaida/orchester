@@ -540,7 +540,7 @@
       "commandRunning": "running",
       "exit": "exit {{code}}",
       "exitDuration": "exit {{code}} · {{seconds}} s",
-      "declined": "denied · not allowed by this run’s permissions",
+      "declined": "denied · not an allowed command",
       "declinedDetail": "Blocked by this run’s permissions. The agent was told and continued without it.",
       "fileAdded": "A",
       "fileModified": "M",
