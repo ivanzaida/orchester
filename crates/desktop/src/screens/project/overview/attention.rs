@@ -45,7 +45,7 @@ pub(super) fn attention(ctx: &Ctx, open: &OpenProject, tasks: &ProjectTasks, nav
   let decisions: Vec<Element> = if waiting.is_empty() {
     vec![
       Text::new(&ctx.t("overview.attention.empty"))
-        .variant(TypographyStyle::Caption)
+        .variant(ExtraTypography::Detail.role())
         .into(),
     ]
   } else {

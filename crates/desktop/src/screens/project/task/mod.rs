@@ -237,12 +237,13 @@ fn control_error_row(text: &str) -> Element {
     .into()
 }
 
-/// The runner notice (02.H `EFY7I`) above the heading, at the page's content edges.
+/// The runner notice (02.H `EFY7I`) above the heading, 32 below the topbar as on the overview
+/// (`c7qiCh`).
 fn padded(notice: Element) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_horizontal(SpacingSize::Section)
-    .padding_top(SpacingSize::Lg)
+    .padding_top(SpacingSize::Section)
     .child(notice)
     .into()
 }
