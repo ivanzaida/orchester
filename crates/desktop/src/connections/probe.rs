@@ -8,7 +8,10 @@ use std::{
 };
 
 use orchester_core::{
-  connection::{self, AgentProvider, Connection, ConnectionCheck, ConnectionKind, GitHubCheck, GitHubHost, LastCheck},
+  connection::{
+    self, AgentProvider, Connection, ConnectionCheck, ConnectionKind, GitHubCheck, GitHubHost, LastCheck,
+    invocation::agent_environment,
+  },
   repository::{self, DetectRequest, Detection},
   time::Timestamp,
 };
@@ -20,7 +23,8 @@ const RUNNER: ProcessRunner = ProcessRunner::new(COMMAND_TIMEOUT);
 
 /// Checks the agent CLI at `executable` now.
 pub fn check(provider: AgentProvider, executable: &Path) -> ConnectionCheck {
-  connection::check(provider, executable, &RUNNER, Timestamp::now())
+  let environment = agent_environment(std::env::vars_os());
+  connection::check(provider, executable, &RUNNER, &environment, Timestamp::now())
 }
 
 /// Checks the GitHub CLI at `executable` for `host` now.

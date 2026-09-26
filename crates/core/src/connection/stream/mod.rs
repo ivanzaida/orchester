@@ -2,12 +2,13 @@
 //! has a parser for its own output format; lines a parser does not understand are kept as
 //! [`AgentEvent::Raw`], so nothing the CLI prints is dropped silently (design: "Activity tab").
 
+mod claude;
 mod codex;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::codex::parse_codex_line;
-use crate::run::TokenUsage;
+pub use self::{claude::ClaudeStream, codex::parse_codex_line};
+use crate::{connection::AgentProvider, run::TokenUsage};
 
 /// Which output of the CLI a line came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -86,6 +87,16 @@ pub enum AgentEvent {
   TurnFailed {
     message: String,
   },
+  /// The CLI's permissions denied a tool call (`command`, as [`AgentEvent::CommandStarted`] names
+  /// it); the agent was told and went on without it.
+  PermissionDenied {
+    item: String,
+    command: String,
+  },
+  /// The CLI is not signed in, so it could do nothing; `message` is what it said.
+  NotSignedIn {
+    message: String,
+  },
   /// A line the parser did not understand, kept as printed.
   Raw {
     stream: OutputStream,
@@ -128,6 +139,8 @@ impl AgentEvent {
       Self::TurnCompleted { .. } => "turn_completed",
       Self::Error { .. } => "error",
       Self::TurnFailed { .. } => "turn_failed",
+      Self::PermissionDenied { .. } => "permission_denied",
+      Self::NotSignedIn { .. } => "not_signed_in",
       Self::Raw { .. } => "raw",
       Self::RunnerProblem { .. } => "runner_problem",
     }
@@ -142,6 +155,8 @@ pub enum InvocationOutcome {
   Completed,
   /// A turn failed; `message` is what the CLI said.
   TurnFailed { message: String },
+  /// The CLI is not signed in; `message` is what it said.
+  NotSignedIn { message: String },
   /// The CLI exited with a failure code without a failed turn.
   ExitFailed { code: Option<i32> },
   /// The CLI exited with 0 but never reported a completed turn.
@@ -165,7 +180,7 @@ pub struct InvocationTracker {
   session: Option<String>,
   usage: TokenUsage,
   completed_turns: u32,
-  failure: Option<String>,
+  failure: Option<Failure>,
   last_message: Option<String>,
 }
 
@@ -177,11 +192,18 @@ impl InvocationTracker {
         self.usage += *usage;
         self.completed_turns += 1;
       }
-      AgentEvent::TurnFailed { message } => self.failure = Some(message.clone()),
+      AgentEvent::NotSignedIn { message } => self.failure = Some(Failure::NotSignedIn(message.clone())),
+      AgentEvent::TurnFailed { message } if !self.not_signed_in() => {
+        self.failure = Some(Failure::Turn(message.clone()));
+      }
       AgentEvent::Message { text } => self.last_message = Some(text.clone()),
-      AgentEvent::Error { message } if self.failure.is_none() => self.failure = Some(message.clone()),
+      AgentEvent::Error { message } if self.failure.is_none() => self.failure = Some(Failure::Turn(message.clone())),
       _ => {}
     }
+  }
+
+  const fn not_signed_in(&self) -> bool {
+    matches!(self.failure, Some(Failure::NotSignedIn(_)))
   }
 
   pub fn session(&self) -> Option<&str> {
@@ -199,15 +221,55 @@ impl InvocationTracker {
 
   /// How the invocation ended, given the CLI's exit code (`None`: no code, e.g. killed).
   pub fn outcome(&self, exit_code: Option<i32>) -> InvocationOutcome {
-    if let Some(message) = &self.failure {
-      return InvocationOutcome::TurnFailed {
-        message: message.clone(),
-      };
+    match &self.failure {
+      Some(Failure::Turn(message)) => {
+        return InvocationOutcome::TurnFailed {
+          message: message.clone(),
+        };
+      }
+      Some(Failure::NotSignedIn(message)) => {
+        return InvocationOutcome::NotSignedIn {
+          message: message.clone(),
+        };
+      }
+      None => {}
     }
     match exit_code {
       Some(0) if self.completed_turns > 0 => InvocationOutcome::Completed,
       Some(0) => InvocationOutcome::NoResult,
       code => InvocationOutcome::ExitFailed { code },
+    }
+  }
+}
+
+/// Why an invocation failed, as its events tell.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Failure {
+  Turn(String),
+  NotSignedIn(String),
+}
+
+/// Reads one invocation's output into [`AgentEvent`]s with the parser of its CLI.
+#[derive(Clone, Debug)]
+pub enum AgentStream {
+  Codex,
+  Claude(ClaudeStream),
+}
+
+impl AgentStream {
+  pub fn new(provider: AgentProvider) -> Self {
+    match provider {
+      AgentProvider::CodexCli => Self::Codex,
+      AgentProvider::ClaudeCodeCli => Self::Claude(ClaudeStream::default()),
+    }
+  }
+
+  /// The events one line of output reports, in order; a line the parser does not understand is
+  /// one [`AgentEvent::Raw`].
+  pub fn parse(&mut self, stream: OutputStream, line: &str) -> Vec<AgentEvent> {
+    match self {
+      Self::Codex => vec![parse_codex_line(stream, line)],
+      Self::Claude(claude) => claude.parse(stream, line),
     }
   }
 }
