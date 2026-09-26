@@ -167,7 +167,8 @@ denied behavior) is part of the tool version body. "Used by" is derived by query
 | `run_events` | run, sequence, time, kind, payload — append-only |
 | `evidence` | run, revision, kind (criteria, tests, review, browser), result, blob |
 | `artifacts` | run, name, blob |
-| `usage` | step execution, provider, model, tokens, cost |
+| `invocations` | run, step execution, number, model, CLI session id, started / ended, input / cached input / output tokens, outcome — one row per agent CLI launch |
+| `agent_events` | run, sequence, step execution, invocation, time, kind, payload — the agent transcript, append-only |
 
 ### Conversations and pull requests
 
