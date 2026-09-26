@@ -63,7 +63,7 @@ fn agents(ctx: &Ctx, project: &ProjectBar, unknown: &str, hints: &Hints) -> Butt
       let args = [("working", working.as_str()), ("slots", slots.as_str())];
       (
         value(&ctx.t_args("statusBar.counts.agentsValue", args), color),
-        ctx.t_args("statusBar.hints.agents", args),
+        ctx.t("statusBar.hints.agents"),
       )
     }
     None => (

@@ -8,6 +8,7 @@ use orchester_core::{
   run::{PauseReason, RaisedLimits, Run, RunError, RunEvent, RunLimit, RunStatus, active_time},
   store::{ActivityStore, RunStore, SettingsStore},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
@@ -93,22 +94,22 @@ pub(super) fn continue_after_reconnect(db: &mut ProjectDb, root: &Path, run: Run
 
 /// Refuses new or continued work while the project's runs have used today's token budget.
 pub(super) fn check_daily_budget(db: &ProjectDb) -> Result<(), Rejection> {
-  let limits = db
-    .project_limits()
-    .map_err(|error| failed("cannot read the project's limits", &error))?;
-  if daily_budget_used(db).map_err(|error| failed("cannot read today's token usage", &error))? {
-    return Err(Rejection::DailyBudgetUsed {
-      budget: limits.daily_budget(),
-    });
+  match used_daily_budget(db).map_err(|error| failed("cannot read today's token usage", &error))? {
+    Some(budget) => Err(Rejection::DailyBudgetUsed { budget }),
+    None => Ok(()),
   }
-  Ok(())
 }
 
 /// Whether the project's runs used today's token budget: today starts at local midnight.
 pub(super) fn daily_budget_used(db: &ProjectDb) -> Result<bool, StoreError> {
+  Ok(used_daily_budget(db)?.is_some())
+}
+
+/// The daily budget, when today's runs used it.
+fn used_daily_budget(db: &ProjectDb) -> Result<Option<TokenBudget>, StoreError> {
   let limits = db.project_limits()?;
   let today = db.tokens_used_since(Timestamp::now().local_day_start())?;
-  Ok(limits.daily_budget_used(today))
+  Ok(limits.daily_budget_used(today).then(|| limits.daily_budget()))
 }
 
 fn load(db: &ProjectDb, run: RunId) -> Result<Run, Rejection> {
