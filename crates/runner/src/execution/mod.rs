@@ -17,6 +17,7 @@ mod checkpoint;
 mod control;
 mod halt;
 mod idle;
+mod permissions;
 mod prepare;
 mod record;
 mod run;

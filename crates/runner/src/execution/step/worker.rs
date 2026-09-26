@@ -41,6 +41,8 @@ pub(in super::super) enum StopCause {
   Limit(RunLimit),
   /// Another step failed and its attempt ended; this execution was skipped.
   Abandoned,
+  /// The run's permissions changed with Apply now: the agent restarts with them.
+  Permissions,
 }
 
 /// What the run tells an agent.
@@ -50,6 +52,10 @@ pub(in super::super) enum Stop {
   Now(StopCause),
   /// Its turn used up a budget: end it once the turn is over.
   AfterTurn(StopCause),
+  /// End it once the command it is running has finished, or now when it runs none.
+  AfterCommand(StopCause),
+  /// Forget an [`Stop::AfterCommand`] that has not happened yet.
+  Withdraw,
 }
 
 /// What an agent tells its run.
@@ -93,6 +99,10 @@ struct Watch {
   stop: Option<StopCause>,
   /// The budget a turn used up, ending the agent at its next turn or after the grace.
   over: Option<StopCause>,
+  /// Commands started and not finished yet.
+  commands: usize,
+  /// Ends the agent once no command runs.
+  after_command: Option<StopCause>,
 }
 
 impl Worker {
@@ -115,6 +125,8 @@ impl Worker {
       pending: Vec::new(),
       stop: None,
       over: None,
+      commands: 0,
+      after_command: None,
     };
     let mut flush = tokio::time::interval(FLUSH_INTERVAL);
     let grace = sleep(Duration::ZERO);
@@ -148,6 +160,16 @@ impl Worker {
               grace_armed = true;
             }
           }
+          Some(Stop::AfterCommand(cause)) => {
+            if watch.stop.is_none() && watch.over.is_none() {
+              watch.after_command = Some(cause);
+              if watch.commands == 0 {
+                watch.stop = watch.after_command.take();
+                self.process.terminate();
+              }
+            }
+          }
+          Some(Stop::Withdraw) => watch.after_command = None,
           None => listening = false,
         },
         () = &mut grace, if grace_armed && watch.stop.is_none() => {
@@ -168,6 +190,16 @@ impl Worker {
     };
     if event == AgentEvent::TurnStarted && watch.stop.is_none() {
       watch.stop = watch.over;
+    }
+    match &event {
+      AgentEvent::CommandStarted { .. } => watch.commands += 1,
+      AgentEvent::CommandFinished { .. } => {
+        watch.commands = watch.commands.saturating_sub(1);
+        if watch.commands == 0 && watch.stop.is_none() {
+          watch.stop = watch.after_command.take();
+        }
+      }
+      _ => {}
     }
     watch.pending.push((Timestamp::now(), event));
     if watch.pending.len() >= FLUSH_BATCH || usage.is_some() {

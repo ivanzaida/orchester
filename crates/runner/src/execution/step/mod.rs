@@ -73,11 +73,12 @@ impl RunTask {
     if !self.may_start() {
       return Ok(false);
     }
+    // An agent stopped to take changed permissions while a pause was asked for waits for it.
     let continuing: Vec<StepExecutionId> = self
       .run
       .running_executions()
       .into_iter()
-      .filter(|execution| !self.agents.contains_key(execution))
+      .filter(|execution| !self.agents.contains_key(execution) && !self.run.pause_requested())
       .collect();
     for execution in continuing {
       if !self.start(execution, Start::Continues)? {

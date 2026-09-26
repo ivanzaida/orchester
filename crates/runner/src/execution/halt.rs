@@ -41,6 +41,8 @@ impl RunTask {
         self.stop_agents(Stop::Now(StopCause::Requested));
         Ok(())
       }
+      Control::ChangePermissions(change, ack) => self.change_permissions(change, ack),
+      Control::KeepPermissions(profile, ack) => self.keep_permissions(profile, ack),
       Control::Interrupt(cause) => {
         self.pending.interrupt = Some(cause);
         self.stop_agents(Stop::Now(StopCause::Requested));

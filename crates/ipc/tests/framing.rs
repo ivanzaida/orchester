@@ -2,9 +2,13 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   connection::AgentProvider,
-  id::{IdempotencyKey, RunId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  permission::{
+    AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
+    capability::{PermissionOption, PermissionProblem, Unavailable},
+  },
   resource::StepKey,
-  run::{PreflightProblem, RunLimit},
+  run::{PermissionsApply, PreflightProblem, RunLimit},
   tokens::TokenBudget,
 };
 use orchester_ipc::{
@@ -59,6 +63,32 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
       run,
       budget: TokenBudget::new(600_000).expect("above zero"),
     },
+    Command::ChangeRunPermissions {
+      run,
+      profile: ResourceId::generate(),
+      permissions: AgentPermissions::new(
+        RepositoryAccess::Write,
+        CommandPermission::Allowed(
+          AllowedCommands::new(vec![
+            CommandPrefix::new("pnpm test").expect("command"),
+            CommandPrefix::new("pnpm build").expect("command"),
+          ])
+          .expect("list"),
+        ),
+        NetworkAccess::Off,
+      ),
+      apply: PermissionsApply::Now,
+    },
+    Command::ChangeRunPermissions {
+      run,
+      profile: ResourceId::generate(),
+      permissions: AgentPermissions::before_permissions(),
+      apply: PermissionsApply::NextInvocation,
+    },
+    Command::KeepPermissionsForNextInvocation {
+      run,
+      profile: ResourceId::generate(),
+    },
     Command::Shutdown {
       mode: ShutdownMode::FinishAtCheckpoints,
     },
@@ -73,6 +103,22 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
     command,
   })
   .collect()
+}
+
+/// The rejections of a run permissions change.
+fn permission_rejections() -> Vec<Rejection> {
+  vec![
+    Rejection::PermissionsNotEnforceable {
+      step: StepKey::new("implement").expect("key"),
+      problem: PermissionProblem::NotEnforceable {
+        option: PermissionOption::AllowedCommands,
+        reason: Unavailable::CannotLimitCommands,
+      },
+    },
+    Rejection::NoAgentToRestart,
+    Rejection::NoPendingPermissions,
+    Rejection::ProfileNotInRun,
+  ]
 }
 
 /// One event of every kind, and replies of every kind.
@@ -160,7 +206,11 @@ async fn frames_round_trip_every_message() {
   let ((mut reader, _), (_, mut writer)) = connection();
   let (run, task) = (RunId::generate(), TaskId::generate());
   let commands = requests(run, task);
-  let events = events(run, task);
+  let rejected = permission_rejections().into_iter().map(|rejection| Event::Reply {
+    id: RequestId::new(8),
+    reply: Reply::Rejected(rejection),
+  });
+  let events: Vec<Event> = events(run, task).into_iter().chain(rejected).collect();
   for request in &commands {
     writer.write(request).await.expect("write request");
   }

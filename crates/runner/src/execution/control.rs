@@ -1,9 +1,11 @@
 //! Requests the scheduler hands to the task that executes a run. The task owns the run's state,
 //! so every change to an executing run goes through it.
 
-use orchester_core::run::InterruptCause;
+use orchester_core::{id::ResourceId, run::InterruptCause};
 use orchester_ipc::Rejection;
 use tokio::sync::oneshot;
+
+use super::permissions::PermissionsChange;
 
 /// Answers a request once it is carried out.
 pub(super) type Ack = oneshot::Sender<Result<(), Rejection>>;
@@ -13,6 +15,10 @@ pub(super) enum Control {
   Pause(Ack),
   /// Cancel now; answered once the run is recorded as cancelled.
   Cancel(Ack),
+  /// Change a profile's permissions for the run; answered once the change is recorded.
+  ChangePermissions(PermissionsChange, Ack),
+  /// Keep a pending change of a profile's permissions for the next invocations.
+  KeepPermissions(ResourceId, Ack),
   /// The runner stops: end the agent and record the run as interrupted.
   Interrupt(InterruptCause),
 }

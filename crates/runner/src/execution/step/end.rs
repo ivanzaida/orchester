@@ -7,7 +7,7 @@ use orchester_core::{
   connection::stream::RunnerProblem,
   id::StepExecutionId,
   revision::Revision,
-  run::{RunLimit, StepFailure, StepOutcome, StepOutput},
+  run::{Checkpoint, RunLimit, StepFailure, StepOutcome, StepOutput},
   store::ActivityStore,
   time::Timestamp,
 };
@@ -42,6 +42,8 @@ impl RunTask {
     match finished.stopped {
       // Carried out once every agent has ended; the work stays uncommitted in the worktree.
       Some(StopCause::Requested | StopCause::Abandoned) => Ok(()),
+      // The execution stays open and continues with the run's new permissions.
+      Some(StopCause::Permissions) => self.restart_for_permissions(execution, &active),
       // The execution stays open: it continues where it stopped once the run continues.
       Some(StopCause::Limit(limit)) => {
         let label = match limit {
@@ -58,6 +60,24 @@ impl RunTask {
       }
       None => self.finish(execution, &active, finished),
     }
+  }
+
+  /// Commits the work of an agent stopped to take changed permissions as a checkpoint and records
+  /// that it restarts with them; its step then continues as a new invocation, resuming its session.
+  fn restart_for_permissions(&mut self, execution: StepExecutionId, active: &Active) -> Result<(), ExecutionError> {
+    let before = self.run.last_checkpoint().map(Checkpoint::id);
+    self.save(execution, active, "saved to apply permissions")?;
+    let checkpoint = self
+      .run
+      .last_checkpoint()
+      .map(Checkpoint::id)
+      .filter(|saved| Some(*saved) != before);
+    // Kept for the next invocation after it had stopped: it restarts all the same, as that
+    // invocation.
+    if self.run.restarts_for_permissions(execution) {
+      self.transition(|run, now| run.apply_permissions(execution, checkpoint, now))?;
+    }
+    Ok(())
   }
 
   /// An agent that exited on its own: its step passes if the CLI succeeded and the agent did not
