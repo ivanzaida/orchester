@@ -99,10 +99,14 @@ fn project_guard(places: &Places, matched: &RouteMatch) -> GuardAction {
   let Some(project) = project else {
     return to_start(places);
   };
-  match Route::parse(matched.path()) {
-    Some(_) => GuardAction::Allow,
-    None => redirect(Route::Project(project, Page::Overview)),
+  if Route::parse(matched.path()).is_some() {
+    return GuardAction::Allow;
   }
+  let nearest = match Route::nearest(matched.path()) {
+    Some(route @ Route::Project(..)) => route,
+    _ => Route::Project(project, Page::Overview),
+  };
+  redirect(nearest)
 }
 
 fn outside_guard(places: &Places, matched: &RouteMatch) -> GuardAction {

@@ -127,6 +127,19 @@ impl Route {
     }
   }
 
+  /// The route of `path`, or of the longest leading part of it that names one: a task that is
+  /// not an id leads to the task list, an unknown settings tab to the settings.
+  pub fn nearest(path: &str) -> Option<Self> {
+    let path = path.split('?').next().unwrap_or(path).trim_end_matches('/');
+    let mut candidate = path;
+    loop {
+      if let Some(route) = Self::parse(candidate) {
+        return Some(route);
+      }
+      candidate = &candidate[..candidate.rfind('/')?];
+    }
+  }
+
   pub fn path(&self) -> String {
     match self {
       Self::Start => "/".to_owned(),
@@ -155,8 +168,8 @@ impl Page {
       [AGENTS] => Self::Agents(AgentSelection::First),
       [AGENTS, NEW] => Self::Agents(AgentSelection::New),
       [AGENTS, profile] => Self::Agents(AgentSelection::Profile(profile.parse().ok()?)),
-      [CONNECTIONS] => Self::Connections(ConnectionTab::from_query(query)?, None),
-      [CONNECTIONS, connection] => Self::Connections(ConnectionTab::from_query(query)?, Some(connection.parse().ok()?)),
+      [CONNECTIONS] => Self::Connections(ConnectionTab::from_query(query), None),
+      [CONNECTIONS, connection] => Self::Connections(ConnectionTab::from_query(query), Some(connection.parse().ok()?)),
       [SETTINGS] => Self::Settings(SettingsTab::General),
       [SETTINGS, LIMITS] => Self::Settings(SettingsTab::Limits),
       _ => return None,
@@ -204,16 +217,15 @@ impl Page {
 }
 
 impl ConnectionTab {
-  /// The tab a query names; no tab is All, an unknown one no page.
-  fn from_query(query: &str) -> Option<Self> {
+  /// The tab a query names; no tab, or one that does not exist, is All.
+  fn from_query(query: &str) -> Self {
     let tab = query
       .split('&')
       .find_map(|pair| pair.strip_prefix(TAB_QUERY)?.strip_prefix('='));
     match tab {
-      None => Some(Self::All),
-      Some(AGENT_PROVIDERS) => Some(Self::AgentProviders),
-      Some(GITHUB) => Some(Self::GitHub),
-      Some(_) => None,
+      Some(AGENT_PROVIDERS) => Self::AgentProviders,
+      Some(GITHUB) => Self::GitHub,
+      _ => Self::All,
     }
   }
 
