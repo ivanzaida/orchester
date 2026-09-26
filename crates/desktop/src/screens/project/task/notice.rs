@@ -71,7 +71,7 @@ fn lost_runner(ctx: &Ctx, run: &RunView, lost: Lost) -> (Icon, Arc<str>, Arc<str
     Lost::NotConnected => "runs.summary.notice.notConnectedDetail",
   };
   (
-    Icon::Pause,
+    Icon::CirclePause,
     ctx.t_args("runs.summary.notice.interruptedTitle", [("step", step)]),
     ctx.t(detail),
   )
@@ -102,7 +102,7 @@ fn run_notice(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
     RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)) => stopped_by_daily_budget(ctx, run),
     RunStatus::Paused(PauseReason::LimitReached(limit)) => stopped_at_limit(ctx, run, *limit),
     RunStatus::Interrupted(_) => plain(
-      Icon::Pause,
+      Icon::CirclePause,
       "runs.summary.notice.interruptedTitle",
       "runs.summary.notice.interruptedDetail",
     ),

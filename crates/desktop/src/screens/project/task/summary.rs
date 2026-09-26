@@ -87,7 +87,7 @@ fn step_row(ctx: &Ctx, step: &StepView, run: &RunStatus, lost: bool) -> Element 
   // runner is gone.
   let (glyph, state) = match (run, step.status) {
     (RunStatus::Paused(_), Some(StepStatus::Running)) => (Icon::Pause, "runs.step.paused"),
-    (RunStatus::Running, Some(StepStatus::Running)) if lost => (Icon::Pause, "runs.step.interrupted"),
+    (RunStatus::Running, Some(StepStatus::Running)) if lost => (Icon::CirclePause, "runs.step.interrupted"),
     (RunStatus::Cancelled, Some(StepStatus::Skipped)) => (Icon::Square, "runs.step.cancelled"),
     _ => step_state(step.status),
   };

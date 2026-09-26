@@ -52,7 +52,7 @@ pub(super) fn status_copy(phase: TaskPhase) -> (Icon, &'static str) {
     TaskPhase::Waiting => (Icon::MessageCircle, "tasks.status.waiting"),
     TaskPhase::Paused => (Icon::Pause, "tasks.status.paused"),
     TaskPhase::StoppedAtLimit => (Icon::OctagonPause, "tasks.status.stoppedAtLimit"),
-    TaskPhase::Interrupted => (Icon::Pause, "tasks.status.interrupted"),
+    TaskPhase::Interrupted => (Icon::CirclePause, "tasks.status.interrupted"),
     TaskPhase::Succeeded => (Icon::CircleCheck, "tasks.status.succeeded"),
     TaskPhase::Failed => (Icon::CircleX, "tasks.status.failed"),
     TaskPhase::Cancelled => (Icon::Square, "tasks.status.cancelled"),
