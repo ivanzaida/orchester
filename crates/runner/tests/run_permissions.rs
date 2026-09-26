@@ -1,4 +1,5 @@
-//! Permissions changed for a run (02.J) end to end against `orchester-fake-codex`: a change applies
+//! Permissions changed for a run (02.J) end to end against `orchester-fake-codex` and
+//! `orchester-fake-claude`: a change applies
 //! from the next invocation; Apply now lets the agent finish its command, commits its work as a
 //! checkpoint and restarts it, resuming its session, with the new permissions; keeping the change
 //! for the next invocation cancels the restart; beside other steps every agent of the profile
@@ -10,9 +11,9 @@ mod support;
 use std::path::Path;
 
 use orchester_core::{
-  connection::stream::AgentEvent,
+  connection::{AgentProvider, stream::AgentEvent},
   id::{IdempotencyKey, ResourceId, RunId},
-  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
+  permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   resource::StepKey,
   run::{Checkpoint, PermissionsApply, Run, RunEventKind, RunStatus},
   store::{ActivityStore, RunStore},
@@ -33,6 +34,19 @@ fn read_only() -> AgentPermissions {
   AgentPermissions::new(
     RepositoryAccess::ReadOnly,
     CommandPermission::AnyInWorktree,
+    NetworkAccess::Off,
+  )
+}
+
+/// The Claude Code Builder's permissions with `pnpm build` added, as in the design's fixture.
+fn with_pnpm_build() -> AgentPermissions {
+  let commands = ["git", "pnpm build"]
+    .into_iter()
+    .map(|command| CommandPrefix::new(command).expect("command"))
+    .collect();
+  AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(AllowedCommands::new(commands).expect("list")),
     NetworkAccess::Off,
   )
 }
@@ -261,4 +275,92 @@ async fn run_permissions_apply_now_restarts_every_agent_beside_others() {
     .filter(|argv| argv.contains("exec resume") && argv.contains("sandbox_mode=read-only"))
     .count();
   assert_eq!(resumed, 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn run_permissions_apply_from_the_next_claude_invocation() {
+  let (project, scheduler, mut events, id) = start(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    steps: vec![
+      StepSpec::new("implement", "Implement", "Wait for release.", &[]),
+      StepSpec::new("review", "Review", "Say hello.", &["implement"]),
+    ],
+    ..Setup::new("Say hello.")
+  })
+  .await;
+  let root = project.repo.path();
+  wait_for_commands(root, &mut events, id, 1).await;
+  let builder = builder(root, id);
+  // Claude Code cannot keep an arbitrary command inside the worktree.
+  assert!(matches!(
+    scheduler
+      .change_permissions(id, builder, read_only(), PermissionsApply::NextInvocation)
+      .await,
+    Err(Rejection::PermissionsNotEnforceable { .. })
+  ));
+  scheduler
+    .change_permissions(id, builder, with_pnpm_build(), PermissionsApply::NextInvocation)
+    .await
+    .expect("the change is recorded");
+  release(root);
+  let run = wait_for(root, &mut events, id, finished).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  let argv = reported(&db, id, "argv: ");
+  assert_eq!(argv.len(), 2, "nothing restarted: {argv:?}");
+  assert!(!argv[0].contains("Bash(pnpm build:*)"), "{argv:?}");
+  assert!(
+    argv[1].contains("--allowedTools Bash(git:*) Bash(pnpm build:*)"),
+    "{argv:?}"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn run_permissions_apply_now_restarts_claude_with_the_same_session() {
+  let (project, scheduler, mut events, id) = start(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    steps: vec![StepSpec::new(
+      "implement",
+      "Implement",
+      "Wait for release. Draft first. Then keep working.",
+      &[],
+    )],
+    ..Setup::new("Say hello.")
+  })
+  .await;
+  let root = project.repo.path();
+  wait_for_commands(root, &mut events, id, 1).await;
+  let builder = builder(root, id);
+  scheduler
+    .change_permissions(id, builder, with_pnpm_build(), PermissionsApply::Now)
+    .await
+    .expect("the change is recorded");
+  release(root);
+  let run = wait_for(root, &mut events, id, finished).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  let invocations = db.invocations(id).expect("invocations");
+  assert_eq!(invocations.len(), 2);
+  let session = invocations[0].session.clone().expect("the first session");
+  assert_eq!(invocations[1].session.as_deref(), Some(session.as_str()));
+  let argv = reported(&db, id, "argv: ");
+  assert!(!argv[0].contains("Bash(pnpm build:*)"), "{argv:?}");
+  assert!(
+    argv[1].contains(&format!("--resume {session}")) && argv[1].contains("Bash(pnpm build:*)"),
+    "the session resumes with the new permissions: {argv:?}"
+  );
+  assert!(
+    run
+      .changed_permissions(builder)
+      .and_then(|changed| changed.applied())
+      .and_then(|applied| applied.checkpoint)
+      .is_some(),
+    "the draft was saved before the restart"
+  );
+  assert_eq!(
+    git(root, &["show", &format!("{}:README.md", run.branch())]),
+    "hi
+draft
+continued"
+  );
 }
