@@ -37,7 +37,7 @@ use crate::{
     form::{Submit, form},
     icon::Icon,
     message_text,
-    unit_input::UnitInput,
+    unit_input::{FocusedInput, UnitInput},
   },
 };
 
@@ -104,7 +104,7 @@ impl RaiseLimitProps {
   fn suggested_time(&self) -> Duration {
     let limit = match self.limit {
       RunLimit::Time => self.max_duration + self.max_duration / 2,
-      RunLimit::Tokens => self.max_duration,
+      RunLimit::Tokens | RunLimit::DailyBudget => self.max_duration,
     };
     let minutes = limit
       .as_secs()
@@ -120,6 +120,8 @@ pub struct RaiseLimitPanel {
   budget: Signal<String>,
   minutes: Signal<String>,
   seeded: Signal<bool>,
+  /// Which input has the focus, for its focused stroke.
+  focused: FocusedInput,
   budget_input: ElementRef,
   time_input: ElementRef,
 }
@@ -133,6 +135,7 @@ impl Component for RaiseLimitPanel {
       budget: ctx.signal(String::new()),
       minutes: ctx.signal(String::new()),
       seeded: ctx.signal(false),
+      focused: ctx.signal(None),
       budget_input: ElementRef::new(),
       time_input: ElementRef::new(),
     }
@@ -196,7 +199,7 @@ impl RaiseLimitPanel {
     self.budget.set(grouped(props.suggested_budget(), separator));
     self.minutes.set(minutes_text(props.suggested_time()));
     ctx.focus(match props.limit {
-      RunLimit::Tokens => &self.budget_input,
+      RunLimit::Tokens | RunLimit::DailyBudget => &self.budget_input,
       RunLimit::Time => &self.time_input,
     });
   }
@@ -212,7 +215,13 @@ impl RaiseLimitPanel {
   fn read_time(&self, props: &RaiseLimitProps) -> Result<Duration, Message> {
     let limit = read_minutes(&self.minutes.get())?;
     if limit <= props.active {
-      return Err(Message::new("errors.timeLimitNotAboveUsed").with("used", whole_minutes(props.active).to_string()));
+      let used = whole_minutes(props.active);
+      let key = if used == 1 {
+        "errors.timeLimitNotAboveUsed.one"
+      } else {
+        "errors.timeLimitNotAboveUsed.other"
+      };
+      return Err(Message::new(key).with("used", used.to_string()));
     }
     Ok(limit)
   }
@@ -240,10 +249,15 @@ impl RaiseLimitPanel {
       Ok(new) => Ok(read_back(ctx, new.get(), props.budget.get())),
       Err(error) => Err(message_text(ctx, error)),
     };
-    let input = UnitInput::new("raise-limit-tokens", self.budget.clone(), ctx.t("tokens.unit"))
-      .tokens(separator.clone())
-      .focus_ref(self.budget_input.clone())
-      .invalid(budget.is_err());
+    let input = UnitInput::new(
+      "raise-limit-tokens",
+      self.budget.clone(),
+      ctx.t("tokens.unit"),
+      self.focused.clone(),
+    )
+    .tokens(separator.clone())
+    .focus_ref(self.budget_input.clone())
+    .invalid(budget.is_err());
     limit_row(ctx, (&ctx.t("runs.limit.tokenBudget"), &current), input, note)
   }
 
@@ -274,9 +288,14 @@ impl RaiseLimitPanel {
       ),
       Err(error) => Err(message_text(ctx, error)),
     };
-    let input = UnitInput::new("raise-limit-time", self.minutes.clone(), ctx.t("runs.limit.minutes"))
-      .focus_ref(self.time_input.clone())
-      .invalid(time.is_err());
+    let input = UnitInput::new(
+      "raise-limit-time",
+      self.minutes.clone(),
+      ctx.t("runs.limit.minutes"),
+      self.focused.clone(),
+    )
+    .focus_ref(self.time_input.clone())
+    .invalid(time.is_err());
     limit_row(ctx, (&ctx.t("runs.limit.timeLimit"), &current), input, note)
   }
 }
@@ -376,10 +395,15 @@ fn continue_button(
       "runs.limit.continueWith",
       [("count", compact_tokens(budget.get()).as_str())],
     ),
-    (false, RunLimit::Time, _, Some(time)) => ctx.t_args(
-      "runs.limit.continueWithMinutes",
-      [("minutes", whole_minutes(*time).to_string().as_str())],
-    ),
+    (false, RunLimit::Time, _, Some(time)) => {
+      let minutes = whole_minutes(*time);
+      let key = if minutes == 1 {
+        "runs.limit.continueWithMinutes.one"
+      } else {
+        "runs.limit.continueWithMinutes.other"
+      };
+      ctx.t_args(key, [("minutes", minutes.to_string().as_str())])
+    }
     (false, ..) => ctx.t("runs.limit.continue"),
   };
   let button = ActionButton::new(label)

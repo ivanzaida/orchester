@@ -17,18 +17,13 @@ use super::{
   item::{clickable, glyph, item, label, separator, value},
   open::Opener,
 };
-use crate::{tasks::usage::ProjectUsage, ui::icon::Icon};
+use crate::{runner::state::RunnerState, tasks::usage::ProjectUsage, ui::icon::Icon};
 
 pub fn counts(ctx: &Ctx, project: Option<&ProjectBar>, opener: &Opener, hints: &Hints) -> Element {
   let mut row = Row::new().height(Dimension::Pct(100.0)).align_items(Alignment::Center);
   if let Some(project) = project {
     let unknown = ctx.t("statusBar.counts.unknown");
-    // Agent slots are not reported by the runner yet (`F7mn6G` shows a dash when unknown).
-    let agents = item("status-agents")
-      .child(glyph(Icon::Bot, PaletteColor::TextSecondary))
-      .child(label(&ctx.t("statusBar.counts.agents"), PaletteColor::TextSecondary))
-      .child(value(&unknown, PaletteColor::TextMuted));
-    let agents = hints.attach(agents, HintAnchor::Agents, ctx.t("statusBar.hints.agents"));
+    let agents = agents(ctx, project, &unknown, hints);
     let queued = item("status-queued")
       .child(glyph(Icon::Clock3, PaletteColor::TextSecondary))
       .child(label(&ctx.t("statusBar.counts.queued"), PaletteColor::TextSecondary))
@@ -48,6 +43,43 @@ pub fn counts(ctx: &Ctx, project: Option<&ProjectBar>, opener: &Opener, hints: &
       .child(separator());
   }
   row.child(version(ctx, hints)).into()
+}
+
+/// `F7mn6G`: agents at work of the runner's agent slots (`2/4`), a dash while the runner is not
+/// online or has not reported yet (states B, E, G).
+fn agents(ctx: &Ctx, project: &ProjectBar, unknown: &str, hints: &Hints) -> Button {
+  let work = match project.runner.state_for(&project.repo_root) {
+    RunnerState::Online => project.runner.work(),
+    _ => None,
+  };
+  let (count, hint) = match work {
+    Some(work) => {
+      let (working, slots) = (work.agents_working().to_string(), work.agent_slots.to_string());
+      let color = if work.agents_working() == 0 {
+        PaletteColor::TextMuted
+      } else {
+        PaletteColor::TextPrimary
+      };
+      let args = [("working", working.as_str()), ("slots", slots.as_str())];
+      (
+        value(&ctx.t_args("statusBar.counts.agentsValue", args), color),
+        ctx.t("statusBar.hints.agents"),
+      )
+    }
+    None => (
+      value(unknown, PaletteColor::TextMuted),
+      ctx.t("statusBar.hints.agentsUnknown"),
+    ),
+  };
+  let row = item("status-agents")
+    .describe(
+      "agents",
+      work.map_or_else(String::new, |work| work.agents_working().to_string()),
+    )
+    .child(glyph(Icon::Bot, PaletteColor::TextSecondary))
+    .child(label(&ctx.t("statusBar.counts.agents"), PaletteColor::TextSecondary))
+    .child(count);
+  hints.attach(row, HintAnchor::Agents, hint)
 }
 
 /// Agents and Queued open the task list; its Queue tab does not exist yet.

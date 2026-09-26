@@ -104,3 +104,25 @@ fn every_key_used_in_code_exists() {
     "keys missing from {FALLBACK_LOCALE}.json: {missing:?}"
   );
 }
+
+/// Counted minutes read naturally: "of its 1 minute", "of its 30 minutes".
+#[test]
+fn locales_count_minutes_with_plural_forms() {
+  let app = App::new();
+  i18n::install(&app).expect("bundled locales load");
+  let detail = |key: &str, limit: &str| {
+    app.i18n().t_args(
+      key,
+      [("run", "3"), ("used", "1"), ("limit", limit), ("agent", "Builder")],
+    )
+  };
+  assert!(detail("runs.limit.timeDetail.one", "1").contains("used 1 of its 1 minute of active agent time"));
+  assert!(detail("runs.limit.timeDetail.other", "30").contains("of its 30 minutes of"));
+  assert!(detail("runs.limit.timeDetailUnsaved.one", "1").contains("of its 1 minute of"));
+  let continue_with = app
+    .i18n()
+    .t_args("runs.limit.continueWithMinutes.one", [("minutes", "1")]);
+  assert_eq!(&*continue_with, "Continue with 1 minute");
+  let not_above = app.i18n().t_args("errors.timeLimitNotAboveUsed.one", [("used", "1")]);
+  assert_eq!(&*not_above, "Enter more than the 1 minute this run already used.");
+}

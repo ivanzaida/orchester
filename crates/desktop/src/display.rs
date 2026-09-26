@@ -117,19 +117,6 @@ pub fn clock(at: Timestamp) -> String {
   clock_time(UNIX_EPOCH + Duration::from_millis(millis))
 }
 
-/// The start of the local day `now` falls in, as "today" counts it (the status bar's tokens).
-/// On a day whose midnight does not exist locally (a daylight saving change at 00:00) usage is
-/// counted from `now` rather than guessed.
-pub fn local_day_start(now: SystemTime) -> Timestamp {
-  let local = chrono::DateTime::<chrono::Local>::from(now);
-  let start = local
-    .date_naive()
-    .and_hms_opt(0, 0, 0)
-    .and_then(|midnight| midnight.and_local_timezone(chrono::Local).earliest())
-    .unwrap_or(local);
-  Timestamp::from_unix_millis(start.timestamp_millis())
-}
-
 /// A revision as people read it: its first seven characters.
 pub fn short_revision(revision: &str) -> &str {
   revision.get(..7).unwrap_or(revision)

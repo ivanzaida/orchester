@@ -25,14 +25,17 @@ impl Notifier {
 }
 
 /// `events`, in order, with repeated notifications merged: one [`Event::RunChanged`] per run, at
-/// its first place, and one [`Event::AgentActivity`] per run with the highest sequence. Replies
-/// and the other events are kept as they are.
+/// its first place, one [`Event::AgentActivity`] per run with the highest sequence, and only the
+/// last [`Event::WorkSummary`], which replaces the ones before it. Replies and the other events
+/// are kept as they are.
 pub fn coalesce(events: Vec<Event>) -> Vec<Event> {
+  let last_summary = events.iter().rposition(|event| matches!(event, Event::WorkSummary(_)));
   let mut kept: Vec<Event> = Vec::with_capacity(events.len());
   let mut changed: HashSet<RunId> = HashSet::new();
   let mut activity: HashMap<RunId, usize> = HashMap::new();
-  for event in events {
+  for (index, event) in events.into_iter().enumerate() {
     match event {
+      Event::WorkSummary(_) if Some(index) != last_summary => {}
       Event::RunChanged { run, .. } => {
         if changed.insert(run) {
           kept.push(event);

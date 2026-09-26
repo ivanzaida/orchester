@@ -48,6 +48,7 @@ fn description(ctx: &Ctx, detail: &TaskDetail) -> Arc<str> {
     (RunStatus::Paused(PauseReason::Requested), _) => "runs.page.describe.paused",
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::Tokens)), _) => "runs.page.describe.tokenLimit",
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::Time)), _) => "runs.page.describe.timeLimit",
+    (RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)), _) => "runs.page.describe.dailyBudget",
     (RunStatus::Interrupted(_), _) => "runs.page.describe.interrupted",
     (RunStatus::Succeeded, _) => "runs.page.describe.succeeded",
     (RunStatus::Failed(_), _) => "runs.page.describe.failed",

@@ -1,12 +1,15 @@
+use std::num::NonZeroU32;
+
 use orchester_core::{
+  connection::AgentProvider,
   id::{IdempotencyKey, RunId, TaskId},
   resource::StepKey,
   run::{PreflightProblem, RunLimit},
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  Command, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, Rejection, Reply, Request, RequestId,
-  ShutdownMode,
+  AttachSession, Command, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, RefusedRun, Rejection, Reply,
+  Request, RequestId, RunWork, SessionEnd, ShutdownMode, WorkState, WorkSummary,
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
   handshake,
 };
@@ -25,12 +28,20 @@ fn connection() -> ((Reader, Writer), (Reader, Writer)) {
   (framed(left), framed(right))
 }
 
-#[tokio::test]
-async fn frames_round_trip_every_message() {
-  let ((mut reader, _), (_, mut writer)) = connection();
-  let (run, task) = (RunId::generate(), TaskId::generate());
-  let commands = [
-    Command::Attach,
+/// One request of every command.
+fn requests(run: RunId, task: TaskId) -> Vec<Request> {
+  [
+    Command::Attach {
+      session: AttachSession::Fresh {
+        previous_end: SessionEnd::QuitNow,
+      },
+      agent_slots: NonZeroU32::new(4).expect("above zero"),
+    },
+    Command::Attach {
+      session: AttachSession::Reconnect,
+      agent_slots: NonZeroU32::new(1).expect("above zero"),
+    },
+    Command::ContinueRuns { runs: vec![run] },
     Command::Ping { nonce: 42 },
     Command::StartRun {
       key: IdempotencyKey::generate(),
@@ -57,13 +68,35 @@ async fn frames_round_trip_every_message() {
     id: RequestId::new(index as u64 + 1),
     command,
   })
-  .collect::<Vec<_>>();
+  .collect()
+}
+
+/// One event of every kind, and replies of every kind.
+fn events(run: RunId, task: TaskId) -> Vec<Event> {
   let reply = |reply| Event::Reply {
     id: RequestId::new(7),
     reply,
   };
-  let events = [
-    reply(Reply::Attached { active_runs: vec![run] }),
+  vec![
+    reply(Reply::Attached {
+      active_runs: vec![run],
+      interrupted: vec![run],
+      continued: Vec::new(),
+    }),
+    reply(Reply::Continued {
+      continued: vec![run],
+      refused: vec![RefusedRun {
+        run,
+        rejection: Rejection::DailyBudgetUsed {
+          budget: TokenBudget::new(20_000_000).expect("above zero"),
+        },
+      }],
+    }),
+    reply(Reply::Rejected(Rejection::NoAgentSlot {
+      slots: NonZeroU32::new(4).expect("above zero"),
+    })),
+    reply(Reply::Rejected(Rejection::RunNotInterrupted)),
+    reply(Reply::Rejected(Rejection::ShuttingDown)),
     reply(Reply::Pong { nonce: 42 }),
     reply(Reply::RunStarted { run }),
     reply(Reply::Accepted { run }),
@@ -91,8 +124,39 @@ async fn frames_round_trip_every_message() {
     },
     Event::RunChanged { run, task },
     Event::AgentActivity { run, sequence: 12 },
-  ];
+    Event::WorkSummary(WorkSummary {
+      agent_slots: NonZeroU32::new(4).expect("above zero"),
+      runs: [
+        WorkState::Working,
+        WorkState::Saving,
+        WorkState::Saved {
+          checkpoint: Some("9d07b3f".repeat(5) + "12345"),
+        },
+        WorkState::Saved { checkpoint: None },
+      ]
+      .into_iter()
+      .map(|state| RunWork {
+        run,
+        task,
+        task_key: "ORC-125".to_owned(),
+        task_title: "Fix canvas zoom".to_owned(),
+        step: "Implement".to_owned(),
+        agent: "Builder".to_owned(),
+        provider: AgentProvider::CodexCli,
+        model: "gpt-5.5".to_owned(),
+        state,
+      })
+      .collect(),
+    }),
+  ]
+}
 
+#[tokio::test]
+async fn frames_round_trip_every_message() {
+  let ((mut reader, _), (_, mut writer)) = connection();
+  let (run, task) = (RunId::generate(), TaskId::generate());
+  let commands = requests(run, task);
+  let events = events(run, task);
   for request in &commands {
     writer.write(request).await.expect("write request");
   }

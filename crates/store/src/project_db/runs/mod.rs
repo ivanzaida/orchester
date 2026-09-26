@@ -108,6 +108,14 @@ impl RunStore for ProjectDb {
       [columns::INTERRUPTED],
     )?)
   }
+
+  fn running_runs(&self) -> Result<Vec<Run>, RunStoreError> {
+    Ok(load_runs(
+      &self.connection,
+      "WHERE status = ?1 ORDER BY number",
+      [columns::RUNNING],
+    )?)
+  }
 }
 
 /// `events` must be the consecutive events of `run` that end in its current state.

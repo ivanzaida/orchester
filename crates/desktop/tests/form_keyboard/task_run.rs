@@ -33,10 +33,10 @@ use crate::{
 };
 
 /// A real run takes longer than the harness's default wait.
-const PATIENCE: Duration = Duration::from_secs(60);
+pub(crate) const PATIENCE: Duration = Duration::from_secs(60);
 
 /// The runner and the fake CLI, built into this profile's directory beside the desktop.
-fn programs() -> (PathBuf, PathBuf) {
+pub(crate) fn programs() -> (PathBuf, PathBuf) {
   let status = Command::new(env!("CARGO"))
     .args([
       "build",
@@ -71,7 +71,7 @@ fn git(repo: &Path, args: &[&str]) {
   assert!(status.success(), "git {args:?}");
 }
 
-fn init_repository(repo: &Path) {
+pub(crate) fn init_repository(repo: &Path) {
   git(repo, &["init", "--quiet", "--initial-branch=main"]);
   git(repo, &["config", "user.name", "Orchester Test"]);
   git(repo, &["config", "user.email", "test@orchester.invalid"]);
@@ -83,7 +83,7 @@ fn init_repository(repo: &Path) {
 
 /// A signed-in Codex connection running `fake`, a Builder profile on it and a published
 /// pipeline: Implement, and with `review` also Review after it.
-fn seed(repo: &Path, fake: &Path, review: bool) {
+pub(crate) fn seed(repo: &Path, fake: &Path, review: bool) {
   let mut db = ProjectDb::open(repo).expect("open the project");
   let now = Timestamp::now();
   let mut connection = AgentConnection::new(
@@ -149,7 +149,7 @@ fn seed(repo: &Path, fake: &Path, review: bool) {
   db.publish_draft::<Pipeline>(id, now).expect("publish pipeline");
 }
 
-fn set_text(desktop: &mut Desktop, id: &str, value: &str) {
+pub(crate) fn set_text(desktop: &mut Desktop, id: &str, value: &str) {
   desktop
     .tree
     .get_element_by_id_mut(id)
@@ -160,7 +160,7 @@ fn set_text(desktop: &mut Desktop, id: &str, value: &str) {
 }
 
 /// Lets the runner work until `done` holds.
-fn wait_long(desktop: &mut Desktop, what: &str, done: impl Fn(&mut Desktop) -> bool) {
+pub(crate) fn wait_long(desktop: &mut Desktop, what: &str, done: impl Fn(&mut Desktop) -> bool) {
   let start = Instant::now();
   while start.elapsed() < PATIENCE {
     desktop.tree.tick_futures();
@@ -174,16 +174,16 @@ fn wait_long(desktop: &mut Desktop, what: &str, done: impl Fn(&mut Desktop) -> b
 }
 
 /// Whether the project's only task has a run that succeeded.
-fn run_finished(repo: &Path) -> bool {
+pub(crate) fn run_finished(repo: &Path) -> bool {
   latest_run(repo).is_some_and(|run| run.status() == &RunStatus::Succeeded)
 }
 
-fn has(desktop: &mut Desktop, id: &str) -> bool {
+pub(crate) fn has(desktop: &mut Desktop, id: &str) -> bool {
   desktop.tree.get_element_by_id(id).is_some()
 }
 
 /// The latest run of the project's only task, once it has one.
-fn latest_run(repo: &Path) -> Option<orchester_core::run::Run> {
+pub(crate) fn latest_run(repo: &Path) -> Option<orchester_core::run::Run> {
   let db = ProjectDb::open(repo).expect("open the project");
   let task = db.tasks().expect("tasks").into_iter().next()?;
   db.runs_of_task(task.id()).expect("runs").pop()
@@ -191,7 +191,19 @@ fn latest_run(repo: &Path) -> Option<orchester_core::run::Run> {
 
 /// Fills the new task form with `brief` and `budget` and presses Create & run until the task
 /// page opens.
-fn create_and_run(desktop: &mut Desktop, brief: &str, budget: &str) {
+pub(crate) fn create_and_run(desktop: &mut Desktop, brief: &str, budget: &str) {
+  fill_new_task(desktop, brief, budget);
+  wait_long(desktop, "the task page", |desktop| {
+    // Pressing before the runner is online fails visibly; pressing again retries the same run.
+    if !has(desktop, "task-page") && has(desktop, "create-and-run") {
+      desktop.click("create-and-run");
+    }
+    has(desktop, "task-page")
+  });
+}
+
+/// Opens New task and fills it with `brief` and `budget` on the published pipeline.
+pub(crate) fn fill_new_task(desktop: &mut Desktop, brief: &str, budget: &str) {
   desktop.wait_for("nav-tasks");
   desktop.click("nav-tasks");
   desktop.wait_for("tasks-new-task");
@@ -215,13 +227,6 @@ fn create_and_run(desktop: &mut Desktop, brief: &str, budget: &str) {
     .expect("the pipeline select")
     .commit(1);
   desktop.pass();
-  wait_long(desktop, "the task page", |desktop| {
-    // Pressing before the runner is online fails visibly; pressing again retries the same run.
-    if !has(desktop, "task-page") && has(desktop, "create-and-run") {
-      desktop.click("create-and-run");
-    }
-    has(desktop, "task-page")
-  });
 }
 
 #[test]

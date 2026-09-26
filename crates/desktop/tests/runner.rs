@@ -6,6 +6,7 @@ use std::{
   time::Duration,
 };
 
+use orchester_core::{connection::AgentProvider, id::RunId};
 use orchester_desktop::{
   app_paths::runner_beside,
   close::{CloseKind, ClosePlan, close_plan, session_end},
@@ -182,11 +183,13 @@ fn close_without_active_work_stops_quietly() {
 fn close_with_active_work_asks_first() {
   let work = ActiveWork::new(&ActiveWorkFields {
     project: "Kontur",
+    run: RunId::generate(),
     task_key: "ORC-1",
     task_title: "Fix login",
     step: "Implement",
     agent: "Builder",
-    model: "Codex · Sol",
+    provider: AgentProvider::CodexCli,
+    model: "gpt-5.5",
   });
   assert_eq!(close_plan(vec![work.clone()]), ClosePlan::Confirm(vec![work].into()));
 }

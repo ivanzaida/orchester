@@ -28,6 +28,10 @@ required-features = ["test-agent"]
 name = "control"
 required-features = ["test-agent"]
 
+[[test]]
+name = "lifecycle"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

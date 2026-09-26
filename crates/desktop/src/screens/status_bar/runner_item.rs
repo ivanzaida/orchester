@@ -75,19 +75,19 @@ fn look(badge: RunnerBadge) -> (Icon, &'static str) {
 /// "5 attempts since 14:02", or that it never started.
 fn offline_detail(ctx: &Ctx, attempts: u32, project: &ProjectBar) -> Arc<str> {
   let since = project.runner.trouble_since().map(display::clock_time);
+  let count = attempts.to_string();
   match (attempts, since) {
     (0, _) => ctx.t("statusBar.runner.notStarted"),
-    (attempts, Some(time)) => {
-      let attempts = attempts.to_string();
-      ctx.t_args(
-        "statusBar.runner.attemptsSince",
-        [("attempts", attempts.as_str()), ("time", time.as_str())],
-      )
-    }
-    (attempts, None) => {
-      let attempts = attempts.to_string();
-      ctx.t_args("statusBar.runner.attempts", [("attempts", attempts.as_str())])
-    }
+    (1, Some(time)) => ctx.t_args(
+      "statusBar.runner.attemptsSince.one",
+      [("attempts", count.as_str()), ("time", time.as_str())],
+    ),
+    (_, Some(time)) => ctx.t_args(
+      "statusBar.runner.attemptsSince.other",
+      [("attempts", count.as_str()), ("time", time.as_str())],
+    ),
+    (1, None) => ctx.t_args("statusBar.runner.attempts.one", [("attempts", count.as_str())]),
+    (_, None) => ctx.t_args("statusBar.runner.attempts.other", [("attempts", count.as_str())]),
   }
 }
 

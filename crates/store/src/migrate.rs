@@ -1,6 +1,6 @@
 use std::{path::Path, time::Duration};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, TransactionBehavior};
 
 use crate::StoreError;
 
@@ -13,6 +13,11 @@ pub(crate) fn open(path: &Path, migrations: &[&str]) -> Result<Connection, Store
   let mut connection = Connection::open(path)?;
   connection.pragma_update_and_check(None, "journal_mode", "WAL", |_| Ok(()))?;
   connection.busy_timeout(BUSY_TIMEOUT)?;
+  // Every transaction here writes. Taking the write lock when it begins lets it wait for the
+  // other writers (the desktop, the tasks of the runs) instead of failing: a transaction that
+  // started reading cannot wait for the lock without risking a deadlock, so SQLite refuses it
+  // at once as "database is locked".
+  connection.set_transaction_behavior(TransactionBehavior::Immediate);
   // A migration that rebuilds a table must not have the drop cascade into the rows that refer
   // to it, so foreign keys are enforced only after migrating; the migrated database is checked
   // for violations before it is committed instead.

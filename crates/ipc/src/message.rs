@@ -4,14 +4,16 @@
 //! source of truth, and the desktop reads the changed run from it (`docs/architecture/storage.md`,
 //! "Write ownership").
 
-use std::fmt;
+use std::{fmt, num::NonZeroU32};
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  run::{PreflightProblem, RunLimit},
+  run::{InterruptCause, PreflightProblem, RunLimit},
   tokens::TokenBudget,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::work::WorkSummary;
 
 /// Identifies a request within one connection, so its reply can be matched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -44,9 +46,14 @@ pub struct Request {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Command {
-  /// The first request of a connection: the desktop starts listening to notifications. Answered
-  /// with [`Reply::Attached`].
-  Attach,
+  /// The first request of a connection: the desktop starts listening to notifications, says
+  /// which session this runner serves, which decides what happens to runs still recorded as
+  /// running (`docs/architecture/storage.md`, "Lifecycle"), and how many agents may work at
+  /// once. Answered with [`Reply::Attached`], followed by an [`Event::WorkSummary`].
+  Attach {
+    session: AttachSession,
+    agent_slots: NonZeroU32,
+  },
   /// Liveness check, answered with [`Reply::Pong`] carrying the same nonce.
   Ping { nonce: u64 },
   /// Starts a run of the queued task `task`. Idempotent by `key`: repeating it (a retry after
@@ -63,6 +70,9 @@ pub enum Command {
   /// Cancels run `run`: its agent's process tree is ended, its worktree and branch stay. Answered
   /// with [`Reply::Accepted`] once the run is recorded as cancelled.
   CancelRun { run: RunId },
+  /// Continues interrupted runs `runs` from their last checkpoints, as far as the agent slots
+  /// and the daily budget allow. Answered with [`Reply::Continued`].
+  ContinueRuns { runs: Vec<RunId> },
   /// Raises the limits of run `run`, stopped at a limit, and continues it. Answered with
   /// [`Reply::Accepted`] once it runs again.
   RaiseLimit {
@@ -73,6 +83,49 @@ pub enum Command {
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes
   /// the connection.
   Shutdown { mode: ShutdownMode },
+}
+
+/// Which session a runner serves, from the desktop's side.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AttachSession {
+  /// The project's first runner in the desktop's session. Runs still recorded as running were
+  /// cut off by the end of the previous session and wait for a person to continue them.
+  Fresh { previous_end: SessionEnd },
+  /// The desktop started this runner after the project's previous runner dropped. Runs that
+  /// runner left running were interrupted by its loss and continue on their own.
+  Reconnect,
+}
+
+impl AttachSession {
+  /// Why a run still recorded as running when this runner attaches stopped: the previous
+  /// runner's loss, Quit now, or else a crash. A run left running by a session that says it
+  /// ended cleanly or with paused runs lost its runner without anyone recording it.
+  pub const fn interrupt_cause(self) -> InterruptCause {
+    match self {
+      Self::Reconnect => InterruptCause::RunnerLost,
+      Self::Fresh {
+        previous_end: SessionEnd::QuitNow,
+      } => InterruptCause::QuitNow,
+      Self::Fresh {
+        previous_end: SessionEnd::Crashed | SessionEnd::Clean | SessionEnd::RunsPaused,
+      } => InterruptCause::Crashed,
+    }
+  }
+}
+
+/// How the desktop's previous session ended, as its session log recorded it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionEnd {
+  /// There was none, or it closed without active runs.
+  Clean,
+  /// The user waited for agents to save; the runs were paused.
+  RunsPaused,
+  /// The user chose Quit now.
+  QuitNow,
+  /// It never recorded its end: a crash, power loss or a killed process.
+  Crashed,
 }
 
 /// How the runner stops, matching the close confirmation in `docs/architecture/storage.md`.
@@ -98,14 +151,21 @@ pub enum Event {
   /// Run `run`'s transcript grew to `sequence` entries. Coalesced: one notification can stand
   /// for many entries.
   AgentActivity { run: RunId, sequence: u64 },
+  /// The runs this runner executes and its agent slots. Sent after attaching and whenever they
+  /// change; each one replaces the one before.
+  WorkSummary(WorkSummary),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Reply {
-  /// Runs this runner is executing right now.
+  /// Runs this runner is executing right now; `interrupted`, the runs attaching recorded as
+  /// interrupted, and `continued`, the interrupted runs it continued because the previous
+  /// runner dropped.
   Attached {
     active_runs: Vec<RunId>,
+    interrupted: Vec<RunId>,
+    continued: Vec<RunId>,
   },
   Pong {
     nonce: u64,
@@ -119,7 +179,20 @@ pub enum Reply {
   Accepted {
     run: RunId,
   },
+  /// The answer to [`Command::ContinueRuns`]: the runs that run again, and the ones that do not
+  /// with why.
+  Continued {
+    continued: Vec<RunId>,
+    refused: Vec<RefusedRun>,
+  },
   Rejected(Rejection),
+}
+
+/// A run [`Command::ContinueRuns`] did not continue.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefusedRun {
+  pub run: RunId,
+  pub rejection: Rejection,
 }
 
 /// Why the runner did not do what a request asked.
@@ -138,6 +211,8 @@ pub enum Rejection {
   RunNotRunning,
   /// Resume and a raised limit need a paused run.
   RunNotPaused,
+  /// Continuing from a checkpoint needs an interrupted run.
+  RunNotInterrupted,
   /// The run has ended; there is nothing to cancel.
   RunEnded,
   /// The run stopped at `limit`; it continues only with a raised limit.
@@ -152,6 +227,17 @@ pub enum Rejection {
   BudgetAboveMaximum {
     max: TokenBudget,
   },
+  /// The project's runs used today's token budget `budget`: runs start or continue again once
+  /// the day has room (tomorrow, or a raised daily budget).
+  DailyBudgetUsed {
+    budget: TokenBudget,
+  },
+  /// All `slots` agent slots of the runner are in use.
+  NoAgentSlot {
+    slots: NonZeroU32,
+  },
+  /// The runner is stopping and starts no work.
+  ShuttingDown,
   /// Starting failed in the runner (database, git worktree); its log has the details.
   Failed {
     detail: String,

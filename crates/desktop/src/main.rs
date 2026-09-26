@@ -87,12 +87,19 @@ fn startup(session: &Result<AppSession, StartupError>, runtime: &Runtime) -> Sta
   match app_paths::runner_path() {
     Ok(runner) => {
       let activity = Activity::new();
-      let runners = Runners::new(runner, runtime.handle().clone(), activity.clone());
+      let runners = Runners::new(
+        runner,
+        runtime.handle().clone(),
+        activity.clone(),
+        session.previous_end(),
+      );
       Startup::Ready {
         workspace: session.workspace().clone(),
         lifecycle: Lifecycle::new(runners, runtime.handle().clone()),
         activity,
         programs: Programs::processes(),
+        previous_end: session.previous_end(),
+        session_start: session.started_at(),
       }
     }
     Err(error) => {

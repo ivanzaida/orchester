@@ -1,5 +1,5 @@
-//! The close dialog rendered headlessly from fixture work. Runs do not exist yet, so the
-//! running app cannot reach this dialog; these fixtures are test data only.
+//! The close dialog rendered headlessly from fixture work (02.C `Xz30C`, 02.D `a0tTV`). The
+//! fixtures are test data only.
 
 use std::sync::{
   Arc,
@@ -10,31 +10,50 @@ use lurq::{
   app::{App, Tree},
   node::element::ElementRef,
 };
+use orchester_core::{connection::AgentProvider, id::RunId};
 use orchester_desktop::{
   close_dialog::{CloseActions, CloseDialog, CloseDialogProps, CloseStage},
   i18n,
-  runner::{ActiveWork, ActiveWorkFields},
+  runner::{ActiveWork, ActiveWorkFields, SaveState},
   theme,
 };
 
+fn active(project: &str, task_key: &str, task_title: &str, step: &str, agent: &str) -> ActiveWork {
+  ActiveWork::new(&ActiveWorkFields {
+    project,
+    run: RunId::generate(),
+    task_key,
+    task_title,
+    step,
+    agent,
+    provider: AgentProvider::CodexCli,
+    model: "gpt-5.5",
+  })
+}
+
 fn work() -> Arc<[ActiveWork]> {
   vec![
-    ActiveWork::new(&ActiveWorkFields {
-      project: "Kontur",
-      task_key: "ORC-125",
-      task_title: "Fix canvas zoom on trackpad",
-      step: "Implement",
-      agent: "Builder",
-      model: "Codex · Sol",
-    }),
-    ActiveWork::new(&ActiveWorkFields {
-      project: "Kontur",
-      task_key: "ORC-127",
-      task_title: "Improve mobile inspector",
-      step: "Run checks",
-      agent: "Reviewer",
-      model: "Claude · Opus",
-    }),
+    active(
+      "Kontur",
+      "ORC-125",
+      "Fix canvas zoom on trackpad",
+      "Implement",
+      "Builder",
+    ),
+    active(
+      "Kontur",
+      "ORC-127",
+      "Improve mobile inspector",
+      "Run checks",
+      "Reviewer",
+    ),
+    active(
+      "Website",
+      "PW-14",
+      "Compress preview images",
+      "Deploy preview",
+      "Builder",
+    ),
   ]
   .into()
 }
@@ -63,7 +82,7 @@ impl Presses {
   }
 }
 
-fn mount(stage: CloseStage, presses: &Arc<Presses>) -> Tree {
+fn mount(stage: CloseStage, saves: Vec<SaveState>, presses: &Arc<Presses>) -> Tree {
   let mut app = App::new();
   theme::install(&mut app);
   i18n::install(&app).expect("bundled locales load");
@@ -73,6 +92,7 @@ fn mount(stage: CloseStage, presses: &Arc<Presses>) -> Tree {
     CloseDialogProps {
       stage,
       work: work(),
+      saves: saves.into(),
       actions: presses.actions(),
     },
   );
@@ -89,21 +109,23 @@ fn has_text(tree: &mut Tree, text: &str) -> bool {
 }
 
 #[test]
-fn close_dialog_confirm_lists_the_work_and_offers_three_choices() {
+fn close_dialog_confirm_lists_the_work_of_every_project_and_offers_three_choices() {
   let presses = Arc::new(Presses::default());
-  let mut tree = mount(CloseStage::Confirm, &presses);
+  let mut tree = mount(CloseStage::Confirm, Vec::new(), &presses);
 
   assert!(has_text(&mut tree, "Close Orchester while agents are working?"));
   assert!(has_text(&mut tree, "In progress · Kontur"));
+  assert!(has_text(&mut tree, "In progress · Website"));
   for text in [
     "ORC-125",
     "Fix canvas zoom on trackpad",
     "Implement · Builder",
-    "Codex · Sol",
+    "Codex · gpt-5.5",
+    "Improve mobile inspector",
+    "Deploy preview · Builder",
   ] {
     assert!(has_text(&mut tree, text), "row text {text}");
   }
-  assert!(has_text(&mut tree, "Improve mobile inspector"));
 
   for (id, index) in [("close-wait", 0), ("close-quit-now", 1), ("close-cancel", 2)] {
     tree.get_element_by_id_mut(id).expect(id).click();
@@ -113,13 +135,25 @@ fn close_dialog_confirm_lists_the_work_and_offers_three_choices() {
 }
 
 #[test]
-fn close_dialog_waiting_keeps_only_quit_now() {
+fn close_dialog_waiting_shows_each_run_saving_or_saved_and_keeps_only_quit_now() {
   let presses = Arc::new(Presses::default());
-  let mut tree = mount(CloseStage::Waiting, &presses);
+  let saved = SaveState::Saved {
+    checkpoint: Some("9d07b3f0a1b2c3d4e5f60718293a4b5c6d7e8f90".into()),
+  };
+  let mut tree = mount(
+    CloseStage::Waiting,
+    vec![SaveState::Saving, saved, SaveState::Saved { checkpoint: None }],
+    &presses,
+  );
 
   assert!(has_text(&mut tree, "Saving before closing"));
-  assert!(has_text(&mut tree, "Saving 2 runs · Kontur"));
-  assert!(has_text(&mut tree, "Closes when every run is saved"));
+  assert!(has_text(&mut tree, "1 of 2 runs saved · Kontur"));
+  assert!(has_text(&mut tree, "1 of 1 run saved · Website"));
+  assert!(has_text(&mut tree, "Saving at next checkpoint…"));
+  assert!(has_text(&mut tree, "Step still running"));
+  assert!(has_text(&mut tree, "Paused at 9d07b3f"));
+  assert!(has_text(&mut tree, "Paused"));
+  assert!(has_text(&mut tree, "Closes after 1 more run"));
   assert!(tree.get_element_by_id("close-waiting").is_some());
   assert!(tree.get_element_by_id("close-cancel").is_none());
   assert!(tree.get_element_by_id("close-wait").is_none());

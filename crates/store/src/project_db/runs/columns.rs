@@ -11,12 +11,13 @@ use orchester_core::{
 use crate::{StoreError, rows::corrupt};
 
 pub(super) const INTERRUPTED: &str = "interrupted";
+pub(super) const RUNNING: &str = "running";
 
 /// `status`, `status_reason` and `failed_step` of a run row.
 pub(super) fn run_status_columns(status: &RunStatus) -> (&'static str, Option<&'static str>, Option<&str>) {
   match status {
     RunStatus::Pending => ("pending", None, None),
-    RunStatus::Running => ("running", None, None),
+    RunStatus::Running => (RUNNING, None, None),
     RunStatus::Paused(reason) => ("paused", Some(pause_reason_text(*reason)), None),
     RunStatus::Interrupted(cause) => (INTERRUPTED, Some(interrupt_cause_text(*cause)), None),
     RunStatus::Succeeded => ("succeeded", None, None),
@@ -34,7 +35,7 @@ pub(super) fn parse_run_status(
   const WHAT: &str = "run status";
   Ok(match (status, reason, failed_step) {
     ("pending", None, None) => RunStatus::Pending,
-    ("running", None, None) => RunStatus::Running,
+    (RUNNING, None, None) => RunStatus::Running,
     ("paused", Some(reason), None) => RunStatus::Paused(parse_pause_reason(reason)?),
     (INTERRUPTED, Some(cause), None) => RunStatus::Interrupted(parse_interrupt_cause(cause)?),
     ("succeeded", None, None) => RunStatus::Succeeded,
@@ -52,6 +53,7 @@ const fn pause_reason_text(reason: PauseReason) -> &'static str {
     PauseReason::Requested => "requested",
     PauseReason::LimitReached(RunLimit::Tokens) => "token_limit",
     PauseReason::LimitReached(RunLimit::Time) => "time_limit",
+    PauseReason::LimitReached(RunLimit::DailyBudget) => "daily_budget",
   }
 }
 
@@ -60,6 +62,7 @@ fn parse_pause_reason(value: &str) -> Result<PauseReason, StoreError> {
     "requested" => Ok(PauseReason::Requested),
     "token_limit" => Ok(PauseReason::LimitReached(RunLimit::Tokens)),
     "time_limit" => Ok(PauseReason::LimitReached(RunLimit::Time)),
+    "daily_budget" => Ok(PauseReason::LimitReached(RunLimit::DailyBudget)),
     other => Err(corrupt("pause reason", other)),
   }
 }

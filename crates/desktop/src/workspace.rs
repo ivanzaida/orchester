@@ -60,6 +60,11 @@ impl Workspace {
     })
   }
 
+  /// Known projects, most recently opened first.
+  pub fn projects(&self) -> Result<Vec<RegisteredProject>, StoreError> {
+    self.db.lock().projects()
+  }
+
   /// Opens a known project and records it as the most recently used one.
   pub fn open(&self, registered: &RegisteredProject) -> Result<OpenProject, StoreError> {
     let db = ProjectDb::open(&registered.repo_root)?;
@@ -87,8 +92,8 @@ impl Workspace {
     })
   }
 
-  pub(crate) fn start_session(&self) -> Result<(SessionId, PreviousSession), StoreError> {
-    self.db.lock().start_session(std::process::id(), Timestamp::now())
+  pub(crate) fn start_session(&self, now: Timestamp) -> Result<(SessionId, PreviousSession), StoreError> {
+    self.db.lock().start_session(std::process::id(), now)
   }
 
   pub(crate) fn end_session(&self, session: SessionId, end: SessionEnd) -> Result<(), StoreError> {

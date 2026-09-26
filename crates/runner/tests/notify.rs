@@ -1,7 +1,9 @@
 //! Coalescing the notifications waiting to be sent to the desktop.
 
+use std::num::NonZeroU32;
+
 use orchester_core::id::{RunId, TaskId};
-use orchester_ipc::{Event, Reply, RequestId};
+use orchester_ipc::{Event, Reply, RequestId, WorkSummary};
 use orchester_runner::notify::coalesce;
 
 #[test]
@@ -32,5 +34,24 @@ fn notify_coalesces_changes_per_run_and_keeps_replies() {
       reply,
       activity(second, 2)
     ]
+  );
+}
+
+#[test]
+fn notify_keeps_only_the_latest_work_summary() {
+  let run = RunId::generate();
+  let summary = |slots| {
+    Event::WorkSummary(WorkSummary {
+      agent_slots: NonZeroU32::new(slots).expect("above zero"),
+      runs: Vec::new(),
+    })
+  };
+  let changed = Event::RunChanged {
+    run,
+    task: TaskId::generate(),
+  };
+  assert_eq!(
+    coalesce(vec![summary(1), changed.clone(), summary(2), summary(3)]),
+    [changed, summary(3)]
   );
 }

@@ -10,6 +10,8 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+# Where the local day starts, for the daily project budget; std has no local time.
+chrono.workspace = true
 serde.workspace = true
 # Reads the JSON the agent CLIs print (model catalog, sign-in status).
 serde_json.workspace = true

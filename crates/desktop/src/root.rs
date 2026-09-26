@@ -12,6 +12,8 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
+use orchester_core::time::Timestamp;
+use orchester_ipc::SessionEnd;
 
 use crate::{
   activity::Activity,
@@ -24,6 +26,7 @@ use crate::{
     close_dialog::CloseConfirmation,
     project::ProjectShell,
     setup::ProjectSetup,
+    startup_recovery::{StartupRecovery, StartupRecoveryProps},
     status_bar::{StatusBar, StatusBarProps},
     unavailable,
     welcome::Welcome,
@@ -45,8 +48,13 @@ pub enum Startup {
     lifecycle: Lifecycle,
     /// Background operations of the session, for the status bar.
     activity: Activity,
-    /// How `gh` runs for pull request sync.
+    /// How `gh` runs for pull request sync, and git for the recovery's worktree states.
     programs: Programs,
+    /// How the previous session ended: after Quit now or a crash, the start-up recovery asks
+    /// about the runs it left interrupted (02.E `o8DCd`).
+    previous_end: SessionEnd,
+    /// When this session started.
+    session_start: Timestamp,
   },
   /// The application database cannot be used; `path` is the file involved, if known.
   Failed { message: Message, path: Option<String> },
@@ -93,8 +101,13 @@ impl Component for Root {
     let content = match ctx.props::<Startup>().clone() {
       Startup::Failed { message, path } => with_status_bar(ctx, startup_failed(ctx, &message, path.as_deref())),
       Startup::Ready {
-        workspace, lifecycle, ..
-      } => self.workspace(ctx, workspace, &lifecycle),
+        workspace,
+        lifecycle,
+        programs,
+        previous_end,
+        session_start,
+        ..
+      } => self.workspace(ctx, (workspace, &programs, (previous_end, session_start)), &lifecycle),
     };
     let screen = Column::new()
       .width(Dimension::Pct(100.0))
@@ -106,9 +119,14 @@ impl Component for Root {
 }
 
 impl Root {
-  fn workspace(&self, ctx: &mut Ctx, workspace: Workspace, lifecycle: &Lifecycle) -> Element {
+  fn workspace(
+    &self,
+    ctx: &mut Ctx,
+    (workspace, programs, (previous_end, session_start)): (Workspace, &Programs, (SessionEnd, Timestamp)),
+    lifecycle: &Lifecycle,
+  ) -> Element {
     let navigation = Navigation::new(workspace.clone(), self.screen.clone());
-    let landing = ctx.future(workspace, |workspace| async move {
+    let landing = ctx.future(workspace.clone(), |workspace| async move {
       background::run(move || workspace.landing())
         .await?
         .map(Screen::from)
@@ -122,10 +140,11 @@ impl Root {
       return startup_failed(ctx, error, None);
     }
     let screen = self.screen.get().or(landing.data);
-    // The open project's runner starts as soon as the project is shown, at startup or after
-    // setup, and stops when another screen replaces it. Repeating the same project is a no-op.
+    // A project's runner starts as soon as the project is shown, at startup or after setup, and
+    // keeps running in the background when another screen replaces it. Repeating the same
+    // project is a no-op.
     let project = match &screen {
-      Some(Screen::Project(project)) => Some(project.repo_root.as_path()),
+      Some(Screen::Project(project)) => Some(project),
       _ => None,
     };
     lifecycle.runners().show(project);
@@ -151,12 +170,19 @@ impl Root {
         with_status_bar(ctx, unavailable)
       }
     };
+    let recovery = StartupRecoveryProps {
+      workspace,
+      programs: programs.clone(),
+      previous: previous_end,
+      session_start,
+    };
     // The confirmation is a modal, so it takes no space in this column.
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(content)
       .child(ctx.mount_keyed::<CloseConfirmation>("close-confirmation", lifecycle.clone()))
+      .child(ctx.mount_keyed::<StartupRecovery>("startup-recovery", recovery))
       .into()
   }
 }

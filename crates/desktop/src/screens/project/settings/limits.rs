@@ -30,7 +30,14 @@ use crate::{
   messages::{self, Message},
   tasks::usage::{ProjectUsage, save_limits_in},
   theme::ExtraTypography,
-  ui::{field::field_error, form::form, icon::Icon, message_text, notice::Notice, unit_input::UnitInput},
+  ui::{
+    field::field_error,
+    form::form,
+    icon::Icon,
+    message_text,
+    notice::Notice,
+    unit_input::{FocusedInput, UnitInput},
+  },
   workspace::OpenProject,
 };
 
@@ -76,6 +83,8 @@ pub struct LimitsTab {
   default: Signal<String>,
   daily: Signal<String>,
   time: Signal<String>,
+  /// Which input has the focus, for its focused stroke.
+  focused: FocusedInput,
   /// The limits as stored; `None` until read.
   stored: Signal<Option<Stored>>,
   nav: ProjectNav,
@@ -93,6 +102,7 @@ impl Component for LimitsTab {
       default: ctx.signal(String::new()),
       daily: ctx.signal(String::new()),
       time: ctx.signal(String::new()),
+      focused: ctx.signal(None),
       stored: ctx.signal(None),
       nav,
     };
@@ -138,7 +148,7 @@ impl Component for LimitsTab {
       .unwrap_or_default();
     let commit = self.commit(save, &props.open, entered.ok());
     let field = |id, value: &Signal<String>, unit: Arc<str>, error: Option<&Message>| {
-      UnitInput::new(id, value.clone(), unit)
+      UnitInput::new(id, value.clone(), unit, self.focused.clone())
         .invalid(error.is_some())
         .on_blur(commit.clone())
         .size(Dimension::Pct(100.0), Dimension::Px(INPUT_HEIGHT))

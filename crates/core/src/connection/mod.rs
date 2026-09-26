@@ -34,7 +34,8 @@ pub use self::{
 use crate::{id::ConnectionId, name::Name, time::Timestamp};
 
 /// The agent CLIs Orchester can run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentProvider {
   CodexCli,
   ClaudeCodeCli,

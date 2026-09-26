@@ -9,6 +9,7 @@ mod dialogs;
 mod draft_autosave;
 mod github;
 mod harness;
+mod lifecycle;
 mod new_task;
 mod pipeline_editor;
 mod project_settings;

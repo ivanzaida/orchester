@@ -57,6 +57,7 @@ fn run_notice(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
       "runs.summary.notice.runningDetail",
     ),
     RunStatus::Paused(PauseReason::Requested) => paused(ctx, run),
+    RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)) => stopped_by_daily_budget(ctx, run),
     RunStatus::Paused(PauseReason::LimitReached(limit)) => stopped_at_limit(ctx, run, *limit),
     RunStatus::Interrupted(_) => plain(
       Icon::Pause,
@@ -93,16 +94,41 @@ fn paused(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
   (Icon::Pause, title, ctx.t("runs.summary.notice.pausedDetail"))
 }
 
-/// "Stopped at the token limit · checkpoint 7c1e9f2" (`EzWLg`): what was used, and whether the
-/// work at the limit was committed.
-fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str>, Arc<str>) {
-  let checkpoint = run
+/// The checkpoint the run's work at its stop was committed as, if it was.
+fn saved_checkpoint(run: &RunView) -> Option<String> {
+  run
     .run
     .last_checkpoint()
     .filter(|_| run.saved_at_pause)
-    .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).to_owned());
+    .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).to_owned())
+}
+
+/// "Stopped at the daily project budget · checkpoint 7c1e9f2", the `EzWLg` notice for the
+/// project's daily budget: the run continues with Resume once the day has room again.
+fn stopped_by_daily_budget(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
+  let checkpoint = saved_checkpoint(run);
+  let title = match &checkpoint {
+    Some(checkpoint) => ctx.t_args("runs.limit.dailyTitleCheckpoint", [("checkpoint", checkpoint.as_str())]),
+    None => ctx.t("runs.limit.dailyTitle"),
+  };
+  let agent = run
+    .stopped_step()
+    .and_then(|step| step.agent.clone())
+    .unwrap_or_else(|| ctx.t("runs.limit.theAgent"));
+  let key = if checkpoint.is_some() {
+    "runs.limit.dailyDetail"
+  } else {
+    "runs.limit.dailyDetailUnsaved"
+  };
+  (Icon::OctagonPause, title, ctx.t_args(key, [("agent", &*agent)]))
+}
+
+/// "Stopped at the token limit · checkpoint 7c1e9f2" (`EzWLg`): what was used, and whether the
+/// work at the limit was committed.
+fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str>, Arc<str>) {
+  let checkpoint = saved_checkpoint(run);
   let (title, titled) = match limit {
-    RunLimit::Tokens => ("runs.limit.tokenTitle", "runs.limit.tokenTitleCheckpoint"),
+    RunLimit::Tokens | RunLimit::DailyBudget => ("runs.limit.tokenTitle", "runs.limit.tokenTitleCheckpoint"),
     RunLimit::Time => ("runs.limit.timeTitle", "runs.limit.timeTitleCheckpoint"),
   };
   let title = match &checkpoint {
@@ -115,7 +141,7 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
     .and_then(|step| step.agent.clone())
     .unwrap_or_else(|| ctx.t("runs.limit.theAgent"));
   let (used, of) = match limit {
-    RunLimit::Tokens => (
+    RunLimit::Tokens | RunLimit::DailyBudget => (
       compact_tokens(run.run.used().get()),
       compact_tokens(run.run.budget().get()),
     ),
@@ -124,11 +150,15 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
       whole_minutes(run.run.max_duration()).to_string(),
     ),
   };
-  let key = match (limit, checkpoint.is_some()) {
-    (RunLimit::Tokens, true) => "runs.limit.tokenDetail",
-    (RunLimit::Tokens, false) => "runs.limit.tokenDetailUnsaved",
-    (RunLimit::Time, true) => "runs.limit.timeDetail",
-    (RunLimit::Time, false) => "runs.limit.timeDetailUnsaved",
+  // The time limit's count decides the plural: "of its 1 minute", "of its 30 minutes".
+  let one = of == "1";
+  let key = match (limit, checkpoint.is_some(), one) {
+    (RunLimit::Tokens | RunLimit::DailyBudget, true, _) => "runs.limit.tokenDetail",
+    (RunLimit::Tokens | RunLimit::DailyBudget, false, _) => "runs.limit.tokenDetailUnsaved",
+    (RunLimit::Time, true, true) => "runs.limit.timeDetail.one",
+    (RunLimit::Time, true, false) => "runs.limit.timeDetail.other",
+    (RunLimit::Time, false, true) => "runs.limit.timeDetailUnsaved.one",
+    (RunLimit::Time, false, false) => "runs.limit.timeDetailUnsaved.other",
   };
   let text = ctx.t_args(
     key,

@@ -6,14 +6,13 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   resource::{Pipeline, ResourceKind, VersionNumber},
-  run::TaskPhase,
   store::{ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
-use super::list::Phases;
+use super::list::{LatestRun, Phases};
 
 /// A pipeline a task can use: one with a published version.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,7 +49,7 @@ impl ProjectTasks {
         },
       })?;
       if let Some(latest) = runs.last() {
-        phases.insert(task.id(), TaskPhase::of(task, Some(latest)));
+        phases.insert(task.id(), LatestRun::of(task, latest));
       }
     }
     Ok(Self {

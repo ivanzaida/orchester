@@ -15,8 +15,8 @@ use orchester_core::{
   },
   revision::Revision,
   run::{
-    BranchName, InterruptCause, NewRun, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot, RunStatus,
-    StepExecutor, StepStatus,
+    BranchName, InterruptCause, NewRun, PauseReason, PlanDecision, PublishedVersions, Run, RunEvent, RunLimit,
+    RunSnapshot, RunStatus, StepExecutor, StepStatus,
   },
   store::{ResourceStore, RunStore, TaskStore},
   task::TaskDetails,
@@ -427,4 +427,60 @@ fn runs_interrupted_by_runner_loss_continue_after_reconnect_once() {
     .collect();
   assert_eq!(interrupted, BTreeSet::from([crashed.id()]));
   assert_eq!(fixture.db.run(running.id()).expect("load"), Some(running));
+}
+
+#[test]
+fn runs_running_lists_only_running_runs_in_number_order() {
+  let mut fixture = Fixture::new();
+  let first = fixture.implementing();
+  let mut paused = fixture.implementing();
+  let third = fixture.implementing();
+  let _pending = fixture.create();
+  fixture.apply(&mut paused, |run| run.request_pause(at(16)));
+  fixture.apply(&mut paused, |run| run.pause(at(17)));
+  let running: Vec<_> = fixture.db.running_runs().expect("list").iter().map(Run::id).collect();
+  assert_eq!(running, [first.id(), third.id()]);
+}
+
+#[test]
+fn runs_stopped_by_the_daily_budget_round_trip_and_resume() {
+  let mut fixture = Fixture::new();
+  let mut run = fixture.implementing();
+  fixture.apply(&mut run, |run| run.stop_at_limit(RunLimit::DailyBudget, at(16)));
+  let stored = fixture.db.run(run.id()).expect("load").expect("exists");
+  assert_eq!(
+    stored.status(),
+    &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget))
+  );
+  // The daily budget is the project's: the run resumes as it is once the day has room.
+  fixture.apply(&mut run, |run| run.resume(at(17)));
+  assert_eq!(run.status(), &RunStatus::Running);
+}
+
+/// Two runners' worth of writers (each run's task has its own connection) record transitions of
+/// their runs at the same time: every write waits for the other instead of failing as locked.
+#[test]
+fn runs_concurrent_writers_on_one_project_wait_for_each_other() {
+  let mut fixture = Fixture::new();
+  let runs = [fixture.implementing(), fixture.implementing()];
+  let root = fixture.repo.path().to_path_buf();
+  let writers: Vec<_> = runs
+    .into_iter()
+    .map(|mut run| {
+      let root = root.clone();
+      std::thread::spawn(move || {
+        let mut db = ProjectDb::open(&root).expect("open");
+        for tick in 0..200 {
+          let events = run
+            .record_usage(TokensUsed::new(1), at(100 + tick))
+            .expect("usage is recorded");
+          db.append_events(&run, &events)
+            .expect("the write waits for the other writer");
+        }
+      })
+    })
+    .collect();
+  for writer in writers {
+    writer.join().expect("the writer finishes");
+  }
 }

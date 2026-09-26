@@ -84,7 +84,9 @@ impl Run {
         self.expect_status(kind, self.status == RunStatus::Running)
       }
       RunEventKind::Resumed => match self.status {
-        RunStatus::Paused(PauseReason::Requested) => Ok(()),
+        // The daily project budget is shared; a run stopped by it continues once the day has
+        // room again, which the runner checks, not with limits of its own.
+        RunStatus::Paused(PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget)) => Ok(()),
         RunStatus::Paused(PauseReason::LimitReached(limit)) => Err(RunError::LimitNotRaised(limit)),
         _ => self.expect_status(kind, false),
       },

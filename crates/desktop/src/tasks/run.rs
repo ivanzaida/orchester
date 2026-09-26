@@ -112,7 +112,13 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
     RunRequestError::Rejected(Rejection::TaskNotFound) => vec![Message::new("runs.start.taskMissing")],
     RunRequestError::Rejected(Rejection::TaskNotQueued) => vec![Message::new("runs.start.notQueued")],
     RunRequestError::Rejected(
+      rejection @ (Rejection::DailyBudgetUsed { .. } | Rejection::NoAgentSlot { .. } | Rejection::ShuttingDown),
+    ) => {
+      vec![capacity_message(rejection)]
+    }
+    RunRequestError::Rejected(
       Rejection::Failed { .. }
+      | Rejection::RunNotInterrupted
       | Rejection::RunNotFound
       | Rejection::RunNotRunning
       | Rejection::RunNotPaused
@@ -133,6 +139,10 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::RunNotRunning) => Message::new("runs.control.notRunning"),
     RunRequestError::Rejected(Rejection::RunNotPaused) => Message::new("runs.control.notPaused"),
     RunRequestError::Rejected(Rejection::RunEnded) => Message::new("runs.control.ended"),
+    RunRequestError::Rejected(Rejection::RunNotInterrupted) => Message::new("runs.control.notInterrupted"),
+    RunRequestError::Rejected(
+      rejection @ (Rejection::DailyBudgetUsed { .. } | Rejection::NoAgentSlot { .. } | Rejection::ShuttingDown),
+    ) => capacity_message(rejection),
     RunRequestError::Rejected(Rejection::LimitNotRaised { .. }) => Message::new("runs.limit.notRaised"),
     RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
       limit: RunLimit::Tokens,
@@ -145,10 +155,27 @@ pub fn control_message(error: &RunRequestError) -> Message {
     }
     RunRequestError::Rejected(
       Rejection::RunNotFound
+      | Rejection::LimitNotAboveUsed {
+        limit: RunLimit::DailyBudget,
+      }
       | Rejection::TaskNotFound
       | Rejection::TaskNotQueued
       | Rejection::Preflight { .. }
       | Rejection::Failed { .. },
     ) => Message::new("runs.control.failed"),
+  }
+}
+
+/// Why no run starts or continues now: today's budget is used, every agent slot is taken or the
+/// runner is stopping.
+fn capacity_message(rejection: &Rejection) -> Message {
+  match rejection {
+    Rejection::DailyBudgetUsed { .. } => Message::new("runs.capacity.dailyBudgetUsed"),
+    Rejection::NoAgentSlot { slots } => Message::new("runs.capacity.noAgentSlot").with("slots", slots.to_string()),
+    Rejection::ShuttingDown => Message::new("runs.capacity.shuttingDown"),
+    other => {
+      tracing::error!(?other, "not a capacity rejection");
+      Message::new("runs.control.failed")
+    }
   }
 }

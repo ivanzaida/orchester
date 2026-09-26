@@ -15,9 +15,10 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
+  connection::stream::InvocationOutcome,
   limits::ProjectLimits,
   resource::RepositoryAccess,
-  run::{PauseReason, RunStatus, StepStatus},
+  run::{PauseReason, RunLimit, RunStatus, StepStatus},
   time::Timestamp,
   tokens::compact_tokens,
 };
@@ -116,7 +117,9 @@ fn step_row(ctx: &Ctx, step: &StepView, run: &RunStatus) -> Element {
 
 /// Raise the limit to continue (`ZUYM0`), for a run stopped at a limit.
 fn raise_panel(ctx: &mut Ctx, run: &RunView, limits: Option<ProjectLimits>) -> Option<Element> {
-  let RunStatus::Paused(PauseReason::LimitReached(limit)) = run.run.status() else {
+  // A daily budget stop continues with a plain resume: the run's own limits were not reached.
+  let RunStatus::Paused(PauseReason::LimitReached(limit @ (RunLimit::Tokens | RunLimit::Time))) = run.run.status()
+  else {
     return None;
   };
   let props = RaiseLimitProps::of(run, *limit, limits?);
@@ -126,13 +129,16 @@ fn raise_panel(ctx: &mut Ctx, run: &RunView, limits: Option<ProjectLimits>) -> O
   ))
 }
 
-/// The latest agent launch (`AY4k5`, `P3P5R`).
+/// The latest agent launch (`AY4k5`, `P3P5R`): started, finished, stopped (by a pause, a cancel,
+/// a limit or the runner) or failed.
 fn latest(ctx: &Ctx, run: &RunView) -> Option<Element> {
   let invocation = run.invocations.last()?;
   let step = run.step_of(invocation.execution)?;
-  let (key, at) = match invocation.ended_at {
-    Some(ended) => ("runs.summary.latestEnded", ended),
-    None => ("runs.summary.latestStarted", invocation.started_at),
+  let (key, at) = match (invocation.ended_at, &invocation.outcome) {
+    (None, _) => ("runs.summary.latestStarted", invocation.started_at),
+    (Some(ended), Some(InvocationOutcome::Completed)) => ("runs.summary.latestEnded", ended),
+    (Some(ended), Some(InvocationOutcome::Terminated)) => ("runs.summary.latestStopped", ended),
+    (Some(ended), _) => ("runs.summary.latestFailed", ended),
   };
   let line = ctx.t_args(
     key,

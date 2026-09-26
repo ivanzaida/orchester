@@ -24,20 +24,25 @@ use crate::{
   ui::{icon::Icon, message_text},
 };
 
-/// The slot's elements; `after_runner` puts a separator after the runner item.
+/// The slot's elements; `after_runner` puts a separator after the runner item. `interrupted`
+/// counts the runs the runner's drop interrupted, which a runner problem names (E, G).
 pub fn activity_slot(
   ctx: &mut Ctx,
-  slot: &ActivitySlot<'_>,
+  (slot, interrupted): (&ActivitySlot<'_>, usize),
   log: &ActivityLog,
   opener: &Opener,
   hints: &Hints,
   after_runner: bool,
 ) -> Vec<Element> {
   let items = match slot {
-    // The design names interrupted runs here (E, G); runs do not exist yet, so only G's actions
-    // are shown.
-    ActivitySlot::Hidden | ActivitySlot::RunnerProblem(RunnerBadge::Reconnecting) => Vec::new(),
-    ActivitySlot::RunnerProblem(_) => runner_actions(ctx, opener),
+    ActivitySlot::Hidden => Vec::new(),
+    ActivitySlot::RunnerProblem(RunnerBadge::Reconnecting) => {
+      interrupted_runs(ctx, interrupted, false, hints).into_iter().collect()
+    }
+    ActivitySlot::RunnerProblem(_) => interrupted_runs(ctx, interrupted, true, hints)
+      .into_iter()
+      .chain(runner_actions(ctx, opener))
+      .collect(),
     ActivitySlot::Activity(Slot::Empty) => Vec::new(),
     ActivitySlot::Activity(Slot::Failure(event)) => failure(ctx, event, opener, hints),
     ActivitySlot::Activity(Slot::Running { newest, count }) => {
@@ -54,6 +59,25 @@ pub fn activity_slot(
 /// Whether the slot shows the activity item, which anchors the popover.
 pub fn shows_activity(slot: &ActivitySlot<'_>) -> bool {
   matches!(slot, ActivitySlot::Activity(slot) if *slot != Slot::Empty)
+}
+
+/// "2 runs interrupted · they continue from their last checkpoint" while reconnecting (E), or
+/// "· nothing runs until the runner starts" once it gave up (G); nothing when no run was at work.
+fn interrupted_runs(ctx: &Ctx, count: usize, offline: bool, hints: &Hints) -> Option<Element> {
+  let key = match (offline, count) {
+    (_, 0) => return None,
+    (false, 1) => "statusBar.activity.interruptedReconnecting.one",
+    (false, _) => "statusBar.activity.interruptedReconnecting.other",
+    (true, 1) => "statusBar.activity.interruptedOffline.one",
+    (true, _) => "statusBar.activity.interruptedOffline.other",
+  };
+  let count = count.to_string();
+  let text = ctx.t_args(key, [("count", count.as_str())]);
+  let row = item("status-activity")
+    .describe("state", "interrupted")
+    .child(glyph(Icon::Pause, PaletteColor::TextSecondary))
+    .child(truncated_label(&text, PaletteColor::TextSecondary));
+  Some(hints.attach(row, HintAnchor::Activity, text).into())
 }
 
 /// "Restart runner" and "Open runner log" (G).

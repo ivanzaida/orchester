@@ -24,6 +24,23 @@ impl Timestamp {
     self.0
   }
 
+  /// Local midnight of the day this instant falls on, in the computer's time zone: where
+  /// "today" starts for the daily project budget and the status bar's tokens today.
+  pub fn local_day_start(self) -> Self {
+    let Some(utc) = chrono::DateTime::from_timestamp_millis(self.0) else {
+      return self;
+    };
+    let local = utc.with_timezone(&chrono::Local);
+    // A day that starts in a skipped hour (a DST change at midnight) starts at the earliest
+    // local time that exists; without one the instant itself is the best answer.
+    let start = local
+      .date_naive()
+      .and_hms_opt(0, 0, 0)
+      .and_then(|midnight| midnight.and_local_timezone(chrono::Local).earliest())
+      .unwrap_or(local);
+    Self(start.timestamp_millis())
+  }
+
   /// Reads a UTC time as GitHub writes it, `2026-09-24T12:38:56Z`, optionally with a fraction
   /// of a second (`…56.123Z`). Offsets other than `Z` are not accepted.
   pub fn parse_utc(text: &str) -> Option<Self> {

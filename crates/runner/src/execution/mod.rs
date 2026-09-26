@@ -5,8 +5,12 @@
 //! database.
 //!
 //! This version executes pipelines of agent steps sequentially, in dependency order, without
-//! approval gates or tool steps (the preflight refuses those).
+//! approval gates or tool steps (the preflight refuses those). Each executing run has one agent
+//! at work, so the desktop's agent slots bound how many runs execute at once; the project's
+//! daily token budget holds new and continued work back once today's runs used it.
 
+mod attach;
+mod board;
 mod checkpoint;
 mod control;
 mod idle;
@@ -14,6 +18,7 @@ mod prepare;
 mod record;
 mod run;
 mod step;
+mod work;
 
 use std::{
   collections::HashMap,
@@ -34,7 +39,9 @@ use tokio::{
   task::JoinHandle,
 };
 
+pub use self::attach::Attached;
 use self::{
+  board::Board,
   control::Control,
   prepare::Prepared,
   run::{RunTask, TaskContext},
@@ -58,6 +65,7 @@ pub struct Scheduler {
 struct Inner {
   project_root: PathBuf,
   notifier: Notifier,
+  board: Arc<Board>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
 }
 
@@ -66,6 +74,7 @@ impl Scheduler {
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
+        board: Arc::new(Board::new(notifier.clone())),
         notifier,
         active: Mutex::new(HashMap::new()),
       }),
@@ -85,6 +94,7 @@ impl Scheduler {
   pub fn start_run(&self, key: IdempotencyKey, task: TaskId) -> Result<RunId, Rejection> {
     let root = &self.inner.project_root;
     let mut db = self.open()?;
+    self.admit(&db)?;
     let prepared = prepare::prepare(&mut db, root, key, task)?;
     let run = prepared.run.id();
     self.inner.notifier.send(Event::RunChanged {
@@ -138,6 +148,34 @@ impl Scheduler {
     self.continue_idle(run, |db, root| idle::raise(db, root, run, limits))
   }
 
+  /// "Wait for agents to save": starts no new work, asks every active run to pause at its next
+  /// checkpoint and returns once each has settled. The work summary shows each run saving, then
+  /// saved.
+  pub async fn finish_at_checkpoints(&self) {
+    self.inner.board.stop_at_checkpoints();
+    let active: Vec<RunId> = self.active_runs();
+    let mut settling = Vec::new();
+    for run in active {
+      match self.ask(run, Control::Pause) {
+        Some(answer) => settling.push((run, answer)),
+        None => tracing::debug!(%run, "the run settled before it was asked to pause"),
+      }
+    }
+    for (run, answer) in settling {
+      match answer.await {
+        Ok(Ok(())) => {}
+        Ok(Err(rejection)) => tracing::warn!(%run, ?rejection, "the run could not be asked to pause"),
+        Err(_) => tracing::debug!(%run, "the run settled before it read the pause"),
+      }
+    }
+    let tasks: Vec<(RunId, ActiveRun)> = self.inner.active.lock().drain().collect();
+    for (run, active) in tasks {
+      if let Err(error) = active.task.await {
+        tracing::warn!(%run, %error, "the run's task ended abnormally");
+      }
+    }
+  }
+
   /// Ends the agents of every active run and records the runs as interrupted by `cause`,
   /// waiting at most [`STOP_TIMEOUT`] for each.
   pub async fn stop_all(&self, cause: InterruptCause) {
@@ -168,6 +206,20 @@ impl Scheduler {
     Some(answered)
   }
 
+  /// Whether new or continued work may start: the runner is not stopping, an agent slot is
+  /// free and today's token budget has room.
+  fn admit(&self, db: &ProjectDb) -> Result<(), Rejection> {
+    if self.inner.board.is_stopping() {
+      return Err(Rejection::ShuttingDown);
+    }
+    if let Some(slots) = self.inner.board.slots()
+      && self.active_runs().len() >= slots.get() as usize
+    {
+      return Err(Rejection::NoAgentSlot { slots });
+    }
+    idle::check_daily_budget(db)
+  }
+
   /// Applies `transition` to idle run `run` and executes it again.
   fn continue_idle(
     &self,
@@ -178,6 +230,7 @@ impl Scheduler {
       return Err(Rejection::RunNotPaused);
     }
     let mut db = self.open()?;
+    self.admit(&db)?;
     let prepared = transition(&mut db, &self.inner.project_root)?;
     self.inner.notifier.send(Event::RunChanged {
       run,
@@ -205,6 +258,7 @@ impl Scheduler {
     let (control, controls) = mpsc::unbounded_channel();
     let context = TaskContext {
       notifier: self.inner.notifier.clone(),
+      board: self.inner.board.clone(),
       controls,
     };
     let task = tokio::spawn(RunTask::new(db, prepared, context).drive());
