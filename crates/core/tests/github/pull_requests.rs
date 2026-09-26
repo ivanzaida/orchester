@@ -346,13 +346,21 @@ fn sync_reads_the_list_as_the_expected_account() {
 fn check_rollups_ask_for_counts_of_exact_head_commits() {
   let heads = heads(&synthetic());
   let command = gh_check_rollups_command(&gh(), &repo("ivanzaida", "kontur"), &heads);
-  let args = command.args();
-  assert_eq!(&args[..4], ["api", "graphql", "--hostname", "github.com"]);
-  assert_eq!(&args[6..], ["-f", "owner=ivanzaida", "-f", "name=kontur"]);
+  // The query is the request body on standard input, never an argument.
+  assert_eq!(
+    command.args(),
+    ["api", "graphql", "--hostname", "github.com", "--input", "-"]
+  );
+  let body: serde_json::Value = serde_json::from_str(command.stdin().expect("a request body")).expect("JSON");
+  assert_eq!(
+    body["variables"],
+    serde_json::json!({"owner": "ivanzaida", "name": "kontur"})
+  );
+  let query = body["query"].as_str().expect("the query");
   for (index, head) in heads.iter().enumerate() {
-    assert!(args[5].contains(&format!("c{index}:object(oid:\"{head}\")")));
+    assert!(query.contains(&format!("c{index}:object(oid:\"{head}\")")));
   }
-  assert!(args[5].contains("checkRunCountsByState") && args[5].contains("statusContextCountsByState"));
+  assert!(query.contains("checkRunCountsByState") && query.contains("statusContextCountsByState"));
 }
 
 #[test]

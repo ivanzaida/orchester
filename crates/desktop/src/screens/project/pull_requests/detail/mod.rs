@@ -312,12 +312,11 @@ fn tabs(ctx: &Ctx, linked: &LinkedDetail) -> Element {
   let height = Dimension::Px(TAB_HEIGHT);
   let files = match &linked.diff {
     DiffState::Read(read) => Some(read.diff.files().len()),
-    // Not read, but GitHub said how many files it changes.
-    DiffState::TooLarge => linked
+    // Not read (too large, or the read failed), but GitHub said how many files it changes.
+    DiffState::TooLarge | DiffState::Unknown => linked
       .pull_request
       .as_ref()
       .map(|pull_request| usize::try_from(pull_request.changes().files).expect("a u32 fits in usize on 32 and 64 bit")),
-    DiffState::Unknown => None,
   };
   let tab = |id, key| Tab::new(id, ctx.t(key), height);
   tab_row(

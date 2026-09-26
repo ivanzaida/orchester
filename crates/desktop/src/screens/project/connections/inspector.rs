@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -18,15 +18,25 @@ use orchester_core::{
   id::ResourceId,
   time::Timestamp,
 };
+use orchester_exec::launch::Launch;
 
-use super::status::{CHECKING, status_detail_key, status_label, vendor_key};
+use super::{
+  launch::launch_properties,
+  status::{CHECKING, status_detail_key, status_label, vendor_key},
+};
 use crate::{
   connections::data::ProfileUse,
   display,
   messages::Message,
   screens::project::page::TOPBAR_BUTTON_HEIGHT,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{button::ActionButton, icon::Icon, message_text, property::property, status_label::status_label as label},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
+  ui::{
+    button::ActionButton,
+    icon::Icon,
+    message_text,
+    property::{ValueStyle, property, styled_property},
+    status_label::status_label as label,
+  },
 };
 
 /// Inspector width (`ez6IT`) and the longest executable path shown in full.
@@ -46,6 +56,8 @@ pub struct InspectorState<'a> {
   pub checking: bool,
   /// Why the last check could not be stored.
   pub check_error: Option<Message>,
+  /// What starts when the program runs.
+  pub launch: Option<&'a Launch>,
 }
 
 pub fn inspector(
@@ -56,17 +68,12 @@ pub fn inspector(
 ) -> Element {
   let status = connection.status();
   let (status_icon, status_key) = if state.checking { CHECKING } else { status_label(status) };
-  Column::new()
-    .id("connection-inspector")
-    .width(Dimension::Px(INSPECTOR_WIDTH))
-    .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
+  let details = Column::new()
+    .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Step.role())
-    .background(PaletteColor::SurfacePanel)
-    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Text::new(connection.name().as_str()).variant(ExtraTypography::InspectorTitle.role()))
     .child(label(status_icon, &ctx.t(status_key)))
-    .with_children(properties(ctx, connection))
+    .with_children(properties(ctx, connection, state.launch))
     .child(models(ctx, connection))
     .child(button(
       ctx,
@@ -75,8 +82,11 @@ pub fn inspector(
       Icon::RefreshCw,
       actions.check.clone(),
     ))
-    .child(used_by(ctx, &state.uses, &actions.show_profile))
-    .child(Spacer::new().flex(1.0))
+    .child(used_by(ctx, &state.uses, &actions.show_profile));
+  let pinned = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_right(ExtraSpacing::Stack.role())
+    .spacing(ExtraSpacing::Step.role())
     .child(button(
       ctx,
       "test-connection",
@@ -91,23 +101,55 @@ pub fn inspector(
       Icon::Settings,
       Some(actions.edit.clone()),
     ))
-    .child(status_detail(ctx, connection, status, state.check_error.as_ref()))
+    .child(status_detail(ctx, connection, status, state.check_error.as_ref()));
+  // The details scroll when they do not fit, their bar in a gutter of its own that takes the
+  // right padding's inner half; the actions and the status detail stay at the bottom, as in
+  // the GitHub inspector.
+  Column::new()
+    .id("connection-inspector")
+    .width(Dimension::Px(INSPECTOR_WIDTH))
+    .height(Dimension::Pct(100.0))
+    .padding_vertical(SpacingSize::Lg)
+    .padding_left(SpacingSize::Lg)
+    .padding_right(ExtraSpacing::Stack.role())
+    .spacing(ExtraSpacing::Step.role())
+    .background(PaletteColor::SurfacePanel)
+    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .child(
+      ScrollVertical::new(details)
+        .id("connection-inspector-details")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
+    )
+    .child(pinned)
     .into()
 }
 
-/// The design's properties (`CRVwa`…`X4Sz0`) plus the program file; the version is in the row.
-fn properties(ctx: &Ctx, connection: &AgentConnection) -> Vec<Element> {
+/// The design's properties (`CRVwa`…`X4Sz0`) plus the program file, its version and, when it
+/// is a launcher script, what it starts.
+fn properties(ctx: &Ctx, connection: &AgentConnection, launch: Option<&Launch>) -> Vec<Element> {
   let provider = connection.provider();
   let checked = connection.last_check().map_or_else(
     || ctx.t("connections.notCheckedYet"),
     |check| message_text(ctx, &display::elapsed(Timestamp::now(), check.at)),
   );
-  vec![
+  let version = match (connection.version(), connection.last_check()) {
+    (Some(version), _) => version.into(),
+    (None, None) => ctx.t("connections.notCheckedYet"),
+    (None, Some(_)) => ctx.t("github.connection.unknown"),
+  };
+  let mut rows = vec![
     property(&ctx.t("connections.property.provider"), &ctx.t(vendor_key(provider))),
-    property(
+    styled_property(
       &ctx.t("connections.property.executable"),
       &display::shorten_path(connection.executable(), PATH_CHARS),
+      ValueStyle::Path,
     ),
+  ];
+  rows.extend(launch_properties(ctx, launch, PATH_CHARS));
+  rows.extend([
+    property(&ctx.t("connections.property.version"), &version),
     property(
       &ctx.t("connections.property.execution"),
       &ctx.t("connections.thisComputer"),
@@ -117,7 +159,8 @@ fn properties(ctx: &Ctx, connection: &AgentConnection) -> Vec<Element> {
       &ctx.t("connections.cliLogin"),
     ),
     property(&ctx.t("connections.property.lastChecked"), &checked),
-  ]
+  ]);
+  rows
 }
 
 /// Models of the last check (`o5BqGF`, `JoYhX`) and where the list comes from.

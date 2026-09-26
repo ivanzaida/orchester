@@ -50,8 +50,9 @@ use crate::{
 const SYNC_INTERVAL: Duration = Duration::from_secs(60);
 /// Tab row (`DF8II`).
 const TAB_ROW_HEIGHT: f32 = 42.0;
-/// Width of the unavailable panel (`MBmo4` in 08.D).
-const UNAVAILABLE_WIDTH: f32 = 520.0;
+/// Width of the unavailable panel (`MBmo4` in 08.D), which the empty inbox, without a design
+/// node of its own, shares.
+const PANEL_WIDTH: f32 = 520.0;
 
 pub struct PullRequestsScreen {
   /// What the latest sync or *Use this account* returned; before it, the stored list is shown.
@@ -186,7 +187,7 @@ impl PullRequestsScreen {
           [("project", open.project.name().as_str())],
         ),
       )
-      .width(UNAVAILABLE_WIDTH)
+      .width(PANEL_WIDTH)
       .action(action),
     );
     centered(panel.into())

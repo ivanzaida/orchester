@@ -207,6 +207,8 @@ fn pull_request_read_without_its_diff_is_synced_and_says_why() {
     CONTEXT,
     "PR #42 · orc/github-auth → main · Head 8f3a2c1 · Synced just now"
   ));
+  // GitHub's own count of the changed files stands in for the unread diff's.
+  assert!(shows(&mut desktop, "pull-request-tab-files", "6"));
 }
 
 #[test]

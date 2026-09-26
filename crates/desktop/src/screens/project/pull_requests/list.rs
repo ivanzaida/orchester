@@ -21,6 +21,7 @@ use orchester_core::{
 };
 
 use super::{
+  PANEL_WIDTH,
   notice::{NoticeActions, failure_notice},
   row::{PullRequestRow, ROW_HEIGHT, RowProps, column_headings},
 };
@@ -205,7 +206,8 @@ impl PullRequestList {
           "pullRequests.empty.detail",
           [("owner", repo.owner()), ("name", repo.name())],
         ),
-      );
+      )
+      .width(PANEL_WIDTH);
       let empty = Column::new()
         .id("pull-requests-empty")
         .width(Dimension::Pct(100.0))
@@ -225,8 +227,15 @@ impl PullRequestList {
       .collect();
     let shown = rows.len();
     let table: Element = if rows.is_empty() {
-      Text::new(&ctx.t_args("pullRequests.footer.noMatch", [("query", query.trim())]))
-        .variant(TypographyStyle::Caption)
+      // Indented like the column headings.
+      Row::new()
+        .id("pull-requests-no-match")
+        .width(Dimension::Pct(100.0))
+        .padding_horizontal(ExtraSpacing::Stack.role())
+        .child(
+          Text::new(&ctx.t_args("pullRequests.footer.noMatch", [("query", query.trim())]))
+            .variant(TypographyStyle::Caption),
+        )
         .into()
     } else {
       // Takes the free height, capped at the rows' own height: the footer follows the last row

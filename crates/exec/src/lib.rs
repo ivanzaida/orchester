@@ -5,6 +5,7 @@
 //! thread.
 
 mod console;
+pub mod launch;
 
 use std::{
   io::{self, Read, Write},
@@ -52,8 +53,11 @@ impl CommandRunner for ProcessRunner {
 }
 
 fn spawn(command: &Command) -> Result<Child, CommandError> {
-  let mut process = Process::new(command.program());
+  let launch = launch::resolve(command.program());
+  launch.check_args(command.args())?;
+  let mut process = Process::new(launch.program());
   process
+    .args(launch.leading_args())
     .args(command.args())
     .envs(command.env().iter().map(|(key, value)| (key, value)))
     .stdin(if command.stdin().is_some() {

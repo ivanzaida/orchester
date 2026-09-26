@@ -14,6 +14,7 @@ use orchester_core::{
   store::{ConnectionStore, RepositoryStore, ResourceStore},
   time::Timestamp,
 };
+use orchester_exec::launch::{self, Launch};
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
@@ -32,14 +33,16 @@ pub struct ProfileUse {
   pub model: Arc<str>,
 }
 
-/// The project's connections of each kind, the profiles that use the agent providers and the
-/// repository link that uses a GitHub connection, read together.
+/// The project's connections of each kind, what starts when each one's program runs, the
+/// profiles that use the agent providers and the repository link that uses a GitHub connection,
+/// read together.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectConnections {
   pub connections: Arc<Vec<AgentConnection>>,
   pub github: Arc<Vec<GitHubConnection>>,
   pub uses: Arc<Vec<ProfileUse>>,
   pub link: Option<Arc<RepositoryLink>>,
+  pub launches: Arc<Vec<(ConnectionId, Launch)>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProjectConnections {}
@@ -60,11 +63,16 @@ impl ProjectConnections {
       })
       .collect();
     let connections = store.connections()?;
+    let launches = connections
+      .iter()
+      .map(|connection| (connection.id(), launch::resolve(connection.executable())))
+      .collect();
     Ok(Self {
       github: Arc::new(github_connections(connections.clone())),
       connections: Arc::new(agent_connections(connections)),
       uses: Arc::new(uses),
       link: store.repository_link()?.map(Arc::new),
+      launches: Arc::new(launches),
     })
   }
 
@@ -78,6 +86,15 @@ impl ProjectConnections {
 
   pub fn github_connection(&self, id: ConnectionId) -> Option<&GitHubConnection> {
     self.github.iter().find(|connection| connection.id() == id)
+  }
+
+  /// What starts when the program of connection `id` runs.
+  pub fn launch_of(&self, id: ConnectionId) -> Option<&Launch> {
+    self
+      .launches
+      .iter()
+      .find(|(connection, _)| *connection == id)
+      .map(|(_, launch)| launch)
   }
 
   /// The repository link reached through `id`, if the project's link uses that connection.

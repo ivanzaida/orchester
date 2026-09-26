@@ -105,6 +105,13 @@ pub enum CommandError {
   TimedOut,
   #[error("the program could not be run: {0}")]
   Failed(String),
+  /// Windows only: the program is a `.cmd`/`.bat` script, which `cmd.exe` runs by reading its
+  /// arguments again; argument `position` (from 0) would be split or changed on the way to the
+  /// program, so it is not run. Free-form text belongs on standard input instead.
+  #[error(
+    "argument {position} would be changed by cmd.exe on its way through the command script that starts the program"
+  )]
+  UnsafeScriptArgument { position: usize },
 }
 
 /// Runs a program to completion.

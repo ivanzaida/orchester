@@ -46,7 +46,9 @@ pub fn check(
 ) -> ConnectionCheck {
   let result = match runner.run(&Command::new(executable, VERSION_ARGS.iter().copied())) {
     Err(CommandError::NotFound) => CheckResult::ExecutableMissing,
-    Err(CommandError::TimedOut | CommandError::Failed(_)) => CheckResult::CouldNotRun,
+    Err(CommandError::TimedOut | CommandError::Failed(_) | CommandError::UnsafeScriptArgument { .. }) => {
+      CheckResult::CouldNotRun
+    }
     Ok(output) => match parse_version(provider, &output) {
       None => CheckResult::NotRecognized,
       Some(version) => CheckResult::Available {

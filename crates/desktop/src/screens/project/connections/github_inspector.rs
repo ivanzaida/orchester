@@ -10,9 +10,8 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text, TextOverflow},
+  components::{Column, ScrollVertical, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -20,8 +19,9 @@ use orchester_core::{
   repository::RepositoryLink,
   time::Timestamp,
 };
+use orchester_exec::launch::Launch;
 
-use super::status::CHECKING;
+use super::{launch::launch_properties, status::CHECKING};
 use crate::{
   display,
   messages::Message,
@@ -29,21 +29,20 @@ use crate::{
     github::status::{command_ids, status_label},
     project::page::TOPBAR_BUTTON_HEIGHT,
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::ActionButton,
     command_row::{CommandPlace, Copied, command_row},
     field::field_error,
     icon::Icon,
     message_text,
-    property::property,
+    property::{ValueStyle, property, styled_property},
     status_label::status_label as label,
   },
 };
 
-/// Inspector width (`l8BJVr`), property row height (`tfGRt`) and the longest path shown in full.
+/// Inspector width (`l8BJVr`) and the longest path shown in full.
 const INSPECTOR_WIDTH: f32 = 344.0;
-const PROPERTY_HEIGHT: f32 = 20.0;
 const PATH_CHARS: usize = 34;
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
@@ -65,6 +64,8 @@ pub struct GitHubInspector<'a> {
   /// Why the last action on the connection failed.
   pub error: Option<Message>,
   pub copied: &'a Signal<Copied>,
+  /// What starts when `gh` runs.
+  pub launch: Option<&'a Launch>,
 }
 
 impl GitHubInspector<'_> {
@@ -95,12 +96,21 @@ impl GitHubInspector<'_> {
       let command = advice.command(self.connection.host());
       details = details.child(command_row(ctx, id, copy_id, &command, CommandPlace::Page, self.copied));
     }
-    // The details scroll when a state has more to say than fits; the actions stay at the bottom.
+    let pinned = Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding_right(ExtraSpacing::Stack.role())
+      .spacing(SpacingSize::Md)
+      .with_children(buttons(ctx, &state, actions))
+      .with_children(self.error.as_ref().map(|error| field_error(&message_text(ctx, error))));
+    // The details scroll when a state has more to say than fits, their bar in a gutter of its
+    // own that takes the right padding's inner half; the actions stay at the bottom.
     Column::new()
       .id("connection-inspector")
       .width(Dimension::Px(INSPECTOR_WIDTH))
       .height(Dimension::Pct(100.0))
-      .padding(SpacingSize::Lg)
+      .padding_vertical(SpacingSize::Lg)
+      .padding_left(SpacingSize::Lg)
+      .padding_right(ExtraSpacing::Stack.role())
       .spacing(SpacingSize::Md)
       .background(PaletteColor::SurfacePanel)
       .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
@@ -108,10 +118,10 @@ impl GitHubInspector<'_> {
         ScrollVertical::new(details)
           .id("github-inspector-details")
           .width(Dimension::Pct(100.0))
-          .flex(1.0),
+          .flex(1.0)
+          .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
       )
-      .with_children(buttons(ctx, &state, actions))
-      .with_children(self.error.as_ref().map(|error| field_error(&message_text(ctx, error))))
+      .child(pinned)
       .into()
   }
 
@@ -135,8 +145,13 @@ impl GitHubInspector<'_> {
     let mut rows = vec![
       property(&ctx.t("github.connection.host"), connection.host().as_str()),
       property(&ctx.t("connections.property.program"), &program),
-      path_property(ctx, &display::shorten_path(connection.executable(), PATH_CHARS)),
+      styled_property(
+        &ctx.t("github.connection.path"),
+        &display::shorten_path(connection.executable(), PATH_CHARS),
+        ValueStyle::Path,
+      ),
     ];
+    rows.extend(launch_properties(ctx, self.launch, PATH_CHARS));
     if let Some(GitHubCheckResult::Available { account, scopes, .. }) = result {
       let account = match (state, account) {
         (GitHubState::NotSignedIn, _) | (_, None) => ctx.t("github.connection.notSignedIn"),
@@ -181,30 +196,6 @@ impl GitHubInspector<'_> {
       GitHubState::CouldNotRun => ctx.t("github.hint.couldNotRun"),
     }
   }
-}
-
-/// The program path in mono (`xJ8W9`).
-fn path_property(ctx: &Ctx, path: &str) -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(PROPERTY_HEIGHT))
-    .align_items(Alignment::Center)
-    .spacing(SpacingSize::Sm)
-    .justify(Justify::SpaceBetween)
-    .child(
-      Text::new(&ctx.t("github.connection.path"))
-        .variant(TypographyStyle::Caption)
-        .nowrap(),
-    )
-    .child(
-      Text::new(path)
-        .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextPrimary)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .selectable(true),
-    )
-    .into()
 }
 
 /// Expected account, repository and remote of the link through this connection (`WtiPq`).

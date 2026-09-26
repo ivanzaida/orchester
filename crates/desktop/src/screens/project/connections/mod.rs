@@ -12,6 +12,7 @@ mod github_dialog;
 mod github_form;
 mod github_inspector;
 mod inspector;
+mod launch;
 mod library;
 mod list;
 mod status;

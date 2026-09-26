@@ -531,7 +531,10 @@
       "executable": "Program file",
       "execution": "Execution",
       "authentication": "Authentication",
-      "lastChecked": "Last checked"
+      "lastChecked": "Last checked",
+      "version": "Version",
+      "runs": "Runs with",
+      "script": "Script"
     },
     "thisComputer": "This computer",
     "cliLogin": "CLI login",

@@ -147,7 +147,9 @@ fn latest(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Element {
   let text = event_text(ctx, event);
   let icon = match event.outcome() {
     Outcome::Finished => Icon::Check,
-    Outcome::Failed { .. } => Icon::AlertCircle,
+    // No status bar state (`keJ9Z`) shows work that was not done; the alert icon in the row's
+    // muted color says so without the raised fill of a failure (H).
+    Outcome::NotDone | Outcome::Failed { .. } => Icon::AlertCircle,
   };
   let row = item("status-activity")
     .describe("state", "latest")
@@ -188,7 +190,7 @@ fn popover_toggle(row: Button, opener: &Opener) -> Element {
 pub fn event_text(ctx: &Ctx, event: &Event) -> Arc<str> {
   let title = message_text(ctx, event.title());
   match event.outcome() {
-    Outcome::Finished => title,
+    Outcome::Finished | Outcome::NotDone => title,
     Outcome::Failed { reason, .. } => {
       let reason = message_text(ctx, reason);
       ctx.t_args("statusBar.activity.failure", [("title", &*title), ("reason", &*reason)])

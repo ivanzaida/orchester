@@ -27,7 +27,7 @@ pub(crate) const LIST: &str = "pr list -R github.com/ivanzaida/kontur --state op
                     number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,additions,deletions,\
                     changedFiles,updatedAt,reviewDecision";
 /// The check counts request of a sync; the fake answers it from `FakeGh::checks`.
-const CHECKS: &str = "api graphql --hostname github.com -f query=";
+const CHECKS: &str = "api graphql --hostname github.com --input -";
 /// The synthetic list's checks, counted by state: #42 three passed (a success, a neutral check
 /// run, a successful commit status), #43 one failed, one running, one skipped and one pending
 /// status; #44 has none.
@@ -79,9 +79,9 @@ impl FakeGh {
     self.answers.lock().insert(args, output);
   }
 
-  /// GitHub's answer to a check counts request: `c<n>` for the n-th commit asked about.
-  fn count_checks(&self, request: &str) -> String {
-    let commits: Vec<String> = request
+  /// GitHub's answer to a check counts query: `c<n>` for the n-th commit asked about.
+  fn count_checks(&self, query: &str) -> String {
+    let commits: Vec<String> = query
       .split("object(oid:\"")
       .skip(1)
       .filter_map(|rest| rest.split_once('"').map(|(head, _)| head))
@@ -103,8 +103,10 @@ impl CommandRunner for FakeGh {
   fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
     let key = command.args().join(" ");
     self.ran.lock().push(key.clone());
-    if key.starts_with(CHECKS) {
-      return Ok(ok(&self.count_checks(&key)));
+    if key == CHECKS {
+      let body: serde_json::Value =
+        serde_json::from_str(command.stdin().expect("the request body")).expect("a JSON request");
+      return Ok(ok(&self.count_checks(body["query"].as_str().expect("the query"))));
     }
     self
       .answers

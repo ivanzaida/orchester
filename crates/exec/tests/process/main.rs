@@ -6,6 +6,9 @@ use std::{path::Path, time::Duration};
 use orchester_core::command::{Command, CommandError, CommandRunner};
 use orchester_exec::ProcessRunner;
 
+#[cfg(windows)]
+mod shim;
+
 const RUNNER: ProcessRunner = ProcessRunner::new(Duration::from_secs(30));
 
 fn git<const N: usize>(args: [&str; N]) -> Command {

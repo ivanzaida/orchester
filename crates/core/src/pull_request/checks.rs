@@ -16,7 +16,10 @@ use crate::{
   revision::Revision,
 };
 
-/// Asks for the check counts of each of `heads`, commits of `repo`, one aliased field each.
+/// Asks for the check counts of each of `heads`, commits of `repo`, one aliased field each. The
+/// query and its variables are the request body on standard input (`--input -`), never an
+/// argument: on Windows a `gh` started through a `.cmd` script would have `cmd.exe` split the
+/// query text into many arguments.
 pub fn gh_check_rollups_command(executable: &Path, repo: &GitHubRepo, heads: &[Revision]) -> Command {
   // Revisions are hexadecimal object ids, so they are safe inside the query text; owner and
   // name travel as variables.
@@ -25,25 +28,17 @@ pub fn gh_check_rollups_command(executable: &Path, repo: &GitHubRepo, heads: &[R
     .enumerate()
     .map(|(index, head)| {
       format!(
-        "c{index}:object(oid:\"{head}\"){{...on Commit{{oid statusCheckRollup{{contexts{{\
-         checkRunCountsByState{{state count}} statusContextCountsByState{{state count}}}}}}}}}}"
+        "c{index}:object(oid:\"{head}\"){{...on Commit{{oid statusCheckRollup{{contexts{{         checkRunCountsByState{{state count}} statusContextCountsByState{{state count}}}}}}}}}}"
       )
     })
     .collect();
   let query = format!("query($owner:String!,$name:String!){{repository(owner:$owner,name:$name){{{commits}}}}}");
-  let args = [
-    "api".to_owned(),
-    "graphql".to_owned(),
-    "--hostname".to_owned(),
-    repo.host().as_str().to_owned(),
-    "-f".to_owned(),
-    format!("query={query}"),
-    "-f".to_owned(),
-    format!("owner={}", repo.owner()),
-    "-f".to_owned(),
-    format!("name={}", repo.name()),
-  ];
-  gh_command(executable, args.to_vec())
+  let body = serde_json::json!({
+    "query": query,
+    "variables": { "owner": repo.owner(), "name": repo.name() },
+  });
+  let args = ["api", "graphql", "--hostname", repo.host().as_str(), "--input", "-"];
+  gh_command(executable, args.map(str::to_owned).to_vec()).with_stdin(body.to_string())
 }
 
 #[derive(Deserialize)]
