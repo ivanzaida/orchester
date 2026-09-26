@@ -117,6 +117,13 @@ impl TaskDetail {
     TaskPhase::of(&self.task, self.run.as_ref().map(|run| &run.run))
   }
 
+  /// Whether the run is recorded as running while no runner is `online`: its agent is gone and
+  /// the run is interrupted until a runner is back ([`TaskPhase::without_runner`]).
+  pub fn lost_its_runner(&self, online: bool) -> bool {
+    let phase = self.phase();
+    !online && phase.without_runner() != phase
+  }
+
   pub fn load_in(repo_root: &Path, task: TaskId) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let task = db.task(task)?.ok_or(StoreError::TaskNotFound(task))?;

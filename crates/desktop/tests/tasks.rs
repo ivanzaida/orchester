@@ -1,3 +1,5 @@
+mod support;
+
 use std::{fs, time::Duration};
 
 use orchester_core::{
@@ -5,6 +7,7 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
   resource::{Pipeline, PromptText, RepositoryAccess, Slug, Step, StepKey, StepKind},
+  run::TaskPhase,
   store::{ResourceStore, TaskStore},
   task::{MissingDetail, Task, TaskDetails},
   time::Timestamp,
@@ -14,6 +17,7 @@ use orchester_desktop::{
   display,
   tasks::{
     data::{ProjectTasks, published_pipelines, save_draft},
+    detail::TaskDetail,
     form::TaskForm,
     list::{self, DraftSummary, PipelineLabel, Readiness, TaskTab},
   },
@@ -342,4 +346,64 @@ fn task_list_keeps_task_order_and_overview_shows_newest_first() {
     titles(list::recent(&tasks, &[], &Default::default(), 2)),
     ["To queue", "Incomplete"]
   );
+}
+
+#[test]
+fn task_list_footer_counts_tasks_and_started_runs() {
+  let footer = |tasks, runs| list::footer(tasks, runs);
+  assert_eq!(footer(10, 0).key, "tasks.footer.noRuns.other");
+  assert_eq!(footer(1, 0).key, "tasks.footer.noRuns.one");
+  assert_eq!(footer(3, 1).key, "tasks.footer.oneRun.other");
+  assert_eq!(footer(1, 2).key, "tasks.footer.runs.one");
+  assert_eq!(
+    footer(3, 4).args,
+    vec![("count", "3".to_owned()), ("runs", "4".to_owned())]
+  );
+}
+
+#[test]
+fn task_list_reads_run_counts_and_interrupts_running_runs_without_a_runner() {
+  let mut fixture = support::Fixture::new();
+  let first = fixture.task("Add login", support::at(10));
+  let second = fixture.task("Fix zoom", support::at(11));
+  let mut earlier = fixture.started_run(first, support::at(20));
+  fixture.succeed(&mut earlier, support::at(30));
+  fixture.started_run(first, support::at(40));
+  fixture.started_run(second, support::at(50));
+  let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  assert_eq!(loaded.runs, 3);
+  assert_eq!(
+    list::footer(loaded.tasks.len(), loaded.runs).key,
+    "tasks.footer.runs.other"
+  );
+  let latest = &loaded.phases[&first];
+  assert_eq!(latest.phase, TaskPhase::Running);
+  assert_eq!(latest.number.get(), 2);
+  assert_eq!(latest.updated_at, support::at(40));
+
+  let away = loaded.without_runner();
+  assert_eq!(away.phases[&first].phase, TaskPhase::Interrupted);
+  assert_eq!(away.phases[&second].phase, TaskPhase::Interrupted);
+  assert_eq!(
+    away.phases[&first].message().key,
+    "tasks.progress.interruptedNoCheckpoint"
+  );
+  assert_eq!(away.runs, 3);
+}
+
+#[test]
+fn task_page_run_recorded_running_lost_its_agent_without_a_runner() {
+  let mut fixture = support::Fixture::new();
+  let running = fixture.task("Fix zoom", support::at(10));
+  fixture.started_run(running, support::at(20));
+  let done = fixture.task("Add login", support::at(30));
+  let mut run = fixture.started_run(done, support::at(40));
+  fixture.succeed(&mut run, support::at(50));
+
+  let detail = TaskDetail::load_in(fixture.repo.path(), running).expect("read the task");
+  assert!(!detail.lost_its_runner(true));
+  assert!(detail.lost_its_runner(false));
+  let settled = TaskDetail::load_in(fixture.repo.path(), done).expect("read the task");
+  assert_eq!(settled.phase(), TaskPhase::Succeeded);
+  assert!(!settled.lost_its_runner(false));
 }

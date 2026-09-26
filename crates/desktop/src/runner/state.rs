@@ -5,8 +5,9 @@
 
 use std::{path::PathBuf, time::Duration};
 
-/// Reconnect attempts after a drop before the runner is reported as failed.
-pub const RECONNECT_LIMIT: u32 = 6;
+/// Reconnect attempts after a drop before the runner is reported as failed: "attempt 2 of 5"
+/// (status bar state E in `keJ9Z`), "Tried 5 times since 14:02" (02.H `EFY7I`).
+pub const RECONNECT_LIMIT: u32 = 5;
 const FIRST_RECONNECT_DELAY: Duration = Duration::from_millis(500);
 const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(8);
 

@@ -126,3 +126,25 @@ fn locales_count_minutes_with_plural_forms() {
   let not_above = app.i18n().t_args("errors.timeLimitNotAboveUsed.one", [("used", "1")]);
   assert_eq!(&*not_above, "Enter more than the 1 minute this run already used.");
 }
+
+/// Task statuses read as the status label variants of the design (`P3HONM`): "Completed", not
+/// "Finished"; "Needs input", not "Needs you".
+#[test]
+fn locales_name_task_statuses_as_designed() {
+  let app = App::new();
+  i18n::install(&app).expect("bundled locales load");
+  let status = |phase: &str| app.i18n().t(&format!("tasks.status.{phase}"));
+  let designed = [
+    ("running", "Running"),
+    ("queued", "Queued"),
+    ("waiting", "Needs input"),
+    ("paused", "Paused"),
+    ("stoppedAtLimit", "Stopped at limit"),
+    ("failed", "Failed"),
+    ("succeeded", "Completed"),
+    ("interrupted", "Interrupted"),
+  ];
+  for (phase, label) in designed {
+    assert_eq!(&*status(phase), label, "tasks.status.{phase}");
+  }
+}

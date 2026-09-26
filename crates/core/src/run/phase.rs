@@ -53,6 +53,17 @@ impl TaskPhase {
   pub const fn is_active(self) -> bool {
     matches!(self, Self::Running | Self::Waiting)
   }
+
+  /// The phase while no runner is connected to the project. A run recorded as running has lost
+  /// its agent: it is interrupted and keeps its last checkpoint until a runner is back and
+  /// records what happened (`docs/design/orchester-workspace.md`, "Runner connection"). A step
+  /// waiting for a person has no agent at work, so it still waits.
+  pub const fn without_runner(self) -> Self {
+    match self {
+      Self::Running => Self::Interrupted,
+      other => other,
+    }
+  }
 }
 
 fn waiting(run: &Run) -> bool {

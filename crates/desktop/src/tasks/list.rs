@@ -6,7 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 use orchester_core::{
   id::{ResourceId, TaskId},
   resource::VersionNumber,
-  run::{PauseReason, Run, RunLimit, RunStatus, TaskPhase},
+  run::{PauseReason, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
 };
@@ -64,6 +64,10 @@ impl TaskTab {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LatestRun {
   pub phase: TaskPhase,
+  /// The run's number in the project, e.g. 128 for "Run #128".
+  pub number: RunNumber,
+  /// When the run last changed: its last recorded event.
+  pub updated_at: Timestamp,
   /// Stopped by the project's daily budget rather than its own limit.
   pub daily_budget: bool,
   /// Running, with a pause requested: it pauses at its next checkpoint.
@@ -73,14 +77,29 @@ pub struct LatestRun {
 }
 
 impl LatestRun {
-  pub fn of(task: &Task, run: &Run) -> Self {
+  /// `run`, the latest run of `task`, whose last event was recorded at `updated_at`.
+  pub fn of(task: &Task, run: &Run, updated_at: Timestamp) -> Self {
     Self {
       phase: TaskPhase::of(task, Some(run)),
+      number: run.number(),
+      updated_at,
       daily_budget: run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)),
       pausing: run.status() == &RunStatus::Running && run.pause_requested(),
       checkpoint: run
         .last_checkpoint()
         .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).into()),
+    }
+  }
+
+  /// The run while no runner is connected: a running run is interrupted, and a requested pause
+  /// cannot settle.
+  #[must_use]
+  pub fn without_runner(&self) -> Self {
+    let phase = self.phase.without_runner();
+    Self {
+      phase,
+      pausing: self.pausing && phase == TaskPhase::Running,
+      ..self.clone()
     }
   }
 
@@ -281,4 +300,19 @@ impl DraftSummary {
         }
       })
   }
+}
+
+/// Under the task list (`Bpth7`): how many tasks there are and how many runs were started.
+pub fn footer(tasks: usize, runs: usize) -> Message {
+  let key = match (tasks == 1, runs) {
+    (true, 0) => "tasks.footer.noRuns.one",
+    (false, 0) => "tasks.footer.noRuns.other",
+    (true, 1) => "tasks.footer.oneRun.one",
+    (false, 1) => "tasks.footer.oneRun.other",
+    (true, _) => "tasks.footer.runs.one",
+    (false, _) => "tasks.footer.runs.other",
+  };
+  Message::new(key)
+    .with("count", tasks.to_string())
+    .with("runs", runs.to_string())
 }

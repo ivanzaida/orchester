@@ -26,7 +26,7 @@ use lurq::{
   },
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{id::StepExecutionId, run::RunStatus};
+use orchester_core::id::StepExecutionId;
 use parking_lot::Mutex;
 
 use self::{
@@ -60,6 +60,8 @@ pub struct ActivityProps {
   pub detail: Arc<TaskDetail>,
   /// Changes whenever the runner reports a change: the transcript is read again.
   pub revision: (u64, u64),
+  /// An agent is at work on the run: its runner is connected and the run is running.
+  pub live: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ActivityProps {}
@@ -139,15 +141,14 @@ impl Component for ActivityTab {
       .id("activity")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
-      .child(self.transcript(ctx, run, &transcript.0))
+      .child(self.transcript(ctx, run, &transcript.0, props.live))
       .child(panel::invocation_panel(ctx, run))
       .into()
   }
 }
 
 impl ActivityTab {
-  fn transcript(&self, ctx: &mut Ctx, run: &RunView, entries: &[Entry]) -> Element {
-    let live = matches!(run.run.status(), RunStatus::Running);
+  fn transcript(&self, ctx: &mut Ctx, run: &RunView, entries: &[Entry], live: bool) -> Element {
     let filter = self.filter.get().0;
     let rows = Arc::new(rows::rows(run, entries, filter, self.raw.get(), &self.toggles));
     let following = self.following.get();
