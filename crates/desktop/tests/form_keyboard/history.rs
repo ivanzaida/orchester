@@ -1,8 +1,9 @@
 //! Back and forward: the mouse's side buttons (on release) and the history shortcuts move
-//! through the screens the user opened. A submitted form is not visited again, and Alt+Left in
-//! a focused text field stays with the field.
+//! through the screens the user opened, tabs included. A submitted form is not visited again,
+//! no screen follows itself in history, and Alt+Left in a focused text field stays with the
+//! field.
 
-use lurq::app::events::MouseButton;
+use lurq::app::{Tree, events::MouseButton};
 
 use crate::harness::Desktop;
 
@@ -120,20 +121,104 @@ fn history_alt_left_stays_with_a_focused_text_field() {
   assert_eq!(desktop.focused().as_deref(), Some(TITLE));
 }
 
+/// Whether the tab `id` of the task list is the selected one: a selected tab, like one that
+/// cannot be opened yet, is not a button.
+fn tab_selected(tree: &mut Tree, id: &str) -> bool {
+  let unavailable = tree
+    .get_element_by_id("tasks-tab-queue")
+    .map(|tab| tab.tag_name().to_owned());
+  tree
+    .get_element_by_id(id)
+    .is_some_and(|tab| Some(tab.tag_name()) == unavailable.as_deref())
+}
+
 #[test]
 fn history_submitted_form_is_not_visited_again() {
   let mut desktop = saved_draft();
-  // The form's entry now holds the task list, so going back leaves the form out.
-  side_button(&mut desktop, BACK);
-  desktop.settle("the task list before the form", |tree| {
-    tree.get_element_by_id(TASKS).is_some() && tree.get_element_by_id(TITLE).is_none()
-  });
+  // Save draft returned to the list the form was opened from, so the list is one entry and
+  // going back leads to the overview.
   side_button(&mut desktop, BACK);
   desktop.wait_for(OVERVIEW);
   side_button(&mut desktop, FORWARD);
+  desktop.wait_for("task-row-KON-1");
+  side_button(&mut desktop, FORWARD);
+  desktop.pass();
+  assert!(shows(&mut desktop, "task-row-KON-1"), "the list is the last entry");
+  assert!(!shows(&mut desktop, TITLE));
+}
+
+#[test]
+fn history_back_restores_the_tab() {
+  let mut desktop = saved_draft();
+  assert!(tab_selected(&mut desktop.tree, "tasks-tab-all"));
+  assert!(!tab_selected(&mut desktop.tree, "tasks-tab-drafts"));
+  desktop.press("tasks-tab-drafts");
+  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  desktop.press("task-row-KON-1");
+  desktop.wait_for(TASK_PAGE);
+  side_button(&mut desktop, BACK);
+  desktop.settle("the list on the Drafts tab", |tree| {
+    tree.get_element_by_id(TASK_PAGE).is_none() && tab_selected(tree, "tasks-tab-drafts")
+  });
+  side_button(&mut desktop, BACK);
+  desktop.settle("the All tab", |tree| {
+    tab_selected(tree, "tasks-tab-all") && !tab_selected(tree, "tasks-tab-drafts")
+  });
+}
+
+#[test]
+fn history_saved_draft_returns_to_the_tab_it_was_written_from() {
+  let mut desktop = saved_draft();
+  desktop.press("tasks-tab-drafts");
+  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  desktop.click(TASKS);
+  desktop.wait_for(TITLE);
+  desktop.tab_to(TITLE, MAX_STOPS);
+  desktop.type_text("Second draft");
+  desktop.enter();
+  desktop.settle("the second draft on the Drafts tab", |tree| {
+    tree.get_element_by_id("task-row-KON-2").is_some() && tab_selected(tree, "tasks-tab-drafts")
+  });
+  // The Drafts tab is one entry: going back leads to the All tab before it.
+  side_button(&mut desktop, BACK);
+  desktop.settle("the All tab", |tree| tab_selected(tree, "tasks-tab-all"));
+}
+
+#[test]
+fn history_saved_draft_from_the_overview_follows_it() {
+  let mut desktop = Desktop::with_project();
+  desktop.wait_for(OVERVIEW);
+  desktop.click(OVERVIEW);
+  desktop.wait_for(TITLE);
+  desktop.tab_to(TITLE, MAX_STOPS);
+  desktop.type_text("Add switcher");
+  desktop.enter();
+  desktop.wait_for("task-row-KON-1");
+  side_button(&mut desktop, BACK);
+  desktop.wait_for(OVERVIEW);
   side_button(&mut desktop, FORWARD);
   desktop.wait_for("task-row-KON-1");
   assert!(!shows(&mut desktop, TITLE));
+}
+
+#[test]
+fn history_overview_tab_is_restored() {
+  let mut desktop = saved_draft();
+  desktop.press("nav-overview");
+  desktop.wait_for("overview-tab-running");
+  desktop.press("overview-tab-running");
+  // A draft is not running: the Running tab lists no task.
+  desktop.settle("the Running tab", |tree| {
+    tree.get_element_by_id("task-row-KON-1").is_none()
+  });
+  desktop.press("nav-tasks");
+  desktop.wait_for(TASKS);
+  side_button(&mut desktop, BACK);
+  desktop.settle("the overview on the Running tab", |tree| {
+    tree.get_element_by_id("overview-tab-running").is_some() && tree.get_element_by_id("task-row-KON-1").is_none()
+  });
+  side_button(&mut desktop, BACK);
+  desktop.wait_for("task-row-KON-1");
 }
 
 #[test]
@@ -177,4 +262,23 @@ fn history_a_tab_is_an_entry() {
   });
   side_button(&mut desktop, FORWARD);
   desktop.wait_for("settings-save-status");
+}
+
+#[cfg(windows)]
+#[test]
+fn history_create_and_run_leaves_one_entry_per_screen() {
+  use crate::task_run::{create_and_run, init_repository, programs, seed};
+
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
+  create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
+  // The task page took the form's place after the task list it was opened from.
+  side_button(&mut desktop, BACK);
+  desktop.settle("the task list", |tree| {
+    tree.get_element_by_id(TASK_PAGE).is_none()
+      && tree.get_element_by_id(TITLE).is_none()
+      && tree.get_element_by_id(TASKS).is_some()
+  });
+  side_button(&mut desktop, BACK);
+  desktop.wait_for(OVERVIEW);
 }

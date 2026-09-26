@@ -40,7 +40,7 @@ use crate::{
   background,
   messages::{self, Message},
   navigation::{
-    Navigation, PROJECT_PARAM,
+    Navigation, PROJECT_PARAM, entry,
     route::{Page, Route},
   },
   runner::{RunnerStatus, Runners, state::RunnerState},
@@ -61,13 +61,28 @@ pub struct ProjectNav {
 impl ProjectNav {
   /// Opens `page` as a new history entry, as every user navigation does.
   pub fn show(&self, page: Page) {
-    self.navigator.push(page.path(self.project));
+    entry::push(&self.navigator, page.path(self.project));
   }
 
-  /// Shows `page` in place of the current entry: after a form was submitted, or when the
-  /// selection follows a save, so going back does not return to the stale state.
+  /// Shows `page` in place of the current entry, when the selection follows a save, so going
+  /// back does not return to the stale state.
   pub fn replace(&self, page: Page) {
-    self.navigator.replace(page.path(self.project));
+    entry::replace(&self.navigator, page.path(self.project));
+  }
+
+  /// Leaves a submitted form for `page`. When the form was opened from the screen `page` shows,
+  /// history goes back to that entry, so the screen does not follow itself in history;
+  /// otherwise `page` takes the form's place. Either way the form is not visited again.
+  pub fn finish(&self, page: Page) {
+    let opened_from_page = matches!(
+      entry::from(&self.navigator),
+      Some(Route::Project(project, from)) if project == self.project && from.same_screen(&page)
+    );
+    if opened_from_page {
+      entry::finish_back(&self.navigator);
+    } else {
+      self.replace(page);
+    }
   }
 
   /// Opens Connections with Add GitHub connection open, e.g. for a remote on an Enterprise host.

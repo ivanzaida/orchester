@@ -154,7 +154,7 @@ impl Component for NewTaskForm {
     ctx.watch(&save.state(), move |state| {
       if state.data.is_some() {
         saved.tasks_changed();
-        saved.replace(Page::Tasks);
+        saved.finish(Page::TASKS);
       }
     });
     let run = run_action(ctx);
@@ -166,7 +166,7 @@ impl Component for NewTaskForm {
       // The task may have been saved and queued even when the run did not start.
       started.tasks_changed();
       if let Some(StartedTask(task)) = state.data {
-        started.replace(Page::Task(task));
+        started.finish(Page::task(task));
       }
     });
     Self {
@@ -380,7 +380,7 @@ fn run_action(ctx: &mut Ctx) -> RunAction {
 /// Save as draft or Create & run, so the state says so rather than claiming a saved draft.
 fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, form: &FormState) -> Element {
   let nav = nav.clone();
-  let back = pressable(surface().id("new-task-back"), move || nav.show(Page::Tasks))
+  let back = pressable(surface().id("new-task-back"), move || nav.show(Page::TASKS))
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));

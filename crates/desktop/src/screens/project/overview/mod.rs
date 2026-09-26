@@ -17,7 +17,6 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -52,6 +51,8 @@ const PATH_CHARS: usize = 48;
 #[derive(Clone, Debug, PartialEq)]
 pub struct OverviewProps {
   pub open: OpenProject,
+  /// The tab of the task list.
+  pub tab: OverviewTab,
   pub tasks: TasksState,
   /// Today's tokens and the daily budget, once read.
   pub usage: Option<ProjectUsage>,
@@ -65,7 +66,6 @@ pub struct OverviewProps {
 impl lurq::app::component::DevtoolsInspectable for OverviewProps {}
 
 pub struct OverviewScreen {
-  tab: Signal<OverviewTab>,
   nav: ProjectNav,
   runners: Runners,
 }
@@ -75,7 +75,6 @@ impl Component for OverviewScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      tab: ctx.signal(OverviewTab::All),
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
@@ -126,7 +125,7 @@ impl Component for OverviewScreen {
               .width(Dimension::Pct(100.0))
               .flex(1.0)
               .spacing(SpacingSize::Section)
-              .child(task_list::task_list(ctx, tasks, &self.tab, &self.nav))
+              .child(task_list::task_list(ctx, tasks, props.tab, &self.nav))
               .child(attention::attention(ctx, &props.open, tasks, &self.nav)),
           )
       }

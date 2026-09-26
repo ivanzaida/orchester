@@ -34,7 +34,7 @@ use self::{
 use super::{ProjectNav, page, runner::connection_notice};
 use crate::{
   background, messages,
-  navigation::route::Page,
+  navigation::route::{Page, TaskPageTab},
   runner::{Runners, state::RunnerState},
   tasks::detail::TaskDetail,
   theme::ExtraSpacing,
@@ -56,6 +56,7 @@ const TAB_ROW_HEIGHT: f32 = 42.0;
 pub struct TaskProps {
   pub project: OpenProject,
   pub task: TaskId,
+  pub tab: TaskPageTab,
   /// Changes when tasks were saved or the runner changed a run: the task is read again.
   pub revision: (u64, u64),
   /// The project's limits, once read: the most a raised limit may be.
@@ -74,16 +75,7 @@ struct LoadedTask(Arc<TaskDetail>);
 
 impl lurq::app::component::DevtoolsInspectable for LoadedTask {}
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TaskTab {
-  Summary,
-  Activity,
-}
-
-impl lurq::app::component::DevtoolsInspectable for TaskTab {}
-
 pub struct TaskScreen {
-  tab: Signal<TaskTab>,
   /// The last run control requested; under way while the control action is pending.
   requested: Signal<Option<RunControl>>,
   nav: ProjectNav,
@@ -96,7 +88,6 @@ impl Component for TaskScreen {
   fn create(ctx: &mut Ctx) -> Self {
     control_action(ctx);
     Self {
-      tab: ctx.signal(TaskTab::Summary),
       requested: ctx.signal(None),
       nav: ctx
         .use_context::<ProjectNav>()
@@ -144,10 +135,9 @@ impl Component for TaskScreen {
     };
     let online = props.runner == RunnerState::Online;
     let lost = detail.lost_its_runner(online).then(|| Lost::of(&props.runner));
-    let tab = self.tab.get();
-    let body = match tab {
-      TaskTab::Summary => summary::summary(ctx, &detail, props.limits, lost),
-      TaskTab::Activity => ctx.mount_keyed::<ActivityTab>(
+    let body = match props.tab {
+      TaskPageTab::Summary => summary::summary(ctx, &detail, props.limits, lost),
+      TaskPageTab::Activity => ctx.mount_keyed::<ActivityTab>(
         "task-activity",
         ActivityProps {
           repo_root: props.project.repo_root.clone(),
@@ -169,7 +159,7 @@ impl Component for TaskScreen {
       .with_children(runner_notice)
       .child(heading::heading(ctx, &detail, lost.is_some()))
       .with_children(control_error)
-      .child(self.tabs(ctx))
+      .child(self.tabs(ctx, &props))
       .child(body)
   }
 }
@@ -181,7 +171,7 @@ impl TaskScreen {
   fn topbar(&self, ctx: &Ctx, props: &TaskProps, detail: Option<&TaskDetail>, control: &ControlAction) -> Element {
     let nav = self.nav.clone();
     let key = detail.map_or_else(String::new, |detail| detail.task.key().to_string());
-    let breadcrumb = pressable(surface().id("task-breadcrumb"), move || nav.show(Page::Tasks)).child(
+    let breadcrumb = pressable(surface().id("task-breadcrumb"), move || nav.show(Page::TASKS)).child(
       Text::new(&ctx.t_args(
         "runs.page.breadcrumb",
         [
@@ -202,26 +192,31 @@ impl TaskScreen {
   }
 
   /// Summary and Activity; the others need later milestones (`X7jYe`).
-  fn tabs(&self, ctx: &Ctx) -> Element {
-    let selected = self.tab.get();
+  fn tabs(&self, ctx: &Ctx, props: &TaskProps) -> Element {
     let height = Dimension::Pct(100.0);
-    let tab = |id, key, value: Option<TaskTab>| {
+    let tab = |id, key, value: Option<TaskPageTab>| {
       let item = Tab::new(id, ctx.t(key), height);
       let Some(value) = value else {
         return item;
       };
-      let signal = self.tab.clone();
-      item.selected(value == selected).on_click(move || signal.set(value))
+      let (nav, task) = (self.nav.clone(), props.task);
+      item
+        .selected(value == props.tab)
+        .on_click(move || nav.show(Page::Task(task, value)))
     };
     tab_row(
       Dimension::Px(TAB_ROW_HEIGHT),
       ExtraSpacing::Step.role(),
       Some(SpacingSize::Section),
       [
-        tab("task-tab-summary", "runs.page.tabs.summary", Some(TaskTab::Summary)),
+        tab("task-tab-summary", "runs.page.tabs.summary", Some(TaskPageTab::Summary)),
         tab("task-tab-conversation", "runs.page.tabs.conversation", None),
         tab("task-tab-changes", "runs.page.tabs.changes", None),
-        tab("task-tab-activity", "runs.page.tabs.activity", Some(TaskTab::Activity)),
+        tab(
+          "task-tab-activity",
+          "runs.page.tabs.activity",
+          Some(TaskPageTab::Activity),
+        ),
         tab("task-tab-artifacts", "runs.page.tabs.artifacts", None),
       ],
     )

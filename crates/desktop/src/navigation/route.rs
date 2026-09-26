@@ -1,10 +1,13 @@
 //! Where the window can be, as typed routes and as the router paths they stand for. A path is
 //! the only state history keeps, so everything a user can go back to (the open task, the
-//! selected profile, a settings tab) is part of it. Paths are canonical: a default (the first
-//! profile, the All tab, the General tab) is left out, so showing it again adds no entry.
+//! selected profile, a tab) is part of it. Paths are canonical: a default (the first profile,
+//! the All tab, the General tab) is left out, so showing it again adds no entry. Typed text such
+//! as a search is not part of a path: going back does not undo typing.
 
 use lurq::app::ctx::Ctx;
 use orchester_core::id::{ConnectionId, ProjectId, ResourceId, TaskId};
+
+use crate::tasks::{list::TaskTab, overview::OverviewTab};
 
 const WELCOME: &str = "welcome";
 const SETUP: &str = "setup";
@@ -21,6 +24,11 @@ const LIMITS: &str = "limits";
 const TAB_QUERY: &str = "tab";
 const AGENT_PROVIDERS: &str = "agent-providers";
 const GITHUB: &str = "github";
+const DRAFTS: &str = "drafts";
+const RUNNING: &str = "running";
+const NEEDS_YOU: &str = "needs-you";
+const QUEUED: &str = "queued";
+const ACTIVITY: &str = "activity";
 
 /// A screen of the window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,14 +48,14 @@ pub enum Route {
 /// A screen inside the project shell (`zo9Py` beside it).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Page {
-  /// `Twtqc`.
-  Overview,
-  /// `J9467`.
-  Tasks,
+  /// `Twtqc`, on a tab of its task list.
+  Overview(OverviewTab),
+  /// `J9467`, on a tab.
+  Tasks(TaskTab),
   /// `l2YA4`.
   NewTask,
-  /// One task and its latest run (`RD4pc`, `SfXU1`).
-  Task(TaskId),
+  /// One task and its latest run, on a tab (`RD4pc`, `SfXU1`).
+  Task(TaskId, TaskPageTab),
   /// `wGtxT`.
   PullRequests,
   /// One pull request of the linked repository, by number (`Rrmhf`).
@@ -72,6 +80,13 @@ pub enum AgentSelection {
   Profile(ResourceId),
   /// A profile being written that is not saved yet.
   New,
+}
+
+/// The tabs of a task's page that show something (`X7jYe`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskPageTab {
+  Summary,
+  Activity,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,15 +167,34 @@ impl Route {
 }
 
 impl Page {
+  /// The overview on the All tab.
+  pub const OVERVIEW: Self = Self::Overview(OverviewTab::All);
+  /// The task list on the All tab.
+  pub const TASKS: Self = Self::Tasks(TaskTab::All);
   /// Connections on the All tab, with the first connection's details.
   pub const CONNECTIONS: Self = Self::Connections(ConnectionTab::All, None);
 
+  /// `task` on its Summary tab.
+  pub const fn task(task: TaskId) -> Self {
+    Self::Task(task, TaskPageTab::Summary)
+  }
+
+  /// Whether both pages show the same screen, whatever tab it is on.
+  pub fn same_screen(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::Overview(_), Self::Overview(_)) | (Self::Tasks(_), Self::Tasks(_)) => true,
+      (Self::Task(task, _), Self::Task(other, _)) => task == other,
+      _ => self == other,
+    }
+  }
+
   fn parse(segments: &[&str], query: &str) -> Option<Self> {
+    let tab = tab_query(query);
     Some(match segments {
-      [] => Self::Overview,
-      [TASKS] => Self::Tasks,
+      [] => Self::Overview(overview_tab(tab)),
+      [TASKS] => Self::Tasks(task_tab(tab)),
       [TASKS, NEW] => Self::NewTask,
-      [TASKS, task] => Self::Task(task.parse().ok()?),
+      [TASKS, task] => Self::Task(task.parse().ok()?, task_page_tab(tab)),
       [PULL_REQUESTS] => Self::PullRequests,
       [PULL_REQUESTS, number] => Self::PullRequest(number.parse().ok()?),
       [PIPELINES] => Self::Pipelines,
@@ -168,8 +202,8 @@ impl Page {
       [AGENTS] => Self::Agents(AgentSelection::First),
       [AGENTS, NEW] => Self::Agents(AgentSelection::New),
       [AGENTS, profile] => Self::Agents(AgentSelection::Profile(profile.parse().ok()?)),
-      [CONNECTIONS] => Self::Connections(ConnectionTab::from_query(query), None),
-      [CONNECTIONS, connection] => Self::Connections(ConnectionTab::from_query(query), Some(connection.parse().ok()?)),
+      [CONNECTIONS] => Self::Connections(ConnectionTab::named(tab), None),
+      [CONNECTIONS, connection] => Self::Connections(ConnectionTab::named(tab), Some(connection.parse().ok()?)),
       [SETTINGS] => Self::Settings(SettingsTab::General),
       [SETTINGS, LIMITS] => Self::Settings(SettingsTab::Limits),
       _ => return None,
@@ -180,10 +214,10 @@ impl Page {
   pub fn path(&self, project: ProjectId) -> String {
     let root = format!("/{PROJECT}/{project}");
     match self {
-      Self::Overview => root,
-      Self::Tasks => format!("{root}/{TASKS}"),
+      Self::Overview(tab) => with_tab(root, overview_query(*tab)),
+      Self::Tasks(tab) => with_tab(format!("{root}/{TASKS}"), task_query(*tab)),
       Self::NewTask => format!("{root}/{TASKS}/{NEW}"),
-      Self::Task(task) => format!("{root}/{TASKS}/{task}"),
+      Self::Task(task, tab) => with_tab(format!("{root}/{TASKS}/{task}"), task_page_query(*tab)),
       Self::PullRequests => format!("{root}/{PULL_REQUESTS}"),
       Self::PullRequest(number) => format!("{root}/{PULL_REQUESTS}/{number}"),
       Self::Pipelines => format!("{root}/{PIPELINES}"),
@@ -193,10 +227,7 @@ impl Page {
       Self::Agents(AgentSelection::Profile(profile)) => format!("{root}/{AGENTS}/{profile}"),
       Self::Connections(tab, selected) => {
         let selected = selected.map_or_else(String::new, |connection| format!("/{connection}"));
-        let tab = tab
-          .query()
-          .map_or_else(String::new, |tab| format!("?{TAB_QUERY}={tab}"));
-        format!("{root}/{CONNECTIONS}{selected}{tab}")
+        with_tab(format!("{root}/{CONNECTIONS}{selected}"), tab.query())
       }
       Self::Settings(SettingsTab::General) => format!("{root}/{SETTINGS}"),
       Self::Settings(SettingsTab::Limits) => format!("{root}/{SETTINGS}/{LIMITS}"),
@@ -205,8 +236,8 @@ impl Page {
 
   pub const fn sidebar_item(&self) -> SidebarItem {
     match self {
-      Self::Overview => SidebarItem::Overview,
-      Self::Tasks | Self::NewTask | Self::Task(_) => SidebarItem::Tasks,
+      Self::Overview(_) => SidebarItem::Overview,
+      Self::Tasks(_) | Self::NewTask | Self::Task(..) => SidebarItem::Tasks,
       Self::PullRequests | Self::PullRequest(_) => SidebarItem::PullRequests,
       Self::Pipelines | Self::Pipeline(_) => SidebarItem::Pipelines,
       Self::Agents(_) => SidebarItem::Agents,
@@ -216,12 +247,71 @@ impl Page {
   }
 }
 
+/// The tab a query names, if it names one.
+fn tab_query(query: &str) -> Option<&str> {
+  query
+    .split('&')
+    .find_map(|pair| pair.strip_prefix(TAB_QUERY)?.strip_prefix('='))
+}
+
+/// `path` on `tab`; the default tab (`None`) is left out.
+fn with_tab(path: String, tab: Option<&str>) -> String {
+  match tab {
+    Some(tab) => format!("{path}?{TAB_QUERY}={tab}"),
+    None => path,
+  }
+}
+
+/// No tab, or one that does not exist, is the first tab of a screen.
+fn overview_tab(tab: Option<&str>) -> OverviewTab {
+  match tab {
+    Some(RUNNING) => OverviewTab::Running,
+    Some(NEEDS_YOU) => OverviewTab::NeedsYou,
+    Some(QUEUED) => OverviewTab::Queued,
+    _ => OverviewTab::All,
+  }
+}
+
+const fn overview_query(tab: OverviewTab) -> Option<&'static str> {
+  match tab {
+    OverviewTab::All => None,
+    OverviewTab::Running => Some(RUNNING),
+    OverviewTab::NeedsYou => Some(NEEDS_YOU),
+    OverviewTab::Queued => Some(QUEUED),
+  }
+}
+
+/// Only the tabs that are available have a path; the others cannot be opened yet.
+fn task_tab(tab: Option<&str>) -> TaskTab {
+  match tab {
+    Some(DRAFTS) => TaskTab::Drafts,
+    _ => TaskTab::All,
+  }
+}
+
+const fn task_query(tab: TaskTab) -> Option<&'static str> {
+  match tab {
+    TaskTab::Drafts => Some(DRAFTS),
+    TaskTab::All | TaskTab::Queue | TaskTab::NeedsReview | TaskTab::Done => None,
+  }
+}
+
+fn task_page_tab(tab: Option<&str>) -> TaskPageTab {
+  match tab {
+    Some(ACTIVITY) => TaskPageTab::Activity,
+    _ => TaskPageTab::Summary,
+  }
+}
+
+const fn task_page_query(tab: TaskPageTab) -> Option<&'static str> {
+  match tab {
+    TaskPageTab::Summary => None,
+    TaskPageTab::Activity => Some(ACTIVITY),
+  }
+}
+
 impl ConnectionTab {
-  /// The tab a query names; no tab, or one that does not exist, is All.
-  fn from_query(query: &str) -> Self {
-    let tab = query
-      .split('&')
-      .find_map(|pair| pair.strip_prefix(TAB_QUERY)?.strip_prefix('='));
+  fn named(tab: Option<&str>) -> Self {
     match tab {
       Some(AGENT_PROVIDERS) => Self::AgentProviders,
       Some(GITHUB) => Self::GitHub,

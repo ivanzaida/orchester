@@ -64,8 +64,8 @@ impl Opener {
       return;
     };
     nav.show(match place {
-      Place::Overview => Page::Overview,
-      Place::Tasks => Page::Tasks,
+      Place::Overview => Page::OVERVIEW,
+      Place::Tasks => Page::TASKS,
       Place::PullRequests => Page::PullRequests,
       Place::Pipeline(id) => Page::Pipeline(id),
       Place::AgentProfile(id) => Page::Agents(AgentSelection::Profile(id)),
@@ -77,7 +77,7 @@ impl Opener {
   /// Opens the Tasks screen, the target of the Agents and Queued items.
   pub fn tasks(&self) -> Option<impl Fn() + Send + Sync + 'static> {
     let nav = self.nav.clone()?;
-    Some(move || nav.show(Page::Tasks))
+    Some(move || nav.show(Page::TASKS))
   }
 
   pub fn open_log(&self) {
