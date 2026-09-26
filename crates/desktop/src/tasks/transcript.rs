@@ -1,8 +1,8 @@
 //! The Activity tab's transcript (02.I `SfXU1`): a run's stored agent events turned into the
-//! entries a person reads. A command's start and end become one entry, consecutive unparsed
-//! lines one collapsed entry, and a failed turn that repeats the error before it is not shown
-//! twice. Session and turn starts carry no text of their own; the invocation panel shows the
-//! session. Nothing else is left out.
+//! entries a person reads. A command's start and end become one entry, a permission denial marks
+//! the command it denied, consecutive unparsed lines become one collapsed entry, and a failed turn
+//! that repeats the error before it is not shown twice. Session and turn starts carry no text of their own; the
+//! invocation panel shows the session. Nothing else is left out.
 
 use std::sync::Arc;
 
@@ -22,6 +22,8 @@ pub enum EntryKind {
   FileChange(Arc<[FileChange]>),
   Usage(TokenUsage),
   Error(Arc<str>),
+  /// The agent CLI is not signed in; what it said.
+  NotSignedIn(Arc<str>),
   Problem(RunnerProblem),
   /// Unparsed lines, in order.
   Raw(Arc<Vec<(OutputStream, Arc<str>)>>),
@@ -55,7 +57,7 @@ impl Entry {
   pub fn is_failure(&self) -> bool {
     match &self.kind {
       EntryKind::Command(command) => matches!(command.status, Some(CommandStatus::Failed | CommandStatus::Declined)),
-      EntryKind::Error(_) | EntryKind::Problem(_) => true,
+      EntryKind::Error(_) | EntryKind::NotSignedIn(_) | EntryKind::Problem(_) => true,
       _ => false,
     }
   }
@@ -94,11 +96,38 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
           entries.push(entry(EntryKind::Error(message.as_str().into())));
         }
       }
+      AgentEvent::PermissionDenied { command, .. } => deny_command(&mut entries, stored, command),
+      AgentEvent::NotSignedIn { message } => entries.push(entry(EntryKind::NotSignedIn(message.as_str().into()))),
       AgentEvent::RunnerProblem { problem } => entries.push(entry(EntryKind::Problem(problem.clone()))),
       AgentEvent::Raw { stream, line } => push_raw(&mut entries, stored, *stream, line),
     }
   }
   entries
+}
+
+/// Marks the latest entry of `command` in the same invocation as declined, or adds a declined one
+/// when the command was not shown.
+fn deny_command(entries: &mut Vec<Entry>, stored: &ActivityEntry, command: &str) {
+  let shown = entries.iter_mut().rev().find_map(|entry| match &mut entry.kind {
+    EntryKind::Command(shown) if entry.invocation == stored.invocation && *shown.command == *command => Some(shown),
+    _ => None,
+  });
+  match shown {
+    Some(shown) => shown.status = Some(CommandStatus::Declined),
+    None => entries.push(Entry {
+      sequence: stored.sequence,
+      execution: stored.execution,
+      invocation: stored.invocation,
+      at: stored.at,
+      kind: EntryKind::Command(CommandEntry {
+        command: command.into(),
+        output: "".into(),
+        status: Some(CommandStatus::Declined),
+        exit_code: None,
+        duration: None,
+      }),
+    }),
+  }
 }
 
 /// Completes the entry its start created, or adds one when the start was not seen.

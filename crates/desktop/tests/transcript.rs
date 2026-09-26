@@ -100,3 +100,62 @@ fn transcript_shows_a_repeated_turn_failure_once_and_keeps_a_running_command_ope
   assert!(matches!(&entries[0].kind, EntryKind::Command(command) if command.status.is_none()));
   assert_eq!(entries[1].kind, EntryKind::Error("bad model".into()));
 }
+
+#[test]
+fn transcript_marks_a_denied_command_and_shows_a_denial_without_a_command() {
+  let activity = stored(vec![
+    AgentEvent::CommandStarted {
+      item: "toolu_1".into(),
+      command: "curl https://example.com".into(),
+    },
+    AgentEvent::CommandFinished {
+      item: "toolu_1".into(),
+      command: "curl https://example.com".into(),
+      output: "Claude requested permissions to use Bash, but you haven't granted it yet.".into(),
+      exit_code: None,
+      status: CommandStatus::Failed,
+    },
+    AgentEvent::PermissionDenied {
+      item: "toolu_1".into(),
+      command: "curl https://example.com".into(),
+    },
+    AgentEvent::PermissionDenied {
+      item: "toolu_2".into(),
+      command: "WebFetch https://example.com".into(),
+    },
+  ]);
+  let entries = entries(&activity);
+  let commands: Vec<(&str, Option<CommandStatus>)> = entries
+    .iter()
+    .filter_map(|entry| match &entry.kind {
+      EntryKind::Command(command) => Some((&*command.command, command.status)),
+      _ => None,
+    })
+    .collect();
+  assert_eq!(
+    commands,
+    [
+      ("curl https://example.com", Some(CommandStatus::Declined)),
+      ("WebFetch https://example.com", Some(CommandStatus::Declined)),
+    ]
+  );
+  assert!(entries.iter().all(|entry| entry.is_failure()));
+}
+
+#[test]
+fn transcript_shows_a_cli_that_is_not_signed_in_as_a_failure() {
+  let activity = stored(vec![
+    AgentEvent::SessionStarted { session: "s".into() },
+    AgentEvent::TurnStarted,
+    AgentEvent::NotSignedIn {
+      message: "Not logged in · Please run /login".into(),
+    },
+  ]);
+  let entries = entries(&activity);
+  assert_eq!(entries.len(), 1);
+  assert_eq!(
+    entries[0].kind,
+    EntryKind::NotSignedIn("Not logged in · Please run /login".into())
+  );
+  assert!(entries[0].is_failure());
+}
