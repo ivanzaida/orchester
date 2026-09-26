@@ -37624,7 +37624,7 @@
                       "id": "BovYZ",
                       "name": "Session ended abnormally dialog",
                       "clip": true,
-                      "width": 1120,
+                      "width": 880,
                       "fill": "$surface",
                       "cornerRadius": "$radius-panel",
                       "stroke": "$border",
@@ -37761,7 +37761,7 @@
                                       "type": "frame",
                                       "id": "ZvJv8",
                                       "name": "Interrupted during header cell",
-                                      "width": 150,
+                                      "width": 140,
                                       "alignItems": "center",
                                       "children": [
                                         {
@@ -37780,7 +37780,7 @@
                                       "type": "frame",
                                       "id": "LQdz1",
                                       "name": "Reason header cell",
-                                      "width": 180,
+                                      "width": 150,
                                       "alignItems": "center",
                                       "children": [
                                         {
@@ -37799,7 +37799,7 @@
                                       "type": "frame",
                                       "id": "vAi6i",
                                       "name": "Last checkpoint header cell",
-                                      "width": 120,
+                                      "width": 88,
                                       "alignItems": "center",
                                       "children": [
                                         {
@@ -37818,7 +37818,7 @@
                                       "type": "frame",
                                       "id": "uM7WA",
                                       "name": "Worktree header cell",
-                                      "width": 190,
+                                      "width": 160,
                                       "alignItems": "center",
                                       "children": [
                                         {
@@ -37906,7 +37906,7 @@
                                       "type": "frame",
                                       "id": "A49ydp",
                                       "name": "Step cell",
-                                      "width": 150,
+                                      "width": 140,
                                       "layout": "vertical",
                                       "gap": 4,
                                       "children": [
@@ -37936,7 +37936,7 @@
                                       "type": "frame",
                                       "id": "JIzfn",
                                       "name": "Reason cell",
-                                      "width": 180,
+                                      "width": 150,
                                       "layout": "vertical",
                                       "children": [
                                         {
@@ -37958,7 +37958,7 @@
                                       "type": "frame",
                                       "id": "l2xxxQ",
                                       "name": "Checkpoint cell",
-                                      "width": 120,
+                                      "width": 88,
                                       "layout": "vertical",
                                       "gap": 4,
                                       "children": [
@@ -37988,7 +37988,7 @@
                                       "type": "frame",
                                       "id": "QwXbp",
                                       "name": "Worktree cell",
-                                      "width": 190,
+                                      "width": 160,
                                       "layout": "vertical",
                                       "gap": 4,
                                       "children": [
@@ -38106,7 +38106,7 @@
                                       "type": "frame",
                                       "id": "U2PgKk",
                                       "name": "Step cell",
-                                      "width": 150,
+                                      "width": 140,
                                       "layout": "vertical",
                                       "gap": 4,
                                       "children": [
@@ -38136,7 +38136,7 @@
                                       "type": "frame",
                                       "id": "sCLOA",
                                       "name": "Reason cell",
-                                      "width": 180,
+                                      "width": 150,
                                       "layout": "vertical",
                                       "children": [
                                         {
@@ -38158,7 +38158,7 @@
                                       "type": "frame",
                                       "id": "j2BUyo",
                                       "name": "Checkpoint cell",
-                                      "width": 120,
+                                      "width": 88,
                                       "layout": "vertical",
                                       "gap": 4,
                                       "children": [
@@ -38188,7 +38188,7 @@
                                       "type": "frame",
                                       "id": "nrwuN",
                                       "name": "Worktree cell",
-                                      "width": 190,
+                                      "width": 160,
                                       "layout": "vertical",
                                       "gap": 4,
                                       "children": [
@@ -38296,7 +38296,7 @@
                                       "type": "frame",
                                       "id": "o6HcVs",
                                       "name": "Step cell",
-                                      "width": 150,
+                                      "width": 140,
                                       "layout": "vertical",
                                       "gap": 4,
                                       "children": [
@@ -38326,7 +38326,7 @@
                                       "type": "frame",
                                       "id": "e3FRS",
                                       "name": "Reason cell",
-                                      "width": 180,
+                                      "width": 150,
                                       "layout": "vertical",
                                       "children": [
                                         {
@@ -38348,7 +38348,7 @@
                                       "type": "frame",
                                       "id": "mmEhj",
                                       "name": "Checkpoint cell",
-                                      "width": 120,
+                                      "width": 88,
                                       "layout": "vertical",
                                       "gap": 4,
                                       "children": [
@@ -38378,7 +38378,7 @@
                                       "type": "frame",
                                       "id": "hu6dL",
                                       "name": "Worktree cell",
-                                      "width": 190,
+                                      "width": 160,
                                       "layout": "vertical",
                                       "gap": 4,
                                       "children": [
