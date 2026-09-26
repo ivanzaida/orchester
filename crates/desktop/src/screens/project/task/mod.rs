@@ -174,7 +174,9 @@ impl Component for TaskScreen {
 }
 
 impl TaskScreen {
-  /// The breadcrumb back to the task list, then the run controls (`ctwcG`).
+  /// The breadcrumb back to the task list, then the run controls (`ctwcG`). A run that lost
+  /// its runner has none: nothing can pause, cancel or continue it until a runner is back, and
+  /// the runner notice offers Restart runner.
   fn topbar(&self, ctx: &Ctx, props: &TaskProps, detail: Option<&TaskDetail>, control: &ControlAction) -> Element {
     let nav = self.nav.clone();
     let key = detail.map_or_else(String::new, |detail| detail.task.key().to_string());
@@ -189,7 +191,9 @@ impl TaskScreen {
       .variant(TypographyStyle::Description)
       .nowrap(),
     );
+    let online = props.runner == RunnerState::Online;
     let buttons = detail
+      .filter(|detail| !detail.lost_its_runner(online))
       .and_then(|detail| detail.run.as_ref())
       .map(|run| control_buttons(ctx, run, control, &self.requested))
       .unwrap_or_default();
