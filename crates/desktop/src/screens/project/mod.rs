@@ -254,7 +254,7 @@ impl Component for ProjectShell {
       project: Some(ProjectBar {
         repo_root: open.repo_root.clone(),
         runner: status,
-        queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks)),
+        queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
       }),
     };
     Column::new()

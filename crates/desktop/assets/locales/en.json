@@ -277,7 +277,7 @@
       "latestEnded": "{{time}}  {{step}} · {{agent}} finished",
       "thisRun": "This run",
       "pipeline": "Pipeline",
-      "pipelineValue": "{{name}} · v{{version}}",
+      "pipelineValue": "{{name}} · {{version}}",
       "branch": "Branch",
       "base": "Base",
       "model": "Model",
@@ -303,7 +303,10 @@
       }
     },
     "activity": {
-      "allSteps": "All steps · {{count}} executions",
+      "allSteps": {
+        "one": "All steps · {{count}} execution",
+        "other": "All steps · {{count}} executions"
+      },
       "stepOption": "{{number}} · {{step}} · {{agent}}",
       "showRaw": "Show raw lines",
       "following": "Following live",

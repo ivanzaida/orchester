@@ -274,10 +274,12 @@ impl ActivityTab {
       .map(|execution| execution.id())
       .filter(|execution| run.invocations_of(*execution).next().is_some())
       .collect();
-    let all = ctx.t_args(
-      "runs.activity.allSteps",
-      [("count", executions.len().to_string().as_str())],
-    );
+    let key = if executions.len() == 1 {
+      "runs.activity.allSteps.one"
+    } else {
+      "runs.activity.allSteps.other"
+    };
+    let all = ctx.t_args(key, [("count", executions.len().to_string().as_str())]);
     let options = std::iter::once((StepFilter(None), all)).chain(executions.iter().filter_map(|execution| {
       let step = run.step_of(*execution)?;
       let number = format!("{:02}", step.number);

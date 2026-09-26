@@ -60,9 +60,12 @@ impl TaskTab {
   }
 }
 
-/// How many tasks wait in the queue for a run (the status bar's Queued count).
-pub fn queued(tasks: &[Task]) -> usize {
-  tasks.iter().filter(|task| task.status() == TaskStatus::Queued).count()
+/// How many tasks wait in the queue for their run to start (the status bar's Queued count).
+pub fn queued(tasks: &[Task], phases: &Phases) -> usize {
+  tasks
+    .iter()
+    .filter(|task| phase_of(task, phases) == TaskPhase::Queued)
+    .count()
 }
 
 /// What a task still needs before it can be queued.
