@@ -150,6 +150,11 @@ pub enum AttemptReason {
     failed_step: StepKey,
     return_to: StepKey,
   },
+  /// The run had succeeded and a person asked the agent of `step` about it (Ask agent): its one
+  /// execution continues the session of the step's passed one ([`super::Run::follow_up`]).
+  FollowUp {
+    step: StepKey,
+  },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

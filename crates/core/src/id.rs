@@ -87,3 +87,7 @@ define_id!(
   /// One launch of an agent CLI for a step execution: the first, or a retry or continue.
   InvocationId
 );
+define_id!(
+  /// One message of a task conversation, a person's or an agent's.
+  MessageId
+);

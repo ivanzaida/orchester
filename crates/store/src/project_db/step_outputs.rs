@@ -21,7 +21,7 @@ pub(super) fn save(connection: &Connection, output: &StepOutput) -> Result<(), S
       output.execution.to_string(),
       output.run.to_string(),
       output.step.as_str(),
-      output.outcome.map(outcome_text),
+      output.outcome.map(outcome_text).transpose()?,
       output.text,
       output.created_at.unix_millis(),
     ],
@@ -60,10 +60,12 @@ pub(super) fn of_run(connection: &Connection, run: RunId) -> Result<Vec<StepOutp
     .collect()
 }
 
-const fn outcome_text(outcome: StepOutcome) -> &'static str {
+/// A question is no output: its step waits for the answer and goes on.
+fn outcome_text(outcome: StepOutcome) -> Result<&'static str, StoreError> {
   match outcome {
-    StepOutcome::Done => "done",
-    StepOutcome::Failed => "failed",
+    StepOutcome::Done => Ok("done"),
+    StepOutcome::Failed => Ok("failed"),
+    StepOutcome::Question => Err(StoreError::Unrepresentable("a question as a step's output")),
   }
 }
 

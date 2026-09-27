@@ -111,6 +111,12 @@ impl Attempt {
     &self.executions
   }
 
+  /// Whether its executions decide their steps' results: every attempt but a follow-up that failed,
+  /// which left the run with the result it had.
+  pub fn counts(&self) -> bool {
+    !(self.status == AttemptStatus::Failed && matches!(self.reason, AttemptReason::FollowUp { .. }))
+  }
+
   pub fn execution(&self, id: StepExecutionId) -> Option<&StepExecution> {
     self.executions.iter().find(|execution| execution.id == id)
   }

@@ -126,6 +126,7 @@ pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> (&'static str, O
   match reason {
     AttemptReason::Initial => ("initial", None, None),
     AttemptReason::Retry { failed_step, return_to } => ("retry", Some(failed_step.as_str()), Some(return_to.as_str())),
+    AttemptReason::FollowUp { step } => ("follow_up", None, Some(step.as_str())),
   }
 }
 
@@ -140,6 +141,7 @@ pub(super) fn parse_attempt_reason(
       failed_step: step_key(failed_step)?,
       return_to: step_key(return_to)?,
     }),
+    ("follow_up", None, Some(step)) => Ok(AttemptReason::FollowUp { step: step_key(step)? }),
     _ => Err(corrupt("attempt reason", reason)),
   }
 }

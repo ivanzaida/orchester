@@ -1,8 +1,14 @@
 //! What a step left behind for the steps after it. An agent ends a new session with a structured
 //! final message (Codex `--output-schema`, `.tmp/cli-probe/REPORT.md`: with `--json` the final
-//! agent message is JSON matching the schema): whether it did the step and a summary. When the
-//! final message is not such a result (a continued session, which is started without the schema,
-//! or a CLI that ignored it), the CLI's exit decides and the message itself is the output.
+//! agent message is JSON matching the schema): whether it did the step, or asks the person a
+//! question before it can go on, and a summary — the question, when it asks one. When the final
+//! message is not such a result (a continued session, which is started without the schema, or a
+//! CLI that ignored it), the CLI's exit decides and the message itself is the output.
+//!
+//! Claude Code runs without a schema; its prompt asks for the same result as its final message,
+//! which is read the same way. Only a final message that is exactly such a JSON document counts, so
+//! free text is never taken for a question; a question written as prose is read as the step's
+//! output.
 
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +19,7 @@ use crate::{
 };
 
 /// The JSON schema of a step's final message.
-pub const STEP_RESULT_SCHEMA: &str = r#"{"type":"object","properties":{"outcome":{"type":"string","enum":["done","failed"]},"summary":{"type":"string"}},"required":["outcome","summary"],"additionalProperties":false}"#;
+pub const STEP_RESULT_SCHEMA: &str = r#"{"type":"object","properties":{"outcome":{"type":"string","enum":["done","failed","question"]},"summary":{"type":"string"}},"required":["outcome","summary"],"additionalProperties":false}"#;
 
 /// Whether the agent says it did the step.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -21,6 +27,8 @@ pub const STEP_RESULT_SCHEMA: &str = r#"{"type":"object","properties":{"outcome"
 pub enum StepOutcome {
   Done,
   Failed,
+  /// It cannot go on without the person's answer; the summary is its question.
+  Question,
 }
 
 /// A final message that follows [`STEP_RESULT_SCHEMA`].

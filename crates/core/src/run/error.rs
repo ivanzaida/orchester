@@ -36,6 +36,8 @@ pub enum RunError {
   PlanAlreadyDecided(PlanVersion),
   #[error("the current attempt still has open step executions")]
   OpenExecutions,
+  #[error("the run is not working on a follow-up")]
+  NotFollowingUp,
   #[error("the run cannot succeed before every step has passed")]
   StepsNotPassed,
   #[error("the attempt does not fit the run: {0}")]

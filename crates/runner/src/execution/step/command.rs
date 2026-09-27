@@ -189,6 +189,7 @@ impl RunTask {
           note,
         }
       }),
+      messages: None,
     }
     .assemble(event)
     .map_err(

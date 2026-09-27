@@ -3,15 +3,22 @@
 use std::fmt::Write as _;
 
 use super::{
-  CONTINUE_PROMPT, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt, PromptAssemblyError,
-  PromptInput, PromptPart, PromptSource,
+  CONTINUE_PROMPT, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
+  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource,
 };
-use crate::resource::{Exclusion, InjectionEvent, Instruction, InstructionTarget, PromptText, Rendered, Variable};
+use crate::{
+  conversation::Message,
+  resource::{Exclusion, InjectionEvent, Instruction, InstructionTarget, PromptText, Rendered, Variable},
+};
 
 /// How every new session is told to end, matching [`crate::run::STEP_RESULT_SCHEMA`].
 const RESULT_INSTRUCTIONS: &str = "End with your result: the outcome `done` when the step is complete, or `failed` \
                                    when you could not complete it, and a short summary of what you did for the \
-                                   steps that run after this one.";
+                                   steps that run after this one. If you cannot go on without an answer from the \
+                                   person who gave you this task, end with the outcome `question` and your \
+                                   question as the summary instead: you continue once they answer.";
+/// How a resumed session that reads people's messages is told to end.
+const RESUMED_RESULT: &str = "Then end with your result for this step, as before.";
 /// What a gated step's session is told on top: a person reviews its summary as the plan.
 const GATED_RESULT_INSTRUCTIONS: &str = "A person reviews your summary before the steps after this one start: make \
                                          it the complete result of this step (for a plan, the whole plan), in \
@@ -230,6 +237,9 @@ fn task_section(input: &PromptInput<'_>) -> PromptSection {
     push_block(&mut text, "The reviewer asks:");
     push_block(&mut text, revision.note.as_str());
   }
+  if let Some(delivered) = input.messages {
+    push_task_messages(&mut text, delivered);
+  }
   text.push_str("\n# When you finish\n");
   push_block(&mut text, RESULT_INSTRUCTIONS);
   if input.step.approval_gate {
@@ -258,8 +268,15 @@ fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[Prompt
           revision.version,
           revision.note.as_str()
         );
+        if let Some(delivered) = input.messages {
+          text.push_str("\n\nThe person also wrote to you:\n");
+          push_messages(&mut text, delivered.messages);
+        }
       }
-      None => text.push_str(CONTINUE_PROMPT),
+      None => match input.messages {
+        Some(delivered) => push_resumed_messages(&mut text, delivered),
+        None => text.push_str(CONTINUE_PROMPT),
+      },
     }
   }
   let mut part = None;
@@ -296,6 +313,71 @@ fn heading(input: &PromptInput<'_>, part: PromptPart) -> String {
     PromptPart::Pipeline => format!("# Pipeline instructions: {}", input.pipeline.name),
     PromptPart::Step => format!("# Current step: {}", input.step.name.as_str()),
     PromptPart::Task => format!("# Task {}: {}", input.task.key(), input.task.details().title.as_str()),
+  }
+}
+
+/// People's messages in a new session's task part, under a heading that says why it reads them.
+fn push_task_messages(text: &mut String, delivered: DeliveredMessages<'_>) {
+  match delivered.occasion {
+    MessageOccasion::Written | MessageOccasion::AfterTurn => text.push_str("\n# Messages from the person\n"),
+    MessageOccasion::Answer { question } => {
+      text.push_str("\n# Your question\n");
+      push_block(text, question);
+      text.push_str("\n# The person's answer\n");
+    }
+    MessageOccasion::FollowUp => {
+      text.push_str("\n# Follow-up\n");
+      push_block(text, FOLLOW_UP_LEAD);
+    }
+  }
+  push_messages(text, delivered.messages);
+}
+
+/// What a follow-up's session reads before the messages.
+const FOLLOW_UP_LEAD: &str = "You completed this step and the run is ready for review. The person reviewing it \
+                              writes to you:";
+
+/// What a resumed session reads first when it delivers people's messages: why it reads them now,
+/// the messages, and how to end.
+fn push_resumed_messages(text: &mut String, delivered: DeliveredMessages<'_>) {
+  match delivered.occasion {
+    MessageOccasion::Written => {
+      text.push_str(CONTINUE_PROMPT);
+      text.push_str("\n\nWhile you were stopped, the person wrote to you:\n");
+    }
+    MessageOccasion::AfterTurn => text.push_str("While you worked on this step, the person wrote to you:\n"),
+    MessageOccasion::Answer { question } => {
+      text.push_str("You asked the person:\n");
+      push_block(text, question);
+      text.push_str("\nThey answered:\n");
+    }
+    MessageOccasion::FollowUp => {
+      text.push_str(FOLLOW_UP_LEAD);
+      text.push('\n');
+    }
+  }
+  push_messages(text, delivered.messages);
+  let close = match delivered.occasion {
+    MessageOccasion::Written | MessageOccasion::AfterTurn => {
+      "Take their messages into account: answer what they ask, and change your work if they ask you to."
+    }
+    MessageOccasion::Answer { .. } => "Continue the step with their answer.",
+    MessageOccasion::FollowUp => {
+      "Answer them, and make the changes they ask for in the worktree, if any. Your summary is your answer to them."
+    }
+  };
+  text.push('\n');
+  push_block(text, close);
+  push_block(text, RESUMED_RESULT);
+}
+
+/// Each message as the person wrote it, oldest first, a rule between two.
+fn push_messages(text: &mut String, messages: &[Message]) {
+  for (index, message) in messages.iter().enumerate() {
+    if index > 0 {
+      text.push_str("\n---\n");
+    }
+    push_block(text, message.body().as_str());
   }
 }
 

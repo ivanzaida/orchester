@@ -9,7 +9,10 @@
 //! already holds that prompt and gets [`CONTINUE_PROMPT`] with the instructions for resuming. A
 //! gated step a reviewer sent back ([`PlanRevision`]) is told what should change instead: a resumed
 //! session gets the reviewer's note in place of the continue prompt, a new one its earlier plan and
-//! the note in the task part.
+//! the note in the task part. People's messages an invocation delivers ([`DeliveredMessages`]) follow
+//! the same rule: a resumed session is told them first, introduced by why it reads them now (the
+//! answer to its question, a follow-up after the run finished, messages that came in while it
+//! worked), and a new session reads them in the task part.
 //!
 //! Placeholders resolve against the run; a variable without a value is an error that names it,
 //! never an empty string. A preview keeps such placeholders and lists them instead.
@@ -30,6 +33,7 @@ use super::{
   state::Run,
 };
 use crate::{
+  conversation::Message,
   id::ResourceId,
   project::Project,
   resource::{AgentProfile, InjectionEvent, Instruction, Step, Variable, VersionNumber},
@@ -95,6 +99,26 @@ pub struct PlanRevision<'a> {
   pub note: &'a ReviewNote,
 }
 
+/// Why an invocation delivers people's messages, which decides how its prompt introduces them.
+#[derive(Clone, Copy, Debug)]
+pub enum MessageOccasion<'a> {
+  /// They came in before the step started, or while it was stopped (a pause, a limit, a restart).
+  Written,
+  /// The agent finished its turn while they came in; its session resumes to read them.
+  AfterTurn,
+  /// They answer `question`, which the agent asked.
+  Answer { question: &'a str },
+  /// The run had finished and a person asks the agent of the step about its work (Ask agent).
+  FollowUp,
+}
+
+/// People's messages an invocation delivers, oldest first, and why it delivers them now.
+#[derive(Clone, Copy, Debug)]
+pub struct DeliveredMessages<'a> {
+  pub occasion: MessageOccasion<'a>,
+  pub messages: &'a [Message],
+}
+
 /// What a continued agent session is told when it resumes a step it did not finish: after a
 /// pause, a stop at a limit or a restart. Its earlier conversation holds the step's prompt.
 pub const CONTINUE_PROMPT: &str = "You were stopped before you finished this step. Everything you changed so far \
@@ -118,6 +142,8 @@ pub struct PromptInput<'a> {
   pub dependencies: &'a [DependencyOutput<'a>],
   /// The step's plan a reviewer sent back, when this invocation revises it.
   pub revision: Option<PlanRevision<'a>>,
+  /// People's messages this invocation delivers, if any.
+  pub messages: Option<DeliveredMessages<'a>>,
 }
 
 impl PromptInput<'_> {
