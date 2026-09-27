@@ -174,11 +174,13 @@ fn untracked_diff(
   Ok((output.stdout, added))
 }
 
-/// `git <args>` in `directory`, with git's messages in English.
+/// `git <args>` in `directory`, with git's messages in English. Git takes no optional locks: a read
+/// beside an agent at work must not refresh the worktree's index while the runner commits in it.
 fn git_command<'a>(git: &Path, directory: &Path, args: impl IntoIterator<Item = &'a str>) -> Command {
   Command::new(git, args)
     .with_current_dir(directory)
     .with_env("LC_ALL", "C")
+    .with_env("GIT_OPTIONAL_LOCKS", "0")
 }
 
 /// `git diff --numstat` of `revisions` (a range's two ends, or the one a worktree is compared
