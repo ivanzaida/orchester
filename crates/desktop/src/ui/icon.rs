@@ -9,7 +9,10 @@ use lurq::{
 use crate::theme::ExtraTypography;
 
 /// Defines [`Icon`] and the code point of each glyph in the bundled `lucide.ttf`, one line per
-/// icon, so the list and the table cannot drift apart.
+/// icon, so the list and the table cannot drift apart. The font names its glyphs as lucide did
+/// before its renames, and some old names now belong to other icons: the design's `circle-check`
+/// is the font's `check-circle-2`, while its `check-circle` is today's `circle-check-big`;
+/// likewise `square-check` is `check-square-2`.
 macro_rules! icons {
   ($($name:ident => $glyph:literal,)*) => {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,7 +45,7 @@ icons! {
   ChevronRight => '\u{e06f}',
   ChevronUp => '\u{e070}',
   Circle => '\u{e076}',
-  CircleCheck => '\u{e07c}',
+  CircleCheck => '\u{e226}',
   CircleDashed => '\u{e4b0}',
   CircleDot => '\u{e345}',
   CircleHelp => '\u{e082}',
@@ -113,7 +116,7 @@ icons! {
   SlidersHorizontal => '\u{e29a}',
   Sparkles => '\u{e412}',
   Square => '\u{e167}',
-  SquareCheck => '\u{e16a}',
+  SquareCheck => '\u{e559}',
   Terminal => '\u{e181}',
   Timer => '\u{e1e0}',
   Trash => '\u{e18e}',
