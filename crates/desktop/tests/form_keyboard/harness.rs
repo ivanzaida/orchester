@@ -8,7 +8,7 @@ use std::{
   path::{Path, PathBuf},
   sync::Arc,
   thread,
-  time::Duration,
+  time::{Duration, Instant},
 };
 
 use lurq::app::{App, Tree, events::MouseButton};
@@ -32,8 +32,13 @@ use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
-const SETTLE_TRIES: usize = 400;
-const SETTLE_PAUSE: Duration = Duration::from_millis(5);
+/// How long a wait may take before the test fails. A wait ends as soon as what it waits for is
+/// shown, so this only bounds a broken test. It is generous because the tests run side by side,
+/// often next to builds: on a loaded machine background reads, the runner and its agents take
+/// many times longer than on an idle one.
+const PATIENCE: Duration = Duration::from_secs(120);
+/// Between two looks at the tree, background work runs.
+const POLL_PAUSE: Duration = Duration::from_millis(10);
 /// The design's window size (`ZBoBm` and the other 1440 screens).
 const WIDTH: u32 = 1440;
 const HEIGHT: u32 = 960;
@@ -186,9 +191,9 @@ impl Desktop {
   }
 
   /// The application ends without recording its end, as when its process is killed: its
-  /// runners and their agents are terminated with it. Then it starts again on the same database,
-  /// which reports the crash.
-  pub fn crash_and_restart(self) -> Self {
+  /// runners and their agents are terminated with it. Once `ended` has waited for them to be
+  /// gone, it starts again on the same database, which reports the crash.
+  pub fn crash_and_restart(self, ended: impl FnOnce()) -> Self {
     let Self {
       tree,
       repo,
@@ -203,6 +208,7 @@ impl Desktop {
     drop(app);
     // Ending the runtime drops the runner connections, which terminates the runners.
     runtime.shutdown_timeout(Duration::from_secs(5));
+    ended();
     drop(session);
     let session = AppSession::start_at(&dir.path().join("orchester.db")).expect("session starts again");
     Self::launch(dir, repo, session, Programs::processes(), runner)
@@ -251,17 +257,27 @@ impl Desktop {
     self.tree.pass_headless(&mut self.app);
   }
 
-  /// Lets background work finish until `done` holds.
-  pub fn settle(&mut self, what: &str, done: impl Fn(&mut Tree) -> bool) {
-    for _ in 0..SETTLE_TRIES {
+  /// Lets background work (futures, the runner, its agents) go on until `done` holds, and fails
+  /// the test once [`PATIENCE`] has passed without it.
+  pub fn wait_until(&mut self, what: &str, done: impl Fn(&mut Self) -> bool) {
+    let start = Instant::now();
+    loop {
       self.tree.tick_futures();
       self.pass();
-      if done(&mut self.tree) {
+      if done(self) {
         return;
       }
-      thread::sleep(SETTLE_PAUSE);
+      assert!(
+        start.elapsed() < PATIENCE,
+        "timed out after {PATIENCE:?} waiting for {what}"
+      );
+      thread::sleep(POLL_PAUSE);
     }
-    panic!("timed out waiting for {what}");
+  }
+
+  /// [`Desktop::wait_until`] what the tree shows.
+  pub fn settle(&mut self, what: &str, done: impl Fn(&mut Tree) -> bool) {
+    self.wait_until(what, |desktop| done(&mut desktop.tree));
   }
 
   pub fn wait_for(&mut self, id: &str) {

@@ -20,6 +20,14 @@ fn new_task() -> Desktop {
   desktop.wait_for("tasks-new-task");
   desktop.click("tasks-new-task");
   desktop.wait_for(TITLE);
+  // The limits start at the project's defaults once those are read; a key typed before then
+  // would keep the field from taking them.
+  desktop.settle("the default budget", |tree| {
+    tree
+      .get_element_by_id_mut(BUDGET)
+      .and_then(|element| element.as_text_input())
+      .is_some_and(|input| input.value() == "1,400,000")
+  });
   desktop
 }
 
@@ -105,12 +113,7 @@ fn new_task_enter_saves_only_a_valid_draft() {
 #[test]
 fn new_task_budget_starts_at_the_project_default_and_groups_digits_while_typing() {
   let mut desktop = new_task();
-  desktop.settle("the default budget", |tree| {
-    tree
-      .get_element_by_id_mut(BUDGET)
-      .and_then(|element| element.as_text_input())
-      .is_some_and(|input| input.value() == "1,400,000")
-  });
+  assert_eq!(desktop.value(BUDGET), "1,400,000");
   assert_eq!(desktop.value(TIME_LIMIT), "30");
   assert!(shows(
     &mut desktop,

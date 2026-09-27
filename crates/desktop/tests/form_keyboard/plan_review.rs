@@ -12,7 +12,6 @@ use crate::{
   harness::Desktop,
   task_run::{
     agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps, set_text,
-    wait_long,
   },
 };
 
@@ -35,9 +34,15 @@ fn gated_desktop() -> Desktop {
 /// Creates and runs the task and waits until plan `version` is under review.
 fn reviewing(desktop: &mut Desktop, version: &str) {
   let title = format!("Plan v{version} · Say hello");
-  wait_long(desktop, "the plan review", |desktop| {
+  desktop.wait_until("the plan review", |desktop| {
     has(desktop, "plan-review-title") && shows(desktop, "plan-review-title", &title)
   });
+}
+
+/// Whether the status bar's latest event names the plan of KON-1. It comes with the runner's
+/// notice of the plan, apart from the pages, which read the run.
+fn plan_event_shown(desktop: &mut Desktop) -> bool {
+  has(desktop, "status-activity") && shows(desktop, "status-activity", "Plan ready for review · KON-1")
 }
 
 fn waiting_run(desktop: &Desktop) -> bool {
@@ -68,16 +73,14 @@ fn plan_review_shows_the_plan_and_approving_continues_the_run() {
   assert!(has(&mut desktop, "task-cancel-run"));
   assert!(!has(&mut desktop, "task-pause-run"));
   // The status bar counts the run and its latest event names the plan.
-  wait_long(&mut desktop, "the status bar", |desktop| {
-    shows(desktop, "status-needs-you", "1") && shows(desktop, "status-activity", "Plan ready for review · KON-1")
+  desktop.wait_until("the status bar", |desktop| {
+    shows(desktop, "status-needs-you", "1") && plan_event_shown(desktop)
   });
   assert!(waiting_run(&desktop));
 
   desktop.click("plan-approve");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
-  wait_long(&mut desktop, "the review to go", |desktop| {
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+  desktop.wait_until("the review to go", |desktop| {
     !has(desktop, "plan-review") && shows(desktop, "status-needs-you", "0")
   });
 }
@@ -106,9 +109,7 @@ fn plan_review_requests_changes_with_a_note_and_reviews_the_revision() {
   assert_eq!(desktop.value("plan-review-note"), "");
 
   desktop.click("plan-approve");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
   let run = latest_run(desktop.repo()).expect("run");
   assert_eq!(run.status(), &RunStatus::Succeeded);
 }
@@ -119,9 +120,7 @@ fn plan_review_waits_in_the_overview_needs_you_panel() {
   create_and_run(&mut desktop, "Say hello.", "1400000");
   reviewing(&mut desktop, "1");
   desktop.click("nav-overview");
-  wait_long(&mut desktop, "the review card", |desktop| {
-    has(desktop, "overview-decision-KON-1")
-  });
+  desktop.wait_until("the review card", |desktop| has(desktop, "overview-decision-KON-1"));
   assert!(shows(&mut desktop, "overview-decision-KON-1", "REVIEW PLAN"));
   assert!(shows(&mut desktop, "overview-decision-KON-1", "Say hello"));
   assert!(shows(
@@ -134,9 +133,8 @@ fn plan_review_waits_in_the_overview_needs_you_panel() {
   reviewing(&mut desktop, "1");
   // The status bar's latest event opens the task too.
   desktop.click("nav-overview");
-  wait_long(&mut desktop, "the overview", |desktop| {
-    has(desktop, "overview-decision-KON-1")
-  });
+  desktop.wait_until("the overview", |desktop| has(desktop, "overview-decision-KON-1"));
+  desktop.wait_until("the plan's event in the status bar", plan_event_shown);
   desktop.click("status-activity");
   reviewing(&mut desktop, "1");
 }

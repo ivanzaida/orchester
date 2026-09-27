@@ -18,7 +18,7 @@ use orchester_store::ProjectDb;
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{agent_step, create_and_run, has, init_repository, programs, run_finished, seed_steps, wait_long},
+  task_run::{agent_step, create_and_run, finished_on_page, has, init_repository, programs, seed_steps},
 };
 
 /// The harmless test program, built by [`programs`] beside the fake Codex CLI.
@@ -81,13 +81,11 @@ fn tool_run_shows_the_command_step_and_its_output() {
     });
   });
   create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
-  wait_long(&mut desktop, "the finished run on the page", |desktop| {
-    run_finished(desktop.repo()) && has(desktop, "task-ready-notice")
-  });
+  finished_on_page(&mut desktop);
   assert!(shows(&mut desktop, "task-progress-steps", "Checks · Print lines"));
   assert!(!shows(&mut desktop, "task-progress-steps", "0 tokens"));
   desktop.click("task-tab-activity");
-  wait_long(&mut desktop, "the transcript", |desktop| {
+  desktop.wait_until("the transcript", |desktop| {
     has(desktop, "activity-step-header") && shows(desktop, "activity", "Checks · Print lines")
   });
   assert!(shows(&mut desktop, "activity", "Command tool · 1 run"));
@@ -110,9 +108,7 @@ fn tool_run_shows_the_command_step_and_its_output() {
     .commit(checks);
   desktop.pass();
   desktop.click("activity-step-header");
-  wait_long(&mut desktop, "the command entry", |desktop| {
-    has(desktop, "activity-entry")
-  });
+  desktop.wait_until("the command entry", |desktop| has(desktop, "activity-entry"));
   assert!(shows(&mut desktop, "activity", "exit 0"));
   assert!(shows(&mut desktop, "activity", "orchester-test-command"));
 }

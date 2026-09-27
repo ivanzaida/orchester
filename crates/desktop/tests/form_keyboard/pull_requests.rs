@@ -413,6 +413,8 @@ fn pull_requests_footer_follows_the_rows_or_the_scrolled_list() {
   let first = row_bounds(&mut desktop, None);
   assert_near(first.y - headings_bottom, 20.0);
 
+  // The stored list can show before the first sync ends, and Refresh is off until it has.
+  settle_on(&mut desktop, STATUS, "Synced just now");
   gh.answer(LIST, Ok(ok(&many_pull_requests(12))));
   desktop.click("pull-requests-refresh");
   settle_on(&mut desktop, LIST_ID, "12 open pull requests");
