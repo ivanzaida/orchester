@@ -155,6 +155,10 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::Code.role()` | mono 12, 1.6, `code-text` | diff code and change mark; tokens color with `ExtraColor::Code*` (`DQMrs`) |
 | `ExtraTypography::Output.role()` | mono 11 muted, 1.6 | command output in the agent transcript (`mMUyR` in `N4SlQq`) |
 | `ExtraTypography::IconEntry.role()` / `IconEvent` / `IconState` | lucide 13 / 14 / 20 | transcript entry glyph (`DQmo9`), activity event glyph (`xQYdP` in `mBkeJ`), tab state icon (`qgZru` in `hig8O`) |
+| `ExtraTypography::RuleTitle.role()` | 20/500 | title of the instruction being edited (`sjJOc` in `yRKeF`) |
+| `ExtraTypography::PromptText.role()` | mono 12, 1.8 | instruction prompt, edited and resolved (`g2Tkg`, `iJdsS`) |
+| `ExtraTypography::VariableName.role()` | mono 20/500 | variable shown in the catalog (`Z69wX` in `EfTiT`) |
+| `ExtraTypography::ContextNote.role()` | 9 muted | preview execution context notes (`HvDGw`, `utiRC` in `TnjFo`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

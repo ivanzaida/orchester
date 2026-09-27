@@ -67,6 +67,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::Publish(PublishError::NoSteps | PublishError::UnassignedSteps(_)) => {
       Message::new("pipelines.problems.notPublishable")
     }
+    StoreError::Publish(PublishError::BlankInstruction) => Message::new("instructions.errors.blankText"),
     StoreError::Publish(PublishError::ConnectionMissing) => {
       Message::new("agents.permissions.publish.connectionMissing")
     }

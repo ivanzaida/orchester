@@ -4,14 +4,14 @@
 use crate::{
   connection::{Connection, stream::AgentEvent},
   diff::RevisionDiff,
-  id::{ConnectionId, IdempotencyKey, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
+  id::{ConnectionId, IdempotencyKey, InvocationId, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
   limits::ProjectLimits,
   name::Name,
   pull_request::{PullRequest, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
   resource::{Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   revision::Revision,
-  run::{ActivityEntry, Checkpoint, Invocation, NewRun, Run, RunEvent, StepOutput},
+  run::{ActivityEntry, Checkpoint, Invocation, InvocationPrompt, NewRun, Run, RunEvent, StepOutput},
   secret::Secret,
   task::{Task, TaskDetails},
   time::Timestamp,
@@ -243,6 +243,14 @@ pub trait ActivityStore {
 
   /// Invocations of a run, in launch order.
   fn invocations(&self, run: RunId) -> Result<Vec<Invocation>, Self::Error>;
+
+  /// Stores what `invocation` was told and where each part came from; an invocation has at most
+  /// one prompt, written once before its CLI starts.
+  fn save_invocation_prompt(&mut self, invocation: InvocationId, prompt: &InvocationPrompt) -> Result<(), Self::Error>;
+
+  /// The prompt sources of `invocation`; `None` for one that never started or was recorded before
+  /// prompts had sources.
+  fn invocation_prompt(&self, invocation: InvocationId) -> Result<Option<InvocationPrompt>, Self::Error>;
 
   /// Appends `events` of `invocation` to its run's transcript, atomically, and returns the
   /// sequence of the last one (of the transcript so far when `events` is empty).

@@ -277,6 +277,9 @@ pub enum PublishError {
   /// A pipeline without steps has nothing to run.
   #[error("the pipeline has no steps")]
   NoSteps,
+  /// An instruction without text would inject nothing.
+  #[error("the instruction has no text")]
+  BlankInstruction,
   /// Pipeline steps without an agent profile or tool; a run could not execute them.
   #[error("steps {0:?} have no agent profile or tool")]
   UnassignedSteps(Vec<StepKey>),

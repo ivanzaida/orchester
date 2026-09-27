@@ -449,6 +449,14 @@ CREATE TABLE revision_diffs (
 ) STRICT;
 ",
   r"
+-- What each agent CLI launch was told (Instructions): the injection event and the
+-- sources of its prompt in order, as JSON. Written once by the runner before the CLI starts.
+CREATE TABLE invocation_prompts (
+  invocation_id TEXT PRIMARY KEY REFERENCES invocations (id),
+  body TEXT NOT NULL
+) STRICT;
+",
+  r"
 -- Project secrets (07.01): what the user sees of a secret, never its value. The value is in the OS
 -- keychain under the project and secret ids (`orchester_core::secret::VaultKey`). An archived
 -- secret keeps its row, so references to it still resolve, and frees its name in its environment.
