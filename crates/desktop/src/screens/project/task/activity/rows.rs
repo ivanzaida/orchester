@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 use lurq::core::Signal;
 use orchester_core::{
   connection::AgentProvider,
-  id::StepExecutionId,
+  id::{StepExecutionId, TaskId},
   run::{StepStatus, TokenUsage},
   time::Timestamp,
 };
@@ -73,6 +73,8 @@ pub(super) enum RowKind {
 #[derive(Clone)]
 pub(super) struct TranscriptRow {
   pub(super) key: Arc<str>,
+  /// The task whose run the transcript is of: its Changes tab shows a changed file.
+  pub(super) task: TaskId,
   pub(super) kind: RowKind,
   /// Whether unparsed lines are shown line by line.
   pub(super) raw: bool,
@@ -81,7 +83,7 @@ pub(super) struct TranscriptRow {
 
 impl PartialEq for TranscriptRow {
   fn eq(&self, other: &Self) -> bool {
-    self.key == other.key && self.kind == other.kind && self.raw == other.raw
+    self.key == other.key && self.task == other.task && self.kind == other.kind && self.raw == other.raw
   }
 }
 
@@ -109,17 +111,18 @@ pub(super) fn rows(
     };
     let open = header.open;
     let agent = header.agent.clone();
-    rows.push(row(
-      format!("header-{}", execution.id()),
-      RowKind::Header(header),
+    rows.push(TranscriptRow {
+      key: format!("header-{}", execution.id()).into(),
+      task: run.run.task(),
+      kind: RowKind::Header(header),
       raw,
-      toggles,
-    ));
+      toggles: toggles.clone(),
+    });
     if !open {
       continue;
     }
     for entry in entries.iter().filter(|entry| entry.execution == execution.id()) {
-      let key: Arc<str> = format!("entry-{}", entry.sequence).into();
+      let key: Arc<str> = format!("entry-{}-{}", entry.sequence, entry.part).into();
       let open = toggles.is_open(&key, entry_starts_open(entry));
       let kind = RowKind::Entry {
         entry: entry.clone(),
@@ -128,6 +131,7 @@ pub(super) fn rows(
       };
       rows.push(TranscriptRow {
         key,
+        task: run.run.task(),
         kind,
         raw,
         toggles: toggles.clone(),
@@ -135,15 +139,6 @@ pub(super) fn rows(
     }
   }
   rows
-}
-
-fn row(key: String, kind: RowKind, raw: bool, toggles: &Toggles) -> TranscriptRow {
-  TranscriptRow {
-    key: key.into(),
-    kind,
-    raw,
-    toggles: toggles.clone(),
-  }
 }
 
 fn header(run: &RunView, execution: StepExecutionId, status: StepStatus, toggles: &Toggles) -> Option<Header> {

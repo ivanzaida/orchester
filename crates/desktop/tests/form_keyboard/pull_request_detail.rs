@@ -76,10 +76,10 @@ fn pull_request_opens_from_the_inbox_with_its_files_and_context() {
   assert!(shows(&mut desktop, "pull-request-heading", "Add GitHub authentication"));
   assert!(shows(&mut desktop, "pull-request-tab-files", "11"));
   for path in ["dir/moved.txt", "gone.txt", "image.png", "main.rs", "with space.txt"] {
-    let id = format!("pull-request-file:{path}");
+    let id = format!("diff-file:{path}");
     desktop.wait_for(&id);
   }
-  assert!(shows(&mut desktop, "pull-request-files", "M · +2 / −1"));
+  assert!(shows(&mut desktop, "diff-files", "M · +2 / −1"));
   // The first file is selected: a pure rename says its content did not change.
   assert!(shows(&mut desktop, "pull-request-diff", "dir/moved.txt"));
   assert!(shows(&mut desktop, "pull-request-diff", "Renamed from moved.txt"));
@@ -91,8 +91,8 @@ fn pull_request_opens_from_the_inbox_with_its_files_and_context() {
 fn pull_request_file_shows_its_hunks_and_highlighted_lines() {
   let gh = signed_in_with_detail();
   let mut desktop = open_detail(&gh);
-  desktop.wait_for("pull-request-file:main.rs");
-  desktop.click("pull-request-file:main.rs");
+  desktop.wait_for("diff-file:main.rs");
+  desktop.click("diff-file:main.rs");
   settle_on(&mut desktop, "pull-request-diff", "@@ −1,3 +1,4 @@");
   desktop.settle("main.rs highlighted", |tree| {
     tree
@@ -115,24 +115,24 @@ fn pull_request_file_shows_its_hunks_and_highlighted_lines() {
 fn pull_request_notes_binary_and_mode_changes() {
   let gh = signed_in_with_detail();
   let mut desktop = open_detail(&gh);
-  desktop.wait_for("pull-request-file:image.png");
-  desktop.click("pull-request-file:image.png");
+  desktop.wait_for("diff-file:image.png");
+  desktop.click("diff-file:image.png");
   settle_on(
     &mut desktop,
     "pull-request-diff",
     "Binary file: its changes are not shown",
   );
-  desktop.click("pull-request-file:run.sh");
+  desktop.click("diff-file:run.sh");
   settle_on(
     &mut desktop,
     "pull-request-diff",
     "File mode changed from 100644 to 100755",
   );
-  desktop.press("pull-request-file-search");
-  assert_eq!(desktop.focused().as_deref(), Some("pull-request-file-search"));
+  desktop.press("diff-file-search");
+  assert_eq!(desktop.focused().as_deref(), Some("diff-file-search"));
   desktop.type_text("gone");
-  assert!(shows(&mut desktop, "pull-request-files", "gone.txt"));
-  assert!(desktop.tree.get_element_by_id("pull-request-file:main.rs").is_none());
+  assert!(shows(&mut desktop, "diff-files", "gone.txt"));
+  assert!(desktop.tree.get_element_by_id("diff-file:main.rs").is_none());
 }
 
 #[test]
@@ -224,11 +224,11 @@ fn pull_request_breadcrumb_leads_back_to_the_inbox() {
   desktop.wait_for("pull-requests-list");
   // Only Find a file takes focus on the pull request screen.
   let mut desktop = open_detail(&gh);
-  desktop.wait_for("pull-request-file-search");
-  desktop.press("pull-request-file-search");
-  assert_eq!(desktop.focused().as_deref(), Some("pull-request-file-search"));
+  desktop.wait_for("diff-file-search");
+  desktop.press("diff-file-search");
+  assert_eq!(desktop.focused().as_deref(), Some("diff-file-search"));
   desktop.tab();
-  assert_eq!(desktop.focused().as_deref(), Some("pull-request-file-search"));
+  assert_eq!(desktop.focused().as_deref(), Some("diff-file-search"));
 }
 
 fn width(desktop: &mut Desktop, id: &str) -> f32 {
@@ -244,13 +244,13 @@ fn width(desktop: &mut Desktop, id: &str) -> f32 {
 fn pull_request_rows_reach_across_the_diff() {
   let gh = signed_in_with_detail();
   let mut desktop = open_detail(&gh);
-  desktop.wait_for("pull-request-file:main.rs");
-  desktop.click("pull-request-file:main.rs");
+  desktop.wait_for("diff-file:main.rs");
+  desktop.click("diff-file:main.rs");
   settle_on(&mut desktop, "pull-request-diff", "@@ −1,3 +1,4 @@");
   // The file list is 192 wide (`h8PZJa`); short lines still color the diff's full width.
-  assert!((width(&mut desktop, "pull-request-files") - 192.0).abs() < 0.5);
+  assert!((width(&mut desktop, "diff-files") - 192.0).abs() < 0.5);
   let diff = width(&mut desktop, "pull-request-diff");
-  for row in ["pull-request-hunk", "pull-request-line"] {
+  for row in ["diff-hunk", "diff-line"] {
     assert!((width(&mut desktop, row) - diff).abs() < 0.5, "{row}");
   }
 }

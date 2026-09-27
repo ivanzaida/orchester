@@ -573,6 +573,7 @@
       "fileAdded": "A",
       "fileModified": "M",
       "fileDeleted": "D",
+      "fileMeta": "{{status}} · open in Changes",
       "usage": "Usage reported",
       "usageMeta": "in {{input}} · out {{output}} · cached {{cached}} not counted",
       "error": "The agent CLI reported an error",
@@ -625,6 +626,66 @@
         "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget."
       },
       "stepOptionAttempt": "{{number}} · {{step}} · {{agent}} · attempt {{attempt}}"
+    },
+    "changes": {
+      "noRunTitle": "No changes yet",
+      "noRunDetail": "The task has no run. What its run changes shows here once it records its first checkpoint.",
+      "loadingTitle": "Reading the run’s changes",
+      "loadingDetail": "Comparing the run’s checkpoint with its base, and its worktree with its checkpoint.",
+      "failedTitle": "Couldn’t read the run’s changes",
+      "tryAgain": "Try again",
+      "failure": {
+        "gitMissing": "git was not found. Install git or add it to the PATH, then try again. The run is not affected.",
+        "git": "git could not compare the run’s revisions. The run is not affected; the runner log may say more."
+      },
+      "noCheckpointTitle": "No checkpoint yet",
+      "noCheckpointDetail": "Run {{run}} has not committed any work yet. Its changes show here once a step records its first checkpoint.",
+      "noChangesTitle": "No changes",
+      "noChangesDetail": "The run’s latest checkpoint has the same files as its base, and its worktree has nothing more.",
+      "tooLargeTitle": "Too large to show here",
+      "tooLargeDetail": "The run changes {{files}} files and {{lines}} lines, more than Orchester shows ({{maxFiles}} files or {{maxLines}} lines). Read its branch {{branch}} with git.",
+      "worktreeTooLargeTitle": "The changes not checkpointed are too large to show here",
+      "worktreeTooLargeDetail": "The run’s worktree changes {{files}} files and {{lines}} lines of tracked files beyond its checkpoint, more than Orchester shows ({{maxFiles}} files or {{maxLines}} lines).",
+      "worktreeFailedTitle": "Couldn’t read the changes not checkpointed",
+      "notCheckpointedHeading": "NOT CHECKPOINTED  {{count}}",
+      "omitted": "{{count}} more changed lines are not shown; the file is too large. Read them with git on the run’s branch.",
+      "range": "{{from}} → {{to}}",
+      "toCheckpoint": "Run {{run}} from its base to its latest checkpoint · {{step}} · {{time}}",
+      "toEarlierCheckpoint": "Run {{run}} from its base to a checkpoint · reading the latest one",
+      "checkpointed": "Checkpointed",
+      "worktreeRange": "{{from}} → worktree",
+      "worktreeFromCheckpoint": "In the run’s worktree after checkpoint {{revision}}, not committed yet",
+      "worktreeFromBase": "In the run’s worktree after its base, before its first checkpoint",
+      "notCheckpointed": "Not checkpointed"
+    },
+    "ready": {
+      "status": "Ready for review",
+      "meta": "Run #{{run}}  ·  {{pipeline}}  ·  Finished at {{time}}",
+      "title": "Ready for your review",
+      "detail": "Every step of the run passed. Its changes wait for your review.",
+      "whatChanged": "What changed",
+      "verification": "Verification",
+      "commit": "commit {{revision}}",
+      "noCommit": "no commit",
+      "scope": {
+        "one": "1 file changed  ·  +{{additions}} / −{{deletions}}",
+        "other": "{{files}} files changed  ·  +{{additions}} / −{{deletions}}"
+      },
+      "scopeTooLarge": "{{files}} files and {{lines}} lines changed  ·  too large to show here",
+      "scopeNone": "No committed changes",
+      "scopeReading": "Reading the changes…",
+      "askAgent": "Ask agent",
+      "reviewPullRequest": "Review PR",
+      "unavailable": "Review PR needs a pull request, which no pipeline step opens yet. Ask agent needs the task conversation, which comes in a later version.",
+      "details": "Run details",
+      "project": "Project",
+      "base": "Base revision",
+      "workingBranch": "Working branch",
+      "duration": "Duration",
+      "tokens": "Tokens used",
+      "agents": "Agents on this run",
+      "agentDetail": "{{engine}} · {{steps}}",
+      "openConversation": "Open conversation"
     },
     "preflight": {
       "pipelineNotPublished": "The task’s pipeline has no published version.",
@@ -873,6 +934,15 @@
         "failed": "GitHub did not return the pull request. Refresh tries again; the log has the details."
       }
     },
+    "diff": {
+      "range": "Full PR · {{base}} → {{revision}}",
+      "rangeHead": "Full PR · {{revision}}",
+      "unified": "Unified",
+      "viewed": "Viewed",
+      "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the pull request in GitHub to see them."
+    }
+  },
+  "diff": {
     "files": {
       "heading": "FILES  {{count}}",
       "search": "Find a file…",
@@ -887,30 +957,23 @@
         "copied": "C"
       }
     },
-    "diff": {
-      "range": "Full PR · {{base}} → {{revision}}",
-      "rangeHead": "Full PR · {{revision}}",
-      "unified": "Unified",
-      "viewed": "Viewed",
-      "meta": {
-        "modified": "Modified · +{{additions}} / −{{deletions}}",
-        "added": "Added · +{{additions}} / −{{deletions}}",
-        "deleted": "Deleted · +{{additions}} / −{{deletions}}",
-        "renamed": "Renamed from {{from}} · +{{additions}} / −{{deletions}}",
-        "copied": "Copied from {{from}} · +{{additions}} / −{{deletions}}"
-      },
-      "hunk": "@@ −{{old}} +{{new}} @@",
-      "hunkSection": "@@ −{{old}} +{{new}} @@ {{section}}",
-      "markAdded": "+",
-      "markRemoved": "−",
-      "lineCut": "Line shortened",
-      "noNewline": "No newline at end of file",
-      "binary": "Binary file: its changes are not shown",
-      "mode": "File mode changed from {{old}} to {{new}}",
-      "unchanged": "The content did not change",
-      "empty": "The file is empty",
-      "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the pull request in GitHub to see them."
-    }
+    "meta": {
+      "modified": "Modified · +{{additions}} / −{{deletions}}",
+      "added": "Added · +{{additions}} / −{{deletions}}",
+      "deleted": "Deleted · +{{additions}} / −{{deletions}}",
+      "renamed": "Renamed from {{from}} · +{{additions}} / −{{deletions}}",
+      "copied": "Copied from {{from}} · +{{additions}} / −{{deletions}}"
+    },
+    "hunk": "@@ −{{old}} +{{new}} @@",
+    "hunkSection": "@@ −{{old}} +{{new}} @@ {{section}}",
+    "markAdded": "+",
+    "markRemoved": "−",
+    "lineCut": "Line shortened",
+    "noNewline": "No newline at end of file",
+    "binary": "Binary file: its changes are not shown",
+    "mode": "File mode changed from {{old}} to {{new}}",
+    "unchanged": "The content did not change",
+    "empty": "The file is empty"
   },
   "agents": {
     "breadcrumb": "{{project}} / Agents",

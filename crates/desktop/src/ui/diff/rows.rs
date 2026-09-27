@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
-use orchester_core::pull_request::diff::{FileChange, FileDiff, LineKind, ModeChange};
+use orchester_core::diff::{FileChange, FileDiff, LineKind, ModeChange};
 
-use crate::pull_requests::highlight::{FileTokens, LineTokens, plain};
+use crate::highlight::{FileTokens, LineTokens, plain};
 
 /// One row of a file's diff. `index` is the row's position, its key in the list.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -7,20 +7,16 @@
 mod gh;
 
 pub use self::gh::{gh_compare_diff_command, gh_pr_view_command, parse_gh_compare_diff, parse_gh_pr_view};
-use super::{Changes, PullRequest, SyncFailure, sync::sync_failure};
+use super::{PullRequest, SyncFailure, sync::sync_failure};
 use crate::{
   connection::{GitHubCheck, GitHubState},
+  diff::RevisionDiff,
   github::GitHub,
   repository::RepositoryLink,
   revision::Revision,
   store::PullRequestDiffStore,
   time::Timestamp,
 };
-
-/// Changed lines (added plus removed) of the largest diff Orchester reads.
-pub const MAX_DIFF_LINES: u32 = 20_000;
-/// Changed files of the largest diff Orchester reads.
-pub const MAX_DIFF_FILES: u32 = 300;
 
 /// A pull request as `gh pr view` read it, with the revision of its base branch its diff starts
 /// from.
@@ -30,27 +26,13 @@ pub struct PullRequestHead {
   pub base: Revision,
 }
 
-/// The unified diff of a pull request from `base` to `head`, read at `synced_at`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RevisionDiff {
-  pub base: Revision,
-  pub head: Revision,
-  pub text: String,
-  pub synced_at: Timestamp,
-}
-
-/// Whether a change is larger than the diffs Orchester reads; GitHub's own diff limits are of the
-/// same order, and such a pull request is reviewed on GitHub.
-pub const fn is_too_large(changes: Changes) -> bool {
-  changes.additions.saturating_add(changes.deletions) > MAX_DIFF_LINES || changes.files > MAX_DIFF_FILES
-}
-
 /// What a refresh read about the diff.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DiffRead {
   /// The diff of the pull request's current head, from storage or from GitHub.
   Read(RevisionDiff),
-  /// The pull request changes more than [`is_too_large`] allows; nothing was fetched.
+  /// The pull request changes more than [`crate::diff::Changes::is_too_large`] allows; nothing was
+  /// fetched.
   TooLarge,
   /// The pull request was read, but GitHub gave no diff of its head.
   Failed(SyncFailure),
@@ -101,7 +83,7 @@ pub fn refresh_pull_request<S: PullRequestDiffStore>(
     }
   };
   let PullRequestHead { pull_request, base } = head;
-  if is_too_large(pull_request.changes()) {
+  if pull_request.changes().is_too_large() {
     let outcome = Ok(RefreshedDetail {
       pull_request,
       diff: DiffRead::TooLarge,
@@ -127,7 +109,7 @@ pub fn refresh_pull_request<S: PullRequestDiffStore>(
     base,
     head: head_sha,
     text,
-    synced_at: now,
+    read_at: now,
   };
   store.save_pull_request_diff(repo, number, &diff)?;
   let outcome = Ok(RefreshedDetail {

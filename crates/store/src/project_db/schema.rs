@@ -438,6 +438,17 @@ CREATE TABLE run_permissions (
 ) STRICT;
 ",
   r"
+-- The diff between two commits, read with git: a run's changes from its base to a checkpoint (the
+-- task page's Changes tab). The diff of two commits does not change (a cache, desktop-written).
+CREATE TABLE revision_diffs (
+  base_sha TEXT NOT NULL,
+  head_sha TEXT NOT NULL,
+  diff_blob TEXT NOT NULL REFERENCES blobs (sha256),
+  read_at INTEGER NOT NULL,
+  PRIMARY KEY (base_sha, head_sha)
+) STRICT;
+",
+  r"
 -- Command tool steps (M10a). A command tool's run is an invocation of its step execution, so its
 -- time counts toward the run's time limit and its output joins the run's transcript. It runs no
 -- model: its `model` is empty.

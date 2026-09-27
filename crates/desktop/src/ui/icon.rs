@@ -72,6 +72,7 @@ icons! {
   FolderX => '\u{e33e}',
   Folders => '\u{e33f}',
   Gauge => '\u{e1bf}',
+  GitCompareArrows => '\u{e553}',
   GitMerge => '\u{e0e4}',
   GitPullRequest => '\u{e0e5}',
   GitPullRequestClosed => '\u{e35a}',

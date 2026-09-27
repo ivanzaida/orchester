@@ -19,7 +19,7 @@ use super::{
   tools::ToolsScreen,
 };
 use crate::{
-  navigation::route::{Page, Route},
+  navigation::route::{self, Page, Route},
   runner::{RunnerStatus, state::RunnerState},
   tasks::usage::ProjectUsage,
   workspace::OpenProject,
@@ -50,6 +50,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
   };
   let open = shown.open.clone();
   let limits = shown.usage.map(|usage| usage.limits);
+  let file = route::changed_file(&ctx.route_path());
   match page {
     Page::Overview(tab) => ctx.mount_keyed::<OverviewScreen>(
       "overview",
@@ -85,6 +86,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         project: open,
         task,
         tab,
+        file,
         revision: shown.revision,
         limits,
         runner: shown.runner,

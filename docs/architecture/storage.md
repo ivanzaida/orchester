@@ -19,6 +19,7 @@ Date: 2026-09-23. Status: agreed direction for the local (single-user) version; 
 | Quit now or crash | next start reports the abnormal end and offers to continue from the last checkpoint |
 | Logs and transcripts | kept in full, no retention limit |
 | Pull request diffs | cached per revision |
+| Run diffs | read with git from the run's base to its latest checkpoint, cached per pair of commits; changes not checkpointed are read from the worktree each time |
 
 ## Processes
 
@@ -256,6 +257,7 @@ keeps its permissions unless the change is also saved to its draft.
 | Table | Purpose |
 | --- | --- |
 | `blobs` | sha256, size, stored size, media type, created at |
+| `revision_diffs` | base revision, head revision, diff blob, read at — the diff between two commits read with git, e.g. a run's changes up to a checkpoint (a cache, desktop-written) |
 
 Files are written to a temporary name and renamed after the hash is verified; the row is
 inserted after the file exists. Blobs are never deleted (full retention).
