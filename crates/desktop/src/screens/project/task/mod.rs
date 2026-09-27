@@ -265,6 +265,7 @@ impl TaskScreen {
           repo_root: &props.project.repo_root,
           lost,
           files,
+          leftovers: leftovers.as_ref().and_then(|leftovers| leftovers.as_ref().ok()),
           nav: &self.nav,
           focus: &self.focus_composer,
           reload: &self.reload,

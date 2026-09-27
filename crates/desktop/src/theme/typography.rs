@@ -152,10 +152,14 @@ pub enum ExtraTypography {
   MaskedValue,
   /// Uppercase heading of a table column, e.g. "SOURCE / VERSION" (`gHiGc` in `WcIvG`).
   ColumnHeading,
+  /// `NAME=value` lines in a mono text area, e.g. the project's environment (`f0e2Hv` in `BGMgO`).
+  MonoArea,
+  /// A change a version makes, in the version history (`o6to5` in `DOroV`).
+  ChangeLine,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 69] = [
+  const ALL: [Self; 71] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -225,6 +229,8 @@ impl ExtraTypography {
     Self::MonoTitle,
     Self::MaskedValue,
     Self::ColumnHeading,
+    Self::MonoArea,
+    Self::ChangeLine,
   ];
 
   fn name(self) -> &'static str {
@@ -298,6 +304,8 @@ impl ExtraTypography {
       Self::MonoTitle => "mono-title",
       Self::MaskedValue => "masked-value",
       Self::ColumnHeading => "column-heading",
+      Self::MonoArea => "mono-area",
+      Self::ChangeLine => "change-line",
     }
   }
 
@@ -363,12 +371,47 @@ impl ExtraTypography {
     }
   }
 
+  /// The style of a Geist Mono role; `None` for the others.
+  fn mono_style(self) -> Option<TextStyle> {
+    Some(match self {
+      Self::Metric => mono(23.0, TEXT),
+      Self::StepNumber => mono(12.0, SUBTLE),
+      Self::NavCount => mono(11.0, MUTED),
+      Self::CanvasLabel => TextStyle {
+        letter_spacing: 1.0,
+        ..mono(9.0, SUBTLE)
+      },
+      Self::MonoTag => mono(9.0, MUTED),
+      Self::MonoValue => mono(11.0, TEXT),
+      Self::MonoField => mono(12.0, TEXT),
+      Self::PullRequestContext => mono(11.0, MUTED),
+      Self::DiffPath => TextStyle {
+        weight: FontWeight::Medium,
+        ..mono(14.0, TEXT)
+      },
+      Self::DiffLineNumber => mono(11.0, CODE_COMMENT),
+      Self::Code => leading(1.6, mono(12.0, CODE_TEXT)),
+      Self::Output => leading(1.6, mono(11.0, MUTED)),
+      Self::PromptText => leading(1.8, mono(12.0, TEXT)),
+      Self::VariableName => TextStyle {
+        weight: FontWeight::Medium,
+        ..mono(20.0, TEXT)
+      },
+      Self::MonoTitle => mono(12.0, TEXT),
+      Self::MaskedValue => mono(13.0, MUTED),
+      Self::MonoArea => leading(1.6, mono(12.0, TEXT)),
+      _ => return None,
+    })
+  }
+
   fn style(self) -> TextStyle {
+    if let Some(mono) = self.mono_style() {
+      return mono;
+    }
     match self {
       Self::SectionHeading => style(15.0, FontWeight::Medium, TEXT),
       Self::CardTitle => style(14.0, FontWeight::Medium, TEXT),
       Self::Overline => style(9.0, FontWeight::SemiBold, SUBTLE),
-      Self::Metric => mono(23.0, TEXT),
       Self::Brand => TextStyle {
         letter_spacing: -0.7,
         ..style(19.0, FontWeight::SemiBold, TEXT)
@@ -385,7 +428,6 @@ impl ExtraTypography {
         ..style(10.0, FontWeight::Normal, MUTED)
       },
       Self::Subheading => style(17.0, FontWeight::Medium, TEXT),
-      Self::StepNumber => mono(12.0, SUBTLE),
       Self::PageTitle => style(27.0, FontWeight::Medium, TEXT),
       Self::Detail => leading(1.6, style(11.0, FontWeight::Normal, MUTED)),
       Self::Footnote => style(10.0, FontWeight::Normal, MUTED),
@@ -393,17 +435,9 @@ impl ExtraTypography {
       Self::ScreenTitle => style(28.0, FontWeight::Medium, TEXT),
       Self::FormLabel => style(12.0, FontWeight::Medium, TEXT),
       Self::StatusLabel => style(11.0, FontWeight::Medium, TEXT),
-      Self::NavCount => mono(11.0, MUTED),
       Self::Brief => leading(1.7, style(13.0, FontWeight::Normal, TEXT)),
       Self::DialogTitle => style(20.0, FontWeight::Medium, TEXT),
       Self::Explanation => leading(1.6, style(12.0, FontWeight::Normal, MUTED)),
-      Self::CanvasLabel => TextStyle {
-        letter_spacing: 1.0,
-        ..mono(9.0, SUBTLE)
-      },
-      Self::MonoTag => mono(9.0, MUTED),
-      Self::MonoValue => mono(11.0, TEXT),
-      Self::MonoField => mono(12.0, TEXT),
       Self::Instructions => leading(1.65, style(12.0, FontWeight::Normal, TEXT)),
       Self::Hint => leading(1.5, style(10.0, FontWeight::Normal, MUTED)),
       Self::VersionFigure => style(18.0, FontWeight::Medium, TEXT),
@@ -412,31 +446,17 @@ impl ExtraTypography {
       Self::InspectorTitle => style(18.0, FontWeight::Medium, TEXT),
       Self::RowTitle => style(15.0, FontWeight::Medium, TEXT),
       Self::PullRequestTitle => style(24.0, FontWeight::Medium, TEXT),
-      Self::PullRequestContext => mono(11.0, MUTED),
       Self::FileListHeading => style(10.0, FontWeight::Medium, MUTED),
       Self::FileName => style(12.0, FontWeight::Normal, TEXT),
-      Self::DiffPath => TextStyle {
-        weight: FontWeight::Medium,
-        ..mono(14.0, TEXT)
-      },
-      Self::DiffLineNumber => mono(11.0, CODE_COMMENT),
-      Self::Code => leading(1.6, mono(12.0, CODE_TEXT)),
-      Self::Output => leading(1.6, mono(11.0, MUTED)),
       Self::RuleTitle => style(20.0, FontWeight::Medium, TEXT),
-      Self::PromptText => leading(1.8, mono(12.0, TEXT)),
-      Self::VariableName => TextStyle {
-        weight: FontWeight::Medium,
-        ..mono(20.0, TEXT)
-      },
       Self::ContextNote => style(9.0, FontWeight::Normal, MUTED),
       Self::CellLabel => leading(1.5, style(11.0, FontWeight::Normal, MUTED)),
       Self::InspectorNote => leading(1.6, style(10.0, FontWeight::Normal, MUTED)),
       Self::PlanTitle => style(19.0, FontWeight::Medium, TEXT),
       Self::ReviewNote => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),
       Self::AgentText => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),
-      Self::MonoTitle => mono(12.0, TEXT),
-      Self::MaskedValue => mono(13.0, MUTED),
       Self::ColumnHeading => style(9.0, FontWeight::Normal, MUTED),
+      Self::ChangeLine => leading(1.4, style(12.0, FontWeight::Normal, TEXT)),
       icon_role => icon(
         icon_role
           .icon_size()

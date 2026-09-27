@@ -36,6 +36,8 @@ pub const SELECT_CHECK_SLOT: f32 = tokens::SELECT_ICON_SIZE;
 pub const UNPARSED_OPACITY: f32 = tokens::UNPARSED_OPACITY;
 /// Opacity of an option that cannot be chosen (`BNliD` in `T1rjv`).
 pub const UNAVAILABLE_OPTION_OPACITY: f32 = tokens::UNAVAILABLE_OPTION_OPACITY;
+/// Opacity of a button that cannot be pressed, over its variant's own colors (`kLJJb`).
+pub const DISABLED_OPACITY: f32 = tokens::DISABLED_OPACITY;
 
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),

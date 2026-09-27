@@ -5,10 +5,11 @@ use lurq::{
 
 use super::tokens::{
   FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_PILL, RADIUS_SELECT_MENU,
-  SPACE_BESIDE_GUTTER, SPACE_COLUMNS, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM,
-  SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR,
-  SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION,
-  SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT, TAB_INDICATOR_STROKE,
+  SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT, SPACE_COLUMNS, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD,
+  SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT,
+  SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL,
+  SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT,
+  TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -69,10 +70,13 @@ pub enum ExtraSpacing {
   /// Section padding beside a scroll gutter: 32 less the 12px gutter, so content still ends 32
   /// from the edge (`JV8S8` in `ZVdRa`, the Summary column of 02.L2 `A7nVbK`).
   BesideGutter,
+  /// What a check row says under its title starts where the title does: the row's icon and the
+  /// gap after it (the uncommitted files, `gzztk` in 02.Q `LMrbK`).
+  CheckIndent,
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 25] = [
+  const ALL: [Self; 26] = [
     Self::Hair,
     Self::Mark,
     Self::Tight,
@@ -98,6 +102,7 @@ impl ExtraSpacing {
     Self::DialogMargin,
     Self::TextArea,
     Self::BesideGutter,
+    Self::CheckIndent,
   ];
 
   fn name(self) -> &'static str {
@@ -127,6 +132,7 @@ impl ExtraSpacing {
       Self::DialogMargin => "dialog-margin",
       Self::TextArea => "text-area",
       Self::BesideGutter => "beside-gutter",
+      Self::CheckIndent => "check-indent",
     }
   }
 
@@ -157,6 +163,7 @@ impl ExtraSpacing {
       Self::DialogMargin => SPACE_DIALOG_MARGIN,
       Self::TextArea => SPACE_TEXT_AREA,
       Self::BesideGutter => SPACE_BESIDE_GUTTER,
+      Self::CheckIndent => SPACE_CHECK_INDENT,
     }
   }
 

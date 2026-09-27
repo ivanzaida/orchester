@@ -116,6 +116,11 @@ fn getting_started_roles_follow_pencil() {
     theme.spacing_value(ExtraSpacing::BesideGutter.role()),
     Dimension::Px(20.0)
   );
+  // The uncommitted files under a check row's title, which starts after its icon (`gzztk`).
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::CheckIndent.role()),
+    Dimension::Px(28.0)
+  );
   assert_eq!(
     theme.typography_style(ExtraTypography::DialogTitle.role()).font_size,
     20.0
@@ -146,6 +151,20 @@ fn mono_field_path_follows_pencil() {
   let app = themed_app();
   let path = app.theme().typography_style(ExtraTypography::MonoField.role());
   assert_eq!((&*path.font_family, path.font_size), ("Geist Mono", 12.0));
+  // The environment's `NAME=value` lines are the same mono 12 at 1.6 (`f0e2Hv` in `BGMgO`).
+  let area = app.theme().typography_style(ExtraTypography::MonoArea.role());
+  assert_eq!(
+    (&*area.font_family, area.font_size, area.line_height),
+    ("Geist Mono", 12.0, 1.6)
+  );
+}
+
+#[test]
+fn version_history_change_lines_follow_pencil() {
+  let app = themed_app();
+  // A change of a version, 12 at 1.4, beside a 17px icon slot: one line of it (`o6to5`, `Q1Geah`).
+  let line = app.theme().typography_style(ExtraTypography::ChangeLine.role());
+  assert_eq!((line.font_size, line.line_height), (12.0, 1.4));
 }
 
 #[test]
@@ -156,6 +175,7 @@ fn mono_text_keeps_the_space_before_double_hyphens() {
     TypographyStyle::Mono,
     ExtraTypography::MonoValue.role(),
     ExtraTypography::MonoField.role(),
+    ExtraTypography::MonoArea.role(),
     ExtraTypography::Metric.role(),
   ] {
     assert_eq!(app.theme().typography_style(role).font_features, off);

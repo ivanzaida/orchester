@@ -1,6 +1,8 @@
 //! The task conversation panel (`kjsmd`): its heading with where the conversation stands, whom the
 //! next message goes to (Orchestrator, which routes it to the agent that works next, or one agent),
 //! who takes part, the messages (`J5MIT`) and the composer (`C3nu0z`) with what sending does now.
+//! Once no agent reads messages (a merged or ended run), the recipient select is disabled with the
+//! composer (02.S2 `m3gLZ`).
 //!
 //! Sending stores the message once per draft (a retry after an unclear failure stores nothing new),
 //! then tells the runner, which delivers it at the run's next invocation boundary. A draft stays
@@ -18,7 +20,7 @@ use lurq::{
   components::{Column, Row, ScrollVertical, Select, Spacer, Text},
   core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::ScrollState},
-  node::{Element, border::Border, dimension::Dimension},
+  node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   conversation::Recipient,
@@ -39,7 +41,7 @@ use crate::{
     conversation::{Conversation, PanelState, Participants, send_in},
     run::control_message,
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
+  theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     field::{field_error, select_style},
     icon::Icon,
@@ -272,7 +274,8 @@ impl ConversationPanel {
     Some(Arc::new(move || action.run(outgoing.clone())))
   }
 
-  /// "To: Orchestrator · this task" and the run's agents (`LDZMb`).
+  /// "To: Orchestrator · this task" and the run's agents (`LDZMb`); disabled, faded as a disabled
+  /// button is, once no agent reads messages.
   fn recipient(&self, ctx: &Ctx, conversation: &Conversation) -> Element {
     let options = conversation.recipients.iter().map(|choice| {
       let label = match &choice.agent {
@@ -281,14 +284,32 @@ impl ConversationPanel {
       };
       (To(choice.recipient), label)
     });
-    Element::from(
+    let open = conversation.state.takes_messages();
+    let select = Element::from(
       Select::new(self.to.clone())
         .options(options)
         .width(Dimension::Pct(100.0))
         .height(Dimension::Px(RECIPIENT_HEIGHT))
-        .style(select_style(ctx, RECIPIENT_HEIGHT)),
+        .style(select_style(ctx, RECIPIENT_HEIGHT))
+        .focusable(open),
     )
-    .id("conversation-recipient")
+    .id("conversation-recipient");
+    if open {
+      return select;
+    }
+    // The select takes no pointer; the field around it says it cannot be used.
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .opacity(DISABLED_OPACITY)
+      .cursor(CursorIcon::NotAllowed)
+      .describe("state", "disabled")
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .pointer_events_none()
+          .child(select),
+      )
+      .into()
   }
 
   /// The messages, oldest first, in a viewport whose scroll gutter takes the panel's inner right

@@ -24,6 +24,7 @@ perf_profile = ["lurq/perf_profile"]
 
 [dependencies]
 chrono.workspace = true
+image.workspace = true
 orchester-core.workspace = true
 lurq = { workspace = true, features = [
   "winit",
@@ -52,6 +53,10 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 # Wipes a secret value typed but not saved.
 zeroize.workspace = true
+
+# Only Windows programs embed their icon; see build.rs.
+[target.'cfg(windows)'.build-dependencies]
+embed-resource.workspace = true
 
 [dev-dependencies]
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
