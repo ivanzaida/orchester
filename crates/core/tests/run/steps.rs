@@ -1,6 +1,5 @@
 use orchester_core::run::{
-  AttemptReason, AttemptStatus, PlanDecision, RunError, RunEventKind, RunFailure, RunStatus, StepFailure, StepStatus,
-  WaitReason,
+  AttemptReason, AttemptStatus, RunError, RunEventKind, RunFailure, RunStatus, StepFailure, StepStatus, WaitReason,
 };
 
 use crate::fixture::{Logged, at, key};
@@ -71,35 +70,21 @@ fn run_steps_plan_waits_are_reserved_for_gated_steps() {
     logged.run.wait_step(research, WaitReason::Plan, at(13)),
     Err(RunError::NotGated(key("research")))
   );
-  assert!(matches!(
-    logged.run.decide_plan(research, PlanDecision::Approved, at(13)),
-    Err(RunError::InvalidStepTransition { .. })
-  ));
-}
-
-#[test]
-fn run_steps_gated_step_waits_for_a_plan_decision() {
-  let mut logged = Logged::started();
-  logged.pass("research");
-  let plan = logged.exec("plan");
-  logged.apply(|run| run.start_step(plan, at(20)));
-  logged.apply(|run| run.complete_step(plan, at(21)));
-  assert_eq!(status(&logged, "plan"), StepStatus::Waiting(WaitReason::Plan));
-  let implement = logged.exec("implement");
   assert_eq!(
-    logged.run.start_step(implement, at(22)),
-    Err(RunError::DependenciesNotPassed(key("implement")))
+    logged
+      .run
+      .propose_plan(research, "A plan.".into(), &[], at(13))
+      .map(|_| ()),
+    Err(RunError::NotGated(key("research")))
   );
-  assert!(logged.run.resume_step(plan, at(22)).is_err());
-
-  logged.apply(|run| run.decide_plan(plan, PlanDecision::ChangesRequested, at(22)));
-  assert_eq!(status(&logged, "plan"), StepStatus::Running);
-  assert!(logged.run.decide_plan(plan, PlanDecision::Approved, at(23)).is_err());
-
-  logged.apply(|run| run.complete_step(plan, at(24)));
-  logged.apply(|run| run.decide_plan(plan, PlanDecision::Approved, at(25)));
-  assert_eq!(status(&logged, "plan"), StepStatus::Passed);
-  logged.apply(|run| run.start_step(implement, at(26)));
+  logged.apply(|run| run.complete_step(research, at(14)));
+  let plan = logged.exec("plan");
+  logged.apply(|run| run.start_step(plan, at(15)));
+  // A gated step's result passes only through a plan decision.
+  assert_eq!(
+    logged.run.complete_step(plan, at(16)),
+    Err(RunError::GatedStep(key("plan")))
+  );
 }
 
 #[test]

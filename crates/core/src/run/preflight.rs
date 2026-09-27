@@ -3,8 +3,8 @@
 //! a run with any problem does not start.
 //!
 //! This version of the runner executes graphs of agent steps on the Codex and Claude Code CLIs —
-//! parallel steps, failure routes and retries included; tool steps and approval gates are reported
-//! as not supported yet rather than skipped.
+//! parallel steps, failure routes, retries and approval gates (plan review) included; tool steps
+//! are reported as not supported yet rather than skipped.
 
 use std::collections::BTreeMap;
 
@@ -26,8 +26,6 @@ pub enum PreflightProblem {
   NoSteps,
   /// Tool steps cannot run yet.
   ToolStep { step: StepKey },
-  /// Approval gates (plan approval) cannot be answered yet.
-  ApprovalGate { step: StepKey },
   /// The step's agent profile has no published version.
   ProfileNotPublished { step: StepKey },
   /// The profile's connection no longer exists.
@@ -72,9 +70,6 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
   let mut problems = Vec::new();
   for step in pipeline.steps() {
     let key = || step.key.clone();
-    if step.approval_gate {
-      problems.push(PreflightProblem::ApprovalGate { step: key() });
-    }
     let profile = match &step.kind {
       StepKind::Tool { .. } => {
         problems.push(PreflightProblem::ToolStep { step: key() });

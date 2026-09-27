@@ -6,7 +6,10 @@
 //!
 //! Instruction resources are injected by event: a new session ([`InjectionEvent::Start`]) gets the
 //! whole prompt with the instructions for starting; a resumed session ([`InjectionEvent::Resume`])
-//! already holds that prompt and gets [`CONTINUE_PROMPT`] with the instructions for resuming.
+//! already holds that prompt and gets [`CONTINUE_PROMPT`] with the instructions for resuming. A
+//! gated step a reviewer sent back ([`PlanRevision`]) is told what should change instead: a resumed
+//! session gets the reviewer's note in place of the continue prompt, a new one its earlier plan and
+//! the note in the task part.
 //!
 //! Placeholders resolve against the run; a variable without a value is an error that names it,
 //! never an empty string. A preview keeps such placeholders and lists them instead.
@@ -22,7 +25,10 @@ pub use self::{
   composition::{AssembledPrompt, Composition, ExcludedInstruction, PromptSection},
   source::{InstructionVersion, InvocationPrompt, PromptPart, PromptSource},
 };
-use super::state::Run;
+use super::{
+  plan::{PlanVersion, ReviewNote},
+  state::Run,
+};
 use crate::{
   id::ResourceId,
   project::Project,
@@ -79,6 +85,16 @@ pub struct DependencyOutput<'a> {
   pub text: &'a str,
 }
 
+/// A gated step's plan a reviewer sent back, and what should change: the next invocation of the
+/// step revises it.
+#[derive(Clone, Copy, Debug)]
+pub struct PlanRevision<'a> {
+  pub version: PlanVersion,
+  /// The plan as the agent left it.
+  pub plan: &'a str,
+  pub note: &'a ReviewNote,
+}
+
 /// What a continued agent session is told when it resumes a step it did not finish: after a
 /// pause, a stop at a limit or a restart. Its earlier conversation holds the step's prompt.
 pub const CONTINUE_PROMPT: &str = "You were stopped before you finished this step. Everything you changed so far \
@@ -100,6 +116,8 @@ pub struct PromptInput<'a> {
   pub instructions: &'a [InstructionSource<'a>],
   /// Outputs of the steps `step` depends on, in pipeline order.
   pub dependencies: &'a [DependencyOutput<'a>],
+  /// The step's plan a reviewer sent back, when this invocation revises it.
+  pub revision: Option<PlanRevision<'a>>,
 }
 
 impl PromptInput<'_> {
