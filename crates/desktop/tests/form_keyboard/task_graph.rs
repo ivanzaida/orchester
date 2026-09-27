@@ -12,9 +12,7 @@ use orchester_core::{
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{
-    agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps, wait_long,
-  },
+  task_run::{agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps},
 };
 
 fn retry(to: &str) -> Option<FailureRoute> {
@@ -37,10 +35,8 @@ fn task_graph_progress_lists_parallel_steps_with_their_attempt_and_usage() {
     });
   });
   create_and_run(&mut desktop, "Say hello.", "1400000");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
-  wait_long(&mut desktop, "the finished progress", |desktop| {
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+  desktop.wait_until("the finished progress", |desktop| {
     has(desktop, "task-progress-steps")
       && has(desktop, "task-ready-notice")
       && shows(desktop, "task-ready-notice", "Ready for your review")
@@ -72,13 +68,11 @@ fn task_graph_retry_limit_shows_the_failing_step_and_unavailable_actions() {
     });
   });
   create_and_run(&mut desktop, "Say hello.", "1400000");
-  wait_long(&mut desktop, "the run to fail", |desktop| {
+  desktop.wait_until("the run to fail", |desktop| {
     latest_run(desktop.repo())
       .is_some_and(|run| matches!(run.status(), RunStatus::Failed(RunFailure::RetriesExhausted(_))))
   });
-  wait_long(&mut desktop, "the retry limit state", |desktop| {
-    has(desktop, "task-retry-limit")
-  });
+  desktop.wait_until("the retry limit state", |desktop| has(desktop, "task-retry-limit"));
   assert!(shows(&mut desktop, "task-notice", "Review still fails after 1 retry"));
   assert!(shows(&mut desktop, "task-page", "Automatic retries exhausted"));
   assert!(shows(&mut desktop, "task-retry-limit", "Review · Builder"));
