@@ -24,10 +24,11 @@ use orchester_store::ProjectDb;
 use crate::{
   github::{contains_text, shows},
   harness::Desktop,
-  task_run::{
-    create_and_run, fill_new_task, has, init_repository, latest_run, programs, run_finished, seed, wait_long,
-  },
+  task_run::{create_and_run, fill_new_task, has, init_repository, latest_run, programs, run_finished, seed},
 };
+
+/// How long a runner that was killed may take to end.
+const ENDED_WITHIN: Duration = Duration::from_secs(120);
 
 /// A desktop whose project runs Implement on the fake CLI, with the runner program `runner`.
 fn desktop(runner: PathBuf, fake: &Path) -> Desktop {
@@ -58,26 +59,52 @@ fn own_runners(repo: &Path) -> Vec<String> {
     .collect()
 }
 
-/// Kills the runner of project `repo`, as a crash of the runner would end it.
+/// Kills the runner of project `repo`, as a crash of the runner would end it, and waits until
+/// it has ended (see [`wait_until_ended`]).
 fn kill_runner_of(repo: &Path) {
   let runners = own_runners(repo);
   assert_eq!(runners.len(), 1, "one runner of this test's project runs: {runners:?}");
-  let status = Command::new("taskkill")
-    .args(["/PID", &runners[0], "/F"])
-    .status()
-    .expect("run taskkill");
-  assert!(status.success(), "taskkill {}", runners[0]);
+  // The runner is taken hold of before the kill, so the wait still sees it once it is gone.
+  let script = format!(
+    "$runner = Get-Process -Id {0} -ErrorAction Stop; $null = $runner.Handle; Stop-Process -Id {0} -Force;      if (-not $runner.WaitForExit({1})) {{ exit 1 }}; exit 0",
+    runners[0],
+    ENDED_WITHIN.as_millis()
+  );
+  powershell(&script, &format!("kill the runner {}", runners[0]));
 }
 
-/// Removes `file` once the process that ran it has let go of it.
-fn remove_when_free(file: &Path) {
-  for _ in 0..100 {
-    if fs::remove_file(file).is_ok() {
-      return;
-    }
-    std::thread::sleep(Duration::from_millis(50));
+/// Waits until the processes `pids` have ended. A killed process lets go of its files only once it
+/// has ended: Windows releases its locks on the shared memory file of the project database before
+/// its map of that file, and in between SQLite cannot open the database (the first to open it
+/// resets that file, which Windows refuses while it is mapped).
+fn wait_until_ended(pids: &[String]) {
+  for pid in pids {
+    let script = format!(
+      "$process = Get-Process -Id {pid} -ErrorAction SilentlyContinue;        if ($process -and -not $process.WaitForExit({})) {{ exit 1 }}; exit 0",
+      ENDED_WITHIN.as_millis()
+    );
+    powershell(&script, &format!("wait for the process {pid} to end"));
   }
-  panic!("{} stays in use", file.display());
+}
+
+fn powershell(script: &str, what: &str) {
+  let output = Command::new("powershell")
+    .args(["-NoProfile", "-Command", script])
+    .output()
+    .unwrap_or_else(|error| panic!("{what}: {error}"));
+  assert!(
+    output.status.success(),
+    "{what}: {}: {}",
+    output.status,
+    String::from_utf8_lossy(&output.stderr)
+  );
+}
+
+/// Ends the application as a crash would, which ends its runner too, and starts it again once
+/// the runner has ended.
+fn crash_and_restart(desktop: Desktop) -> Desktop {
+  let runners = own_runners(desktop.repo());
+  desktop.crash_and_restart(|| wait_until_ended(&runners))
 }
 
 /// Whether the agent of the latest run reported its CLI session, which continuing resumes.
@@ -98,7 +125,7 @@ fn lifecycle_active_work_and_agents_count_follow_the_runner() {
   let (runner, fake) = programs();
   let mut desktop = desktop(runner, &fake);
   create_and_run(&mut desktop, "Keep working.", "1400000");
-  wait_long(&mut desktop, "the agent at work", |desktop| {
+  desktop.wait_until("the agent at work", |desktop| {
     !desktop.runners.active_work().is_empty()
       && text_of(desktop, "status-agents", "1/4")
       && has(desktop, "task-cancel-run")
@@ -112,11 +139,11 @@ fn lifecycle_active_work_and_agents_count_follow_the_runner() {
   assert_eq!(work[0].agent(), "Builder");
   assert_eq!(work[0].model(), "gpt-5.5");
   desktop.click("task-cancel-run");
-  wait_long(&mut desktop, "no agent at work", |desktop| {
+  desktop.wait_until("no agent at work", |desktop| {
     desktop.runners.active_work().is_empty() && text_of(desktop, "status-agents", "0/4")
   });
   // The cancelled agent was stopped; it did not finish.
-  wait_long(&mut desktop, "the latest activity", |desktop| {
+  desktop.wait_until("the latest activity", |desktop| {
     text_of(desktop, "task-latest", "Implement · Builder stopped")
   });
   assert!(!text_of(&mut desktop, "task-latest", "finished"));
@@ -131,13 +158,15 @@ fn lifecycle_a_dropped_runner_shows_the_interrupted_runs_then_continues_them() {
   fs::copy(&runner, &copy).expect("copy the runner");
   let mut desktop = desktop(copy.clone(), &fake);
   create_and_run(&mut desktop, "Keep working.", "1400000");
-  wait_long(&mut desktop, "the agent at work", |desktop| {
+  desktop.wait_until("the agent at work", |desktop| {
     text_of(desktop, "status-agents", "1/4") && session_recorded(desktop.repo())
   });
 
+  // Taken away before the kill, so no reconnect attempt can start it again: Windows lets a running
+  // program be renamed, not removed.
+  fs::rename(&copy, copies.path().join("taken-away.exe")).expect("take the runner away");
   kill_runner_of(desktop.repo());
-  remove_when_free(&copy);
-  wait_long(&mut desktop, "the runner offline (G)", |desktop| {
+  desktop.wait_until("the runner offline (G)", |desktop| {
     text_of(desktop, "status-runner", "Runner offline")
   });
   assert!(text_of(
@@ -150,16 +179,14 @@ fn lifecycle_a_dropped_runner_shows_the_interrupted_runs_then_continues_them() {
 
   fs::copy(&runner, &copy).expect("bring the runner back");
   desktop.click("status-restart-runner");
-  wait_long(&mut desktop, "the reconnect event (F)", |desktop| {
+  desktop.wait_until("the reconnect event (F)", |desktop| {
     text_of(
       desktop,
       "status-activity",
       "Runner reconnected · 1 interrupted run continued",
     )
   });
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
   let run = latest_run(desktop.repo()).expect("run");
   let db = ProjectDb::open(desktop.repo()).expect("open");
   let kinds: Vec<String> = orchester_core::store::RunStore::events(&db, run.id())
@@ -176,12 +203,12 @@ fn lifecycle_a_reconnecting_runner_names_the_interrupted_runs() {
   let (runner, fake) = programs();
   let mut desktop = desktop(runner, &fake);
   create_and_run(&mut desktop, "Keep working.", "1400000");
-  wait_long(&mut desktop, "the agent at work", |desktop| {
+  desktop.wait_until("the agent at work", |desktop| {
     text_of(desktop, "status-agents", "1/4") && session_recorded(desktop.repo())
   });
   kill_runner_of(desktop.repo());
   // E: reconnecting; it lasts for the first backoff and the next start.
-  wait_long(&mut desktop, "the reconnecting runner (E)", |desktop| {
+  desktop.wait_until("the reconnecting runner (E)", |desktop| {
     text_of(desktop, "status-runner", "Reconnecting to runner")
       && text_of(
         desktop,
@@ -189,9 +216,7 @@ fn lifecycle_a_reconnecting_runner_names_the_interrupted_runs() {
         "1 run interrupted · it continues from its last checkpoint",
       )
   });
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }
 
 /// Holds project `repo`'s runner lock (`.orchester/runner.lock`), as the runner of another
@@ -214,9 +239,7 @@ fn lifecycle_a_project_another_app_runs_says_so_until_that_app_closes() {
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
     other_app = Some(hold_runner_lock(repo));
   });
-  wait_long(&mut desktop, "the runner notice", |desktop| {
-    has(desktop, "runner-notice")
-  });
+  desktop.wait_until("the runner notice", |desktop| has(desktop, "runner-notice"));
   for text in [
     "Could not start the runner",
     "Another Orchester window is already running this project's runner. Close that window, then restart the runner.",
@@ -227,7 +250,7 @@ fn lifecycle_a_project_another_app_runs_says_so_until_that_app_closes() {
 
   drop(other_app);
   desktop.click("runner-restart");
-  wait_long(&mut desktop, "the runner online", |desktop| {
+  desktop.wait_until("the runner online", |desktop| {
     text_of(desktop, "status-runner", "Runner online") && !has(desktop, "runner-notice")
   });
 }
@@ -237,11 +260,11 @@ fn lifecycle_after_a_crash_the_recovery_continues_all_runs() {
   let (runner, fake) = programs();
   let mut desktop = desktop(runner, &fake);
   create_and_run(&mut desktop, "Keep working.", "1400000");
-  wait_long(&mut desktop, "the agent at work", |desktop| {
+  desktop.wait_until("the agent at work", |desktop| {
     text_of(desktop, "status-agents", "1/4") && session_recorded(desktop.repo())
   });
-  let mut desktop = desktop.crash_and_restart();
-  wait_long(&mut desktop, "the recovery", |desktop| has(desktop, "recovery-dialog"));
+  let mut desktop = crash_and_restart(desktop);
+  desktop.wait_until("the recovery", |desktop| has(desktop, "recovery-dialog"));
   for text in [
     "The last session ended before agents could save",
     "Orchester stopped unexpectedly and 1 run was interrupted.",
@@ -258,12 +281,8 @@ fn lifecycle_after_a_crash_the_recovery_continues_all_runs() {
     assert!(shows(&mut desktop, "recovery-dialog", text), "{text}");
   }
   desktop.click("recovery-continue-all");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
-  wait_long(&mut desktop, "the recovery to close", |desktop| {
-    !has(desktop, "recovery-dialog")
-  });
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+  desktop.wait_until("the recovery to close", |desktop| !has(desktop, "recovery-dialog"));
 }
 
 #[test]
@@ -271,21 +290,21 @@ fn lifecycle_after_a_crash_view_changes_opens_the_changes_not_checkpointed() {
   let (runner, fake) = programs();
   let mut desktop = desktop(runner, &fake);
   create_and_run(&mut desktop, "Keep working.", "1400000");
-  wait_long(&mut desktop, "the agent at work", |desktop| {
+  desktop.wait_until("the agent at work", |desktop| {
     text_of(desktop, "status-agents", "1/4") && session_recorded(desktop.repo())
   });
   let run = latest_run(desktop.repo()).expect("run").id();
   fs::write(run_worktree(desktop.repo(), run).join("notes.md"), "draft\n").expect("write into the worktree");
-  let mut desktop = desktop.crash_and_restart();
+  let mut desktop = crash_and_restart(desktop);
   let link = format!("recovery-view-changes-{run}");
-  wait_long(&mut desktop, "View changes", |desktop| has(desktop, &link));
+  desktop.wait_until("View changes", |desktop| has(desktop, &link));
   assert!(shows(&mut desktop, "recovery-dialog", "not committed"));
   desktop.click(&link);
-  wait_long(&mut desktop, "the run's changes not checkpointed", |desktop| {
+  desktop.wait_until("the run's changes not checkpointed", |desktop| {
     !has(desktop, "recovery-dialog") && has(desktop, "diff-worktree-file:notes.md")
   });
   // Viewing the changes continues nothing: the run stays interrupted until its page continues it.
-  wait_long(&mut desktop, "the interrupted run", |desktop| {
+  desktop.wait_until("the interrupted run", |desktop| {
     latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Interrupted(InterruptCause::Crashed))
       && has(desktop, "task-continue-run")
   });
@@ -296,23 +315,21 @@ fn lifecycle_runs_not_continued_wait_until_their_task_page_continues_them() {
   let (runner, fake) = programs();
   let mut desktop = desktop(runner, &fake);
   create_and_run(&mut desktop, "Keep working.", "1400000");
-  wait_long(&mut desktop, "the agent at work", |desktop| {
+  desktop.wait_until("the agent at work", |desktop| {
     text_of(desktop, "status-agents", "1/4") && session_recorded(desktop.repo())
   });
-  let mut desktop = desktop.crash_and_restart();
-  wait_long(&mut desktop, "the recovery", |desktop| has(desktop, "recovery-dialog"));
+  let mut desktop = crash_and_restart(desktop);
+  desktop.wait_until("the recovery", |desktop| has(desktop, "recovery-dialog"));
   desktop.click("recovery-dont-continue");
-  wait_long(&mut desktop, "the recovery to close", |desktop| {
-    !has(desktop, "recovery-dialog")
-  });
+  desktop.wait_until("the recovery to close", |desktop| !has(desktop, "recovery-dialog"));
   // The project's runner records the interruption when it attaches for the new session.
-  wait_long(&mut desktop, "the interrupted run", |desktop| {
+  desktop.wait_until("the interrupted run", |desktop| {
     latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Interrupted(InterruptCause::Crashed))
   });
   // Runs not continued are not this session's to recover: the next abnormal end does not list
   // them again.
-  let mut desktop = desktop.crash_and_restart();
-  wait_long(&mut desktop, "the project", |desktop| has(desktop, "nav-tasks"));
+  let mut desktop = crash_and_restart(desktop);
+  desktop.wait_until("the project", |desktop| has(desktop, "nav-tasks"));
   for _ in 0..100 {
     desktop.tree.tick_futures();
     desktop.pass();
@@ -320,17 +337,13 @@ fn lifecycle_runs_not_continued_wait_until_their_task_page_continues_them() {
   }
   assert!(!has(&mut desktop, "recovery-dialog"));
   desktop.click("nav-tasks");
-  wait_long(&mut desktop, "the task row", |desktop| {
+  desktop.wait_until("the task row", |desktop| {
     text_of(desktop, "task-row-KON-1", "Interrupted") && text_of(desktop, "task-row-KON-1", "No checkpoint yet")
   });
   desktop.click("task-row-KON-1");
-  wait_long(&mut desktop, "Continue run", |desktop| {
-    has(desktop, "task-continue-run")
-  });
+  desktop.wait_until("Continue run", |desktop| has(desktop, "task-continue-run"));
   desktop.click("task-continue-run");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }
 
 #[test]
@@ -351,12 +364,12 @@ fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
       .expect("save limits");
   });
   create_and_run(&mut desktop, "Work in turns.", "1400000");
-  wait_long(&mut desktop, "the daily budget stop", |desktop| {
+  desktop.wait_until("the daily budget stop", |desktop| {
     latest_run(desktop.repo())
       .is_some_and(|run| run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)))
       && has(desktop, "task-resume-run")
   });
-  wait_long(&mut desktop, "the notice", |desktop| {
+  desktop.wait_until("the notice", |desktop| {
     text_of(desktop, "task-notice", "Stopped at the daily project budget")
   });
   assert!(text_of(
@@ -376,14 +389,12 @@ fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   assert!(text_of(&mut desktop, "task-progress", "Latest activity"));
   desktop.click("task-resume-run");
   let refusal = "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.";
-  wait_long(&mut desktop, "the refusal", |desktop| {
-    text_of(desktop, "task-page", refusal)
-  });
+  desktop.wait_until("the refusal", |desktop| text_of(desktop, "task-page", refusal));
   // New work waits too: Create & run queues the task, and the runner refuses its run.
   desktop.click("task-breadcrumb");
   fill_new_task(&mut desktop, "Append one line to README.md.", "1400000");
   desktop.click("create-and-run");
-  wait_long(&mut desktop, "the refusal in New task", |desktop| {
+  desktop.wait_until("the refusal in New task", |desktop| {
     desktop.tree.root().is_some_and(|root| contains_text(root, refusal)) && has(desktop, "create-and-run")
   });
 }

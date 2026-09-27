@@ -9,8 +9,7 @@ use std::{
   env, fs,
   path::{Path, PathBuf},
   process::Command,
-  thread,
-  time::{Duration, Instant},
+  sync::OnceLock,
 };
 
 use orchester_core::{
@@ -34,11 +33,16 @@ use crate::{
   harness::Desktop,
 };
 
-/// A real run takes longer than the harness's default wait.
-pub(crate) const PATIENCE: Duration = Duration::from_secs(60);
-
-/// The runner and the fake CLI, built into this profile's directory beside the desktop.
+/// The runner and the fake CLI, built into this profile's directory beside the desktop. They are
+/// built once per test process, before any test starts them: the tests run side by side, and a
+/// build could not replace a program another test is running (Windows keeps a running program's
+/// file).
 pub(crate) fn programs() -> (PathBuf, PathBuf) {
+  static BUILT: OnceLock<(PathBuf, PathBuf)> = OnceLock::new();
+  BUILT.get_or_init(build_programs).clone()
+}
+
+fn build_programs() -> (PathBuf, PathBuf) {
   let status = Command::new(env!("CARGO"))
     .args([
       "build",
@@ -208,23 +212,21 @@ pub(crate) fn set_text(desktop: &mut Desktop, id: &str, value: &str) {
   desktop.pass();
 }
 
-/// Lets the runner work until `done` holds.
-pub(crate) fn wait_long(desktop: &mut Desktop, what: &str, done: impl Fn(&mut Desktop) -> bool) {
-  let start = Instant::now();
-  while start.elapsed() < PATIENCE {
-    desktop.tree.tick_futures();
-    desktop.pass();
-    if done(desktop) {
-      return;
-    }
-    thread::sleep(Duration::from_millis(20));
-  }
-  panic!("timed out waiting for {what}");
-}
-
 /// Whether the project's only task has a run that succeeded.
 pub(crate) fn run_finished(repo: &Path) -> bool {
   latest_run(repo).is_some_and(|run| run.status() == &RunStatus::Succeeded)
+}
+
+/// Waits until the run succeeded and the task page shows it (Ready for review on the Summary
+/// tab). The page reads the run again only when the runner reports the change, so for a moment
+/// it still shows the run at work after the database has it finished: a step of a run the page
+/// shows at work starts open in the transcript, one of a finished run collapsed.
+pub(crate) fn finished_on_page(desktop: &mut Desktop) {
+  desktop.wait_until("the finished run on the page", |desktop| {
+    run_finished(desktop.repo())
+      && has(desktop, "task-ready-notice")
+      && shows(desktop, "task-ready-notice", "Ready for your review")
+  });
 }
 
 pub(crate) fn has(desktop: &mut Desktop, id: &str) -> bool {
@@ -242,7 +244,7 @@ pub(crate) fn latest_run(repo: &Path) -> Option<orchester_core::run::Run> {
 /// page opens.
 pub(crate) fn create_and_run(desktop: &mut Desktop, brief: &str, budget: &str) {
   fill_new_task(desktop, brief, budget);
-  wait_long(desktop, "the task page", |desktop| {
+  desktop.wait_until("the task page", |desktop| {
     // Pressing before the runner is online fails visibly; pressing again retries the same run.
     if !has(desktop, "task-page") && has(desktop, "create-and-run") {
       desktop.click("create-and-run");
@@ -284,20 +286,12 @@ fn create_and_run_opens_the_task_page_with_the_run_and_its_activity() {
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
   create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
   // The page shows the finished run before the transcript opens, so its step starts collapsed.
-  wait_long(&mut desktop, "the finished run on the page", |desktop| {
-    run_finished(desktop.repo())
-      && has(desktop, "task-ready-notice")
-      && shows(desktop, "task-ready-notice", "Ready for your review")
-  });
+  finished_on_page(&mut desktop);
   desktop.click("task-tab-activity");
-  wait_long(&mut desktop, "the transcript", |desktop| {
-    has(desktop, "activity-step-header")
-  });
+  desktop.wait_until("the transcript", |desktop| has(desktop, "activity-step-header"));
   assert!(has(&mut desktop, "activity-invocation"));
   desktop.click("activity-step-header");
-  wait_long(&mut desktop, "the step's entries", |desktop| {
-    has(desktop, "activity-entry")
-  });
+  desktop.wait_until("the step's entries", |desktop| has(desktop, "activity-entry"));
   let head = Command::new("git")
     .arg("-C")
     .arg(desktop.repo())
@@ -312,9 +306,7 @@ fn run_controls_raise_the_limit_of_a_run_stopped_at_it_and_continue() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
   create_and_run(&mut desktop, "Work in turns.", "5000");
-  wait_long(&mut desktop, "the raise-limit panel", |desktop| {
-    has(desktop, "raise-limit")
-  });
+  desktop.wait_until("the raise-limit panel", |desktop| has(desktop, "raise-limit"));
   assert!(shows(
     &mut desktop,
     "task-notice",
@@ -339,10 +331,8 @@ fn run_controls_raise_the_limit_of_a_run_stopped_at_it_and_continue() {
   assert_eq!(desktop.value("raise-limit-tokens"), "100,000");
   assert!(shows(&mut desktop, "raise-limit-continue", "Continue with 100k tokens"));
   desktop.click("raise-limit-continue");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
-  wait_long(&mut desktop, "the run controls to go", |desktop| {
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+  desktop.wait_until("the run controls to go", |desktop| {
     !has(desktop, "raise-limit") && !has(desktop, "task-cancel-run")
   });
 }
@@ -360,9 +350,7 @@ fn run_controls_raise_the_step_budget_of_a_run_stopped_at_it_and_continue() {
     });
   });
   create_and_run(&mut desktop, "Say hello.", "1400000");
-  wait_long(&mut desktop, "the raise-limit panel", |desktop| {
-    has(desktop, "raise-limit")
-  });
+  desktop.wait_until("the raise-limit panel", |desktop| has(desktop, "raise-limit"));
   assert!(shows(
     &mut desktop,
     "task-notice",
@@ -403,9 +391,7 @@ fn run_controls_raise_the_step_budget_of_a_run_stopped_at_it_and_continue() {
   assert!(shows(&mut desktop, "raise-limit", "= 30k tokens · 29k more than now"));
   assert!(shows(&mut desktop, "raise-limit-continue", "Continue with 30k tokens"));
   desktop.click("raise-limit-continue");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
   let run = latest_run(desktop.repo()).expect("run");
   assert_eq!(run.attempts().len(), 1);
   assert_eq!(
@@ -419,12 +405,12 @@ fn run_controls_cancel_a_working_run() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
   create_and_run(&mut desktop, "Keep working.", "1400000");
-  wait_long(&mut desktop, "Pause run", |desktop| has(desktop, "task-pause-run"));
+  desktop.wait_until("Pause run", |desktop| has(desktop, "task-pause-run"));
   desktop.click("task-cancel-run");
-  wait_long(&mut desktop, "the run to be cancelled", |desktop| {
+  desktop.wait_until("the run to be cancelled", |desktop| {
     latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Cancelled)
   });
-  wait_long(&mut desktop, "the cancelled run", |desktop| {
+  desktop.wait_until("the cancelled run", |desktop| {
     has(desktop, "task-page") && !has(desktop, "task-cancel-run")
   });
   assert!(shows(&mut desktop, "task-notice", "The run was cancelled"));
@@ -435,21 +421,19 @@ fn run_controls_pause_at_the_checkpoint_and_resume() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, true));
   create_and_run(&mut desktop, "Work slowly.", "1400000");
-  wait_long(&mut desktop, "Pause run", |desktop| has(desktop, "task-pause-run"));
+  desktop.wait_until("Pause run", |desktop| has(desktop, "task-pause-run"));
   desktop.click("task-pause-run");
-  wait_long(&mut desktop, "Pausing", |desktop| {
+  desktop.wait_until("Pausing", |desktop| {
     desktop
       .tree
       .get_element_by_id("task-pause-run")
       .is_some_and(|button| contains_text(button, "Pausing…"))
       || has(desktop, "task-resume-run")
   });
-  wait_long(&mut desktop, "Resume run", |desktop| has(desktop, "task-resume-run"));
+  desktop.wait_until("Resume run", |desktop| has(desktop, "task-resume-run"));
   assert!(shows(&mut desktop, "task-notice", "Paused at checkpoint"));
   let paused = latest_run(desktop.repo()).expect("run");
   assert!(matches!(paused.status(), RunStatus::Paused(_)));
   desktop.click("task-resume-run");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }

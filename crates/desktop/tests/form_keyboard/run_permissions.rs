@@ -18,9 +18,7 @@ use orchester_store::ProjectDb;
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{
-    agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps, wait_long,
-  },
+  task_run::{agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps},
 };
 
 fn desktop_running(instructions: &'static str) -> Desktop {
@@ -31,7 +29,7 @@ fn desktop_running(instructions: &'static str) -> Desktop {
     });
   });
   create_and_run(&mut desktop, "Say hello.", "1400000");
-  wait_long(&mut desktop, "the agent's command", |desktop| {
+  desktop.wait_until("the agent's command", |desktop| {
     command_started(desktop.repo()) && has(desktop, "task-permissions-view")
   });
   desktop
@@ -87,7 +85,7 @@ fn run_permissions_apply_now_is_pending_then_applied_and_saved_to_the_profile_dr
   desktop.click("task-permissions-save-to-profile");
   assert!(shows(&mut desktop, "task-permissions-save-to-profile", "draft v2"));
   desktop.click("task-permissions-apply-now");
-  wait_long(&mut desktop, "the pending change", |desktop| {
+  desktop.wait_until("the pending change", |desktop| {
     !has(desktop, "task-permissions-popover") && has(desktop, "task-permissions-pending")
   });
   assert!(shows(&mut desktop, "task-permissions", "Applying at next checkpoint…"));
@@ -100,9 +98,7 @@ fn run_permissions_apply_now_is_pending_then_applied_and_saved_to_the_profile_dr
 
   fs::write(orchester(desktop.repo()).join("fake-hold"), "hold").expect("hold");
   fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
-  wait_long(&mut desktop, "the applied change", |desktop| {
-    has(desktop, "task-permissions-applied")
-  });
+  desktop.wait_until("the applied change", |desktop| has(desktop, "task-permissions-applied"));
   assert!(shows(
     &mut desktop,
     "task-permissions-applied",
@@ -111,9 +107,7 @@ fn run_permissions_apply_now_is_pending_then_applied_and_saved_to_the_profile_dr
   assert!(shows(&mut desktop, "task-permissions-applied", "(invocation 2)"));
   assert!(shows(&mut desktop, "task-permissions", "Edit files"));
   fs::remove_file(orchester(desktop.repo()).join("fake-hold")).expect("let go");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }
 
 #[test]
@@ -137,11 +131,9 @@ fn run_permissions_popover_closes_without_changes_and_keeps_a_change_for_the_nex
   desktop.click("task-permissions-view");
   desktop.click("task-permissions-edit");
   desktop.click("task-permissions-apply-now");
-  wait_long(&mut desktop, "the pending change", |desktop| {
-    has(desktop, "task-permissions-pending")
-  });
+  desktop.wait_until("the pending change", |desktop| has(desktop, "task-permissions-pending"));
   desktop.click("task-permissions-keep");
-  wait_long(&mut desktop, "the kept change", |desktop| {
+  desktop.wait_until("the kept change", |desktop| {
     !pending(desktop.repo()) && !has(desktop, "task-permissions-pending")
   });
   assert!(changed(desktop.repo()));
@@ -150,9 +142,7 @@ fn run_permissions_popover_closes_without_changes_and_keeps_a_change_for_the_nex
     "nothing was saved to the profile"
   );
   fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
-  wait_long(&mut desktop, "the run to finish", |desktop| {
-    run_finished(desktop.repo())
-  });
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
   let run = latest_run(desktop.repo()).expect("run");
   let db = ProjectDb::open(desktop.repo()).expect("open");
   assert_eq!(

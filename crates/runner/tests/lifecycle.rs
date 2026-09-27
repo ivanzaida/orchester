@@ -251,7 +251,7 @@ async fn lifecycle_finish_at_checkpoints_settles_every_run() {
   );
   assert_eq!(saved.agents_working(), 0);
   // Stopping starts no new work.
-  assert_eq!(scheduler.resume_run(run), Err(Rejection::ShuttingDown));
+  assert_eq!(scheduler.resume_run(run).await, Err(Rejection::ShuttingDown));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -286,13 +286,13 @@ async fn lifecycle_daily_budget_stops_the_run_and_refuses_new_work() {
   let daily = Rejection::DailyBudgetUsed {
     budget: tight.daily_budget(),
   };
-  assert_eq!(scheduler.resume_run(run), Err(daily.clone()));
+  assert_eq!(scheduler.resume_run(run).await, Err(daily.clone()));
   let other = support::queue_another_task(root);
   assert_eq!(scheduler.start_run(IdempotencyKey::generate(), other), Err(daily));
 
   // A raised daily budget makes room: the run resumes as it is.
   db.save_project_limits(&ProjectLimits::DEFAULT).expect("save limits");
-  assert_eq!(scheduler.resume_run(run), Ok(()));
+  assert_eq!(scheduler.resume_run(run).await, Ok(()));
   wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Running).await;
   scheduler.stop_all(InterruptCause::QuitNow).await;
 }

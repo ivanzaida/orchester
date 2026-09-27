@@ -86,18 +86,21 @@ async fn step_budget_stops_the_run_at_its_limit_and_a_raise_continues_the_sessio
   assert!(scheduler.active_runs().is_empty());
 
   // Only a raised step budget above what the step used, within the project's maximum, continues it.
-  assert_eq!(scheduler.resume_run(id), Err(Rejection::LimitNotRaised { limit }));
+  assert_eq!(scheduler.resume_run(id).await, Err(Rejection::LimitNotRaised { limit }));
   let run_limits = RaisedLimits {
     budget: tokens(2_000_000),
     max_duration: run.max_duration(),
   };
-  assert_eq!(scheduler.raise_limit(id, run_limits), Err(Rejection::RunNotPaused));
   assert_eq!(
-    scheduler.raise_step_budget(id, tokens(TURN)),
+    scheduler.raise_limit(id, run_limits).await,
+    Err(Rejection::RunNotPaused)
+  );
+  assert_eq!(
+    scheduler.raise_step_budget(id, tokens(TURN)).await,
     Err(Rejection::LimitNotAboveUsed { limit })
   );
   assert_eq!(
-    scheduler.raise_step_budget(id, tokens(12_000_000)),
+    scheduler.raise_step_budget(id, tokens(12_000_000)).await,
     Err(Rejection::BudgetAboveMaximum {
       max: tokens(10_000_000)
     })
@@ -105,6 +108,7 @@ async fn step_budget_stops_the_run_at_its_limit_and_a_raise_continues_the_sessio
 
   scheduler
     .raise_step_budget(id, tokens(3 * TURN))
+    .await
     .expect("the step budget is raised");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
@@ -162,6 +166,7 @@ async fn step_budget_lets_a_parallel_step_finish_and_takes_no_retry() {
 
   scheduler
     .raise_step_budget(id, tokens(3 * TURN))
+    .await
     .expect("the step budget is raised");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
