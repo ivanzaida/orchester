@@ -26,6 +26,8 @@ pub enum Place {
   Instruction(ResourceId),
   /// A task's page: its latest run.
   Task(TaskId),
+  /// A task's conversation.
+  TaskConversation(TaskId),
   AgentProfile(ResourceId),
   Tool(ResourceId),
   Secrets,

@@ -17,6 +17,7 @@ mod attach;
 mod board;
 mod checkpoint;
 mod control;
+mod conversation;
 mod halt;
 mod idle;
 mod permissions;

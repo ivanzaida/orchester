@@ -2,8 +2,7 @@
 //! the run started from and its working branch (`pN4LP`, `UcSVd`), its active agent time and
 //! tokens, and the agents that worked on it (`it5nz`, `mBkeJ` rows). The run records the revision
 //! it started from, not a branch, so the base reads as that revision. The instruction snapshots
-//! row belongs to instructions and is left out; Open conversation needs the task conversation and
-//! is drawn unavailable.
+//! row belongs to instructions and is left out; Open conversation opens the task conversation.
 
 use std::sync::Arc;
 
@@ -36,7 +35,8 @@ const PANEL_WIDTH: f32 = 300.0;
 const AGENT_HEIGHT: f32 = 44.0;
 const AGENT_GLYPH: f32 = 28.0;
 
-pub(super) fn run_details(ctx: &Ctx, run: &RunView, project: &str) -> Element {
+pub(super) fn run_details(ctx: &Ctx, run: &RunView, project: &str, open: &Arc<dyn Fn() + Send + Sync>) -> Element {
+  let open = open.clone();
   let version = run.version.to_string();
   let pipeline = ctx.t_args(
     "runs.summary.pipelineValue",
@@ -82,6 +82,7 @@ pub(super) fn run_details(ctx: &Ctx, run: &RunView, project: &str) -> Element {
         .icon(Icon::MessagesSquare)
         .id("task-open-conversation")
         .fill_width()
+        .on_click(move || open())
         .render(ctx),
     )
     .into()

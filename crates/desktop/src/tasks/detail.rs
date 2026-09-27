@@ -7,6 +7,7 @@ use std::{num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
   connection::{AgentProvider, ConnectionKind},
+  conversation::Message,
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
   resource::{AgentProfile, StepKey, VersionNumber},
@@ -14,7 +15,7 @@ use orchester_core::{
     ActivityEntry, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent, RunEventKind, RunLimit, RunStatus,
     StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
   },
-  store::{ActivityStore, ConnectionStore, MergeStore, ResourceStore, RunStore, TaskStore},
+  store::{ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::Task,
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -172,6 +173,8 @@ pub struct TaskDetail {
   pub run: Option<RunView>,
   /// The merge of the latest run into its base branch, once it was merged.
   pub merge: Option<RunMerge>,
+  /// The task's conversation, oldest first.
+  pub messages: Vec<Message>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskDetail {}
@@ -201,7 +204,13 @@ impl TaskDetail {
       None => None,
     };
     let run = latest.map(|run| run_view(&db, run)).transpose()?;
-    Ok(Self { task, run, merge })
+    let messages = db.messages(task.id())?;
+    Ok(Self {
+      task,
+      run,
+      merge,
+      messages,
+    })
   }
 }
 

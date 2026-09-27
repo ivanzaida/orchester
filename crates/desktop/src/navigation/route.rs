@@ -44,6 +44,7 @@ const NEEDS_YOU: &str = "needs-you";
 const QUEUED: &str = "queued";
 const ACTIVITY: &str = "activity";
 const CHANGES: &str = "changes";
+const CONVERSATION: &str = "conversation";
 const FILE_QUERY: &str = "file";
 const FROM_QUERY: &str = "from";
 const WORKTREE: &str = "worktree";
@@ -133,6 +134,7 @@ pub enum ToolSelection {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskPageTab {
   Summary,
+  Conversation,
   Changes,
   Activity,
 }
@@ -390,6 +392,7 @@ const fn task_query(tab: TaskTab) -> Option<&'static str> {
 
 fn task_page_tab(tab: Option<&str>) -> TaskPageTab {
   match tab {
+    Some(CONVERSATION) => TaskPageTab::Conversation,
     Some(CHANGES) => TaskPageTab::Changes,
     Some(ACTIVITY) => TaskPageTab::Activity,
     _ => TaskPageTab::Summary,
@@ -399,6 +402,7 @@ fn task_page_tab(tab: Option<&str>) -> TaskPageTab {
 const fn task_page_query(tab: TaskPageTab) -> Option<&'static str> {
   match tab {
     TaskPageTab::Summary => None,
+    TaskPageTab::Conversation => Some(CONVERSATION),
     TaskPageTab::Changes => Some(CHANGES),
     TaskPageTab::Activity => Some(ACTIVITY),
   }

@@ -1,4 +1,7 @@
-//! Project database migrations. Append only: never edit a migration that has shipped.
+//! Project database migrations. Append only: never edit a migration that has shipped. Later
+//! migrations live in modules of their own, named after what they add.
+
+mod conversation;
 
 pub(super) const MIGRATIONS: &[&str] = &[
   r"
@@ -550,4 +553,5 @@ CREATE TABLE run_merges (
   merged_at INTEGER NOT NULL
 ) STRICT;
 ",
+  conversation::MIGRATION,
 ];

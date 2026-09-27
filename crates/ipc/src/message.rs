@@ -10,7 +10,7 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   permission::{AgentPermissions, capability::PermissionProblem},
   resource::StepKey,
-  run::{InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunLimit},
+  run::{InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunLimit, RunNumber},
   tokens::TokenBudget,
 };
 use serde::{Deserialize, Serialize};
@@ -109,6 +109,13 @@ pub enum Command {
     version: PlanVersion,
     decision: PlanDecision,
   },
+  /// The desktop stored a person's messages to the task of run `run`: the runner delivers them at
+  /// the run's next invocation boundary. A step waiting for an answer to its agent's question
+  /// resumes now; a run that succeeded works again on a follow-up of its last agent step (Ask
+  /// agent); an agent at work reads them once its turn is over; a paused or stopped run keeps them
+  /// queued until it continues. Answered with [`Reply::Accepted`] once that is arranged, or
+  /// [`Rejection::RunEnded`] for a run that failed or was cancelled.
+  DeliverMessages { run: RunId },
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes
   /// the connection.
   Shutdown { mode: ShutdownMode },
@@ -192,6 +199,23 @@ pub enum Event {
     task_key: String,
     version: PlanVersion,
   },
+  /// Run `run` (number `number`) of task `task` succeeded: it is ready for review, and the status
+  /// bar says so ("Run #128 ready for review"). The run itself changed as an [`Event::RunChanged`]
+  /// says.
+  RunReady {
+    run: RunId,
+    task: TaskId,
+    number: RunNumber,
+  },
+  /// The agent (`agent`, its role) of a step of run `run` asked a question and its step waits for
+  /// the answer: the status bar says so ("Builder asks · ORC-12", `task_key`). The run itself
+  /// changed as an [`Event::RunChanged`] says.
+  QuestionAsked {
+    run: RunId,
+    task: TaskId,
+    task_key: String,
+    agent: String,
+  },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -252,7 +276,7 @@ pub enum Rejection {
   RunNotPaused,
   /// Continuing from a checkpoint needs an interrupted run.
   RunNotInterrupted,
-  /// The run has ended; there is nothing to cancel.
+  /// The run has ended: there is nothing to cancel, and no agent reads messages to it.
   RunEnded,
   /// The run stopped at `limit`; it continues only with a raised limit.
   LimitNotRaised {

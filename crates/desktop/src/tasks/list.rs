@@ -79,6 +79,23 @@ pub struct LatestRun {
   pub plan: Option<AwaitedPlan>,
   /// The branch its work was merged into, once it was.
   pub merged_into: Option<Arc<str>>,
+  /// The question it waits for an answer to, if it does.
+  pub question: Option<AwaitedQuestion>,
+}
+
+/// A question an agent asked, which its run waits for an answer to: who asks (the agent role of
+/// its step, the step's name when its profile version is gone) and what.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AwaitedQuestion {
+  pub agent: Arc<str>,
+  pub text: Arc<str>,
+}
+
+/// What a run waits for from a person, if anything: a plan decision or an answer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Awaited {
+  pub plan: Option<AwaitedPlan>,
+  pub question: Option<AwaitedQuestion>,
 }
 
 /// A plan a run waits on a decision for (02.11): its version and who proposed it, the agent role
@@ -105,13 +122,8 @@ impl AwaitedPlan {
 
 impl LatestRun {
   /// `run`, the latest run of `task`, merged as `merge` records, whose last event was recorded at
-  /// `updated_at`, with the plan it waits on, if any.
-  pub fn of(
-    task: &Task,
-    (run, merge): (&Run, Option<&RunMerge>),
-    updated_at: Timestamp,
-    plan: Option<AwaitedPlan>,
-  ) -> Self {
+  /// `updated_at`, with the plan or the question it waits on, if any.
+  pub fn of(task: &Task, (run, merge): (&Run, Option<&RunMerge>), updated_at: Timestamp, awaited: Awaited) -> Self {
     Self {
       phase: TaskPhase::of(task, Some(run), merge),
       merged_into: merge.map(|merge| merge.into.as_str().into()),
@@ -122,7 +134,8 @@ impl LatestRun {
       checkpoint: run
         .last_checkpoint()
         .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).into()),
-      plan,
+      plan: awaited.plan,
+      question: awaited.question,
     }
   }
 
@@ -261,6 +274,8 @@ pub struct TaskRow {
   pub detail: Message,
   /// The plan its run waits on a decision for, if it does.
   pub plan: Option<AwaitedPlan>,
+  /// The question its run waits for an answer to, if it does.
+  pub question: Option<AwaitedQuestion>,
   pub created_at: Timestamp,
 }
 
@@ -291,6 +306,7 @@ impl TaskRow {
       phase,
       detail,
       plan: latest.and_then(|latest| latest.plan.clone()),
+      question: latest.and_then(|latest| latest.question.clone()),
       created_at: task.created_at(),
     }
   }

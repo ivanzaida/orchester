@@ -185,17 +185,7 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
     Some(step) if step.tool_step => &*command_tool,
     _ => step.and_then(|step| step.model.as_deref()).unwrap_or_default(),
   };
-  let permissions = step.and_then(|step| {
-    let props = RunPermissionsProps {
-      permissions: step.permissions.clone()?,
-      step: step.clone(),
-      run: run.id(),
-      run_number: run.run.number().get(),
-      live: !run.run.status().is_terminal(),
-      repo_root: repo_root.to_path_buf(),
-    };
-    Some(ctx.mount_keyed::<RunPermissionsRow>(&format!("task-permissions-{}", step.key), props))
-  });
+  let permissions = permissions_row(ctx, run, repo_root);
   let checkpoint = run.run.last_checkpoint().map(|checkpoint| {
     ctx.t_args(
       "runs.summary.checkpointValue",
@@ -228,6 +218,21 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
     .child(property(&ctx.t("runs.summary.time"), &time))
     .with_children(permissions);
   this_run_panel(ctx, rows)
+}
+
+/// The *Permissions* row of the current step's agent, with its *change ↗* (`C5Ai5o`); `None` for a
+/// tool step, or once its profile version is gone.
+pub(super) fn permissions_row(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Option<Element> {
+  let step = run.current_step()?;
+  let props = RunPermissionsProps {
+    permissions: step.permissions.clone()?,
+    step: step.clone(),
+    run: run.id(),
+    run_number: run.run.number().get(),
+    live: !run.run.status().is_terminal(),
+    repo_root: repo_root.to_path_buf(),
+  };
+  Some(ctx.mount_keyed::<RunPermissionsRow>(&format!("task-permissions-{}", step.key), props))
 }
 
 /// The "This run" panel around its `rows`. They scroll when a permission change's notices make

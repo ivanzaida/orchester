@@ -10,6 +10,8 @@
 //! - "Work in turns": appends `draft` to `README.md`, finishes a message that used 9,739 counted tokens, starts another
 //!   one and waits until it is ended;
 //! - "Keep working": starts a message and waits until it is ended;
+//! - "Ask first": appends `draft` to `README.md` and ends with the step result `{"outcome":"question","summary":"Keep
+//!   email sign-in?"}` (a new session only: a resumed one works as below);
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
@@ -47,22 +49,9 @@ const NO_USAGE: &str = r#"{"input_tokens":0,"output_tokens":0}"#;
 
 fn main() -> ExitCode {
   let args: Vec<String> = std::env::args().skip(1).collect();
-  let mut names: Vec<String> = std::env::vars_os()
-    .map(|(name, _)| name.to_string_lossy().into_owned())
-    .collect();
-  names.sort();
-  let mut prompt = String::new();
-  if std::io::stdin().read_to_string(&mut prompt).is_err() {
-    eprintln!("cannot read the prompt");
+  let Some(prompt) = read_prompt(&args) else {
     return ExitCode::from(2);
-  }
-  eprintln!("argv: {}", args.join(" "));
-  eprintln!("env: {}", names.join(","));
-  eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
-  for line in prompt.lines() {
-    eprintln!("prompt| {line}");
-  }
-  eprintln!("pid: {}", std::process::id());
+  };
   if prompt.contains("Please sign in") {
     print!("{NOT_SIGNED_IN}");
     return ExitCode::from(1);
@@ -101,6 +90,9 @@ fn main() -> ExitCode {
     fake.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
     wait_to_be_ended();
   }
+  if prompt.contains("Ask first") {
+    return fake.ask(&worktree);
+  }
   if prompt.contains("Work in turns") {
     if let Err(error) = append(&worktree, "draft") {
       eprintln!("cannot write README.md: {error}");
@@ -126,6 +118,27 @@ fn main() -> ExitCode {
     return fake.finish_with(&worktree, "hello", &step, DENIAL);
   }
   fake.finish(&worktree, "hello", &step)
+}
+
+/// Reads the prompt from standard input and reports on standard error how the CLI was started.
+fn read_prompt(args: &[String]) -> Option<String> {
+  let mut names: Vec<String> = std::env::vars_os()
+    .map(|(name, _)| name.to_string_lossy().into_owned())
+    .collect();
+  names.sort();
+  let mut prompt = String::new();
+  if std::io::stdin().read_to_string(&mut prompt).is_err() {
+    eprintln!("cannot read the prompt");
+    return None;
+  }
+  eprintln!("argv: {}", args.join(" "));
+  eprintln!("env: {}", names.join(","));
+  eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
+  for line in prompt.lines() {
+    eprintln!("prompt| {line}");
+  }
+  eprintln!("pid: {}", std::process::id());
+  Some(prompt)
 }
 
 const DENIAL: &str =
@@ -176,6 +189,21 @@ impl Fake {
       self.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
       wait_to_be_ended();
     }
+  }
+
+  /// "Ask first": a draft, then a question as the step result.
+  fn ask(&self, worktree: &Path) -> ExitCode {
+    if let Err(error) = append(worktree, "draft") {
+      eprintln!("cannot write README.md: {error}");
+      return ExitCode::from(2);
+    }
+    let question = r#"{\"outcome\":\"question\",\"summary\":\"Keep email sign-in?\"}"#;
+    self.assistant("msg_ask", &format!(r#"{{"type":"text","text":"{question}"}}"#));
+    println!(
+      r#"{{"type":"result","subtype":"success","is_error":false,"num_turns":1,"result":"{question}","session_id":"{}","total_cost_usd":0.1,"usage":{{"input_tokens":0,"output_tokens":0}},"permission_denials":[]}}"#,
+      self.session
+    );
+    ExitCode::SUCCESS
   }
 
   fn finish(&self, worktree: &Path, line: &str, step: &str) -> ExitCode {

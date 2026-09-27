@@ -98,6 +98,7 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
   ]
   .into_iter()
   .chain(plan_commands(run))
+  .chain([Command::DeliverMessages { run }])
   .enumerate()
   .map(|(index, command)| Request {
     id: RequestId::new(index as u64 + 1),
@@ -137,6 +138,27 @@ fn plan_events(run: RunId, task: TaskId) -> Vec<Event> {
     Event::Reply {
       id: RequestId::new(9),
       reply: Reply::Rejected(Rejection::PlanNotAwaited),
+    },
+  ]
+}
+
+/// A question an agent asked, and messages to a run that ended.
+fn conversation_events(run: RunId, task: TaskId) -> Vec<Event> {
+  vec![
+    Event::QuestionAsked {
+      run,
+      task,
+      task_key: "ORC-12".to_owned(),
+      agent: "Planner".to_owned(),
+    },
+    Event::RunReady {
+      run,
+      task,
+      number: orchester_core::run::RunNumber::new(std::num::NonZeroU32::MIN),
+    },
+    Event::Reply {
+      id: RequestId::new(10),
+      reply: Reply::Rejected(Rejection::RunEnded),
     },
   ]
 }
@@ -249,6 +271,7 @@ async fn frames_round_trip_every_message() {
   let events: Vec<Event> = events(run, task)
     .into_iter()
     .chain(plan_events(run, task))
+    .chain(conversation_events(run, task))
     .chain(rejected)
     .collect();
   for request in &commands {

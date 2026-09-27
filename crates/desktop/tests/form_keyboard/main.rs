@@ -10,6 +10,7 @@ mod agents;
 mod canvas_zoom;
 mod changes;
 mod claude_run;
+mod conversation;
 mod dialogs;
 mod draft_autosave;
 mod github;

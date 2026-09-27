@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::{
   connection::{Connection, stream::AgentEvent},
+  conversation::Message,
   diff::RevisionDiff,
   id::{ConnectionId, IdempotencyKey, InvocationId, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
   integration::RunMerge,
@@ -262,6 +263,26 @@ pub trait RunStore {
     &self,
     pipeline: ResourceId,
   ) -> Result<BTreeMap<VersionNumber, Vec<RunNumber>>, Self::Error>;
+}
+
+/// Task conversations. A person's messages are written by the desktop; their delivery states and
+/// agents' messages by the runner. A message's text never changes and it is never removed.
+pub trait ConversationStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Stores a person's new message. Repeating the call with the same `key` returns the message
+  /// stored the first time instead of a second one.
+  fn send_message(&mut self, key: IdempotencyKey, message: &Message) -> Result<Message, Self::Error>;
+
+  /// Stores an agent's message.
+  fn add_agent_message(&mut self, message: &Message) -> Result<(), Self::Error>;
+
+  /// Stores how far people's `messages` got (delivered, acknowledged) and the run a delivered one
+  /// went to, atomically. A delivery state only moves forward.
+  fn save_deliveries(&mut self, messages: &[Message]) -> Result<(), Self::Error>;
+
+  /// The conversation of `task`, oldest first.
+  fn messages(&self, task: TaskId) -> Result<Vec<Message>, Self::Error>;
 }
 
 /// Agent CLI and command tool invocations and their transcripts, written by the runner. Transcript

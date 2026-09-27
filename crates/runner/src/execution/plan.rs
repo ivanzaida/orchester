@@ -19,7 +19,7 @@ use super::{
   control::{Ack, Control, answer},
   failed, idle,
   prepare::Prepared,
-  record::RecordError,
+  record::{RecordError, announce_ready},
   run::{ExecutionError, RunTask},
 };
 
@@ -123,6 +123,8 @@ fn record(db: &mut ProjectDb, notifier: &Notifier, run: &mut Run, request: PlanR
     run: run.id(),
     task: run.task(),
   });
+  // Approving the plan of the last step finishes the run.
+  announce_ready(notifier, run);
   Ok(())
 }
 

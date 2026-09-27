@@ -44,6 +44,10 @@ impl RunTask {
       Control::ChangePermissions(change, ack) => self.change_permissions(change, ack),
       Control::KeepPermissions(profile, ack) => self.keep_permissions(profile, ack),
       Control::DecidePlan(request, ack) => self.decide_plan(request, ack),
+      Control::DeliverMessages(ack) => {
+        Self::deliver_messages(ack);
+        Ok(())
+      }
       Control::Interrupt(cause) => {
         self.pending.interrupt = Some(cause);
         self.stop_agents(Stop::Now(StopCause::Requested));
@@ -75,7 +79,8 @@ impl RunTask {
       return cancelled.map(|()| true);
     }
     if self.run.status() != &RunStatus::Running {
-      return Ok(true);
+      // A run that succeeded while messages were queued for its agents works on at once.
+      return Ok(!self.follow_up_queued()?);
     }
     if let Some(cause) = self.pending.interrupt {
       self.transition(|run, now| run.interrupt(cause, now))?;

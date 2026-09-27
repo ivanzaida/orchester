@@ -279,6 +279,7 @@ impl Resolved<'_> {
       // Outputs of earlier steps exist only while a run executes.
       dependencies: &[],
       revision: None,
+      messages: None,
     }
   }
 }

@@ -3,7 +3,9 @@
 //! `tool::end`). Its final message becomes its output for the steps after it; the step then passes
 //! — a gated one proposes the output as its next plan and waits for a decision — or fails for a
 //! reason its failure route handles. A failed step ends the attempt, so agents of the same attempt
-//! still at work are ended.
+//! still at work are ended. An agent whose turn ends reads what people wrote first (see
+//! `conversation`): its question makes the step wait for the answer, and messages queued for it
+//! keep the step going.
 
 use orchester_core::{
   connection::stream::RunnerProblem,
@@ -83,8 +85,11 @@ impl RunTask {
     Ok(())
   }
 
-  /// An agent that exited on its own: its step passes if the CLI succeeded and the agent did not
-  /// report a failure, and its work joins the run's branch.
+  /// An agent that exited on its own. A turn that ended acknowledges the messages it read. The
+  /// step then waits for the answer to the agent's question, or continues to read messages queued
+  /// for its agent meanwhile; otherwise it passes if the CLI succeeded and the agent did not report
+  /// a failure, and its work joins the run's branch. A follow-up leaves no output: its answer is its
+  /// reply in the conversation, and the step's output stays what it was.
   fn finish(&mut self, execution: StepExecutionId, active: &Active, finished: &Finished) -> Result<(), ExecutionError> {
     let step = self
       .run
@@ -99,9 +104,6 @@ impl RunTask {
       finished.final_message.as_deref(),
       Timestamp::now(),
     );
-    if output.outcome.is_some() || !output.text.is_empty() {
-      self.db.save_step_output(&output)?;
-    }
     let failure = if !finished.outcome.is_success() {
       Some(StepFailure::AgentFailed)
     } else if output.outcome == Some(StepOutcome::Failed) {
@@ -109,6 +111,20 @@ impl RunTask {
     } else {
       None
     };
+    if finished.outcome.is_success() {
+      self.acknowledge(execution, &active.invocation, &output)?;
+    }
+    if failure.is_none() {
+      if output.outcome == Some(StepOutcome::Question) {
+        return self.ask(execution, active, &output.text);
+      }
+      if !self.queued_for(execution)?.is_empty() {
+        return self.save(execution, active, "saved to read messages");
+      }
+    }
+    if (output.outcome.is_some() || !output.text.is_empty()) && !self.run.is_follow_up(execution) {
+      self.db.save_step_output(&output)?;
+    }
     if let Some(failure) = failure {
       self.save(execution, active, "step failed")?;
       return self.fail(execution, failure);

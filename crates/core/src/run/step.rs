@@ -114,19 +114,24 @@ impl Run {
   /// Fails an active step for `reason` and routes the failure: with a failure route that has
   /// retries left, a new attempt re-executes the route's target and everything downstream of it;
   /// otherwise the run fails. Open executions of the ending attempt — steps running in parallel
-  /// included — are skipped either way, so their agents must be ended.
+  /// included — are skipped either way, so their agents must be ended. A follow-up that fails is
+  /// not routed: the run is succeeded again with the result it had.
   pub fn fail_step(
     &mut self,
     execution: StepExecutionId,
     reason: StepFailure,
     now: Timestamp,
   ) -> Result<Vec<RunEvent>, RunError> {
+    let follow_up = self.in_follow_up();
     self.transition(now, |transition| {
       transition.record(RunEventKind::StepFailed {
         execution,
         reason: Some(reason),
       })?;
       transition.skip_open()?;
+      if follow_up {
+        return transition.record(RunEventKind::FollowUpFailed);
+      }
       let run = &transition.run;
       let step = run
         .execution(execution)
@@ -161,20 +166,20 @@ impl Run {
     })
   }
 
-  /// Whether `execution`'s step has an approval gate: its result waits for a plan decision.
+  /// Whether `execution`'s result waits for a plan decision: its step has an approval gate, and it
+  /// is no follow-up (the step's plan was decided before the run succeeded).
   pub fn is_gated(&self, execution: StepExecutionId) -> Result<bool, RunError> {
     let step = self
       .execution(execution)
       .ok_or(RunError::UnknownExecution(execution))?
       .step();
-    Ok(
-      self
-        .snapshot()
-        .body()
-        .step(step)
-        .expect("executions name snapshot steps")
-        .approval_gate,
-    )
+    let gate = self
+      .snapshot()
+      .body()
+      .step(step)
+      .expect("executions name snapshot steps")
+      .approval_gate;
+    Ok(gate && !self.is_follow_up(execution))
   }
 
   /// Executions of a retry attempt returning to `return_to`: that step, everything downstream

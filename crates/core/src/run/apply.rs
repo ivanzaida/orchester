@@ -13,7 +13,7 @@ use super::{
   status::{AttemptReason, AttemptStatus, ContinueTrigger, PauseReason, RunLimit, RunStatus, StepStatus, WaitReason},
 };
 use crate::{
-  id::{CheckpointId, StepExecutionId},
+  id::{AttemptId, CheckpointId, StepExecutionId},
   resource::StepKey,
   time::Timestamp,
   tokens::TokenBudget,
@@ -107,6 +107,13 @@ impl Run {
         } else {
           Err(RunError::StepsNotPassed)
         }
+      }
+      RunEventKind::Reopened => self.expect_status(kind, self.status == RunStatus::Succeeded),
+      RunEventKind::FollowUpFailed => {
+        if !self.in_follow_up() {
+          return Err(RunError::NotFollowingUp);
+        }
+        self.expect_settled()
       }
       RunEventKind::Failed { .. } => {
         self.expect_status(kind, self.status == RunStatus::Running)?;
@@ -236,7 +243,8 @@ impl Run {
     }
   }
 
-  /// Plan waits and plan decisions belong to gated steps; plain passes to ungated ones.
+  /// Plan waits and plan decisions belong to gated steps; plain passes to ungated ones and to
+  /// follow-ups, whose step's plan was decided before the run succeeded.
   fn expect_gate(&self, id: StepExecutionId, gated: bool) -> Result<(), RunError> {
     let key = self.current_execution(id)?.step();
     let step = self
@@ -244,7 +252,7 @@ impl Run {
       .body()
       .step(key)
       .expect("executions name snapshot steps");
-    match (step.approval_gate, gated) {
+    match (step.approval_gate && !self.is_follow_up(id), gated) {
       (true, false) => Err(RunError::GatedStep(key.clone())),
       (false, true) => Err(RunError::NotGated(key.clone())),
       _ => Ok(()),
@@ -295,6 +303,7 @@ impl Run {
       (true, AttemptReason::Initial) if steps == known => Ok(()),
       (true, _) => Err(RunError::InvalidAttempt("the first attempt executes every step")),
       (false, AttemptReason::Retry { .. }) => Ok(()),
+      (false, AttemptReason::FollowUp { step }) => self.check_follow_up(step, executions),
       (false, AttemptReason::Initial) => Err(RunError::InvalidAttempt("only the first attempt is initial")),
     }
   }
@@ -327,9 +336,10 @@ impl Run {
   fn apply(&mut self, kind: &RunEventKind, at: Timestamp) {
     match kind {
       RunEventKind::Created(_) => unreachable!("Run::check rejects a second creation event"),
-      RunEventKind::Started | RunEventKind::Resumed | RunEventKind::Continued { .. } => {
+      RunEventKind::Started | RunEventKind::Resumed | RunEventKind::Continued { .. } | RunEventKind::Reopened => {
         self.status = RunStatus::Running;
       }
+      RunEventKind::FollowUpFailed => self.end(RunStatus::Succeeded, AttemptStatus::Failed),
       RunEventKind::PauseRequested => self.pause_requested = true,
       RunEventKind::Paused { reason } => {
         self.status = RunStatus::Paused(*reason);
@@ -357,22 +367,7 @@ impl Run {
         number,
         reason,
         executions,
-      } => {
-        if let Some(current) = self.attempts.last_mut() {
-          current.set_status(AttemptStatus::RoutedBack);
-        }
-        let executions = executions
-          .iter()
-          .map(|planned| StepExecution::new(planned.id, planned.step.clone(), StepStatus::Pending))
-          .collect();
-        self.attempts.push(Attempt::new(
-          *attempt,
-          *number,
-          reason.clone(),
-          AttemptStatus::Active,
-          executions,
-        ));
-      }
+      } => self.open_attempt(*attempt, *number, reason, executions),
       RunEventKind::CheckpointRecorded {
         checkpoint,
         execution,
@@ -406,6 +401,35 @@ impl Run {
       RunEventKind::StepFailed { execution, reason } => self.current_execution_mut(*execution).fail(*reason),
       RunEventKind::StepSkipped { execution } => self.set_step(*execution, StepStatus::Skipped),
     }
+  }
+
+  /// A new attempt with pending `executions`. A retry replaces the active attempt; a follow-up
+  /// comes after one that succeeded, which stays succeeded.
+  fn open_attempt(
+    &mut self,
+    attempt: AttemptId,
+    number: NonZeroU32,
+    reason: &AttemptReason,
+    executions: &[PlannedExecution],
+  ) {
+    if let Some(current) = self
+      .attempts
+      .last_mut()
+      .filter(|current| current.status() == AttemptStatus::Active)
+    {
+      current.set_status(AttemptStatus::RoutedBack);
+    }
+    let executions = executions
+      .iter()
+      .map(|planned| StepExecution::new(planned.id, planned.step.clone(), StepStatus::Pending))
+      .collect();
+    self.attempts.push(Attempt::new(
+      attempt,
+      number,
+      reason.clone(),
+      AttemptStatus::Active,
+      executions,
+    ));
   }
 
   fn set_step(&mut self, execution: StepExecutionId, status: StepStatus) {

@@ -103,9 +103,11 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     ("version", version.as_str()),
   ];
   let awaiting_plan = run.run.waits_for_a_person() && !run.run.awaiting_plan().is_empty();
+  let asking = run.run.waits_for_a_person() && !run.run.awaiting_answer().is_empty();
   let key = match (run.run.status(), step) {
     (RunStatus::Running, _) if lost => "runs.page.describe.interrupted",
     (RunStatus::Running, _) if awaiting_plan => "runs.page.describe.awaitingPlan",
+    (RunStatus::Running, _) if asking => "runs.page.describe.asking",
     (RunStatus::Pending, _) => "runs.page.describe.pending",
     (RunStatus::Running, _) if run.run.pause_requested() => "runs.page.describe.pausing",
     (RunStatus::Running, Some(_)) if working.len() > 1 => "runs.page.describe.workingParallel",
