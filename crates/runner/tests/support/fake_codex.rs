@@ -14,6 +14,8 @@
 //! - "Fail once": the first time a step works on it, the result says it failed; later it works as below;
 //! - "Write own file": writes `<step>.txt` instead of appending to `README.md`;
 //! - "Sign the line": appends `hello from <step>` instead of `hello`;
+//! - "Ask first": appends `draft` to `README.md` and ends with the step result `{"outcome":"question","summary":"Keep
+//!   email sign-in?"}` (a new session only: a resumed one works as below);
 //! - anything else: appends `hello` to `README.md` in its worktree, reports the command, the file change and the usage,
 //!   and exits with 0.
 //!
@@ -55,22 +57,9 @@ fn main() -> ExitCode {
     return ExitCode::SUCCESS;
   }
   let args: Vec<String> = std::env::args().skip(1).collect();
-  let mut names: Vec<String> = std::env::vars_os()
-    .map(|(name, _)| name.to_string_lossy().into_owned())
-    .collect();
-  names.sort();
-  let mut prompt = String::new();
-  if std::io::stdin().read_to_string(&mut prompt).is_err() {
-    eprintln!("cannot read the prompt");
+  let Some(prompt) = read_prompt(&args) else {
     return ExitCode::from(2);
-  }
-  eprintln!("argv: {}", args.join(" "));
-  eprintln!("env: {}", names.join(","));
-  eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
-  for line in prompt.lines() {
-    eprintln!("prompt| {line}");
-  }
-  eprintln!("pid: {}", std::process::id());
+  };
   if prompt.contains("Please fail") {
     print!("{FAILED_TURN}");
     return ExitCode::from(1);
@@ -105,6 +94,9 @@ fn main() -> ExitCode {
     wait_while_held(&worktree);
     return finish(&worktree, "continued", &result);
   }
+  if prompt.contains("Ask first") {
+    return ask(&worktree);
+  }
   if prompt.contains("Keep working") {
     match start_helper() {
       Ok(helper) => eprintln!("helper pid: {helper}"),
@@ -128,6 +120,27 @@ fn main() -> ExitCode {
     "hello".to_owned()
   };
   finish(&worktree, &line, &result)
+}
+
+/// Reads the prompt from standard input and reports on standard error how the CLI was started.
+fn read_prompt(args: &[String]) -> Option<String> {
+  let mut names: Vec<String> = std::env::vars_os()
+    .map(|(name, _)| name.to_string_lossy().into_owned())
+    .collect();
+  names.sort();
+  let mut prompt = String::new();
+  if std::io::stdin().read_to_string(&mut prompt).is_err() {
+    eprintln!("cannot read the prompt");
+    return None;
+  }
+  eprintln!("argv: {}", args.join(" "));
+  eprintln!("env: {}", names.join(","));
+  eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
+  for line in prompt.lines() {
+    eprintln!("prompt| {line}");
+  }
+  eprintln!("pid: {}", std::process::id());
+  Some(prompt)
 }
 
 /// What the step's final message reports.
@@ -202,6 +215,18 @@ fn finish(worktree: &std::path::Path, line: &str, result: &StepReport) -> ExitCo
     "Done.".to_owned()
   };
   println!(r#"{{"type":"item.completed","item":{{"id":"item_3","type":"agent_message","text":"{text}"}}}}"#);
+  println!("{USAGE}");
+  ExitCode::SUCCESS
+}
+
+/// "Ask first": a draft, then a question as the step result.
+fn ask(worktree: &std::path::Path) -> ExitCode {
+  if let Err(error) = append(worktree, "draft") {
+    eprintln!("cannot write README.md: {error}");
+    return ExitCode::from(2);
+  }
+  let question = r#"{\"outcome\":\"question\",\"summary\":\"Keep email sign-in?\"}"#;
+  println!(r#"{{"type":"item.completed","item":{{"id":"item_q","type":"agent_message","text":"{question}"}}}}"#);
   println!("{USAGE}");
   ExitCode::SUCCESS
 }

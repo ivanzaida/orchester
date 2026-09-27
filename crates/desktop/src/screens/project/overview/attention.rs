@@ -1,7 +1,7 @@
 //! Beside the overview's task list (`EKUWS`): what needs the user (`jWEn1`) — runs waiting for a
-//! plan decision (a review card, `dpeD7`), an answer or an approval (`Mt22P`) — and the recent
-//! activity of the project's runs (`YJ8PV`, `mBkeJ` events). Each opens its task; they are outside
-//! any form, so pointer-only.
+//! plan decision (a review card, `dpeD7`), an answer to an agent's question (`Mt22P`, which opens
+//! the task's conversation) or an approval — and the recent activity of the project's runs
+//! (`YJ8PV`, `mBkeJ` events). Each opens its task; they are outside any form, so pointer-only.
 
 use lurq::{
   app::{
@@ -17,7 +17,7 @@ use orchester_core::time::Timestamp;
 use super::super::{ProjectNav, task_rows::status_copy};
 use crate::{
   display,
-  navigation::route::Page,
+  navigation::route::{Page, TaskPageTab},
   tasks::{
     data::ProjectTasks,
     list::{AwaitedPlan, TaskRow},
@@ -77,19 +77,37 @@ pub(super) fn attention(ctx: &Ctx, open: &OpenProject, tasks: &ProjectTasks, nav
     .into()
 }
 
-/// A run waiting for the user: its plan to review (`dpeD7`), or else what it waits for (`Mt22P`),
-/// with the way to its task.
+/// A run waiting for the user: its plan to review (`dpeD7`), or else what it waits for (`Mt22P`):
+/// the question an agent asked, with the way to the task's conversation, or its task.
 fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
   if let Some(plan) = &row.plan {
     return plan_decision(ctx, row, plan, nav);
   }
   let (nav, task) = (nav.clone(), row.id);
-  let context = ctx.t_args(
-    "overview.attention.context",
-    [("task", &*row.key), ("detail", &*message_text(ctx, &row.detail))],
-  );
+  let (overline, title, context, action, page) = match &row.question {
+    Some(question) => (
+      ctx.t("overview.attention.clarification"),
+      question.text.clone(),
+      ctx.t_args(
+        "overview.attention.questionContext",
+        [("agent", &*question.agent), ("task", &*row.key)],
+      ),
+      ctx.t("overview.attention.answer"),
+      Page::Task(task, TaskPageTab::Conversation),
+    ),
+    None => (
+      ctx.t("overview.attention.needsInput"),
+      row.title.clone(),
+      ctx.t_args(
+        "overview.attention.context",
+        [("task", &*row.key), ("detail", &*message_text(ctx, &row.detail))],
+      ),
+      ctx.t("overview.attention.open"),
+      Page::task(task),
+    ),
+  };
   pressable(surface().id(format!("overview-decision-{}", row.key)), move || {
-    nav.show(Page::task(task));
+    nav.show(page);
   })
   .width(Dimension::Pct(100.0))
   .child(
@@ -100,10 +118,14 @@ fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
       .padding_bottom(SpacingSize::Lg)
       .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .child(Text::new(&ctx.t("overview.attention.needsInput")).variant(ExtraTypography::Overline.role()))
-      .child(Text::new(&row.title).variant(ExtraTypography::NoticeHeading.role()))
+      .child(Text::new(&overline).variant(ExtraTypography::Overline.role()))
+      .child(
+        Text::new(&title)
+          .variant(ExtraTypography::NoticeHeading.role())
+          .width(Dimension::Pct(100.0)),
+      )
       .child(Text::new(&context).variant(TypographyStyle::Caption))
-      .child(Text::new(&ctx.t("overview.attention.open")).variant(TypographyStyle::Link)),
+      .child(Text::new(&action).variant(TypographyStyle::Link)),
   )
   .into()
 }

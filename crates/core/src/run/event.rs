@@ -157,6 +157,12 @@ pub enum RunEventKind {
     from: Option<CheckpointId>,
   },
   Succeeded,
+  /// A succeeded run works again: a follow-up attempt comes with this event
+  /// ([`super::Run::follow_up`]).
+  Reopened,
+  /// The follow-up attempt's execution failed: the attempt fails, and the run is succeeded again
+  /// with the result it had.
+  FollowUpFailed,
   Failed {
     reason: RunFailure,
   },
@@ -242,6 +248,8 @@ impl RunEventKind {
       Self::PermissionsApplied { .. } => "permissions_applied",
       Self::Continued { .. } => "continued",
       Self::Succeeded => "succeeded",
+      Self::Reopened => "reopened",
+      Self::FollowUpFailed => "follow_up_failed",
       Self::Failed { .. } => "failed",
       Self::Cancelled => "cancelled",
       Self::AttemptStarted { .. } => "attempt_started",

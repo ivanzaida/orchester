@@ -2,13 +2,16 @@
 //! readiness card (`IBuWf`), the run's stages (`XHMgH`, `i9rVFu`), what its steps reported
 //! (`Wegul`), what verified the revision its work ended at (`pWiFM`: the steps, at the latest
 //! checkpoint `q91Jf8`), and the review actions with the size of the change (`ksjis`, `T2AAq`);
-//! beside them the run's details (`cB4GN`, see [`details`]).
+//! beside them the run's details (`cB4GN`, see [`details`]). What the run did scrolls in a viewport
+//! with the scroll gutter, so a long pipeline never pushes the actions out of the window; the
+//! actions stay at the bottom.
 //!
-//! Reviewing the pull request (`o5Txa1`) needs a pull request, which no pipeline step opens yet;
-//! asking the agent (`QzsSV`) needs the task conversation. Both are drawn unavailable and say why.
-//! Evidence records (acceptance criteria, tests, browser checks) and artifacts do not exist yet, so
-//! their rows and the artifact buttons are left out. *Merge into <branch>* ([`merge`]) is not drawn
-//! yet; it sits beside Review PR.
+//! Reviewing the pull request (`o5Txa1`) needs a pull request, which no pipeline step opens yet, so
+//! it is drawn unavailable and says why. Asking the agent (`QzsSV`) and Open conversation open the
+//! task conversation; Ask agent also puts the focus in its composer. Evidence records (acceptance
+//! criteria, tests, browser checks) and artifacts do not exist yet, so their rows and the artifact
+//! buttons are left out. *Merge into <branch>* ([`merge`]) is not drawn yet; it sits beside Review
+//! PR.
 
 mod details;
 mod merge;
@@ -21,22 +24,23 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Text},
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{integration::Leftovers, run::StepStatus};
+use orchester_core::{id::TaskId, integration::Leftovers, run::StepStatus};
 
 use self::merge::{MergeAction, merge_action, merge_button, merge_problem, merge_unavailable, readiness};
-use super::{super::ProjectNav, changes::CheckpointedLoad, progress::progress_list};
+use super::{super::ProjectNav, changes::CheckpointedLoad, conversation::ComposerFocus, progress::progress_list};
 use crate::{
   display,
   messages::Message,
+  navigation::route::{Page, TaskPageTab},
   tasks::{
     changes::Checkpointed,
     detail::{RunView, TaskDetail},
   },
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
@@ -52,6 +56,8 @@ const STAGE_LINE: f32 = 2.0;
 const BULLET: f32 = 3.0;
 /// Height of the review actions row (`ksjis`).
 const ACTIONS_HEIGHT: f32 = 44.0;
+
+type Handler = Arc<dyn Fn() + Send + Sync>;
 
 /// What Ready for review shows, compared to render it again when the task or its run changes.
 #[derive(Clone, Debug, PartialEq)]
@@ -100,25 +106,71 @@ impl Component for ReadyForReview {
       _ => None,
     };
     let leftovers = props.leftovers.as_ref().and_then(|leftovers| leftovers.as_ref().ok());
-    let summary = Column::new()
-      .id("task-ready")
-      .flex(1.0)
-      .height(Dimension::Pct(100.0))
-      .padding(SpacingSize::Section)
+    let (ask, open) = conversation(ctx, detail.task.id());
+    let content = Column::new()
+      .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
       .child(readiness(ctx, detail.merge.as_ref(), leftovers))
       .child(stages(run))
       .with_children(what_changed(ctx, run))
-      .child(verification(ctx, run))
-      .child(Spacer::new().flex(1.0))
-      .with_children(merge_problem(ctx, detail, &action))
-      .child(actions(ctx, (detail, &action), checkpointed));
+      .child(verification(ctx, run));
+    let summary = Column::new()
+      .id("task-ready")
+      .flex(1.0)
+      .height(Dimension::Pct(100.0))
+      .padding_vertical(SpacingSize::Section)
+      .padding_left(SpacingSize::Section)
+      .padding_right(ExtraSpacing::BesideGutter.role())
+      .spacing(SpacingSize::Lg)
+      .child(
+        ScrollVertical::new(content)
+          .id("task-ready-scroll")
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .scrollbar(gutter_scrollbar()),
+      )
+      .with_children(merge_problem(ctx, detail, &action).map(beside_gutter))
+      .child(beside_gutter(actions(ctx, (detail, &action), checkpointed, ask)));
     Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(summary)
-      .child(details::run_details(ctx, run, props.open.project.name().as_str()))
+      .child(details::run_details(
+        ctx,
+        run,
+        props.open.project.name().as_str(),
+        &open,
+      ))
   }
+}
+
+/// Ask agent and Open conversation: the task's Conversation tab; Ask agent also puts the focus in
+/// its composer.
+fn conversation(ctx: &mut Ctx, task: TaskId) -> (Handler, Handler) {
+  let nav = ctx
+    .use_context::<ProjectNav>()
+    .expect("the project shell provides ProjectNav");
+  let ComposerFocus(focus) = ctx
+    .use_context::<ComposerFocus>()
+    .expect("the task page provides ComposerFocus");
+  let page = Page::Task(task, TaskPageTab::Conversation);
+  let open = nav.clone();
+  (
+    Arc::new(move || {
+      focus.set(true);
+      nav.show(page);
+    }),
+    Arc::new(move || open.show(page)),
+  )
+}
+
+/// A part below the scrolled summary, ending where the viewport's gutter begins.
+fn beside_gutter(child: Element) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_right(ExtraSpacing::Stack.role())
+    .child(child)
+    .into()
 }
 
 /// The pipeline's steps, each passed (`XHMgH`).
@@ -234,7 +286,12 @@ fn verification(ctx: &Ctx, run: &RunView) -> Element {
 
 /// The size of the change, then Ask agent, Merge and Review PR, and why the unavailable ones are
 /// (`ksjis`).
-fn actions(ctx: &Ctx, (detail, merge): (&TaskDetail, &MergeAction), checkpointed: Option<&Checkpointed>) -> Element {
+fn actions(
+  ctx: &Ctx,
+  (detail, merge): (&TaskDetail, &MergeAction),
+  checkpointed: Option<&Checkpointed>,
+  ask: Handler,
+) -> Element {
   let scope = match checkpointed {
     Some(Checkpointed::Read { changes, .. }) => {
       let files = changes.diff.files().len();
@@ -272,6 +329,7 @@ fn actions(ctx: &Ctx, (detail, merge): (&TaskDetail, &MergeAction), checkpointed
   let ask = ActionButton::new(ctx.t("runs.ready.askAgent"))
     .icon(Icon::MessageSquare)
     .id("task-ask-agent")
+    .on_click(move || ask())
     .render(ctx);
   let review = ActionButton::new(ctx.t("runs.ready.reviewPullRequest"))
     .icon(Icon::GitCompareArrows)

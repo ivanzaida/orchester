@@ -34,7 +34,7 @@ use super::{
   board::Board,
   control::{Ack, Control, answer},
   prepare::Prepared,
-  record::{RecordError, record},
+  record::{RecordError, announce_ready, record},
   step::{
     Active,
     worker::{Stop, StopCause, WorkerEvent},
@@ -59,6 +59,8 @@ pub(super) enum ExecutionError {
   Schema(std::io::Error),
   #[error("the run has steps left but none can run")]
   Stalled,
+  #[error(transparent)]
+  Conversation(orchester_core::conversation::MessageError),
 }
 
 /// What the task of a run is given besides the run: where it announces changes, where its
@@ -291,7 +293,18 @@ impl RunTask {
       }
       Ok(events)
     };
-    Ok(record(&mut self.db, &self.notifier, &mut self.run, settling)?)
+    let was_ready = self.run.status() == &RunStatus::Succeeded;
+    record(&mut self.db, &self.notifier, &mut self.run, settling)?;
+    if !was_ready {
+      announce_ready(&self.notifier, &self.run);
+    }
+    Ok(())
+  }
+
+  /// The task executes the run again after a transition settled it: a follow-up of a run that
+  /// just succeeded.
+  pub(super) fn executes_again(&self) {
+    self.settled.store(false, Ordering::Release);
   }
 
   /// Reports a problem around `invocation`'s agent in the run's transcript.

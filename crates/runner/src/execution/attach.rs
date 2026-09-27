@@ -40,11 +40,13 @@ impl Scheduler {
       .map_err(|error| failed("cannot read the running runs", &error))?;
     let mut attached = Attached::default();
     let cut_off = |run: &Run| !self.is_active(run.id()) && !run.waits_for_a_person();
-    for mut run in stale.into_iter().filter(cut_off) {
+    let (stale, waiting): (Vec<Run>, Vec<Run>) = stale.into_iter().partition(cut_off);
+    for mut run in stale {
       interrupt(&mut db, &mut run, cause)?;
       self.announce(&run);
       attached.interrupted.push(run.id());
     }
+    self.wake_answered(&db, waiting)?;
     if session == AttachSession::Reconnect {
       attached.continued = self.continue_after_reconnect(&db)?;
     }

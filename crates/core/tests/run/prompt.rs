@@ -109,6 +109,7 @@ impl Prompt {
       instructions,
       dependencies,
       revision: None,
+      messages: None,
     }
   }
 }
@@ -141,7 +142,9 @@ fn prompt_assembles_role_step_and_task_in_order() {
                   Add GitHub sign-in\n\nUsers sign in with GitHub.\n\n## Acceptance criteria\n- Sign-in works\n- \
                   Cancel shows an error\n\n# When you finish\n\nEnd with your result: the outcome `done` when the \
                   step is complete, or `failed` when you could not complete it, and a short summary of what you did \
-                  for the steps that run after this one.\n";
+                  for the steps that run after this one. If you cannot go on without an answer from the person who \
+                  gave you this task, end with the outcome `question` and your question as the summary instead: you \
+                  continue once they answer.\n";
   assert_eq!(assembled.text, expected);
   let parts: Vec<PromptPart> = assembled.sources.sources.iter().map(PromptSource::part).collect();
   assert_eq!(parts, [PromptPart::AgentRole, PromptPart::Step, PromptPart::Task]);
@@ -210,7 +213,7 @@ fn prompt_lists_the_outputs_of_the_steps_it_runs_after_with_their_sources() {
   assert!(text.contains("\nSources: checks (`checks`, attempt 2), review (`review`, attempt 2)\n"));
   assert!(text.contains("\n## checks (`checks`, attempt 2)\n\nAll 38 tests pass.\n"));
   assert!(text.contains("\n## review (`review`, attempt 2)\n\n(no output)\n"));
-  assert!(text.ends_with("for the steps that run after this one.\n"));
+  assert!(text.ends_with("you continue once they answer.\n"));
 }
 
 /// One instruction per scope, given in an order unlike assembly order.

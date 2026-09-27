@@ -2,7 +2,7 @@
 //! is told that the run changed.
 
 use orchester_core::{
-  run::{Run, RunError, RunEvent},
+  run::{Run, RunError, RunEvent, RunStatus},
   store::RunStore,
   time::Timestamp,
 };
@@ -18,6 +18,17 @@ pub(super) enum RecordError {
   Run(#[from] RunError),
   #[error(transparent)]
   Store(#[from] RunStoreError),
+}
+
+/// Tells the desktop that `run` is ready for review, if it succeeded.
+pub(super) fn announce_ready(notifier: &Notifier, run: &Run) {
+  if run.status() == &RunStatus::Succeeded {
+    notifier.send(Event::RunReady {
+      run: run.id(),
+      task: run.task(),
+      number: run.number(),
+    });
+  }
 }
 
 /// Applies `transition` to `run`, stores its events with the new state and announces the change.

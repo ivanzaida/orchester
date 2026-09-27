@@ -1,6 +1,7 @@
 //! Run execution model: snapshots, state machines, failure routing, interruption and replay.
 
 mod agent;
+mod conversation;
 mod fixture;
 mod lifecycle;
 mod limits;

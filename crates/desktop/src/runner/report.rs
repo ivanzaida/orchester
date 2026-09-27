@@ -7,7 +7,10 @@ use std::{
   time::{Instant, SystemTime},
 };
 
-use orchester_core::{id::TaskId, run::PlanVersion};
+use orchester_core::{
+  id::TaskId,
+  run::{PlanVersion, RunNumber},
+};
 use orchester_ipc::WorkSummary;
 use parking_lot::Mutex;
 use tokio::sync::watch;
@@ -222,16 +225,36 @@ impl Reporter {
   /// A run of task `task` (`task_key`) proposed plan `version`, which waits for the user: the
   /// latest event says so and opens the task ("Plan ready for review · ORC-12").
   pub(super) fn plan_proposed(&self, task: TaskId, task_key: &str, version: PlanVersion) {
-    let Some(repo_root) = self.status.borrow().project_root().map(Path::to_path_buf) else {
-      return;
-    };
     let title = Message::new("statusBar.activity.planReady")
       .with("task", task_key.to_owned())
       .with("version", version.to_string());
-    let target = Target::Project {
-      repo_root,
-      place: Place::Task(task),
+    self.record_for_task(task, title, Place::Task(task));
+  }
+
+  /// The agent (`agent`, its role) of a run of task `task` (`task_key`) asked a question that waits
+  /// for the user: the latest event says so and opens the task's conversation ("Builder asks ·
+  /// ORC-12").
+  pub(super) fn question_asked(&self, task: TaskId, task_key: &str, agent: &str) {
+    let title = Message::new("statusBar.activity.agentAsks")
+      .with("agent", agent.to_owned())
+      .with("task", task_key.to_owned());
+    self.record_for_task(task, title, Place::TaskConversation(task));
+  }
+
+  /// Run `number` of task `task` succeeded: the latest event says it is ready for review and opens
+  /// the task ("Run #128 ready for review").
+  pub(super) fn run_ready(&self, task: TaskId, number: RunNumber) {
+    let title = Message::new("statusBar.activity.runReady").with("run", number.get().to_string());
+    self.record_for_task(task, title, Place::Task(task));
+  }
+
+  /// Records `title` as the latest event of this runner's project, opening `place`.
+  fn record_for_task(&self, task: TaskId, title: Message, place: Place) {
+    let Some(repo_root) = self.status.borrow().project_root().map(Path::to_path_buf) else {
+      tracing::debug!(%task, "an event for a runner without a project");
+      return;
     };
+    let target = Target::Project { repo_root, place };
     self.shared.activity.record(Some(self.project.clone()), title, target);
   }
 

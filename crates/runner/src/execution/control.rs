@@ -21,6 +21,8 @@ pub(super) enum Control {
   KeepPermissions(ResourceId, Ack),
   /// Record a person's decision on a plan; answered once it is recorded.
   DecidePlan(PlanRequest, Ack),
+  /// People's messages were stored; answered at once, delivered at the next boundary.
+  DeliverMessages(Ack),
   /// The runner stops: end the agent and record the run as interrupted.
   Interrupt(InterruptCause),
 }

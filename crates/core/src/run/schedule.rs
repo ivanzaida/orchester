@@ -71,6 +71,19 @@ impl Run {
     })
   }
 
+  /// Executions of the current attempt whose agent asked a question and waits for the answer, in
+  /// pipeline order.
+  pub fn awaiting_answer(&self) -> Vec<StepExecutionId> {
+    self.current_attempt().map_or_else(Vec::new, |attempt| {
+      attempt
+        .executions()
+        .iter()
+        .filter(|execution| execution.status() == StepStatus::Waiting(WaitReason::Message))
+        .map(StepExecution::id)
+        .collect()
+    })
+  }
+
   /// Whether the run can go no further until a person decides: a step waits for a decision (a
   /// plan, an approval, a message) and no other step works or can start. No agent works for it
   /// meanwhile, so it holds no agent slot, and waiting is not active agent time.

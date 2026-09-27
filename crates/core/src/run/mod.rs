@@ -9,6 +9,7 @@ mod attempt;
 mod branch;
 mod error;
 mod event;
+mod follow_up;
 mod invocation;
 mod number;
 mod permissions;
@@ -38,9 +39,9 @@ pub use self::{
   plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},
   preflight::{PreflightInput, PreflightProblem, preflight},
   prompt::{
-    AssembledPrompt, CONTINUE_PROMPT, Composition, DependencyOutput, ExcludedInstruction, InstructionSource,
-    InstructionVersion, InvocationPrompt, PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput,
-    PromptPart, PromptSection, PromptSource, RunContext,
+    AssembledPrompt, CONTINUE_PROMPT, Composition, DeliveredMessages, DependencyOutput, ExcludedInstruction,
+    InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion, PipelineInfo, PlanRevision, ProfileInfo,
+    PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource, RunContext,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},

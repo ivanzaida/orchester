@@ -308,12 +308,14 @@ impl Run {
     self.executions().find(|execution| execution.id() == id)
   }
 
-  /// The step's most recent execution: the one that decides whether it has passed.
+  /// The step's most recent execution: the one that decides whether it has passed. A follow-up that
+  /// failed decides nothing ([`Attempt::counts`]).
   pub fn latest_execution(&self, step: &StepKey) -> Option<&StepExecution> {
     self
       .attempts
       .iter()
       .rev()
+      .filter(|attempt| attempt.counts())
       .find_map(|attempt| attempt.executions().iter().find(|execution| execution.step() == step))
   }
 
