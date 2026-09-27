@@ -11,6 +11,7 @@ pub mod connections;
 pub mod display;
 pub mod drafts;
 mod external;
+pub mod highlight;
 pub mod i18n;
 pub mod instructions;
 pub mod messages;

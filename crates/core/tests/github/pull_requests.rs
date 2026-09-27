@@ -10,11 +10,12 @@ use std::sync::OnceLock;
 use orchester_core::{
   command::CommandError,
   connection::{GitHubHost, GitHubLogin, GitHubState},
+  diff::Changes,
   github::GhCli,
   id::ConnectionId,
   pull_request::{
-    Changes, CheckRollup, PullRequest, PullRequestError, PullRequestParts, PullRequestState, ReviewDecision,
-    SYNC_LIMIT, SyncFailure, gh_check_rollups_command, gh_pr_list_command, parse_gh_check_rollups, parse_gh_pr_list,
+    CheckRollup, PullRequest, PullRequestError, PullRequestParts, PullRequestState, ReviewDecision, SYNC_LIMIT,
+    SyncFailure, gh_check_rollups_command, gh_pr_list_command, parse_gh_check_rollups, parse_gh_pr_list,
     parse_gh_rate_limit, sort_by_update, sync_pull_requests,
   },
   repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryError, RepositoryLink, RepositoryView},

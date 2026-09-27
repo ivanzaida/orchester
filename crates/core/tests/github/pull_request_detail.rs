@@ -7,11 +7,12 @@ use std::{cell::RefCell, collections::HashMap, convert::Infallible};
 use orchester_core::{
   command::CommandOutput,
   connection::{GitHubHost, GitHubLogin, GitHubState},
+  diff::{Changes, RevisionDiff},
   github::GhCli,
   id::ConnectionId,
   pull_request::{
-    Changes, DiffRead, PullRequestState, RevisionDiff, SyncFailure, gh_compare_diff_command, gh_pr_view_command,
-    is_too_large, parse_gh_compare_diff, parse_gh_pr_view, refresh_pull_request,
+    DiffRead, PullRequestState, SyncFailure, gh_compare_diff_command, gh_pr_view_command, parse_gh_compare_diff,
+    parse_gh_pr_view, refresh_pull_request,
   },
   repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryError, RepositoryLink, RepositoryView},
   revision::Revision,
@@ -145,10 +146,10 @@ fn changes_beyond_the_limits_are_too_large_to_read() {
     additions,
     deletions,
   };
-  assert!(!is_too_large(changes(2, 29, 0)));
-  assert!(!is_too_large(changes(300, 10_000, 10_000)));
-  assert!(is_too_large(changes(301, 1, 0)));
-  assert!(is_too_large(changes(12, 15_000, 5_001)));
+  assert!(!changes(2, 29, 0).is_too_large());
+  assert!(!changes(300, 10_000, 10_000).is_too_large());
+  assert!(changes(301, 1, 0).is_too_large());
+  assert!(changes(12, 15_000, 5_001).is_too_large());
 }
 
 /// Diffs by (number, head), in memory.
@@ -180,7 +181,7 @@ impl PullRequestDiffStore for Diffs {
     let latest = diffs
       .iter()
       .filter(|((stored, _), _)| *stored == number)
-      .max_by_key(|(_, diff)| diff.synced_at);
+      .max_by_key(|(_, diff)| diff.read_at);
     Ok(latest.map(|(_, diff)| diff.clone()))
   }
 }
@@ -228,7 +229,7 @@ fn refresh_reuses_the_stored_diff_of_an_unchanged_head() {
     base: revision(BASE_463),
     head: revision(HEAD_463),
     text: fixture!("gh_api_compare_anyhow_463.stdout").to_owned(),
-    synced_at: Timestamp::from_unix_millis(1),
+    read_at: Timestamp::from_unix_millis(1),
   };
   let anyhow = repo("dtolnay", "anyhow");
   store
@@ -248,12 +249,12 @@ fn refresh_reuses_the_stored_diff_of_an_unchanged_head() {
   assert_eq!(
     detail.diff,
     DiffRead::Read(RevisionDiff {
-      synced_at: now(),
+      read_at: now(),
       ..earlier
     })
   );
   let latest = store.latest_pull_request_diff(&anyhow, 463).expect("infallible store");
-  assert_eq!(latest.map(|diff| diff.synced_at), Some(now()));
+  assert_eq!(latest.map(|diff| diff.read_at), Some(now()));
 }
 
 #[test]

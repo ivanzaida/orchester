@@ -7,6 +7,7 @@
 
 mod agent_permissions;
 mod agents;
+mod changes;
 mod claude_run;
 mod dialogs;
 mod draft_autosave;

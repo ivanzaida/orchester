@@ -7,7 +7,6 @@ mod entry;
 mod footer;
 mod panel;
 mod rows;
-mod states;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -34,6 +33,7 @@ use self::{
   footer::{LiveFooter, LiveFooterProps},
   rows::{OpenRows, Toggles, TranscriptRow},
 };
+use super::tab_state;
 use crate::{
   background, messages,
   messages::Message,
@@ -111,7 +111,7 @@ impl Component for ActivityTab {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ActivityProps>().clone();
     let Some(run) = props.detail.run.as_ref() else {
-      return states::empty(ctx, &ctx.t("runs.activity.emptyNoRun"));
+      return tab_state::empty_activity(ctx, &ctx.t("runs.activity.emptyNoRun"));
     };
     let deps = (props.repo_root.clone(), run.id(), props.revision, self.retry.get());
     let load = ctx.future(deps, |(repo_root, run, ..)| async move {
@@ -129,7 +129,7 @@ impl Component for ActivityTab {
       (None, Some(error)) => return self.failed(ctx, &error),
       (None, None) => {
         let number = run.run.number().get().to_string();
-        return states::state(
+        return tab_state::state(
           "activity-loading",
           Icon::Loader,
           &ctx.t_args("runs.activity.loadingTitle", [("run", number.as_str())]),
@@ -160,7 +160,7 @@ impl ActivityTab {
       } else {
         "runs.activity.emptyNone"
       };
-      states::empty(ctx, &ctx.t(key))
+      tab_state::empty_activity(ctx, &ctx.t(key))
     } else {
       self.list(ctx, rows.clone())
     };
@@ -340,7 +340,7 @@ impl ActivityTab {
         .on_click(move || retry.update(|attempt| *attempt += 1))
         .render(ctx),
     ];
-    states::state(
+    tab_state::state(
       "activity-failed",
       Icon::CloudOff,
       &ctx.t("runs.activity.failedTitle"),
@@ -352,7 +352,7 @@ impl ActivityTab {
 
 /// The CLI and model an agent runs on, as the design writes it ("Codex / Sol"); the model alone
 /// once the profile's connection is gone.
-fn engine(ctx: &Ctx, provider: Option<AgentProvider>, model: &str) -> Arc<str> {
+pub(super) fn engine(ctx: &Ctx, provider: Option<AgentProvider>, model: &str) -> Arc<str> {
   match provider {
     Some(provider) => ctx.t_args(
       "runs.activity.engine",

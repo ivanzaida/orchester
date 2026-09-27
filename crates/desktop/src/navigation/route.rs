@@ -2,7 +2,11 @@
 //! the only state history keeps, so everything a user can go back to (the open task, the
 //! selected profile, a tab) is part of it. Paths are canonical: a default (the first profile,
 //! the All tab, the General tab) is left out, so showing it again adds no entry. Typed text such
-//! as a search is not part of a path: going back does not undo typing.
+//! as a search is not part of a path: going back does not undo typing. A task's Changes tab opened
+//! on a file keeps the file in the `file` query, which the tab reads itself (see
+//! [`changes_path`]), so the typed routes stay plain values.
+
+use std::fmt::Write as _;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::id::{ConnectionId, ProjectId, ResourceId, TaskId};
@@ -33,6 +37,10 @@ const RUNNING: &str = "running";
 const NEEDS_YOU: &str = "needs-you";
 const QUEUED: &str = "queued";
 const ACTIVITY: &str = "activity";
+const CHANGES: &str = "changes";
+const FILE_QUERY: &str = "file";
+const FROM_QUERY: &str = "from";
+const WORKTREE: &str = "worktree";
 
 /// A screen of the window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,7 +66,7 @@ pub enum Page {
   Tasks(TaskTab),
   /// `l2YA4`.
   NewTask,
-  /// One task and its latest run, on a tab (`RD4pc`, `SfXU1`).
+  /// One task and its latest run, on a tab (`RD4pc`, `SfXU1`, `vpgrJ`).
   Task(TaskId, TaskPageTab),
   /// `wGtxT`.
   PullRequests,
@@ -93,6 +101,7 @@ pub enum AgentSelection {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskPageTab {
   Summary,
+  Changes,
   Activity,
 }
 
@@ -322,6 +331,7 @@ const fn task_query(tab: TaskTab) -> Option<&'static str> {
 
 fn task_page_tab(tab: Option<&str>) -> TaskPageTab {
   match tab {
+    Some(CHANGES) => TaskPageTab::Changes,
     Some(ACTIVITY) => TaskPageTab::Activity,
     _ => TaskPageTab::Summary,
   }
@@ -330,6 +340,7 @@ fn task_page_tab(tab: Option<&str>) -> TaskPageTab {
 const fn task_page_query(tab: TaskPageTab) -> Option<&'static str> {
   match tab {
     TaskPageTab::Summary => None,
+    TaskPageTab::Changes => Some(CHANGES),
     TaskPageTab::Activity => Some(ACTIVITY),
   }
 }
@@ -352,6 +363,70 @@ impl InstructionsTab {
       Self::StepOverrides => Some(STEP_OVERRIDES),
     }
   }
+}
+
+/// A changed file a task's Changes tab shows: its repository path (`/`-separated), and whether it
+/// is the version in the run's worktree that is not checkpointed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChangedFile {
+  pub path: String,
+  pub worktree: bool,
+}
+
+/// The path of `task`'s Changes tab in `project`, on `file`.
+pub fn changes_path(project: ProjectId, task: TaskId, file: &ChangedFile) -> String {
+  let tab = Page::Task(task, TaskPageTab::Changes).path(project);
+  let from = if file.worktree {
+    format!("&{FROM_QUERY}={WORKTREE}")
+  } else {
+    String::new()
+  };
+  format!("{tab}&{FILE_QUERY}={}{from}", encode(&file.path))
+}
+
+/// The changed file the queries of `path` name, if they name one.
+pub fn changed_file(path: &str) -> Option<ChangedFile> {
+  let (_, query) = path.split_once('?')?;
+  let value = |name: &str| {
+    query
+      .split('&')
+      .find_map(|pair| pair.strip_prefix(name)?.strip_prefix('='))
+  };
+  let path = decode(value(FILE_QUERY)?).filter(|file| !file.is_empty())?;
+  Some(ChangedFile {
+    path,
+    worktree: value(FROM_QUERY) == Some(WORKTREE),
+  })
+}
+
+/// `value` with every byte outside the unreserved characters and `/` percent-encoded, so a path
+/// with spaces, `&`, `?`, `#` or non-ASCII names stays one query value.
+fn encode(value: &str) -> String {
+  let mut encoded = String::with_capacity(value.len());
+  for byte in value.bytes() {
+    if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'/') {
+      encoded.push(char::from(byte));
+    } else {
+      write!(encoded, "%{byte:02X}").expect("writing to a String cannot fail");
+    }
+  }
+  encoded
+}
+
+/// [`encode`] undone; `None` for a malformed escape or bytes that are not UTF-8.
+fn decode(value: &str) -> Option<String> {
+  let mut bytes = Vec::with_capacity(value.len());
+  let mut rest = value.bytes();
+  while let Some(byte) = rest.next() {
+    if byte != b'%' {
+      bytes.push(byte);
+      continue;
+    }
+    let digits = [rest.next()?, rest.next()?];
+    let hex = std::str::from_utf8(&digits).ok()?;
+    bytes.push(u8::from_str_radix(hex, 16).ok()?);
+  }
+  String::from_utf8(bytes).ok()
 }
 
 impl ConnectionTab {

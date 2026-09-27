@@ -11,10 +11,7 @@
 
 mod actions;
 mod diff_pane;
-mod files;
 mod heading;
-mod line;
-mod rows;
 mod state;
 
 use std::sync::Arc;
@@ -36,7 +33,6 @@ use parking_lot::Mutex;
 use self::{
   actions::Actions,
   diff_pane::{DiffPane, DiffPaneProps},
-  files::{FileEntry, FileList, FileListProps},
   heading::{HeadingProps, PullRequestHeading},
 };
 use super::{
@@ -50,6 +46,7 @@ use crate::{
   theme::ExtraSpacing,
   ui::{
     button::ActionButton,
+    diff::{FileEntry, FileGroup, FileList, FileListProps},
     icon::Icon,
     message_text,
     notice::Notice,
@@ -65,7 +62,7 @@ const TAB_ROW_HEIGHT: f32 = 42.0;
 const TAB_HEIGHT: f32 = 40.0;
 
 /// The file list of the diff of one head.
-type Files = Option<(Revision, Arc<Vec<FileEntry>>)>;
+type Files = Option<(Revision, Arc<Vec<FileGroup>>)>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PullRequestProps {
@@ -235,14 +232,15 @@ impl PullRequestScreen {
     if read.diff.files().is_empty() {
       return with_notice(ctx, linked, centered(state::empty_panel(ctx)));
     }
-    let files = self.files(read);
-    let index = self.selected.get().min(files.len() - 1);
+    let files = self.files(ctx, read);
+    let index = self.selected.get().min(read.diff.files().len() - 1);
+    let selected = self.selected.clone();
     let list = ctx.mount_keyed::<FileList>(
       "pull-request-files",
       FileListProps {
-        files,
+        groups: files,
         selected: index,
-        select: self.selected.clone(),
+        select: Arc::new(move |index| selected.set(index)),
       },
     );
     let pane = ctx.mount_keyed::<DiffPane>(
@@ -265,24 +263,27 @@ impl PullRequestScreen {
     with_notice(ctx, linked, workspace.into())
   }
 
-  fn files(&self, read: &ReadDiff) -> Arc<Vec<FileEntry>> {
+  fn files(&self, ctx: &Ctx, read: &ReadDiff) -> Arc<Vec<FileGroup>> {
     let mut files = self.files.lock();
-    if let Some((head, entries)) = files.as_ref()
+    if let Some((head, groups)) = files.as_ref()
       && *head == read.head
     {
-      return entries.clone();
+      return groups.clone();
     }
-    let entries: Arc<Vec<FileEntry>> = Arc::new(
-      read
+    let count = read.diff.files().len().to_string();
+    let groups = Arc::new(vec![FileGroup {
+      key: "diff-file",
+      heading: ctx.t_args("diff.files.heading", [("count", count.as_str())]),
+      files: read
         .diff
         .files()
         .iter()
         .enumerate()
         .map(|(index, file)| FileEntry::of(index, file))
         .collect(),
-    );
-    *files = Some((read.head.clone(), entries.clone()));
-    entries
+    }]);
+    *files = Some((read.head.clone(), groups.clone()));
+    groups
   }
 }
 

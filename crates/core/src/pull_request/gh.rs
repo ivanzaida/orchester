@@ -6,10 +6,11 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use super::{Changes, CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision};
+use super::{CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision};
 use crate::{
   command::{Command, CommandOutput},
   connection::{GitHubHost, gh_command},
+  diff::Changes,
   repository::{GitHubRepo, RepositoryError, classify_failure, unrecognized},
   revision::Revision,
   run::BranchName,

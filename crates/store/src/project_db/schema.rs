@@ -438,6 +438,17 @@ CREATE TABLE run_permissions (
 ) STRICT;
 ",
   r"
+-- The diff between two commits, read with git: a run's changes from its base to a checkpoint (the
+-- task page's Changes tab). The diff of two commits does not change (a cache, desktop-written).
+CREATE TABLE revision_diffs (
+  base_sha TEXT NOT NULL,
+  head_sha TEXT NOT NULL,
+  diff_blob TEXT NOT NULL REFERENCES blobs (sha256),
+  read_at INTEGER NOT NULL,
+  PRIMARY KEY (base_sha, head_sha)
+) STRICT;
+",
+  r"
 -- What each agent CLI launch was told (Instructions): the injection event and the
 -- sources of its prompt in order, as JSON. Written once by the runner before the CLI starts.
 CREATE TABLE invocation_prompts (
