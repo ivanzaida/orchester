@@ -108,6 +108,21 @@ at work takes one.
 - **Sessions.** Codex reports its session (`thread.started`); a Claude Code session gets an id
   Orchester chose (`--session-id`), which the CLI reports back (`system/init`). Continuing a step
   resumes the session its last invocation reported (`codex exec resume`, `claude --resume`).
+- **Tool steps (M10a).** A tool step runs a published command tool: its program with fixed
+  arguments, no shell, found on the `PATH` or in the worktree and started like every program
+  (command scripts, the cleaned environment plus the tool's variables, no console window, its
+  process tree ended with it on Windows). It works where an agent step would: alone in the run's
+  worktree, beside others in a worktree of its own merged back when it passes. It takes no agent
+  slot — a command is no agent and uses no tokens — but one of two command slots the runner's runs
+  share, since a check such as a test suite can use every core. Its run is an invocation of kind
+  `command`, so its time counts toward the run's time limit; the limit, a cancel or the runner
+  stopping end it, and a run limit reached by an agent's turn lets it run to its end, as a pause
+  does. Its output (both streams, in order) is kept up to the tool's limit and recorded in the
+  transcript when it ends, with how many bytes before it were not kept. An exit code the tool
+  expects passes the step; another code or the tool's timeout fails it (*command failed*) for its
+  failure route. A short summary (the command, how it ended, its last lines) is its output for the
+  steps after it. HTTP and database tools, which use secrets and approvals, and command tools with
+  access rules are refused by the preflight.
 
 ## Storage layout
 
@@ -194,7 +209,11 @@ immutable published versions `v1..vN`. Runs pin versions; publishing affects new
 | `secrets` | name, environment, type, keychain reference, created / rotated / archived; unique (name, environment) |
 
 Tool access policy (allowed pipelines and steps, environment, approval mode, access window,
-denied behavior) is part of the tool version body. "Used by" is derived by query, never stored.
+denied behavior) is part of the tool version body. HTTP and database tools must have one; a command
+tool (body schema 2: program, arguments, timeout, expected exit codes, environment additions and
+output limit, no secrets) has none, and any tool step of a project pipeline that names it may run it.
+Bodies of schema 1 are upgraded when read: a command gets the defaults (10 minutes, exit code 0, no
+variables, 256 KiB). "Used by" is derived by query, never stored.
 
 Agent permissions (repository access, commands, network) are part of the agent profile version body
 since body schema 2. Bodies of schema 1 are upgraded when read, never rewritten: they get read-only
@@ -223,14 +242,14 @@ keeps its permissions unless the change is also saved to its draft.
 | `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step |
 | `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
 | `attempts` | run, number, status, reason |
-| `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, merge conflict, checkpoint failed; step budget only in records of earlier versions) |
+| `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, merge conflict, checkpoint failed, command failed; step budget only in records of earlier versions) |
 | `step_outputs` | step execution, run, step, outcome (done, failed, or none when the final message was not a structured result), text — what the step left for the steps after it, read into their prompts with its source; append-only |
 | `plans` | run, version, body blob, decision (proposed, approved, changes requested) |
 | `checkpoints` | run, step execution, revision, agent state blob |
 | `run_events` | run, sequence, time, kind, payload — append-only |
 | `evidence` | run, revision, kind (criteria, tests, review, browser), result, blob |
 | `artifacts` | run, name, blob |
-| `invocations` | run, step execution, number, model, CLI session id, started / ended, input / cached input / output tokens, outcome — one row per agent CLI launch |
+| `invocations` | run, step execution, number, kind (agent, command), model (empty for a command), CLI session id, started / ended, input / cached input / output tokens, outcome — one row per agent CLI launch or command tool run |
 | `agent_events` | run, sequence, step execution, invocation, time, kind, payload — the agent transcript, append-only |
 | `invocation_prompts` | invocation, injection event (start for a new session, resume for a continued one) and the source of each part of its prompt in order (profile version, instruction versions, pipeline step, task) — written once before the CLI starts |
 
