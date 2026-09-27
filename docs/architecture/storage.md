@@ -99,7 +99,7 @@ at work takes one.
   what the execution used, at most the project's maximum run budget) continues the stopped agent's
   CLI session. The raised budget applies to this run only; the published pipeline keeps its own.
 - **Outputs.** A new agent session ends with a structured result (Codex `--output-schema`,
-  `{outcome: done|failed, summary}`); its summary — or, without one, the final message — is the
+  `{outcome: done|failed|question, summary}`); its summary — or, without one, the final message — is the
   step's output, and the prompts of the steps that depend on it include it with its source (step,
   attempt). A continued session is started without the schema (the probe verified it for new
   sessions only), so its CLI exit and final message decide. Claude Code runs without a schema
@@ -117,6 +117,33 @@ at work takes one.
 - **Sessions.** Codex reports its session (`thread.started`); a Claude Code session gets an id
   Orchester chose (`--session-id`), which the CLI reports back (`system/init`). Continuing a step
   resumes the session its last invocation reported (`codex exec resume`, `claude --resume`).
+- **Task conversation (M8).** A person's message goes to Orchestrator, which routes it to the agent
+  of the task's run whose invocation starts next, or to the agents of one profile; it is written for
+  the task's latest run (for its next run when it has none). The runner delivers messages at the
+  run's next invocation boundary: every agent invocation that starts takes the messages queued for its
+  agent into its prompt (a new session in its task part, a resumed one first, told why it reads them
+  now), and they are *delivered*. An agent that finishes its turn — its CLI exits on its own — while
+  messages for it are queued does not end its step: its work is committed as a checkpoint and its
+  session resumes to read them, as with *Apply now* without a change of permissions. The turn that
+  ends after a delivery *acknowledges* the messages, and its final message (its summary, when it is
+  a structured result) is the agent's reply in the conversation. A paused, stopped or interrupted
+  run keeps messages queued until it continues; a run that failed or was cancelled takes none.
+  *DeliverMessages* only wakes a run; what is queued is read from the database.
+- **Questions.** A result with the outcome `question` asks the person before the step can go on: its
+  work is committed, the question is the agent's message, and the step waits for a message (like a
+  plan, a run that only waits holds no agent slot and no active time). A message that reaches it
+  resumes the session with the question and the answer. Claude Code's final message is read the same
+  way as for done and failed; only a final message that is exactly the JSON result counts, so prose
+  is never taken for a question.
+- **Follow-ups (Ask agent).** A person's message to a run that succeeded reopens it: an attempt of
+  its own (reason `follow_up`, naming the step) executes the last agent step in pipeline order — of
+  the recipient's profile, for a direct message — once more, continuing the CLI session of that
+  step's passed execution in the run's worktree, so its work makes new checkpoints. The run is
+  running meanwhile and succeeded again when the step passes; the run's limits apply as to any work.
+  Its reply is its message in the conversation, not a new output. A follow-up that fails leaves the
+  run succeeded with the result it had; its attempt stays recorded as failed and decides nothing. A
+  run that succeeds while messages are still queued for its agents (e.g. written while a tool step
+  ran) is followed up at once.
 - **Tool steps (M10a).** A tool step runs a published command tool: its program with fixed
   arguments, no shell, found on the `PATH` or in the worktree and started like every program
   (command scripts, the cleaned environment plus the tool's variables, no console window, its
@@ -251,7 +278,7 @@ keeps its permissions unless the change is also saved to its draft.
 | `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it), branch, base revision, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
 | `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step |
 | `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
-| `attempts` | run, number, status, reason |
+| `attempts` | run, number, status, reason (initial, retry, or a follow-up naming the step it asks) |
 | `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, merge conflict, checkpoint failed, command failed; step budget only in records of earlier versions) |
 | `step_outputs` | step execution, run, step, outcome (done, failed, or none when the final message was not a structured result), text — what the step left for the steps after it, read into their prompts with its source; append-only |
 | `plans` | run, step, version (per run and step, from 1), step execution, text, created; decision (none while proposed, approved, changes requested with the reviewer's note) and when — written with the run events that propose or decide it; the text never changes and a plan is decided once |
@@ -267,8 +294,8 @@ keeps its permissions unless the change is also saved to its draft.
 
 | Table | Purpose |
 | --- | --- |
-| `conversations` | scope (project, task, PR thread), task, title |
-| `messages` | conversation, idempotency key, author, recipient, run / step, body, attachments, delivery state and times |
+| `conversations` | *not built yet*: project and pull request thread conversations (scope, title); a task's conversation is its messages |
+| `messages` | task, run, idempotency key (a person's), author (person, agent), kind (an agent's reply or question), recipient profile (a person's; none: Orchestrator), step execution and invocation (delivered to, or written by), body, created, delivered, acknowledged — what a message says never changes, it is never deleted and its delivery only moves forward; attachments are not built yet |
 | `proposals` | conversation, version, proposed task set (not tasks until created) |
 | `pull_requests` | number, title, state, branches, head revision, linked task, synced at |
 | `pull_request_syncs` | repository (host / owner / name) and when its open pull requests were last read; `pull_requests` rows of a repository are replaced with every sync (a cache of GitHub, desktop-written) |
@@ -312,7 +339,9 @@ SQLite serializes writes between the two processes; ownership keeps meaning unam
   (session ended) → running on continue. Interrupted keeps its last checkpoint. A pause is
   requested first and recorded as paused once the active agent invocation ended and its work was
   committed. A run that reaches its token budget or time limit is paused as stopped at limit
-  after its agent was ended and its work committed; raising the limit continues it.
+  after its agent was ended and its work committed; raising the limit continues it. A succeeded
+  run is reopened by a follow-up (Ask agent) → running → succeeded again, also when the follow-up
+  fails.
 - **Step execution:** pending → running → waiting (approval, plan, message) → passed / failed /
   skipped.
 - **Message:** draft (desktop only) → queued → delivered → acknowledged; failed keeps the draft.
