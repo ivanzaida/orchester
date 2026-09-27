@@ -1,7 +1,8 @@
 //! Tab (`SOW6S`): a label with an optional count; the selected tab is underlined (`Iefue`).
 //! A tab without a data source yet is unavailable: muted, locked and without a count.
-//! [`tab_row`] lays tabs out over the hairline that ends their row. Tabs are outside any form,
-//! so they never take focus: they are pointer-only (see `ui::pressable`).
+//! [`tab_row`] lays tabs out over the hairline that ends their row. Tabs outside a form never take
+//! focus: they are pointer-only (see `ui::pressable`). Tabs in a dialog are form controls
+//! ([`Tab::in_form`]): Tab reaches the selected and the available ones, with the focus ring.
 
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ use lurq::{
 
 use super::{
   icon::{Icon, IconSize, icon},
-  pressable::{pressable, surface},
+  pressable::{Ring, keyboard_stop, pressable, surface},
 };
 use crate::theme::{ExtraColor, ExtraSpacing};
 
@@ -33,6 +34,7 @@ pub struct Tab {
   state: State,
   height: Dimension,
   min_width: Option<Dimension>,
+  in_form: bool,
 }
 
 impl Tab {
@@ -45,7 +47,15 @@ impl Tab {
       state: State::Unavailable,
       height,
       min_width: None,
+      in_form: false,
     }
+  }
+
+  /// A form control of a dialog: a Tab stop unless unavailable, the selected tab included, so
+  /// the focus stays on a tab that Enter or Space has just selected.
+  pub fn in_form(mut self) -> Self {
+    self.in_form = true;
+    self
   }
 
   /// The design's width for this tab; a longer label still widens it.
@@ -101,6 +111,9 @@ impl From<Tab> for Element {
           .count
           .map(|count| Text::new(&count.to_string()).variant(TypographyStyle::Mono)),
       );
+    if tab.in_form && !matches!(tab.state, State::Unavailable) {
+      return form_tab(tab.id, tab.height, row, tab.state);
+    }
     match tab.state {
       State::Selected => row
         .id(tab.id)
@@ -126,6 +139,26 @@ impl From<Tab> for Element {
         .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))
         .into(),
     }
+  }
+}
+
+/// A tab of a dialog (see [`Tab::in_form`]): the same button whether selected or not, so the focus
+/// stays on it when it becomes selected.
+fn form_tab(id: &'static str, height: Dimension, row: Row, state: State) -> Element {
+  let (row, described) = match &state {
+    State::Selected => (
+      row.border_bottom(Border::inside(BorderSize::Lg, PaletteColor::TextPrimary)),
+      "selected",
+    ),
+    _ => (
+      row.hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Lg, PaletteColor::Border))),
+      "enabled",
+    ),
+  };
+  let button = keyboard_stop(surface().id(id).height(height).child(row), Ring::Outer).describe("state", described);
+  match state {
+    State::Available(handler) => button.cursor(CursorIcon::Pointer).on_click(move |_| handler()).into(),
+    State::Selected | State::Unavailable => button.into(),
   }
 }
 

@@ -128,6 +128,8 @@ fn lifecycle_active_work_and_agents_count_follow_the_runner() {
   desktop.wait_until("the agent at work", |desktop| {
     !desktop.runners.active_work().is_empty()
       && text_of(desktop, "status-agents", "1/4")
+      && text_of(desktop, "sidebar-runner-state", "Local runner online")
+      && text_of(desktop, "sidebar-runner-detail", "1 of 4 agent slots in use")
       && has(desktop, "task-cancel-run")
   });
   let work = desktop.runners.active_work();
@@ -140,7 +142,9 @@ fn lifecycle_active_work_and_agents_count_follow_the_runner() {
   assert_eq!(work[0].model(), "gpt-5.5");
   desktop.click("task-cancel-run");
   desktop.wait_until("no agent at work", |desktop| {
-    desktop.runners.active_work().is_empty() && text_of(desktop, "status-agents", "0/4")
+    desktop.runners.active_work().is_empty()
+      && text_of(desktop, "status-agents", "0/4")
+      && text_of(desktop, "sidebar-runner-detail", "0 of 4 agent slots in use")
   });
   // The cancelled agent was stopped; it did not finish.
   desktop.wait_until("the latest activity", |desktop| {

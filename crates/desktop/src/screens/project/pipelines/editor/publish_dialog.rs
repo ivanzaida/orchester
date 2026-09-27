@@ -11,7 +11,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -23,7 +23,7 @@ use crate::{
   pipelines::{describe, editor::EditorState},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
-    button::ActionButton,
+    button::{ActionButton, SKIPPED_BY_TAB},
     field::field_error,
     icon::{Icon, IconSize, icon},
     message_text,
@@ -35,10 +35,17 @@ use crate::{
 const DIALOG_WIDTH: f32 = 600.0;
 const ACTIONS_HEIGHT: f32 = 76.0;
 
+/// The confirmation as a dialog: its own element, which takes the focus when it opens but is no
+/// Tab stop, and whether it is open.
+pub struct Dialog<'a> {
+  pub frame: &'a ElementRef,
+  pub open: &'a Signal<bool>,
+}
+
 pub fn publish_dialog(
   ctx: &Ctx,
   state: &EditorState,
-  open: &Signal<bool>,
+  dialog: &Dialog<'_>,
   publish: impl Fn() + Send + Sync + 'static,
   pending: bool,
   error: Option<Message>,
@@ -83,13 +90,16 @@ pub fn publish_dialog(
   }
   Column::new()
     .id("publish-dialog")
+    .ref_element(dialog.frame.clone())
+    .focusable(true)
+    .tab_index(SKIPPED_BY_TAB)
     .width(Dimension::Px(DIALOG_WIDTH))
     .background(ExtraColor::Surface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .child(header)
     .child(body)
-    .child(actions(ctx, &draft, open, publish, pending, error))
+    .child(actions(ctx, &draft, dialog.open, publish, pending, error))
     .into()
 }
 

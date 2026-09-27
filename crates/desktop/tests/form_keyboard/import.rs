@@ -25,7 +25,7 @@ use orchester_core::{
 use orchester_desktop::activity::{Place, Target};
 use orchester_store::ProjectDb;
 
-use crate::harness::Desktop;
+use crate::harness::{Desktop, expected};
 
 fn name(value: &str) -> Name {
   Name::new(value).expect("valid name")
@@ -351,5 +351,57 @@ fn import_closes_back_to_the_page_it_was_opened_over() {
     resources(desktop.repo(), ResourceKind::Pipeline),
     [],
     "closing imports nothing"
+  );
+}
+
+/// Kontur with Personal website beside it, the import open from the sidebar, listing Personal
+/// website's resources.
+fn opened() -> (Desktop, Source) {
+  let mut source = None;
+  let mut desktop = Desktop::with_other_project(|repo| source = Some(seed_source(repo)), |_| {});
+  let source = source.expect("seeded");
+  desktop.wait_for("nav-import");
+  desktop.press("nav-import");
+  desktop.wait_for(&format!("import-resource-{}", source.pipeline));
+  (desktop, source)
+}
+
+#[test]
+fn import_escape_closes_it_like_every_dialog() {
+  let (mut desktop, _) = opened();
+
+  desktop.key("Escape", "Escape");
+
+  assert!(desktop.tree.get_element_by_id("import-dialog").is_none());
+  assert!(desktop.tree.get_element_by_id("nav-import").is_some());
+  // Closed for good: the page under it does not open it again.
+  desktop.pass();
+  assert!(desktop.tree.get_element_by_id("import-dialog").is_none());
+}
+
+#[test]
+fn import_tab_reaches_the_kind_tabs_between_the_source_and_the_search() {
+  let (mut desktop, source) = opened();
+  desktop.tab_to("import-tab-all", 10);
+  let order = [
+    Some("import-tab-pipelines"),
+    Some("import-tab-agents"),
+    Some("import-tab-instructions"),
+    Some("import-tab-tools"),
+    // Secrets cannot be imported: its tab is no stop.
+    Some("import-search"),
+  ];
+  assert_eq!(desktop.stops(order.len(), false), expected(&order));
+
+  // Enter selects the focused tab, which keeps the focus.
+  desktop.tab_to("import-tab-agents", 20);
+  desktop.enter();
+  assert_eq!(desktop.focused().as_deref(), Some("import-tab-agents"));
+  assert!(
+    desktop
+      .tree
+      .get_element_by_id(&format!("import-resource-{}", source.pipeline))
+      .is_none(),
+    "the Agents tab lists no pipeline"
   );
 }

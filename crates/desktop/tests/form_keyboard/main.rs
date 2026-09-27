@@ -32,6 +32,7 @@ mod pull_requests;
 mod run_permissions;
 mod secrets;
 mod selection_focus;
+mod sidebar;
 mod task_graph;
 mod task_run;
 mod tool_run;

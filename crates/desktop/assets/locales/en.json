@@ -95,6 +95,27 @@
       },
       "openLog": "Open runner log",
       "restart": "Restart runner"
+    },
+    "card": {
+      "starting": "Starting local runner",
+      "startingDetail": "Agents can start when it’s ready",
+      "online": "Local runner online",
+      "slots": {
+        "one": "{{used}} of {{slots}} agent slot in use",
+        "other": "{{used}} of {{slots}} agent slots in use"
+      },
+      "slotsUnknown": "Agent slots not reported yet",
+      "reconnecting": "Reconnecting to runner",
+      "attempt": "Attempt {{attempt}} of {{limit}}",
+      "attemptInterrupted": {
+        "one": "Attempt {{attempt}} of {{limit}} · run interrupted",
+        "other": "Attempt {{attempt}} of {{limit}} · runs interrupted"
+      },
+      "offline": "Runner offline",
+      "notStarted": "Could not start · see runner log",
+      "notRestarted": "Could not restart · see runner log",
+      "stopping": "Stopping local runner",
+      "stopped": "Local runner stopped"
     }
   },
   "lifecycle": {
@@ -224,6 +245,10 @@
     "activity": {
       "title": "Recent activity",
       "empty": "No runs yet. Runs appear here as they start and finish.",
+      "unreadable": {
+        "one": "No run to show: the latest run of a task could not be read. The task list marks it.",
+        "other": "No run to show: the latest runs of {{count}} tasks could not be read. The task list marks them."
+      },
       "detail": "{{task}} · {{project}} · {{time}}",
       "queued": "Run #{{run}} is waiting to start",
       "running": "Run #{{run}} is running",
