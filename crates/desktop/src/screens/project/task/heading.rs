@@ -120,6 +120,7 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     (RunStatus::Succeeded, _) => "runs.page.describe.succeeded",
     (RunStatus::Failed(RunFailure::RetriesExhausted(_)), _) => "runs.page.describe.retriesExhausted",
     (RunStatus::Failed(_), _) => "runs.page.describe.failed",
+    (RunStatus::Cancelled, _) if run.run.current_attempt().is_none() => "runs.page.describe.cancelledBeforeStart",
     (RunStatus::Cancelled, _) => "runs.page.describe.cancelled",
   };
   ctx.t_args(key, args)

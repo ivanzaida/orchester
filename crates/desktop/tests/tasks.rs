@@ -411,6 +411,28 @@ fn task_page_run_recorded_running_lost_its_agent_without_a_runner() {
   assert!(!settled.lost_its_runner(false));
 }
 
+/// A run cancelled before its first attempt reads back into the task list and the task page: the
+/// task is cancelled and none of its steps waits.
+#[test]
+fn task_list_and_page_read_a_run_cancelled_before_it_started() {
+  let mut fixture = support::Fixture::new();
+  let task = fixture.task("Fix zoom", support::at(10));
+  let mut run = fixture.pending_run(task, support::at(20));
+  let events = run.cancel(support::at(21)).expect("cancel the pending run");
+  fixture.record(&run, &events);
+
+  let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  assert_eq!(loaded.runs, 1);
+  assert_eq!(loaded.phases[&task].phase, TaskPhase::Cancelled);
+  let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("read the task");
+  let run = detail.run.expect("the task has a run");
+  let states: Vec<_> = progress(&run, false, support::at(30))
+    .into_iter()
+    .map(|row| row.state)
+    .collect();
+  assert_eq!(states, [ProgressState::Cancelled]);
+}
+
 /// While a run is stopped at any limit, its working step reads "Stopped at limit", never "Paused":
 /// Paused is only a pause the user asked for (design doc, "Stopped at limit").
 #[test]

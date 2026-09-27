@@ -397,6 +397,7 @@
         "succeeded": "Run {{run}} · Attempt {{attempt}} · every step passed",
         "failed": "Run {{run}} · Attempt {{attempt}} · failed at {{step}}",
         "cancelled": "Run {{run}} · Attempt {{attempt}} · cancelled",
+        "cancelledBeforeStart": "Run {{run}} · cancelled before it started",
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
         "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted"
       },
