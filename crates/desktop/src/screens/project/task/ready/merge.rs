@@ -1,10 +1,10 @@
-//! Merging from Ready for review. The design has no merge action yet: *Merge into <branch>* is a
+//! Merging from Ready for review (02.P `GIiCb`, states `OP7dt`): *Merge into <branch>* is a
 //! secondary button beside the unavailable *Review PR* (`o5Txa1`), in the review actions (`ksjis`).
 //! It merges the run into the branch the user's checkout had when the run started, in that
 //! checkout, then removes what the run left that is safe to remove (see
 //! `orchester_core::integration`). A refusal or a conflict is a notice above the actions that says
-//! why and that nothing changed. Once merged, the readiness card (`IBuWf`) says where the work went
-//! and what is left of the run.
+//! why and that nothing changed (02.P2 `lDcdB`). Once merged, the readiness card (`IBuWf`) says
+//! where the work went and what is left of the run (02.P3 `bMJUA`).
 
 use std::sync::Arc;
 

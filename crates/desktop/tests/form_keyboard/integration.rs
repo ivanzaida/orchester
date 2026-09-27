@@ -92,6 +92,10 @@ fn merge_moves_main_to_the_run_and_clears_its_worktree_and_branch() {
     "Its worktrees and merged branches were removed."
   ));
   assert!(!has(&mut desktop, "task-merge"), "a merged run is not merged again");
+  assert!(
+    !has(&mut desktop, "task-ask-agent"),
+    "the conversation of a merged run takes no messages"
+  );
   assert!(!has(&mut desktop, "task-remove-worktree"), "nothing is left to remove");
   assert!(!run_worktree(&desktop).exists());
   assert!(git(desktop.repo(), &["branch", "--list", run.branch().as_str()]).is_empty());
