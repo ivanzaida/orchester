@@ -17,9 +17,9 @@ use orchester_core::{
   id::StepExecutionId,
   resource::{AgentProfile, InjectionEvent, Instruction, Step, StepKind},
   run::{
-    AssembledPrompt, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt, PinnedVersion,
-    PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, Run, RunContext, StepExecutor,
-    StepOutput,
+    AssembledPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
+    PinnedVersion, PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, Run, RunContext,
+    StepExecutor, StepOutput,
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore},
 };
@@ -189,7 +189,10 @@ impl RunTask {
           note,
         }
       }),
-      messages: None,
+      messages: (!continuation.messages.is_empty()).then(|| DeliveredMessages {
+        occasion: continuation.occasion.as_prompt(),
+        messages: &continuation.messages,
+      }),
     }
     .assemble(event)
     .map_err(

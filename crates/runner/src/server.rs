@@ -230,6 +230,9 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
         handle.decide_plan(run, execution, version, decision).await
       });
     }
+    Command::DeliverMessages { run } => {
+      return later(replies, id, run, async move { handle.deliver_messages(run).await });
+    }
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
   };
   Answer::Reply(Event::Reply { id, reply })

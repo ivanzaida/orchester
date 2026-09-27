@@ -2526,7 +2526,8 @@
         "one": "1 run interrupted · nothing runs until the runner starts",
         "other": "{{count}} runs interrupted · nothing runs until the runner starts"
       },
-      "planReady": "Plan ready for review · {{task}}"
+      "planReady": "Plan ready for review · {{task}}",
+      "agentAsks": "{{agent}} asks · {{task}}"
     },
     "counts": {
       "agents": "Agents",

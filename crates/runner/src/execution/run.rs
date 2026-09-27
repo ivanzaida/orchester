@@ -51,6 +51,8 @@ pub(super) enum ExecutionError {
   Schema(std::io::Error),
   #[error("the run has steps left but none can run")]
   Stalled,
+  #[error(transparent)]
+  Conversation(orchester_core::conversation::MessageError),
 }
 
 /// What the task of a run is given besides the run: where it announces changes and where its

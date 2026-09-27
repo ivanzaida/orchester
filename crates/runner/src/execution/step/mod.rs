@@ -9,10 +9,11 @@ pub(super) mod worker;
 
 use orchester_core::{
   connection::stream::{AgentStream, InvocationOutcome, RunnerProblem},
+  conversation::{Message, latest_question},
   id::StepExecutionId,
   resource::ModelId,
-  run::{Invocation, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
-  store::{ActivityStore, RunStore},
+  run::{Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
+  store::{ActivityStore, ConversationStore, RunStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -27,11 +28,39 @@ use super::{
 use crate::supervisor::Supervised;
 
 /// How an execution's next invocation continues it: the CLI session it resumes, if its last
-/// invocation reported one, and when that invocation started.
+/// invocation reported one, when that invocation started, and the people's messages it delivers.
 #[derive(Default)]
 pub(super) struct Continuation {
   pub(super) session: Option<String>,
   pub(super) last_started: Option<Timestamp>,
+  /// People's messages queued for the agent, oldest first: the invocation delivers them.
+  pub(super) messages: Vec<Message>,
+  pub(super) occasion: Occasion,
+}
+
+/// Why an invocation delivers people's messages now ([`MessageOccasion`], owning the question).
+#[derive(Default)]
+pub(super) enum Occasion {
+  /// Before the step started, or while it was stopped.
+  #[default]
+  Written,
+  /// Its agent finished its turn while they came in.
+  AfterTurn,
+  /// They answer the question its agent asked.
+  Answer(String),
+  /// A follow-up of a run that succeeded.
+  FollowUp,
+}
+
+impl Occasion {
+  pub(super) fn as_prompt(&self) -> MessageOccasion<'_> {
+    match self {
+      Self::Written => MessageOccasion::Written,
+      Self::AfterTurn => MessageOccasion::AfterTurn,
+      Self::Answer(question) => MessageOccasion::Answer { question },
+      Self::FollowUp => MessageOccasion::FollowUp,
+    }
+  }
 }
 
 /// An agent at work on one execution of the run.
@@ -100,6 +129,7 @@ impl RunTask {
     if !self.may_start() {
       return Ok(false);
     }
+    self.answer_questions()?;
     // An agent stopped to take changed permissions while a pause was asked for waits for it.
     let continuing: Vec<StepExecutionId> = self
       .run
@@ -152,7 +182,7 @@ impl RunTask {
       return Ok(false);
     }
     let workspace = Workspace::of(&self.root, &self.run, &self.worktree, execution, start);
-    let continuation = self.begin_step(execution)?;
+    let mut continuation = self.begin_step(execution)?;
     let model = self.model(execution)?;
     let mut invocation = self
       .db
@@ -189,6 +219,8 @@ impl RunTask {
         return Ok(true);
       }
     };
+    // Messages that never reached a started agent stay queued.
+    self.deliver(execution, &invocation, std::mem::take(&mut continuation.messages))?;
     self.spawn(execution, invocation, AgentStream::new(provider), process, workspace)?;
     Ok(true)
   }
@@ -234,37 +266,69 @@ impl RunTask {
     Ok(())
   }
 
-  /// Starts `execution` if it has not started. One that was stopped mid-step, or that a reviewer
-  /// sent back, continues: the session of its last invocation, if the CLI reported one, is resumed.
+  /// Starts `execution` if it has not started; a follow-up resumes the session of its step's passed
+  /// execution. One that was stopped mid-step, that a reviewer sent back, that asked a question or
+  /// that finished its turn while messages came in continues: the session of its last invocation,
+  /// if the CLI reported one, is resumed. Either way the messages queued for its agent go with it.
   fn begin_step(&mut self, execution: StepExecutionId) -> Result<Continuation, ExecutionError> {
+    let messages = self.queued_for(execution)?;
     let status = self.run.execution(execution).map(|execution| execution.status());
     if status == Some(StepStatus::Pending) {
       self.transition(|run, now| run.start_step(execution, now))?;
-      return Ok(Continuation::default());
+      let Some(followed) = self.run.followed_up(execution) else {
+        return Ok(Continuation {
+          messages,
+          ..Continuation::default()
+        });
+      };
+      return Ok(Continuation {
+        session: self
+          .last_invocation(followed)?
+          .and_then(|invocation| invocation.session),
+        last_started: None,
+        messages,
+        occasion: Occasion::FollowUp,
+      });
     }
-    let last = self
-      .db
-      .invocations(self.run.id())?
-      .into_iter()
-      .rev()
-      .find(|invocation| invocation.execution == execution);
+    let last = self.last_invocation(execution)?;
+    let started = last.as_ref().map(|invocation| invocation.started_at);
+    let conversation = self.db.messages(self.run.task())?;
+    // Asked in the last invocation, so the one that starts now answers it.
+    let question = latest_question(&conversation, execution)
+      .filter(|question| started.is_none_or(|started| question.created_at() >= started))
+      .map(|question| question.body().as_str().to_owned());
+    let completed =
+      last.as_ref().and_then(|invocation| invocation.outcome.as_ref()) == Some(&InvocationOutcome::Completed);
+    let occasion = match question {
+      Some(question) => Occasion::Answer(question),
+      None if completed => Occasion::AfterTurn,
+      None => Occasion::Written,
+    };
     Ok(Continuation {
-      last_started: last.as_ref().map(|invocation| invocation.started_at),
+      last_started: started,
       session: last.and_then(|invocation| invocation.session),
+      messages,
+      occasion,
     })
+  }
+
+  /// The latest invocation of `execution`, if it had one.
+  fn last_invocation(&self, execution: StepExecutionId) -> Result<Option<Invocation>, ExecutionError> {
+    Ok(
+      self
+        .db
+        .invocations(self.run.id())?
+        .into_iter()
+        .rev()
+        .find(|invocation| invocation.execution == execution),
+    )
   }
 
   /// Whether `execution` continues because a reviewer sent its plan back: its last invocation
   /// ended with the plan, so it starts over where the run's graph stands now, not where it worked.
   fn revises_plan(&self, execution: StepExecutionId) -> Result<bool, ExecutionError> {
     let plans = self.db.plans(self.run.id()).map_err(RecordError::from)?;
-    let last_started = self
-      .db
-      .invocations(self.run.id())?
-      .into_iter()
-      .rev()
-      .find(|invocation| invocation.execution == execution)
-      .map(|invocation| invocation.started_at);
+    let last_started = self.last_invocation(execution)?.map(|invocation| invocation.started_at);
     Ok(Plan::awaiting_revision(&plans, execution, last_started).is_some())
   }
 
