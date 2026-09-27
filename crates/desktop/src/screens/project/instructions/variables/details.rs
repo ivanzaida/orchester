@@ -190,6 +190,7 @@ fn unavailable_reason(ctx: &Ctx, variable: Variable, resolved: Option<&Resolved<
   let key = match (resolved, variable.group()) {
     (None, _) => "variables.reasons.noPreview",
     (Some(resolved), VariableGroup::Run) if resolved.run.is_none() => "variables.reasons.noRun",
+    (Some(_), _) if variable == Variable::RunRevision => "variables.reasons.noCheckpoint",
     (Some(_), VariableGroup::Run) => "variables.reasons.noAttempt",
     (Some(_), _) => "variables.reasons.notRecorded",
   };
@@ -273,6 +274,7 @@ const fn key(variable: Variable) -> &'static str {
     Variable::RunAttempt => "runAttempt",
     Variable::RunBudget => "runBudget",
     Variable::RunBranch => "runBranch",
+    Variable::RunBaseRevision => "runBaseRevision",
     Variable::RunRevision => "runRevision",
     Variable::StepId => "stepId",
     Variable::StepName => "stepName",
