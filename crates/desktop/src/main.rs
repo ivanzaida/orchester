@@ -1,7 +1,7 @@
 use lurq::app::{App, Tree, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
 use orchester_desktop::{
   activity::Activity,
-  app_paths,
+  app_log, app_paths,
   close::{CloseKind, Lifecycle, session_end},
   i18n,
   messages::Message,
@@ -13,12 +13,9 @@ use orchester_desktop::{
   theme,
 };
 use tokio::runtime::Runtime;
-use tracing_subscriber::EnvFilter;
 
 fn main() {
-  tracing_subscriber::fmt()
-    .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
-    .init();
+  app_log::install();
 
   let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
   let mut app = App::new();
