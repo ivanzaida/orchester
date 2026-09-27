@@ -22,7 +22,10 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use crate::{github::contains_text, harness::Desktop};
+use crate::{
+  github::contains_text,
+  harness::{Desktop, expected},
+};
 
 const HISTORY: &str = "pipeline-history";
 const DETAILS: &str = "pipeline-version-details";
@@ -340,4 +343,22 @@ fn pipeline_history_canvas_follows_the_window_after_it_grows() {
   );
   assert_eq!(area.0, canvas.0);
   assert!(area.1 < canvas.1 && area.1 > canvas.1 / 2.0, "{area:?} in {canvas:?}");
+}
+
+/// Publish opens its confirmation focused, as the other dialogs without fields open: the field of
+/// the inspector behind it loses the focus, and Tab starts at Cancel and stays in the dialog.
+#[test]
+fn publish_confirmation_takes_the_focus_when_it_opens() {
+  let mut desktop = editor();
+  desktop
+    .tree
+    .get_element_by_id_mut(STEP_NAME)
+    .expect("the step name")
+    .focus();
+  desktop.pass();
+  desktop.press("pipeline-publish");
+  desktop.wait_for("publish-confirm");
+  assert_eq!(desktop.focused().as_deref(), Some("publish-dialog"));
+  let order = [Some("publish-cancel"), Some("publish-confirm"), Some("publish-cancel")];
+  assert_eq!(desktop.stops(order.len(), false), expected(&order));
 }

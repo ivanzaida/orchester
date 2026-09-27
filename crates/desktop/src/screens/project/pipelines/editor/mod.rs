@@ -27,7 +27,7 @@ use lurq::{
     theme::{BorderSize, SpacingSize},
   },
   components::{Column, Modal, ModalTarget, Row},
-  core::Signal,
+  core::{ElementRef, Ref, Signal},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -42,7 +42,7 @@ use self::{
   canvas::{Canvas, CanvasProps},
   history_panel::{Current, HistoryPanel, HistoryPanelProps, HistoryState},
   pipeline_inspector::{PipelineInspector, PipelineInspectorProps},
-  publish_dialog::publish_dialog,
+  publish_dialog::{Dialog, publish_dialog},
   step_inspector::{StepInspector, StepInspectorProps},
 };
 use super::PipelinesNav;
@@ -213,6 +213,11 @@ impl EditorHandle {
 pub struct PipelineEditor {
   handle: EditorHandle,
   confirm_publish: Signal<bool>,
+  /// The publish confirmation, focused when it opens so that Tab starts at its first button and
+  /// no field of the inspector behind it keeps the focus, as in the other dialogs without fields.
+  publish_frame: ElementRef,
+  /// Whether the confirmation shown has asked for the focus.
+  publish_focused: Ref<bool>,
 }
 
 impl Component for PipelineEditor {
@@ -235,6 +240,8 @@ impl Component for PipelineEditor {
     Self {
       handle,
       confirm_publish,
+      publish_frame: ElementRef::new(),
+      publish_focused: ctx.create_ref(false),
     }
   }
 
@@ -352,7 +359,12 @@ impl PipelineEditor {
 
   fn publish_modal(&self, ctx: &Ctx, state: &EditorState, publish: &PublishAction, project: &OpenProject) -> Element {
     if !self.confirm_publish.get() {
+      self.publish_focused.set(false);
       return Column::new().into();
+    }
+    if !self.publish_focused.get() {
+      self.publish_focused.set(true);
+      ctx.focus(&self.publish_frame);
     }
     let action = publish.state().get();
     let run = {
@@ -368,7 +380,10 @@ impl PipelineEditor {
     let dialog = publish_dialog(
       ctx,
       state,
-      &self.confirm_publish,
+      &Dialog {
+        frame: &self.publish_frame,
+        open: &self.confirm_publish,
+      },
       run,
       action.is_pending(),
       action.error.clone().filter(|_| !action.is_pending()),
