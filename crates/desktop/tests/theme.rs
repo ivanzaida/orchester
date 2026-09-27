@@ -52,6 +52,23 @@ fn window_chrome_follows_pencil() {
 }
 
 #[test]
+fn disabled_buttons_follow_pencil() {
+  // A button that cannot be pressed, primary or secondary, at 40 % (`kLJJb`, `HN7cO`).
+  assert_eq!(theme::DISABLED_OPACITY, 0.4);
+  let app = themed_app();
+  let form = app.theme().form().clone();
+  // It keeps its variant's colors (`u1XBP`, `HN7cO`): only the opacity marks it.
+  assert_eq!(
+    (form.button.primary.background, form.button.primary.text.color),
+    (PaletteColor::Accent, PaletteColor::TextInverse)
+  );
+  assert_eq!(
+    (form.button.secondary.background, form.button.secondary.border),
+    (PaletteColor::SurfaceRaised, PaletteColor::Border)
+  );
+}
+
+#[test]
 fn typography_and_radii_follow_pencil() {
   let app = themed_app();
   let theme = app.theme();
