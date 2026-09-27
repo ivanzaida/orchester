@@ -1842,6 +1842,16 @@
         "none": "No tasks",
         "one": "1 task",
         "other": "{{count}} tasks"
+      },
+      "change": {
+        "none": "No changes",
+        "one": "1 change",
+        "other": "{{count}} changes"
+      },
+      "run": {
+        "none": "No runs",
+        "one": "1 run",
+        "other": "{{count}} runs"
       }
     },
     "library": {
@@ -2130,6 +2140,27 @@
     "published": {
       "title": "Published {{version}} just now",
       "detail": "New runs use {{version}}. Runs that already started keep the version they pinned until they finish."
+    },
+    "history": {
+      "loading": "Reading the published versions…",
+      "failed": "The published versions could not be read",
+      "version": "{{version}}",
+      "latest": "LATEST",
+      "firstVersion": "First version",
+      "summary": "{{changes}} · {{runs}}",
+      "runs": "Runs that pinned it",
+      "noRuns": "No run pinned this version",
+      "compareDraft": "Compare with draft v{{draft}}",
+      "compareLatest": "Compare with the latest version",
+      "hideComparison": "Hide comparison",
+      "fromVersionToDraft": "From {{version}} to draft v{{draft}}",
+      "fromVersionToLatest": "From {{version}} to the latest version",
+      "compareInvalid": "Draft v{{draft}} has problems to fix before it can be compared.",
+      "noDifferences": "No differences",
+      "restore": "Restore {{version}} as draft",
+      "confirmRestore": "Replace draft v{{draft}}? Click again",
+      "backToEditor": "Back to editing",
+      "readOnly": "Viewing {{version}} · Read-only"
     },
     "changes": {
       "description": "Pipeline · description edited",

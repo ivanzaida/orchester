@@ -1,6 +1,7 @@
-//! Above the canvas: the topbar with the version and save state and Publish (`oWMR7`), the
-//! toolbar with Add step, Pipeline settings and the draft's state (`EbAzx`), and the strip of
-//! problems that block publishing (`U7y0m`).
+//! Above the canvas: the topbar with the version and save state and Publish or Version history
+//! (`oWMR7`), the toolbar with Add step, Pipeline settings and the draft's state (`EbAzx`), and
+//! the strip of problems that block publishing (`U7y0m`). While a published version is shown,
+//! the toolbar leads back to the draft and says the version is read-only.
 
 use std::sync::Arc;
 
@@ -15,12 +16,13 @@ use lurq::{
 };
 use orchester_core::{
   name::Name,
-  resource::{EditProblem, Step},
+  resource::{EditProblem, Step, VersionNumber},
 };
 
 use super::{EditorHandle, Selection};
 use crate::{
   messages::Message,
+  navigation::route::PipelineView,
   pipelines::{
     describe::step_count,
     editor::{EditorState, SaveState},
@@ -99,9 +101,7 @@ pub fn topbar(
       .on_click(publish)
       .enabled(state.can_publish())
   } else {
-    ActionButton::new(ctx.t("pipelines.editor.versionHistory"))
-      .icon(Icon::History)
-      .id("pipeline-version-history")
+    history_button(ctx, state, nav).id("pipeline-version-history")
   };
   Row::new()
     .width(Dimension::Pct(100.0))
@@ -155,12 +155,17 @@ fn save_status(ctx: &Ctx, state: &EditorState, saving: &Saving) -> Arc<str> {
   message_text(ctx, &status)
 }
 
-/// Add step, Pipeline settings and what the draft's state means for publishing (`EbAzx`).
-pub fn toolbar(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> Element {
-  let (add, settings) = (handle.clone(), handle.clone());
-  let new_step = new_step_name(ctx, state.edit().steps());
-  let small = |button: ActionButton| button.height(Dimension::Px(SMALL_BUTTON_HEIGHT)).render(ctx);
-  let (glyph, color, summary) = toolbar_summary(ctx, state);
+/// Opens the version history on the latest version.
+fn history_button(ctx: &Ctx, state: &EditorState, nav: &PipelinesNav) -> ActionButton {
+  let button = ActionButton::new(ctx.t("pipelines.editor.versionHistory")).icon(Icon::History);
+  let Some(latest) = state.latest() else {
+    return button;
+  };
+  let (nav, id, latest) = (nav.clone(), state.id(), latest.number);
+  button.on_click(move || nav.show(id, PipelineView::Version(latest)))
+}
+
+fn toolbar_row() -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(TOOLBAR_HEIGHT))
@@ -168,6 +173,22 @@ pub fn toolbar(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> Element
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+}
+
+fn small_button(ctx: &Ctx, button: ActionButton) -> Element {
+  button.height(Dimension::Px(SMALL_BUTTON_HEIGHT)).render(ctx)
+}
+
+/// Add step, Pipeline settings and what the draft's state means for publishing (`EbAzx`).
+/// While the draft has changes, the topbar shows Publish, so Version history is here.
+pub fn toolbar(ctx: &Ctx, state: &EditorState, handle: &EditorHandle, nav: &PipelinesNav) -> Element {
+  let (add, settings) = (handle.clone(), handle.clone());
+  let new_step = new_step_name(ctx, state.edit().steps());
+  let small = |button: ActionButton| small_button(ctx, button);
+  let (glyph, color, summary) = toolbar_summary(ctx, state);
+  let history = (state.latest().is_some() && state.has_changes())
+    .then(|| small(history_button(ctx, state, nav).id("pipeline-toolbar-history")));
+  toolbar_row()
     .child(small(
       ActionButton::new(ctx.t("pipelines.editor.addStep"))
         .icon(Icon::Plus)
@@ -180,6 +201,7 @@ pub fn toolbar(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> Element
         .id("pipeline-settings")
         .on_click(move || settings.select(Selection::Pipeline)),
     ))
+    .with_children(history)
     .child(Spacer::new().flex(1.0))
     .child(icon(glyph, IconSize::Dismiss, color.clone()))
     .child(
@@ -187,6 +209,31 @@ pub fn toolbar(ctx: &Ctx, state: &EditorState, handle: &EditorHandle) -> Element
         .variant(TypographyStyle::Caption)
         .color(color)
         .id("pipeline-state"),
+    )
+    .into()
+}
+
+/// While a published version is shown: back to the draft, and that the version is read-only.
+pub fn version_toolbar(ctx: &Ctx, state: &EditorState, nav: &PipelinesNav, version: VersionNumber) -> Element {
+  let (nav, id) = (nav.clone(), state.id());
+  toolbar_row()
+    .child(small_button(
+      ctx,
+      ActionButton::new(ctx.t("pipelines.history.backToEditor"))
+        .icon(Icon::ArrowLeft)
+        .id("pipeline-history-back")
+        .on_click(move || nav.show(id, PipelineView::Draft)),
+    ))
+    .child(Spacer::new().flex(1.0))
+    .child(icon(Icon::Lock, IconSize::Dismiss, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&ctx.t_args(
+        "pipelines.history.readOnly",
+        [("version", version.to_string().as_str())],
+      ))
+      .variant(TypographyStyle::Caption)
+      .color(PaletteColor::TextSecondary)
+      .id("pipeline-state"),
     )
     .into()
 }
