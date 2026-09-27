@@ -3,6 +3,11 @@
 //! its task, step, agent and model — takes one slot, so a run's parallel steps and other runs
 //! compete for the same slots. Every change is announced as an [`Event::WorkSummary`] once the
 //! desktop has said how many slots there are.
+//!
+//! Tool steps running a command tool take no agent slot: a command is no agent and uses no
+//! tokens. They take one of [`COMMAND_SLOTS`] command slots instead, shared by all runs, since a
+//! check such as a test suite can use every core of the machine. They are not part of the work
+//! summary, which lists agents.
 
 use std::num::NonZeroU32;
 
@@ -15,9 +20,14 @@ use parking_lot::Mutex;
 
 use super::Notifier;
 
+/// Command tools that may run at once across the runner's runs.
+pub(super) const COMMAND_SLOTS: usize = 2;
+
 pub(super) struct Board {
   notifier: Notifier,
   state: Mutex<State>,
+  /// Executions whose command tool runs, each holding a command slot.
+  commands: Mutex<Vec<StepExecutionId>>,
 }
 
 #[derive(Default)]
@@ -42,6 +52,7 @@ impl Board {
     Self {
       notifier,
       state: Mutex::new(State::default()),
+      commands: Mutex::new(Vec::new()),
     }
   }
 
@@ -94,9 +105,23 @@ impl Board {
     taken
   }
 
-  /// `execution`'s agent ended: its slot is free again. While the runner stops at checkpoints it
-  /// stays listed until its run settles, which shows it as saved.
+  /// Takes a command slot for `execution`'s command tool; `false` when none is free.
+  pub(super) fn take_command(&self, execution: StepExecutionId) -> bool {
+    let mut commands = self.commands.lock();
+    if commands.contains(&execution) {
+      return true;
+    }
+    if commands.len() >= COMMAND_SLOTS {
+      return false;
+    }
+    commands.push(execution);
+    true
+  }
+
+  /// `execution`'s agent or command ended: its slot is free again. While the runner stops at
+  /// checkpoints an agent stays listed until its run settles, which shows it as saved.
   pub(super) fn release(&self, execution: StepExecutionId) {
+    self.commands.lock().retain(|command| *command != execution);
     self.change(|state| {
       if state.stopping {
         for agent in state

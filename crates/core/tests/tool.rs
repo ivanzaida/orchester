@@ -7,9 +7,9 @@ use orchester_core::{
   id::{ResourceId, SecretId},
   name::Name,
   resource::{
-    AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, DatabaseQuery,
-    DeniedBehavior, FieldName, HttpAuth, HttpError, HttpMethod, HttpRequest, RequestTarget, ResponseSource, StepKey,
-    Tool, ToolAction, ToolError,
+    AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, DatabaseQuery, DeniedBehavior,
+    FieldName, HttpAuth, HttpError, HttpMethod, HttpRequest, RequestTarget, ResponseSource, StepKey, Tool, ToolAction,
+    ToolError,
   },
 };
 
@@ -140,17 +140,21 @@ fn tool_field_names_are_identifiers() {
 }
 
 #[test]
-fn tool_command_and_database_actions_need_content() {
-  assert_eq!(
-    CommandAction::new(" ".into(), vec!["test".into()]),
-    Err(ToolError::BlankProgram)
-  );
+fn tool_database_actions_need_a_query_and_credentialed_tools_a_policy() {
   assert_eq!(
     DatabaseQuery::new(SecretId::generate(), String::new()),
     Err(ToolError::BlankQuery)
   );
-  let command = CommandAction::new("cargo".into(), vec!["test".into()]).unwrap();
-  assert_eq!((command.program(), command.args()), ("cargo", &["test".to_owned()][..]));
+  let query = DatabaseQuery::new(SecretId::generate(), "SELECT 1".into()).unwrap();
+  assert_eq!(
+    Tool::new("", ToolAction::DatabaseQuery(query), None),
+    Err(ToolError::AccessPolicyRequired)
+  );
+  let http = request("https://deploy.example.test/v1", "deploy.example.test", bearer()).unwrap();
+  assert_eq!(
+    Tool::new("", ToolAction::Http(http), None),
+    Err(ToolError::AccessPolicyRequired)
+  );
 }
 
 #[test]
@@ -189,7 +193,7 @@ fn tool_body_round_trips_and_revalidates_on_read() {
   )
   .unwrap();
   let action = ToolAction::Http(request("https://deploy.example.test/v1", "deploy.example.test", bearer()).unwrap());
-  let tool = Tool::new(action, access);
+  let tool = Tool::new("Deploy a preview.", action, Some(access)).unwrap();
   let json = serde_json::to_string(&tool).unwrap();
   assert_eq!(serde_json::from_str::<Tool>(&json).unwrap(), tool);
 
@@ -198,9 +202,11 @@ fn tool_body_round_trips_and_revalidates_on_read() {
   assert!(error.to_string().contains("not the allowed host"), "{error}");
 
   let database = Tool::new(
+    "",
     ToolAction::DatabaseQuery(DatabaseQuery::new(SecretId::generate(), "SELECT 1".into()).unwrap()),
-    tool.access().clone(),
-  );
+    tool.access().cloned(),
+  )
+  .unwrap();
   let json = serde_json::to_string(&database).unwrap();
   assert_eq!(serde_json::from_str::<Tool>(&json).unwrap(), database);
 }

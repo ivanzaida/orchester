@@ -22,6 +22,7 @@ mod snapshot;
 mod state;
 mod status;
 mod step;
+mod tool_step;
 mod transition;
 mod usage;
 
@@ -30,7 +31,7 @@ pub use self::{
   branch::{BranchName, BranchNameError},
   error::RunError,
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
-  invocation::{ActivityEntry, Invocation, active_time, execution_tokens},
+  invocation::{ActivityEntry, Invocation, InvocationKind, active_time, execution_tokens},
   number::RunNumber,
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
@@ -48,6 +49,7 @@ pub use self::{
     AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus,
     StepFailure, StepStatus, WaitReason,
   },
+  tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
   transition::RaisedLimits,
   usage::TokenUsage,
 };

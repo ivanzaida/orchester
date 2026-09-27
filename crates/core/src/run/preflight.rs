@@ -2,9 +2,11 @@
 //! configuration, authorization, runner readiness"). Each problem is a typed, visible reason;
 //! a run with any problem does not start.
 //!
-//! This version of the runner executes graphs of agent steps on the Codex and Claude Code CLIs —
-//! parallel steps, failure routes, retries and approval gates (plan review) included; tool steps
-//! are reported as not supported yet rather than skipped.
+//! This version of the runner executes graphs of agent steps on the Codex and Claude Code CLIs and
+//! of tool steps that run published command tools — parallel steps, failure routes, retries and
+//! approval gates on agent steps (plan review) included. HTTP and database tools (secrets,
+//! approvals), tools with access rules and approval gates on tool steps are reported as not
+//! supported yet rather than skipped.
 
 use std::collections::BTreeMap;
 
@@ -14,7 +16,7 @@ use crate::{
   connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus, invocation::Platform},
   id::{ConnectionId, ResourceId},
   permission::capability::PermissionProblem,
-  resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, Version},
+  resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, Tool, ToolKind, Version},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -24,8 +26,15 @@ pub enum PreflightProblem {
   PipelineNotPublished,
   /// A published pipeline has at least one step; this one has none.
   NoSteps,
-  /// Tool steps cannot run yet.
-  ToolStep { step: StepKey },
+  /// The step's tool has no published version.
+  ToolNotPublished { step: StepKey },
+  /// Tools of `kind` (HTTP, database) use project secrets and runtime approvals, which cannot be
+  /// used yet.
+  ToolNotRunnable { step: StepKey, kind: ToolKind },
+  /// The step's command tool carries access rules; tool steps do not apply access rules yet.
+  ToolAccessRules { step: StepKey },
+  /// The step runs a tool and has an approval gate: only agent steps propose plans for review.
+  ApprovalGate { step: StepKey },
   /// The step's agent profile has no published version.
   ProfileNotPublished { step: StepKey },
   /// The profile's connection no longer exists.
@@ -50,6 +59,8 @@ pub struct PreflightInput<'a> {
   pub pipeline: Option<&'a Pipeline>,
   /// Latest published version of each agent profile.
   pub profiles: &'a BTreeMap<ResourceId, Version<AgentProfile>>,
+  /// Latest published version of each tool.
+  pub tools: &'a BTreeMap<ResourceId, Version<Tool>>,
   pub connections: &'a [Connection],
 }
 
@@ -71,8 +82,12 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
   for step in pipeline.steps() {
     let key = || step.key.clone();
     let profile = match &step.kind {
-      StepKind::Tool { .. } => {
-        problems.push(PreflightProblem::ToolStep { step: key() });
+      StepKind::Tool { tool } => {
+        if step.approval_gate {
+          problems.push(PreflightProblem::ApprovalGate { step: key() });
+        }
+        let tool = tool.and_then(|tool| input.tools.get(&tool)).map(Version::body);
+        problems.extend(tool_problem(tool, key()));
         continue;
       }
       StepKind::Agent { profile, .. } => profile.and_then(|profile| input.profiles.get(&profile)),
@@ -87,6 +102,20 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
     }
   }
   problems
+}
+
+/// Why a tool step cannot run `tool` (its tool's latest published version), if it cannot.
+fn tool_problem(tool: Option<&Tool>, step: StepKey) -> Option<PreflightProblem> {
+  let Some(tool) = tool else {
+    return Some(PreflightProblem::ToolNotPublished { step });
+  };
+  if !tool.kind().runnable() {
+    return Some(PreflightProblem::ToolNotRunnable {
+      step,
+      kind: tool.kind(),
+    });
+  }
+  tool.access().map(|_| PreflightProblem::ToolAccessRules { step })
 }
 
 /// Whether `provider`'s CLI enforces the step's effective permissions on this platform. Only

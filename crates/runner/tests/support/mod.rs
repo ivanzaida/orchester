@@ -5,6 +5,8 @@
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
+pub mod tools;
+
 use std::{
   collections::{BTreeMap, BTreeSet},
   fs,
@@ -73,6 +75,8 @@ pub struct StepSpec {
   pub budget: Option<u64>,
   /// Its result waits for a plan decision.
   pub gate: bool,
+  /// A tool step running this command tool instead of an agent step.
+  pub tool: Option<tools::ToolSpec>,
 }
 
 impl StepSpec {
@@ -90,11 +94,18 @@ impl StepSpec {
       retry: None,
       budget: None,
       gate: false,
+      tool: None,
     }
   }
 
   pub const fn gate(mut self) -> Self {
     self.gate = true;
+    self
+  }
+
+  /// A tool step running `tool`.
+  pub const fn command(mut self, tool: tools::ToolSpec) -> Self {
+    self.tool = Some(tool);
     self
   }
 
@@ -206,16 +217,22 @@ fn agent_step(key: &str, title: &str, builder: orchester_core::id::ResourceId) -
   }
 }
 
-fn graph_step(spec: &StepSpec, builder: orchester_core::id::ResourceId) -> Step {
-  Step {
-    key: StepKey::new(spec.key).expect("key"),
-    name: name(spec.name),
-    kind: StepKind::Agent {
+fn graph_step(db: &mut ProjectDb, spec: &StepSpec, builder: orchester_core::id::ResourceId) -> Step {
+  let kind = match &spec.tool {
+    Some(tool) => StepKind::Tool {
+      tool: Some(tools::publish(db, spec.name, tool)),
+    },
+    None => StepKind::Agent {
       profile: Some(builder),
       repository: RepositoryAccess::Write,
       model: None,
       permissions: StepPermissions::default(),
     },
+  };
+  Step {
+    key: StepKey::new(spec.key).expect("key"),
+    name: name(spec.name),
+    kind,
     instructions: PromptText::new(spec.instructions).expect("prompt"),
     depends_on: spec.after.iter().map(|key| StepKey::new(key).expect("key")).collect(),
     approval_gate: spec.gate,
@@ -255,7 +272,7 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
   db.publish_draft::<AgentProfile>(builder, now).expect("publish profile");
   let mut steps = vec![agent_step("implement", "Implement", builder)];
   if !setup.steps.is_empty() {
-    steps = setup.steps.iter().map(|spec| graph_step(spec, builder)).collect();
+    steps = setup.steps.iter().map(|spec| graph_step(db, spec, builder)).collect();
   } else if setup.review {
     let mut review = agent_step("review", "Review", builder);
     review.depends_on = BTreeSet::from([StepKey::new("implement").expect("key")]);

@@ -26,6 +26,7 @@ const AGENT_ROLES: &str = "agent-roles";
 const PIPELINE_OVERRIDES: &str = "pipeline-overrides";
 const STEP_OVERRIDES: &str = "step-overrides";
 const AGENTS: &str = "agents";
+const TOOLS: &str = "tools";
 const SECRETS: &str = "secrets";
 const CONNECTIONS: &str = "connections";
 const SETTINGS: &str = "settings";
@@ -82,6 +83,8 @@ pub enum Page {
   Instructions(InstructionsTab, Option<ResourceId>),
   /// Agent profiles and the one being edited (`WPmtS`).
   Agents(AgentSelection),
+  /// The tool library (`ZFwWl`) or one tool in its editor (`YEWFo`).
+  Tools(ToolSelection),
   /// Project secrets and the one whose details are shown (`R99lt`); without one, the first
   /// listed.
   Secrets(Option<SecretId>),
@@ -98,6 +101,15 @@ pub enum AgentSelection {
   First,
   Profile(ResourceId),
   /// A profile being written that is not saved yet.
+  New,
+}
+
+/// What the Tools screen shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolSelection {
+  Library,
+  Tool(ResourceId),
+  /// A command tool being written that is not saved yet.
   New,
 }
 
@@ -140,6 +152,7 @@ pub enum SidebarItem {
   Pipelines,
   Instructions,
   Agents,
+  Tools,
   Secrets,
   Connections,
   Settings,
@@ -237,6 +250,9 @@ impl Page {
       [AGENTS] => Self::Agents(AgentSelection::First),
       [AGENTS, NEW] => Self::Agents(AgentSelection::New),
       [AGENTS, profile] => Self::Agents(AgentSelection::Profile(profile.parse().ok()?)),
+      [TOOLS] => Self::Tools(ToolSelection::Library),
+      [TOOLS, NEW] => Self::Tools(ToolSelection::New),
+      [TOOLS, tool] => Self::Tools(ToolSelection::Tool(tool.parse().ok()?)),
       [SECRETS] => Self::SECRETS,
       [SECRETS, secret] => Self::Secrets(Some(secret.parse().ok()?)),
       [CONNECTIONS] => Self::Connections(ConnectionTab::named(tab), None),
@@ -266,6 +282,9 @@ impl Page {
       Self::Agents(AgentSelection::First) => format!("{root}/{AGENTS}"),
       Self::Agents(AgentSelection::New) => format!("{root}/{AGENTS}/{NEW}"),
       Self::Agents(AgentSelection::Profile(profile)) => format!("{root}/{AGENTS}/{profile}"),
+      Self::Tools(ToolSelection::Library) => format!("{root}/{TOOLS}"),
+      Self::Tools(ToolSelection::New) => format!("{root}/{TOOLS}/{NEW}"),
+      Self::Tools(ToolSelection::Tool(tool)) => format!("{root}/{TOOLS}/{tool}"),
       Self::Secrets(selected) => {
         let selected = selected.map_or_else(String::new, |secret| format!("/{secret}"));
         format!("{root}/{SECRETS}{selected}")
@@ -287,6 +306,7 @@ impl Page {
       Self::Pipelines | Self::Pipeline(_) => SidebarItem::Pipelines,
       Self::Instructions(..) => SidebarItem::Instructions,
       Self::Agents(_) => SidebarItem::Agents,
+      Self::Tools(_) => SidebarItem::Tools,
       Self::Secrets(_) => SidebarItem::Secrets,
       Self::Connections(..) => SidebarItem::Connections,
       Self::Settings(_) => SidebarItem::Settings,

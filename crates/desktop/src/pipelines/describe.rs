@@ -37,8 +37,9 @@ pub fn executor_line(step: &Step, assignables: &Assignables) -> Message {
   }
 }
 
-/// Third line of a step card: what the step waits for or may do (`Dz9R9` in `ajikA`).
-pub fn outcome_line(step: &Step) -> Message {
+/// Third line of a step card: what the step waits for or may do (`Dz9R9` in `ajikA`). A tool step
+/// passes or fails by its command's exit code; a tool it cannot run yet says so.
+pub fn outcome_line(step: &Step, assignables: &Assignables) -> Message {
   match &step.kind {
     StepKind::Agent { profile: None, .. } => Message::new("pipelines.step.chooseProfile"),
     StepKind::Tool { tool: None } => Message::new("pipelines.step.chooseTool"),
@@ -51,7 +52,10 @@ pub fn outcome_line(step: &Step) -> Message {
       repository: RepositoryAccess::ReadOnly,
       ..
     } => Message::new("pipelines.step.readsOnly"),
-    StepKind::Tool { .. } => Message::new("pipelines.step.toolPolicy"),
+    StepKind::Tool { tool: Some(id) } => match assignables.tool(*id) {
+      Some(tool) if !tool.runnable => Message::new("pipelines.step.toolUnavailable"),
+      _ => Message::new("pipelines.step.exitCodeDecides"),
+    },
   }
 }
 

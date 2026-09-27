@@ -66,6 +66,7 @@ fn problems_with(connection: &Connection, permissions: &AgentPermissions) -> Vec
   preflight(PreflightInput {
     pipeline: Some(config.pipeline_version.body()),
     profiles: &config.profiles,
+    tools: &BTreeMap::new(),
     connections: std::slice::from_ref(connection),
   })
 }
@@ -151,6 +152,7 @@ fn preflight_reports_steps_whose_permissions_codex_cannot_enforce() {
   let problems = preflight(PreflightInput {
     pipeline: Some(&pipeline),
     profiles: &profiles,
+    tools: &BTreeMap::new(),
     connections: std::slice::from_ref(&codex),
   });
   assert!(problems.contains(&PreflightProblem::PermissionsNotEnforceable {
@@ -174,13 +176,18 @@ fn preflight_reports_tool_steps_unpublished_profiles_and_missing_pipelines() {
   let problems = preflight(PreflightInput {
     pipeline: Some(&pipeline),
     profiles: &BTreeMap::new(),
+    tools: &BTreeMap::new(),
     connections: &[],
   });
-  assert_eq!(problems[0], PreflightProblem::ToolStep { step: key("research") });
+  assert_eq!(
+    problems[0],
+    PreflightProblem::ToolNotPublished { step: key("research") }
+  );
   assert!(problems.contains(&PreflightProblem::ProfileNotPublished { step: key("implement") }));
   let none = preflight(PreflightInput {
     pipeline: None,
     profiles: &config.profiles,
+    tools: &BTreeMap::new(),
     connections: &[],
   });
   assert_eq!(none, [PreflightProblem::PipelineNotPublished]);

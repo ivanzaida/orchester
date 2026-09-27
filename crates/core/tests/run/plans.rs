@@ -2,8 +2,8 @@ use orchester_core::{
   id::{InvocationId, RunId},
   resource::InjectionEvent,
   run::{
-    CONTINUE_PROMPT, Invocation, Plan, PlanDecision, PlanRevision, PlanVersion, PromptInput, ReviewNote,
-    ReviewNoteError, Run, RunError, RunStatus, StepOutput, StepStatus, TokenUsage, WaitReason, active_time,
+    CONTINUE_PROMPT, Invocation, InvocationKind, Plan, PlanDecision, PlanRevision, PlanVersion, PromptInput,
+    ReviewNote, ReviewNoteError, Run, RunError, RunStatus, StepOutput, StepStatus, TokenUsage, WaitReason, active_time,
   },
 };
 
@@ -152,7 +152,9 @@ fn plans_waiting_for_a_decision_is_not_active_agent_time() {
     run: RunId::generate(),
     execution: logged.exec("plan"),
     number: 1,
-    model: model("gpt-5.5"),
+    kind: InvocationKind::Agent {
+      model: model("gpt-5.5"),
+    },
     session: Some("thread-1".into()),
     started_at: at(1_000),
     ended_at: Some(at(61_000)),

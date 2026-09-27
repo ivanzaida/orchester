@@ -490,6 +490,7 @@
         "succeededDetail": "The run’s changes are committed on {{branch}}.",
         "failedTitle": "The run failed at {{step}}",
         "failedDetail": "Activity shows what the agent reported.",
+        "failedCommandDetail": "Activity shows the command, its exit code and its output.",
         "cancelledTitle": "The run was cancelled",
         "cancelledDetail": "Completed work stays on {{branch}}."
       }
@@ -498,6 +499,7 @@
       "stepAgent": "{{step}} · {{agent}}",
       "together": " + ",
       "detail": "{{state}} · attempt {{attempt}} · {{tokens}} tokens · {{duration}}",
+      "commandDetail": "{{state}} · attempt {{attempt}} · {{duration}}",
       "state": {
         "waiting": "Waiting",
         "working": "Working",
@@ -515,7 +517,8 @@
         "notStarted": "Could not start",
         "stepBudget": "Step budget reached",
         "mergeConflict": "Merge conflict",
-        "checkpointFailed": "Commit failed"
+        "checkpointFailed": "Commit failed",
+        "commandFailed": "Command failed"
       }
     },
     "retryLimit": {
@@ -559,11 +562,20 @@
         "one": "{{engine}} · {{count}} invocation · {{start}}–{{end}}",
         "other": "{{engine}} · {{count}} invocations · {{start}}–{{end}}"
       },
+      "commandTool": "Command tool",
+      "commandHeaderRunning": "{{engine}} · run {{count}} · started {{start}}",
+      "commandHeaderFinished": {
+        "one": "{{engine}} · {{count}} run · {{start}}–{{end}}",
+        "other": "{{engine}} · {{count}} runs · {{start}}–{{end}}"
+      },
       "agentMessage": "agent message",
       "reasoning": "Reasoning summary",
       "commandRunning": "running",
       "exit": "exit {{code}}",
       "exitDuration": "exit {{code}} · {{seconds}} s",
+      "timedOut": "timed out · {{seconds}} s",
+      "stopped": "stopped",
+      "noExitCode": "no exit code · {{seconds}} s",
       "declined": "denied · not an allowed command",
       "declinedDetail": "Blocked by this run’s permissions. The agent was told and continued without it.",
       "fileAdded": "A",
@@ -577,10 +589,12 @@
       "notSignedInDetail": "Sign in to the CLI in your own terminal, check the connection again in Connections, then run the task again. Orchester never signs in for you.",
       "problem": {
         "unavailableVariable": "The prompt uses {{variable}}, which has no value in this run",
-        "couldNotStart": "The agent could not be started",
+        "couldNotStart": "The step could not start",
         "checkpointFailed": "The step’s changes could not be committed",
         "mergeConflict": "The step’s changes conflict with the run’s branch; they stay on {{branch}}",
-        "stepBudgetReached": "The step used its budget of {{budget}} tokens and was stopped"
+        "stepBudgetReached": "The step used its budget of {{budget}} tokens and was stopped",
+        "programNotFound": "{{program}} was not found",
+        "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool."
       },
       "unparsed": {
         "one": "{{count}} unparsed line",
@@ -589,6 +603,7 @@
       "rawOutput": "raw output",
       "stderrLine": "stderr  {{line}}",
       "outputTrimmed": "{{count}} earlier lines are not shown",
+      "outputOmitted": "{{size}} of earlier output was not kept",
       "jump": "Jump to latest",
       "jumpNew": "Jump to latest · {{count}} new",
       "working": "{{agent}} is working · last event {{elapsed}} ago",
@@ -609,6 +624,7 @@
         "stepValue": "{{number}} · {{step}} · attempt {{attempt}}",
         "agent": "Agent",
         "agentValue": "{{agent}} · {{engine}}",
+        "tool": "Tool",
         "invocation": "Invocation",
         "started": "Started",
         "input": "Input tokens",
@@ -725,7 +741,14 @@
     "preflight": {
       "pipelineNotPublished": "The task’s pipeline has no published version.",
       "noSteps": "The pipeline has no steps.",
-      "toolStep": "Step “{{step}}” calls a tool; tool steps cannot run in this version yet.",
+      "toolNotPublished": "Step “{{step}}” calls a tool without a published version.",
+      "toolNotRunnable": {
+        "http": "Step “{{step}}” calls an HTTP tool; HTTP tools use project secrets and approvals, which are not available in this version yet.",
+        "database": "Step “{{step}}” calls a database tool; database tools use project secrets and approvals, which are not available in this version yet.",
+        "command": "Step “{{step}}” calls a command tool that cannot run in this version."
+      },
+      "toolAccessRules": "Step “{{step}}” calls a command tool with access rules; tool steps cannot apply access rules in this version yet.",
+      "approvalGate": "Step “{{step}}” calls a tool and waits for an approval; only agent steps can propose a plan for review in this version.",
       "profileNotPublished": "Step “{{step}}” uses an agent profile without a published version.",
       "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
@@ -1712,7 +1735,10 @@
     }
   },
   "number": {
-    "groupSeparator": ","
+    "groupSeparator": ",",
+    "bytes": "{{count}} bytes",
+    "kib": "{{count}} KiB",
+    "mib": "{{count}} MiB"
   },
   "pipelines": {
     "flow": {
@@ -1918,7 +1944,8 @@
       "waitsForApproval": "Waits for your approval",
       "changesFiles": "Can change files",
       "readsOnly": "Reads the repository",
-      "toolPolicy": "Under the tool’s access policy",
+      "exitCodeDecides": "Its exit code decides the step",
+      "toolUnavailable": "This tool can’t run in this version yet",
       "profileConnectionModel": "{{profile}} · {{connection}} / {{model}}"
     },
     "inspector": {
@@ -1929,6 +1956,14 @@
       "chooseTool": "Choose a tool",
       "profileOption": "{{profile}} · published {{version}}",
       "toolOption": "Tool · {{tool}}",
+      "toolNeedsSecrets": "Not available yet",
+      "toolAccessRules": "Access rules not applied yet",
+      "toolCommand": "Runs {{command}} in the step’s worktree",
+      "toolCommandHint": "Its exit code decides whether the step passes. Runs keep the tool version they started with.",
+      "openTool": "Open tool",
+      "noCommandTool": "No published command tool yet",
+      "noCommandToolHint": "Tool steps run command tools. Add one in Tools and publish it, then choose it here.",
+      "openTools": "Open Tools",
       "unpublishedExecutor": "Not published",
       "profileRequired": "Required. {{step}} cannot run or be published without a profile.",
       "toolRequired": "Required. {{step}} cannot run or be published without a tool.",
@@ -1945,6 +1980,7 @@
       "instructionsPlaceholder": "What this step should do. Variables from the catalog go in double braces.",
       "runsAfter": "Runs after",
       "route": "When changes are requested",
+      "routeOnFailure": "When the step fails",
       "routeFail": "Fail the run",
       "routeReturn": "Return to {{step}}",
       "maxRetries": "Maximum retries",
@@ -2023,6 +2059,136 @@
       "failureRoute": "{{step}} · when changes are requested changed",
       "maxRetries": "{{step}} · maximum retries {{from}} → {{to}}",
       "budget": "{{step}} · step budget {{from}} → {{to}} tokens"
+    }
+  },
+  "tools": {
+    "title": "Tools",
+    "description": "Define what agents can do in {{project}}. Connect credentials and control access here.",
+    "breadcrumb": "{{project}}  /  Tools",
+    "breadcrumbTool": "{{project}}  /  Tools  /  {{tool}}",
+    "import": "Import from project",
+    "add": "Add tool",
+    "allTypes": "All types",
+    "counts": {
+      "one": "{{count}} tool · no secret bindings",
+      "other": "{{count}} tools · no secret bindings"
+    },
+    "loadFailed": "Couldn’t load the project’s tools",
+    "noDescription": "No description",
+    "ownership": "Tools and secrets belong to {{project}}. Import from another project to create independent local copies.",
+    "kind": {
+      "command": "Command",
+      "http": "HTTP request",
+      "database": "Database"
+    },
+    "secrets": {
+      "none": "No secrets",
+      "notAvailable": "Needs a secret"
+    },
+    "status": {
+      "ready": "Ready",
+      "draft": "Draft",
+      "unavailable": "Unavailable"
+    },
+    "usage": {
+      "title": "Used in your pipelines",
+      "none": "No published pipeline calls a tool yet. Choose a tool for a tool step in a pipeline, then publish it.",
+      "countOne": "{{count}} tool · v{{version}}",
+      "countOther": "{{count}} tools · v{{version}}"
+    },
+    "empty": {
+      "title": "No tools yet",
+      "detail": "A command tool runs a program in the worktree of the pipeline step that calls it, like a test suite or a linter. Its exit code decides whether the step passes.",
+      "add": "Add command tool"
+    },
+    "create": {
+      "title": "Create a tool",
+      "description": "Choose how the action runs. Configure it next, then publish it for pipeline steps.",
+      "http": "HTTP request",
+      "command": "Command",
+      "mcp": "Import from MCP",
+      "database": "Database query",
+      "pullRequest": "Create pull request",
+      "unavailable": "HTTP, MCP, database and pull request tools need project secrets, approvals or GitHub push, which are not available in this version yet.",
+      "credentials": "Credentials are selected in each tool. Secrets show a read-only list of the tools using them."
+    },
+    "tabs": {
+      "configuration": "Configuration",
+      "inputs": "Inputs & outputs",
+      "access": "Access",
+      "usage": "Usage log"
+    },
+    "saveDraft": "Save draft",
+    "publish": "Publish v{{version}}",
+    "saving": "Saving…",
+    "notSaved": "Not saved",
+    "notPublished": "Not published",
+    "published": "Published v{{version}}",
+    "draftSaved": "Draft saved · {{published}}",
+    "staleDraftSaved": "Draft saved · {{published}} is newer",
+    "unsavedChanges": "Unsaved changes · {{published}}",
+    "version": "v{{version}}",
+    "noVersion": "none",
+    "keepDraft": "Keep this draft",
+    "staleTitle": "A newer version was published after this draft was started",
+    "staleDetail": "This draft is based on {{basedOn}}, but {{published}} is the latest. Keep this draft to publish it over {{published}}, or change it first.",
+    "editor": {
+      "newTitle": "New command tool",
+      "noDescription": "Runs a program in the worktree of the step that calls it.",
+      "name": "Name",
+      "description": "Description",
+      "command": "Command",
+      "program": "Program",
+      "programHint": "A name on the PATH (cargo), a path inside the worktree (scripts/check.sh) or an absolute path.",
+      "arguments": "Arguments · one per line",
+      "argumentsHint": "Passed to the program as they are. No shell reads them, so quotes, * and $ are not special.",
+      "workingDirectory": "Working directory",
+      "worktree": "The worktree of the step that runs it",
+      "run": "Run",
+      "timeout": "Timeout · seconds",
+      "exitCodes": "Exit codes that pass",
+      "outputLimit": "Output kept · KiB",
+      "runHint": "Any other exit code, or running past the timeout, fails the step; its failure route decides what follows. When the program prints more than the limit, the latest output is kept.",
+      "environment": "Environment",
+      "variables": "Variables · NAME=value per line",
+      "environmentHint": "Added to the cleaned environment every program gets (PATH, HOME, TEMP and the like). Stored and shown in plain text, so never put secrets here.",
+      "unavailableTitle": "This tool can’t be edited in this version",
+      "httpUnavailable": "HTTP tools use project secrets and runtime approvals, which are not available yet. Steps that call it can’t start.",
+      "databaseUnavailable": "Database tools use project secrets and runtime approvals, which are not available yet. Steps that call it can’t start."
+    },
+    "inspector": {
+      "title": "Project & access",
+      "owner": "Owner project",
+      "kind": "Kind",
+      "secrets": "Secrets",
+      "access": "Access",
+      "accessSteps": "Pipeline steps that call it",
+      "accessRules": "Access rules · not applied yet",
+      "version": "Version",
+      "draftVersion": "v{{version}} draft",
+      "editAccess": "Edit access rules",
+      "usedBy": "Used by",
+      "unused": "No published pipeline calls this tool yet.",
+      "use": "{{pipeline}} / {{step}}",
+      "versions": "Runs keep the tool version they started with.",
+      "note": "Command tools hold no secrets: the program runs with the cleaned environment and the variables above, and its output is kept in the run’s transcript.",
+      "noteSecrets": "HTTP and database tools use project secrets and runtime approvals, which tool steps cannot use in this version yet."
+    },
+    "errors": {
+      "programRequired": "Enter the program to run.",
+      "programOutsideWorktree": "A relative program path must stay inside the worktree.",
+      "controlCharacter": "Line breaks, tabs and other control characters can’t be passed to a program.",
+      "tooLong": "This is too long.",
+      "emptyArgument": "An argument can’t be empty.",
+      "timeout": "Enter whole seconds, from 1 up to {{max}} hours.",
+      "exitCodeNotNumber": "Enter whole numbers separated by commas.",
+      "noExitCodes": "Enter at least one exit code that passes.",
+      "tooManyExitCodes": "Enter at most {{max}} exit codes.",
+      "outputLimit": "Enter whole KiB, from 1 up to {{max}}.",
+      "variableLine": "Write each variable as NAME=value: {{line}}",
+      "variableName": "{{name}} is not a variable name: a letter or underscore, then letters, digits or underscores.",
+      "duplicateVariable": "{{name}} is set more than once.",
+      "variableValue": "The value of {{name}} contains a NUL character."
     }
   },
   "variables": {
@@ -2435,6 +2601,26 @@
         "done": "Agent profile draft kept",
         "failed": "Could not keep agent profile draft"
       },
+      "toolCreate": {
+        "running": "Creating tool {{name}}",
+        "done": "Tool created · {{name}}",
+        "failed": "Could not create tool {{name}}"
+      },
+      "toolDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "toolPublish": {
+        "running": "Publishing {{name}} v{{version}}",
+        "done": "Published {{name}} v{{version}}",
+        "failed": "Could not publish {{name}} v{{version}}"
+      },
+      "toolKeepDraft": {
+        "running": "Keeping the draft of {{name}}",
+        "done": "Draft kept · {{name}}",
+        "failed": "Could not keep the draft of {{name}}"
+      },
       "connectionCheck": {
         "running": "Checking {{name}}",
         "done": "Checked {{name}}",
@@ -2535,6 +2721,7 @@
       "tasks": "opens the task list",
       "pipeline": "opens the pipeline",
       "agentProfile": "opens the agent profile",
+      "tool": "opens the tool",
       "connections": "opens Connections",
       "runnerLog": "opens the runner log",
       "settings": "opens Project settings",
@@ -2548,6 +2735,7 @@
       "tasks": "Open tasks",
       "pipeline": "Open pipeline",
       "agentProfile": "Open profile",
+      "tool": "Open tool",
       "connections": "Open connections",
       "settings": "Open settings",
       "pullRequests": "Open pull requests",

@@ -196,7 +196,7 @@ fn events(run: RunId, task: TaskId) -> Vec<Event> {
     })),
     reply(Reply::Rejected(Rejection::Preflight {
       problems: vec![
-        PreflightProblem::ToolStep {
+        PreflightProblem::ToolAccessRules {
           step: StepKey::new("deploy").expect("key"),
         },
         PreflightProblem::NoCommits,

@@ -90,7 +90,12 @@ pub(super) fn run_details(ctx: &Ctx, run: &RunView, project: &str) -> Element {
 /// The agents that worked on the run, each with its CLI, model and steps (`it5nz`).
 fn agents(ctx: &Ctx, run: &RunView) -> Option<Element> {
   let mut agents: Vec<(Arc<str>, Arc<str>, Vec<&str>)> = Vec::new();
-  for step in run.steps.iter().filter(|step| step.execution.is_some()) {
+  // A tool step's command is no agent.
+  for step in run
+    .steps
+    .iter()
+    .filter(|step| step.execution.is_some() && !step.tool_step)
+  {
     let Some(agent) = step.agent.clone() else {
       continue;
     };

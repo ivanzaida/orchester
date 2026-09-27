@@ -6,7 +6,7 @@ use std::path::Path;
 use orchester_core::{connection::AgentProvider, id::ResourceId};
 
 use super::log::{OperationSpec, Place, Target};
-use crate::{agents::data::ProfileChange, messages::Message, workspace::OpenProject};
+use crate::{agents::data::ProfileChange, messages::Message, tools::data::ToolChange, workspace::OpenProject};
 
 /// Copy keys of one operation: while it runs, once it finished, and its failure heading.
 struct Wording {
@@ -245,6 +245,59 @@ pub fn profile_change(open: &OpenProject, change: &ProfileChange) -> OperationSp
     ProfileChange::SaveDraft(id, _) | ProfileChange::Publish(id) | ProfileChange::KeepDraft(id) => {
       spec.target(in_project(open, Place::AgentProfile(*id)))
     }
+  }
+}
+
+const TOOL_CREATE: Wording = Wording {
+  running: "statusBar.operations.toolCreate.running",
+  done: "statusBar.operations.toolCreate.done",
+  failed: "statusBar.operations.toolCreate.failed",
+};
+const TOOL_DRAFT: Wording = Wording {
+  running: "statusBar.operations.toolDraft.running",
+  done: "statusBar.operations.toolDraft.done",
+  failed: "statusBar.operations.toolDraft.failed",
+};
+const TOOL_KEEP_DRAFT: Wording = Wording {
+  running: "statusBar.operations.toolKeepDraft.running",
+  done: "statusBar.operations.toolKeepDraft.done",
+  failed: "statusBar.operations.toolKeepDraft.failed",
+};
+
+/// A change to the tool called `name`; publishing makes it version `version`. Saving a draft is
+/// quiet: only its outcome is listed.
+pub fn tool_change(open: &OpenProject, name: &str, change: &ToolChange, version: u32) -> OperationSpec {
+  let spec = match change {
+    ToolChange::Create(..) => TOOL_CREATE.named(name),
+    ToolChange::SaveDraft(..) => TOOL_DRAFT.named(name).quiet(),
+    ToolChange::KeepDraft(_) => TOOL_KEEP_DRAFT.named(name),
+    ToolChange::Publish(_) => {
+      let message = |key| {
+        Message::new(key)
+          .with("name", name.to_owned())
+          .with("version", version.to_string())
+      };
+      OperationSpec::new(
+        message("statusBar.operations.toolPublish.running"),
+        message("statusBar.operations.toolPublish.done"),
+        message("statusBar.operations.toolPublish.failed"),
+      )
+    }
+  };
+  let spec = spec.project(open.project.name().as_str());
+  match change {
+    ToolChange::Create(..) => spec,
+    ToolChange::SaveDraft(id, _) | ToolChange::Publish(id) | ToolChange::KeepDraft(id) => {
+      spec.target(in_project(open, Place::Tool(*id)))
+    }
+  }
+}
+
+/// The target of a created tool in the project at `repo_root`.
+pub fn tool(repo_root: &Path, id: ResourceId) -> Target {
+  Target::Project {
+    repo_root: repo_root.to_path_buf(),
+    place: Place::Tool(id),
   }
 }
 
