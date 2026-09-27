@@ -9,7 +9,7 @@ mod archive_dialog;
 mod dialog;
 mod fields;
 mod inspector;
-mod labels;
+pub(super) mod labels;
 mod library;
 mod row;
 

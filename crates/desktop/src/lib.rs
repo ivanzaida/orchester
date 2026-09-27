@@ -13,6 +13,7 @@ pub mod drafts;
 mod external;
 pub mod highlight;
 pub mod i18n;
+pub mod import;
 pub mod instructions;
 pub mod messages;
 pub mod navigation;

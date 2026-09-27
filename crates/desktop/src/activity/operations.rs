@@ -125,6 +125,31 @@ pub fn pipeline(repo_root: &Path, id: ResourceId) -> Target {
   }
 }
 
+/// Importing `count` resources from the project called `source`; it names the first imported
+/// resource once it exists.
+pub fn import_resources(open: &OpenProject, source: &str, count: usize) -> OperationSpec {
+  let wording = if count == 1 {
+    Wording {
+      running: "statusBar.operations.import.running.one",
+      done: "statusBar.operations.import.done.one",
+      failed: "statusBar.operations.import.failed.one",
+    }
+  } else {
+    Wording {
+      running: "statusBar.operations.import.running.other",
+      done: "statusBar.operations.import.done.other",
+      failed: "statusBar.operations.import.failed.other",
+    }
+  };
+  let message = |key| {
+    Message::new(key)
+      .with("project", source.to_owned())
+      .with("count", count.to_string())
+  };
+  OperationSpec::new(message(wording.running), message(wording.done), message(wording.failed))
+    .project(open.project.name().as_str())
+}
+
 /// Autosave of an instruction draft; only its outcome is listed.
 pub fn instruction_draft(open: &OpenProject, id: ResourceId, name: &str) -> OperationSpec {
   Wording {

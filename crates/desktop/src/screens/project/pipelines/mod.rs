@@ -22,7 +22,11 @@ use self::{
   library::{Library, LibraryProps},
 };
 use super::ProjectNav;
-use crate::{navigation::route::Page, pipelines::library::StarterText, workspace::OpenProject};
+use crate::{
+  navigation::{import::ImportTab, route::Page},
+  pipelines::library::StarterText,
+  workspace::OpenProject,
+};
 
 /// A pipeline to open, as signals and futures carry it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -50,6 +54,12 @@ impl PipelinesNav {
 
   pub fn changed(&self) {
     self.revision.update(|revision| *revision += 1);
+  }
+
+  /// Opens Import resources on its Pipelines tab.
+  pub fn import(&self) -> impl Fn() + Send + Sync + 'static {
+    let project = self.project.clone();
+    move || project.show_import(ImportTab::Pipelines)
   }
 }
 

@@ -36,6 +36,8 @@ pub struct Shown {
   pub runner: RunnerState,
   /// Changes when tasks were saved or the runner changed a run.
   pub revision: (u64, u64),
+  /// Changes when resources were imported; the screens listing them are mounted again.
+  pub resources: u64,
   pub tasks: TasksState,
   pub usage: Option<ProjectUsage>,
 }
@@ -101,11 +103,11 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
       &format!("pull-request-{number}"),
       PullRequestProps { project: open, number },
     ),
-    Page::Pipelines => pipelines(ctx, open, None),
-    Page::Pipeline(pipeline) => pipelines(ctx, open, Some(pipeline)),
-    Page::Instructions(..) => ctx.mount_keyed::<InstructionsScreen>("instructions", open),
-    Page::Agents(_) => ctx.mount_keyed::<AgentsScreen>("agents", open),
-    Page::Tools(_) => ctx.mount_keyed::<ToolsScreen>("tools", open),
+    Page::Pipelines => pipelines(ctx, open, None, shown.resources),
+    Page::Pipeline(pipeline) => pipelines(ctx, open, Some(pipeline), shown.resources),
+    Page::Instructions(..) => ctx.mount_keyed::<InstructionsScreen>(&format!("instructions-{}", shown.resources), open),
+    Page::Agents(_) => ctx.mount_keyed::<AgentsScreen>(&format!("agents-{}", shown.resources), open),
+    Page::Tools(_) => ctx.mount_keyed::<ToolsScreen>(&format!("tools-{}", shown.resources), open),
     Page::Secrets(_) => ctx.mount_keyed::<SecretsScreen>("secrets", open),
     Page::Connections(..) => ctx.mount_keyed::<ConnectionsScreen>("connections", open),
     Page::Settings(_) => ctx.mount_keyed::<SettingsScreen>("settings", open),
@@ -113,10 +115,10 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
 }
 
 /// The library, or `pipeline` in its editor: one screen, so the library's state survives a
-/// visit to the editor.
-fn pipelines(ctx: &mut Ctx, project: OpenProject, pipeline: Option<ResourceId>) -> Element {
+/// visit to the editor, until resources are imported (`resources`).
+fn pipelines(ctx: &mut Ctx, project: OpenProject, pipeline: Option<ResourceId>, resources: u64) -> Element {
   ctx.mount_keyed::<PipelinesScreen>(
-    "pipelines",
+    &format!("pipelines-{resources}"),
     PipelinesProps {
       project,
       open: pipeline,

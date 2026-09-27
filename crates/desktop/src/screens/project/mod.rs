@@ -8,6 +8,7 @@
 
 mod agents;
 pub(crate) mod connections;
+mod import;
 mod instructions;
 mod new_task;
 mod overview;
@@ -47,6 +48,7 @@ use crate::{
   messages::{self, Message},
   navigation::{
     Navigation, PROJECT_PARAM, entry,
+    import::{self as import_query, ImportTab},
     route::{self, ChangedFile, Page, Route},
   },
   runner::{RunnerStatus, Runners, state::RunnerState},
@@ -60,6 +62,8 @@ pub struct ProjectNav {
   navigator: Navigator,
   project: ProjectId,
   revision: Signal<u64>,
+  /// Counts imports: the screens that list resources are mounted again after one.
+  resources: Signal<u64>,
   /// Connections opens Add GitHub connection when it next mounts.
   add_github: Signal<bool>,
 }
@@ -117,6 +121,24 @@ impl ProjectNav {
     )
   }
 
+  /// Opens Import resources over the page shown, on `tab`, as a new history entry.
+  pub fn show_import(&self, tab: ImportTab) {
+    let path = self.navigator.path().get_untracked();
+    entry::push(&self.navigator, import_query::open(&path, tab));
+  }
+
+  /// Closes Import resources: back to the entry it was opened from when that shows the page under
+  /// it, otherwise that page in its place.
+  pub fn close_import(&self) {
+    let under = import_query::close(&self.navigator.path().get_untracked());
+    let from = entry::from(&self.navigator);
+    if from.is_some() && from == Route::parse(&under) {
+      self.navigator.back();
+    } else {
+      entry::replace(&self.navigator, under);
+    }
+  }
+
   /// Opens Connections with Add GitHub connection open, e.g. for a remote on an Enterprise host.
   pub fn show_add_github(&self) {
     self.add_github.set(true);
@@ -135,6 +157,12 @@ impl ProjectNav {
   /// Tasks were saved; the shell reads them again.
   pub fn tasks_changed(&self) {
     self.revision.update(|revision| *revision += 1);
+  }
+
+  /// Resources were imported: the screens that list pipelines, profiles, instructions or tools
+  /// start over and read them again.
+  pub fn resources_changed(&self) {
+    self.resources.update(|revision| *revision += 1);
   }
 }
 
@@ -203,6 +231,7 @@ impl Component for ProjectShell {
         navigator: ctx.navigator().expect("the router mounts the project shell"),
         project: ctx.props::<OpenProject>().project.id(),
         revision: ctx.signal(0),
+        resources: ctx.signal(0),
         add_github: ctx.signal(false),
       },
     }
@@ -229,6 +258,7 @@ impl Component for ProjectShell {
       status: status.clone(),
       runner,
       revision: (self.nav.revision.get(), runs),
+      resources: self.nav.resources.get(),
       tasks: tasks.clone(),
       usage,
     });
@@ -258,6 +288,7 @@ impl Component for ProjectShell {
           ),
       )
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
+      .child(import::dialog(ctx, &open))
   }
 }
 

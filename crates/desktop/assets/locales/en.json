@@ -1732,7 +1732,8 @@
     "timeLimitNotAboveUsed": {
       "one": "Enter more than the {{used}} minute this run already used.",
       "other": "Enter more than the {{used}} minutes this run already used."
-    }
+    },
+    "olderSchema": "The data was written by an earlier version of Orchester and was not updated yet."
   },
   "number": {
     "groupSeparator": ",",
@@ -2189,6 +2190,154 @@
       "variableName": "{{name}} is not a variable name: a letter or underscore, then letters, digits or underscores.",
       "duplicateVariable": "{{name}} is set more than once.",
       "variableValue": "The value of {{name}} contains a NUL character."
+    }
+  },
+  "projectImport": {
+    "title": "Import resources",
+    "resolveTitle": "Resolve dependencies",
+    "stages": "1  Select resources     /     2  Resolve dependencies",
+    "sourceProject": "Source project",
+    "noSources": "No other projects",
+    "destination": "Destination",
+    "destinationValue": "{{project}} · independent project copies",
+    "tabs": {
+      "all": "All",
+      "pipelines": "Pipelines",
+      "agents": "Agents",
+      "instructions": "Instructions",
+      "tools": "Tools",
+      "secrets": "Secrets"
+    },
+    "search": "Search resources…",
+    "reading": "Reading {{project}}…",
+    "noOtherProjects": "Orchester knows no other project yet. Add one to import its resources here.",
+    "empty": "{{project}} has no pipelines, agent profiles, instructions or tools yet.",
+    "noMatch": "No resources match.",
+    "dependencyNote": "Selecting a pipeline includes its dependencies for review in the next step.",
+    "kind": {
+      "pipeline": "Pipeline",
+      "agentProfile": "Agent profile",
+      "instruction": "Instruction",
+      "httpTool": "HTTP tool",
+      "commandTool": "Command tool",
+      "databaseTool": "Database tool",
+      "connection": "Connection",
+      "secret": "Secret"
+    },
+    "github": "GitHub CLI",
+    "version": "v{{version}}",
+    "draft": "Draft",
+    "pick": {
+      "published": "Published v{{version}}",
+      "draft": "Draft · unpublished changes"
+    },
+    "steps": {
+      "one": "1 step",
+      "other": "{{count}} steps"
+    },
+    "dependencies": {
+      "one": "1 dependency",
+      "other": "{{count}} dependencies"
+    },
+    "scope": {
+      "project": "Project rule",
+      "role": "For {{role}}",
+      "pipeline": "For {{pipeline}}"
+    },
+    "usedBy": {
+      "none": "Not used yet",
+      "one": "Used by {{name}}",
+      "other": "Used by {{count}} resources"
+    },
+    "selected": "{{count}} selected",
+    "nothingSelected": "Nothing selected",
+    "toResolve": {
+      "none": "nothing to resolve",
+      "one": "1 dependency to resolve",
+      "other": "{{count}} dependencies to resolve"
+    },
+    "resolve": "Resolve dependencies",
+    "context": {
+      "one": "{{source}} → {{target}} · {{name}} {{version}}",
+      "other": "{{source}} → {{target}} · {{count}} resources"
+    },
+    "columns": {
+      "source": "SOURCE / VERSION",
+      "target": "TARGET IN {{project}}",
+      "resolution": "RESOLUTION"
+    },
+    "option": {
+      "copy": "New copy · {{name}}",
+      "rename": "Rename copy · {{name}}",
+      "renameBlank": "Rename copy",
+      "useResource": "Use {{name}} · {{version}}",
+      "useConnection": "Use {{name}}",
+      "useSecret": "Use {{name}} · {{environment}}",
+      "unresolved": "Leave unresolved",
+      "leaveOut": "Leave out"
+    },
+    "targetVersion": {
+      "published": "published v{{version}}",
+      "draft": "draft only"
+    },
+    "renamePlaceholder": "Name of the copy",
+    "status": {
+      "ready": "Ready",
+      "newPipeline": "New local pipeline",
+      "newAgentProfile": "New local agent profile",
+      "newInstruction": "New local instruction",
+      "newTool": "New local tool",
+      "renamed": "Name resolved",
+      "renamedDetail": "Renamed from {{name}}",
+      "nameTaken": "Name taken",
+      "nameTakenDetail": "{{project}} already has {{name}}",
+      "nameInvalid": "Name needed",
+      "nameRequired": "Enter a name for the copy",
+      "targetMissing": "Choose again",
+      "targetMissingDetail": "{{project}} no longer has it",
+      "reused": "Reuse local",
+      "reusedDetail": "{{name}} in {{project}}",
+      "mapped": "Mapped",
+      "mappedDetail": "{{name}} in {{project}}",
+      "unresolved": "Unresolved",
+      "unresolvedDetail": "Copies show it as missing",
+      "leftOut": "Left out",
+      "leftOutDetail": "Not imported"
+    },
+    "totals": {
+      "copies": {
+        "one": "1 new copy",
+        "other": "{{count}} new copies"
+      },
+      "reused": {
+        "one": "1 local resource reused",
+        "other": "{{count}} local resources reused"
+      },
+      "unresolved": {
+        "one": "1 left unresolved",
+        "other": "{{count}} left unresolved"
+      }
+    },
+    "access": {
+      "title": "Target access policy",
+      "detail": "Copied tools keep access only for pipelines copied with them. Every other caller is denied."
+    },
+    "ready": "All dependencies resolved · creates local drafts",
+    "readyUnresolved": "Creates local drafts · unresolved connections and secrets show as missing",
+    "blocked": {
+      "nameTaken": "Rename {{name}} to continue.",
+      "nameInvalid": "Name the copy of {{name}} to continue.",
+      "targetMissing": "Choose again for {{name}} to continue."
+    },
+    "import": "Import resources",
+    "importing": "Importing…",
+    "errors": {
+      "sourceMissing": "{{project}} has no Orchester data in its folder any more.",
+      "sourceOutdated": "{{project}} was last opened with an earlier version of Orchester. Open it once, then import from it.",
+      "sourceNewer": "{{project}} was written by a newer version of Orchester.",
+      "sourceUnreadable": "{{project}} could not be read. The log has the details.",
+      "targetChanged": "This project changed while you chose. Check the mappings, then import again.",
+      "invalidCopy": "A copy could not be prepared. The log has the details."
     }
   },
   "variables": {
@@ -2714,6 +2863,20 @@
         "running": "Archiving secret {{name}}",
         "done": "Secret archived · {{name}}",
         "failed": "Could not archive secret {{name}}"
+      },
+      "import": {
+        "running": {
+          "one": "Importing 1 resource from {{project}}",
+          "other": "Importing {{count}} resources from {{project}}"
+        },
+        "done": {
+          "one": "Imported 1 resource from {{project}}",
+          "other": "Imported {{count}} resources from {{project}}"
+        },
+        "failed": {
+          "one": "Could not import from {{project}}",
+          "other": "Could not import from {{project}}"
+        }
       }
     },
     "opens": {

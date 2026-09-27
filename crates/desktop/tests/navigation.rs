@@ -14,6 +14,7 @@ use orchester_core::id::{ConnectionId, ProjectId, ResourceId, SecretId, TaskId};
 use orchester_desktop::{
   navigation::{
     Navigation, Places, Start, forward,
+    import::{self, ImportTab},
     route::{
       AgentSelection, ChangedFile, ConnectionTab, InstructionsTab, Page, Route, SettingsTab, TaskPageTab,
       ToolSelection, changed_file, changes_path,
@@ -325,4 +326,28 @@ fn route_changes_tab_keeps_the_file_in_its_path() {
   let tab = Route::Project(project, Page::Task(task, TaskPageTab::Changes)).path();
   assert_eq!(changed_file(&tab), None);
   assert_eq!(changed_file(&format!("{tab}&file=%zz")), None);
+}
+
+#[test]
+fn route_import_opens_over_the_page_and_closes_to_it() {
+  let project = ProjectId::generate();
+  for page in [
+    Page::Pipelines,
+    Page::Tools(ToolSelection::Library),
+    Page::Connections(ConnectionTab::GitHub, None),
+  ] {
+    let under = Route::Project(project, page).path();
+    let over = import::open(&under, ImportTab::Tools);
+    assert_eq!(Route::parse(&over), Some(Route::Project(project, page)), "{over}");
+    assert_eq!(import::tab(&over), Some(ImportTab::Tools));
+    assert_eq!(import::close(&over), under);
+    assert_eq!(import::tab(&under), None);
+    assert_eq!(
+      import::open(&over, ImportTab::All),
+      import::open(&under, ImportTab::All),
+      "one import at a time"
+    );
+    let matched = routes(&Places::default()).resolve(&over);
+    assert_ne!(matched.last().map(|leaf| leaf.pattern_raw()), Some("**"), "{over}");
+  }
 }
