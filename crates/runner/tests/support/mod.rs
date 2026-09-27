@@ -71,6 +71,8 @@ pub struct StepSpec {
   /// Where a failure returns to, and how often.
   pub retry: Option<(&'static str, u32)>,
   pub budget: Option<u64>,
+  /// Its result waits for a plan decision.
+  pub gate: bool,
 }
 
 impl StepSpec {
@@ -87,7 +89,13 @@ impl StepSpec {
       after,
       retry: None,
       budget: None,
+      gate: false,
     }
+  }
+
+  pub const fn gate(mut self) -> Self {
+    self.gate = true;
+    self
   }
 
   pub const fn retry(mut self, to: &'static str, times: u32) -> Self {
@@ -105,7 +113,6 @@ impl StepSpec {
 pub struct Setup {
   /// The task's brief, which tells the fake CLI what to do.
   pub brief: &'static str,
-  pub approval_gate: bool,
   /// `false`: one step, Implement; `true`: Implement, then Review.
   pub review: bool,
   pub budget: u64,
@@ -120,7 +127,6 @@ impl Setup {
   pub fn new(brief: &'static str) -> Self {
     Self {
       brief,
-      approval_gate: false,
       review: false,
       steps: Vec::new(),
       provider: AgentProvider::CodexCli,
@@ -182,7 +188,7 @@ fn agent_connection(provider: AgentProvider) -> orchester_core::connection::Conn
   connection.into_connection()
 }
 
-fn agent_step(key: &str, title: &str, builder: orchester_core::id::ResourceId, setup: &Setup) -> Step {
+fn agent_step(key: &str, title: &str, builder: orchester_core::id::ResourceId) -> Step {
   Step {
     key: StepKey::new(key).expect("key"),
     name: name(title),
@@ -194,7 +200,7 @@ fn agent_step(key: &str, title: &str, builder: orchester_core::id::ResourceId, s
     },
     instructions: PromptText::new("Change README.md for {{task.id}}.").expect("prompt"),
     depends_on: BTreeSet::new(),
-    approval_gate: setup.approval_gate,
+    approval_gate: false,
     on_failure: None,
     budget: None,
   }
@@ -212,7 +218,7 @@ fn graph_step(spec: &StepSpec, builder: orchester_core::id::ResourceId) -> Step 
     },
     instructions: PromptText::new(spec.instructions).expect("prompt"),
     depends_on: spec.after.iter().map(|key| StepKey::new(key).expect("key")).collect(),
-    approval_gate: false,
+    approval_gate: spec.gate,
     on_failure: spec.retry.map(|(to, times)| FailureRoute {
       return_to: StepKey::new(to).expect("key"),
       max_retries: std::num::NonZeroU32::new(times).expect("above zero"),
@@ -247,11 +253,11 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     .expect("profile")
     .id();
   db.publish_draft::<AgentProfile>(builder, now).expect("publish profile");
-  let mut steps = vec![agent_step("implement", "Implement", builder, setup)];
+  let mut steps = vec![agent_step("implement", "Implement", builder)];
   if !setup.steps.is_empty() {
     steps = setup.steps.iter().map(|spec| graph_step(spec, builder)).collect();
   } else if setup.review {
-    let mut review = agent_step("review", "Review", builder, setup);
+    let mut review = agent_step("review", "Review", builder);
     review.depends_on = BTreeSet::from([StepKey::new("implement").expect("key")]);
     steps.push(review);
   }

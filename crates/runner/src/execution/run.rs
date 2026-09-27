@@ -155,7 +155,9 @@ impl RunTask {
         if startable && self.may_start() {
           continue;
         }
-        if self.settle()? {
+        // A run that waits for a person ends its task here: it holds no agent slot meanwhile, and
+        // the decision executes it again.
+        if self.settle()? || self.run.waits_for_a_person() {
           return Ok(());
         }
         return Err(ExecutionError::Stalled);

@@ -2,13 +2,13 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   connection::AgentProvider,
-  id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     capability::{PermissionOption, PermissionProblem, Unavailable},
   },
   resource::StepKey,
-  run::{PermissionsApply, PreflightProblem, RunLimit},
+  run::{PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, ReviewNote, RunLimit},
   tokens::TokenBudget,
 };
 use orchester_ipc::{
@@ -89,6 +89,24 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
       run,
       profile: ResourceId::generate(),
     },
+    Command::DecidePlan {
+      run,
+      execution: StepExecutionId::generate(),
+      version: PlanVersion::FIRST,
+      decision: PlanDecision::Approved,
+    },
+    Command::DecidePlan {
+      run,
+      execution: StepExecutionId::generate(),
+      version: PlanVersion::FIRST.next(),
+      decision: PlanDecision::ChangesRequested {
+        note: ReviewNote::new(
+          "Keep email sign-in.
+\"Quoted\" — é",
+        )
+        .expect("a note"),
+      },
+    },
     Command::Shutdown {
       mode: ShutdownMode::FinishAtCheckpoints,
     },
@@ -160,8 +178,8 @@ fn events(run: RunId, task: TaskId) -> Vec<Event> {
     })),
     reply(Reply::Rejected(Rejection::Preflight {
       problems: vec![
-        PreflightProblem::ApprovalGate {
-          step: StepKey::new("plan").expect("key"),
+        PreflightProblem::ToolStep {
+          step: StepKey::new("deploy").expect("key"),
         },
         PreflightProblem::NoCommits,
       ],
@@ -174,6 +192,13 @@ fn events(run: RunId, task: TaskId) -> Vec<Event> {
     },
     Event::RunChanged { run, task },
     Event::AgentActivity { run, sequence: 12 },
+    Event::PlanProposed {
+      run,
+      task,
+      task_key: "ORC-12".to_owned(),
+      version: PlanVersion::FIRST.next(),
+    },
+    reply(Reply::Rejected(Rejection::PlanNotAwaited)),
     Event::WorkSummary(WorkSummary {
       agent_slots: NonZeroU32::new(4).expect("above zero"),
       runs: [

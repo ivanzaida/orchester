@@ -1,7 +1,8 @@
 //! What happens when an agent ends. Its work is committed in its worktree; a step that passed and
 //! worked beside others is merged back into the run's branch. Its final message becomes its output
-//! for the steps after it; the step then passes, or fails for a reason its failure route handles.
-//! A failed step ends the attempt, so agents of the same attempt still at work are ended.
+//! for the steps after it; the step then passes — a gated one proposes the output as its next plan
+//! and waits for a decision — or fails for a reason its failure route handles. A failed step ends
+//! the attempt, so agents of the same attempt still at work are ended.
 
 use orchester_core::{
   connection::stream::RunnerProblem,
@@ -19,6 +20,7 @@ use super::{
 use crate::{
   execution::{
     checkpoint::{self, Merge},
+    record::RecordError,
     run::{ExecutionError, RunTask},
     workspace::Workspace,
   },
@@ -111,6 +113,9 @@ impl RunTask {
       return self.fail(execution, failure);
     }
     match self.integrate(execution, active) {
+      Ok(Integrated::Done) if self.run.is_gated(execution).map_err(RecordError::from)? => {
+        self.propose(execution, output.text)
+      }
       Ok(Integrated::Done) => self.transition(|run, now| run.complete_step(execution, now)),
       Ok(Integrated::Conflict { branch, files }) => {
         self.report(&active.invocation, RunnerProblem::MergeConflict { branch, files })?;

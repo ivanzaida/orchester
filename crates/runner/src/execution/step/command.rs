@@ -2,7 +2,8 @@
 //! Claude Code): the connection and settings, the worktree it works in, and the prompt assembled for
 //! its injection event: for a new session the whole prompt with the instructions injected at start,
 //! the outputs of the steps it runs after (and, for Codex, the result schema); for a session that
-//! resumes the continue prompt with the instructions injected at resume.
+//! resumes the continue prompt with the instructions injected at resume. A gated step a reviewer
+//! sent back is told what should change instead (the plan revision).
 
 use std::path::Path;
 
@@ -17,12 +18,12 @@ use orchester_core::{
   resource::{AgentProfile, InjectionEvent, Instruction, Step, StepKind},
   run::{
     AssembledPrompt, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt, PinnedVersion,
-    PipelineInfo, ProfileInfo, PromptAssemblyError, PromptInput, RunContext, StepExecutor,
+    PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, RunContext, StepExecutor,
   },
-  store::{ActivityStore, ConnectionStore, ResourceStore},
+  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore},
 };
 
-use super::super::run::RunTask;
+use super::{super::run::RunTask, Continuation};
 
 fn problem(detail: String) -> RunnerProblem {
   RunnerProblem::CouldNotStart { detail }
@@ -30,13 +31,14 @@ fn problem(detail: String) -> RunnerProblem {
 
 impl RunTask {
   /// The command that runs `execution`'s agent, the CLI it starts and what its prompt is made of,
-  /// continuing session `resume` when given, or why it cannot start.
+  /// continuing as `continuation` says, or why it cannot start.
   pub(super) fn command(
     &self,
     execution: StepExecutionId,
-    resume: Option<&str>,
+    continuation: &Continuation,
     worktree: &Path,
   ) -> Result<(Command, AgentProvider, InvocationPrompt), RunnerProblem> {
+    let resume = continuation.session.as_deref();
     let key = self
       .run
       .execution(execution)
@@ -67,12 +69,12 @@ impl RunTask {
       .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?;
     let connection =
       AgentConnection::try_from(connection).map_err(|_| problem("the connection is not an agent CLI".to_owned()))?;
-    let event = if resume.is_some() {
-      InjectionEvent::Resume
-    } else {
-      InjectionEvent::Start
+    let profile = ProfileInfo {
+      id: profile.resource,
+      version: profile.number,
+      body: &body,
     };
-    let AssembledPrompt { text: prompt, sources } = self.prompt(execution, step, *profile, &body, event)?;
+    let AssembledPrompt { text: prompt, sources } = self.prompt(execution, step, profile, continuation)?;
     // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
     // because an agent never starts with permissions that are not enforced. The run's permissions
     // for the profile, if they were changed for it, else the profile's, narrowed by the step.
@@ -115,16 +117,22 @@ impl RunTask {
       .map_err(|error: InvocationError| problem(error.to_string()))
   }
 
-  /// The prompt at `event`: role, instructions, step and task with the run's variables filled in,
-  /// then the outputs of the passed executions of the steps it depends on.
+  /// The prompt of `execution`'s next invocation: role, instructions, step and task with the run's
+  /// variables filled in, then the outputs of the passed executions of the steps it depends on (a
+  /// gated one's approved plan), and what a reviewer asked to change in its own plan, if the
+  /// invocation revises it.
   fn prompt(
     &self,
     execution: StepExecutionId,
     step: &Step,
-    profile: PinnedVersion,
-    body: &AgentProfile,
-    event: InjectionEvent,
+    profile: ProfileInfo<'_>,
+    continuation: &Continuation,
   ) -> Result<AssembledPrompt, RunnerProblem> {
+    let event = if continuation.session.is_some() {
+      InjectionEvent::Resume
+    } else {
+      InjectionEvent::Start
+    };
     let pipeline = self.run.snapshot().pipeline();
     let pipeline_name = self
       .db
@@ -135,6 +143,10 @@ impl RunTask {
     let outputs = self
       .db
       .step_outputs(self.run.id())
+      .map_err(|error| problem(error.to_string()))?;
+    let plans = self
+      .db
+      .plans(self.run.id())
       .map_err(|error| problem(error.to_string()))?;
     let dependencies: Vec<DependencyOutput<'_>> = self
       .run
@@ -150,10 +162,16 @@ impl RunTask {
           .attempts()
           .iter()
           .find(|attempt| attempt.execution(passed.id()).is_some())?;
-        let text = outputs
-          .iter()
-          .find(|output| output.execution == passed.id())
-          .map_or("", |output| output.text.as_str());
+        // A gated step's output is the plan that was approved, its latest.
+        let text = Plan::latest_of(&plans, passed.id())
+          .map(|plan| plan.text.as_str())
+          .or_else(|| {
+            outputs
+              .iter()
+              .find(|output| output.execution == passed.id())
+              .map(|output| output.text.as_str())
+          })
+          .unwrap_or_default();
         Some(DependencyOutput {
           step: dependency,
           attempt: attempt.number(),
@@ -190,13 +208,16 @@ impl RunTask {
         version: pipeline.number,
       },
       step,
-      profile: ProfileInfo {
-        id: profile.resource,
-        version: profile.number,
-        body,
-      },
+      profile,
       instructions: &sources,
       dependencies: &dependencies,
+      revision: Plan::awaiting_revision(&plans, execution, continuation.last_started).map(|(plan, note)| {
+        PlanRevision {
+          version: plan.version,
+          plan: &plan.text,
+          note,
+        }
+      }),
     }
     .assemble(event)
     .map_err(
