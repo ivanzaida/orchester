@@ -1,3 +1,8 @@
+// A release build is a window without a console: started from Explorer or the Start menu, a
+// console program opens a console beside it, and closing that console ends Orchester. Debug
+// builds, run with `tools/run.ps1`, keep the console and its log output.
+#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
+
 use lurq::app::{App, Tree, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
 use orchester_desktop::{
   activity::Activity,
