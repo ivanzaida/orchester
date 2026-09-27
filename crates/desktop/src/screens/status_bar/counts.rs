@@ -1,7 +1,7 @@
 //! Right side of the bar (`doeZn`): the project's counts, today's tokens against the daily
-//! project budget (`Kzi83`) and the application version. Zero counts stay visible in `$subtle`;
-//! a count that is not measured shows a dash. The tokens item is not interactive: a usage screen
-//! does not exist, so its hint says what it counts.
+//! project budget (`Kzi83`) and the application version. Counts are plain numbers; zero stays
+//! visible in `$subtle`, and a count that is not known yet shows a dash. The tokens item is not
+//! interactive: a usage screen does not exist, so its hint says what it counts.
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
@@ -17,7 +17,15 @@ use super::{
   item::{clickable, glyph, item, label, separator, value},
   open::Opener,
 };
-use crate::{runner::state::RunnerState, tasks::usage::ProjectUsage, ui::icon::Icon};
+use crate::{
+  navigation::route::Page,
+  runner::state::RunnerState,
+  tasks::{
+    overview::{OverviewTab, figure},
+    usage::ProjectUsage,
+  },
+  ui::icon::Icon,
+};
 
 pub fn counts(ctx: &Ctx, project: Option<&ProjectBar>, opener: &Opener, hints: &Hints) -> Element {
   let mut row = Row::new().height(Dimension::Pct(100.0)).align_items(Alignment::Center);
@@ -28,17 +36,16 @@ pub fn counts(ctx: &Ctx, project: Option<&ProjectBar>, opener: &Opener, hints: &
       .child(glyph(Icon::Clock3, PaletteColor::TextSecondary))
       .child(label(&ctx.t("statusBar.counts.queued"), PaletteColor::TextSecondary))
       .child(count(project.queued, &unknown));
-    // Plan approvals, questions and reviews do not exist yet, and neither does the Overview
-    // area the item opens, so it is not interactive and says why.
+    // The Overview's *Need your input*: runs waiting for a plan decision, an answer or an
+    // approval.
     let needs_you = item("status-needs-you")
       .child(glyph(Icon::MessageCircle, PaletteColor::TextSecondary))
       .child(label(&ctx.t("statusBar.counts.needsYou"), PaletteColor::TextSecondary))
-      .child(value(&unknown, PaletteColor::TextMuted));
-    let needs_you = hints.attach(needs_you, HintAnchor::NeedsYou, ctx.t("statusBar.hints.needsYou"));
+      .child(count(project.needs_you, &unknown));
     row = row
-      .child(open_tasks(agents, opener))
-      .child(open_tasks(queued, opener))
-      .child(needs_you)
+      .child(opens(agents, opener, Page::TASKS))
+      .child(opens(queued, opener, Page::TASKS))
+      .child(opens(needs_you, opener, Page::Overview(OverviewTab::NeedsYou)))
       .child(tokens(ctx, project.usage.as_ref(), &unknown, hints))
       .child(separator());
   }
@@ -82,9 +89,10 @@ fn agents(ctx: &Ctx, project: &ProjectBar, unknown: &str, hints: &Hints) -> Butt
   hints.attach(row, HintAnchor::Agents, hint)
 }
 
-/// Agents and Queued open the task list; its Queue tab does not exist yet.
-fn open_tasks(row: Button, opener: &Opener) -> Element {
-  match opener.tasks() {
+/// Agents and Queued open the task list, whose Queue tab does not exist yet; Needs you opens the
+/// Overview on its Needs you tab.
+fn opens(row: Button, opener: &Opener, page: Page) -> Element {
+  match opener.page(page) {
     Some(open) => clickable(row, open).into(),
     None => row.into(),
   }
@@ -99,7 +107,7 @@ fn count(count: Option<usize>, unknown: &str) -> Element {
       } else {
         PaletteColor::TextPrimary
       };
-      value(&count.to_string(), color)
+      value(&figure(count), color)
     }
   }
 }

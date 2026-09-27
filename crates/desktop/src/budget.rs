@@ -60,9 +60,9 @@ pub fn minutes_text(limit: Duration) -> String {
   whole_minutes(limit).to_string()
 }
 
-/// Default time limits offered by Project settings › Limits (`bPPG9`), in minutes of active
-/// agent time. The design draws the select closed with 30 minutes, the default; it has no open
-/// menu, so the choices are ours: up to 8, the menu's height without scrolling (`u0ByM`).
+/// Default time limits offered by Project settings › Limits (`bPPG9`, open in `u5Vn2`), in
+/// minutes of active agent time: eight choices, the menu's height without scrolling (`u0ByM`);
+/// 30 is the default (`oLDmx`).
 pub const TIME_LIMIT_CHOICES: [u64; 8] = [15, 30, 45, 60, 90, 120, 180, 240];
 
 /// The minutes the time limit select offers: [`TIME_LIMIT_CHOICES`] and `current`, the stored

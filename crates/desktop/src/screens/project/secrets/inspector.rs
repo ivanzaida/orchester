@@ -96,7 +96,7 @@ pub fn inspector(ctx: &Ctx, secret: &Secret, project: &str, uses: &[&ToolUse], a
         .id("secret-inspector-details")
         .width(Dimension::Pct(100.0))
         .flex(1.0)
-        .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
+        .scrollbar(gutter_scrollbar()),
     )
     .child(pinned)
     .into()

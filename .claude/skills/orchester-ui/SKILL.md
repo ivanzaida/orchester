@@ -103,6 +103,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | unparsed transcript lines at 60 % (`Ane9j`) | `theme::UNPARSED_OPACITY` |
 | permission option that cannot be chosen at 50 % (`BNliD` in `T1rjv`) | `theme::UNAVAILABLE_OPTION_OPACITY` |
 | select menu overlay scrollbar: 4px `border` thumb, radius 2, inset 1 (`g3poI`) | `theme::select_menu_scrollbar()` |
+| scroll gutter: a reserved 12px gutter, 4px `border` thumb, radius 2, 4 from each side and from the viewport's top and bottom (`nf9DG` in `JuVaA`) | `theme::gutter_scrollbar()` |
 | operations popover drop shadow 0 8 24 #00000066 (`E1msJS`) | `ExtraShadow::Popover.role()` |
 | `focus-ring` #EEEEEE / `focus-gap` #101010 (`xURvJ`) | `ExtraColor::FocusRing.role()` / `ExtraColor::FocusGap.role()` |
 | focus ring, outer / inset: spreads `focus-width` 2 and `focus-extent` 4 (`xURvJ`, `Oz9EN`) | `ExtraShadow::FocusRing.role()` / `FocusRingInset.role()`, applied only through `ui::pressable::Ring` |
@@ -159,6 +160,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::PromptText.role()` | mono 12, 1.8 | instruction prompt, edited and resolved (`g2Tkg`, `iJdsS`) |
 | `ExtraTypography::VariableName.role()` | mono 20/500 | variable shown in the catalog (`Z69wX` in `EfTiT`) |
 | `ExtraTypography::ContextNote.role()` | 9 muted | preview execution context notes (`HvDGw`, `utiRC` in `TnjFo`) |
+| `ExtraTypography::CellLabel.role()` | 11 muted, 1.5 | table cell label that wraps beside its icon (worktree state `VHSnL` in `Py65X`) |
+| `ExtraTypography::InspectorNote.role()` | 10 muted, 1.6 | note under an inspector's details or actions (model source `xK9v9`, status detail `Thdx2`) |
 | `ExtraTypography::MonoTitle.role()` | mono 12 | identifier as a list row's title, e.g. a secret name (`B1zGN` in `vxAMD`) |
 | `ExtraTypography::MaskedValue.role()` | mono 13 muted | a stored secret shown only as its mask (`FNlaR` in `CQxCb`) |
 

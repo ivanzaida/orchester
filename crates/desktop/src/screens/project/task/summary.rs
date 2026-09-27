@@ -204,7 +204,7 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
         .width(Dimension::Pct(100.0))
         .flex(1.0)
         // A gutter of its own: the bar never covers the right-aligned values.
-        .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
+        .scrollbar(gutter_scrollbar()),
     )
     .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()))
     .into()
