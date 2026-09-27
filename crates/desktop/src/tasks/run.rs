@@ -93,7 +93,6 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::PipelineNotPublished => Message::new("runs.preflight.pipelineNotPublished"),
     PreflightProblem::NoSteps => Message::new("runs.preflight.noSteps"),
     PreflightProblem::ToolStep { step: key } => step("runs.preflight.toolStep", key),
-    PreflightProblem::ApprovalGate { step: key } => step("runs.preflight.approvalGate", key),
     PreflightProblem::ProfileNotPublished { step: key } => step("runs.preflight.profileNotPublished", key),
     PreflightProblem::ConnectionMissing { step: key } => step("runs.preflight.connectionMissing", key),
     PreflightProblem::UnsupportedProvider { step: key } => step("runs.preflight.unsupportedProvider", key),
@@ -132,7 +131,8 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::ProfileNotInRun
       | Rejection::PermissionsNotEnforceable { .. }
       | Rejection::NoAgentToRestart
-      | Rejection::NoPendingPermissions,
+      | Rejection::NoPendingPermissions
+      | Rejection::PlanNotAwaited,
     ) => vec![Message::new("runs.start.failed")],
   }
 }
@@ -168,6 +168,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     }
     RunRequestError::Rejected(Rejection::NoAgentToRestart) => Message::new("runs.permissions.errors.noAgentToRestart"),
     RunRequestError::Rejected(Rejection::NoPendingPermissions) => Message::new("runs.permissions.errors.noPending"),
+    RunRequestError::Rejected(Rejection::PlanNotAwaited) => Message::new("runs.plan.errors.notAwaited"),
     RunRequestError::Rejected(
       Rejection::RunNotFound
       | Rejection::ProfileNotInRun

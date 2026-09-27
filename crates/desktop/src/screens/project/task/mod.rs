@@ -1,6 +1,7 @@
 //! A task and its latest run (02.10 `RD4pc`, paused 02.A `Oqmog`, stopped at limit 02.L
 //! `D6Nwxz`): the topbar with the way back to the task list and the run controls, the heading,
-//! the tabs, and the Summary (`uVIxb`, `F5Lsi`), Changes or Activity (02.I `SfXU1`) tab. The run is
+//! the tabs, and the Summary (`uVIxb`, `F5Lsi`; the plan review 02.11 `x3lVC` while a plan waits for
+//! a decision), Changes or Activity (02.I `SfXU1`) tab. The run is
 //! read from the project database and read again whenever the runner reports a change; its
 //! changes up to its latest checkpoint are read again when it records a new one. Conversation and
 //! Artifacts come in later milestones and are shown unavailable.
@@ -12,6 +13,7 @@ mod heading;
 mod limit_panel;
 mod notice;
 mod permissions;
+mod plan_review;
 mod progress;
 mod ready;
 mod retry_limit;
@@ -42,6 +44,7 @@ use self::{
   changes::{ChangesProps, ChangesTab, CheckpointedLoad},
   controls::{ControlAction, RunControl, control_action, control_buttons},
   notice::Lost,
+  plan_review::{PlanReviewPanel, PlanReviewProps},
 };
 use super::{ProjectNav, page, runner::connection_notice};
 use crate::{
@@ -49,7 +52,11 @@ use crate::{
   navigation::route::{ChangedFile, Page, TaskPageTab},
   programs::Programs,
   runner::{Runners, state::RunnerState},
-  tasks::{changes::checkpointed_in, detail::TaskDetail},
+  tasks::{
+    changes::checkpointed_in,
+    detail::{RunView, TaskDetail},
+    plan::PlanReview,
+  },
   theme::ExtraSpacing,
   ui::{
     field::field_error,
@@ -187,6 +194,12 @@ impl TaskScreen {
     checkpointed: Option<CheckpointedLoad>,
   ) -> Element {
     let live = detail.phase() == TaskPhase::Running && lost.is_none();
+    if props.tab == TaskPageTab::Summary
+      && let Some(run) = detail.run.as_ref()
+      && let Some(review) = PlanReview::of(run)
+    {
+      return plan_review(ctx, detail, run, review);
+    }
     match (props.tab, detail.run.as_ref()) {
       (TaskPageTab::Summary, Some(run)) if *run.run.status() == RunStatus::Succeeded => {
         ready::ready_for_review(ctx, run, checkpointed.as_ref(), props.project.project.name().as_str())
@@ -310,6 +323,20 @@ impl TaskScreen {
       ],
     )
   }
+}
+
+/// The Summary while a plan waits for a decision (02.11 `x3lVC`); a new version mounts it anew,
+/// with an empty note.
+fn plan_review(ctx: &mut Ctx, detail: &TaskDetail, run: &RunView, review: PlanReview) -> Element {
+  let key = format!("plan-review-{}-{}", run.id(), review.waiting().version);
+  let task = detail.task.details();
+  let props = PlanReviewProps {
+    review: Arc::new(review),
+    task: task.title.as_str().into(),
+    criteria: task.acceptance_criteria.clone().into(),
+    tokens: summary::budget_value(ctx, run),
+  };
+  ctx.mount_keyed::<PlanReviewPanel>(&key, props)
 }
 
 /// Why the runner did not carry out a run control (`field-error` below the heading).

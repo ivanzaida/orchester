@@ -8,7 +8,7 @@ use std::{
   time::{Instant, SystemTime},
 };
 
-use orchester_core::id::ResourceId;
+use orchester_core::id::{ResourceId, TaskId};
 
 use crate::messages::Message;
 
@@ -24,6 +24,8 @@ pub enum Place {
   PullRequests,
   Pipeline(ResourceId),
   Instruction(ResourceId),
+  /// A task's page: its latest run.
+  Task(TaskId),
   AgentProfile(ResourceId),
   Connections,
   Settings,
@@ -286,12 +288,13 @@ impl ActivityLog {
     self.take(id);
   }
 
-  /// Something that finished without being started here, e.g. the runner reconnecting.
-  pub fn record(&mut self, title: Message, target: Target, at: SystemTime) {
+  /// Something that finished without being started here, e.g. the runner reconnecting or a run
+  /// proposing a plan in `project`.
+  pub fn record(&mut self, project: Option<Arc<str>>, title: Message, target: Target, at: SystemTime) {
     let id = self.next_id();
     self.push(Event {
       id,
-      project: None,
+      project,
       title,
       target,
       at,

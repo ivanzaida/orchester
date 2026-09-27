@@ -8,7 +8,7 @@ use super::tokens::{
   SPACE_COLUMNS, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR,
   SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG,
   SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION, SPACE_SELECT_MENU,
-  SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TIGHT, TAB_INDICATOR_STROKE,
+  SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -64,10 +64,12 @@ pub enum ExtraSpacing {
   /// Least room between a dialog and the left and right window edges when the window is
   /// narrower than the dialog (design doc, "Lifecycle dialog width").
   DialogMargin,
+  /// Padding of a note field around its text, e.g. the changes a plan needs (`NbNN0`).
+  TextArea,
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 23] = [
+  const ALL: [Self; 24] = [
     Self::Hair,
     Self::Mark,
     Self::Tight,
@@ -91,6 +93,7 @@ impl ExtraSpacing {
     Self::Divider,
     Self::SelectMenu,
     Self::DialogMargin,
+    Self::TextArea,
   ];
 
   fn name(self) -> &'static str {
@@ -118,6 +121,7 @@ impl ExtraSpacing {
       Self::Divider => "divider",
       Self::SelectMenu => "select-menu",
       Self::DialogMargin => "dialog-margin",
+      Self::TextArea => "text-area",
     }
   }
 
@@ -146,6 +150,7 @@ impl ExtraSpacing {
       Self::Divider => SPACE_DIVIDER,
       Self::SelectMenu => SPACE_SELECT_MENU,
       Self::DialogMargin => SPACE_DIALOG_MARGIN,
+      Self::TextArea => SPACE_TEXT_AREA,
     }
   }
 

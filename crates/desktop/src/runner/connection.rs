@@ -354,6 +354,15 @@ impl Session {
         reporter.work(summary);
         true
       }
+      Some(Ok(Some(Event::PlanProposed {
+        task,
+        task_key,
+        version,
+        ..
+      }))) => {
+        reporter.plan_proposed(task, &task_key, version);
+        true
+      }
       Some(Ok(Some(Event::Stopped { mode }))) => {
         tracing::warn!(?mode, "the runner stopped without being asked");
         false

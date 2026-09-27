@@ -71,6 +71,7 @@ impl Opener {
       // The instructions screen moves to the tab of the instruction's scope.
       Place::Instruction(id) => Page::Instructions(InstructionsTab::ProjectRules, Some(id)),
       Place::AgentProfile(id) => Page::Agents(AgentSelection::Profile(id)),
+      Place::Task(id) => Page::task(id),
       Place::Connections => Page::CONNECTIONS,
       Place::Settings => Page::Settings(SettingsTab::General),
     });

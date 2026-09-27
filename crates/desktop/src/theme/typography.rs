@@ -140,10 +140,14 @@ pub enum ExtraTypography {
   /// A note under an inspector's details or actions: where the models come from, what the
   /// connection's status means (`xK9v9`, `Thdx2` in `JuVaA`).
   InspectorNote,
+  /// Title of the plan under review, e.g. "Plan v1 · GitHub sign-in" (`J7irj` in `x3lVC`), 19/500.
+  PlanTitle,
+  /// A note written to an agent, e.g. the changes a plan needs (`DDXc5` in `NbNN0`): 12, 1.6.
+  ReviewNote,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 63] = [
+  const ALL: [Self; 65] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -207,6 +211,8 @@ impl ExtraTypography {
     Self::ContextNote,
     Self::CellLabel,
     Self::InspectorNote,
+    Self::PlanTitle,
+    Self::ReviewNote,
   ];
 
   fn name(self) -> &'static str {
@@ -274,6 +280,8 @@ impl ExtraTypography {
       Self::ContextNote => "context-note",
       Self::CellLabel => "cell-label",
       Self::InspectorNote => "inspector-note",
+      Self::PlanTitle => "plan-title",
+      Self::ReviewNote => "review-note",
     }
   }
 
@@ -407,6 +415,8 @@ impl ExtraTypography {
       Self::ContextNote => style(9.0, FontWeight::Normal, MUTED),
       Self::CellLabel => leading(1.5, style(11.0, FontWeight::Normal, MUTED)),
       Self::InspectorNote => leading(1.6, style(10.0, FontWeight::Normal, MUTED)),
+      Self::PlanTitle => style(19.0, FontWeight::Medium, TEXT),
+      Self::ReviewNote => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),
       icon_role => icon(
         icon_role
           .icon_size()

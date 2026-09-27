@@ -59,7 +59,13 @@ impl ProjectTasks {
           .map_err(run_store_error)?
           .last()
           .map_or_else(|| latest.created_at(), RunEvent::at);
-        phases.insert(task.id(), LatestRun::of(task, latest, updated_at));
+        // Only a run waiting on a plan decision needs its plans here.
+        let plans = if latest.awaiting_plan().is_empty() {
+          Vec::new()
+        } else {
+          db.plans(latest.id()).map_err(run_store_error)?
+        };
+        phases.insert(task.id(), LatestRun::of(task, latest, updated_at, &plans));
       }
     }
     Ok(Self {

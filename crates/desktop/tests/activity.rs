@@ -149,7 +149,7 @@ fn activity_finish_at_names_the_object_created() {
 #[test]
 fn activity_recorded_event_becomes_the_latest() {
   let mut log = ActivityLog::default();
-  log.record(Message::new("reconnected"), Target::RunnerLog, at(1));
+  log.record(None, Message::new("reconnected"), Target::RunnerLog, at(1));
   assert!(matches!(log.slot(), Slot::Latest(event) if event.title().key == "reconnected"));
 }
 

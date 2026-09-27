@@ -177,12 +177,13 @@ impl Runners {
     let session = AttachSession::Fresh {
       previous_end: self.inner.previous_end,
     };
-    let connection = self.connect(root, &status, session);
+    let name: Arc<str> = name.into();
+    let connection = self.connect(root, &name, &status, session);
     self.inner.shared.publish(&status.borrow());
     projects.insert(
       root.to_path_buf(),
       ProjectRunner {
-        name: name.into(),
+        name,
         status,
         connection: Some(connection),
       },
@@ -216,16 +217,22 @@ impl Runners {
     self.inner.shared.publish(&entry.status.borrow());
     // The previous task has ended; its handle only needs to go.
     drop(entry.connection.take());
-    entry.connection = Some(self.connect(&root, &entry.status, AttachSession::Reconnect));
+    entry.connection = Some(self.connect(&root, &entry.name, &entry.status, AttachSession::Reconnect));
   }
 
-  fn connect(&self, root: &Path, status: &watch::Sender<RunnerStatus>, session: AttachSession) -> Connection {
+  fn connect(
+    &self,
+    root: &Path,
+    name: &Arc<str>,
+    status: &watch::Sender<RunnerStatus>,
+    session: AttachSession,
+  ) -> Connection {
     let generation = status.borrow().generation();
     Connection::spawn(
       &self.inner.runtime,
       self.inner.runner_exe.clone(),
       root.to_path_buf(),
-      Reporter::new(generation, status.clone(), self.inner.shared.clone()),
+      Reporter::new(generation, name.clone(), status.clone(), self.inner.shared.clone()),
       session,
     )
   }
