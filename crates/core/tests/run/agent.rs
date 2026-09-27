@@ -1,4 +1,4 @@
-//! What running a task needs besides the state machine: the prompt, the branch name, the
+//! What running a task needs besides the state machine and the prompt: the branch name, the
 //! preflight and the task phase.
 
 use std::{collections::BTreeMap, num::NonZeroU32};
@@ -8,199 +8,18 @@ use orchester_core::{
     AgentConnection, AgentProvider, CatalogSource, CheckResult, Connection, ConnectionCheck, ConnectionKind,
     ConnectionStatus, GitHubHost, ModelCatalog, SignIn,
   },
-  id::{ConnectionId, ProjectId, ResourceId, TaskId},
+  id::ConnectionId,
   name::Name,
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess, StepCommands,
     capability::{PermissionOption, PermissionProblem, Unavailable},
   },
-  project::{Project, ProjectKey, TaskKey},
-  resource::{AgentProfile, Pipeline, PromptText, ProviderSettings, Step, StepKind, Variable, VersionNumber},
-  run::{
-    BranchName, DependencyOutput, PipelineInfo, PreflightInput, PreflightProblem, PromptAssemblyError, PromptInput,
-    PromptSource, StepFailure, TaskPhase, preflight,
-  },
-  task::{Task, TaskDetails, TaskStatus},
+  resource::{AgentProfile, Pipeline, ProviderSettings, StepKind},
+  run::{BranchName, PreflightInput, PreflightProblem, StepFailure, TaskPhase, preflight},
+  task::{Task, TaskStatus},
 };
 
-use crate::fixture::{Config, Logged, at, key, model, version};
-
-fn task_key(number: u32) -> TaskKey {
-  TaskKey::new(
-    ProjectKey::new("ORC").expect("valid key"),
-    NonZeroU32::new(number).expect("positive"),
-  )
-}
-
-fn task(brief: &str, criteria: &[&str]) -> Task {
-  let details = TaskDetails {
-    title: Name::new("Add GitHub sign-in").expect("valid title"),
-    brief: brief.into(),
-    acceptance_criteria: criteria.iter().map(|criterion| (*criterion).to_owned()).collect(),
-    pipeline: None,
-    limits: None,
-  };
-  Task::draft(TaskId::generate(), task_key(12), details, at(1))
-}
-
-fn project() -> Project {
-  Project::new(
-    ProjectId::generate(),
-    ProjectKey::new("ORC").expect("valid key"),
-    Name::new("Kontur").expect("valid name"),
-  )
-}
-
-fn builder(instructions: &str) -> AgentProfile {
-  AgentProfile::new(
-    Name::new("Builder").expect("valid role"),
-    "Implements the approved plan.".into(),
-    PromptText::new(instructions).expect("valid prompt"),
-    ConnectionId::generate(),
-    model("gpt-5.5"),
-    ProviderSettings::default(),
-  )
-}
-
-fn step_with(instructions: &str) -> Step {
-  let config = Config::feature_delivery();
-  let mut step = config
-    .pipeline_version
-    .body()
-    .step(&key("implement"))
-    .expect("step")
-    .clone();
-  step.instructions = PromptText::new(instructions).expect("valid prompt");
-  step
-}
-
-fn assemble(profile: &AgentProfile, step: &Step, task: &Task) -> Result<String, PromptAssemblyError> {
-  let logged = Logged::started();
-  let project = project();
-  PromptInput {
-    project: &project,
-    task,
-    run: &logged.run,
-    execution: logged.exec("implement"),
-    pipeline: PipelineInfo {
-      id: ResourceId::generate(),
-      name: "Feature delivery",
-      version: VersionNumber::new(NonZeroU32::new(3).expect("positive")),
-    },
-    step,
-    profile_id: ResourceId::generate(),
-    profile,
-    dependencies: &[],
-  }
-  .assemble()
-}
-
-#[test]
-fn prompt_assembles_role_step_and_task_in_order() {
-  let prompt = assemble(
-    &builder("Keep commits small for {{task.id}}."),
-    &step_with("Work on {{run.branch}}, attempt {{ run.attempt }}. Literal \\{{task.title}}."),
-    &task(
-      "Users sign in with GitHub.",
-      &["Sign-in works", "Cancel shows an error"],
-    ),
-  )
-  .expect("every variable has a value");
-  let expected = "# Your role: Builder\n\nImplements the approved plan.\n\nKeep commits small for ORC-12.\n\n# Current \
-                  step: implement\n\nWork on orchester/orc-129, attempt 1. Literal {{task.title}}.\n\n# Task ORC-12: \
-                  Add GitHub sign-in\n\nUsers sign in with GitHub.\n\n## Acceptance criteria\n- Sign-in works\n- \
-                  Cancel shows an error\n\n# When you finish\n\nEnd with your result: the outcome `done` when the \
-                  step is complete, or `failed` when you could not complete it, and a short summary of what you did \
-                  for the steps that run after this one.\n";
-  assert_eq!(prompt, expected);
-}
-
-#[test]
-fn prompt_names_a_variable_without_a_value_instead_of_leaving_it_empty() {
-  let error = assemble(
-    &builder("Fine."),
-    &step_with("See {{task.attachments}}."),
-    &task("Brief.", &[]),
-  );
-  assert_eq!(
-    error,
-    Err(PromptAssemblyError::UnavailableVariable {
-      variable: Variable::TaskAttachments,
-      part: PromptSource::StepInstructions,
-    })
-  );
-  // The budget in force, as a whole number of tokens.
-  let prompt = assemble(&builder("Budget {{run.budget}}"), &step_with(""), &task("Brief.", &[]));
-  assert!(prompt.expect("run.budget is known").contains("Budget 1400000"));
-}
-
-#[test]
-fn prompt_lists_the_outputs_of_the_steps_it_runs_after_with_their_sources() {
-  let config = Config::feature_delivery();
-  let body = config.pipeline_version.body();
-  let (checks, review) = (
-    body.step(&key("checks")).expect("step"),
-    body.step(&key("review")).expect("step"),
-  );
-  let pr = body.step(&key("pr")).expect("step");
-  let logged = Logged::started();
-  let (project, task, profile) = (project(), task("Brief.", &[]), builder("Fine."));
-  let attempt = NonZeroU32::new(2).expect("positive");
-  let dependencies = [
-    DependencyOutput {
-      step: checks,
-      attempt,
-      text: "All 38 tests pass.",
-    },
-    DependencyOutput {
-      step: review,
-      attempt,
-      text: " ",
-    },
-  ];
-  let prompt = PromptInput {
-    project: &project,
-    task: &task,
-    run: &logged.run,
-    execution: logged.exec("pr"),
-    pipeline: PipelineInfo {
-      id: ResourceId::generate(),
-      name: "Feature delivery",
-      version: VersionNumber::new(NonZeroU32::new(3).expect("positive")),
-    },
-    step: pr,
-    profile_id: ResourceId::generate(),
-    profile: &profile,
-    dependencies: &dependencies,
-  }
-  .assemble()
-  .expect("every variable has a value");
-  let results = prompt.find("# Results of earlier steps").expect("results section");
-  assert!(results > prompt.find("# Task ORC-12").expect("task section"));
-  assert!(prompt.contains(
-    "
-Sources: checks (`checks`, attempt 2), review (`review`, attempt 2)
-"
-  ));
-  assert!(prompt.contains(
-    "
-## checks (`checks`, attempt 2)
-
-All 38 tests pass.
-"
-  ));
-  assert!(prompt.contains(
-    "
-## review (`review`, attempt 2)
-
-(no output)
-"
-  ));
-  assert!(prompt.ends_with(
-    "for the steps that run after this one.
-"
-  ));
-}
+use crate::fixture::{Config, Logged, at, key, task, task_key, version};
 
 #[test]
 fn branch_for_run_uses_the_lowercase_task_key_and_ordinal() {

@@ -3,7 +3,10 @@ use std::collections::BTreeSet;
 use orchester_core::{
   id::ResourceId,
   name::Name,
-  resource::{AgentTargets, InjectionEvent, Instruction, InstructionError, InstructionScope, PromptText, StepKey},
+  resource::{
+    AgentTargets, Exclusion, InjectionEvent, Instruction, InstructionError, InstructionScope, InstructionTarget,
+    PromptText, PublishError, ResourceBody, StepKey,
+  },
 };
 
 fn text(value: &str) -> PromptText {
@@ -55,29 +58,39 @@ fn instruction_scopes_cover_role_pipeline_and_step() {
 }
 
 #[test]
-fn instruction_rejects_blank_text() {
-  assert_eq!(
-    Instruction::new(
-      text("  \n"),
-      AgentTargets::All,
-      start_and_resume(),
-      InstructionScope::Project
+fn instruction_draft_may_be_blank_but_publishing_needs_text() {
+  let blank = Instruction::new(
+    text(
+      "  
+",
     ),
-    Err(InstructionError::BlankText)
-  );
+    AgentTargets::All,
+    start_and_resume(),
+    InstructionScope::Project,
+  )
+  .expect("a new draft starts without text");
+  assert_eq!(blank.check_publishable(), Err(PublishError::BlankInstruction));
+  let written = Instruction::new(
+    text("Rule."),
+    AgentTargets::All,
+    start_and_resume(),
+    InstructionScope::Project,
+  )
+  .unwrap();
+  assert_eq!(written.check_publishable(), Ok(()));
 }
 
 #[test]
-fn instruction_rejects_an_empty_role_selection() {
-  assert_eq!(
-    Instruction::new(
-      text("Rule."),
-      AgentTargets::Roles(BTreeSet::new()),
-      start_and_resume(),
-      InstructionScope::Project
-    ),
-    Err(InstructionError::NoRoles)
-  );
+fn instruction_rejects_an_empty_role_or_profile_selection() {
+  for targets in [
+    AgentTargets::Roles(BTreeSet::new()),
+    AgentTargets::Profiles(BTreeSet::new()),
+  ] {
+    assert_eq!(
+      Instruction::new(text("Rule."), targets, start_and_resume(), InstructionScope::Project),
+      Err(InstructionError::NoTargets)
+    );
+  }
 }
 
 #[test]
@@ -94,15 +107,114 @@ fn instruction_needs_an_injection_event() {
 }
 
 #[test]
-fn instruction_for_a_role_cannot_target_other_roles() {
+fn instruction_for_a_role_cannot_select_other_agents() {
   let scope = InstructionScope::AgentRole {
     role: Name::new("Builder").unwrap(),
   };
-  let targets = AgentTargets::Roles(roles(&["Reviewer"]));
-  assert_eq!(
-    Instruction::new(text("Rule."), targets, start_and_resume(), scope),
-    Err(InstructionError::RoleScopeTargetsRoles)
-  );
+  for targets in [
+    AgentTargets::Roles(roles(&["Reviewer"])),
+    AgentTargets::Profiles(BTreeSet::from([ResourceId::generate()])),
+  ] {
+    assert_eq!(
+      Instruction::new(text("Rule."), targets, start_and_resume(), scope.clone()),
+      Err(InstructionError::RoleScopeSelectsAgents)
+    );
+  }
+}
+
+/// Implement of `pipeline`, run by the Builder profile `profile`.
+fn implement_target<'a>(
+  pipeline: ResourceId,
+  profile: ResourceId,
+  step: &'a StepKey,
+  role: &'a Name,
+) -> InstructionTarget<'a> {
+  InstructionTarget {
+    pipeline,
+    step,
+    profile,
+    role,
+  }
+}
+
+fn rule(targets: AgentTargets, events: &[InjectionEvent], scope: InstructionScope) -> Instruction {
+  Instruction::new(text("Rule."), targets, events.iter().copied().collect(), scope).expect("valid instruction")
+}
+
+#[test]
+fn instruction_reaches_selected_agents_at_its_events() {
+  let (pipeline, profile) = (ResourceId::generate(), ResourceId::generate());
+  let (implement, builder) = (StepKey::new("implement").unwrap(), Name::new("Builder").unwrap());
+  let target = implement_target(pipeline, profile, &implement, &builder);
+  let start = [InjectionEvent::Start];
+  let cases = [
+    (AgentTargets::All, &start[..], Ok(())),
+    (AgentTargets::Roles(roles(&["Builder"])), &start[..], Ok(())),
+    (
+      AgentTargets::Roles(roles(&["Reviewer"])),
+      &start[..],
+      Err(Exclusion::OtherAgents),
+    ),
+    (AgentTargets::Profiles(BTreeSet::from([profile])), &start[..], Ok(())),
+    (
+      AgentTargets::Profiles(BTreeSet::from([ResourceId::generate()])),
+      &start[..],
+      Err(Exclusion::OtherAgents),
+    ),
+    (
+      AgentTargets::All,
+      &[InjectionEvent::Resume][..],
+      Err(Exclusion::OtherEvent),
+    ),
+  ];
+  for (targets, events, expected) in cases {
+    let instruction = rule(targets, events, InstructionScope::Project);
+    assert_eq!(
+      instruction.applies(target, InjectionEvent::Start),
+      expected,
+      "{instruction:?}"
+    );
+  }
+}
+
+#[test]
+fn instruction_reaches_agents_of_its_role_pipeline_or_step() {
+  let (pipeline, profile) = (ResourceId::generate(), ResourceId::generate());
+  let (implement, builder) = (StepKey::new("implement").unwrap(), Name::new("Builder").unwrap());
+  let target = implement_target(pipeline, profile, &implement, &builder);
+  let reviewer = Name::new("Reviewer").unwrap();
+  let cases = [
+    (InstructionScope::AgentRole { role: builder.clone() }, Ok(())),
+    (
+      InstructionScope::AgentRole { role: reviewer },
+      Err(Exclusion::OtherRole),
+    ),
+    (InstructionScope::Pipeline { pipeline }, Ok(())),
+    (
+      InstructionScope::Pipeline {
+        pipeline: ResourceId::generate(),
+      },
+      Err(Exclusion::OtherPipeline),
+    ),
+    (
+      InstructionScope::Step {
+        pipeline,
+        step: implement.clone(),
+      },
+      Ok(()),
+    ),
+    (
+      InstructionScope::Step {
+        pipeline,
+        step: StepKey::new("review").unwrap(),
+      },
+      Err(Exclusion::OtherStep),
+    ),
+  ];
+  for (scope, expected) in cases {
+    let instruction = rule(AgentTargets::All, &[InjectionEvent::Start], scope);
+    assert_eq!(instruction.reaches(target), expected, "{instruction:?}");
+  }
 }
 
 #[test]

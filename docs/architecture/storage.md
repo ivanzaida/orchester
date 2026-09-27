@@ -226,6 +226,7 @@ with their profile's permissions.
 | `artifacts` | run, name, blob |
 | `invocations` | run, step execution, number, model, CLI session id, started / ended, input / cached input / output tokens, outcome — one row per agent CLI launch |
 | `agent_events` | run, sequence, step execution, invocation, time, kind, payload — the agent transcript, append-only |
+| `invocation_prompts` | invocation, injection event (start for a new session, resume for a continued one) and the source of each part of its prompt in order (profile version, instruction versions, pipeline step, task) — written once before the CLI starts |
 
 ### Conversations and pull requests
 

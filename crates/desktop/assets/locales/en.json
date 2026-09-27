@@ -1774,6 +1774,11 @@
       "budget": "{{step}} · step budget {{from}} → {{to}} tokens"
     }
   },
+  "instructions": {
+    "errors": {
+      "blankText": "Write the instruction before you publish it."
+    }
+  },
   "statusBar": {
     "runner": {
       "starting": "Starting runner…",

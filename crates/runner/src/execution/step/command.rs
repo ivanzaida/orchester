@@ -1,7 +1,8 @@
 //! The agent CLI command of an agent step, for the provider of its profile's connection (Codex or
-//! Claude Code): the connection and settings, the worktree it works in, the assembled prompt with the
-//! outputs of the steps it runs after (and, for Codex, the result schema) for a new session, or the
-//! continue prompt for a session that resumes.
+//! Claude Code): the connection and settings, the worktree it works in, and the prompt assembled for
+//! its injection event: for a new session the whole prompt with the instructions injected at start,
+//! the outputs of the steps it runs after (and, for Codex, the result schema); for a session that
+//! resumes the continue prompt with the instructions injected at resume.
 
 use std::path::Path;
 
@@ -12,9 +13,12 @@ use orchester_core::{
     invocation::{ClaudeInvocation, ClaudeSession, CodexInvocation, InvocationError, Platform},
     stream::RunnerProblem,
   },
-  id::{ResourceId, StepExecutionId},
-  resource::{AgentProfile, Step, StepKind},
-  run::{CONTINUE_PROMPT, DependencyOutput, PipelineInfo, PromptAssemblyError, PromptInput, StepExecutor},
+  id::StepExecutionId,
+  resource::{AgentProfile, InjectionEvent, Instruction, Step, StepKind},
+  run::{
+    AssembledPrompt, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt, PinnedVersion,
+    PipelineInfo, ProfileInfo, PromptAssemblyError, PromptInput, RunContext, StepExecutor,
+  },
   store::{ActivityStore, ConnectionStore, ResourceStore},
 };
 
@@ -25,14 +29,14 @@ fn problem(detail: String) -> RunnerProblem {
 }
 
 impl RunTask {
-  /// The command that runs `execution`'s agent and the CLI it starts, continuing session `resume`
-  /// when given, or why it cannot start.
+  /// The command that runs `execution`'s agent, the CLI it starts and what its prompt is made of,
+  /// continuing session `resume` when given, or why it cannot start.
   pub(super) fn command(
     &self,
     execution: StepExecutionId,
     resume: Option<&str>,
     worktree: &Path,
-  ) -> Result<(Command, AgentProvider), RunnerProblem> {
+  ) -> Result<(Command, AgentProvider, InvocationPrompt), RunnerProblem> {
     let key = self
       .run
       .execution(execution)
@@ -69,10 +73,12 @@ impl RunTask {
       .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?;
     let connection =
       AgentConnection::try_from(connection).map_err(|_| problem("the connection is not an agent CLI".to_owned()))?;
-    let prompt = match resume {
-      Some(_) => CONTINUE_PROMPT.to_owned(),
-      None => self.prompt(execution, step, profile.resource, &body)?,
+    let event = if resume.is_some() {
+      InjectionEvent::Resume
+    } else {
+      InjectionEvent::Start
     };
+    let AssembledPrompt { text: prompt, sources } = self.prompt(execution, step, *profile, &body, event)?;
     // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
     // because an agent never starts with permissions that are not enforced.
     let enforced = body
@@ -109,19 +115,20 @@ impl RunTask {
       .command(prompt, std::env::vars_os()),
     };
     command
-      .map(|command| (command, provider))
+      .map(|command| (command, provider, sources))
       .map_err(|error: InvocationError| problem(error.to_string()))
   }
 
-  /// The prompt of a new session: role, step and task, with the run's variables filled in, then the
-  /// outputs of the passed executions of the steps it depends on.
+  /// The prompt at `event`: role, instructions, step and task with the run's variables filled in,
+  /// then the outputs of the passed executions of the steps it depends on.
   fn prompt(
     &self,
     execution: StepExecutionId,
     step: &Step,
-    profile_id: ResourceId,
-    profile: &AgentProfile,
-  ) -> Result<String, RunnerProblem> {
+    profile: PinnedVersion,
+    body: &AgentProfile,
+    event: InjectionEvent,
+  ) -> Result<AssembledPrompt, RunnerProblem> {
     let pipeline = self.run.snapshot().pipeline();
     let pipeline_name = self
       .db
@@ -158,26 +165,71 @@ impl RunTask {
         })
       })
       .collect();
+    let instructions = self.pinned_instructions()?;
+    let sources: Vec<InstructionSource<'_>> = instructions
+      .iter()
+      .map(|(pin, name, body)| InstructionSource {
+        resource: pin.resource,
+        name,
+        version: InstructionVersion::Published { number: pin.number },
+        body,
+      })
+      .collect();
+    let attempt = self
+      .run
+      .attempts()
+      .iter()
+      .find(|attempt| attempt.execution(execution).is_some())
+      .map(|attempt| attempt.number());
     PromptInput {
       project: &self.project,
       task: &self.task,
-      run: &self.run,
-      execution,
+      run: Some(RunContext {
+        run: &self.run,
+        attempt,
+      }),
       pipeline: PipelineInfo {
         id: pipeline.resource,
         name: &pipeline_name,
         version: pipeline.number,
       },
       step,
-      profile_id,
-      profile,
+      profile: ProfileInfo {
+        id: profile.resource,
+        version: profile.number,
+        body,
+      },
+      instructions: &sources,
       dependencies: &dependencies,
     }
-    .assemble()
+    .assemble(event)
     .map_err(
       |PromptAssemblyError::UnavailableVariable { variable, .. }| RunnerProblem::UnavailableVariable {
         variable: variable.name().to_owned(),
       },
     )
+  }
+
+  /// The instruction versions the run pinned, with their names, in library (slug) order.
+  fn pinned_instructions(&self) -> Result<Vec<(PinnedVersion, String, Instruction)>, RunnerProblem> {
+    let mut pinned = Vec::new();
+    for pin in self.run.snapshot().instructions() {
+      let resource = self
+        .db
+        .resource(pin.resource)
+        .map_err(|error| problem(error.to_string()))?
+        .ok_or_else(|| problem(format!("instruction {} no longer exists", pin.resource)))?;
+      let version = self
+        .db
+        .version::<Instruction>(pin.resource, pin.number)
+        .map_err(|error| problem(error.to_string()))?
+        .ok_or_else(|| problem(format!("instruction version {} is missing", pin.number)))?;
+      pinned.push((
+        resource.slug().clone(),
+        (*pin, resource.name().as_str().to_owned(), version.body().clone()),
+      ));
+    }
+    pinned.sort_by(|(left, _), (right, _)| left.cmp(right));
+    Ok(pinned.into_iter().map(|(_, instruction)| instruction).collect())
   }
 }

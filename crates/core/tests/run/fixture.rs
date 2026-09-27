@@ -4,15 +4,17 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ConnectionId, ResourceId, RunId, StepExecutionId, TaskId, VersionId},
+  id::{ConnectionId, ProjectId, ResourceId, RunId, StepExecutionId, TaskId, VersionId},
   name::Name,
   permission::StepPermissions,
+  project::{Project, ProjectKey, TaskKey},
   resource::{
     AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Step, StepKey,
     StepKind, Version, VersionNumber,
   },
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunEvent, RunNumber, RunSnapshot},
+  task::{Task, TaskDetails},
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -35,6 +37,33 @@ pub fn revision(hex_digit: char) -> Revision {
 
 pub fn tokens(count: u64) -> TokenBudget {
   TokenBudget::new(count).expect("a budget above zero")
+}
+
+pub fn task_key(number: u32) -> TaskKey {
+  TaskKey::new(
+    ProjectKey::new("ORC").expect("valid key"),
+    NonZeroU32::new(number).expect("positive"),
+  )
+}
+
+/// Draft task ORC-12, "Add GitHub sign-in".
+pub fn task(brief: &str, criteria: &[&str]) -> Task {
+  let details = TaskDetails {
+    title: Name::new("Add GitHub sign-in").expect("valid title"),
+    brief: brief.into(),
+    acceptance_criteria: criteria.iter().map(|criterion| (*criterion).to_owned()).collect(),
+    pipeline: None,
+    limits: None,
+  };
+  Task::draft(TaskId::generate(), task_key(12), details, at(1))
+}
+
+pub fn project() -> Project {
+  Project::new(
+    ProjectId::generate(),
+    ProjectKey::new("ORC").expect("valid key"),
+    Name::new("Kontur").expect("valid name"),
+  )
 }
 
 pub fn version<B>(number: u32, body: B) -> Version<B> {

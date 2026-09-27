@@ -426,4 +426,12 @@ CREATE TABLE run_step_budgets (
   PRIMARY KEY (run_id, step_key)
 ) STRICT;
 ",
+  r"
+-- What each agent CLI launch was told (Instructions): the injection event and the
+-- sources of its prompt in order, as JSON. Written once by the runner before the CLI starts.
+CREATE TABLE invocation_prompts (
+  invocation_id TEXT PRIMARY KEY REFERENCES invocations (id),
+  body TEXT NOT NULL
+) STRICT;
+",
 ];

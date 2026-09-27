@@ -4,6 +4,7 @@ mod agent;
 mod fixture;
 mod lifecycle;
 mod limits;
+mod prompt;
 mod recovery;
 mod schedule;
 mod snapshot;
