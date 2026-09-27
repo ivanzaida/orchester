@@ -234,12 +234,13 @@ impl PullRequestScreen {
     }
     let files = self.files(ctx, read);
     let index = self.selected.get().min(read.diff.files().len() - 1);
+    let selected = self.selected.clone();
     let list = ctx.mount_keyed::<FileList>(
       "pull-request-files",
       FileListProps {
         groups: files,
         selected: index,
-        select: self.selected.clone(),
+        select: Arc::new(move |index| selected.set(index)),
       },
     );
     let pane = ctx.mount_keyed::<DiffPane>(

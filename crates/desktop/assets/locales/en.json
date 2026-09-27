@@ -563,6 +563,7 @@
       "fileAdded": "A",
       "fileModified": "M",
       "fileDeleted": "D",
+      "fileMeta": "{{status}} · open in Changes",
       "usage": "Usage reported",
       "usageMeta": "in {{input}} · out {{output}} · cached {{cached}} not counted",
       "error": "The agent CLI reported an error",
@@ -611,6 +612,37 @@
         "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget."
       },
       "stepOptionAttempt": "{{number}} · {{step}} · {{agent}} · attempt {{attempt}}"
+    },
+    "changes": {
+      "noRunTitle": "No changes yet",
+      "noRunDetail": "The task has no run. What its run changes shows here once it records its first checkpoint.",
+      "loadingTitle": "Reading the run’s changes",
+      "loadingDetail": "Comparing the run’s checkpoint with its base, and its worktree with its checkpoint.",
+      "failedTitle": "Couldn’t read the run’s changes",
+      "tryAgain": "Try again",
+      "failure": {
+        "gitMissing": "git was not found. Install git or add it to the PATH, then try again. The run is not affected.",
+        "git": "git could not compare the run’s revisions. The run is not affected; the runner log may say more."
+      },
+      "noCheckpointTitle": "No checkpoint yet",
+      "noCheckpointDetail": "Run {{run}} has not committed any work yet. Its changes show here once a step records its first checkpoint.",
+      "noChangesTitle": "No changes",
+      "noChangesDetail": "The run’s latest checkpoint has the same files as its base, and its worktree has nothing more.",
+      "tooLargeTitle": "Too large to show here",
+      "tooLargeDetail": "The run changes {{files}} files and {{lines}} lines, more than Orchester shows ({{maxFiles}} files or {{maxLines}} lines). Read its branch {{branch}} with git.",
+      "worktreeTooLargeTitle": "The changes not checkpointed are too large to show here",
+      "worktreeTooLargeDetail": "The run’s worktree changes {{files}} files and {{lines}} lines of tracked files beyond its checkpoint, more than Orchester shows ({{maxFiles}} files or {{maxLines}} lines).",
+      "worktreeFailedTitle": "Couldn’t read the changes not checkpointed",
+      "notCheckpointedHeading": "NOT CHECKPOINTED  {{count}}",
+      "omitted": "{{count}} more changed lines are not shown; the file is too large. Read them with git on the run’s branch.",
+      "range": "{{from}} → {{to}}",
+      "toCheckpoint": "Run {{run}} from its base to its latest checkpoint · {{step}} · {{time}}",
+      "toEarlierCheckpoint": "Run {{run}} from its base to a checkpoint · reading the latest one",
+      "checkpointed": "Checkpointed",
+      "worktreeRange": "{{from}} → worktree",
+      "worktreeFromCheckpoint": "In the run’s worktree after checkpoint {{revision}}, not committed yet",
+      "worktreeFromBase": "In the run’s worktree after its base, before its first checkpoint",
+      "notCheckpointed": "Not checkpointed"
     },
     "preflight": {
       "pipelineNotPublished": "The task’s pipeline has no published version.",

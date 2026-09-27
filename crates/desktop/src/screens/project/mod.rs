@@ -31,7 +31,10 @@ use lurq::{
   node::{Element, dimension::Dimension},
   router::Navigator,
 };
-use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_core::{
+  id::{ProjectId, TaskId},
+  time::Timestamp,
+};
 
 pub(crate) use self::pages::page;
 use self::{pages::Shown, sidebar::sidebar};
@@ -41,7 +44,7 @@ use crate::{
   messages::{self, Message},
   navigation::{
     Navigation, PROJECT_PARAM, entry,
-    route::{Page, Route},
+    route::{self, ChangedFile, Page, Route},
   },
   runner::{RunnerStatus, Runners, state::RunnerState},
   tasks::{data::ProjectTasks, list, usage::ProjectUsage},
@@ -62,6 +65,17 @@ impl ProjectNav {
   /// Opens `page` as a new history entry, as every user navigation does.
   pub fn show(&self, page: Page) {
     entry::push(&self.navigator, page.path(self.project));
+  }
+
+  /// Opens `task`'s Changes tab on `file`, as a new history entry.
+  pub fn show_changes(&self, task: TaskId, file: &ChangedFile) {
+    entry::push(&self.navigator, route::changes_path(self.project, task, file));
+  }
+
+  /// Shows `file` on `task`'s Changes tab in place of the current entry: choosing another file
+  /// does not add to history.
+  pub fn replace_changes(&self, task: TaskId, file: &ChangedFile) {
+    entry::replace(&self.navigator, route::changes_path(self.project, task, file));
   }
 
   /// Shows `page` in place of the current entry, when the selection follows a save, so going

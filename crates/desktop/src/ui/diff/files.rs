@@ -85,12 +85,15 @@ const fn status_key(change: &FileChange) -> &'static str {
   }
 }
 
+/// Called with the list position of the file a person chose.
+pub type SelectFile = Arc<dyn Fn(usize) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct FileListProps {
   /// The first group's heading tops the list; later groups follow their files.
   pub groups: Arc<Vec<FileGroup>>,
   pub selected: usize,
-  pub select: Signal<usize>,
+  pub select: SelectFile,
 }
 
 impl PartialEq for FileListProps {
@@ -260,7 +263,7 @@ fn items(groups: &[FileGroup], selected: usize, query: &str) -> Vec<FileItem> {
 #[derive(Clone)]
 struct FileRowProps {
   item: FileItem,
-  select: Signal<usize>,
+  select: SelectFile,
 }
 
 impl PartialEq for FileRowProps {
@@ -308,7 +311,7 @@ impl Component for FileRow {
 }
 
 /// A changed file (`j9NDM`); the selected one on the hover fill (`QtCOv`).
-fn file_row(ctx: &Ctx, group: &str, entry: &FileEntry, selected: bool, select: Signal<usize>) -> Element {
+fn file_row(ctx: &Ctx, group: &str, entry: &FileEntry, selected: bool, select: SelectFile) -> Element {
   let status = ctx.t(entry.status);
   let summary = if entry.binary {
     ctx.t_args("diff.files.summaryBinary", [("status", &*status)])
@@ -346,7 +349,7 @@ fn file_row(ctx: &Ctx, group: &str, entry: &FileEntry, selected: bool, select: S
     return row.background(PaletteColor::AccentMuted).into();
   }
   let index = entry.index;
-  pressable(row, move || select.set(index))
+  pressable(row, move || select(index))
     .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
     .into()
 }
