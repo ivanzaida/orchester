@@ -100,6 +100,9 @@ pub const SPACE_DIALOG_MARGIN: f32 = 32.0;
 /// Padding of a note field (`NbNN0`, the changes a plan needs).
 pub const SPACE_TEXT_AREA: f32 = 14.0;
 pub const SPACE_BESIDE_GUTTER: f32 = 20.0;
+/// A check row's detail under its title: the row's icon and the gap after it (`gzztk` in 02.Q
+/// `LMrbK`).
+pub const SPACE_CHECK_INDENT: f32 = 28.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;
@@ -146,3 +149,6 @@ pub const UNPARSED_OPACITY: f32 = 0.6;
 /// A permission option the connection cannot enforce, or one that is not available yet, at 50 %
 /// (`BNliD` in 04.04 `T1rjv`; the compact 04.B `W0Owo` shows 45 %).
 pub const UNAVAILABLE_OPTION_OPACITY: f32 = 0.5;
+/// A button that cannot be pressed keeps its variant's look at 40 %, primary and secondary alike
+/// (`kLJJb` Button / Disabled state, `HN7cO`, `W4y2y` and `WuZqY` in `angoF`).
+pub const DISABLED_OPACITY: f32 = 0.4;

@@ -1,7 +1,9 @@
-//! The Conversation tab (02.12 `jgqPe`): the task's active work (`FjbKY`) beside the task
-//! conversation panel (`kjsmd`, see [`panel`]). The active work repeats where the run stands — its
-//! notice, its progress per step and its working context — so a message is written with the work in
-//! view.
+//! The Conversation tab (02.12 `jgqPe`, as built 02.S `JOG1i`): the task's active work (`FjbKY`)
+//! beside the task conversation panel (`kjsmd`, see [`panel`]). The active work repeats where the
+//! run stands — its notice, its progress per step and its working context — so a message is written
+//! with the work in view. Once no agent reads messages any more, the policy about when they do is
+//! left out; a merged run's notice says where its work went, and its permissions cannot change, so
+//! their row has no link (02.S2 `m3gLZ`).
 
 mod composer;
 mod entry;
@@ -15,11 +17,14 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
+use orchester_core::integration::Leftovers;
 
 pub use self::panel::{ConversationPanel, ConversationProps};
 use super::{
   notice::{Lost, notice},
+  permissions::permissions_value,
   progress::progress_list,
+  ready::merged_notice,
   summary::{budget_value, permissions_row},
 };
 use crate::{
@@ -48,6 +53,8 @@ pub(super) struct TabContext<'a> {
   pub(super) lost: Option<Lost>,
   /// Files changed up to the latest checkpoint, once read.
   pub(super) files: Option<usize>,
+  /// What the latest run left once it ended, once read.
+  pub(super) leftovers: Option<&'a Leftovers>,
   pub(super) nav: &'a ProjectNav,
   /// Set to have the composer take the focus (Ask agent, Reply).
   pub(super) focus: &'a Signal<bool>,
@@ -57,6 +64,7 @@ pub(super) struct TabContext<'a> {
 
 pub(super) fn conversation_tab(ctx: &mut Ctx, detail: &Arc<TaskDetail>, tab: &TabContext<'_>) -> Element {
   let conversation = Conversation::of(detail, tab.lost.is_some());
+  let open = conversation.state.takes_messages();
   let props = ConversationProps {
     repo_root: tab.repo_root.to_path_buf(),
     task: detail.task.id(),
@@ -69,14 +77,19 @@ pub(super) fn conversation_tab(ctx: &mut Ctx, detail: &Arc<TaskDetail>, tab: &Ta
     .id("task-conversation-tab")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(active_work(ctx, detail, tab))
+    .child(active_work(ctx, detail, tab, open))
     .child(ctx.mount_keyed::<ConversationPanel>("task-conversation", props))
     .into()
 }
 
 /// Active work (`FjbKY`): the notice, the progress rows (`qB7mj`) and the working context, in a
-/// viewport with the scroll gutter; the communication policy (`e2D1lv`) stays at the bottom.
-fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>) -> Element {
+/// viewport with the scroll gutter; the communication policy (`e2D1lv`) stays at the bottom while
+/// the conversation is `open`, that is, while an agent reads messages.
+fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>, open: bool) -> Element {
+  let notice = match &detail.merge {
+    Some(merge) => merged_notice(ctx, merge, tab.leftovers),
+    None => notice(ctx, detail, tab.lost),
+  };
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Section)
@@ -84,25 +97,32 @@ fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>) -> Elem
     .padding_right(ExtraSpacing::BesideGutter.role())
     .padding_bottom(SpacingSize::Section)
     .spacing(ExtraSpacing::Form.role())
-    .child(notice(ctx, detail, tab.lost))
+    .child(notice)
     .with_children(
       detail
         .run
         .as_ref()
         .map(|run| progress_list(ctx, run, tab.lost.is_some())),
     )
-    .with_children(detail.run.as_ref().map(|run| working_context(ctx, run, tab)));
-  let policy = Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding_top(ExtraSpacing::Form.role())
-    .padding_horizontal(SpacingSize::Section)
-    .padding_bottom(SpacingSize::Section)
-    .child(
-      Text::new(&ctx.t("conversation.policy"))
-        .id("task-conversation-policy")
-        .variant(ExtraTypography::Detail.role())
-        .width(Dimension::Pct(100.0)),
+    .with_children(
+      detail
+        .run
+        .as_ref()
+        .map(|run| working_context(ctx, run, tab, detail.merge.is_some())),
     );
+  let policy = open.then(|| {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding_top(ExtraSpacing::Form.role())
+      .padding_horizontal(SpacingSize::Section)
+      .padding_bottom(SpacingSize::Section)
+      .child(
+        Text::new(&ctx.t("conversation.policy"))
+          .id("task-conversation-policy")
+          .variant(ExtraTypography::Detail.role())
+          .width(Dimension::Pct(100.0)),
+      )
+  });
   Column::new()
     .id("task-active-work")
     .flex(1.0)
@@ -113,13 +133,22 @@ fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>) -> Elem
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),
     )
-    .child(policy)
+    .with_children(policy)
     .into()
 }
 
 /// Working context (`PdgpB` and the `tfGRt` rows after it): branch, last checkpoint, changed files
-/// with the way to the Changes tab, budget and the current agent's permissions.
-fn working_context(ctx: &mut Ctx, run: &RunView, tab: &TabContext<'_>) -> Element {
+/// with the way to the Changes tab, budget and the current agent's permissions; a `merged` run's
+/// permissions are only shown (`d9SVut` in 02.S2).
+fn working_context(ctx: &mut Ctx, run: &RunView, tab: &TabContext<'_>, merged: bool) -> Element {
+  let permissions = if merged {
+    run
+      .current_step()
+      .and_then(|step| permissions_value(ctx, step))
+      .map(|value| property(&ctx.t("runs.summary.permissions"), &value))
+  } else {
+    permissions_row(ctx, run, tab.repo_root, true)
+  };
   let checkpoint = run.run.last_checkpoint().map_or_else(
     || ctx.t("conversation.work.noCheckpoint"),
     |checkpoint| {
@@ -145,7 +174,7 @@ fn working_context(ctx: &mut Ctx, run: &RunView, tab: &TabContext<'_>) -> Elemen
     .child(property(&ctx.t("runs.summary.checkpoint"), &checkpoint))
     .child(changed_files(ctx, run, tab))
     .child(property(&ctx.t("runs.summary.budget"), &budget_value(ctx, run)))
-    .with_children(permissions_row(ctx, run, tab.repo_root))
+    .with_children(permissions)
     .into()
 }
 

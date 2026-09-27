@@ -8,10 +8,11 @@
 //!
 //! Reviewing the pull request (`o5Txa1`) needs a pull request, which no pipeline step opens yet, so
 //! it is drawn unavailable and says why. Asking the agent (`QzsSV`) and Open conversation open the
-//! task conversation; Ask agent also puts the focus in its composer. Evidence records (acceptance
-//! criteria, tests, browser checks) and artifacts do not exist yet, so their rows and the artifact
-//! buttons are left out. *Merge into <branch>* ([`merge`]) is not drawn yet; it sits beside Review
-//! PR.
+//! task conversation; Ask agent also puts the focus in its composer. Once the run is merged its
+//! conversation takes no messages, so Ask agent is not offered (02.P3 `bMJUA`, `OP7dt`). Evidence
+//! records (acceptance criteria, tests, browser checks) and artifacts do not exist yet, so their
+//! rows and the artifact buttons are left out. *Merge into <branch>* ([`merge`], 02.P `GIiCb`)
+//! sits between Ask agent and Review PR.
 
 mod details;
 mod merge;
@@ -30,6 +31,7 @@ use lurq::{
 };
 use orchester_core::{id::TaskId, integration::Leftovers, run::StepStatus};
 
+pub(super) use self::merge::merged_notice;
 use self::merge::{MergeAction, merge_action, merge_button, merge_problem, merge_unavailable, readiness};
 use super::{super::ProjectNav, changes::CheckpointedLoad, conversation::ComposerFocus, progress::progress_list};
 use crate::{
@@ -285,7 +287,7 @@ fn verification(ctx: &Ctx, run: &RunView) -> Element {
 }
 
 /// The size of the change, then Ask agent, Merge and Review PR, and why the unavailable ones are
-/// (`ksjis`).
+/// (`ksjis`); a merged run offers neither Ask agent nor Merge.
 fn actions(
   ctx: &Ctx,
   (detail, merge): (&TaskDetail, &MergeAction),
@@ -326,11 +328,13 @@ fn actions(
     Some(Checkpointed::NoCheckpoint) => ctx.t("runs.ready.scopeNone"),
     None => ctx.t("runs.ready.scopeReading"),
   };
-  let ask = ActionButton::new(ctx.t("runs.ready.askAgent"))
-    .icon(Icon::MessageSquare)
-    .id("task-ask-agent")
-    .on_click(move || ask())
-    .render(ctx);
+  let ask = detail.merge.is_none().then(|| {
+    ActionButton::new(ctx.t("runs.ready.askAgent"))
+      .icon(Icon::MessageSquare)
+      .id("task-ask-agent")
+      .on_click(move || ask())
+      .render(ctx)
+  });
   let review = ActionButton::new(ctx.t("runs.ready.reviewPullRequest"))
     .icon(Icon::GitCompareArrows)
     .primary()
@@ -353,7 +357,7 @@ fn actions(
             .flex(1.0)
             .nowrap(),
         )
-        .child(ask)
+        .with_children(ask)
         .with_children(merge_button(ctx, detail, merge))
         .child(review),
     )

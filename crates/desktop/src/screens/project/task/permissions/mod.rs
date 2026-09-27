@@ -21,7 +21,7 @@ use lurq::{
   },
   components::{Column, Popup, Row, Text},
   core::{ElementRef, Signal},
-  layout::{Alignment, text_style::TextAlign},
+  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -73,6 +73,9 @@ pub struct RunPermissionsProps {
   pub live: bool,
   /// The project folder, where the profile's draft is saved.
   pub repo_root: PathBuf,
+  /// The link follows the value on its line, as in the Conversation tab's wide column (`Lr8Dg` in
+  /// 02.S `JOG1i`), instead of under it.
+  pub inline_link: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RunPermissionsProps {}
@@ -175,19 +178,34 @@ impl RunPermissionsRow {
     })
     .rounded(RadiusSize::Sm)
     .child(Text::new(&ctx.t(link_key)).variant(TypographyStyle::Link));
-    // The value wraps in the narrow "This run" panel rather than losing its end; the link follows
-    // it, right-aligned under the value.
-    let value = Column::new()
-      .flex(1.0)
-      .spacing(SpacingSize::Xs)
-      .align_items(Alignment::End)
-      .child(
-        Text::new(&value)
-          .variant(TypographyStyle::Caption)
-          .color(PaletteColor::TextPrimary)
-          .text_align(TextAlign::Right),
-      )
-      .child(link);
+    let text = Text::new(&value)
+      .variant(TypographyStyle::Caption)
+      .color(PaletteColor::TextPrimary);
+    let value: Element = if props.inline_link {
+      Row::new()
+        .flex(1.0)
+        .spacing(SpacingSize::Xs)
+        .align_items(Alignment::Center)
+        .justify(Justify::End)
+        .child(text.nowrap())
+        .child(
+          Text::new(&ctx.t("common.separator"))
+            .variant(TypographyStyle::Caption)
+            .color(PaletteColor::TextPrimary),
+        )
+        .child(link)
+        .into()
+    } else {
+      // The value wraps in the narrow "This run" panel rather than losing its end; the link
+      // follows it, right-aligned under the value.
+      Column::new()
+        .flex(1.0)
+        .spacing(SpacingSize::Xs)
+        .align_items(Alignment::End)
+        .child(text.text_align(TextAlign::Right))
+        .child(link)
+        .into()
+    };
     Row::new()
       .id("task-permissions")
       .width(Dimension::Pct(100.0))

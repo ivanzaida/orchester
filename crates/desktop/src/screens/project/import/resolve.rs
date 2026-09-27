@@ -100,12 +100,7 @@ impl ImportDialog {
       options: item
         .options()
         .iter()
-        .map(|choice| {
-          (
-            MappingChoice(*choice),
-            labels::option(ctx, catalogs, item, *choice, &rename),
-          )
-        })
+        .map(|choice| (MappingChoice(*choice), labels::option(ctx, catalogs, item, *choice)))
         .collect(),
       choice: item.choice(),
       rename,

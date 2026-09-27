@@ -313,7 +313,10 @@ impl PipelineEditor {
         column = column.child(header::version_toolbar(ctx, state, &nav, number));
         let canvas = shown.as_ref().map_or_else(
           || CanvasProps::draft(state, &Selection::Pipeline),
-          |version| CanvasProps::version(state, &version.body),
+          |version| match props.view {
+            PipelineView::Compare(_) => CanvasProps::compared(state, &version.body),
+            PipelineView::Draft | PipelineView::Version(_) => CanvasProps::version(state, &version.body),
+          },
         );
         (canvas, history_panel(ctx, props, state, history))
       }

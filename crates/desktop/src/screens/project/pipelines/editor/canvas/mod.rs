@@ -31,7 +31,7 @@ use parking_lot::Mutex;
 
 use self::{
   controls::{NoticeRefs, band},
-  graph::{CanvasGraph, GraphProps},
+  graph::{CanvasGraph, Compared, GraphProps},
   input::{ZoomCommand, ZoomModifier, shortcut},
 };
 use super::Selection;
@@ -64,6 +64,7 @@ impl CanvasProps {
         cycle: state.edit().cycle(),
         assignables: state.assignables().clone(),
         read_only: false,
+        compared: None,
       },
       just_published: state
         .latest()
@@ -83,9 +84,21 @@ impl CanvasProps {
         cycle: None,
         assignables: state.assignables().clone(),
         read_only: true,
+        compared: None,
       },
       just_published: None,
     }
+  }
+
+  /// A published version compared with what the editor holds, when that is valid: the steps it
+  /// changes are tagged (03.08 `Fb42P`).
+  pub fn compared(state: &EditorState, body: &Pipeline) -> Self {
+    let mut props = Self::version(state, body);
+    if let Ok(current) = state.edit().validate() {
+      let draft = state.has_changes().then(|| state.draft_number());
+      props.graph.compared = Some(Compared::new(body, &current, draft));
+    }
+    props
   }
 }
 

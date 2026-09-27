@@ -783,6 +783,7 @@
       "merging": "Merging…",
       "unavailable": "Merge is unavailable: this run didn’t record the branch your checkout had when it started (it started before Orchester kept it, or on a detached HEAD). Merge its branch yourself with git.",
       "mergedTitle": "Merged into {{branch}}",
+      "noticeDetail": "{{merged}} {{left}}",
       "mergedDetail": {
         "fastForward": "{{branch}} moved forward to {{revision}} at {{time}}.",
         "mergeCommit": "Merge commit {{revision}} joined the run’s work into {{branch}} at {{time}}.",
@@ -2272,6 +2273,8 @@
       "fromVersionToLatest": "From {{version}} to the latest version",
       "compareInvalid": "Draft v{{draft}} has problems to fix before it can be compared.",
       "noDifferences": "No differences",
+      "changedInDraft": "Changed in draft v{{draft}}",
+      "changedInLatest": "Changed in the latest version",
       "restore": "Restore {{version}} as draft",
       "confirmRestore": "Replace draft v{{draft}}? Click again",
       "backToEditor": "Back to editing",
@@ -2501,8 +2504,7 @@
     },
     "option": {
       "copy": "New copy · {{name}}",
-      "rename": "Rename copy · {{name}}",
-      "renameBlank": "Rename copy",
+      "rename": "Rename copy",
       "useResource": "Use {{name}} · {{version}}",
       "useConnection": "Use {{name}}",
       "useSecret": "Use {{name}} · {{environment}}",

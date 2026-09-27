@@ -174,13 +174,13 @@ pub(super) fn source_detail(ctx: &Ctx, source: &Catalog, item: &Item) -> Arc<str
   }
 }
 
-/// The label of `choice` in `item`'s menu (`u8vYa`); `renamed` is the name typed for a rename.
-pub(super) fn option(ctx: &Ctx, catalogs: &Catalogs, item: &Item, choice: Choice, renamed: &str) -> Arc<str> {
+/// The label of `choice` in `item`'s menu (`u8vYa`). A renamed copy's name is in the field beside
+/// the menu, so the choice reads just *Rename copy* (`QFCoh` in `ixzlL`).
+pub(super) fn option(ctx: &Ctx, catalogs: &Catalogs, item: &Item, choice: Choice) -> Arc<str> {
   let source = name(&catalogs.source, item.source());
   match choice {
     Choice::Copy => ctx.t_args("projectImport.option.copy", [("name", &*source)]),
-    Choice::Rename if renamed.trim().is_empty() => ctx.t("projectImport.option.renameBlank"),
-    Choice::Rename => ctx.t_args("projectImport.option.rename", [("name", renamed.trim())]),
+    Choice::Rename => ctx.t("projectImport.option.rename"),
     Choice::Use(target) => use_label(ctx, &catalogs.target, target),
     Choice::Unresolved => ctx.t("projectImport.option.unresolved"),
     Choice::LeaveOut => ctx.t("projectImport.option.leaveOut"),
