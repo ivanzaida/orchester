@@ -34,8 +34,8 @@ use crate::{
   },
 };
 
-/// Dialog size, header and footer heights, column widths, search and row heights, rows per page
-/// (`CMmsI`, `jQaAf`, `oFlLX`, `IGagT`, `HMei5`, `O0AWC`, `WH2TF`, `br44j`).
+/// Dialog size, header and footer heights, column widths, search, row and page bar heights, rows per page
+/// (`CMmsI`, `jQaAf`, `oFlLX`, `IGagT`, `HMei5`, `O0AWC`, `WH2TF`, `TD4PC`, `br44j`).
 const DIALOG_WIDTH: f32 = 1120.0;
 const DIALOG_HEIGHT: f32 = 800.0;
 const HEADER_HEIGHT: f32 = 128.0;
@@ -44,6 +44,7 @@ const CATEGORIES_WIDTH: f32 = 184.0;
 const LIST_WIDTH: f32 = 456.0;
 const SEARCH_HEIGHT: f32 = 38.0;
 const ROW_HEIGHT: f32 = 62.0;
+const PAGES_HEIGHT: f32 = 30.0;
 const PER_PAGE: usize = 7;
 
 /// Which variables the list shows.
@@ -363,6 +364,7 @@ impl InstructionEditor {
       ));
     Row::new()
       .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(PAGES_HEIGHT))
       .align_items(Alignment::Center)
       .justify(Justify::SpaceBetween)
       .child(Text::new(&range).variant(ExtraTypography::Footnote.role()))
