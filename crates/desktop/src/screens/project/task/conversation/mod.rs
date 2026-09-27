@@ -147,7 +147,7 @@ fn working_context(ctx: &mut Ctx, run: &RunView, tab: &TabContext<'_>, merged: b
       .and_then(|step| permissions_value(ctx, step))
       .map(|value| property(&ctx.t("runs.summary.permissions"), &value))
   } else {
-    permissions_row(ctx, run, tab.repo_root)
+    permissions_row(ctx, run, tab.repo_root, true)
   };
   let checkpoint = run.run.last_checkpoint().map_or_else(
     || ctx.t("conversation.work.noCheckpoint"),
