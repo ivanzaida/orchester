@@ -72,7 +72,7 @@ impl OverviewTab {
 fn phase_of(task: &Task, phases: &Phases) -> TaskPhase {
   phases
     .get(&task.id())
-    .map_or_else(|| TaskPhase::of(task, None), |latest| latest.phase)
+    .map_or_else(|| TaskPhase::of(task, None, None), |latest| latest.phase)
 }
 
 /// The project pulse (`C95Z93`) counted from the tasks' latest runs.
@@ -100,7 +100,7 @@ impl Pulse {
           needs_input: pulse.needs_input + 1,
           ..pulse
         },
-        TaskPhase::Succeeded if latest.updated_at >= day_start => Self {
+        TaskPhase::Succeeded | TaskPhase::Merged if latest.updated_at >= day_start => Self {
           completed_today: pulse.completed_today + 1,
           ..pulse
         },
@@ -144,7 +144,7 @@ pub fn footer(tasks: &[Task], phases: &Phases) -> Message {
       .iter()
       .map(|task| phase_of(task, phases))
       .fold((0, 0), |(active, completed), phase| match phase {
-        TaskPhase::Succeeded => (active, completed + 1),
+        TaskPhase::Succeeded | TaskPhase::Merged => (active, completed + 1),
         TaskPhase::Draft | TaskPhase::Failed | TaskPhase::Cancelled => (active, completed),
         _ => (active + 1, completed),
       });
@@ -180,6 +180,7 @@ impl RecentRun {
       TaskPhase::StoppedAtLimit => "overview.activity.stoppedAtLimit",
       TaskPhase::Interrupted => "overview.activity.interrupted",
       TaskPhase::Succeeded => "overview.activity.succeeded",
+      TaskPhase::Merged => "overview.activity.merged",
       TaskPhase::Failed => "overview.activity.failed",
       TaskPhase::Cancelled => "overview.activity.cancelled",
     };

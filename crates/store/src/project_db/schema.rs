@@ -535,4 +535,19 @@ CREATE TABLE project_environment (
   value TEXT NOT NULL
 ) STRICT;
 ",
+  r"
+-- Integration: the branch the user's checkout had when a run started, which merging the run brings
+-- its work into (NULL on a detached HEAD, and for runs recorded before it was kept).
+ALTER TABLE runs ADD COLUMN base_branch TEXT;
+
+-- Runs whose work was merged into their base branch: the commit that branch was at afterwards and
+-- how it got there. Desktop-written, once per run.
+CREATE TABLE run_merges (
+  run_id TEXT PRIMARY KEY REFERENCES runs (id),
+  into_branch TEXT NOT NULL,
+  revision TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('fast_forward', 'merge_commit', 'already_merged')),
+  merged_at INTEGER NOT NULL
+) STRICT;
+",
 ];

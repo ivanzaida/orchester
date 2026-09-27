@@ -5,6 +5,7 @@ use crate::{
   connection::{Connection, stream::AgentEvent},
   diff::RevisionDiff,
   id::{ConnectionId, IdempotencyKey, InvocationId, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
+  integration::RunMerge,
   limits::ProjectLimits,
   name::Name,
   pull_request::{PullRequest, SyncedPullRequests},
@@ -56,6 +57,17 @@ pub trait SettingsStore {
 
   /// Replaces the project's environment additions with `environment`.
   fn save_project_environment(&mut self, environment: &CommandEnvironment) -> Result<(), Self::Error>;
+}
+
+/// Runs whose work was merged into their base branch. Written by the desktop, which merges; a run
+/// is merged at most once.
+pub trait MergeStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Records `merge`. Recording a merge of a run that has one already fails.
+  fn save_run_merge(&mut self, merge: &RunMerge) -> Result<(), Self::Error>;
+
+  fn run_merge(&self, run: RunId) -> Result<Option<RunMerge>, Self::Error>;
 }
 
 /// Versioned configuration resources. Reading a body of the wrong kind is an error, not `None`.

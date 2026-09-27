@@ -30,6 +30,8 @@ pub struct NewRun {
   pub snapshot: RunSnapshot,
   pub branch: BranchName,
   pub base: Revision,
+  /// The branch the user's checkout had at `base`; `None` on a detached HEAD.
+  pub base_branch: Option<BranchName>,
   pub budget: TokenBudget,
   /// Most active agent time the run may use.
   pub max_duration: Duration,
@@ -85,6 +87,7 @@ impl Run {
       snapshot: new.snapshot,
       branch: new.branch,
       base: new.base,
+      base_branch: new.base_branch,
       budget: new.budget,
       max_duration: new.max_duration,
     };
@@ -207,6 +210,12 @@ impl Run {
   /// Revision the run's branch was created from.
   pub fn base(&self) -> &Revision {
     &self.created.base
+  }
+
+  /// The branch the user's checkout had when the run started: where merging the run brings its
+  /// work. `None` when it had a detached HEAD, or the run was recorded before Orchester kept it.
+  pub fn base_branch(&self) -> Option<&BranchName> {
+    self.created.base_branch.as_ref()
   }
 
   /// The token budget in force: the creation budget or the last raised one.

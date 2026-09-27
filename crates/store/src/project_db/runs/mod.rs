@@ -6,7 +6,7 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  run::{Checkpoint, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber, StepExecutor},
+  run::{BranchName, Checkpoint, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber, StepExecutor},
   store::RunStore,
   time::Timestamp,
 };
@@ -167,8 +167,8 @@ fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(),
   transaction.execute(
     "INSERT INTO runs (id, number, idempotency_key, task_id, pipeline_version_id, snapshot, branch, base_revision, \
      initial_budget_tokens, initial_max_duration_ms, budget_tokens, max_duration_ms, used_tokens, pause_requested, \
-     status, status_reason, failed_step, limit_execution, last_sequence, created_at) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+     status, status_reason, failed_step, limit_execution, last_sequence, created_at, base_branch) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
     params![
       run.id().to_string(),
       run.number().get(),
@@ -190,6 +190,7 @@ fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(),
       columns.limit_execution,
       sequence_column(run.last_sequence().get())?,
       run.created_at().unix_millis(),
+      run.base_branch().map(BranchName::as_str),
     ],
   )?;
   Ok(())

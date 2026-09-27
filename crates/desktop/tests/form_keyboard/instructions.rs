@@ -116,6 +116,7 @@ fn seed_runs(repo: &Path) {
       snapshot: snapshot.clone(),
       branch: BranchName::new(&format!("orchester/orc-1-run-{number}")).expect("branch"),
       base: revision('a'),
+      base_branch: None,
       budget: TokenBudget::new(1_000_000).expect("budget"),
       max_duration: Duration::from_secs(1_800),
     };

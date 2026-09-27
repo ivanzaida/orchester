@@ -112,6 +112,7 @@ fn run_of_one_step(approval_gate: bool) -> (TempDir, ProjectDb, Run, StepExecuti
     snapshot: RunSnapshot::build(delivery, &version, published).expect("snapshot"),
     branch: BranchName::new("orchester/orc-1-run-1").expect("branch"),
     base: Revision::new(&"a".repeat(40)).expect("revision"),
+    base_branch: None,
     budget: budget(1_000_000),
     max_duration: Duration::from_secs(1_800),
   };

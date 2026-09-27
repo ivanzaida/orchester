@@ -96,7 +96,7 @@ fn run_limits_stop_at_limit_keeps_the_step_open_and_waits_for_a_raise() {
     at(1),
   );
   assert_eq!(task.status(), TaskStatus::Draft);
-  assert_eq!(TaskPhase::of(&task, Some(run)), TaskPhase::StoppedAtLimit);
+  assert_eq!(TaskPhase::of(&task, Some(run), None), TaskPhase::StoppedAtLimit);
   assert!(!TaskPhase::StoppedAtLimit.is_active());
   assert_eq!(
     logged.run.resume(at(16)),
