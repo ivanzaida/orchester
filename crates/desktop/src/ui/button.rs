@@ -8,7 +8,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::mouse_event::MouseEvent,
-    theme::{BorderSize, FormButtonRole, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, FormButtonRole, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, Text},
   layout::{Alignment, layout_kind::Justify},
@@ -19,6 +19,7 @@ use super::{
   icon::{Icon, IconSize, icon},
   pressable::{Ring, TAB_STOP},
 };
+use crate::theme::DISABLED_OPACITY;
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
@@ -152,22 +153,6 @@ impl ActionButton {
     self
   }
 
-  fn colors(&self, role: &FormButtonRole) -> (PaletteColor, PaletteColor, PaletteColor) {
-    match (&self.state, self.kind) {
-      (State::Enabled(_), _) => (role.background.clone(), role.border.clone(), role.text.color.clone()),
-      (_, Kind::Primary) => (
-        PaletteColor::TextMuted,
-        PaletteColor::TextMuted,
-        PaletteColor::TextInverse,
-      ),
-      (_, Kind::Secondary) => (
-        PaletteColor::SurfaceRaised,
-        PaletteColor::Border,
-        PaletteColor::TextMuted,
-      ),
-    }
-  }
-
   pub fn render(self, ctx: &Ctx) -> Element {
     let form = ctx.theme().form();
     let role = match self.kind {
@@ -175,7 +160,7 @@ impl ActionButton {
       Kind::Secondary => form.button.secondary.clone(),
     };
     drop(form);
-    let (background, border, text) = self.colors(&role);
+    let text = role.text.color.clone();
 
     let (icon_size, typography) = if self.compact {
       (IconSize::Marker, TypographyStyle::Link)
@@ -195,8 +180,8 @@ impl ActionButton {
       .button()
       .height(self.height.unwrap_or(role.height))
       .padding_custom(role.padding)
-      .background(background)
-      .border(Border::inside(BorderSize::Sm, border))
+      .background(role.background.clone())
+      .border(Border::inside(BorderSize::Sm, role.border.clone()))
       .rounded(role.radius)
       .align_items(Alignment::Center)
       .justify(if self.start { Justify::Start } else { Justify::Center })
@@ -227,15 +212,16 @@ impl ActionButton {
           handler();
         }),
       // Tab skips a button that cannot be pressed.
-      State::Disabled => focus(button, SKIPPED_BY_TAB)
-        .describe("state", "disabled")
-        .cursor(CursorIcon::NotAllowed),
-      State::Unavailable => focus(button, SKIPPED_BY_TAB)
-        .describe("state", "unavailable")
-        .cursor(CursorIcon::NotAllowed),
+      State::Disabled => not_pressable(focus(button, SKIPPED_BY_TAB)).describe("state", "disabled"),
+      State::Unavailable => not_pressable(focus(button, SKIPPED_BY_TAB)).describe("state", "unavailable"),
     }
     .into()
   }
+}
+
+/// A button that cannot be pressed: its variant's own colors, faded as a whole (`kLJJb`).
+fn not_pressable(button: Button) -> Button {
+  button.opacity(DISABLED_OPACITY).cursor(CursorIcon::NotAllowed)
 }
 
 /// Pointer, hover and press fills; in a form also the outer focus ring while focused. Hover and
