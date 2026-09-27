@@ -3,7 +3,10 @@
 
 use std::path::Path;
 
-use orchester_core::{connection::AgentProvider, id::ResourceId};
+use orchester_core::{
+  connection::AgentProvider,
+  id::{ResourceId, TaskId},
+};
 
 use super::log::{OperationSpec, Place, Target};
 use crate::{agents::data::ProfileChange, messages::Message, tools::data::ToolChange, workspace::OpenProject};
@@ -206,6 +209,52 @@ pub fn task_draft(open: &OpenProject, title: &str) -> OperationSpec {
   .named(title)
   .project(open.project.name().as_str())
   .target(in_project(open, Place::Tasks))
+  .quiet()
+}
+
+/// Merging run `number` of task `key` ("ORC-12", 3) into `branch`, then clearing what it left.
+pub fn run_merge(open: &OpenProject, task: TaskId, (key, number): (&str, u32), branch: &str) -> OperationSpec {
+  let message = |text| {
+    Message::new(text)
+      .with("task", key.to_owned())
+      .with("run", number.to_string())
+      .with("branch", branch.to_owned())
+  };
+  OperationSpec::new(
+    message("statusBar.operations.runMerge.running"),
+    message("statusBar.operations.runMerge.done"),
+    message("statusBar.operations.runMerge.failed"),
+  )
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::Task(task)))
+}
+
+/// Removing the worktrees of run `number` of task `key` ("ORC-12", 3).
+pub fn run_cleanup(open: &OpenProject, task: TaskId, (key, number): (&str, u32)) -> OperationSpec {
+  let message = |text| {
+    Message::new(text)
+      .with("task", key.to_owned())
+      .with("run", number.to_string())
+  };
+  OperationSpec::new(
+    message("statusBar.operations.runCleanup.running"),
+    message("statusBar.operations.runCleanup.done"),
+    message("statusBar.operations.runCleanup.failed"),
+  )
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::Task(task)))
+}
+
+/// Saving Project settings › Environment; only its outcome is listed.
+pub fn project_environment(open: &OpenProject) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.projectEnvironment.running",
+    done: "statusBar.operations.projectEnvironment.done",
+    failed: "statusBar.operations.projectEnvironment.failed",
+  }
+  .unnamed()
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::Settings))
   .quiet()
 }
 

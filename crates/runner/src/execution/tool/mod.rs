@@ -2,11 +2,11 @@
 //! `workspace`): alone in the run's worktree, beside other steps in a worktree of its own that is
 //! merged back when it passes. Its program is found on the `PATH` or in the worktree and started
 //! as the process runner starts every program (Windows command scripts included), with the cleaned
-//! environment and the tool's variables, no console window and its whole process tree ended with
-//! it. It takes a command slot instead of an agent slot (see `board`); its run is an invocation of
-//! the step, so its time counts toward the run's time limit. What it printed is kept up to the
-//! tool's output limit and recorded in the transcript when it ends; its exit code decides the
-//! step, and a short summary is the step's output for the steps after it.
+//! environment, the project's variables and the tool's, no console window and its whole process
+//! tree ended with it. It takes a command slot instead of an agent slot (see `board`); its run is
+//! an invocation of the step, so its time counts toward the run's time limit. What it printed is
+//! kept up to the tool's output limit and recorded in the transcript when it ends; its exit code
+//! decides the step, and a short summary is the step's output for the steps after it.
 
 mod end;
 mod worker;
@@ -16,9 +16,9 @@ use std::path::{Path, PathBuf};
 use orchester_core::{
   connection::{invocation::Platform, stream::RunnerProblem},
   id::StepExecutionId,
-  resource::{CommandAction, Tool, ToolAction},
+  resource::{CommandAction, CommandEnvironment, Tool, ToolAction},
   run::{Invocation, StepExecutor, StepFailure, StepStatus, ToolCommand},
-  store::{ActivityStore, ResourceStore},
+  store::{ActivityStore, ResourceStore, SettingsStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
@@ -72,7 +72,7 @@ impl RunTask {
         return Ok(true);
       }
     };
-    let (command, program) = match self.resolve(execution, workspace.path()) {
+    let (command, program, environment) = match self.resolve(execution, workspace.path()) {
       Ok(resolved) => resolved,
       Err(problem) => {
         self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted)?;
@@ -85,7 +85,9 @@ impl RunTask {
     }
     .started();
     self.record(&invocation, started)?;
-    let process = command.action.process(&program, workspace.path(), std::env::vars_os());
+    let process = command
+      .action
+      .process(&program, workspace.path(), std::env::vars_os(), &environment);
     match Supervised::start(&process) {
       Ok(process) => self.follow(execution, invocation, command, process, workspace),
       Err(error) => {
@@ -98,14 +100,25 @@ impl RunTask {
     Ok(true)
   }
 
-  /// The pinned command tool of `execution`'s step and the file its program is, or why it cannot
-  /// start in `worktree`.
-  fn resolve(&self, execution: StepExecutionId, worktree: &Path) -> Result<(PinnedCommand, PathBuf), RunnerProblem> {
+  /// The pinned command tool of `execution`'s step, the file its program is and the variables the
+  /// project adds, or why it cannot start in `worktree`.
+  fn resolve(
+    &self,
+    execution: StepExecutionId,
+    worktree: &Path,
+  ) -> Result<(PinnedCommand, PathBuf, CommandEnvironment), RunnerProblem> {
     let command = self.pinned_command(execution)?;
-    let program = find_program(&command.action, worktree).ok_or_else(|| RunnerProblem::ProgramNotFound {
-      program: command.action.program().as_str().to_owned(),
-    })?;
-    Ok((command, program))
+    let environment = self
+      .db
+      .project_environment()
+      .map_err(|error| RunnerProblem::CouldNotStart {
+        detail: error.to_string(),
+      })?;
+    let program =
+      find_program(&command.action, &environment, worktree).ok_or_else(|| RunnerProblem::ProgramNotFound {
+        program: command.action.program().as_str().to_owned(),
+      })?;
+    Ok((command, program, environment))
   }
 
   /// The command tool of `execution`'s step, as the run pinned it, or why it cannot run.
@@ -192,8 +205,8 @@ impl RunTask {
 }
 
 /// The first file the program is, on the `PATH` it starts with or in `worktree`.
-fn find_program(action: &CommandAction, worktree: &Path) -> Option<PathBuf> {
-  let path = action.search_path(std::env::var_os("PATH"));
+fn find_program(action: &CommandAction, project: &CommandEnvironment, worktree: &Path) -> Option<PathBuf> {
+  let path = action.search_path(project, std::env::var_os("PATH"));
   action
     .program_candidates(worktree, path.as_deref(), Platform::current())
     .into_iter()

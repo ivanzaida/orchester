@@ -14,7 +14,9 @@ Date: 2026-09-23. Status: agreed direction for the local (single-user) version; 
 | Large content | content-addressed blob files |
 | Secrets | OS keychain only; databases store references |
 | Execution | separate runner process; agents are runner child processes |
-| Agent worktrees | inside the repository, `<repo>/.orchester/worktrees/`; a step running beside other steps of its run has its own, merged back when it passes |
+| Agent worktrees | inside the repository, `<repo>/.orchester/worktrees/`; a step running beside other steps of its run has its own, merged back when it passes; a run's worktrees go when it is merged, or when a person removes them after it ended (see [Integration](#integration)) |
+| Integration | a run that succeeded is merged into the branch the user's checkout had when it started, in that checkout, only while it is clean and on that branch; nothing of the user's is stashed, reset or discarded |
+| Environment | a project adds plain variables (no secrets) to the cleaned environment of every agent CLI and command tool its runs start, e.g. `CARGO_TARGET_DIR` |
 | Closing with active runs | confirmation listing the runs: wait for checkpoints, or quit now |
 | Quit now or crash | next start reports the abnormal end and offers to continue from the last checkpoint |
 | Logs and transcripts | kept in full, no retention limit |
@@ -133,6 +135,34 @@ at work takes one.
   steps after it. HTTP and database tools, which use secrets and approvals, and command tools with
   access rules are refused by the preflight.
 
+### Integration
+
+A run that succeeded is merged by the desktop, in the user's checkout (the repository folder), into
+the branch that checkout had when the run started: the runner records it with the run (`runs.base_branch`;
+none on a detached HEAD, and none for runs recorded before it was kept, which cannot be merged from
+Orchester). All of it is git through `orchester-exec`, with git's messages in English and no optional
+locks (`orchester_core::integration`).
+
+- **Only a checkout that is ready.** The checkout must be on that branch, have no uncommitted
+  changes (untracked files included) and no merge, cherry-pick or revert in progress; otherwise the
+  merge is refused with the reason and nothing changes. Nothing is ever stashed, reset or discarded.
+- **Merging.** A fast-forward when the branch did not move since the run started, else a merge commit
+  *Merge ORC-12 run #3* with the repository's git identity. The repository's own hooks run: they are
+  the user's. A conflict, or a hook that refuses the merge commit, is undone with `git merge
+  --abort` — safe because the checkout was clean — and the conflicting files are named. A branch that
+  already holds every commit of the run is recorded as merged without a change.
+- **Recording.** The merge is a desktop-written row (`run_merges`: the branch, the commit it was at
+  afterwards, fast-forward / merge commit / already merged, when). The task is then *Merged*.
+- **Clearing up.** Right after a merge the run's worktrees (its own and those of failed or skipped
+  steps that ran beside others) are removed with `git worktree remove`, build output included, and
+  its branches whose commits are on the base branch or the checkout's current branch are deleted;
+  other branches are kept, and so is a worktree with uncommitted changes. For a run that ended
+  (succeeded, failed or cancelled) a person can remove them too (*Remove worktree*): a worktree with
+  uncommitted changes goes only once the person saw the files named and agreed to discard them, and
+  only if the changes are still exactly those. A folder already deleted by hand is pruned. The
+  Changes tab then shows the checkpointed changes and says the worktree was removed; a run's commits
+  stay reachable through the base branch or its kept branch.
+
 ## Storage layout
 
 ```
@@ -201,6 +231,7 @@ open at the next start means the previous session crashed.
 | `project` | key (`ORC`), name, repository, default branch |
 | `counters` | next task number, next run number |
 | `project_limits` | at most one row: maximum run budget, default run budget, daily project budget, default time limit; without it the defaults apply (10M, 1.4M, 20M tokens, 30 min) |
+| `project_environment` | Project settings › Environment: variable name (unique without regard to case) and plain value, added to the cleaned environment of every agent CLI and command tool the project's runs start, under a command tool's own variables; read at each start |
 | `money_budgets_before_tokens` | the money budgets tasks and runs had before budgets became tokens, kept by the migration that replaced them with the default run budget |
 | `money_step_budgets_before_tokens` | the money step budgets of published pipeline versions and drafts from before step budgets became tokens, per version or draft and step |
 | `repository_link` | at most one row: GitHub connection, git remote, host / owner / name, default branch, permission, expected login, checked at |
@@ -248,7 +279,8 @@ keeps its permissions unless the change is also saved to its draft.
 
 | Table | Purpose |
 | --- | --- |
-| `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it), branch, base revision, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
+| `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it), branch, base revision and the branch the user's checkout had there, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
+| `run_merges` | a run that succeeded and was merged into its base branch: the branch, the commit it was at afterwards, how (fast-forward, merge commit, already merged), when — desktop-written, once per run |
 | `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step |
 | `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
 | `attempts` | run, number, status, reason |
@@ -296,7 +328,8 @@ inserted after the file exists. Blobs are never deleted (full retention).
 
 SQLite serializes writes between the two processes; ownership keeps meaning unambiguous.
 
-- **Desktop** writes user-authored data: configuration, connections, secret metadata, tasks,
+- **Desktop** writes user-authored data: configuration, connections, secret metadata, tasks, run
+  merges (`run_merges`, a person's integration of a finished run), environment additions,
   dependencies, run groups, user messages, feedback threads, approval decisions, settings.
 - **Runner** writes execution data: runs, attempts, steps, plans, checkpoints, events,
   evidence, artifacts, usage, agent messages, message delivery state, audit events.

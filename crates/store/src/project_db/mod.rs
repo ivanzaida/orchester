@@ -1,8 +1,10 @@
 mod activity;
 mod blobs;
 mod connections;
+mod environment;
 mod invocation_prompts;
 mod limits;
+mod merges;
 mod plans;
 mod pull_request_diffs;
 mod pull_requests;

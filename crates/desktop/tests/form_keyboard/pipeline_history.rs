@@ -123,6 +123,7 @@ fn run_of(
     snapshot: RunSnapshot::build(pipeline, version, published).expect("snapshot"),
     branch: BranchName::new("orchester/orc-1-run-1").expect("branch"),
     base: Revision::new(&"a".repeat(40)).expect("revision"),
+    base_branch: None,
     budget,
     max_duration: Duration::from_secs(1_800),
   };

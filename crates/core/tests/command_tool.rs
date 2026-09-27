@@ -197,6 +197,38 @@ fn command_tool_candidates_follow_the_path_or_the_worktree() {
 }
 
 #[test]
+fn command_tool_process_adds_the_project_variables_under_its_own() {
+  let worktree = std::env::temp_dir().join("worktree");
+  let found = PathBuf::from("/usr/bin/cargo");
+  let environment = [("PATH", "/usr/bin"), ("GH_TOKEN", "must not pass")]
+    .map(|(name, value)| (OsString::from(name), OsString::from(value)));
+  let project = CommandEnvironment::new(BTreeMap::from([
+    (variable("CARGO_TARGET_DIR"), "/repo/.orchester/target".to_owned()),
+    (variable("path"), "/opt/tools".to_owned()),
+    (variable("rust_log"), "warn".to_owned()),
+  ]))
+  .expect("valid variables");
+  let process = full_command().process(&found, &worktree, environment, &project);
+  assert_eq!(
+    process.env(),
+    [
+      ("CARGO_TARGET_DIR".to_owned(), "/repo/.orchester/target".to_owned()),
+      ("path".to_owned(), "/opt/tools".to_owned()),
+      ("RUST_LOG".to_owned(), "info".to_owned())
+    ]
+  );
+  // The program is looked up on the project's PATH unless the tool sets its own.
+  assert_eq!(
+    full_command().search_path(&project, Some("/usr/bin".into())),
+    Some("/opt/tools".into())
+  );
+  assert_eq!(
+    full_command().search_path(&CommandEnvironment::default(), Some("/usr/bin".into())),
+    Some("/usr/bin".into())
+  );
+}
+
+#[test]
 fn command_tool_process_runs_in_the_worktree_with_the_cleaned_environment_and_its_variables() {
   let worktree = std::env::temp_dir().join("worktree");
   let found = PathBuf::from("/usr/bin/cargo");
@@ -206,7 +238,7 @@ fn command_tool_process_runs_in_the_worktree_with_the_cleaned_environment_and_it
     ("rust_log", "debug"),
   ]
   .map(|(name, value)| (OsString::from(name), OsString::from(value)));
-  let process = full_command().process(&found, &worktree, environment);
+  let process = full_command().process(&found, &worktree, environment, &CommandEnvironment::default());
   assert_eq!(process.program(), found);
   assert_eq!(process.args(), ["test", "--workspace", "name with space"]);
   assert_eq!(process.current_dir(), Some(worktree.as_path()));

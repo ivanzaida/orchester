@@ -1,14 +1,17 @@
-//! Turning a queued task into a started run: preflight, the run's base revision and branch, its
-//! record in the database, its worktree and its start. Idempotent by the request's key.
+//! Turning a queued task into a started run: preflight, the run's base revision and the branch
+//! the user's checkout has there (which merging the run brings its work into), the run's branch,
+//! its record in the database, its worktree and its start. Idempotent by the request's key.
 
 use std::{
   collections::BTreeMap,
   num::NonZeroU32,
   path::{Path, PathBuf},
+  time::Duration,
 };
 
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, TaskId},
+  integration::checked_out_branch,
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Tool, Version},
   revision::Revision,
   run::{
@@ -18,11 +21,15 @@ use orchester_core::{
   task::{Task, TaskStatus},
   time::Timestamp,
 };
+use orchester_exec::ProcessRunner;
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::failed;
 use crate::{git::Git, worktree::Worktrees};
+
+/// A git query that does not answer within this time counts as failed.
+const GIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// A recorded run and whether this request is the one that executes it.
 pub(super) struct Prepared {
@@ -65,6 +72,8 @@ pub(super) fn prepare(
   }
   let pipeline = pipeline.expect("the preflight rejects a pipeline without a published version");
   let base = base_revision(root)?;
+  let base_branch = checked_out_branch(&ProcessRunner::new(GIT_TIMEOUT), Path::new("git"), root)
+    .map_err(|error| failed("cannot read the checked-out branch", &error))?;
   let snapshot = RunSnapshot::build(pipeline_id, &pipeline, published.versions())
     .map_err(|error| failed("cannot pin the run's configuration", &error))?;
   let ordinal = u32::try_from(earlier.len() + 1)
@@ -77,6 +86,7 @@ pub(super) fn prepare(
     snapshot,
     branch: BranchName::for_run(task.key(), ordinal),
     base,
+    base_branch,
     budget: limits.budget(),
     max_duration: limits.max_duration(),
   };

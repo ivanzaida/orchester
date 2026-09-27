@@ -7,30 +7,41 @@
 //! Reviewing the pull request (`o5Txa1`) needs a pull request, which no pipeline step opens yet;
 //! asking the agent (`QzsSV`) needs the task conversation. Both are drawn unavailable and say why.
 //! Evidence records (acceptance criteria, tests, browser checks) and artifacts do not exist yet, so
-//! their rows and the artifact buttons are left out.
+//! their rows and the artifact buttons are left out. *Merge into <branch>* ([`merge`]) is not drawn
+//! yet; it sits beside Review PR.
 
 mod details;
+mod merge;
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
+    component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::StepStatus;
+use orchester_core::{integration::Leftovers, run::StepStatus};
 
-use super::{changes::CheckpointedLoad, progress::progress_list};
+use self::merge::{MergeAction, merge_action, merge_button, merge_problem, merge_unavailable, readiness};
+use super::{super::ProjectNav, changes::CheckpointedLoad, progress::progress_list};
 use crate::{
   display,
-  tasks::{changes::Checkpointed, detail::RunView},
+  messages::Message,
+  tasks::{
+    changes::Checkpointed,
+    detail::{RunView, TaskDetail},
+  },
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
   },
+  workspace::OpenProject,
 };
 
 /// Height of the stage row and of a stage, the stage line's thickness, and a bullet's size
@@ -39,62 +50,75 @@ const STAGES_HEIGHT: f32 = 44.0;
 const STAGE_HEIGHT: f32 = 24.0;
 const STAGE_LINE: f32 = 2.0;
 const BULLET: f32 = 3.0;
-/// Height of the review actions row (`ksjis`) and of the readiness card (`IBuWf`).
+/// Height of the review actions row (`ksjis`).
 const ACTIONS_HEIGHT: f32 = 44.0;
-const READINESS_HEIGHT: f32 = 76.0;
 
-/// The Summary tab of `run`, which succeeded, in project `project`.
-pub(super) fn ready_for_review(
-  ctx: &mut Ctx,
-  run: &RunView,
-  checkpointed: Option<&CheckpointedLoad>,
-  project: &str,
-) -> Element {
-  let checkpointed = match checkpointed {
-    Some(CheckpointedLoad::Ready(checkpointed)) => Some(checkpointed),
-    _ => None,
-  };
-  let summary = Column::new()
-    .id("task-ready")
-    .flex(1.0)
-    .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Section)
-    .spacing(SpacingSize::Lg)
-    .child(readiness(ctx))
-    .child(stages(run))
-    .with_children(what_changed(ctx, run))
-    .child(verification(ctx, run))
-    .child(Spacer::new().flex(1.0))
-    .child(actions(ctx, checkpointed));
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .child(summary)
-    .child(details::run_details(ctx, run, project))
-    .into()
+/// What Ready for review shows, compared to render it again when the task or its run changes.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct ReadyProps {
+  /// The task, whose latest run succeeded.
+  pub(super) detail: Arc<TaskDetail>,
+  pub(super) checkpointed: Option<CheckpointedLoad>,
+  pub(super) open: OpenProject,
+  /// What the run left in the repository, once read.
+  pub(super) leftovers: Option<Result<Leftovers, Message>>,
 }
 
-/// "Ready for your review" (`IBuWf`).
-fn readiness(ctx: &Ctx) -> Element {
-  Row::new()
-    .id("task-ready-notice")
-    .width(Dimension::Pct(100.0))
-    .min_height(Dimension::Px(READINESS_HEIGHT))
-    .padding(SpacingSize::Md)
-    .spacing(ExtraSpacing::Group.role())
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .rounded(ExtraRadius::Notice.role())
-    .child(icon(Icon::CircleCheck, IconSize::Panel, PaletteColor::TextPrimary))
-    .child(
-      Column::new()
-        .flex(1.0)
-        .spacing(ExtraSpacing::Indicator.role())
-        .child(Text::new(&ctx.t("runs.ready.title")).variant(ExtraTypography::CardTitle.role()))
-        .child(Text::new(&ctx.t("runs.ready.detail")).variant(TypographyStyle::FieldLabel)),
-    )
-    .into()
+impl lurq::app::component::DevtoolsInspectable for ReadyProps {}
+
+/// The Summary tab of a run that succeeded, with its merge; mounted per run.
+pub(super) struct ReadyForReview;
+
+impl Component for ReadyForReview {
+  type Props = ReadyProps;
+
+  fn create(ctx: &mut Ctx) -> Self {
+    let props = ctx.props::<ReadyProps>().clone();
+    let action = merge_action(ctx, &props.open, &props.detail);
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav");
+    // The task page reads the merge and what the run left again.
+    ctx.watch(&action.state(), move |state| {
+      if !state.is_pending() && state.data.is_some() {
+        nav.tasks_changed();
+      }
+    });
+    Self
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<ReadyProps>().clone();
+    let action = merge_action(ctx, &props.open, &props.detail);
+    let detail = &props.detail;
+    let run = detail
+      .run
+      .as_ref()
+      .expect("Ready for review shows a task whose run succeeded");
+    let checkpointed = match &props.checkpointed {
+      Some(CheckpointedLoad::Ready(checkpointed)) => Some(checkpointed),
+      _ => None,
+    };
+    let leftovers = props.leftovers.as_ref().and_then(|leftovers| leftovers.as_ref().ok());
+    let summary = Column::new()
+      .id("task-ready")
+      .flex(1.0)
+      .height(Dimension::Pct(100.0))
+      .padding(SpacingSize::Section)
+      .spacing(SpacingSize::Lg)
+      .child(readiness(ctx, detail.merge.as_ref(), leftovers))
+      .child(stages(run))
+      .with_children(what_changed(ctx, run))
+      .child(verification(ctx, run))
+      .child(Spacer::new().flex(1.0))
+      .with_children(merge_problem(ctx, detail, &action))
+      .child(actions(ctx, (detail, &action), checkpointed));
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .child(summary)
+      .child(details::run_details(ctx, run, props.open.project.name().as_str()))
+  }
 }
 
 /// The pipeline's steps, each passed (`XHMgH`).
@@ -208,8 +232,9 @@ fn verification(ctx: &Ctx, run: &RunView) -> Element {
     .into()
 }
 
-/// The size of the change, then Ask agent and Review PR, unavailable and why (`ksjis`).
-fn actions(ctx: &Ctx, checkpointed: Option<&Checkpointed>) -> Element {
+/// The size of the change, then Ask agent, Merge and Review PR, and why the unavailable ones are
+/// (`ksjis`).
+fn actions(ctx: &Ctx, (detail, merge): (&TaskDetail, &MergeAction), checkpointed: Option<&Checkpointed>) -> Element {
   let scope = match checkpointed {
     Some(Checkpointed::Read { changes, .. }) => {
       let files = changes.diff.files().len();
@@ -271,14 +296,20 @@ fn actions(ctx: &Ctx, checkpointed: Option<&Checkpointed>) -> Element {
             .nowrap(),
         )
         .child(ask)
+        .with_children(merge_button(ctx, detail, merge))
         .child(review),
     )
-    .child(
-      Text::new(&ctx.t("runs.ready.unavailable"))
-        .id("task-ready-unavailable")
-        .variant(ExtraTypography::Hint.role())
-        .text_align(TextAlign::Right)
-        .width(Dimension::Pct(100.0)),
-    )
+    .child(hint("task-ready-unavailable", &ctx.t("runs.ready.unavailable")))
+    .with_children(merge_unavailable(ctx, detail).map(|text| hint("task-merge-unavailable", &text)))
+    .into()
+}
+
+/// A right-aligned line under the actions.
+fn hint(id: &'static str, text: &str) -> Element {
+  Text::new(text)
+    .id(id)
+    .variant(ExtraTypography::Hint.role())
+    .text_align(TextAlign::Right)
+    .width(Dimension::Pct(100.0))
     .into()
 }

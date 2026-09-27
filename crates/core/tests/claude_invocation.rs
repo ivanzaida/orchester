@@ -2,7 +2,7 @@
 //! and the environment it sees. Claude Code enforces the same options on Windows and macOS (its own
 //! sandbox, the only platform-specific part, is not used), so every expectation is checked for both.
 
-use std::{ffi::OsString, path::Path};
+use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
 use orchester_core::{
   connection::{
@@ -13,6 +13,7 @@ use orchester_core::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     capability::EnforcedPermissions,
   },
+  resource::{CommandEnvironment, VariableName},
 };
 use uuid::Uuid;
 
@@ -256,7 +257,7 @@ fn claude_invocation_command_runs_in_the_worktree_without_the_agent_hosts_variab
     Platform::current(),
   );
   let command = invocation(&permissions)
-    .command("Do it".into(), environment)
+    .command("Do it".into(), environment, &CommandEnvironment::default())
     .expect("unicode worktree");
   assert_eq!(command.program(), Path::new("/bin/claude"));
   assert_eq!(command.current_dir(), Some(Path::new("/repo/.orchester/worktrees/run")));
@@ -264,4 +265,28 @@ fn claude_invocation_command_runs_in_the_worktree_without_the_agent_hosts_variab
   assert!(!command.inherits_env());
   let names: Vec<&str> = command.env().iter().map(|(name, _)| name.as_str()).collect();
   assert_eq!(names, ["PATH", "USERPROFILE", "CLAUDE_CONFIG_DIR"]);
+}
+
+#[test]
+fn claude_invocation_command_adds_the_project_variables() {
+  let permissions = enforced(
+    RepositoryAccess::Write,
+    allowed(&["git"]),
+    NetworkAccess::On,
+    Platform::current(),
+  );
+  let name = VariableName::new("CARGO_TARGET_DIR").expect("a valid variable name");
+  let project =
+    CommandEnvironment::new(BTreeMap::from([(name, "/repo/.orchester/target".to_owned())])).expect("valid variables");
+  let environment = [(OsString::from("PATH"), OsString::from("/usr/bin"))];
+  let command = invocation(&permissions)
+    .command("Do it".into(), environment, &project)
+    .expect("unicode worktree");
+  assert_eq!(
+    command.env(),
+    [
+      ("PATH".to_owned(), "/usr/bin".to_owned()),
+      ("CARGO_TARGET_DIR".to_owned(), "/repo/.orchester/target".to_owned()),
+    ]
+  );
 }

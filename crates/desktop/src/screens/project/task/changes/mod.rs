@@ -148,6 +148,7 @@ impl Component for ChangesTab {
       Some(Ok(NotCheckpointed::Read(changes))) => (Some(changes.clone()), None),
       Some(Ok(NotCheckpointed::TooLarge { size, .. })) => (None, Some(worktree_too_large(ctx, *size))),
       Some(Err(error)) => (None, Some(worktree_failed(ctx, error))),
+      Some(Ok(NotCheckpointed::Removed)) => (None, Some(worktree_removed(ctx))),
       Some(Ok(NotCheckpointed::Clean)) | None => (None, None),
     };
     let listed = self.listed(ctx, committed.as_deref(), uncommitted.as_deref());
@@ -211,7 +212,12 @@ impl ChangesTab {
         .last_checkpoint()
         .map(|checkpoint| checkpoint.revision().clone())
     });
-    let deps = (props.repo_root.clone(), run, head, self.tick.get());
+    let ended = props
+      .detail
+      .run
+      .as_ref()
+      .is_some_and(|run| run.run.status().is_terminal());
+    let deps = (props.repo_root.clone(), (run, ended), head, self.tick.get());
     let load = ctx.future(deps, move |(repo_root, run, ..)| {
       let programs = programs.clone();
       async move {
@@ -362,6 +368,18 @@ fn worktree_failed(ctx: &Ctx, error: &Message) -> Element {
       Icon::AlertCircle,
       ctx.t("runs.changes.worktreeFailedTitle"),
       message_text(ctx, error),
+    )
+    .id("changes-notice"),
+  )
+}
+
+/// The run ended and its worktree was removed: what it committed is all there is to show.
+fn worktree_removed(ctx: &Ctx) -> Element {
+  inset(
+    Notice::new(
+      Icon::FolderX,
+      ctx.t("runs.changes.worktreeRemovedTitle"),
+      ctx.t("runs.changes.worktreeRemovedDetail"),
     )
     .id("changes-notice"),
   )

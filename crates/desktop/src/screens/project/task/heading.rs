@@ -27,13 +27,19 @@ use crate::{
 pub(super) fn heading(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Element {
   let title = detail.task.details().title.as_str();
   match &detail.run {
-    Some(run) if *run.run.status() == RunStatus::Succeeded => ready_heading(ctx, title, run),
+    Some(run) if *run.run.status() == RunStatus::Succeeded => ready_heading(ctx, title, run, detail.merge.is_some()),
     _ => page::heading(title, &description(ctx, detail, lost)),
   }
 }
 
-/// The title over "Ready for review" and "Run #128 · Feature delivery · Finished at 14:32" (`ruBkY`).
-fn ready_heading(ctx: &Ctx, title: &str, run: &RunView) -> Element {
+/// The title over "Ready for review" and "Run #128 · Feature delivery · Finished at 14:32" (`ruBkY`);
+/// "Merged" once the run's work was merged (not drawn yet).
+fn ready_heading(ctx: &Ctx, title: &str, run: &RunView, merged: bool) -> Element {
+  let (glyph, status) = if merged {
+    (Icon::GitMerge, ctx.t("runs.merge.status"))
+  } else {
+    (Icon::GitPullRequest, ctx.t("runs.ready.status"))
+  };
   let number = run.run.number().get().to_string();
   let finished = run.finished_at.map(display::clock).unwrap_or_default();
   let meta = ctx.t_args(
@@ -56,7 +62,7 @@ fn ready_heading(ctx: &Ctx, title: &str, run: &RunView) -> Element {
       Row::new()
         .spacing(ExtraSpacing::Group.role())
         .align_items(Alignment::Center)
-        .child(status_label(Icon::GitPullRequest, &ctx.t("runs.ready.status")))
+        .child(status_label(glyph, &status))
         .child(
           Text::new(&meta)
             .id("task-ready-meta")

@@ -34,7 +34,8 @@ use crate::{
 
 const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_revision, initial_budget_tokens, \
                            initial_max_duration_ms, budget_tokens, max_duration_ms, used_tokens, pause_requested, \
-                           status, status_reason, failed_step, limit_execution, last_sequence, created_at FROM runs";
+                           status, status_reason, failed_step, limit_execution, last_sequence, created_at, \
+                           base_branch FROM runs";
 
 pub(super) fn load_runs(connection: &Connection, clause: &str, params: impl Params) -> Result<Vec<Run>, StoreError> {
   let mut statement = connection.prepare(&format!("{SELECT_RUNS} {clause}"))?;
@@ -229,6 +230,7 @@ struct RunRow {
   limit_execution: Option<String>,
   last_sequence: i64,
   created_at: i64,
+  base_branch: Option<String>,
 }
 
 impl RunRow {
@@ -249,6 +251,7 @@ impl RunRow {
       limit_execution: row.get(15)?,
       last_sequence: row.get(16)?,
       created_at: row.get(17)?,
+      base_branch: row.get(18)?,
     })
   }
 
@@ -261,6 +264,12 @@ impl RunRow {
       snapshot: decode_json("run snapshot", SNAPSHOT_SCHEMA, &self.snapshot)?,
       branch: BranchName::new(&self.branch).map_err(|error| corrupt("run branch", error))?,
       base: Revision::new(&self.base).map_err(|error| corrupt("run base revision", error))?,
+      base_branch: self
+        .base_branch
+        .as_deref()
+        .map(BranchName::new)
+        .transpose()
+        .map_err(|error| corrupt("run base branch", error))?,
       budget: budget_value("run budget", initial_budget)?,
       max_duration: duration_value("run time limit", initial_duration)?,
     };

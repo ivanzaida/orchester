@@ -33,7 +33,11 @@
 use std::{ffi::OsString, path::Path};
 
 use super::{InvocationError, Platform, agent_command};
-use crate::{command::Command, permission::NetworkAccess, resource::RepositoryAccess};
+use crate::{
+  command::Command,
+  permission::NetworkAccess,
+  resource::{CommandEnvironment, RepositoryAccess},
+};
 
 /// Everything that decides how one Codex invocation starts.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -106,13 +110,20 @@ impl CodexInvocation<'_> {
     args
   }
 
-  /// The command that runs the step: in the worktree, with `prompt` on standard input and only
-  /// the allowed part of `environment`.
+  /// The command that runs the step: in the worktree, with `prompt` on standard input, the
+  /// allowed part of `environment` and the variables the project adds (`project`).
   pub fn command(
     &self,
     prompt: String,
     environment: impl IntoIterator<Item = (OsString, OsString)>,
+    project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
-    agent_command(self.executable, self.args(), self.worktree, prompt, environment)
+    agent_command(
+      self.executable,
+      self.args(),
+      self.worktree,
+      prompt,
+      (environment, project),
+    )
   }
 }

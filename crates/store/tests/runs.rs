@@ -166,6 +166,7 @@ impl Fixture {
       snapshot: self.snapshot.clone(),
       branch: BranchName::new("orchester/orc-1").expect("valid branch"),
       base: revision('a'),
+      base_branch: None,
       budget: TokenBudget::new(1_400_000).expect("above zero"),
       max_duration: std::time::Duration::from_secs(1_800),
     }

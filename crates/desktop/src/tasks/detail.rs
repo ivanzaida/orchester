@@ -8,12 +8,13 @@ use std::{num::NonZeroU32, path::Path, sync::Arc};
 use orchester_core::{
   connection::{AgentProvider, ConnectionKind},
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
+  integration::RunMerge,
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
     ActivityEntry, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent, RunEventKind, RunLimit, RunStatus,
     StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
   },
-  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
+  store::{ActivityStore, ConnectionStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::Task,
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -169,13 +170,15 @@ impl RunView {
 pub struct TaskDetail {
   pub task: Task,
   pub run: Option<RunView>,
+  /// The merge of the latest run into its base branch, once it was merged.
+  pub merge: Option<RunMerge>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskDetail {}
 
 impl TaskDetail {
   pub fn phase(&self) -> TaskPhase {
-    TaskPhase::of(&self.task, self.run.as_ref().map(|run| &run.run))
+    TaskPhase::of(&self.task, self.run.as_ref().map(|run| &run.run), self.merge.as_ref())
   }
 
   /// Whether the run is recorded as running while no runner is `online`: its agent is gone and
@@ -193,8 +196,12 @@ impl TaskDetail {
       .map_err(run_store_error)?
       .into_iter()
       .next_back();
+    let merge = match &latest {
+      Some(run) => db.run_merge(run.id())?,
+      None => None,
+    };
     let run = latest.map(|run| run_view(&db, run)).transpose()?;
-    Ok(Self { task, run })
+    Ok(Self { task, run, merge })
   }
 }
 

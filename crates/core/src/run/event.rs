@@ -88,6 +88,11 @@ pub struct RunCreated {
   pub snapshot: RunSnapshot,
   pub branch: BranchName,
   pub base: Revision,
+  /// The branch the user's checkout had when the run started, which merging the run brings its
+  /// work into; `None` when the checkout had a detached HEAD, and for runs recorded before
+  /// Orchester recorded it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub base_branch: Option<BranchName>,
   pub budget: TokenBudget,
   /// The most active agent time the run may use; pauses and waits for a person do not count.
   #[serde(with = "millis")]

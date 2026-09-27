@@ -1,12 +1,16 @@
-//! Where a task stands, derived from the task and its latest run (`docs/architecture/storage.md`,
-//! "State machines"). The phase is never stored: the task holds the user's intent (draft or
-//! queued) and the run holds what execution did.
+//! Where a task stands, derived from the task, its latest run and that run's merge
+//! (`docs/architecture/storage.md`, "State machines"). The phase is never stored: the task holds
+//! the user's intent (draft or queued), the run holds what execution did and the merge record
+//! whether its work reached the base branch.
 
 use super::{
   state::Run,
   status::{PauseReason, RunStatus, StepStatus},
 };
-use crate::task::{Task, TaskStatus};
+use crate::{
+  integration::RunMerge,
+  task::{Task, TaskStatus},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TaskPhase {
@@ -21,15 +25,17 @@ pub enum TaskPhase {
   StoppedAtLimit,
   /// Stopped without settling; its last checkpoint is kept.
   Interrupted,
-  /// Every step passed.
+  /// Every step passed; its work waits for review.
   Succeeded,
+  /// Its run succeeded and its work was merged into the branch it started from.
+  Merged,
   Failed,
   Cancelled,
 }
 
 impl TaskPhase {
-  /// The phase of `task` whose most recent run is `latest`.
-  pub fn of(task: &Task, latest: Option<&Run>) -> Self {
+  /// The phase of `task` whose most recent run is `latest`, merged as `merge` records.
+  pub fn of(task: &Task, latest: Option<&Run>, merge: Option<&RunMerge>) -> Self {
     let Some(run) = latest else {
       return match task.status() {
         TaskStatus::Draft => Self::Draft,
@@ -43,6 +49,7 @@ impl TaskPhase {
       RunStatus::Paused(PauseReason::Requested) => Self::Paused,
       RunStatus::Paused(PauseReason::LimitReached(_)) => Self::StoppedAtLimit,
       RunStatus::Interrupted(_) => Self::Interrupted,
+      RunStatus::Succeeded if merge.is_some_and(|merge| merge.run == run.id()) => Self::Merged,
       RunStatus::Succeeded => Self::Succeeded,
       RunStatus::Failed(_) => Self::Failed,
       RunStatus::Cancelled => Self::Cancelled,

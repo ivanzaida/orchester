@@ -64,12 +64,7 @@ impl CommandText {
         .collect::<Vec<_>>()
         .join(", "),
       output_limit: command.output_limit().kib().to_string(),
-      environment: command
-        .environment()
-        .iter()
-        .map(|(name, value)| format!("{name}={value}"))
-        .collect::<Vec<_>>()
-        .join("\n"),
+      environment: environment_text(command.environment()),
     })
   }
 
@@ -148,18 +143,32 @@ impl CommandText {
   }
 
   fn environment(&self) -> Result<CommandEnvironment, Message> {
-    let mut variables = BTreeMap::new();
-    for line in lines(&self.environment) {
-      let (name, value) = line
-        .split_once('=')
-        .ok_or_else(|| Message::new("tools.errors.variableLine").with("line", line.to_owned()))?;
-      let name = VariableName::new(name.trim()).map_err(|error| variable_error(&error))?;
-      if variables.insert(name, value.to_owned()).is_some() {
-        return Err(Message::new("tools.errors.duplicateVariable").with("name", name_of(line)));
-      }
-    }
-    CommandEnvironment::new(variables).map_err(|error| variable_error(&error))
+    parse_environment(&self.environment)
   }
+}
+
+/// Variables as `NAME=value` lines, as a command tool and Project settings › Environment show them.
+pub fn environment_text(environment: &CommandEnvironment) -> String {
+  environment
+    .iter()
+    .map(|(name, value)| format!("{name}={value}"))
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
+/// The variables of `NAME=value` lines; empty lines are left out.
+pub fn parse_environment(text: &str) -> Result<CommandEnvironment, Message> {
+  let mut variables = BTreeMap::new();
+  for line in lines(text) {
+    let (name, value) = line
+      .split_once('=')
+      .ok_or_else(|| Message::new("tools.errors.variableLine").with("line", line.to_owned()))?;
+    let name = VariableName::new(name.trim()).map_err(|error| variable_error(&error))?;
+    if variables.insert(name, value.to_owned()).is_some() {
+      return Err(Message::new("tools.errors.duplicateVariable").with("name", name_of(line)));
+    }
+  }
+  CommandEnvironment::new(variables).map_err(|error| variable_error(&error))
 }
 
 /// Why the tool cannot be saved yet, per field.

@@ -139,6 +139,7 @@ impl Fixture {
       snapshot: self.snapshot.clone(),
       branch: BranchName::new(&format!("orchester/orc-run-{}", self.runs)).expect("branch"),
       base: Revision::new(&"a".repeat(40)).expect("revision"),
+      base_branch: None,
       budget: budget(1_000_000),
       max_duration: Duration::from_secs(1_800),
     };

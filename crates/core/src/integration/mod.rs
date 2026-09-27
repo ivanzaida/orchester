@@ -1,0 +1,47 @@
+//! Bringing a finished run's work into the user's checkout and clearing what it left
+//! (`docs/architecture/storage.md`, "Integration"): merging the run's branch into the branch the
+//! checkout had when the run started ([`merge_run`]), and removing the run's worktrees and the
+//! branches whose commits are merged ([`clean_up`]). Everything runs through the `git` program with
+//! a [`CommandRunner`](crate::command::CommandRunner); none of it stashes, resets or discards
+//! uncommitted work a person did not confirm discarding.
+
+mod cleanup;
+mod git;
+mod merge;
+
+use std::path::Path;
+
+use thiserror::Error;
+
+pub use self::{
+  cleanup::{
+    Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, WORKTREES_DIR, WorktreeOwner, clean_up,
+    leftovers,
+  },
+  merge::{MergeError, MergeKind, RunMerge, merge_run},
+};
+use crate::{
+  command::{CommandError, CommandRunner},
+  run::BranchName,
+};
+
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum GitError {
+  #[error("cannot run git: {0}")]
+  Run(#[from] CommandError),
+  /// Git refused; its message, without credentials.
+  #[error("git failed: {0}")]
+  Failed(String),
+  #[error("git printed something that is not {expected}: {detail}")]
+  Unrecognized { expected: &'static str, detail: String },
+}
+
+/// The branch checked out in the repository at `repo`, read with the `git` program; `None` on a
+/// detached HEAD. A run records it when it starts, as the branch merging it brings its work into.
+pub fn checked_out_branch(
+  runner: &impl CommandRunner,
+  git: &Path,
+  repo: &Path,
+) -> Result<Option<BranchName>, GitError> {
+  git::Git::new(runner, git, repo).checked_out_branch()
+}
