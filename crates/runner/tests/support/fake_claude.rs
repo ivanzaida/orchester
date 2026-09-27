@@ -10,10 +10,14 @@
 //! - "Work in turns": appends `draft` to `README.md`, finishes a message that used 9,739 counted tokens, starts another
 //!   one and waits until it is ended;
 //! - "Keep working": starts a message and waits until it is ended;
+//! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
+//!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
+//!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
 //! - anything else: edits `README.md` in its working directory (appending `hello`), runs `git status`, and ends with
 //!   the step result `{"outcome":"done","summary":"Finished <step>"}` and exit 0.
 //!
-//! `--resume <session>` continues that session: it appends `continued` to `README.md` and ends the same way. A new
+//! `--resume <session>` continues that session: once no `fake-hold` lies next to the worktrees (a test holds a
+//! continued session at work with it), it appends `continued` to `README.md` and ends the same way. A new
 //! session takes its id from `--session-id`.
 //!
 //! On standard error it reports its arguments, the names of its environment variables, the first line of the prompt
@@ -87,6 +91,7 @@ fn main() -> ExitCode {
     .unwrap_or("the step")
     .to_owned();
   if resumed.is_some() {
+    wait_while_held(&worktree);
     return fake.finish(&worktree, "continued", &step);
   }
   if prompt.contains("Keep working") {
@@ -101,6 +106,9 @@ fn main() -> ExitCode {
     fake.assistant("msg_draft", r#"{"type":"text","text":"Drafted."}"#);
     fake.message("msg_more", r#"{"type":"text","text":"Going on."}"#, NO_USAGE);
     wait_to_be_ended();
+  }
+  if prompt.contains("Wait for release") {
+    fake.wait_for_release(&worktree, &prompt);
   }
   if prompt.contains("Ask for the web") {
     fake.assistant(
@@ -144,6 +152,29 @@ impl Fake {
     );
   }
 
+  /// A command that runs until the test releases it.
+  fn wait_for_release(&self, worktree: &Path, prompt: &str) {
+    if prompt.contains("Draft first") && append(worktree, "draft").is_err() {
+      eprintln!("cannot write README.md");
+    }
+    self.assistant(
+      "msg_test",
+      r#"{"type":"tool_use","id":"toolu_test","name":"Bash","input":{"command":"pnpm test"}}"#,
+    );
+    let release = worktree
+      .parent()
+      .and_then(Path::parent)
+      .map(|orchester| orchester.join("fake-release"));
+    while !release.as_ref().is_some_and(|release| release.exists()) {
+      thread::sleep(Duration::from_millis(50));
+    }
+    self.tool_result("toolu_test", "ok", false);
+    if prompt.contains("Then keep working") {
+      self.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
+      wait_to_be_ended();
+    }
+  }
+
   fn finish(&self, worktree: &Path, line: &str, step: &str) -> ExitCode {
     self.finish_with(worktree, line, step, "[]")
   }
@@ -180,6 +211,17 @@ fn append(worktree: &Path, line: &str) -> std::io::Result<()> {
     .append(true)
     .open(worktree.join("README.md"))
     .and_then(|mut readme| writeln!(readme, "{line}"))
+}
+
+/// Waits while the test holds continued sessions with `fake-hold` next to the worktrees.
+fn wait_while_held(worktree: &Path) {
+  let hold = worktree
+    .parent()
+    .and_then(Path::parent)
+    .map(|orchester| orchester.join("fake-hold"));
+  while hold.as_ref().is_some_and(|hold| hold.exists()) {
+    thread::sleep(Duration::from_millis(50));
+  }
 }
 
 fn wait_to_be_ended() -> ! {

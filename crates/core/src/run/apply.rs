@@ -70,6 +70,7 @@ impl Run {
   fn record(&mut self, kind: RunEventKind, at: Timestamp) -> Result<RunEvent, RunError> {
     self.check(&kind)?;
     self.apply(&kind, at);
+    self.drop_stale_restarts();
     self.last_sequence = self.last_sequence.next();
     Ok(RunEvent::new(self.id, self.last_sequence, at, kind))
   }
@@ -124,6 +125,13 @@ impl Run {
         ..
       } => self.check_attempt(kind, *number, reason, executions),
       RunEventKind::UsageRecorded { .. } => Ok(()),
+      RunEventKind::PermissionsChanged { profile, apply, .. } => self.check_permissions_change(kind, *profile, *apply),
+      RunEventKind::PermissionsRestartCancelled { profile } => self.check_restart_cancel(*profile),
+      RunEventKind::PermissionsApplied { execution, .. } => {
+        self.expect_status(kind, self.status == RunStatus::Running)?;
+        self.expect_step(kind, *execution, |status| status == StepStatus::Running)?;
+        self.check_permissions_applied(*execution)
+      }
       _ => self.check_step(kind),
     }
   }
@@ -373,6 +381,16 @@ impl Run {
         revision,
       } => self.last_checkpoint = Some(Checkpoint::new(*checkpoint, *execution, revision.clone(), at)),
       RunEventKind::UsageRecorded { tokens } => self.used += *tokens,
+      RunEventKind::PermissionsChanged {
+        profile,
+        permissions,
+        apply,
+        by,
+      } => self.apply_permissions_change(*profile, (permissions, *apply, *by), at),
+      RunEventKind::PermissionsRestartCancelled { profile } => self.apply_restart_cancel(*profile),
+      RunEventKind::PermissionsApplied { execution, checkpoint } => {
+        self.apply_permissions_applied(*execution, *checkpoint, at);
+      }
       RunEventKind::StepStarted { execution } | RunEventKind::StepResumed { execution } => {
         self.set_step(*execution, StepStatus::Running);
       }

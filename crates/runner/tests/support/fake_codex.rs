@@ -7,6 +7,9 @@
 //! - "Work in turns": appends `draft` to `README.md`, completes a turn that used 9,739 counted tokens, starts another
 //!   one and waits until it is ended;
 //! - "Work slowly": waits a moment, then works as below;
+//! - "Wait for release": runs a command (`pnpm test`) that ends once the test writes `fake-release` next to the
+//!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
+//!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
 //! - "Report failure": works as below, but its result says it failed;
 //! - "Fail once": the first time a step works on it, the result says it failed; later it works as below;
 //! - "Write own file": writes `<step>.txt` instead of appending to `README.md`;
@@ -18,7 +21,8 @@
 //! "Finished <step>"), else "Done.". The step is read from the prompt's "# Current step:" line.
 //!
 //! `exec resume <session> -` continues session `fake-thread-1` in its working directory: it appends `continued` to
-//! `README.md` and completes its turn. A new session works in the `-C` directory.
+//! `README.md` and completes its turn, once no `fake-hold` lies next to the worktrees (a test holds a continued session
+//! at work with it). A new session works in the `-C` directory.
 //!
 //! On standard error it reports what it was given: its arguments, the names of its environment
 //! variables and the first line of the prompt, so tests can check how it was started, and the
@@ -98,6 +102,7 @@ fn main() -> ExitCode {
     own_file: prompt.contains("Write own file"),
   };
   if resumed {
+    wait_while_held(&worktree);
     return finish(&worktree, "continued", &result);
   }
   if prompt.contains("Keep working") {
@@ -116,10 +121,7 @@ fn main() -> ExitCode {
     println!(r#"{{"type":"turn.started"}}"#);
     wait_to_be_ended();
   }
-  if prompt.contains("Work slowly") {
-    flush();
-    thread::sleep(Duration::from_millis(1_500));
-  }
+  before_finishing(&worktree, &prompt);
   let line = if prompt.contains("Sign the line") {
     format!("hello from {}", result.step)
   } else {
@@ -202,6 +204,54 @@ fn finish(worktree: &std::path::Path, line: &str, result: &StepReport) -> ExitCo
   println!(r#"{{"type":"item.completed","item":{{"id":"item_3","type":"agent_message","text":"{text}"}}}}"#);
   println!("{USAGE}");
   ExitCode::SUCCESS
+}
+
+/// "Wait for release" and "Work slowly": what happens before the agent finishes its work.
+fn before_finishing(worktree: &std::path::Path, prompt: &str) {
+  if prompt.contains("Wait for release") {
+    wait_for_release(worktree, prompt.contains("Draft first"));
+    if prompt.contains("Then keep working") {
+      wait_to_be_ended();
+    }
+  }
+  if prompt.contains("Work slowly") {
+    flush();
+    thread::sleep(Duration::from_millis(1_500));
+  }
+}
+
+/// Waits while the test holds continued sessions with `fake-hold` next to the worktrees.
+fn wait_while_held(worktree: &std::path::Path) {
+  let hold = worktree
+    .parent()
+    .and_then(std::path::Path::parent)
+    .map(|orchester| orchester.join("fake-hold"));
+  flush();
+  while hold.as_ref().is_some_and(|hold| hold.exists()) {
+    thread::sleep(Duration::from_millis(50));
+  }
+}
+
+/// A command that runs until the test releases it.
+fn wait_for_release(worktree: &std::path::Path, draft: bool) {
+  if draft && let Err(error) = append(worktree, "draft") {
+    eprintln!("cannot write README.md: {error}");
+  }
+  println!(
+    r#"{{"type":"item.started","item":{{"id":"item_9","type":"command_execution","command":"pnpm test","aggregated_output":"","exit_code":null,"status":"in_progress"}}}}"#
+  );
+  flush();
+  let release = worktree
+    .parent()
+    .and_then(std::path::Path::parent)
+    .map(|orchester| orchester.join("fake-release"));
+  while !release.as_ref().is_some_and(|release| release.exists()) {
+    thread::sleep(Duration::from_millis(50));
+  }
+  println!(
+    r#"{{"type":"item.completed","item":{{"id":"item_9","type":"command_execution","command":"pnpm test","aggregated_output":"ok","exit_code":0,"status":"completed"}}}}"#
+  );
+  flush();
 }
 
 fn append(worktree: &std::path::Path, line: &str) -> std::io::Result<()> {

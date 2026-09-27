@@ -11,6 +11,7 @@ mod error;
 mod event;
 mod invocation;
 mod number;
+mod permissions;
 mod phase;
 mod preflight;
 mod prompt;
@@ -30,6 +31,7 @@ pub use self::{
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
   invocation::{ActivityEntry, Invocation, active_time, execution_tokens},
   number::RunNumber,
+  permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
   preflight::{PreflightInput, PreflightProblem, preflight},
   prompt::{

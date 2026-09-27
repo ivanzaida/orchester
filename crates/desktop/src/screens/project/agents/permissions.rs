@@ -16,16 +16,14 @@ use lurq::{
 use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
   permission::{
-    AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPermission, CommandPrefix, CommandPrefixError,
-    NetworkAccess, RepositoryAccess,
+    AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess,
     capability::{PermissionOption, Support, support},
   },
 };
 
 use super::editor::{ProfileEditor, Resets};
 use crate::{
-  agents::permissions::{option_detail, option_title, unavailable},
-  messages::Message,
+  agents::permissions::{option_detail, option_title, unavailable, with_command, without_command},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -183,13 +181,7 @@ impl ProfileEditor {
         CommandChip::new(format!("agent-command-{index}"), entry.as_str().into()).on_remove(move || {
           permissions.update(|permissions| {
             if let CommandPermission::Allowed(list) = permissions.commands() {
-              let rest = list
-                .entries()
-                .iter()
-                .filter(|kept| **kept != removed)
-                .cloned()
-                .collect();
-              let rest = AllowedCommands::new(rest).expect("a shorter list keeps its entries unique");
+              let rest = without_command(list, &removed);
               permissions.set_commands(CommandPermission::Allowed(rest));
             }
           });
@@ -259,7 +251,7 @@ impl ProfileEditor {
       let CommandPermission::Allowed(list) = permissions.get_untracked().commands().clone() else {
         return;
       };
-      match added(&list, &typed.get_untracked()) {
+      match with_command(&list, &typed.get_untracked()) {
         Ok(list) => {
           permissions.update(|permissions| permissions.set_commands(CommandPermission::Allowed(list)));
           typed.set(String::new());
@@ -337,27 +329,4 @@ const fn option_id(option: PermissionOption) -> &'static str {
     PermissionOption::NetworkOff => "agent-permission-network-off",
     PermissionOption::NetworkOn => "agent-permission-network-on",
   }
-}
-
-/// `list` with the command `typed` added, or why it cannot be.
-fn added(list: &AllowedCommands, typed: &str) -> Result<AllowedCommands, Message> {
-  let prefix = CommandPrefix::new(typed).map_err(|error| match error {
-    CommandPrefixError::Blank => Message::new("agents.permissions.commandInvalid.blank"),
-    CommandPrefixError::TooLong => {
-      Message::new("agents.permissions.commandInvalid.tooLong").with("max", CommandPrefix::MAX_CHARS.to_string())
-    }
-    CommandPrefixError::ForbiddenCharacter(character) => {
-      Message::new("agents.permissions.commandInvalid.character").with("character", character.to_string())
-    }
-  })?;
-  let mut entries = list.entries().to_vec();
-  entries.push(prefix);
-  AllowedCommands::new(entries).map_err(|error| match error {
-    AllowedCommandsError::Duplicate(command) => {
-      Message::new("agents.permissions.commandInvalid.duplicate").with("command", command.to_string())
-    }
-    AllowedCommandsError::TooMany => {
-      Message::new("agents.permissions.commandInvalid.tooMany").with("max", AllowedCommands::MAX_ENTRIES.to_string())
-    }
-  })
 }
