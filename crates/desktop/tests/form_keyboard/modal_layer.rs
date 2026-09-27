@@ -1,7 +1,8 @@
 //! A dialog's modal layer covers the screen and nothing else, as the design draws every backdrop
 //! over its screen frame (`a8U756`, `nqqYL` in `c3jD7`): the scrim leaves the title bar and the
-//! status bar out, and the dialog is centred in the screen between them. The status bar under a
-//! dialog keeps the pointer; it takes no focus, so Tab stays in the dialog.
+//! status bar out, and the dialog is centred in the screen between them. While a dialog is open,
+//! only the dialog and the title bar take input: the status bar under it shows no hint and its
+//! items open nothing, and Tab stays in the dialog.
 
 use lurq::core::ElementRect;
 use orchester_desktop::theme::{STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT};
@@ -86,17 +87,36 @@ fn modal_layer_connection_dialog_is_centred_in_the_screen_above_the_status_bar()
 }
 
 #[test]
-fn modal_layer_status_bar_under_a_dialog_takes_the_pointer_but_not_the_focus() {
+fn modal_layer_status_bar_under_a_dialog_shows_no_hint() {
   let mut desktop = new_pipeline_dialog();
-  assert_eq!(desktop.focused().as_deref(), Some(PIPELINE_NAME));
   desktop.hover("status-version");
   assert!(
-    desktop.tree.get_element_by_id("status-bar-hint").is_some(),
-    "the version under the pointer shows its hint"
+    desktop.tree.get_element_by_id("status-bar-hint").is_none(),
+    "the version under a dialog shows its hint"
   );
-  desktop.press("status-version");
-  assert_eq!(desktop.focused().as_deref(), Some(PIPELINE_NAME));
-  assert!(desktop.tree.get_element_by_id("new-pipeline-dialog").is_some());
+}
+
+#[test]
+fn modal_layer_status_bar_under_a_dialog_opens_nothing() {
+  let mut desktop = new_pipeline_dialog();
+  desktop.type_text("Release");
+  for item in ["status-queued", "status-agents", "status-needs-you", "status-runner"] {
+    desktop.press(item);
+    assert!(
+      desktop.tree.get_element_by_id("new-pipeline-dialog").is_some(),
+      "{item} under the dialog closed it"
+    );
+    assert_eq!(
+      desktop.value(PIPELINE_NAME),
+      "Release",
+      "{item} under the dialog lost the name"
+    );
+    assert_eq!(
+      desktop.focused().as_deref(),
+      Some(PIPELINE_NAME),
+      "{item} under the dialog took the focus"
+    );
+  }
   // Tab goes on inside the dialog: from the name to the first starting point.
   desktop.tab();
   assert_eq!(desktop.focused().as_deref(), Some("new-pipeline-starter"));

@@ -212,6 +212,10 @@ maximizes).
 - macOS (`V70DN`): the three window buttons on the left, 12px, 8px apart, 12px from the edge,
   in the platform's standard colors — the only non-grayscale colors in the application.
 
+A dialog's backdrop covers the screen frame only, so both bars stay undimmed. While a dialog is
+open only the dialog and the title bar (drag, minimize, maximize, close) take input: the status
+bar shows no hover and its items open nothing until the dialog closes.
+
 Screens include neither bar; design verification captures the app window at 1440 × 1020 and
 compares the title bar (top 32px) with the platform component, the screen area (next 960px) with
 the screen frame, and the status bar (bottom 28px) with the matching `pmOpt` state. A worked
