@@ -161,6 +161,7 @@
         },
         "unknown": "Could not read the worktree"
       },
+      "viewChanges": "View changes  →",
       "note": "Uncommitted changes are kept in each run’s worktree and are never discarded silently. If you don’t continue now, you can continue each run later from its task page.",
       "dontContinue": "Don't continue",
       "continueAll": {
@@ -498,6 +499,7 @@
         "working": "Working",
         "needsYou": "Needs you",
         "paused": "Paused",
+        "stoppedAtLimit": "Stopped at limit",
         "interrupted": "Interrupted",
         "complete": "Complete",
         "failed": "Failed",
@@ -701,8 +703,8 @@
       "timeTitleCheckpoint": "Stopped at the time limit · checkpoint {{checkpoint}}",
       "dailyTitle": "Stopped at the daily project budget",
       "dailyTitleCheckpoint": "Stopped at the daily project budget · checkpoint {{checkpoint}}",
-      "tokenDetail": "Run {{run}} used {{used}} of its {{limit}} tokens. {{agent}} was stopped and its work was committed as a checkpoint. Nothing runs until you raise the limit.",
-      "tokenDetailUnsaved": "Run {{run}} used {{used}} of its {{limit}} tokens. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the limit.",
+      "tokenDetail": "Run {{run}} used {{used}} of its {{limit}} tokens. {{agent}} was stopped after its turn and its work was committed as a checkpoint. Nothing runs until you raise the limit.",
+      "tokenDetailUnsaved": "Run {{run}} used {{used}} of its {{limit}} tokens. {{agent}} was stopped after its turn; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the limit.",
       "timeDetail": {
         "one": "Run {{run}} used {{used}} of its {{limit}} minute of active agent time. {{agent}} was stopped and its work was committed as a checkpoint. Nothing runs until you raise the limit.",
         "other": "Run {{run}} used {{used}} of its {{limit}} minutes of active agent time. {{agent}} was stopped and its work was committed as a checkpoint. Nothing runs until you raise the limit."
@@ -711,8 +713,8 @@
         "one": "Run {{run}} used {{used}} of its {{limit}} minute of active agent time. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the limit.",
         "other": "Run {{run}} used {{used}} of its {{limit}} minutes of active agent time. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Nothing runs until you raise the limit."
       },
-      "dailyDetail": "This project’s runs used today’s token budget. {{agent}} was stopped and its work was committed as a checkpoint. Resume the run tomorrow, or raise the daily budget in Project settings and resume it now.",
-      "dailyDetailUnsaved": "This project’s runs used today’s token budget. {{agent}} was stopped; there was nothing new to commit, or the commit failed and Activity says why. Resume the run tomorrow, or raise the daily budget in Project settings and resume it now.",
+      "dailyDetail": "This project’s runs used today’s token budget. {{agent}} was stopped after its turn and its work was committed as a checkpoint. Resume the run tomorrow, or raise the daily budget in Project settings and resume it now.",
+      "dailyDetailUnsaved": "This project’s runs used today’s token budget. {{agent}} was stopped after its turn; there was nothing new to commit, or the commit failed and Activity says why. Resume the run tomorrow, or raise the daily budget in Project settings and resume it now.",
       "stepTitle": "Stopped at the step budget of {{step}}",
       "stepTitleCheckpoint": "Stopped at the step budget of {{step}} · checkpoint {{checkpoint}}",
       "stepDetail": "{{step}} used {{used}} of its {{limit}}-token step budget in Run {{run}}. {{agent}} was stopped after its turn and its work was committed as a checkpoint. Nothing runs until you raise the step budget.",

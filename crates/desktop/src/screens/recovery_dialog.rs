@@ -1,8 +1,9 @@
 //! Next start after Quit now or a crash: "The last session ended before agents could save"
 //! (02.E `o8DCd`, dialog `BovYZ`, table `KzyXA`). All or nothing: *Continue all N from
 //! checkpoints* or *Don't continue*; rows have no action of their own, and runs not continued
-//! stay interrupted until each is continued from its task page. [`StartupRecovery`] finds the
-//! runs and continues them; [`RecoveryDialog`] renders the dialog from plain props.
+//! stay interrupted until each is continued from its task page. A run with uncommitted changes
+//! links to them (*View changes*). [`StartupRecovery`] finds the runs and continues them;
+//! [`RecoveryDialog`] renders the dialog from plain props.
 
 use std::sync::Arc;
 
@@ -14,9 +15,9 @@ use lurq::{
   },
   components::{Column, Row, Spacer, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::run::InterruptCause;
+use orchester_core::{id::ProjectId, run::InterruptCause};
 use orchester_ipc::SessionEnd;
 
 use crate::{
@@ -29,6 +30,7 @@ use crate::{
     button::ActionButton,
     field::field_error,
     icon::{Icon, IconSize, icon},
+    pressable::{pressable, surface},
   },
 };
 
@@ -46,12 +48,14 @@ const WORKTREE_WIDTH: f32 = 160.0;
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
-/// What the dialog's buttons do.
+/// What the dialog's buttons and links do.
 #[derive(Clone)]
 pub struct RecoveryActions {
   pub open_log: Handler,
   pub dont_continue: Handler,
   pub continue_all: Handler,
+  /// Opens the run's changes on its task page.
+  pub view_changes: Arc<dyn Fn(&InterruptedRun) + Send + Sync>,
 }
 
 #[derive(Clone)]
@@ -59,6 +63,9 @@ pub struct RecoveryDialogProps {
   /// How the previous session ended: Quit now or a crash.
   pub previous: SessionEnd,
   pub runs: Arc<[InterruptedRun]>,
+  /// The project the window shows, once known. *View changes* is offered for its runs only:
+  /// there is no switching to another project yet.
+  pub shown_project: Option<ProjectId>,
   /// Continue all is under way.
   pub continuing: bool,
   /// Why not every run continued, once that is known.
@@ -70,11 +77,13 @@ impl PartialEq for RecoveryDialogProps {
   fn eq(&self, other: &Self) -> bool {
     self.previous == other.previous
       && self.runs == other.runs
+      && self.shown_project == other.shown_project
       && self.continuing == other.continuing
       && self.error == other.error
       && Arc::ptr_eq(&self.actions.open_log, &other.actions.open_log)
       && Arc::ptr_eq(&self.actions.dont_continue, &other.actions.dont_continue)
       && Arc::ptr_eq(&self.actions.continue_all, &other.actions.continue_all)
+      && Arc::ptr_eq(&self.actions.view_changes, &other.actions.view_changes)
   }
 }
 
@@ -101,7 +110,7 @@ impl Component for RecoveryDialog {
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .rounded(RadiusSize::Lg)
       .child(header(ctx, props.previous, props.runs.len()))
-      .child(body(ctx, &props.runs, props.error.as_deref()))
+      .child(body(ctx, &props))
       .child(actions(ctx, &props));
     backdrop(dialog)
   }
@@ -142,12 +151,12 @@ fn header(ctx: &Ctx, previous: SessionEnd, count: usize) -> Element {
 }
 
 /// The table and the note about uncommitted changes (`n8P5P`).
-fn body(ctx: &Ctx, runs: &[InterruptedRun], error: Option<&str>) -> Element {
+fn body(ctx: &Ctx, props: &RecoveryDialogProps) -> Element {
   let table = Column::new()
     .id("recovery-runs")
     .width(Dimension::Pct(100.0))
     .child(heading_row(ctx))
-    .with_children(runs.iter().map(|run| run_row(ctx, run)));
+    .with_children(props.runs.iter().map(|run| run_row(ctx, run, props)));
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Md)
@@ -160,7 +169,7 @@ fn body(ctx: &Ctx, runs: &[InterruptedRun], error: Option<&str>) -> Element {
         .variant(ExtraTypography::Detail.role())
         .color(PaletteColor::TextMuted),
     )
-    .with_children(error.map(field_error))
+    .with_children(props.error.as_deref().map(field_error))
     .into()
 }
 
@@ -210,7 +219,7 @@ fn caption(text: &str) -> Element {
 
 /// One interrupted run (`ZZBQa`): task, where it was interrupted, why, its last checkpoint and
 /// what its worktree holds.
-fn run_row(ctx: &Ctx, run: &InterruptedRun) -> Element {
+fn run_row(ctx: &Ctx, run: &InterruptedRun, props: &RecoveryDialogProps) -> Element {
   let number = run.number.to_string();
   let project_run = ctx.t_args(
     "lifecycle.recovery.projectRun",
@@ -252,7 +261,7 @@ fn run_row(ctx: &Ctx, run: &InterruptedRun) -> Element {
       None,
     ))
     .child(checkpoint(ctx, run))
-    .child(worktree(ctx, run))
+    .child(worktree(ctx, run, view_changes(ctx, run, props)))
     .into()
 }
 
@@ -299,10 +308,9 @@ fn checkpoint(ctx: &Ctx, run: &InterruptedRun) -> Element {
   }
 }
 
-/// "3 files not committed", "No uncommitted changes" or "Could not read the worktree" (`BwjS0`,
-/// `Bv9Wc`, `Py65X`). The design's *View changes* link opens the Changes tab, which does not
-/// exist yet, so it is not shown.
-fn worktree(ctx: &Ctx, run: &InterruptedRun) -> Element {
+/// "3 files not committed" with *View changes* under it, "No uncommitted changes" or "Could not
+/// read the worktree" (`BwjS0`, `Bv9Wc`, `Py65X`).
+fn worktree(ctx: &Ctx, run: &InterruptedRun, link: Option<Element>) -> Element {
   let (glyph, text, color) = match run.worktree {
     WorktreeState::Clean => (
       Icon::Check,
@@ -347,7 +355,24 @@ fn worktree(ctx: &Ctx, run: &InterruptedRun) -> Element {
         .color(color)
         .flex(1.0),
     );
-  stacked(Some(WORKTREE_WIDTH), state, None)
+  stacked(Some(WORKTREE_WIDTH), state, link)
+}
+
+/// *View changes →* (`O5D84`): the run's task page on its Changes tab, which shows what the
+/// worktree holds beyond the checkpoint. Only for a run of the project the window shows.
+fn view_changes(ctx: &Ctx, run: &InterruptedRun, props: &RecoveryDialogProps) -> Option<Element> {
+  let uncommitted = matches!(run.worktree, WorktreeState::Uncommitted(_));
+  if !uncommitted || props.shown_project != Some(run.project_id) {
+    return None;
+  }
+  let (view, target) = (props.actions.view_changes.clone(), run.clone());
+  let link = pressable(surface().id(format!("recovery-view-changes-{}", run.run)), move || {
+    view(&target);
+  })
+  .rounded(RadiusSize::Sm)
+  .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+  .child(Text::new(&ctx.t("lifecycle.recovery.viewChanges")).variant(TypographyStyle::Caption));
+  Some(link.into())
 }
 
 const fn reason_key(cause: InterruptCause) -> &'static str {

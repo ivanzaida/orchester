@@ -7,7 +7,7 @@
 use std::{num::NonZeroU32, sync::Arc, time::Duration};
 
 use orchester_core::{
-  run::{RunStatus, StepFailure, StepStatus},
+  run::{PauseReason, RunStatus, StepFailure, StepStatus},
   time::Timestamp,
 };
 
@@ -20,8 +20,11 @@ pub enum ProgressState {
   Working,
   /// Waiting for a person: an approval, a plan decision or a message.
   NeedsYou,
-  /// The run paused or stopped at a limit while the step's agent worked.
+  /// A person paused the run while the step's agent worked.
   Paused,
+  /// The run stopped at a limit (its budget or time limit, a step's budget, the project's daily
+  /// budget) while the step's agent worked: "Stopped at limit", never "Paused" (02.L2 `A7nVbK`).
+  StoppedAtLimit,
   /// The run lost its agent (no runner) or was interrupted mid-step.
   Interrupted,
   Complete,
@@ -96,7 +99,8 @@ pub fn progress(run: &RunView, lost: bool, now: Timestamp) -> Vec<ProgressRow> {
 fn state(run: &RunView, step: &StepView, lost: bool) -> ProgressState {
   match (run.run.status(), step.status) {
     (_, None | Some(StepStatus::Pending)) => ProgressState::Waiting,
-    (RunStatus::Paused(_), Some(StepStatus::Running)) => ProgressState::Paused,
+    (RunStatus::Paused(PauseReason::Requested), Some(StepStatus::Running)) => ProgressState::Paused,
+    (RunStatus::Paused(PauseReason::LimitReached(_)), Some(StepStatus::Running)) => ProgressState::StoppedAtLimit,
     (RunStatus::Interrupted(_), Some(StepStatus::Running)) => ProgressState::Interrupted,
     (RunStatus::Running, Some(StepStatus::Running)) if lost => ProgressState::Interrupted,
     (_, Some(StepStatus::Running)) => ProgressState::Working,

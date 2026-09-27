@@ -103,6 +103,11 @@ fn getting_started_roles_follow_pencil() {
     theme.spacing_value(ExtraSpacing::DialogMargin.role()),
     Dimension::Px(32.0)
   );
+  // Summary column beside its 12px scroll gutter: content still ends 32 from the edge (`JV8S8`).
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::BesideGutter.role()),
+    Dimension::Px(20.0)
+  );
   assert_eq!(
     theme.typography_style(ExtraTypography::DialogTitle.role()).font_size,
     20.0

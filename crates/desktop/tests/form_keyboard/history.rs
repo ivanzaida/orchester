@@ -184,6 +184,44 @@ fn history_saved_draft_returns_to_the_tab_it_was_written_from() {
   desktop.settle("the All tab", |tree| tab_selected(tree, "tasks-tab-all"));
 }
 
+/// The form's own back arrow returns to the list it was opened from, on its tab, instead of
+/// opening the list again after the form.
+#[test]
+fn history_new_task_back_arrow_returns_to_the_list_and_its_tab() {
+  let mut desktop = saved_draft();
+  desktop.press("tasks-tab-drafts");
+  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  desktop.click(TASKS);
+  desktop.wait_for(TITLE);
+  desktop.press("new-task-back");
+  desktop.settle("the list on the Drafts tab", |tree| {
+    tree.get_element_by_id(TITLE).is_none() && tab_selected(tree, "tasks-tab-drafts")
+  });
+  // The list was not opened again: going back leads to the All tab before it, and forward to
+  // the form that was left.
+  side_button(&mut desktop, BACK);
+  desktop.settle("the All tab", |tree| tab_selected(tree, "tasks-tab-all"));
+  side_button(&mut desktop, FORWARD);
+  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  side_button(&mut desktop, FORWARD);
+  desktop.wait_for(TITLE);
+}
+
+/// Opened from another screen, the back arrow opens the task list as a new entry.
+#[test]
+fn history_new_task_back_arrow_from_the_overview_opens_the_list() {
+  let mut desktop = Desktop::with_project();
+  desktop.wait_for(OVERVIEW);
+  desktop.click(OVERVIEW);
+  desktop.wait_for(TITLE);
+  desktop.press("new-task-back");
+  desktop.wait_for(TASKS);
+  side_button(&mut desktop, BACK);
+  desktop.wait_for(TITLE);
+  side_button(&mut desktop, BACK);
+  desktop.wait_for(OVERVIEW);
+}
+
 #[test]
 fn history_saved_draft_from_the_overview_follows_it() {
   let mut desktop = Desktop::with_project();
