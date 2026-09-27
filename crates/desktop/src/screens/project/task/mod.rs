@@ -1,14 +1,15 @@
 //! A task and its latest run (02.10 `RD4pc`, paused 02.A `Oqmog`, stopped at limit 02.L
 //! `D6Nwxz`): the topbar with the way back to the task list and the run controls, the heading,
 //! the tabs, and the Summary (`uVIxb`, `F5Lsi`; the plan review 02.11 `x3lVC` while a plan waits for
-//! a decision), Changes or Activity (02.I `SfXU1`) tab. The run is
-//! read from the project database and read again whenever the runner reports a change; its
-//! changes up to its latest checkpoint are read again when it records a new one. Conversation and
-//! Artifacts come in later milestones and are shown unavailable.
+//! a decision), Conversation (02.12 `jgqPe`), Changes or Activity (02.I `SfXU1`) tab. The run is
+//! read from the project database and read again whenever the runner reports a change or a message
+//! is sent; its changes up to its latest checkpoint are read again when it records a new one.
+//! Artifacts come in a later milestone and are shown unavailable.
 
 mod activity;
 mod changes;
 mod controls;
+mod conversation;
 mod heading;
 mod limit_panel;
 mod notice;
@@ -102,6 +103,10 @@ pub struct TaskScreen {
   requested: Signal<Option<RunControl>>,
   /// Reads the run's checkpointed changes again after they could not be read.
   retry: Signal<u64>,
+  /// Reads the task again once a message was sent.
+  reload: Signal<u64>,
+  /// Puts the focus in the conversation's composer (Ask agent).
+  focus_composer: Signal<bool>,
   nav: ProjectNav,
   runners: Runners,
 }
@@ -114,6 +119,8 @@ impl Component for TaskScreen {
     Self {
       requested: ctx.signal(None),
       retry: ctx.signal(0),
+      reload: ctx.signal(0),
+      focus_composer: ctx.signal(false),
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
@@ -126,8 +133,13 @@ impl Component for TaskScreen {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TaskProps>().clone();
     let control = control_action(ctx);
-    let deps = (props.project.repo_root.clone(), props.task, props.revision);
-    let load = ctx.future(deps, |(repo_root, task, _)| async move {
+    let deps = (
+      props.project.repo_root.clone(),
+      props.task,
+      props.revision,
+      self.reload.get(),
+    );
+    let load = ctx.future(deps, |(repo_root, task, ..)| async move {
       background::run(move || TaskDetail::load_in(&repo_root, task))
         .await?
         .map(|detail| LoadedTask(Arc::new(detail)))
@@ -165,7 +177,7 @@ impl Component for TaskScreen {
       Some(CheckpointedLoad::Ready(checkpointed)) => checkpointed.files(),
       _ => None,
     };
-    let body = self.body(ctx, &props, &detail, lost, checkpointed);
+    let body = self.body(ctx, &props, &detail, (lost, files), checkpointed);
     let runner_notice = connection_notice(ctx, &props.runner, props.runner_since, &self.runners).map(padded);
     let control_error = control
       .state()
@@ -190,7 +202,7 @@ impl TaskScreen {
     ctx: &mut Ctx,
     props: &TaskProps,
     detail: &Arc<TaskDetail>,
-    lost: Option<Lost>,
+    (lost, files): (Option<Lost>, Option<usize>),
     checkpointed: Option<CheckpointedLoad>,
   ) -> Element {
     let live = detail.phase() == TaskPhase::Running && lost.is_none();
@@ -202,8 +214,27 @@ impl TaskScreen {
     }
     match (props.tab, detail.run.as_ref()) {
       (TaskPageTab::Summary, Some(run)) if *run.run.status() == RunStatus::Succeeded => {
-        ready::ready_for_review(ctx, run, checkpointed.as_ref(), props.project.project.name().as_str())
+        let ask = self.ask_agent(props.task);
+        ready::ready_for_review(
+          ctx,
+          run,
+          checkpointed.as_ref(),
+          props.project.project.name().as_str(),
+          &ask,
+        )
       }
+      (TaskPageTab::Conversation, _) => conversation::conversation_tab(
+        ctx,
+        detail,
+        &conversation::TabContext {
+          repo_root: &props.project.repo_root,
+          lost,
+          files,
+          nav: &self.nav,
+          focus: &self.focus_composer,
+          reload: &self.reload,
+        },
+      ),
       (TaskPageTab::Summary, _) => summary::summary(ctx, detail, props.limits, lost, &props.project.repo_root),
       (TaskPageTab::Activity, _) => ctx.mount_keyed::<ActivityTab>(
         "task-activity",
@@ -225,6 +256,20 @@ impl TaskScreen {
           retry: self.retry.clone(),
         },
       ),
+    }
+  }
+
+  /// Ask agent and Open conversation of a run ready for review: the Conversation tab, with the
+  /// focus in the composer for Ask agent.
+  fn ask_agent(&self, task: TaskId) -> ready::Ask {
+    let (nav, focus) = (self.nav.clone(), self.focus_composer.clone());
+    let open = self.nav.clone();
+    ready::Ask {
+      ask: Arc::new(move || {
+        focus.set(true);
+        nav.show(Page::Task(task, TaskPageTab::Conversation));
+      }),
+      open: Arc::new(move || open.show(Page::Task(task, TaskPageTab::Conversation))),
     }
   }
 
@@ -312,7 +357,11 @@ impl TaskScreen {
       Some(SpacingSize::Section),
       [
         tab("task-tab-summary", "runs.page.tabs.summary", Some(TaskPageTab::Summary)),
-        tab("task-tab-conversation", "runs.page.tabs.conversation", None),
+        tab(
+          "task-tab-conversation",
+          "runs.page.tabs.conversation",
+          Some(TaskPageTab::Conversation),
+        ),
         tab("task-tab-changes", "runs.page.tabs.changes", Some(TaskPageTab::Changes)).count(files),
         tab(
           "task-tab-activity",

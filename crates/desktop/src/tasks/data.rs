@@ -4,10 +4,11 @@
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use orchester_core::{
+  conversation::{Message, latest_question},
   id::{IdempotencyKey, ResourceId},
-  resource::{AgentProfile, Pipeline, ResourceKind, VersionNumber},
+  resource::{AgentProfile, Pipeline, ResourceKind, StepKey, VersionNumber},
   run::{Run, RunEvent, StepExecutor},
-  store::{ResourceStore, RunStore, TaskStore},
+  store::{ConversationStore, ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
   time::Timestamp,
 };
@@ -15,7 +16,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   detail::run_store_error,
-  list::{AwaitedPlan, LatestRun, Phases},
+  list::{Awaited, AwaitedPlan, AwaitedQuestion, LatestRun, Phases},
 };
 
 /// A pipeline a task can use: one with a published version.
@@ -59,8 +60,8 @@ impl ProjectTasks {
           .map_err(run_store_error)?
           .last()
           .map_or_else(|| latest.created_at(), RunEvent::at);
-        let plan = awaited_plan(&db, latest)?;
-        phases.insert(task.id(), LatestRun::of(task, latest, updated_at, plan));
+        let awaited = awaited(&db, latest)?;
+        phases.insert(task.id(), LatestRun::of(task, latest, updated_at, awaited));
       }
     }
     Ok(Self {
@@ -93,13 +94,14 @@ impl ProjectTasks {
   }
 }
 
-/// The plan `run` waits on a decision for, with the agent role of the step that proposed it; only
-/// such a run needs its plans and a profile read here.
-fn awaited_plan(db: &ProjectDb, run: &Run) -> Result<Option<AwaitedPlan>, StoreError> {
-  if run.awaiting_plan().is_empty() {
-    return Ok(None);
+/// The plan `run` waits on a decision for, or the question it waits for an answer to, with the agent
+/// role of the step that proposed or asked it; only such a run needs its plans or its conversation
+/// and its profiles read here.
+fn awaited(db: &ProjectDb, run: &Run) -> Result<Awaited, StoreError> {
+  let (plan_waits, question_waits) = (!run.awaiting_plan().is_empty(), !run.awaiting_answer().is_empty());
+  if !plan_waits && !question_waits {
+    return Ok(Awaited::default());
   }
-  let plans = db.plans(run.id()).map_err(run_store_error)?;
   let mut roles = BTreeMap::new();
   for step in run.snapshot().steps() {
     if let StepExecutor::Agent { profile, .. } = step.executor()
@@ -108,7 +110,34 @@ fn awaited_plan(db: &ProjectDb, run: &Run) -> Result<Option<AwaitedPlan>, StoreE
       roles.insert(step.key().clone(), Arc::<str>::from(version.body().role().as_str()));
     }
   }
-  Ok(AwaitedPlan::of(run, &plans, |step| roles.get(step).cloned()))
+  let role = |step: &StepKey| roles.get(step).cloned();
+  let plan = if plan_waits {
+    AwaitedPlan::of(run, &db.plans(run.id()).map_err(run_store_error)?, role)
+  } else {
+    None
+  };
+  let question = if question_waits {
+    awaited_question(run, &db.messages(run.task())?, role)
+  } else {
+    None
+  };
+  Ok(Awaited { plan, question })
+}
+
+/// The question the first execution waiting for an answer asked, among `messages`, and who asks.
+fn awaited_question(
+  run: &Run,
+  messages: &[Message],
+  role: impl Fn(&StepKey) -> Option<Arc<str>>,
+) -> Option<AwaitedQuestion> {
+  let execution = *run.awaiting_answer().first()?;
+  let question = latest_question(messages, execution)?;
+  let step = run.execution(execution)?.step();
+  let agent = role(step).or_else(|| run.snapshot().body().step(step).map(|step| step.name.as_str().into()))?;
+  Some(AwaitedQuestion {
+    agent,
+    text: question.body().as_str().into(),
+  })
 }
 
 /// Pipelines with a published version, ordered by slug. Drafts that were never published

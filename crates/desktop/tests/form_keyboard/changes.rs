@@ -92,10 +92,11 @@ fn ready_for_review(desktop: &mut Desktop) {
     "task-ready-unavailable",
     "which no pipeline step opens yet"
   ));
-  // Review PR and Ask agent do nothing yet.
+  // Review PR does nothing yet; Ask agent opens the task conversation.
   desktop.click("task-review-pull-request");
-  desktop.click("task-ask-agent");
   assert!(has(desktop, "task-ready"));
+  desktop.click("task-ask-agent");
+  desktop.wait_for("task-conversation-panel");
 }
 
 #[test]

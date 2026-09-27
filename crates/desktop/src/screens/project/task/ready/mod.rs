@@ -4,12 +4,15 @@
 //! checkpoint `q91Jf8`), and the review actions with the size of the change (`ksjis`, `T2AAq`);
 //! beside them the run's details (`cB4GN`, see [`details`]).
 //!
-//! Reviewing the pull request (`o5Txa1`) needs a pull request, which no pipeline step opens yet;
-//! asking the agent (`QzsSV`) needs the task conversation. Both are drawn unavailable and say why.
-//! Evidence records (acceptance criteria, tests, browser checks) and artifacts do not exist yet, so
-//! their rows and the artifact buttons are left out.
+//! Reviewing the pull request (`o5Txa1`) needs a pull request, which no pipeline step opens yet, so
+//! it is drawn unavailable and says why. Asking the agent (`QzsSV`) and Open conversation open the
+//! task conversation; Ask agent also puts the focus in its composer. Evidence records (acceptance
+//! criteria, tests, browser checks) and artifacts do not exist yet, so their rows and the artifact
+//! buttons are left out.
 
 mod details;
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -43,12 +46,19 @@ const BULLET: f32 = 3.0;
 const ACTIONS_HEIGHT: f32 = 44.0;
 const READINESS_HEIGHT: f32 = 76.0;
 
+/// What Ask agent and Open conversation do.
+pub(super) struct Ask {
+  pub(super) ask: Arc<dyn Fn() + Send + Sync>,
+  pub(super) open: Arc<dyn Fn() + Send + Sync>,
+}
+
 /// The Summary tab of `run`, which succeeded, in project `project`.
 pub(super) fn ready_for_review(
   ctx: &mut Ctx,
   run: &RunView,
   checkpointed: Option<&CheckpointedLoad>,
   project: &str,
+  ask: &Ask,
 ) -> Element {
   let checkpointed = match checkpointed {
     Some(CheckpointedLoad::Ready(checkpointed)) => Some(checkpointed),
@@ -65,12 +75,12 @@ pub(super) fn ready_for_review(
     .with_children(what_changed(ctx, run))
     .child(verification(ctx, run))
     .child(Spacer::new().flex(1.0))
-    .child(actions(ctx, checkpointed));
+    .child(actions(ctx, checkpointed, &ask.ask));
   Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .child(summary)
-    .child(details::run_details(ctx, run, project))
+    .child(details::run_details(ctx, run, project, &ask.open))
     .into()
 }
 
@@ -209,7 +219,7 @@ fn verification(ctx: &Ctx, run: &RunView) -> Element {
 }
 
 /// The size of the change, then Ask agent and Review PR, unavailable and why (`ksjis`).
-fn actions(ctx: &Ctx, checkpointed: Option<&Checkpointed>) -> Element {
+fn actions(ctx: &Ctx, checkpointed: Option<&Checkpointed>, ask: &Arc<dyn Fn() + Send + Sync>) -> Element {
   let scope = match checkpointed {
     Some(Checkpointed::Read { changes, .. }) => {
       let files = changes.diff.files().len();
@@ -244,9 +254,11 @@ fn actions(ctx: &Ctx, checkpointed: Option<&Checkpointed>) -> Element {
     Some(Checkpointed::NoCheckpoint) => ctx.t("runs.ready.scopeNone"),
     None => ctx.t("runs.ready.scopeReading"),
   };
+  let ask = ask.clone();
   let ask = ActionButton::new(ctx.t("runs.ready.askAgent"))
     .icon(Icon::MessageSquare)
     .id("task-ask-agent")
+    .on_click(move || ask())
     .render(ctx);
   let review = ActionButton::new(ctx.t("runs.ready.reviewPullRequest"))
     .icon(Icon::GitCompareArrows)

@@ -76,6 +76,23 @@ pub struct LatestRun {
   pub checkpoint: Option<Arc<str>>,
   /// The plan it waits on a decision for, if it does.
   pub plan: Option<AwaitedPlan>,
+  /// The question it waits for an answer to, if it does.
+  pub question: Option<AwaitedQuestion>,
+}
+
+/// A question an agent asked, which its run waits for an answer to: who asks (the agent role of
+/// its step, the step's name when its profile version is gone) and what.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AwaitedQuestion {
+  pub agent: Arc<str>,
+  pub text: Arc<str>,
+}
+
+/// What a run waits for from a person, if anything: a plan decision or an answer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Awaited {
+  pub plan: Option<AwaitedPlan>,
+  pub question: Option<AwaitedQuestion>,
 }
 
 /// A plan a run waits on a decision for (02.11): its version and who proposed it, the agent role
@@ -102,8 +119,8 @@ impl AwaitedPlan {
 
 impl LatestRun {
   /// `run`, the latest run of `task`, whose last event was recorded at `updated_at`, with the plan
-  /// it waits on, if any.
-  pub fn of(task: &Task, run: &Run, updated_at: Timestamp, plan: Option<AwaitedPlan>) -> Self {
+  /// or the question it waits on, if any.
+  pub fn of(task: &Task, run: &Run, updated_at: Timestamp, awaited: Awaited) -> Self {
     Self {
       phase: TaskPhase::of(task, Some(run)),
       number: run.number(),
@@ -113,7 +130,8 @@ impl LatestRun {
       checkpoint: run
         .last_checkpoint()
         .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).into()),
-      plan,
+      plan: awaited.plan,
+      question: awaited.question,
     }
   }
 
@@ -249,6 +267,8 @@ pub struct TaskRow {
   pub detail: Message,
   /// The plan its run waits on a decision for, if it does.
   pub plan: Option<AwaitedPlan>,
+  /// The question its run waits for an answer to, if it does.
+  pub question: Option<AwaitedQuestion>,
   pub created_at: Timestamp,
 }
 
@@ -279,6 +299,7 @@ impl TaskRow {
       phase,
       detail,
       plan: latest.and_then(|latest| latest.plan.clone()),
+      question: latest.and_then(|latest| latest.question.clone()),
       created_at: task.created_at(),
     }
   }

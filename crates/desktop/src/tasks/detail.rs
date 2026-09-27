@@ -7,13 +7,14 @@ use std::{num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
   connection::{AgentProvider, ConnectionKind},
+  conversation::Message,
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
     ActivityEntry, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent, RunEventKind, RunLimit, RunStatus,
     StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
   },
-  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
+  store::{ActivityStore, ConnectionStore, ConversationStore, ResourceStore, RunStore, TaskStore},
   task::Task,
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -169,6 +170,8 @@ impl RunView {
 pub struct TaskDetail {
   pub task: Task,
   pub run: Option<RunView>,
+  /// The task's conversation, oldest first.
+  pub messages: Vec<Message>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskDetail {}
@@ -194,7 +197,8 @@ impl TaskDetail {
       .into_iter()
       .next_back();
     let run = latest.map(|run| run_view(&db, run)).transpose()?;
-    Ok(Self { task, run })
+    let messages = db.messages(task.id())?;
+    Ok(Self { task, run, messages })
   }
 }
 

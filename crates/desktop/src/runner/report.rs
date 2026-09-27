@@ -229,13 +229,13 @@ impl Reporter {
   }
 
   /// The agent (`agent`, its role) of a run of task `task` (`task_key`) asked a question that waits
-  /// for the user: the latest event says so and opens the task ("Builder asks ·
+  /// for the user: the latest event says so and opens the task's conversation ("Builder asks ·
   /// ORC-12").
   pub(super) fn question_asked(&self, task: TaskId, task_key: &str, agent: &str) {
     let title = Message::new("statusBar.activity.agentAsks")
       .with("agent", agent.to_owned())
       .with("task", task_key.to_owned());
-    self.record_for_task(task, title, Place::Task(task));
+    self.record_for_task(task, title, Place::TaskConversation(task));
   }
 
   /// Records `title` as the latest event of this runner's project, opening `place`.

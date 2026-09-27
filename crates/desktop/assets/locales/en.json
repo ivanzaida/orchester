@@ -216,7 +216,10 @@
       "planSummary": "Plan v{{version}} from {{agent}} waits for your decision. Nothing after it starts until you decide.",
       "reviewPlanAction": "Review plan",
       "context": "{{task}} · {{detail}}",
-      "open": "Open task  →"
+      "open": "Open task  →",
+      "clarification": "CLARIFICATION",
+      "questionContext": "{{agent}} is waiting · {{task}}",
+      "answer": "Answer question  →"
     },
     "activity": {
       "title": "Recent activity",
@@ -384,6 +387,7 @@
         "starting": "Run {{run}} · Attempt {{attempt}} · starting",
         "working": "Run {{run}} · Attempt {{attempt}} · {{step}} · {{agent}} working",
         "awaitingPlan": "Run {{run}} · Attempt {{attempt}} · {{pipeline}} {{version}} · {{agent}} finished",
+        "asking": "Run {{run}} · Attempt {{attempt}} · {{step}} · {{agent}} asks you",
         "pausing": "Run {{run}} · Attempt {{attempt}} · {{step}} · pausing at the next checkpoint",
         "paused": "Run {{run}} · Attempt {{attempt}} · Paused by you at {{time}}",
         "tokenLimit": "Run {{run}} · Attempt {{attempt}} · Stopped at the token limit at {{time}}",
@@ -478,6 +482,8 @@
         "runningDetail": "The agent works in the run’s own worktree and branch; your checkout is not touched.",
         "pausingTitle": "Pausing at the next checkpoint",
         "pausingDetail": "The agent finishes the invocation it is running and its work is committed as a checkpoint; then the run pauses. Nothing in the worktree is lost.",
+        "askingTitle": "{{agent}} asks you a question",
+        "askingDetail": "Answer it in the Conversation tab. {{step}} goes on with your answer.",
         "pausedTitle": "Paused at checkpoint {{checkpoint}}",
         "pausedNoCheckpointTitle": "Paused",
         "pausedDetail": "Work is preserved. No new steps or tool calls start until you resume this run.",
@@ -727,7 +733,7 @@
       "scopeReading": "Reading the changes…",
       "askAgent": "Ask agent",
       "reviewPullRequest": "Review PR",
-      "unavailable": "Review PR needs a pull request, which no pipeline step opens yet. Ask agent needs the task conversation, which comes in a later version.",
+      "unavailable": "Review PR needs a pull request, which no pipeline step opens yet.",
       "details": "Run details",
       "project": "Project",
       "base": "Base revision",
@@ -830,6 +836,79 @@
       "ended": "The run has already ended.",
       "notInterrupted": "The run is not interrupted.",
       "failed": "The runner could not do this; its log has the details."
+    }
+  },
+  "conversation": {
+    "title": "Task conversation",
+    "status": {
+      "notStarted": "Not started",
+      "live": "Live",
+      "waiting": "Waiting for you",
+      "paused": "Paused",
+      "stopped": "Stopped",
+      "interrupted": "Interrupted",
+      "ready": "Ready for review",
+      "ended": "Ended"
+    },
+    "to": {
+      "orchestrator": "To: Orchestrator · this task",
+      "agent": "To: {{agent}}"
+    },
+    "participants": {
+      "working": "{{agents}} working · {{available}} available",
+      "workingOnly": "{{agents}} working",
+      "asking": "{{agents}} asks you · {{available}} available",
+      "askingOnly": "{{agents}} asks you",
+      "available": "{{available}} available",
+      "none": "No agent takes part in this task yet"
+    },
+    "author": {
+      "you": "You · {{time}}",
+      "youTo": "You to {{agent}} · {{time}}",
+      "agent": "{{agent}} · {{time}}"
+    },
+    "delivery": {
+      "queued": "Queued · waiting for the next checkpoint",
+      "queuedRunStart": "Queued · waiting for the run to start",
+      "queuedRunContinue": "Queued · waiting for the run to continue",
+      "notDelivered": "Not delivered · the run has ended",
+      "delivered": "Delivered to {{agent}}",
+      "acknowledged": "Acknowledged by {{agent}}",
+      "reply": "Reply · {{step}}",
+      "question": "Question · waiting for your answer",
+      "answered": "Question · answered"
+    },
+    "reply": "Reply  →",
+    "empty": "No messages yet. Questions and clarifications you write here stay with this task.",
+    "composer": {
+      "placeholder": "Ask, clarify or redirect this task…",
+      "attach": "Attach",
+      "send": "Send",
+      "sending": "Sending…",
+      "closed": "This run has ended, so no agent reads messages to it."
+    },
+    "explanation": {
+      "notStarted": "Messages reach the first step when the run starts.",
+      "checkpoint": "Messages arrive at a checkpoint. Pause for an urgent change.",
+      "answer": "Your reply resumes {{agent}}'s session.",
+      "queued": "Messages stay queued until the run continues.",
+      "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
+      "readyNoAgent": "No agent step of this run can be asked again.",
+      "ended": "This run has ended. Messages no longer reach its agents."
+    },
+    "errors": {
+      "blank": "Write a message first."
+    },
+    "policy": "Questions and clarifications stay in this task. An agent reads your messages when its current turn ends.",
+    "work": {
+      "title": "Working context",
+      "noCheckpoint": "No checkpoint yet",
+      "changedFiles": "Changed files",
+      "files": {
+        "one": "1 file · view changes ↗",
+        "other": "{{count}} files · view changes ↗"
+      },
+      "filesUnknown": "view changes ↗"
     }
   },
   "pullRequests": {
