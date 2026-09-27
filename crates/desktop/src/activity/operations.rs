@@ -256,6 +256,52 @@ pub fn profile(repo_root: &Path, id: ResourceId) -> Target {
   }
 }
 
+/// Adding a secret: its value goes to the keychain, its name to the project.
+pub fn secret_add(open: &OpenProject, name: &str) -> OperationSpec {
+  secret_operation(
+    open,
+    name,
+    &Wording {
+      running: "statusBar.operations.secretAdd.running",
+      done: "statusBar.operations.secretAdd.done",
+      failed: "statusBar.operations.secretAdd.failed",
+    },
+  )
+}
+
+/// Replacing a secret's value in the keychain (rotation).
+pub fn secret_replace(open: &OpenProject, name: &str) -> OperationSpec {
+  secret_operation(
+    open,
+    name,
+    &Wording {
+      running: "statusBar.operations.secretReplace.running",
+      done: "statusBar.operations.secretReplace.done",
+      failed: "statusBar.operations.secretReplace.failed",
+    },
+  )
+}
+
+/// Archiving a secret: its value is removed from the keychain.
+pub fn secret_archive(open: &OpenProject, name: &str) -> OperationSpec {
+  secret_operation(
+    open,
+    name,
+    &Wording {
+      running: "statusBar.operations.secretArchive.running",
+      done: "statusBar.operations.secretArchive.done",
+      failed: "statusBar.operations.secretArchive.failed",
+    },
+  )
+}
+
+fn secret_operation(open: &OpenProject, name: &str, wording: &Wording) -> OperationSpec {
+  wording
+    .named(name)
+    .project(open.project.name().as_str())
+    .target(in_project(open, Place::Secrets))
+}
+
 /// Checking a saved connection again from its details.
 pub fn connection_check(open: &OpenProject, name: &str) -> OperationSpec {
   Wording {

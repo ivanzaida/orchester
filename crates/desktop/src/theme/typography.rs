@@ -135,10 +135,14 @@ pub enum ExtraTypography {
   VariableName,
   /// Execution context note of the instruction preview (`HvDGw`, `utiRC` in `TnjFo`): 9 muted.
   ContextNote,
+  /// An identifier as the title of a list row, e.g. a secret's name (`B1zGN` in `vxAMD`).
+  MonoTitle,
+  /// A stored secret shown only as its mask (`FNlaR` in `CQxCb`).
+  MaskedValue,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 61] = [
+  const ALL: [Self; 63] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -200,6 +204,8 @@ impl ExtraTypography {
     Self::PromptText,
     Self::VariableName,
     Self::ContextNote,
+    Self::MonoTitle,
+    Self::MaskedValue,
   ];
 
   fn name(self) -> &'static str {
@@ -265,6 +271,8 @@ impl ExtraTypography {
       Self::PromptText => "prompt-text",
       Self::VariableName => "variable-name",
       Self::ContextNote => "context-note",
+      Self::MonoTitle => "mono-title",
+      Self::MaskedValue => "masked-value",
     }
   }
 
@@ -396,6 +404,8 @@ impl ExtraTypography {
         ..mono(20.0, TEXT)
       },
       Self::ContextNote => style(9.0, FontWeight::Normal, MUTED),
+      Self::MonoTitle => mono(12.0, TEXT),
+      Self::MaskedValue => mono(13.0, MUTED),
       icon_role => icon(
         icon_role
           .icon_size()

@@ -25,6 +25,7 @@ pub mod repository;
 pub mod root;
 pub mod runner;
 mod screens;
+pub mod secrets;
 pub use screens::{close_dialog, recovery_dialog};
 pub mod session;
 pub mod tasks;

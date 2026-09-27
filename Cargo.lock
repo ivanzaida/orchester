@@ -2529,6 +2529,7 @@ dependencies = [
  "orchester-exec",
  "orchester-ipc",
  "orchester-store",
+ "orchester-vault",
  "parking_lot",
  "rfd",
  "serde_json",
@@ -2538,6 +2539,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zeroize",
 ]
 
 [[package]]

@@ -159,6 +159,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::PromptText.role()` | mono 12, 1.8 | instruction prompt, edited and resolved (`g2Tkg`, `iJdsS`) |
 | `ExtraTypography::VariableName.role()` | mono 20/500 | variable shown in the catalog (`Z69wX` in `EfTiT`) |
 | `ExtraTypography::ContextNote.role()` | 9 muted | preview execution context notes (`HvDGw`, `utiRC` in `TnjFo`) |
+| `ExtraTypography::MonoTitle.role()` | mono 12 | identifier as a list row's title, e.g. a secret name (`B1zGN` in `vxAMD`) |
+| `ExtraTypography::MaskedValue.role()` | mono 13 muted | a stored secret shown only as its mask (`FNlaR` in `CQxCb`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

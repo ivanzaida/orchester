@@ -9,7 +9,7 @@
 use std::fmt::Write as _;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::id::{ConnectionId, ProjectId, ResourceId, TaskId};
+use orchester_core::id::{ConnectionId, ProjectId, ResourceId, SecretId, TaskId};
 
 use crate::tasks::{list::TaskTab, overview::OverviewTab};
 
@@ -26,6 +26,7 @@ const AGENT_ROLES: &str = "agent-roles";
 const PIPELINE_OVERRIDES: &str = "pipeline-overrides";
 const STEP_OVERRIDES: &str = "step-overrides";
 const AGENTS: &str = "agents";
+const SECRETS: &str = "secrets";
 const CONNECTIONS: &str = "connections";
 const SETTINGS: &str = "settings";
 const LIMITS: &str = "limits";
@@ -81,6 +82,9 @@ pub enum Page {
   Instructions(InstructionsTab, Option<ResourceId>),
   /// Agent profiles and the one being edited (`WPmtS`).
   Agents(AgentSelection),
+  /// Project secrets and the one whose details are shown (`R99lt`); without one, the first
+  /// listed.
+  Secrets(Option<SecretId>),
   /// Connections, the tab and the connection whose details are shown (`a4Lqb`).
   Connections(ConnectionTab, Option<ConnectionId>),
   /// `QV1af`, `c7e729`.
@@ -136,6 +140,7 @@ pub enum SidebarItem {
   Pipelines,
   Instructions,
   Agents,
+  Secrets,
   Connections,
   Settings,
 }
@@ -197,6 +202,8 @@ impl Page {
   pub const OVERVIEW: Self = Self::Overview(OverviewTab::All);
   /// The task list on the All tab.
   pub const TASKS: Self = Self::Tasks(TaskTab::All);
+  /// Secrets, with the first secret's details.
+  pub const SECRETS: Self = Self::Secrets(None);
   /// Connections on the All tab, with the first connection's details.
   pub const CONNECTIONS: Self = Self::Connections(ConnectionTab::All, None);
 
@@ -230,6 +237,8 @@ impl Page {
       [AGENTS] => Self::Agents(AgentSelection::First),
       [AGENTS, NEW] => Self::Agents(AgentSelection::New),
       [AGENTS, profile] => Self::Agents(AgentSelection::Profile(profile.parse().ok()?)),
+      [SECRETS] => Self::SECRETS,
+      [SECRETS, secret] => Self::Secrets(Some(secret.parse().ok()?)),
       [CONNECTIONS] => Self::Connections(ConnectionTab::named(tab), None),
       [CONNECTIONS, connection] => Self::Connections(ConnectionTab::named(tab), Some(connection.parse().ok()?)),
       [SETTINGS] => Self::Settings(SettingsTab::General),
@@ -257,6 +266,10 @@ impl Page {
       Self::Agents(AgentSelection::First) => format!("{root}/{AGENTS}"),
       Self::Agents(AgentSelection::New) => format!("{root}/{AGENTS}/{NEW}"),
       Self::Agents(AgentSelection::Profile(profile)) => format!("{root}/{AGENTS}/{profile}"),
+      Self::Secrets(selected) => {
+        let selected = selected.map_or_else(String::new, |secret| format!("/{secret}"));
+        format!("{root}/{SECRETS}{selected}")
+      }
       Self::Connections(tab, selected) => {
         let selected = selected.map_or_else(String::new, |connection| format!("/{connection}"));
         with_tab(format!("{root}/{CONNECTIONS}{selected}"), tab.query())
@@ -274,6 +287,7 @@ impl Page {
       Self::Pipelines | Self::Pipeline(_) => SidebarItem::Pipelines,
       Self::Instructions(..) => SidebarItem::Instructions,
       Self::Agents(_) => SidebarItem::Agents,
+      Self::Secrets(_) => SidebarItem::Secrets,
       Self::Connections(..) => SidebarItem::Connections,
       Self::Settings(_) => SidebarItem::Settings,
     }

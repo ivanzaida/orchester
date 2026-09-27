@@ -25,6 +25,7 @@ pub enum Place {
   Pipeline(ResourceId),
   Instruction(ResourceId),
   AgentProfile(ResourceId),
+  Secrets,
   Connections,
   Settings,
 }
