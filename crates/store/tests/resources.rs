@@ -10,9 +10,10 @@ use orchester_core::{
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, StepPermissions},
   project::{Project, ProjectKey},
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, DeniedBehavior,
-    Draft, DraftSaved, InjectionEvent, Instruction, InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings,
-    PublishError, RepositoryAccess, ResourceKind, Slug, Step, StepKey, StepKind, Tool, ToolAction, VersionNumber,
+    AccessPolicy, AccessWindow, AgentProfile, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
+    CommandProgram, DeniedBehavior, Draft, DraftSaved, InjectionEvent, Instruction, InstructionScope, ModelId,
+    Pipeline, PromptText, ProviderSettings, PublishError, RepositoryAccess, ResourceKind, Slug, Step, StepKey,
+    StepKind, Tool, ToolAction, VersionNumber,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -112,8 +113,11 @@ fn tool() -> Tool {
     DeniedBehavior::FailStep,
   )
   .expect("valid policy");
-  let action = CommandAction::new("cargo".into(), vec!["test".into()]).expect("valid command");
-  Tool::new(ToolAction::Command(action), access)
+  let action = CommandAction::new(
+    CommandProgram::new("cargo").expect("valid program"),
+    vec![CommandArg::new("test").expect("valid argument")],
+  );
+  Tool::new("", ToolAction::Command(action), Some(access)).expect("valid tool")
 }
 
 #[test]

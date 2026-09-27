@@ -48,6 +48,21 @@ pub fn remote_address(url: &str) -> &str {
   address.strip_suffix(".git").unwrap_or(address)
 }
 
+/// A number of bytes as people read it: `980 bytes`, `12.3 KiB`, `4.1 MiB`.
+pub fn byte_size(bytes: u64) -> Message {
+  const KIB: u64 = 1024;
+  if bytes < KIB {
+    return Message::new("number.bytes").with("count", bytes.to_string());
+  }
+  let (key, unit) = if bytes < KIB * KIB {
+    ("number.kib", KIB)
+  } else {
+    ("number.mib", KIB * KIB)
+  };
+  let tenths = bytes.saturating_mul(10) / unit;
+  Message::new(key).with("count", format!("{}.{}", tenths / 10, tenths % 10))
+}
+
 const MINUTE_MILLIS: i64 = 60_000;
 const HOUR_MILLIS: i64 = 60 * MINUTE_MILLIS;
 const DAY_MILLIS: i64 = 24 * HOUR_MILLIS;

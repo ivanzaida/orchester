@@ -1,5 +1,6 @@
 //! What happens when an agent ends. Its work is committed in its worktree; a step that passed and
-//! worked beside others is merged back into the run's branch. Its final message becomes its output
+//! worked beside others is merged back into the run's branch (for command tools as well, see
+//! `tool::end`). Its final message becomes its output
 //! for the steps after it; the step then passes, or fails for a reason its failure route handles.
 //! A failed step ends the attempt, so agents of the same attempt still at work are ended.
 
@@ -110,6 +111,12 @@ impl RunTask {
       self.save(execution, active, "step failed")?;
       return self.fail(execution, failure);
     }
+    self.pass(execution, active)
+  }
+
+  /// A step its agent or command finished: its work joins the run's branch and the step passes, or
+  /// it fails when its work cannot be committed or merged.
+  pub(in super::super) fn pass(&mut self, execution: StepExecutionId, active: &Active) -> Result<(), ExecutionError> {
     match self.integrate(execution, active) {
       Ok(Integrated::Done) => self.transition(|run, now| run.complete_step(execution, now)),
       Ok(Integrated::Conflict { branch, files }) => {
@@ -163,7 +170,12 @@ impl RunTask {
   /// Commits what an agent that did not pass changed, in its own worktree, as a checkpoint of its
   /// execution: nothing is discarded, and the run's worktree stays clean for later merges. A commit
   /// that fails is reported; the changes stay uncommitted.
-  fn save(&mut self, execution: StepExecutionId, active: &Active, what: &str) -> Result<(), ExecutionError> {
+  pub(in super::super) fn save(
+    &mut self,
+    execution: StepExecutionId,
+    active: &Active,
+    what: &str,
+  ) -> Result<(), ExecutionError> {
     let message = self.commit_message(execution, Some(what));
     match checkpoint::commit(active.workspace.path(), &message) {
       Ok(Some(revision)) => self.checkpoint(execution, revision),

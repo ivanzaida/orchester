@@ -27,4 +27,6 @@ mod secrets;
 mod selection_focus;
 mod task_graph;
 mod task_run;
+mod tool_run;
+mod tools;
 mod window;

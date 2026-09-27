@@ -55,8 +55,8 @@ fn pressing_an_unavailable_item_clears_the_focus() {
   desktop.click("tasks-new-task");
   desktop.wait_for(TITLE);
   desktop.tab_to(TITLE, MAX_STOPS);
-  // Tools does not exist yet: a press on it is a press on empty space, which clears the focus.
-  desktop.press("nav-tools");
+  // Orchestrator does not exist yet: a press on it is a press on empty space, which clears the focus.
+  desktop.press("nav-orchestrator");
   assert_eq!(desktop.focused(), None);
 }
 

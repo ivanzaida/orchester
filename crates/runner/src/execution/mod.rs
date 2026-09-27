@@ -4,12 +4,13 @@
 //! told *that* something changed ([`Event::RunChanged`], [`Event::AgentActivity`]) and reads the
 //! database.
 //!
-//! This version executes pipeline graphs of agent steps: every step whose dependencies have passed
-//! runs, beside the others (see `workspace` for where each works), with failure routes and retries,
-//! step budgets and the outputs of earlier steps in later prompts. Approval gates and tool steps
-//! are refused by the preflight. Every agent at work takes one of the desktop's agent slots, which
-//! all runs share; the project's daily token budget holds new and continued work back once today's
-//! runs used it.
+//! This version executes pipeline graphs of agent steps and of tool steps that run command tools
+//! (`tool`): every step whose dependencies have passed runs, beside the others (see `workspace` for
+//! where each works), with failure routes and retries, step budgets and the outputs of earlier steps
+//! in later prompts. Approval gates and other tools are refused by the preflight. Every agent at
+//! work takes one of the desktop's agent slots, which all runs share, and every command one of the
+//! runner's command slots; the project's daily token budget holds new and continued work back once
+//! today's runs used it.
 
 mod attach;
 mod board;
@@ -22,6 +23,7 @@ mod prepare;
 mod record;
 mod run;
 mod step;
+mod tool;
 mod work;
 mod workspace;
 
