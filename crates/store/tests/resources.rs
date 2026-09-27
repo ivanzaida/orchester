@@ -445,3 +445,55 @@ fn resources_published_versions_are_immutable() {
   assert!(raw.execute("DELETE FROM resource_versions", []).is_err());
   assert!(db.latest_version::<Instruction>(id).unwrap().is_some());
 }
+
+#[test]
+fn resources_list_every_published_version_oldest_first() {
+  let (_repo, mut db) = project_repo();
+  let id = db
+    .create_resource(slug("feature-delivery"), name("Feature delivery"), &pipeline(), at(1))
+    .unwrap()
+    .id();
+  assert_eq!(db.versions::<Pipeline>(id).unwrap(), Vec::new());
+  let v1 = db.publish_draft::<Pipeline>(id, at(2)).unwrap();
+  let single = Pipeline::new(pipeline().steps()[..1].to_vec()).unwrap();
+  db.save_draft(id, &Draft::new(single, Some(v1.number()), at(3)))
+    .unwrap();
+  let v2 = db.publish_draft::<Pipeline>(id, at(4)).unwrap();
+  // A draft is not a version.
+  db.save_draft(id, &Draft::new(pipeline(), Some(v2.number()), at(5)))
+    .unwrap();
+
+  assert_eq!(db.versions::<Pipeline>(id).unwrap(), [v1, v2]);
+  assert!(matches!(
+    db.versions::<AgentProfile>(id),
+    Err(StoreError::ResourceKindMismatch { .. })
+  ));
+}
+
+/// Restoring an old version as the draft, as the pipeline editor does: the draft holds the old
+/// body on top of the latest version, publishing it adds a version, and the versions already
+/// published stay as they were. Restoring the latest version leaves no draft.
+#[test]
+fn resources_restore_an_old_version_as_a_draft_of_the_next_one() {
+  let (_repo, mut db) = project_repo();
+  let id = db
+    .create_resource(slug("feature-delivery"), name("Feature delivery"), &pipeline(), at(1))
+    .unwrap()
+    .id();
+  let v1 = db.publish_draft::<Pipeline>(id, at(2)).unwrap();
+  let single = Pipeline::new(pipeline().steps()[..1].to_vec()).unwrap();
+  db.save_draft(id, &Draft::new(single, Some(v1.number()), at(3)))
+    .unwrap();
+  let v2 = db.publish_draft::<Pipeline>(id, at(4)).unwrap();
+
+  let restored = Draft::new(v1.body().clone(), Some(v2.number()), at(5));
+  assert_eq!(db.save_draft(id, &restored).unwrap(), DraftSaved::Stored);
+  let v3 = db.publish_draft::<Pipeline>(id, at(6)).unwrap();
+  assert_eq!(v3.number().get(), 3);
+  assert_eq!(v3.body(), v1.body());
+  assert_eq!(db.versions::<Pipeline>(id).unwrap(), [v1, v2, v3.clone()]);
+
+  let latest = Draft::new(v3.body().clone(), Some(v3.number()), at(7));
+  assert_eq!(db.save_draft(id, &latest).unwrap(), DraftSaved::Discarded);
+  assert_eq!(db.draft::<Pipeline>(id).unwrap(), None);
+}
