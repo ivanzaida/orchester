@@ -89,6 +89,70 @@ impl Variable {
       Self::StepName => "step.name",
     }
   }
+  /// The part of the catalog the variable belongs to.
+  pub const fn group(self) -> VariableGroup {
+    match self {
+      Self::TaskId
+      | Self::TaskTitle
+      | Self::TaskDescription
+      | Self::TaskAcceptanceCriteria
+      | Self::TaskAttachments
+      | Self::TaskCreatedAt => VariableGroup::Task,
+      Self::ProjectId | Self::ProjectName | Self::ProjectRepository | Self::ProjectDefaultBranch => {
+        VariableGroup::Project
+      }
+      Self::AgentId | Self::AgentName | Self::AgentRole | Self::AgentModel => VariableGroup::Agent,
+      Self::PipelineId | Self::PipelineName | Self::PipelineVersion => VariableGroup::Pipeline,
+      Self::RunId | Self::RunAttempt | Self::RunBudget | Self::RunBranch | Self::RunRevision => VariableGroup::Run,
+      Self::StepId | Self::StepName => VariableGroup::Step,
+    }
+  }
+
+  /// What kind of value the variable holds (the design's "Type" column).
+  pub const fn value_type(self) -> VariableType {
+    match self {
+      Self::TaskAcceptanceCriteria => VariableType::StringList,
+      Self::TaskAttachments => VariableType::AttachmentList,
+      Self::TaskCreatedAt => VariableType::Timestamp,
+      Self::ProjectRepository => VariableType::Repository,
+      Self::PipelineVersion | Self::RunAttempt => VariableType::Integer,
+      Self::RunBudget => VariableType::Tokens,
+      _ => VariableType::String,
+    }
+  }
+}
+
+/// The catalog's groups, in the design's order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum VariableGroup {
+  Task,
+  Project,
+  Agent,
+  Pipeline,
+  Run,
+  Step,
+}
+
+impl VariableGroup {
+  pub const ALL: [Self; 6] = [
+    Self::Task,
+    Self::Project,
+    Self::Agent,
+    Self::Pipeline,
+    Self::Run,
+    Self::Step,
+  ];
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum VariableType {
+  String,
+  StringList,
+  AttachmentList,
+  Timestamp,
+  Repository,
+  Integer,
+  Tokens,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]

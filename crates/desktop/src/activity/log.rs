@@ -23,6 +23,7 @@ pub enum Place {
   Tasks,
   PullRequests,
   Pipeline(ResourceId),
+  Instruction(ResourceId),
   AgentProfile(ResourceId),
   Connections,
   Settings,

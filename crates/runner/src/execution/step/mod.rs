@@ -134,13 +134,14 @@ impl RunTask {
         return Ok(true);
       }
     };
-    let (command, provider) = match self.command(execution, resume.as_deref(), workspace.path()) {
+    let (command, provider, prompt) = match self.command(execution, resume.as_deref(), workspace.path()) {
       Ok(started) => started,
       Err(problem) => {
         self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted)?;
         return Ok(true);
       }
     };
+    self.db.save_invocation_prompt(invocation.id, &prompt)?;
     let process = match Supervised::start(&command) {
       Ok(process) => process,
       Err(error) => {
