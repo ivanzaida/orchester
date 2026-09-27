@@ -2,6 +2,7 @@
 //! migrations live in modules of their own, named after what they add.
 
 mod conversation;
+mod import;
 
 pub(super) const MIGRATIONS: &[&str] = &[
   r"
@@ -554,4 +555,5 @@ CREATE TABLE run_merges (
 ) STRICT;
 ",
   conversation::MIGRATION,
+  import::MIGRATION,
 ];

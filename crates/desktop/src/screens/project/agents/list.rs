@@ -16,7 +16,10 @@ use orchester_core::id::ResourceId;
 use super::super::{ProjectNav, page::TOPBAR_BUTTON_HEIGHT};
 use crate::{
   agents::data::{ProfileEntry, ProjectAgents},
-  navigation::route::{AgentSelection, Page},
+  navigation::{
+    import::ImportTab,
+    route::{AgentSelection, Page},
+  },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -90,6 +93,10 @@ pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selection: ListSelection,
       ActionButton::new(ctx.t("agents.import"))
         .icon(Icon::Download)
         .id("import-agents")
+        .on_click({
+          let nav = nav.clone();
+          move || nav.show_import(ImportTab::Agents)
+        })
         .fill_width()
         .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
         .render(ctx),

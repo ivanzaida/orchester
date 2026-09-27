@@ -1,6 +1,7 @@
 //! Opening and reading the project database while the other process (desktop or runner) holds it:
 //! the read waits for a lock, and for the shared memory of the write-ahead log that a crashed
-//! runner still maps, then succeeds once they are released. A real error comes back at once.
+//! runner still maps, then succeeds once they are released. So does opening another project's
+//! database only to read it (Import resources). A real error comes back at once.
 
 use std::{
   fs,
@@ -41,12 +42,24 @@ fn database(repo: &Path) -> PathBuf {
   repo.join(".orchester").join("orchester.db")
 }
 
+/// How a test opens the project database.
+#[derive(Clone, Copy)]
+enum Open {
+  /// As its own desktop or runner does, migrating it.
+  Owned,
+  /// Only to read it, as an import from another project does.
+  ReadOnly,
+}
+
 /// Opens the project database of `repo` on a thread of its own, which reads the project's name.
-fn read_elsewhere(repo: &Path) -> mpsc::Receiver<Result<String, StoreError>> {
+fn read_elsewhere(repo: &Path, open: Open) -> mpsc::Receiver<Result<String, StoreError>> {
   let (read, name) = mpsc::channel();
   let repo = repo.to_path_buf();
   thread::spawn(move || {
-    let result = ProjectDb::open(&repo).map(|db| db.project().name().as_str().to_owned());
+    let result = match open {
+      Open::Owned => ProjectDb::open(&repo).map(|db| db.project().name().as_str().to_owned()),
+      Open::ReadOnly => ProjectDb::open_read_only(&repo).map(|db| db.project().name().as_str().to_owned()),
+    };
     read.send(result).expect("the test waits for the read");
   });
   name
@@ -62,6 +75,15 @@ fn assert_waits(name: &mpsc::Receiver<Result<String, StoreError>>, what: &str) {
 
 #[test]
 fn contention_a_read_waits_for_a_locked_database_and_then_succeeds() {
+  waits_for_the_lock(Open::Owned);
+}
+
+#[test]
+fn contention_a_read_only_open_waits_for_a_locked_database_and_then_succeeds() {
+  waits_for_the_lock(Open::ReadOnly);
+}
+
+fn waits_for_the_lock(open: Open) {
   let repo = project();
   let writer = rusqlite::Connection::open(database(repo.path())).expect("open");
   // In exclusive locking mode the writer keeps the database locked, for readers too, until it
@@ -72,7 +94,7 @@ fn contention_a_read_waits_for_a_locked_database_and_then_succeeds() {
   writer
     .execute_batch("BEGIN EXCLUSIVE; UPDATE project SET name = 'Kontur Two'; COMMIT;")
     .expect("write");
-  let name = read_elsewhere(repo.path());
+  let name = read_elsewhere(repo.path(), open);
   assert_waits(&name, "the lock");
   drop(writer);
   let read = name.recv_timeout(PATIENCE).expect("the read ends in time");
@@ -126,13 +148,24 @@ impl Mapped {
 #[cfg(windows)]
 #[test]
 fn contention_a_read_waits_for_the_shared_memory_a_killed_runner_still_maps() {
+  waits_for_the_map(Open::Owned);
+}
+
+#[cfg(windows)]
+#[test]
+fn contention_a_read_only_open_waits_for_the_shared_memory_a_killed_runner_still_maps() {
+  waits_for_the_map(Open::ReadOnly);
+}
+
+#[cfg(windows)]
+fn waits_for_the_map(open: Open) {
   let repo = project();
   // What a runner killed mid-write leaves behind: the log's shared memory, still mapped by the
   // process as it goes away.
   let shared_memory = repo.path().join(".orchester").join("orchester.db-shm");
   fs::write(&shared_memory, vec![0; 32 * 1024]).expect("write the shared memory");
   let mapped = Mapped::map(&shared_memory);
-  let name = read_elsewhere(repo.path());
+  let name = read_elsewhere(repo.path(), open);
   assert_waits(&name, "the map to go");
   mapped.unmap();
   let read = name.recv_timeout(PATIENCE).expect("the read ends in time");

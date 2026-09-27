@@ -15,7 +15,10 @@ use lurq::{
 
 use super::{super::ProjectNav, row::tool_row};
 use crate::{
-  navigation::route::{Page, PipelineView, ToolSelection},
+  navigation::{
+    import::ImportTab,
+    route::{Page, PipelineView, ToolSelection},
+  },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   tools::data::ProjectTools,
   ui::{
@@ -66,7 +69,7 @@ pub(super) fn library(ctx: &Ctx, open: &OpenProject, tools: &ProjectTools, nav: 
 /// Breadcrumb, Import from project and Add tool (`GIQmD`). Add tool writes a command tool, the
 /// only kind that can be created.
 fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
-  let nav = nav.clone();
+  let (nav, importing) = (nav.clone(), nav.clone());
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(TOPBAR_HEIGHT))
@@ -80,6 +83,7 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
       ActionButton::new(ctx.t("tools.import"))
         .icon(Icon::Download)
         .id("tools-import")
+        .on_click(move || importing.show_import(ImportTab::Tools))
         .render(ctx),
     )
     .child(

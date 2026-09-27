@@ -4,6 +4,7 @@
 
 pub(crate) mod entry;
 mod history;
+pub mod import;
 pub mod route;
 mod table;
 
