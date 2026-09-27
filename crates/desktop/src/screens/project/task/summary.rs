@@ -222,13 +222,25 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
     .with_children(permissions);
-  // The rows scroll when a permission change's notices make them taller than the window; the
-  // note stays at the bottom.
+  this_run_panel(ctx, rows)
+}
+
+/// The "This run" panel around its `rows`. They scroll when a permission change's notices make
+/// them taller than the window, their bar in a gutter of its own that takes the right padding's
+/// inner half, so the values still end 24 from the edge (design doc, "Scroll gutter"); the note
+/// stays at the bottom.
+fn this_run_panel(ctx: &Ctx, rows: Column) -> Element {
+  let note = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_right(ExtraSpacing::Stack.role())
+    .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()));
   Column::new()
     .id("task-this-run")
     .width(Dimension::Px(PANEL_WIDTH))
     .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
+    .padding_vertical(SpacingSize::Lg)
+    .padding_left(SpacingSize::Lg)
+    .padding_right(ExtraSpacing::Stack.role())
     .spacing(ExtraSpacing::Step.role())
     .background(PaletteColor::SurfacePanel)
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
@@ -236,10 +248,9 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
       ScrollVertical::new(rows)
         .width(Dimension::Pct(100.0))
         .flex(1.0)
-        // A gutter of its own: the bar never covers the right-aligned values.
         .scrollbar(gutter_scrollbar()),
     )
-    .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()))
+    .child(note)
     .into()
 }
 
