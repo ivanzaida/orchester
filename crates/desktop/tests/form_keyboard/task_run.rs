@@ -320,6 +320,11 @@ fn run_controls_raise_the_limit_of_a_run_stopped_at_it_and_continue() {
     "task-notice",
     "Stopped at the token limit · checkpoint"
   ));
+  assert!(shows(
+    &mut desktop,
+    "task-progress-steps",
+    "Stopped at limit · attempt 1 · 9.7k tokens ·"
+  ));
   assert!(shows(&mut desktop, "task-this-run", "9.7k / 5k tokens · limit reached"));
   assert!(has(&mut desktop, "task-cancel-run"));
   assert!(!has(&mut desktop, "task-pause-run"));
@@ -358,6 +363,12 @@ fn run_controls_raise_the_step_budget_of_a_run_stopped_at_it_and_continue() {
     "Stopped at the step budget of Implement · checkpoint"
   ));
   assert!(shows(&mut desktop, "raise-limit", "Raise the step budget to continue"));
+  assert!(shows(
+    &mut desktop,
+    "task-progress-steps",
+    "Stopped at limit · attempt 1 · 9.7k tokens ·"
+  ));
+  assert!(!shows(&mut desktop, "task-progress-steps", "Paused"));
   assert!(shows(
     &mut desktop,
     "raise-limit",

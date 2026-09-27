@@ -295,6 +295,11 @@ fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   wait_long(&mut desktop, "the notice", |desktop| {
     text_of(desktop, "task-notice", "Stopped at the daily project budget")
   });
+  assert!(text_of(
+    &mut desktop,
+    "task-progress-steps",
+    "Stopped at limit · attempt 1 ·"
+  ));
   assert!(!has(&mut desktop, "raise-limit"));
   desktop.click("task-resume-run");
   let refusal = "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.";

@@ -498,6 +498,7 @@
         "working": "Working",
         "needsYou": "Needs you",
         "paused": "Paused",
+        "stoppedAtLimit": "Stopped at limit",
         "interrupted": "Interrupted",
         "complete": "Complete",
         "failed": "Failed",

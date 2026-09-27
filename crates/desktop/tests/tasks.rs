@@ -8,7 +8,7 @@ use orchester_core::{
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{Pipeline, PromptText, RepositoryAccess, Slug, Step, StepKey, StepKind},
-  run::TaskPhase,
+  run::{RunLimit, TaskPhase},
   store::{ResourceStore, TaskStore},
   task::{MissingDetail, Task, TaskDetails},
   time::Timestamp,
@@ -21,6 +21,7 @@ use orchester_desktop::{
     detail::TaskDetail,
     form::TaskForm,
     list::{self, DraftSummary, PipelineLabel, Readiness, TaskTab},
+    progress::{ProgressState, progress},
   },
 };
 use orchester_store::ProjectDb;
@@ -408,4 +409,50 @@ fn task_page_run_recorded_running_lost_its_agent_without_a_runner() {
   let settled = TaskDetail::load_in(fixture.repo.path(), done).expect("read the task");
   assert_eq!(settled.phase(), TaskPhase::Succeeded);
   assert!(!settled.lost_its_runner(false));
+}
+
+/// While a run is stopped at any limit, its working step reads "Stopped at limit", never "Paused":
+/// Paused is only a pause the user asked for (design doc, "Stopped at limit").
+#[test]
+fn task_page_progress_reads_stopped_at_limit_for_every_limit_and_paused_for_a_pause() {
+  let mut fixture = support::Fixture::new();
+  let step_states = |fixture: &support::Fixture, task| {
+    let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("read the task");
+    let run = detail.run.expect("the task has a run");
+    progress(&run, false, support::at(100))
+      .into_iter()
+      .map(|row| row.state)
+      .collect::<Vec<_>>()
+  };
+  for (at, limit) in [
+    (10, RunLimit::Tokens),
+    (20, RunLimit::Time),
+    (30, RunLimit::DailyBudget),
+  ] {
+    let task = fixture.task("Fix zoom", support::at(at));
+    let mut run = fixture.started_run(task, support::at(at + 1));
+    let events = run
+      .stop_at_limit(limit, support::at(at + 2))
+      .expect("stop at the limit");
+    fixture.record(&run, &events);
+    assert_eq!(
+      step_states(&fixture, task),
+      [ProgressState::StoppedAtLimit],
+      "{limit:?}"
+    );
+  }
+  let task = fixture.task("Add login", support::at(40));
+  let mut run = fixture.started_run(task, support::at(41));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run
+    .stop_at_limit(RunLimit::StepBudget { execution }, support::at(42))
+    .expect("stop at the step budget");
+  fixture.record(&run, &events);
+  assert_eq!(step_states(&fixture, task), [ProgressState::StoppedAtLimit]);
+
+  let task = fixture.task("Add search", support::at(50));
+  let mut run = fixture.started_run(task, support::at(51));
+  let events = run.pause(support::at(52)).expect("pause");
+  fixture.record(&run, &events);
+  assert_eq!(step_states(&fixture, task), [ProgressState::Paused]);
 }
