@@ -105,8 +105,10 @@ async fn tools_command_step_passes_beside_an_agent_and_its_output_reaches_later_
   assert_eq!(commands.len(), 1);
   let (result, exit_code, output, omitted) = &commands[0];
   assert_eq!((*result, *exit_code, *omitted), (ToolCommandResult::Passed, Some(0), 0));
-  assert!(output.contains("line 1\nline 2\nline 3"), "{output}");
-  assert!(output.contains("warned"), "{output}");
+  // Both streams, each in its order; how they interleave depends on when each pipe is read.
+  let printed: Vec<&str> = output.lines().filter(|line| line.starts_with("line ")).collect();
+  assert_eq!(printed, ["line 1", "line 2", "line 3"], "{output}");
+  assert!(output.lines().any(|line| line == "warned"), "{output}");
   let invocations = db.invocations(run.id()).expect("invocations");
   let command = invocations
     .iter()
