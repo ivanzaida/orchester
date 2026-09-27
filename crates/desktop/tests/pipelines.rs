@@ -12,9 +12,10 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_desktop::{
+  drafts::save_draft_in,
   i18n::{FALLBACK_LOCALE, LOCALES},
   pipelines::{
-    data::{OpenedPipeline, publish_in, save_draft_in},
+    data::{OpenedPipeline, publish_in},
     editor::{EditorState, SaveState},
     fields::{Executor, RouteChoice, unused_step_name},
     layout::layout,

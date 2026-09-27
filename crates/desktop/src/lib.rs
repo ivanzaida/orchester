@@ -9,6 +9,7 @@ pub mod budget;
 pub mod close;
 pub mod connections;
 pub mod display;
+pub mod drafts;
 mod external;
 pub mod i18n;
 pub mod messages;

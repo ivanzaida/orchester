@@ -7,7 +7,7 @@ use orchester_core::{
   connection::{AgentProvider, ConnectionKind},
   id::ResourceId,
   permission::AgentPermissions,
-  resource::{AgentProfile, Draft, DraftSaved, ModelId, Pipeline, ResourceKind, Tool, Version, VersionNumber},
+  resource::{AgentProfile, ModelId, Pipeline, ResourceKind, Tool, Version, VersionNumber},
   store::{ConnectionStore, ResourceStore, TaskStore},
   time::Timestamp,
 };
@@ -190,11 +190,6 @@ pub fn tasks_using<S: TaskStore>(store: &S, id: ResourceId) -> Result<usize, S::
       .filter(|task| task.details().pipeline == Some(id))
       .count(),
   )
-}
-
-/// Stores `draft` as the pipeline's draft, or removes the draft when it repeats its version.
-pub fn save_draft_in(repo_root: &Path, id: ResourceId, draft: &Draft<Pipeline>) -> Result<DraftSaved, StoreError> {
-  ProjectDb::open(repo_root)?.save_draft(id, draft)
 }
 
 /// Publishes the stored draft; the version it became.
