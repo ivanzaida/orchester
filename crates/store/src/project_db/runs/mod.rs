@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, num::NonZeroU32};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::VersionNumber,
-  run::{BranchName, Checkpoint, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber, StepExecutor},
+  run::{BranchName, Checkpoint, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber, StepExecutor},
   store::RunStore,
   time::Timestamp,
 };
@@ -35,7 +35,7 @@ impl RunStore for ProjectDb {
     let key = key.to_string();
     let transaction = self.connection.transaction()?;
     if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
-      return Ok(existing);
+      return existing.map_err(|unreadable| unreadable.error);
     }
     let task_exists: bool = transaction.query_row(
       "SELECT EXISTS (SELECT 1 FROM tasks WHERE id = ?1)",
@@ -70,10 +70,13 @@ impl RunStore for ProjectDb {
   }
 
   fn run(&self, id: RunId) -> Result<Option<Run>, RunStoreError> {
-    Ok(load_runs(&self.connection, "WHERE id = ?1", [id.to_string()])?.pop())
+    load_runs(&self.connection, "WHERE id = ?1", [id.to_string()])?
+      .pop()
+      .transpose()
+      .map_err(|unreadable| unreadable.error)
   }
 
-  fn runs_of_task(&self, task: TaskId) -> Result<Vec<Run>, RunStoreError> {
+  fn runs_of_task(&self, task: TaskId) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
     Ok(load_runs(
       &self.connection,
       "WHERE task_id = ?1 ORDER BY number",
@@ -89,7 +92,7 @@ impl RunStore for ProjectDb {
     Ok(load_checkpoint(&self.connection, run)?)
   }
 
-  fn interrupted_runs(&self) -> Result<Vec<Run>, RunStoreError> {
+  fn interrupted_runs(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
     Ok(load_runs(
       &self.connection,
       "WHERE status = ?1 ORDER BY number",
@@ -97,7 +100,7 @@ impl RunStore for ProjectDb {
     )?)
   }
 
-  fn running_runs(&self) -> Result<Vec<Run>, RunStoreError> {
+  fn running_runs(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
     Ok(load_runs(
       &self.connection,
       "WHERE status = ?1 ORDER BY number",

@@ -16,8 +16,8 @@ use orchester_core::{
   },
   revision::Revision,
   run::{
-    BranchName, InterruptCause, NewRun, PauseReason, PlanDecision, PublishedVersions, Run, RunEvent, RunLimit,
-    RunSnapshot, RunStatus, StepExecutor, StepFailure, StepStatus,
+    BranchName, InterruptCause, ListedRun, NewRun, PauseReason, PlanDecision, PublishedVersions, Run, RunEvent,
+    RunLimit, RunSnapshot, RunStatus, StepExecutor, StepFailure, StepStatus,
   },
   store::{ResourceStore, RunStore, TaskStore},
   task::TaskDetails,
@@ -42,6 +42,11 @@ fn key(value: &str) -> StepKey {
 
 fn revision(digit: char) -> Revision {
   Revision::new(&digit.to_string().repeat(40)).expect("valid revision")
+}
+
+/// The runs of a listing, each of which must be readable.
+fn readable(listed: Vec<ListedRun<RunStoreError>>) -> Vec<Run> {
+  listed.into_iter().map(|run| run.expect("readable run")).collect()
 }
 
 fn raw(repo: &Path) -> Connection {
@@ -222,7 +227,7 @@ fn runs_are_created_with_consecutive_numbers_and_a_creation_event() {
   assert_eq!(first.status(), &RunStatus::Pending);
   assert_eq!(fixture.db.run(first.id()).expect("load"), Some(first.clone()));
   assert_eq!(
-    fixture.db.runs_of_task(fixture.task).expect("list"),
+    readable(fixture.db.runs_of_task(fixture.task).expect("list")),
     vec![first.clone(), second]
   );
   let events = fixture.db.events(first.id()).expect("events");
@@ -382,7 +387,10 @@ fn runs_cancelled_before_it_started_reads_back_with_its_task() {
   assert_eq!(stored, run);
   assert_eq!(stored.status(), &RunStatus::Cancelled);
   assert!(stored.attempts().is_empty());
-  assert_eq!(fixture.db.runs_of_task(fixture.task).expect("list"), vec![run.clone()]);
+  assert_eq!(
+    readable(fixture.db.runs_of_task(fixture.task).expect("list")),
+    vec![run.clone()]
+  );
   let tasks = fixture.db.tasks().expect("tasks");
   assert_eq!(tasks.iter().map(|task| task.id()).collect::<Vec<_>>(), [fixture.task]);
   let events = fixture.db.events(run.id()).expect("events");
@@ -401,10 +409,13 @@ fn runs_a_damaged_row_isreported_as_corrupt() {
     .expect("tamper");
   assert!(matches!(
     fixture.db.run(run.id()),
-    Err(RunStoreError::Store(StoreError::Corrupt {
-      what: "run snapshot",
-      ..
-    }))
+    Err(RunStoreError::Unreadable {
+      run: id,
+      source: StoreError::Corrupt {
+        what: "run snapshot",
+        ..
+      },
+    }) if id == run.id()
   ));
 }
 
@@ -418,17 +429,14 @@ fn runs_interrupted_by_runner_loss_continue_after_reconnect_once() {
   fixture.apply(&mut lost, |run| run.record_checkpoint(implement, revision('e'), at(16)));
   fixture.apply(&mut lost, |run| run.interrupt(InterruptCause::RunnerLost, at(17)));
   fixture.apply(&mut crashed, |run| run.interrupt(InterruptCause::Crashed, at(17)));
-  let interrupted: Vec<_> = fixture
-    .db
-    .interrupted_runs()
-    .expect("list")
+  let interrupted: Vec<_> = readable(fixture.db.interrupted_runs().expect("list"))
     .iter()
     .map(Run::id)
     .collect();
   assert_eq!(interrupted, [lost.id(), crashed.id()]);
 
   for _ in 0..2 {
-    for mut run in fixture.db.interrupted_runs().expect("list") {
+    for mut run in readable(fixture.db.interrupted_runs().expect("list")) {
       if run.continues_on_reconnect() {
         let events = run.continue_after_reconnect(at(30)).expect("continue");
         fixture.db.append_events(&run, &events).expect("append");
@@ -449,10 +457,7 @@ fn runs_interrupted_by_runner_loss_continue_after_reconnect_once() {
     .filter(|event| event.kind().name() == "continued")
     .count();
   assert_eq!(continued, 1);
-  let interrupted: BTreeSet<_> = fixture
-    .db
-    .interrupted_runs()
-    .expect("list")
+  let interrupted: BTreeSet<_> = readable(fixture.db.interrupted_runs().expect("list"))
     .iter()
     .map(Run::id)
     .collect();
@@ -469,7 +474,10 @@ fn runs_running_lists_only_running_runs_in_number_order() {
   let _pending = fixture.create();
   fixture.apply(&mut paused, |run| run.request_pause(at(16)));
   fixture.apply(&mut paused, |run| run.pause(at(17)));
-  let running: Vec<_> = fixture.db.running_runs().expect("list").iter().map(Run::id).collect();
+  let running: Vec<_> = readable(fixture.db.running_runs().expect("list"))
+    .iter()
+    .map(Run::id)
+    .collect();
   assert_eq!(running, [first.id(), third.id()]);
 }
 
