@@ -66,6 +66,15 @@ struct ActiveRun {
   task: JoinHandle<()>,
 }
 
+impl ActiveRun {
+  /// Whether the task has ended. It lets go of its requests as it drops its state, once its last
+  /// change is recorded and its agents have ended; its [`JoinHandle`] reports it finished only a
+  /// moment later.
+  fn ended(&self) -> bool {
+    self.control.is_closed()
+  }
+}
+
 /// The runs this runner executes.
 #[derive(Clone)]
 pub struct Scheduler {
@@ -77,8 +86,9 @@ struct Inner {
   notifier: Notifier,
   board: Arc<Board>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
-  /// Held by a request that continues a run, so two cannot both continue it while one waits for
-  /// the run's last task to end.
+  /// Held by a request that may execute a run again (continuing it or deciding its plan), so two
+  /// cannot both start a task for it while one waits for the run's last task to end, and a
+  /// decision reaches a task another request started instead of starting a second one.
   continuing: tokio::sync::Mutex<()>,
 }
 
@@ -98,7 +108,7 @@ impl Scheduler {
   /// Runs being executed right now.
   pub fn active_runs(&self) -> Vec<RunId> {
     let mut active = self.inner.active.lock();
-    active.retain(|_, run| !run.task.is_finished());
+    active.retain(|_, run| !run.ended());
     active.keys().copied().collect()
   }
 
@@ -116,7 +126,7 @@ impl Scheduler {
       task: prepared.run.task(),
     });
     if prepared.execute {
-      self.spawn(db, prepared);
+      self.spawn(db, prepared)?;
     }
     Ok(run)
   }
@@ -226,10 +236,12 @@ impl Scheduler {
     ProjectDb::open(&self.inner.project_root).map_err(|error| failed("cannot open the project database", &error))
   }
 
-  /// Hands `control` to the task executing `run`, if one does; `None` when the run is idle.
+  /// Hands `control` to the task executing `run`, if one does; `None` when the run is idle. A task
+  /// that ends before it reads the request drops it unanswered: once the answer fails, the task
+  /// has ended.
   fn ask<T>(&self, run: RunId, control: impl FnOnce(oneshot::Sender<T>) -> Control) -> Option<oneshot::Receiver<T>> {
     let active = self.inner.active.lock();
-    let active = active.get(&run).filter(|active| !active.task.is_finished())?;
+    let active = active.get(&run).filter(|active| !active.ended())?;
     let (answer, answered) = oneshot::channel();
     active.control.send(control(answer)).ok()?;
     Some(answered)
@@ -267,8 +279,7 @@ impl Scheduler {
       run,
       task: prepared.run.task(),
     });
-    self.spawn(db, prepared);
-    Ok(())
+    self.spawn(db, prepared)
   }
 
   /// [`Scheduler::continue_idle`] for a run its task may have settled a moment ago. The task
@@ -302,19 +313,19 @@ impl Scheduler {
   }
 
   fn is_active(&self, run: RunId) -> bool {
-    self
-      .inner
-      .active
-      .lock()
-      .get(&run)
-      .is_some_and(|active| !active.task.is_finished())
+    self.inner.active.lock().get(&run).is_some_and(|active| !active.ended())
   }
 
-  fn spawn(&self, db: ProjectDb, prepared: Prepared) {
+  /// Starts the task that executes `prepared`. A run another task still executes is refused rather
+  /// than left to that task, which does not know the change just recorded.
+  fn spawn(&self, db: ProjectDb, prepared: Prepared) -> Result<(), Rejection> {
     let mut active = self.inner.active.lock();
     let run = prepared.run.id();
-    if active.get(&run).is_some_and(|active| !active.task.is_finished()) {
-      return;
+    if active.get(&run).is_some_and(|active| !active.ended()) {
+      tracing::error!(%run, "another task still executes the run");
+      return Err(Rejection::Failed {
+        detail: format!("another task still executes run {run}"),
+      });
     }
     let (control, controls) = mpsc::unbounded_channel();
     let context = TaskContext {
@@ -325,6 +336,7 @@ impl Scheduler {
     };
     let task = tokio::spawn(RunTask::new(db, prepared, context).drive());
     active.insert(run, ActiveRun { control, task });
+    Ok(())
   }
 }
 
