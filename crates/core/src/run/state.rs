@@ -138,8 +138,14 @@ impl Run {
     if self.pause_requested && self.status != RunStatus::Running {
       return Err(RunError::Inconsistent("only a running run waits to pause"));
     }
-    if (self.status == RunStatus::Pending) != self.attempts.is_empty() {
-      return Err(RunError::Inconsistent("only a pending run has no attempts"));
+    if self.status == RunStatus::Pending && !self.attempts.is_empty() {
+      return Err(RunError::Inconsistent("a pending run has no attempts"));
+    }
+    // Cancelling a pending run records no attempt: it ends before it started.
+    if self.attempts.is_empty() && !matches!(self.status, RunStatus::Pending | RunStatus::Cancelled) {
+      return Err(RunError::Inconsistent(
+        "only a pending run, or one cancelled before it started, has no attempts",
+      ));
     }
     let numbered = (1..)
       .zip(&self.attempts)

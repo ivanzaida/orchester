@@ -370,6 +370,24 @@ fn runs_events_and_checkpoints_are_immutable() {
   }
 }
 
+/// Cancelling a run before its first attempt stores no attempt; the run, its task's runs and the
+/// task list still read back, as they do from databases written before this was accepted.
+#[test]
+fn runs_cancelled_before_it_started_reads_back_with_its_task() {
+  let mut fixture = Fixture::new();
+  let mut run = fixture.create();
+  fixture.apply(&mut run, |run| run.cancel(at(11)));
+  let stored = fixture.db.run(run.id()).expect("load").expect("exists");
+  assert_eq!(stored, run);
+  assert_eq!(stored.status(), &RunStatus::Cancelled);
+  assert!(stored.attempts().is_empty());
+  assert_eq!(fixture.db.runs_of_task(fixture.task).expect("list"), vec![run.clone()]);
+  let tasks = fixture.db.tasks().expect("tasks");
+  assert_eq!(tasks.iter().map(|task| task.id()).collect::<Vec<_>>(), [fixture.task]);
+  let events = fixture.db.events(run.id()).expect("events");
+  assert_eq!(Run::replay(&events), Ok(stored));
+}
+
 #[test]
 fn runs_a_damaged_row_isreported_as_corrupt() {
   let mut fixture = Fixture::new();

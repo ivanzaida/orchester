@@ -13,7 +13,10 @@ use orchester_core::{
     StepKind, Version, VersionNumber,
   },
   revision::Revision,
-  run::{BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunNumber, RunSnapshot, StepStatus},
+  run::{
+    BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunNumber, RunSnapshot, StepStatus,
+    StoredRun,
+  },
   task::{Task, TaskDetails},
   time::Timestamp,
   tokens::TokenBudget,
@@ -167,6 +170,25 @@ pub fn new_run(snapshot: RunSnapshot) -> NewRun {
     base: revision('a'),
     budget: tokens(1_400_000),
     max_duration: std::time::Duration::from_secs(30 * 60),
+  }
+}
+
+/// `run` as a store persists it, for [`Run::restore`].
+pub fn stored(run: &Run) -> StoredRun {
+  StoredRun {
+    id: run.id(),
+    created: run.created().clone(),
+    created_at: run.created_at(),
+    status: run.status().clone(),
+    budget: run.budget(),
+    max_duration: run.max_duration(),
+    step_budgets: run.raised_step_budgets().clone(),
+    permissions: run.all_changed_permissions().clone(),
+    used: run.used(),
+    pause_requested: run.pause_requested(),
+    attempts: run.attempts().to_vec(),
+    last_checkpoint: run.last_checkpoint().cloned(),
+    last_sequence: run.last_sequence(),
   }
 }
 

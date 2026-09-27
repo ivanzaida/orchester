@@ -131,8 +131,8 @@ impl Fixture {
       .id()
   }
 
-  /// A run of `task`, started at `now`: running its one step.
-  pub fn started_run(&mut self, task: TaskId, now: Timestamp) -> Run {
+  /// A run of `task`, created at `now` and not started.
+  pub fn pending_run(&mut self, task: TaskId, now: Timestamp) -> Run {
     self.runs += 1;
     let new = NewRun {
       task,
@@ -142,7 +142,12 @@ impl Fixture {
       budget: budget(1_000_000),
       max_duration: Duration::from_secs(1_800),
     };
-    let mut run = self.db.create_run(IdempotencyKey::generate(), new, now).expect("run");
+    self.db.create_run(IdempotencyKey::generate(), new, now).expect("run")
+  }
+
+  /// A run of `task`, started at `now`: running its one step.
+  pub fn started_run(&mut self, task: TaskId, now: Timestamp) -> Run {
+    let mut run = self.pending_run(task, now);
     let events = run.start(now).expect("start");
     self.record(&run, &events);
     let execution = run.current_attempt().expect("attempt").executions()[0].id();
