@@ -15,7 +15,7 @@ use std::path::Path;
 use orchester_core::{
   conversation::{self, AgentMessage, Delivery, Message, MessageBody},
   id::{RunId, StepExecutionId},
-  run::{Invocation, RunStatus, StepExecutor, StepFailure, StepOutcome, StepOutput},
+  run::{Invocation, Run, RunStatus, StepExecutor, StepFailure, StepOutcome, StepOutput},
   store::ConversationStore,
   time::Timestamp,
 };
@@ -43,14 +43,7 @@ impl Scheduler {
     {
       return result;
     }
-    // No task executes the run, or its task ended before it read the request: wait for its end, so
-    // the run is never executed by two tasks.
-    let ended = self.inner.active.lock().remove(&run).map(|active| active.task);
-    if let Some(task) = ended
-      && let Err(error) = task.await
-    {
-      tracing::warn!(%run, %error, "the run's task ended abnormally");
-    }
+    // No task executes the run, or its task ended without reading the request.
     if self.inner.board.is_stopping() {
       return Err(Rejection::ShuttingDown);
     }
@@ -63,7 +56,28 @@ impl Scheduler {
       task: prepared.run.task(),
     });
     // Needs no free agent slot: the run waits for one like any other.
-    self.spawn(db, prepared);
+    self.spawn(db, prepared)
+  }
+
+  /// Executes again those of `waiting`, runs that only wait for a person, whose agent asked a
+  /// question while people's messages are queued for the run: written while no runner was
+  /// attached, they would otherwise wait for the next message. The run's task resumes the step the
+  /// messages reach, or ends again at once.
+  pub(super) fn wake_answered(&self, db: &ProjectDb, waiting: Vec<Run>) -> Result<(), Rejection> {
+    for run in waiting {
+      if self.is_active(run.id()) || run.awaiting_answer().is_empty() {
+        continue;
+      }
+      let messages = db
+        .messages(run.task())
+        .map_err(|error| failed("cannot read the task's conversation", &error))?;
+      if !messages.iter().any(|message| message.queued_for(run.id()).is_some()) {
+        continue;
+      }
+      tracing::info!(run = %run.id(), "a question was answered while no runner was attached");
+      let prepared = Prepared::continuing(db, &self.inner.project_root, run)?;
+      self.spawn(self.open()?, prepared)?;
+    }
     Ok(())
   }
 }
@@ -246,6 +260,8 @@ impl RunTask {
       return Ok(false);
     };
     self.transition(|run, now| run.follow_up(&step, now))?;
+    // The run succeeded a moment ago, which settled it; it runs again.
+    self.executes_again();
     tracing::info!(run = %self.run.id(), %step, "follow-up started for queued messages");
     Ok(true)
   }

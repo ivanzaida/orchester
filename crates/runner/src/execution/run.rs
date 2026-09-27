@@ -296,6 +296,12 @@ impl RunTask {
     Ok(record(&mut self.db, &self.notifier, &mut self.run, settling)?)
   }
 
+  /// The task executes the run again after a transition settled it: a follow-up of a run that
+  /// just succeeded.
+  pub(super) fn executes_again(&self) {
+    self.settled.store(false, Ordering::Release);
+  }
+
   /// Reports a problem around `invocation`'s agent in the run's transcript.
   pub(super) fn report(&mut self, invocation: &Invocation, problem: RunnerProblem) -> Result<(), ExecutionError> {
     tracing::warn!(run = %self.run.id(), ?problem, "a step ran into a problem");

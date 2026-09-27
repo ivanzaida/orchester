@@ -19,12 +19,14 @@ use orchester_core::{
   store::{ActivityStore, ConversationStore, RunStore},
   time::Timestamp,
 };
-use orchester_ipc::{Event, Rejection};
+use orchester_ipc::{AttachSession, Event, Rejection};
 use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, TestProject, git, project, reported, scheduler, wait_for, wait_for_turns};
+use self::support::{
+  PATIENCE, Setup, StepSpec, TestProject, git, project, reported, scheduler, tools::ToolSpec, wait_for, wait_for_turns,
+};
 
 fn codex(brief: &'static str) -> TestProject {
   project(&Setup::new(brief))
@@ -295,6 +297,68 @@ async fn conversation_a_run_waiting_for_an_answer_cancels_and_takes_no_message_a
       .len(),
     1
   );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn conversation_an_answer_written_without_a_runner_resumes_the_step_when_one_attaches() {
+  let project = codex("Ask first.");
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .expect("the run starts");
+  wait_for(root, &mut events, id, Run::waits_for_a_person).await;
+  idle(&scheduler).await;
+  drop(scheduler);
+  // No runner is attached: the desktop stores the answer, and nobody is told.
+  send(root, project.task, Some(id), "Yes, keep it.");
+  let (next, mut next_events) = support::scheduler(root);
+  next
+    .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .expect("attached");
+  let run = wait_for(root, &mut next_events, id, ended).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(db.invocations(id).expect("invocations").len(), 2);
+  let prompt = reported(&db, id, "prompt| ");
+  assert!(prompt.iter().any(|line| line == "Yes, keep it."), "{prompt:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn conversation_a_message_no_agent_read_before_the_run_succeeded_follows_it_up() {
+  let project = project(&Setup {
+    steps: vec![
+      StepSpec::new("implement", "Implement", "Append one line.", &[]),
+      StepSpec::new("checks", "Checks", "", &["implement"]).command(ToolSpec::test_command(&["sleep", "2"])),
+    ],
+    ..Setup::new("Say hello.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .expect("the run starts");
+  let checks = StepKey::new("checks").expect("key");
+  wait_for(root, &mut events, id, |run| {
+    run.latest_execution(&checks).map(|execution| execution.status()) == Some(StepStatus::Running)
+  })
+  .await;
+  // Only a command works: no agent reads the message before the run succeeds.
+  send(root, project.task, Some(id), "Add a second line.");
+  scheduler.deliver_messages(id).await.expect("taken");
+  let run = wait_for(root, &mut events, id, |run| {
+    ended(run)
+      && matches!(
+        run.current_attempt().map(|attempt| attempt.reason()),
+        Some(AttemptReason::FollowUp { .. })
+      )
+  })
+  .await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let stored = conversation(root, project.task);
+  assert!(matches!(stored[0].delivery(), Some(Delivery::Acknowledged { .. })));
+  // The follow-up's task counted the run as executed until it succeeded again.
+  idle(&scheduler).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
