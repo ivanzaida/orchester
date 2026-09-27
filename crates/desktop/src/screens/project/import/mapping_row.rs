@@ -120,7 +120,7 @@ impl Component for MappingRow {
           "import-rename",
           self.name.clone(),
           props.problem,
-          TypographyStyle::FieldLabel,
+          TypographyStyle::Caption,
         )
         .id(format!("import-rename-{key}"))
         .height(Dimension::Px(SELECT_HEIGHT))
