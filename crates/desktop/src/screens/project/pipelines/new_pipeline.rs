@@ -46,6 +46,11 @@ const NAME_HEIGHT: f32 = 36.0;
 const ACTIONS_HEIGHT: f32 = 76.0;
 const RADIO_SIZE: f32 = 16.0;
 const RADIO_DOT_SIZE: f32 = 8.0;
+/// Heights of the start options (`spYQ3`, `t0B5NG`). Pencil lays each line of their text out on
+/// whole pixels, and the starter's step line, whose arrows and parallel mark come from a fallback
+/// font, one pixel taller; the cards are at least as tall as drawn, and grow with longer text.
+const STARTER_OPTION_HEIGHT: f32 = 97.0;
+const EMPTY_OPTION_HEIGHT: f32 = 72.0;
 
 #[derive(Clone)]
 pub struct NewPipelineProps {
@@ -186,16 +191,18 @@ impl NewPipelineDialog {
   /// A start option (`spYQ3`, `t0B5NG`).
   fn option(&self, ctx: &Ctx, option: StartFrom, chosen: StartFrom) -> Element {
     let selected = option == chosen;
-    let (id, title, detail) = match option {
+    let (id, title, detail, height) = match option {
       StartFrom::Starter => (
         "new-pipeline-starter",
         "pipelines.create.starterTitle",
         "pipelines.create.starterDetail",
+        STARTER_OPTION_HEIGHT,
       ),
       StartFrom::Empty => (
         "new-pipeline-empty",
         "pipelines.create.emptyTitle",
         "pipelines.create.emptyDetail",
+        EMPTY_OPTION_HEIGHT,
       ),
     };
     let mut text = Column::new()
@@ -224,6 +231,7 @@ impl NewPipelineDialog {
       .align_items(Alignment::Start)
       .describe("selected", if selected { "true" } else { "false" })
       .width(Dimension::Pct(100.0))
+      .min_height(Dimension::Px(height))
       .padding(SpacingSize::Md)
       .spacing(ExtraSpacing::Stack.role())
       .background(background)

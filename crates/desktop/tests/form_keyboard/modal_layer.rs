@@ -86,6 +86,18 @@ fn modal_layer_connection_dialog_is_centred_in_the_screen_above_the_status_bar()
   assert_dialog_in_screen(&mut desktop, "connection-dialog");
 }
 
+/// The start options are as tall as drawn (`spYQ3`, `t0B5NG`).
+#[test]
+fn modal_layer_new_pipeline_options_are_as_tall_as_drawn() {
+  let mut desktop = new_pipeline_dialog();
+  assert_near(
+    desktop.bounds("new-pipeline-starter").height,
+    97.0,
+    "starter option height",
+  );
+  assert_near(desktop.bounds("new-pipeline-empty").height, 72.0, "empty option height");
+}
+
 #[test]
 fn modal_layer_status_bar_under_a_dialog_shows_no_hint() {
   let mut desktop = new_pipeline_dialog();
