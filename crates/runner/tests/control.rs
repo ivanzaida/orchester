@@ -78,7 +78,7 @@ async fn control_pause_waits_for_the_checkpoint_and_resume_continues() {
   // Pausing a paused run changes nothing.
   assert_eq!(scheduler.pause_run(id).await, Ok(()));
 
-  scheduler.resume_run(id).expect("the run resumes");
+  scheduler.resume_run(id).await.expect("the run resumes");
   let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);
   let argv = reported(&db, id, "argv: ");
@@ -156,25 +156,26 @@ async fn control_token_limit_commits_the_work_and_continues_the_session_once_rai
 
   let long = Duration::from_secs(30 * 60);
   assert_eq!(
-    scheduler.resume_run(id),
+    scheduler.resume_run(id).await,
     Err(Rejection::LimitNotRaised {
       limit: RunLimit::Tokens
     })
   );
   assert_eq!(
-    scheduler.raise_limit(id, raised(9_000, long)),
+    scheduler.raise_limit(id, raised(9_000, long)).await,
     Err(Rejection::LimitNotAboveUsed {
       limit: RunLimit::Tokens
     })
   );
   assert_eq!(
-    scheduler.raise_limit(id, raised(12_000_000, long)),
+    scheduler.raise_limit(id, raised(12_000_000, long)).await,
     Err(Rejection::BudgetAboveMaximum {
       max: TokenBudget::new(10_000_000).expect("above zero")
     })
   );
   scheduler
     .raise_limit(id, raised(2_000_000, long))
+    .await
     .expect("the run continues");
   let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);
@@ -217,13 +218,14 @@ async fn control_time_limit_counts_active_time_and_stops_the_agent() {
   assert!(stopped.last_checkpoint().is_none());
   let budget = 1_400_000;
   assert_eq!(
-    scheduler.raise_limit(id, raised(budget, Duration::from_secs(1))),
+    scheduler.raise_limit(id, raised(budget, Duration::from_secs(1))).await,
     Err(Rejection::LimitNotAboveUsed { limit: RunLimit::Time })
   );
   // The time the run spent stopped does not count: the new limit is measured against the agent's time.
   tokio::time::sleep(Duration::from_secs(2)).await;
   scheduler
     .raise_limit(id, raised(budget, Duration::from_secs(60)))
+    .await
     .expect("the run continues");
   let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);
@@ -239,13 +241,15 @@ async fn control_rejects_requests_for_unknown_and_running_runs() {
   let (scheduler, mut events): (Scheduler, mpsc::UnboundedReceiver<_>) = scheduler(root);
   let unknown = RunId::generate();
   assert_eq!(scheduler.pause_run(unknown).await, Err(Rejection::RunNotFound));
-  assert_eq!(scheduler.resume_run(unknown), Err(Rejection::RunNotFound));
+  assert_eq!(scheduler.resume_run(unknown).await, Err(Rejection::RunNotFound));
   assert_eq!(scheduler.cancel_run(unknown).await, Err(Rejection::RunNotFound));
   let id = start(&scheduler, project.task).await;
   wait_for_turns(root, &mut events, id, 1).await;
-  assert_eq!(scheduler.resume_run(id), Err(Rejection::RunNotPaused));
+  assert_eq!(scheduler.resume_run(id).await, Err(Rejection::RunNotPaused));
   assert_eq!(
-    scheduler.raise_limit(id, raised(2_000_000, Duration::from_secs(60))),
+    scheduler
+      .raise_limit(id, raised(2_000_000, Duration::from_secs(60)))
+      .await,
     Err(Rejection::RunNotPaused)
   );
   scheduler.cancel_run(id).await.expect("cancel");

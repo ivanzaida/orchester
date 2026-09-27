@@ -8,9 +8,7 @@ use orchester_core::connection::AgentProvider;
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{
-    agent_step, create_and_run, fake_claude, has, init_repository, programs, run_finished, seed_agent, wait_long,
-  },
+  task_run::{agent_step, create_and_run, fake_claude, finished_on_page, has, init_repository, programs, seed_agent},
 };
 
 #[test]
@@ -23,20 +21,12 @@ fn claude_run_names_the_provider_in_activity_and_shows_its_transcript() {
     });
   });
   create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
-  wait_long(&mut desktop, "the finished run on the page", |desktop| {
-    run_finished(desktop.repo())
-      && has(desktop, "task-ready-notice")
-      && shows(desktop, "task-ready-notice", "Ready for your review")
-  });
+  finished_on_page(&mut desktop);
   desktop.click("task-tab-activity");
-  wait_long(&mut desktop, "the transcript", |desktop| {
-    has(desktop, "activity-step-header")
-  });
+  desktop.wait_until("the transcript", |desktop| has(desktop, "activity-step-header"));
   assert!(shows(&mut desktop, "activity-step-header", "Claude / haiku"));
   assert!(shows(&mut desktop, "activity-invocation", "Builder · Claude / haiku"));
   desktop.click("activity-step-header");
-  wait_long(&mut desktop, "the step's entries", |desktop| {
-    has(desktop, "activity-entry")
-  });
+  desktop.wait_until("the step's entries", |desktop| has(desktop, "activity-entry"));
   assert!(shows(&mut desktop, "activity", "git status --short"));
 }
