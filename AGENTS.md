@@ -91,6 +91,13 @@ Hard requirements:
 18. Before reporting work as done, run `powershell -File tools/check.ps1` and report its result. Report which tests
     you ran and state plainly what you did not run.
 
+Stable build:
+
+- The user runs an installed release build for daily use (`tools/install.ps1`, `docs/stable-build.md`), by default
+  in `%LOCALAPPDATA%\Orchester\` (`app\` holds its own `orchester.db`). Never write to, build into or delete from
+  that install, never stop or kill its processes, and run `tools/install.ps1` only when asked, into `.tmp/` unless
+  told otherwise. Stop only Orchester processes you started yourself, by their pid.
+
 Scratch files:
 
 - Put throwaway artifacts (one-off scripts, dumps, captures) in the git-ignored `.tmp/<topic>/` folder, not in OS
