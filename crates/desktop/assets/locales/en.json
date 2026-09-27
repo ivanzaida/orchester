@@ -1839,7 +1839,7 @@
     },
     "catalog": {
       "taskId": {
-        "description": "The task’s key, e.g. ORC-128",
+        "description": "The task’s key: the project key and the task’s number",
         "availability": "After task creation"
       },
       "taskTitle": {
@@ -1924,7 +1924,7 @@
       },
       "runRevision": {
         "description": "The revision the run started from",
-        "availability": "When a commit is available"
+        "availability": "When the run is created"
       },
       "stepId": {
         "description": "The step’s key in its pipeline",
@@ -2047,10 +2047,10 @@
     },
     "excluded": {
       "otherRole": "Applies to another role only.",
-      "otherAgents": "Applies to other agents only.",
       "otherPipeline": "Applies in another pipeline.",
       "otherStep": "Applies to another step.",
-      "otherEvent": "Injected at another event."
+      "otherEvent": "Injected at another event.",
+      "onlyFor": "Applies to {{agents}} only."
     },
     "sources": {
       "agentRole": "Agent role",
@@ -2073,7 +2073,8 @@
       "resolved": "Source {{index}} of {{count}} · {{resolved}} variables resolved at this injection event",
       "unresolved": "Source {{index}} of {{count}} · {{resolved}} variables resolved · no value yet: {{unavailable}}",
       "note": "Preview only. Existing runs keep the instruction versions they started with.",
-      "originDraft": "{{kind}} · {{event}} · Draft substituted for published v{{version}}"
+      "originDraft": "{{kind}} · {{event}} · Draft substituted for published v{{version}}",
+      "noteDraft": "Draft preview only. Existing runs keep the instruction versions they started with."
     },
     "create": {
       "title": "New instruction",

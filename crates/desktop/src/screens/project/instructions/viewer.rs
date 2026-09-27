@@ -23,7 +23,7 @@ use super::{
   preview::{LoadedCatalog, number, source_description},
 };
 use crate::{
-  instructions::data::InstructionEntry,
+  instructions::data::{InstructionEntry, ProjectInstructions},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     backdrop::backdrop,
@@ -84,7 +84,7 @@ impl InstructionEditor {
         .variant(ExtraTypography::Overline.role()),
       )
       .child(ScrollVertical::new(self.navigator_rows(ctx, &composition, resolved.pipeline_name())).flex(1.0))
-      .with_children(excluded(ctx, &composition));
+      .with_children(excluded(ctx, &composition, &self.context.data));
     let dialog = Column::new()
       .id("instruction-viewer")
       .width(Dimension::Px(DIALOG_WIDTH))
@@ -101,7 +101,7 @@ impl InstructionEditor {
           .child(navigator)
           .child(self.selected_source(ctx, &composition, resolved.pipeline_name())),
       )
-      .child(footer(ctx));
+      .child(footer(ctx, live.state.has_draft()));
     Modal::new(backdrop(dialog))
       .target(ModalTarget::Root)
       .open(self.viewer_open.clone())
@@ -187,7 +187,11 @@ impl InstructionEditor {
           .on_click(move |_| source.set(index))
       }
     });
-    Column::new().width(Dimension::Pct(100.0)).with_children(rows).into()
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Tight.role())
+      .with_children(rows)
+      .into()
   }
 
   /// The chosen source (`z3eDQH`): its title and version, where it comes from, its text with the
@@ -293,25 +297,23 @@ fn resolution(ctx: &Ctx, section: &PromptSection, index: usize, count: usize) ->
 }
 
 /// The rules the prompt leaves out, and why (`T8eQc`).
-fn excluded(ctx: &Ctx, composition: &Composition) -> Vec<Element> {
+fn excluded(ctx: &Ctx, composition: &Composition, data: &ProjectInstructions) -> Vec<Element> {
   composition
     .excluded()
     .iter()
     .map(|excluded| {
-      let text = ctx.t_args(
-        "instructions.preview.excluded",
-        [
-          ("name", excluded.name.as_str()),
-          ("version", &*copy::instruction_version(ctx, excluded.version)),
-          ("reason", &*copy::exclusion(ctx, excluded.reason)),
-        ],
-      );
+      let text = copy::excluded(ctx, excluded, data);
       Text::new(&text).variant(ExtraTypography::Hint.role()).into()
     })
     .collect()
 }
 
-fn footer(ctx: &Ctx) -> Element {
+fn footer(ctx: &Ctx, draft: bool) -> Element {
+  let note = if draft {
+    "instructions.viewer.noteDraft"
+  } else {
+    "instructions.viewer.note"
+  };
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(FOOTER_HEIGHT))
@@ -320,7 +322,7 @@ fn footer(ctx: &Ctx) -> Element {
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(icon(Icon::Info, IconSize::Dismiss, PaletteColor::TextSecondary))
-    .child(Text::new(&ctx.t("instructions.viewer.note")).variant(TypographyStyle::Caption))
+    .child(Text::new(&ctx.t(note)).variant(TypographyStyle::Caption))
     .child(Spacer::new().flex(1.0))
     .into()
 }

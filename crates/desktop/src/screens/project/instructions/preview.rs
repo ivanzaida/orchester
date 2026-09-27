@@ -98,14 +98,7 @@ impl InstructionEditor {
       )
       .child(self.source_rows(ctx, &composition, resolved.pipeline_name()));
     for excluded in composition.excluded() {
-      let text = ctx.t_args(
-        "instructions.preview.excluded",
-        [
-          ("name", excluded.name.as_str()),
-          ("version", &*copy::instruction_version(ctx, excluded.version)),
-          ("reason", &*copy::exclusion(ctx, excluded.reason)),
-        ],
-      );
+      let text = copy::excluded(ctx, excluded, &self.context.data);
       panel = panel.child(Text::new(&text).variant(ExtraTypography::Hint.role()));
     }
     let (open, source) = (self.viewer_open.clone(), self.viewer_source.clone());
@@ -258,8 +251,9 @@ impl InstructionEditor {
         .focusable(false)
         .width(Dimension::Pct(100.0))
         .height(Dimension::Px(SOURCE_ROW_HEIGHT))
+        .padding_vertical(ExtraSpacing::Indicator.role())
         .spacing(ExtraSpacing::Inline.role())
-        .align_items(Alignment::Center)
+        .align_items(Alignment::Start)
         .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
         .cursor(CursorIcon::Pointer)
         .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))

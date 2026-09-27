@@ -215,9 +215,12 @@ impl InstructionEditor {
       .placeholder(&ctx.t("instructions.promptPlaceholder"));
     let error = errors.and_then(|errors| errors.text.as_ref());
     let area = ScrollVertical::new(
+      // The design's first line starts 18 below the edge plus the half-leading of its 1.8 lines,
+      // which lurq's trimmed line box leaves out.
       Column::new()
         .width(Dimension::Pct(100.0))
         .padding(ExtraSpacing::Divider.role())
+        .padding_top(SpacingSize::Lg)
         .child(input),
     )
     .width(Dimension::Pct(100.0))
@@ -235,7 +238,7 @@ impl InstructionEditor {
     Column::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
-      .spacing(ExtraSpacing::Stack.role())
+      .spacing(ExtraSpacing::Step.role())
       .child(toolbar)
       .child(area)
       .with_children(error.map(|error| field_error(&message_text(ctx, error))))

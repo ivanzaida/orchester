@@ -33,6 +33,8 @@ enum Density {
   Secondary,
   /// Footer entries such as Project settings.
   Compact,
+  /// A group of the variable catalog (`rehxJ` in `IGagT`): smaller icon, label and count.
+  Category,
 }
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
@@ -108,6 +110,11 @@ impl NavItem {
     self.density = Density::Compact;
     self
   }
+
+  pub fn category(mut self) -> Self {
+    self.density = Density::Category;
+    self
+  }
 }
 
 impl From<NavItem> for Element {
@@ -122,6 +129,12 @@ impl From<NavItem> for Element {
       Density::Step => (STEP_HEIGHT, IconSize::Nav, TypographyStyle::FieldLabel),
       Density::Secondary => (ITEM_HEIGHT, IconSize::Button, TypographyStyle::FieldLabel),
       Density::Compact => (COMPACT_HEIGHT, IconSize::Button, TypographyStyle::FieldLabel),
+      Density::Category => (ITEM_HEIGHT, IconSize::Dismiss, TypographyStyle::Caption),
+    };
+    let count_style = if item.density == Density::Category {
+      TypographyStyle::Mono
+    } else {
+      ExtraTypography::NavCount.role()
     };
     let row = Row::new()
       .width(Dimension::Pct(100.0))
@@ -141,7 +154,7 @@ impl From<NavItem> for Element {
       .with_children(
         item
           .count
-          .map(|count| Text::new(&count.to_string()).variant(ExtraTypography::NavCount.role())),
+          .map(|count| Text::new(&count.to_string()).variant(count_style)),
       );
     match item.state {
       State::Selected(None) => row

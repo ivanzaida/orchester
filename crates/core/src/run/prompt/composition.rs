@@ -6,7 +6,7 @@ use super::{
   CONTINUE_PROMPT, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt, PromptAssemblyError,
   PromptInput, PromptPart, PromptSource,
 };
-use crate::resource::{Exclusion, InjectionEvent, InstructionTarget, PromptText, Rendered, Variable};
+use crate::resource::{Exclusion, InjectionEvent, Instruction, InstructionTarget, PromptText, Rendered, Variable};
 
 /// How every new session is told to end, matching [`crate::run::STEP_RESULT_SCHEMA`].
 const RESULT_INSTRUCTIONS: &str = "End with your result: the outcome `done` when the step is complete, or `failed` \
@@ -35,6 +35,8 @@ pub struct ExcludedInstruction {
   pub name: String,
   pub version: InstructionVersion,
   pub reason: Exclusion,
+  /// The instruction as offered, to say whom it is for instead.
+  pub body: Instruction,
 }
 
 /// The prompt's sections at one event, its text, and the instructions it leaves out.
@@ -74,6 +76,7 @@ impl Composition {
           name: source.name.to_owned(),
           version: source.version,
           reason,
+          body: source.body.clone(),
         }),
       }
     }

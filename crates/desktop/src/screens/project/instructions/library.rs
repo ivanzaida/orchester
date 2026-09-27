@@ -68,6 +68,7 @@ pub fn library(ctx: &Ctx, library: &Library<'_>) -> Element {
   } = *library;
   let new = ActionButton::new(ctx.t("instructions.new"))
     .icon(Icon::Plus)
+    .compact()
     .id("new-instruction")
     .fill_width()
     .height(Dimension::Px(NEW_HEIGHT));

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   resource::{AgentTargets, Exclusion, InjectionEvent, Instruction, InstructionScope, VersionNumber},
-  run::{InstructionVersion, PromptPart, PromptSection, PromptSource},
+  run::{ExcludedInstruction, InstructionVersion, PromptPart, PromptSection, PromptSource},
 };
 
 use crate::{agents::data::VersionState, instructions::data::ProjectInstructions, navigation::route::InstructionsTab};
@@ -208,12 +208,23 @@ pub fn source_version(ctx: &Ctx, source: &PromptSource) -> Option<Arc<str>> {
   }
 }
 
-pub fn exclusion(ctx: &Ctx, reason: Exclusion) -> Arc<str> {
-  ctx.t(match reason {
-    Exclusion::OtherRole => "instructions.excluded.otherRole",
-    Exclusion::OtherAgents => "instructions.excluded.otherAgents",
-    Exclusion::OtherPipeline => "instructions.excluded.otherPipeline",
-    Exclusion::OtherStep => "instructions.excluded.otherStep",
-    Exclusion::OtherEvent => "instructions.excluded.otherEvent",
-  })
+/// "Excluded: Review checklist v2" and why: the agents it is for, or where or when it applies.
+pub fn excluded(ctx: &Ctx, excluded: &ExcludedInstruction, data: &ProjectInstructions) -> Arc<str> {
+  let only = |agents: String| ctx.t_args("instructions.excluded.onlyFor", [("agents", agents.as_str())]);
+  let reason = match (excluded.reason, excluded.body.scope()) {
+    (Exclusion::OtherRole, InstructionScope::AgentRole { role }) => only(role.as_str().to_owned()),
+    (Exclusion::OtherAgents, _) => only(targets(ctx, excluded.body.targets(), data)),
+    (Exclusion::OtherRole, _) => ctx.t("instructions.excluded.otherRole"),
+    (Exclusion::OtherPipeline, _) => ctx.t("instructions.excluded.otherPipeline"),
+    (Exclusion::OtherStep, _) => ctx.t("instructions.excluded.otherStep"),
+    (Exclusion::OtherEvent, _) => ctx.t("instructions.excluded.otherEvent"),
+  };
+  ctx.t_args(
+    "instructions.preview.excluded",
+    [
+      ("name", excluded.name.as_str()),
+      ("version", &*instruction_version(ctx, excluded.version)),
+      ("reason", &*reason),
+    ],
+  )
 }

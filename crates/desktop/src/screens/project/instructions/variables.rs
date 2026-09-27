@@ -159,11 +159,10 @@ impl InstructionEditor {
       .child(icon(Icon::X, IconSize::Notice, PaletteColor::TextSecondary));
     Row::new()
       .width(Dimension::Pct(100.0))
-      .min_height(Dimension::Px(HEADER_HEIGHT))
+      .height(Dimension::Px(HEADER_HEIGHT))
       .padding_horizontal(SpacingSize::Lg)
-      .padding_vertical(SpacingSize::Lg)
       .spacing(ExtraSpacing::Stack.role())
-      .align_items(Alignment::Start)
+      .align_items(Alignment::Center)
       .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(title)
       .child(close)
@@ -179,6 +178,7 @@ impl InstructionEditor {
         .count();
       let signal = self.catalog_view.clone();
       NavItem::new(id, glyph, label)
+        .category()
         .count(Some(count))
         .selected(view.group == filter)
         .on_click(move || {
@@ -263,7 +263,7 @@ impl InstructionEditor {
       .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(search)
       .child(meta)
-      .child(Column::new().width(Dimension::Pct(100.0)).flex(1.0).with_children(rows))
+      .child(Column::new().width(Dimension::Pct(100.0)).with_children(rows))
       .child(self.pages(ctx, page, matching.len()))
       .into()
   }
