@@ -43,15 +43,26 @@ fn progress_row(ctx: &Ctx, row: &ProgressRow) -> Element {
     Some(usage) => {
       let attempt = usage.attempt.to_string();
       let duration = message_text(ctx, &display::duration(usage.active));
-      ctx.t_args(
-        "runs.progress.detail",
-        [
-          ("state", &*state),
-          ("attempt", attempt.as_str()),
-          ("tokens", compact_tokens(usage.tokens).as_str()),
-          ("duration", &*duration),
-        ],
-      )
+      match usage.tokens {
+        Some(tokens) => ctx.t_args(
+          "runs.progress.detail",
+          [
+            ("state", &*state),
+            ("attempt", attempt.as_str()),
+            ("tokens", compact_tokens(tokens).as_str()),
+            ("duration", &*duration),
+          ],
+        ),
+        // A tool step's command uses no tokens.
+        None => ctx.t_args(
+          "runs.progress.commandDetail",
+          [
+            ("state", &*state),
+            ("attempt", attempt.as_str()),
+            ("duration", &*duration),
+          ],
+        ),
+      }
     }
     None => state,
   };

@@ -69,10 +69,10 @@ impl ToolEditor {
       .child(hint(ctx, "tools.editor.programHint"))
       .child(self.area(
         ctx,
-        "tool-arguments",
-        "tools.editor.arguments",
+        ("tool-arguments", "tools.editor.arguments"),
         &self.arguments,
         arguments,
+        None,
       ))
       .child(hint(ctx, "tools.editor.argumentsHint"))
       .child(property(
@@ -118,10 +118,10 @@ impl ToolEditor {
     section(ctx, "tools.editor.environment")
       .child(self.area(
         ctx,
-        "tool-environment",
-        "tools.editor.variables",
+        ("tool-environment", "tools.editor.variables"),
         &self.environment,
         error,
+        Some(&ctx.t("tools.editor.variablesPlaceholder")),
       ))
       .child(hint(ctx, "tools.editor.environmentHint"))
       .into()
@@ -170,12 +170,22 @@ impl ToolEditor {
   }
 
   /// A mono text area drawn like a field, for one value per line.
-  fn area(&self, ctx: &Ctx, id: &'static str, label: &str, value: &Signal<String>, error: Option<&Message>) -> Element {
-    let input = styled_input(ctx, value.clone(), ExtraTypography::MonoField.role())
+  fn area(
+    &self,
+    ctx: &Ctx,
+    (id, label): (&'static str, &str),
+    value: &Signal<String>,
+    error: Option<&Message>,
+    placeholder: Option<&str>,
+  ) -> Element {
+    let mut input = styled_input(ctx, value.clone(), ExtraTypography::MonoField.role())
       .id(id)
       .textarea()
       .rows(AREA_ROWS.0, AREA_ROWS.1)
       .width(Dimension::Pct(100.0));
+    if let Some(placeholder) = placeholder {
+      input = input.placeholder(placeholder);
+    }
     let area = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(SpacingSize::Md)

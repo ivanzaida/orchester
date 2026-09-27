@@ -31,6 +31,8 @@ const ICON_SURFACE: f32 = 36.0;
 const TYPE_WIDTH: f32 = 100.0;
 const SECRETS_WIDTH: f32 = 78.0;
 const ROW_HEIGHT: f32 = 76.0;
+/// Wide enough for the longest status, so the columns before it line up from row to row.
+const STATUS_WIDTH: f32 = 88.0;
 
 /// The icon, type and secrets copy of a tool kind.
 pub(super) const fn kind_icon(kind: ToolKind) -> Icon {
@@ -97,7 +99,12 @@ pub(super) fn tool_row(ctx: &Ctx, entry: &ToolEntry, open: impl Fn() + Send + Sy
     .child(identity)
     .child(caption(&ctx.t(kind_key(kind)), TYPE_WIDTH))
     .child(caption(&secrets, SECRETS_WIDTH))
-    .child(compact_status_label(glyph, &state))
+    .child(
+      Row::new()
+        .width(Dimension::Px(STATUS_WIDTH))
+        .justify(Justify::End)
+        .child(compact_status_label(glyph, &state)),
+    )
     .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
   // Rows are outside a form, so they are pointer-only: no Tab stop and no focus ring.
   pressable(row, open)

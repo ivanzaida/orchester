@@ -493,6 +493,7 @@
       "stepAgent": "{{step}} · {{agent}}",
       "together": " + ",
       "detail": "{{state}} · attempt {{attempt}} · {{tokens}} tokens · {{duration}}",
+      "commandDetail": "{{state}} · attempt {{attempt}} · {{duration}}",
       "state": {
         "waiting": "Waiting",
         "working": "Working",
@@ -1976,6 +1977,7 @@
       "runHint": "Any other exit code, or running past the timeout, fails the step; its failure route decides what follows. When the program prints more than the limit, the latest output is kept.",
       "environment": "Environment",
       "variables": "Variables · NAME=value per line",
+      "variablesPlaceholder": "RUST_LOG=info",
       "environmentHint": "Added to the cleaned environment every program gets (PATH, HOME, TEMP and the like). Stored and shown in plain text, so never put secrets here.",
       "unavailableTitle": "This tool can’t be edited in this version",
       "httpUnavailable": "HTTP tools use project secrets and runtime approvals, which are not available yet. Steps that call it can’t start.",
