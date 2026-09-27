@@ -139,8 +139,8 @@ fn what_changed(ctx: &Ctx, run: &RunView) -> Option<Element> {
   let reported: Vec<&str> = run
     .steps
     .iter()
-    .filter_map(|step| run.output(step.execution?))
-    .map(|output| output.text.trim())
+    .filter_map(|step| run.reported(step.execution?))
+    .map(str::trim)
     .filter(|text| !text.is_empty())
     .collect();
   if reported.is_empty() {

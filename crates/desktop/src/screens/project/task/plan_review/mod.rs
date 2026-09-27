@@ -22,7 +22,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{RunId, StepExecutionId},
-  run::{Plan, PlanDecision, PlanVersion},
+  run::{Plan, PlanDecision, PlanVersion, ReviewNote},
 };
 use orchester_ipc::Command;
 
@@ -161,7 +161,8 @@ impl PlanReviewPanel {
       })
     };
     let idle = !state.is_pending();
-    let note = orchester_core::run::ReviewNote::new(&self.note.get()).ok();
+    // A blank note is the only error: it leaves Request changes disabled.
+    let note = ReviewNote::new(&self.note.get()).ok();
     Decisions {
       approve: idle.then(|| decide(Choice::Approve, PlanDecision::Approved)),
       request_changes: note

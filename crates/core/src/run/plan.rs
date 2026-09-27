@@ -10,6 +10,7 @@ use std::{fmt, num::NonZeroU32};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use super::result::StepOutput;
 use crate::{
   id::{RunId, StepExecutionId},
   resource::StepKey,
@@ -127,6 +128,20 @@ impl Plan {
       .iter()
       .filter(|plan| plan.execution == execution)
       .max_by_key(|plan| plan.version)
+  }
+
+  /// What `execution` left for the steps after it, as they read it: for a gated step its latest
+  /// plan (the approved one once it passed), else its output among `outputs`; `None` when it left
+  /// nothing.
+  pub fn output_of<'a>(execution: StepExecutionId, outputs: &'a [StepOutput], plans: &'a [Self]) -> Option<&'a str> {
+    Self::latest_of(plans, execution)
+      .map(|plan| plan.text.as_str())
+      .or_else(|| {
+        outputs
+          .iter()
+          .find(|output| output.execution == execution)
+          .map(|output| output.text.as_str())
+      })
   }
 
   /// The version after the plans of `step` among `plans`: v1 for the first.

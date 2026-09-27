@@ -3,6 +3,8 @@
 //! plan's version (`RCDJQ`, `d1NvIW`) — a choice of the step's versions once there are several.
 //! The details scroll in a viewport with a scroll gutter; the properties stay at the bottom.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -19,7 +21,7 @@ use crate::{
   tasks::plan::{PlanReview, state_key},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
-    field::{field, select_style, styled_input},
+    field::{FieldNote, field, select_style, styled_input},
     property::property,
   },
 };
@@ -94,7 +96,7 @@ fn detail(text: &str) -> Element {
 }
 
 /// "Request changes returns the plan to Planner. Builder stays blocked." (`biSnS`).
-fn changes_meaning(ctx: &Ctx, review: &PlanReview) -> std::sync::Arc<str> {
+fn changes_meaning(ctx: &Ctx, review: &PlanReview) -> Arc<str> {
   let next = review.next.join(&*ctx.t("runs.progress.together"));
   let key = match review.next.len() {
     0 => "runs.plan.changesMeaning.none",
@@ -157,10 +159,10 @@ fn version(ctx: &Ctx, review: &PlanReview, shown: &Signal<Shown>) -> Element {
       .style(select_style(ctx, VERSION_HEIGHT)),
   )
   .id("plan-review-version");
-  field(&label, select, crate::ui::field::FieldNote::None)
+  field(&label, select, FieldNote::None)
 }
 
-fn version_label(ctx: &Ctx, plan: &Plan) -> std::sync::Arc<str> {
+fn version_label(ctx: &Ctx, plan: &Plan) -> Arc<str> {
   let version = plan.version.to_string();
   ctx.t_args(state_key(plan), [("version", version.as_str())])
 }

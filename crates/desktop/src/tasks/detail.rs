@@ -145,6 +145,11 @@ impl RunView {
     self.outputs.iter().find(|output| output.execution == execution)
   }
 
+  /// What `execution` left for the steps after it: a gated step's latest plan, else its output.
+  pub fn reported(&self, execution: StepExecutionId) -> Option<&str> {
+    Plan::output_of(execution, &self.outputs, &self.plans)
+  }
+
   /// Invocations of `execution`, in launch order.
   pub fn invocations_of(&self, execution: StepExecutionId) -> impl Iterator<Item = &Invocation> {
     self

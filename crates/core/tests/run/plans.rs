@@ -3,7 +3,7 @@ use orchester_core::{
   resource::InjectionEvent,
   run::{
     CONTINUE_PROMPT, Invocation, Plan, PlanDecision, PlanRevision, PlanVersion, PromptInput, ReviewNote,
-    ReviewNoteError, Run, RunError, RunStatus, StepStatus, TokenUsage, WaitReason, active_time,
+    ReviewNoteError, Run, RunError, RunStatus, StepOutput, StepStatus, TokenUsage, WaitReason, active_time,
   },
 };
 
@@ -224,4 +224,30 @@ fn plans_a_new_session_gets_its_earlier_plan_and_the_note() {
     "# Changes requested to your plan v1\n\nYour earlier result for this step:\n\n1. Replace sign-in.\n\nThe reviewer \
      asks:\n\nKeep email sign-in.\n\n# When you finish"
   ));
+}
+
+#[test]
+fn plans_the_steps_after_a_gate_read_its_latest_plan() {
+  let (mut logged, mut first) = proposed();
+  logged.apply(|run| run.decide_plan(&mut first, changes("Keep email sign-in."), at(30)));
+  let mut second = logged.propose("plan", "2. Keep email sign-in.", std::slice::from_ref(&first));
+  logged.apply(|run| run.decide_plan(&mut second, PlanDecision::Approved, at(40)));
+  let research = logged.exec("research");
+  let research_output = StepOutput::from_final_message(
+    logged.run.id(),
+    research,
+    key("research"),
+    Some("Found the auth service."),
+    at(21),
+  );
+  let (outputs, plans) = (vec![research_output], vec![first.clone(), second]);
+  assert_eq!(
+    Plan::output_of(first.execution, &outputs, &plans),
+    Some("2. Keep email sign-in.")
+  );
+  assert_eq!(
+    Plan::output_of(research, &outputs, &plans),
+    Some("Found the auth service.")
+  );
+  assert_eq!(Plan::output_of(logged.exec("implement"), &outputs, &plans), None);
 }

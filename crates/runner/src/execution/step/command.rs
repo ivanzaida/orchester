@@ -243,15 +243,7 @@ fn dependencies<'a>(
         .attempts()
         .iter()
         .find(|attempt| attempt.execution(passed.id()).is_some())?;
-      let text = Plan::latest_of(plans, passed.id())
-        .map(|plan| plan.text.as_str())
-        .or_else(|| {
-          outputs
-            .iter()
-            .find(|output| output.execution == passed.id())
-            .map(|output| output.text.as_str())
-        })
-        .unwrap_or_default();
+      let text = Plan::output_of(passed.id(), outputs, plans).unwrap_or_default();
       Some(DependencyOutput {
         step: dependency,
         attempt: attempt.number(),
