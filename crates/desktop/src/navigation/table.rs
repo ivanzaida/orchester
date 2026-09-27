@@ -61,6 +61,7 @@ fn project_pages(routes: Routes) -> Routes {
     .layout("/tools", project::page, |routes| {
       selection(routes, "/:tool").route("/new", |_ctx| Element::new())
     })
+    .layout("/secrets", project::page, |routes| selection(routes, "/:secret"))
     .layout("/connections", project::page, |routes| {
       selection(routes, "/:connection")
     })

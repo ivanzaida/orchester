@@ -103,6 +103,11 @@ fn getting_started_roles_follow_pencil() {
     theme.spacing_value(ExtraSpacing::DialogMargin.role()),
     Dimension::Px(32.0)
   );
+  // Summary column beside its 12px scroll gutter: content still ends 32 from the edge (`JV8S8`).
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::BesideGutter.role()),
+    Dimension::Px(20.0)
+  );
   assert_eq!(
     theme.typography_style(ExtraTypography::DialogTitle.role()).font_size,
     20.0
@@ -220,6 +225,18 @@ fn agents_and_connections_roles_follow_pencil() {
   assert_eq!(theme.spacing_value(ExtraSpacing::Form.role()), Dimension::Px(22.0));
   // Permission options a connection cannot enforce (`BNliD` in 04.04 `T1rjv`).
   assert_eq!(theme::UNAVAILABLE_OPTION_OPACITY, 0.5);
+}
+
+#[test]
+fn secrets_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  // `B1zGN` in the secret row `vxAMD`: Geist Mono 12 in `text`.
+  let name = theme.typography_style(ExtraTypography::MonoTitle.role());
+  assert_eq!((name.font_size, &*name.font_family), (12.0, "Geist Mono"));
+  // `FNlaR` in the secret inspector `CQxCb`: Geist Mono 13 in `muted`.
+  let masked = theme.typography_style(ExtraTypography::MaskedValue.role());
+  assert_eq!((masked.font_size, &*masked.font_family), (13.0, "Geist Mono"));
 }
 
 #[test]

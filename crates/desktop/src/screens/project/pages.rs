@@ -14,6 +14,7 @@ use super::{
   overview::{OverviewProps, OverviewScreen},
   pipelines::{PipelinesProps, PipelinesScreen},
   pull_requests::{PullRequestProps, PullRequestScreen, PullRequestsScreen},
+  secrets::SecretsScreen,
   settings::SettingsScreen,
   task::{TaskProps, TaskScreen},
   tasks::{TasksProps, TasksScreen},
@@ -39,8 +40,9 @@ pub struct Shown {
   pub usage: Option<ProjectUsage>,
 }
 
-/// The screen of the page the path names. A section (pipelines, instructions, agents, connections, settings)
-/// keeps one screen while its selection changes; the screen reads the selection itself.
+/// The screen of the page the path names. A section (pipelines, instructions, agents, secrets,
+/// connections, settings) keeps one screen while its selection changes; the screen reads the
+/// selection itself.
 pub(crate) fn page(ctx: &mut Ctx) -> Element {
   let shown = ctx
     .use_context::<Shown>()
@@ -104,6 +106,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
     Page::Instructions(..) => ctx.mount_keyed::<InstructionsScreen>("instructions", open),
     Page::Agents(_) => ctx.mount_keyed::<AgentsScreen>("agents", open),
     Page::Tools(_) => ctx.mount_keyed::<ToolsScreen>("tools", open),
+    Page::Secrets(_) => ctx.mount_keyed::<SecretsScreen>("secrets", open),
     Page::Connections(..) => ctx.mount_keyed::<ConnectionsScreen>("connections", open),
     Page::Settings(_) => ctx.mount_keyed::<SettingsScreen>("settings", open),
   }

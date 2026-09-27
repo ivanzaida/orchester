@@ -10,7 +10,7 @@ use lurq::{
   node::Element,
   router::RouterHandle,
 };
-use orchester_core::id::{ConnectionId, ProjectId, ResourceId, TaskId};
+use orchester_core::id::{ConnectionId, ProjectId, ResourceId, SecretId, TaskId};
 use orchester_desktop::{
   navigation::{
     Navigation, Places, Start, forward,
@@ -140,6 +140,8 @@ fn pages() -> Vec<Page> {
     Page::Tools(ToolSelection::Library),
     Page::Tools(ToolSelection::New),
     Page::Tools(ToolSelection::Tool(ResourceId::generate())),
+    Page::SECRETS,
+    Page::Secrets(Some(SecretId::generate())),
     Page::CONNECTIONS,
     Page::Connections(ConnectionTab::GitHub, None),
     Page::Connections(ConnectionTab::AgentProviders, Some(ConnectionId::generate())),

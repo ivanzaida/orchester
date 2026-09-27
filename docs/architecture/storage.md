@@ -206,7 +206,7 @@ immutable published versions `v1..vN`. Runs pin versions; publishing affects new
 | `resource_drafts` | resource id, body, based-on version, updated at |
 | `resource_versions` | id, resource id, number, body, content hash, published at; unique (resource, number) |
 | `connections` | kind (GitHub, agent provider, MCP), name, settings, keychain reference, status, last check |
-| `secrets` | name, environment, type, keychain reference, created / rotated / archived; unique (name, environment) |
+| `secrets` | name, kind, environment (development, staging, production), created / rotated / archived; unique (name, environment) among secrets not archived. No column holds the value: the keychain entry is named by the project and secret ids (Windows Credential Manager: generic credential `orchester:<project id>/<secret id>`, local to the computer; macOS login keychain: service `orchester:<project id>`, account `<secret id>`). Archiving deletes the value and keeps the row |
 
 Tool access policy (allowed pipelines and steps, environment, approval mode, access window,
 denied behavior) is part of the tool version body. HTTP and database tools must have one; a command
@@ -316,4 +316,5 @@ Transitions live in `orchester-core` as typed functions; stores persist the resu
 
 1. IPC transport details, framing and versioning between desktop and runner.
 2. Agent state inside checkpoints: what each provider can actually resume from.
-3. Keychain naming scheme and behavior when a project folder is moved or cloned.
+3. Keychain naming is decided (`secrets` above); a moved project folder keeps its values. *Open:* what a project
+   shows when its database is used on a computer whose keychain does not hold the values.

@@ -26,6 +26,7 @@ pub enum Place {
   Instruction(ResourceId),
   AgentProfile(ResourceId),
   Tool(ResourceId),
+  Secrets,
   Connections,
   Settings,
 }

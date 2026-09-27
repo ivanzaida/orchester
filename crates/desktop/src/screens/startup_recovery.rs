@@ -2,6 +2,8 @@
 //! the runs the previous session left interrupted across the registered projects and asks
 //! once. *Continue all* continues every one of them through its project's runner, started in
 //! the background when that project is not shown; *Don't continue* leaves them interrupted.
+//! *View changes* leaves them interrupted too and opens the run's Changes tab, where its task
+//! page offers to continue it.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -14,13 +16,20 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::{id::RunId, time::Timestamp};
+use orchester_core::{
+  id::{ProjectId, RunId},
+  time::Timestamp,
+};
 use orchester_ipc::SessionEnd;
 
 use super::recovery_dialog::{RecoveryActions, RecoveryDialog, RecoveryDialogProps};
 use crate::{
   background,
   messages::{self, Message},
+  navigation::{
+    Navigation, entry,
+    route::{Page, Route, TaskPageTab},
+  },
   programs::Programs,
   recovery::{self, InterruptedRun},
   runner::{RunRequestError, Runners},
@@ -37,6 +46,8 @@ pub struct StartupRecoveryProps {
   pub previous: SessionEnd,
   /// When this session started.
   pub session_start: Timestamp,
+  /// The project the window shows, once the start screen is known.
+  pub shown_project: Option<ProjectId>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for StartupRecoveryProps {}
@@ -94,12 +105,14 @@ impl Component for StartupRecovery {
     let props = RecoveryDialogProps {
       previous: props.previous,
       runs,
+      shown_project: props.shown_project,
       continuing,
       error,
       actions: RecoveryActions {
         open_log: Arc::new(move || runners.open_log_of(&first)),
         dont_continue: Arc::new(move || answered.set(true)),
         continue_all: Arc::new(move || action.run(resume.clone())),
+        view_changes: self.view_changes(ctx),
       },
     };
     Modal::new(ctx.mount_keyed::<RecoveryDialog>("recovery-dialog", props))
@@ -109,6 +122,22 @@ impl Component for StartupRecovery {
 }
 
 impl StartupRecovery {
+  /// Answers the dialog as *Don't continue* would, and opens the run's task page on its Changes
+  /// tab as a new history entry.
+  fn view_changes(&self, ctx: &mut Ctx) -> Arc<dyn Fn(&InterruptedRun) + Send + Sync> {
+    let navigator = ctx
+      .use_context::<Navigation>()
+      .expect("the root provides Navigation before mounting the recovery")
+      .router()
+      .navigator();
+    let answered = self.answered.clone();
+    Arc::new(move |run: &InterruptedRun| {
+      answered.set(true);
+      let page = Page::Task(run.task, TaskPageTab::Changes);
+      entry::push(&navigator, Route::Project(run.project_id, page).path());
+    })
+  }
+
   /// The interrupted runs, once read; none while they are read or when reading failed (logged:
   /// the runs stay interrupted and each can be continued from its task page).
   fn runs(&self, ctx: &mut Ctx, props: &StartupRecoveryProps) -> Arc<[InterruptedRun]> {

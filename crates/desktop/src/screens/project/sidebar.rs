@@ -1,6 +1,6 @@
-//! Shell sidebar (`zo9Py`). Overview, Tasks, Pull requests, Pipelines, Instructions, Agents, Tools, Connections and
-//! Project settings open their screens; every other entry is shown but unavailable. The runner card (`O2Jjjf`) is not
-//! shown: the status bar reports the runner on every screen.
+//! Shell sidebar (`zo9Py`). Overview, Tasks, Pull requests, Pipelines, Instructions, Agents, Tools, Secrets,
+//! Connections and Project settings open their screens; every other entry is shown but unavailable. The runner card
+//! (`O2Jjjf`) is not shown: the status bar reports the runner on every screen.
 
 use lurq::{
   app::{
@@ -86,7 +86,7 @@ fn project_selector(open: &OpenProject) -> Element {
 }
 
 /// Tasks stays selected while a new task is written (`l2YA4`). An item opens its section at its
-/// start (the task list, the library, the first profile, all connections), also from a screen
+/// start (the task list, the library, the first profile, the first secret, all connections), also from a screen
 /// inside the section; it does nothing on the start itself.
 fn primary_navigation(ctx: &Ctx, shown: Option<Page>, tasks: &TasksState, nav: &ProjectNav) -> Element {
   let item = |item: NavItem, target: Page| section_item(item, shown, target, nav);
@@ -121,7 +121,10 @@ fn primary_navigation(ctx: &Ctx, shown: Option<Page>, tasks: &TasksState, nav: &
       NavItem::new("nav-tools", Icon::Wrench, ctx.t("nav.tools")),
       Page::Tools(ToolSelection::Library),
     ),
-    NavItem::new("nav-secrets", Icon::KeyRound, ctx.t("nav.secrets")),
+    item(
+      NavItem::new("nav-secrets", Icon::KeyRound, ctx.t("nav.secrets")),
+      Page::SECRETS,
+    ),
     item(
       NavItem::new("nav-connections", Icon::Plug, ctx.t("nav.connections")),
       Page::CONNECTIONS,

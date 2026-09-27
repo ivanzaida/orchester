@@ -92,6 +92,7 @@ fn state(ctx: &Ctx, state: ProgressState) -> (Icon, Arc<str>) {
     ProgressState::Working => (Icon::Loader, "runs.progress.state.working"),
     ProgressState::NeedsYou => (Icon::MessageSquare, "runs.progress.state.needsYou"),
     ProgressState::Paused => (Icon::Pause, "runs.progress.state.paused"),
+    ProgressState::StoppedAtLimit => (Icon::OctagonPause, "runs.progress.state.stoppedAtLimit"),
     ProgressState::Interrupted => (Icon::CirclePause, "runs.progress.state.interrupted"),
     ProgressState::Complete => (Icon::CircleCheck, "runs.progress.state.complete"),
     ProgressState::Failed(failure) => (Icon::CircleX, failure_key(failure)),

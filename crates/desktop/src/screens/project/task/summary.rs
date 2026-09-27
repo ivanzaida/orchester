@@ -11,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -58,26 +58,59 @@ pub(super) fn summary(
     return retry_limit(ctx, run, step);
   }
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
-  let mut progress = Column::new()
-    .id("task-progress")
-    .flex(1.0)
-    .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Section)
+  let raising = raise.is_some();
+  let content = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_top(SpacingSize::Section)
+    .padding_left(SpacingSize::Section)
+    .padding_right(ExtraSpacing::BesideGutter.role())
     .spacing(ExtraSpacing::Form.role())
     .child(notice(ctx, detail, lost))
-    .with_children(raise);
-  if let Some(run) = &detail.run {
-    progress = progress
-      .child(progress_list(ctx, run, lost.is_some()))
-      .child(Spacer::new().flex(1.0))
-      .with_children(latest(ctx, run));
-  }
+    .with_children(raise)
+    .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())));
+  let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
   Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(progress)
+    .child(progress_column(content, latest, raising))
     .with_children(detail.run.as_ref().map(|run| this_run(ctx, run, repo_root)))
     .into()
+}
+
+/// The notice, the raise panel and the progress rows (`content`) in a viewport with the scroll
+/// gutter (`ZVdRa`, thumb `PigH4`), so nothing is cut when they are taller than the window.
+/// Latest activity sits at the bottom when there is room. With the raise panel the column is
+/// taller than a 960px window (02.L2), so Latest activity scrolls with it, below the fold;
+/// otherwise it stays below the viewport. lurq cannot make scrolled content at least as tall as
+/// its viewport, which both at once would need.
+fn progress_column(content: Column, latest: Option<Element>, raising: bool) -> Element {
+  let scrolled = |content: Column| {
+    ScrollVertical::new(content)
+      .id("task-progress-scroll")
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .scrollbar(gutter_scrollbar())
+  };
+  let column = Column::new()
+    .id("task-progress")
+    .flex(1.0)
+    .height(Dimension::Pct(100.0));
+  if raising {
+    return column
+      .child(scrolled(
+        content.with_children(latest).padding_bottom(SpacingSize::Section),
+      ))
+      .into();
+  }
+  let latest = latest.map(|latest| {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding_top(ExtraSpacing::Form.role())
+      .padding_horizontal(SpacingSize::Section)
+      .padding_bottom(SpacingSize::Section)
+      .child(latest)
+  });
+  column.child(scrolled(content)).with_children(latest).into()
 }
 
 /// Raise the limit to continue (`ZUYM0`), for a run stopped at a limit.
@@ -189,13 +222,25 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
     .with_children(permissions);
-  // The rows scroll when a permission change's notices make them taller than the window; the
-  // note stays at the bottom.
+  this_run_panel(ctx, rows)
+}
+
+/// The "This run" panel around its `rows`. They scroll when a permission change's notices make
+/// them taller than the window, their bar in a gutter of its own that takes the right padding's
+/// inner half, so the values still end 24 from the edge (design doc, "Scroll gutter"); the note
+/// stays at the bottom.
+fn this_run_panel(ctx: &Ctx, rows: Column) -> Element {
+  let note = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_right(ExtraSpacing::Stack.role())
+    .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()));
   Column::new()
     .id("task-this-run")
     .width(Dimension::Px(PANEL_WIDTH))
     .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
+    .padding_vertical(SpacingSize::Lg)
+    .padding_left(SpacingSize::Lg)
+    .padding_right(ExtraSpacing::Stack.role())
     .spacing(ExtraSpacing::Step.role())
     .background(PaletteColor::SurfacePanel)
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
@@ -203,10 +248,9 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
       ScrollVertical::new(rows)
         .width(Dimension::Pct(100.0))
         .flex(1.0)
-        // A gutter of its own: the bar never covers the right-aligned values.
         .scrollbar(gutter_scrollbar()),
     )
-    .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()))
+    .child(note)
     .into()
 }
 

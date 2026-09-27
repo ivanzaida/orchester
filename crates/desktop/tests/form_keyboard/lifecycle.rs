@@ -1,8 +1,8 @@
 //! Run lifecycle end to end, headlessly, with the real runner on `orchester-fake-codex`
 //! (`docs/architecture/storage.md`, "Lifecycle"): the work a close would interrupt, the status
-//! bar while the runner drops and reconnects, the start-up recovery after a crash, continuing an
-//! interrupted run from its task page, and the daily project budget. The runner talks to the
-//! desktop over a named pipe, which exists on Windows only.
+//! bar while the runner drops and reconnects, the start-up recovery after a crash and the changes
+//! it links to, continuing an interrupted run from its task page, and the daily project budget.
+//! The runner talks to the desktop over a named pipe, which exists on Windows only.
 #![cfg(windows)]
 
 use std::{
@@ -18,6 +18,7 @@ use orchester_core::{
   store::{ActivityStore, SettingsStore},
   tokens::TokenBudget,
 };
+use orchester_desktop::tasks::changes::run_worktree;
 use orchester_store::ProjectDb;
 
 use crate::{
@@ -228,6 +229,31 @@ fn lifecycle_after_a_crash_the_recovery_continues_all_runs() {
 }
 
 #[test]
+fn lifecycle_after_a_crash_view_changes_opens_the_changes_not_checkpointed() {
+  let (runner, fake) = programs();
+  let mut desktop = desktop(runner, &fake);
+  create_and_run(&mut desktop, "Keep working.", "1400000");
+  wait_long(&mut desktop, "the agent at work", |desktop| {
+    text_of(desktop, "status-agents", "1/4") && session_recorded(desktop.repo())
+  });
+  let run = latest_run(desktop.repo()).expect("run").id();
+  fs::write(run_worktree(desktop.repo(), run).join("notes.md"), "draft\n").expect("write into the worktree");
+  let mut desktop = desktop.crash_and_restart();
+  let link = format!("recovery-view-changes-{run}");
+  wait_long(&mut desktop, "View changes", |desktop| has(desktop, &link));
+  assert!(shows(&mut desktop, "recovery-dialog", "not committed"));
+  desktop.click(&link);
+  wait_long(&mut desktop, "the run's changes not checkpointed", |desktop| {
+    !has(desktop, "recovery-dialog") && has(desktop, "diff-worktree-file:notes.md")
+  });
+  // Viewing the changes continues nothing: the run stays interrupted until its page continues it.
+  wait_long(&mut desktop, "the interrupted run", |desktop| {
+    latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Interrupted(InterruptCause::Crashed))
+      && has(desktop, "task-continue-run")
+  });
+}
+
+#[test]
 fn lifecycle_runs_not_continued_wait_until_their_task_page_continues_them() {
   let (runner, fake) = programs();
   let mut desktop = desktop(runner, &fake);
@@ -295,7 +321,21 @@ fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   wait_long(&mut desktop, "the notice", |desktop| {
     text_of(desktop, "task-notice", "Stopped at the daily project budget")
   });
+  assert!(text_of(
+    &mut desktop,
+    "task-notice",
+    "Builder was stopped after its turn and its work was committed as a checkpoint."
+  ));
+  assert!(text_of(
+    &mut desktop,
+    "task-progress-steps",
+    "Stopped at limit · attempt 1 ·"
+  ));
   assert!(!has(&mut desktop, "raise-limit"));
+  assert!(has(&mut desktop, "task-cancel-run"));
+  // Without the raise panel Latest activity stays at the bottom, below the scrolled rows (`F2aBX`).
+  assert!(!text_of(&mut desktop, "task-progress-scroll", "Latest activity"));
+  assert!(text_of(&mut desktop, "task-progress", "Latest activity"));
   desktop.click("task-resume-run");
   let refusal = "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.";
   wait_long(&mut desktop, "the refusal", |desktop| {
