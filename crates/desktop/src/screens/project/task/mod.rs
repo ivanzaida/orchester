@@ -13,6 +13,7 @@ mod limit_panel;
 mod notice;
 mod permissions;
 mod progress;
+mod ready;
 mod retry_limit;
 mod summary;
 mod tab_state;
@@ -30,7 +31,11 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{id::TaskId, limits::ProjectLimits, run::TaskPhase};
+use orchester_core::{
+  id::TaskId,
+  limits::ProjectLimits,
+  run::{RunStatus, TaskPhase},
+};
 
 use self::{
   activity::{ActivityProps, ActivityTab},
@@ -172,7 +177,7 @@ impl Component for TaskScreen {
 }
 
 impl TaskScreen {
-  /// The selected tab.
+  /// The selected tab; the Summary of a run that succeeded is Ready for review (02.13).
   fn body(
     &self,
     ctx: &mut Ctx,
@@ -183,6 +188,9 @@ impl TaskScreen {
   ) -> Element {
     let live = detail.phase() == TaskPhase::Running && lost.is_none();
     match (props.tab, detail.run.as_ref()) {
+      (TaskPageTab::Summary, Some(run)) if *run.run.status() == RunStatus::Succeeded => {
+        ready::ready_for_review(ctx, run, checkpointed.as_ref(), props.project.project.name().as_str())
+      }
       (TaskPageTab::Summary, _) => summary::summary(ctx, detail, props.limits, lost, &props.project.repo_root),
       (TaskPageTab::Activity, _) => ctx.mount_keyed::<ActivityTab>(
         "task-activity",

@@ -644,6 +644,35 @@
       "worktreeFromBase": "In the run’s worktree after its base, before its first checkpoint",
       "notCheckpointed": "Not checkpointed"
     },
+    "ready": {
+      "status": "Ready for review",
+      "meta": "Run #{{run}}  ·  {{pipeline}}  ·  Finished at {{time}}",
+      "title": "Ready for your review",
+      "detail": "Every step of the run passed. Its changes wait for your review.",
+      "whatChanged": "What changed",
+      "verification": "Verification",
+      "commit": "commit {{revision}}",
+      "noCommit": "no commit",
+      "scope": {
+        "one": "1 file changed  ·  +{{additions}} / −{{deletions}}",
+        "other": "{{files}} files changed  ·  +{{additions}} / −{{deletions}}"
+      },
+      "scopeTooLarge": "{{files}} files and {{lines}} lines changed  ·  too large to show here",
+      "scopeNone": "No committed changes",
+      "scopeReading": "Reading the changes…",
+      "askAgent": "Ask agent",
+      "reviewPullRequest": "Review PR",
+      "unavailable": "Review PR needs a pull request, which no pipeline step opens yet. Ask agent needs the task conversation, which comes in a later version.",
+      "details": "Run details",
+      "project": "Project",
+      "base": "Base revision",
+      "workingBranch": "Working branch",
+      "duration": "Duration",
+      "tokens": "Tokens used",
+      "agents": "Agents on this run",
+      "agentDetail": "{{engine}} · {{steps}}",
+      "openConversation": "Open conversation"
+    },
     "preflight": {
       "pipelineNotPublished": "The task’s pipeline has no published version.",
       "noSteps": "The pipeline has no steps.",

@@ -1,8 +1,8 @@
 //! The task page's Changes tab and Ready for review (02.13 `vpgrJ`) end to end, headlessly, on the
 //! real runner and `orchester-fake-codex`: the files of the run's diff to its latest checkpoint and
 //! of its worktree beyond it, a new checkpoint shown while the tab is open, the empty tab before
-//! the first checkpoint, and an Activity file change opening its file. Windows only, like the
-//! runner's named pipe.
+//! the first checkpoint, an Activity file change opening its file, and the state of a run whose
+//! every step passed. Windows only, like the runner's named pipe.
 #![cfg(windows)]
 
 use std::fs;
@@ -66,6 +66,38 @@ fn changes_tab_follows_new_checkpoints_and_lists_work_not_checkpointed() {
       && holds(desktop, "diff-file:README.md", "M · +2 / −0")
       && !has(desktop, "diff-worktree-file:notes.md")
   });
+  wait_long(&mut desktop, "the run to finish", |desktop| {
+    run_finished(desktop.repo())
+  });
+  ready_for_review(&mut desktop);
+}
+
+/// The Summary of the run above, which succeeded: Ready for review (02.13).
+fn ready_for_review(desktop: &mut Desktop) {
+  let run = latest_run(desktop.repo()).expect("run");
+  let head = run.last_checkpoint().expect("a checkpoint").revision().as_str()[..7].to_owned();
+  desktop.click("task-tab-summary");
+  wait_long(desktop, "Ready for review", |desktop| {
+    has(desktop, "task-ready") && holds(desktop, "task-ready-scope", "2 files changed  ·  +3 / −0")
+  });
+  assert!(shows(desktop, "task-heading", "Ready for review"));
+  assert!(shows(desktop, "task-ready-meta", "Run #1  ·  Delivery  ·  Finished at"));
+  assert!(shows(desktop, "task-ready-notice", "Ready for your review"));
+  assert!(shows(desktop, "task-ready-stages", "Implement"));
+  assert!(shows(desktop, "task-ready-stages", "Review"));
+  assert!(shows(desktop, "task-ready-revision", &format!("commit {head}")));
+  assert!(shows(desktop, "task-ready-details", "orchester/kon-1-run-1"));
+  assert!(shows(desktop, "task-ready-details", &run.base().as_str()[..7]));
+  assert!(shows(desktop, "task-ready-agents", "Builder"));
+  assert!(shows(
+    desktop,
+    "task-ready-unavailable",
+    "which no pipeline step opens yet"
+  ));
+  // Review PR and Ask agent do nothing yet.
+  desktop.click("task-review-pull-request");
+  desktop.click("task-ask-agent");
+  assert!(has(desktop, "task-ready"));
 }
 
 #[test]
