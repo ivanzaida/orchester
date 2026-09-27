@@ -349,6 +349,27 @@ fn header(ctx: &mut Ctx, title: &str) -> Element {
     .into()
 }
 
+/// The dialog's body (`sxeK1`, `X03Af`): its padding, less the scroll gutter at the right, where
+/// the body's viewport keeps its thumb (design doc, "Scroll gutter").
+fn body() -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .padding_vertical(ExtraSpacing::Rail.role())
+    .padding_left(ExtraSpacing::Rail.role())
+    .padding_right(SpacingSize::Md)
+}
+
+/// `content` of the body outside its viewport, ending where the viewport's content ends: before
+/// the gutter, as wide as a list's side padding (`space-stack`).
+fn beside_gutter(content: Element) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_right(ExtraSpacing::Stack.role())
+    .child(content)
+    .into()
+}
+
 /// The action bar at the bottom of the dialog (`qSGs5`, `SxdEQ`).
 fn footer_bar(children: Vec<Element>) -> Element {
   Row::new()

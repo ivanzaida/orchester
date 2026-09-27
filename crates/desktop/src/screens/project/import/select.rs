@@ -17,7 +17,8 @@ use orchester_core::import::{CatalogResource, Choices, Plan};
 use orchester_store::RegisteredProject;
 
 use super::{
-  BUTTON_HEIGHT, ImportDialog, ImportProps, Picked, Source, SourceChoice, Stage, footer_bar, labels,
+  BUTTON_HEIGHT, ImportDialog, ImportProps, Picked, Source, SourceChoice, Stage, beside_gutter, body, footer_bar,
+  labels,
   resource_row::{PickValue, ResourceRow, ResourceRowProps},
 };
 use crate::{
@@ -50,21 +51,23 @@ impl ImportDialog {
     source: &Source<'_>,
   ) -> Element {
     let tab = self.tab(props);
-    Column::new()
+    // The note follows the list, so it scrolls with it.
+    let list = Column::new()
       .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .padding(ExtraSpacing::Rail.role())
       .spacing(ExtraSpacing::Step.role())
-      .child(self.projects(ctx, props, sources))
-      .child(self.tabs(ctx, tab))
-      .child(self.search_field(ctx))
+      .child(self.list(ctx, tab, sources, chosen, source))
+      .child(Text::new(&ctx.t("projectImport.dependencyNote")).variant(TypographyStyle::Caption));
+    body()
+      .spacing(ExtraSpacing::Step.role())
+      .child(beside_gutter(self.projects(ctx, props, sources)))
+      .child(beside_gutter(self.tabs(ctx, tab)))
+      .child(beside_gutter(self.search_field(ctx)))
       .child(
-        ScrollVertical::new(self.list(ctx, tab, sources, chosen, source))
+        ScrollVertical::new(list)
           .scrollbar(gutter_scrollbar())
           .width(Dimension::Pct(100.0))
           .flex(1.0),
       )
-      .child(Text::new(&ctx.t("projectImport.dependencyNote")).variant(TypographyStyle::Caption))
       .into()
   }
 

@@ -19,13 +19,13 @@ use orchester_core::{
 };
 
 use super::{
-  BUTTON_HEIGHT, ImportAction, ImportDialog, Stage, footer_bar, labels,
+  BUTTON_HEIGHT, ImportAction, ImportDialog, Stage, beside_gutter, body, footer_bar, labels,
   mapping_row::{MappingChoice, MappingRow, MappingRowProps, RESOLUTION_WIDTH, SOURCE_WIDTH, row_key},
 };
 use crate::{
   activity::operations,
   import::data::Catalogs,
-  theme::{ExtraSpacing, ExtraTypography, gutter_scrollbar},
+  theme::{ExtraTypography, gutter_scrollbar},
   ui::{button::ActionButton, field::field_error, icon::Icon, message_text, notice::Notice},
   workspace::OpenProject,
 };
@@ -66,18 +66,19 @@ impl ImportDialog {
             .id("import-totals"),
         ),
     );
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .padding(ExtraSpacing::Rail.role())
+    body()
       .spacing(SpacingSize::Md)
-      .child(Text::new(&context(ctx, catalogs, plan)).variant(TypographyStyle::Description))
+      .child(beside_gutter(
+        Text::new(&context(ctx, catalogs, plan))
+          .variant(TypographyStyle::FieldLabel)
+          .into(),
+      ))
       .child(
         // The headings sit on the table (`mAnma`); only the rows scroll under them.
         Column::new()
           .width(Dimension::Pct(100.0))
           .flex(1.0)
-          .child(headings(ctx, catalogs))
+          .child(beside_gutter(headings(ctx, catalogs)))
           .child(
             ScrollVertical::new(table)
               .scrollbar(gutter_scrollbar())

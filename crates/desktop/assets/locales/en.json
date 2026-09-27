@@ -2289,6 +2289,7 @@
       "newTool": "New local tool",
       "renamed": "Name resolved",
       "renamedDetail": "Renamed from {{name}}",
+      "renamedTaken": "{{name}} already exists",
       "nameTaken": "Name taken",
       "nameTakenDetail": "{{project}} already has {{name}}",
       "nameInvalid": "Name needed",

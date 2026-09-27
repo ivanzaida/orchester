@@ -236,7 +236,7 @@ pub(super) fn status(ctx: &Ctx, catalogs: &Catalogs, item: &Item) -> (Arc<str>, 
     (None, Resolution::Copy { .. }) => (Message::new("projectImport.status.ready"), new_local(catalogs, item)),
     (None, Resolution::Rename(_)) => (
       Message::new("projectImport.status.renamed"),
-      Message::new("projectImport.status.renamedDetail").with("name", source.to_string()),
+      renamed(catalogs, item).with("name", source.to_string()),
     ),
     (None, Resolution::Use(entity)) => used(catalogs, *entity),
     (None, Resolution::Unresolved) => (
@@ -249,6 +249,30 @@ pub(super) fn status(ctx: &Ctx, catalogs: &Catalogs, item: &Item) -> (Arc<str>, 
     ),
   };
   (message_text(ctx, &status), message_text(ctx, &detail))
+}
+
+/// Why the copy was renamed: the target already has the source's name, or the user chose another.
+fn renamed(catalogs: &Catalogs, item: &Item) -> Message {
+  let Entity::Resource(id) = item.source() else {
+    return Message::new("projectImport.status.renamedDetail");
+  };
+  let taken = catalogs.source.resource(id).is_some_and(|source| {
+    let wanted = source.resource();
+    catalogs
+      .target
+      .resources()
+      .iter()
+      .map(CatalogResource::resource)
+      .any(|existing| {
+        existing.kind() == wanted.kind()
+          && existing.name().as_str().to_lowercase() == wanted.name().as_str().to_lowercase()
+      })
+  });
+  Message::new(if taken {
+    "projectImport.status.renamedTaken"
+  } else {
+    "projectImport.status.renamedDetail"
+  })
 }
 
 fn copy_name(item: &Item) -> Option<&str> {

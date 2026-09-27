@@ -13,14 +13,14 @@ use lurq::{
   components::{Column, Row, Select, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, SelectStyle, border::Border, dimension::Dimension},
 };
 use orchester_core::import::{Choice, Entity};
 
 use super::ChoiceState;
 use crate::{
   theme::{ExtraColor, ExtraTypography},
-  ui::field::{select_style, text_input},
+  ui::field::{select_style, select_trigger, text_input},
 };
 
 /// Row, select and column sizes (`HfNoA`, `u8vYa`, `a2i3d`, `galyn`).
@@ -108,7 +108,7 @@ impl Component for MappingRow {
               .options(props.options.clone())
               .width(Dimension::Pct(100.0))
               .height(Dimension::Px(SELECT_HEIGHT))
-              .style(select_style(ctx, SELECT_HEIGHT)),
+              .style(mapping_style(ctx)),
           )
           .id(format!("import-choice-{key}")),
         ),
@@ -152,6 +152,14 @@ impl Component for MappingRow {
         .id(format!("import-status-{key}")),
       )
   }
+}
+
+/// A select drawn like a field, its value in the smaller text of the mapping (`ObbY7` in `u8vYa`).
+fn mapping_style(ctx: &Ctx) -> SelectStyle {
+  let trigger = select_trigger(ctx, SELECT_HEIGHT)
+    .typography(TypographyStyle::Caption)
+    .text_color(PaletteColor::TextPrimary);
+  select_style(ctx, SELECT_HEIGHT).trigger(trigger)
 }
 
 /// A fixed-width cell of a line over a smaller line (`a2i3d`, `galyn`).
