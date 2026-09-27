@@ -17,3 +17,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+# Temporary git repositories for reading changes with the real git.
+tempfile.workspace = true

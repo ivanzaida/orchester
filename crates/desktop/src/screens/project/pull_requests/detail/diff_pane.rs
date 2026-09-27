@@ -1,10 +1,7 @@
 //! The code diff of the selected file (`rz27k`): the diff toolbar (`SrS47`) with the compared
-//! revisions and the unified mode, the file header (`nJCAp`), and the file's rows in a
-//! virtualised list that also scrolls sideways for long lines. The file's lines show plain at
-//! once and highlighted when a background thread finished them; highlighted files are kept per
-//! head revision while the screen is open, so going back to a file does not highlight it again.
+//! revisions and the unified mode, above the shared diff of the file (`ui::diff`).
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -12,32 +9,18 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, SpacingSize},
   },
-  components::{Column, Row, Spacer, Text, VirtualizedList},
-  core::{ElementRef, Signal},
+  components::{Column, Row, Spacer},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{
-  pull_request::diff::{FileChange, FileDiff},
-  revision::Revision,
-};
-use parking_lot::Mutex;
 
-use super::{
-  heading::SHORT_REVISION,
-  line::{DiffRowView, RowProps, content_width},
-  rows::{DiffRow, rows},
-};
+use super::heading::SHORT_REVISION;
 use crate::{
-  background,
-  messages::Message,
-  pull_requests::{
-    detail::ReadDiff,
-    highlight::{FileTokens, highlight},
-  },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  pull_requests::detail::ReadDiff,
+  theme::{ExtraColor, ExtraSpacing},
   ui::{
     button::ActionButton,
+    diff::{DiffView, DiffViewProps},
     field::{ValueTone, value_box_sized},
     icon::Icon,
     status_label::status_label,
@@ -50,14 +33,6 @@ const TOOLBAR_HEIGHT: f32 = 54.0;
 const RANGE_WIDTH: f32 = 252.0;
 const RANGE_HEIGHT: f32 = 32.0;
 const VIEWED_HEIGHT: f32 = 30.0;
-/// Width changes below this are layout noise, not a resize.
-const WIDTH_EPSILON: f32 = 0.5;
-
-/// The rows of one file of one head: plain, or highlighted; with room for a horizontal
-/// scrollbar under them, or not.
-type RowsKey = (Revision, usize, bool, bool);
-/// A file of one head, and its tokens; `None` when no grammar knows the file.
-type Highlighted = HashMap<(Revision, usize), Option<Arc<FileTokens>>>;
 
 #[derive(Clone)]
 pub struct DiffPaneProps {
@@ -75,120 +50,32 @@ impl PartialEq for DiffPaneProps {
 
 impl lurq::app::component::DevtoolsInspectable for DiffPaneProps {}
 
-pub struct DiffPane {
-  /// The pane, and its width after the latest layout: rows are at least this wide.
-  pane: ElementRef,
-  width: Signal<f32>,
-  highlighted: Arc<Mutex<Highlighted>>,
-  rows: Arc<Mutex<HashMap<RowsKey, Arc<Vec<DiffRow>>>>>,
-}
+pub struct DiffPane;
 
 impl Component for DiffPane {
   type Props = DiffPaneProps;
 
-  fn create(ctx: &mut Ctx) -> Self {
-    Self {
-      pane: ElementRef::new(),
-      width: ctx.signal(0.0),
-      highlighted: Arc::new(Mutex::new(HashMap::new())),
-      rows: Arc::new(Mutex::new(HashMap::new())),
-    }
-  }
-
-  /// Keeps the pane's width after a layout that changed it, e.g. a resized window.
-  fn after_layout(&self) {
-    if !self.pane.is_attached() {
-      return;
-    }
-    let width = self.pane.width();
-    if (width - self.width.get_untracked()).abs() > WIDTH_EPSILON {
-      self.width.set(width);
-    }
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<DiffPaneProps>().clone();
-    let Some(file) = props.diff.diff.files().get(props.index) else {
-      return Column::new().flex(1.0);
-    };
-    let tokens = self.tokens(ctx, &props);
-    let rows = self.rows(&props, file, tokens.as_deref(), false);
-    let pane_width = self.width.get();
-    let content = content_width(&rows);
-    // Wider than the pane: the horizontal scrollbar shows, below the last row.
-    let rows = if content > pane_width {
-      self.rows(&props, file, tokens.as_deref(), true)
-    } else {
-      rows
-    };
-    let width = content.max(pane_width);
-    let list: Element = VirtualizedList::new_shared(ctx, rows)
-      .list_key(format!("pull-request-diff-{}", props.index))
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .horizontal_scroll(true)
-      .mount_keyed::<DiffRowView, _, _, _>(DiffRow::index, move |row| RowProps {
-        row: row.clone(),
-        width,
-      });
+    let view = ctx.mount_keyed::<DiffView>(
+      "pull-request-diff-view",
+      DiffViewProps {
+        diff: props.diff.diff.clone(),
+        key: props.diff.head.as_str().into(),
+        index: props.index,
+        omitted: "pullRequests.diff.omitted",
+      },
+    );
     Column::new()
       .id("pull-request-diff")
-      .ref_element(self.pane.clone())
-      .describe("highlighted", tokens.is_some().to_string())
       .flex(1.0)
       .height(Dimension::Pct(100.0))
       .child(toolbar(ctx, &props))
-      .child(file_header(ctx, file))
-      .child(list)
-  }
-}
-
-impl DiffPane {
-  /// The highlighted tokens of the selected file once a background thread made them; a file of
-  /// a head is highlighted once while the screen is open.
-  fn tokens(&self, ctx: &mut Ctx, props: &DiffPaneProps) -> Option<Arc<FileTokens>> {
-    let key = (props.diff.head.clone(), props.index);
-    let cache = self.highlighted.clone();
-    let handle = ctx.future((props.diff.clone(), props.index), move |(diff, index)| {
-      let cache = cache.clone();
-      async move {
-        let key = (diff.head.clone(), index);
-        if let Some(done) = cache.lock().get(&key) {
-          return Ok((key, done.clone()));
-        }
-        let file = diff.diff.files().get(index).cloned();
-        let tokens = background::run(move || file.as_ref().and_then(highlight).map(Arc::new)).await?;
-        cache.lock().insert(key.clone(), tokens.clone());
-        Ok::<_, Message>((key, tokens))
-      }
-    });
-    if let Some(done) = self.highlighted.lock().get(&key) {
-      return done.clone();
-    }
-    // A pending refetch keeps the previous file's result; only this file's counts.
-    match handle.state().get().data {
-      Some((done, tokens)) if done == key => tokens,
-      _ => None,
-    }
-  }
-
-  /// The rows of `file`, with a `gap` for the horizontal scrollbar after them: the same list for
-  /// the same file, tokens and gap, so the virtualised list sees an unchanged list between
-  /// renders.
-  fn rows(&self, props: &DiffPaneProps, file: &FileDiff, tokens: Option<&FileTokens>, gap: bool) -> Arc<Vec<DiffRow>> {
-    let key = (props.diff.head.clone(), props.index, tokens.is_some(), gap);
-    self
-      .rows
-      .lock()
-      .entry(key)
-      .or_insert_with(|| {
-        let mut rows = rows(file, tokens);
-        if gap {
-          rows.push(DiffRow::ScrollbarGap { index: rows.len() });
-        }
-        Arc::new(rows)
-      })
-      .clone()
+      .child(view)
   }
 }
 
@@ -224,35 +111,5 @@ fn toolbar(ctx: &Ctx, props: &DiffPaneProps) -> Element {
     .child(Spacer::new().flex(1.0))
     .child(status_label(Icon::AlignLeft, &ctx.t("pullRequests.diff.unified")))
     .child(viewed)
-    .into()
-}
-
-/// The file's path and what happened to it (`nJCAp`).
-fn file_header(ctx: &Ctx, file: &FileDiff) -> Element {
-  let (additions, deletions) = (file.additions().to_string(), file.deletions().to_string());
-  let sizes = [("additions", additions.as_str()), ("deletions", deletions.as_str())];
-  let meta = match (file.change(), file.old_path()) {
-    (FileChange::Renamed { .. }, Some(from)) => {
-      ctx.t_args("pullRequests.diff.meta.renamed", [sizes[0], sizes[1], ("from", from)])
-    }
-    (FileChange::Copied { .. }, Some(from)) => {
-      ctx.t_args("pullRequests.diff.meta.copied", [sizes[0], sizes[1], ("from", from)])
-    }
-    (FileChange::Added, _) => ctx.t_args("pullRequests.diff.meta.added", sizes),
-    (FileChange::Deleted, _) => ctx.t_args("pullRequests.diff.meta.deleted", sizes),
-    _ => ctx.t_args("pullRequests.diff.meta.modified", sizes),
-  };
-  Column::new()
-    .id("pull-request-file-header")
-    .width(Dimension::Pct(100.0))
-    .padding_vertical(ExtraSpacing::Divider.role())
-    .padding_horizontal(ExtraSpacing::Step.role())
-    .spacing(SpacingSize::Sm)
-    .child(
-      Text::new(file.path())
-        .variant(ExtraTypography::DiffPath.role())
-        .nowrap(),
-    )
-    .child(Text::new(&meta).variant(ExtraTypography::Footnote.role()).nowrap())
     .into()
 }

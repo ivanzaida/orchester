@@ -8,7 +8,8 @@ use std::sync::Arc;
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{
   connection::{GitHubState, REQUIRED_SCOPE},
-  pull_request::{MAX_DIFF_FILES, MAX_DIFF_LINES, PullRequest, SyncFailure},
+  diff::{MAX_DIFF_FILES, MAX_DIFF_LINES},
+  pull_request::{PullRequest, SyncFailure},
   repository::RepositoryError,
   time::Timestamp,
 };
@@ -54,7 +55,7 @@ pub fn loading_panel(ctx: &Ctx) -> RecoveryPanel {
   )
 }
 
-/// A pull request larger than Orchester reads (`is_too_large`), its sizes grouped as the locale
+/// A pull request larger than Orchester reads (`Changes::is_too_large`), its sizes grouped as the locale
 /// writes numbers ("20,000").
 pub fn too_large_panel(ctx: &Ctx, pull_request: Option<&PullRequest>) -> RecoveryPanel {
   let separator = ctx.t("number.groupSeparator");

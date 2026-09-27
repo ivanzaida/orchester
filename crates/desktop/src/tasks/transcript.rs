@@ -1,6 +1,7 @@
 //! The Activity tab's transcript (02.I `SfXU1`): a run's stored agent events turned into the
 //! entries a person reads. A command's start and end become one entry, a permission denial marks
-//! the command it denied, consecutive unparsed lines become one collapsed entry, and a failed turn
+//! the command it denied, each file of a file change is an entry of its own (it opens the file in
+//! the Changes tab), consecutive unparsed lines become one collapsed entry, and a failed turn
 //! that repeats the error before it is not shown twice. Session and turn starts carry no text of their own; the
 //! invocation panel shows the session. Nothing else is left out.
 
@@ -19,7 +20,7 @@ pub enum EntryKind {
   Message(Arc<str>),
   Reasoning(Arc<str>),
   Command(CommandEntry),
-  FileChange(Arc<[FileChange]>),
+  FileChange(FileChange),
   Usage(TokenUsage),
   Error(Arc<str>),
   /// The agent CLI is not signed in; what it said.
@@ -46,6 +47,8 @@ pub struct CommandEntry {
 pub struct Entry {
   /// Sequence of the entry's first event: stable while the transcript grows.
   pub sequence: u64,
+  /// Position among the entries of that event: a file change lists several files.
+  pub part: usize,
   pub execution: StepExecutionId,
   pub invocation: InvocationId,
   pub at: Timestamp,
@@ -69,6 +72,7 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
   for stored in activity {
     let entry = |kind| Entry {
       sequence: stored.sequence,
+      part: 0,
       execution: stored.execution,
       invocation: stored.invocation,
       at: stored.at,
@@ -86,7 +90,12 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
         duration: None,
       }))),
       AgentEvent::CommandFinished { .. } => finish_command(&mut entries, stored),
-      AgentEvent::FileChanged { changes, .. } => entries.push(entry(EntryKind::FileChange(changes.clone().into()))),
+      AgentEvent::FileChanged { changes, .. } => {
+        entries.extend(changes.iter().enumerate().map(|(part, change)| Entry {
+          part,
+          ..entry(EntryKind::FileChange(change.clone()))
+        }));
+      }
       AgentEvent::TurnCompleted { usage } => entries.push(entry(EntryKind::Usage(*usage))),
       AgentEvent::Error { message } => entries.push(entry(EntryKind::Error(message.as_str().into()))),
       AgentEvent::TurnFailed { message } => {
@@ -116,6 +125,7 @@ fn deny_command(entries: &mut Vec<Entry>, stored: &ActivityEntry, command: &str)
     Some(shown) => shown.status = Some(CommandStatus::Declined),
     None => entries.push(Entry {
       sequence: stored.sequence,
+      part: 0,
       execution: stored.execution,
       invocation: stored.invocation,
       at: stored.at,
@@ -161,6 +171,7 @@ fn finish_command(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
     }
     None => entries.push(Entry {
       sequence: stored.sequence,
+      part: 0,
       execution: stored.execution,
       invocation: stored.invocation,
       at: stored.at,
@@ -183,6 +194,7 @@ fn push_raw(entries: &mut Vec<Entry>, stored: &ActivityEntry, stream: OutputStre
   }
   entries.push(Entry {
     sequence: stored.sequence,
+    part: 0,
     execution: stored.execution,
     invocation: stored.invocation,
     at: stored.at,

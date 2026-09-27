@@ -5,6 +5,7 @@
 
 pub mod command;
 pub mod connection;
+pub mod diff;
 pub mod github;
 pub mod id;
 pub mod limits;

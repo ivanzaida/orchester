@@ -1,21 +1,70 @@
 //! The task page heading (`DAsh8`): the task's title and where its run stands, e.g. "Run 128 ·
-//! Attempt 1 · Implement · Builder working", and the words and icons for step states.
+//! Attempt 1 · Implement · Builder working", and the words and icons for step states. A run ready
+//! for review shows its status label and when it finished instead (`ruBkY` in 02.13 `vpgrJ`).
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, node::Element};
+use lurq::{
+  app::{
+    ctx::Ctx,
+    theme::{SpacingSize, TypographyStyle},
+  },
+  components::{Column, Row, Text},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
+};
 use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, TaskPhase};
 
 use super::super::page;
 use crate::{
   display,
-  tasks::detail::{StepView, TaskDetail},
-  ui::icon::Icon,
+  tasks::detail::{RunView, StepView, TaskDetail},
+  theme::{ExtraSpacing, ExtraTypography},
+  ui::{icon::Icon, status_label::status_label},
 };
 
 /// `lost`: the run is recorded as running but no runner is connected, so it is interrupted.
 pub(super) fn heading(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Element {
-  page::heading(detail.task.details().title.as_str(), &description(ctx, detail, lost))
+  let title = detail.task.details().title.as_str();
+  match &detail.run {
+    Some(run) if *run.run.status() == RunStatus::Succeeded => ready_heading(ctx, title, run),
+    _ => page::heading(title, &description(ctx, detail, lost)),
+  }
+}
+
+/// The title over "Ready for review" and "Run #128 · Feature delivery · Finished at 14:32" (`ruBkY`).
+fn ready_heading(ctx: &Ctx, title: &str, run: &RunView) -> Element {
+  let number = run.run.number().get().to_string();
+  let finished = run.finished_at.map(display::clock).unwrap_or_default();
+  let meta = ctx.t_args(
+    "runs.ready.meta",
+    [
+      ("run", number.as_str()),
+      ("pipeline", &*run.pipeline),
+      ("time", finished.as_str()),
+    ],
+  );
+  Column::new()
+    .id("task-heading")
+    .width(Dimension::Pct(100.0))
+    .padding_top(ExtraSpacing::Rail.role())
+    .padding_horizontal(SpacingSize::Section)
+    .padding_bottom(ExtraSpacing::HeadingBottom.role())
+    .spacing(ExtraSpacing::Group.role())
+    .child(Text::new(title).variant(ExtraTypography::PageTitle.role()))
+    .child(
+      Row::new()
+        .spacing(ExtraSpacing::Group.role())
+        .align_items(Alignment::Center)
+        .child(status_label(Icon::GitPullRequest, &ctx.t("runs.ready.status")))
+        .child(
+          Text::new(&meta)
+            .id("task-ready-meta")
+            .variant(TypographyStyle::Caption)
+            .nowrap(),
+        ),
+    )
+    .into()
 }
 
 fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {

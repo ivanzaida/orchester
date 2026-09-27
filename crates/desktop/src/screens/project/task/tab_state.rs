@@ -1,4 +1,5 @@
-//! Activity states without a transcript (`hig8O`): no activity yet, loading, and couldn't load.
+//! A task page tab without its content (`hig8O`): an icon, a title and an explanation centered in
+//! the tab, e.g. no activity yet, loading, couldn't load; the Changes tab's states are drawn alike.
 
 use lurq::{
   app::{
@@ -40,8 +41,8 @@ pub(super) fn state(id: &'static str, glyph: Icon, title: &str, text: &str, acti
     .into()
 }
 
-/// Nothing has been reported yet, with why.
-pub(super) fn empty(ctx: &Ctx, text: &str) -> Element {
+/// No activity has been reported yet, with why.
+pub(super) fn empty_activity(ctx: &Ctx, text: &str) -> Element {
   state(
     "activity-empty",
     Icon::Activity,

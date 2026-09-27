@@ -6,6 +6,7 @@ pub mod button;
 pub mod check_row;
 pub mod command_chip;
 pub mod command_row;
+pub mod diff;
 pub mod field;
 pub mod form;
 pub mod github_mark;

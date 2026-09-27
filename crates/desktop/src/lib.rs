@@ -10,6 +10,7 @@ pub mod close;
 pub mod connections;
 pub mod display;
 mod external;
+pub mod highlight;
 pub mod i18n;
 pub mod messages;
 pub mod navigation;
