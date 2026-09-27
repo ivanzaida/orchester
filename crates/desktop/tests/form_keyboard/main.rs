@@ -20,6 +20,7 @@ mod import;
 mod instructions;
 mod integration;
 mod lifecycle;
+mod modal_layer;
 mod new_task;
 mod pipeline_editor;
 mod pipeline_history;

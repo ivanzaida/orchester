@@ -36,12 +36,11 @@ use crate::{
   activity::{Activity, ActivityLog, bar},
   runner::RunnerStatus,
   tasks::usage::ProjectUsage,
-  theme::ExtraColor,
+  theme::{ExtraColor, STATUS_BAR_HEIGHT},
 };
 
-/// Bar height (`pmOpt`). A popover or hint sits 6px above the bar (`imT2E`), which is 9px
-/// above the 22px item it hangs from.
-const STATUS_BAR_HEIGHT: f32 = 28.0;
+/// A popover or hint sits 6px above the bar (`imT2E`), which is 9px above the 22px item it
+/// hangs from.
 const POPOVER_GAP: f32 = 9.0;
 
 /// The open project, when there is one.

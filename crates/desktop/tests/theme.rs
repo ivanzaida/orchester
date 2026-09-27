@@ -45,6 +45,13 @@ fn palette_roles_resolve_to_pencil_values() {
 }
 
 #[test]
+fn window_chrome_follows_pencil() {
+  // Window composition `cpoal`: 32 title bar + 960 screen + 28 status bar (`pmOpt`).
+  assert_eq!(theme::TITLE_BAR_HEIGHT, 32.0);
+  assert_eq!(theme::STATUS_BAR_HEIGHT, 28.0);
+}
+
+#[test]
 fn typography_and_radii_follow_pencil() {
   let app = themed_app();
   let theme = app.theme();

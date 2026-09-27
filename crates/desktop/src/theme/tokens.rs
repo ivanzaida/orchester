@@ -106,6 +106,8 @@ pub const CONNECTOR_STROKE: f32 = 1.25;
 
 /// Custom window title bar height (`QQmsI`, `V70DN`).
 pub const TITLE_BAR_HEIGHT: f32 = 32.0;
+/// Window status bar height (`pmOpt`).
+pub const STATUS_BAR_HEIGHT: f32 = 28.0;
 /// Width of each Windows window control (`QQmsI`).
 pub const WINDOW_CONTROL_WIDTH: f32 = 46.0;
 /// Width of the lifecycle dialogs at most: close with active work, waiting and start-up
