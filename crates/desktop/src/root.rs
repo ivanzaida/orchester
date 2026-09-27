@@ -26,6 +26,7 @@ use crate::{
     startup_recovery::{StartupRecovery, StartupRecoveryProps},
     status_bar::{StatusBar, StatusBarProps},
   },
+  secrets::Vault,
   theme::{ExtraColor, TITLE_BAR_HEIGHT, WINDOW_CONTROL_WIDTH},
   ui::{
     icon::{Icon, window_control},
@@ -45,6 +46,8 @@ pub enum Startup {
     activity: Activity,
     /// How `gh` runs for pull request sync, and git for the recovery's worktree states.
     programs: Programs,
+    /// Where secret values are kept: the OS keychain.
+    vault: Vault,
     /// How the previous session ended: after Quit now or a crash, the start-up recovery asks
     /// about the runs it left interrupted (02.E `o8DCd`).
     previous_end: SessionEnd,
@@ -77,6 +80,7 @@ impl Component for Root {
       workspace,
       lifecycle,
       programs,
+      vault,
       ..
     } = startup
     else {
@@ -86,6 +90,7 @@ impl Component for Root {
     let router = ctx.router(navigation::routes(&places));
     let navigation = Navigation::new(workspace, router, places);
     ctx.provide(programs);
+    ctx.provide(vault);
     ctx.provide(navigation.clone());
     let close = lifecycle.clone();
     ctx
@@ -155,6 +160,10 @@ impl Root {
       return startup_failed(ctx, error, None);
     }
     // Reading the workspace takes milliseconds; the start route shows nothing until it is known.
+    let shown_project = match &landing.data {
+      Some(Start::Project(project)) => Some(project.project.id()),
+      _ => None,
+    };
     if let Some(start) = landing.data {
       navigation.arrive(start);
     }
@@ -163,6 +172,7 @@ impl Root {
       programs: programs.clone(),
       previous: previous_end,
       session_start,
+      shown_project,
     };
     // The confirmation is a modal, so it takes no space in this column.
     Column::new()

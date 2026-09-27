@@ -14,7 +14,7 @@ use std::{
 use orchester_core::{
   command::Command,
   connection::AgentProvider,
-  id::{RunId, TaskId},
+  id::{ProjectId, RunId, TaskId},
   run::{InterruptCause, Run, RunEvent, RunStatus},
   store::{RunStore, TaskStore},
   time::Timestamp,
@@ -35,6 +35,7 @@ use crate::{
 /// A run the previous session left interrupted, as the recovery table lists it (`KzyXA`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InterruptedRun {
+  pub project_id: ProjectId,
   pub project_root: PathBuf,
   pub project: Arc<str>,
   pub run: RunId,
@@ -139,6 +140,7 @@ fn describe(
   });
   let worktree = run_worktree(root, view.run.id());
   Ok(InterruptedRun {
+    project_id: db.project().id(),
     project_root: root.to_path_buf(),
     project: project.clone(),
     run: view.run.id(),

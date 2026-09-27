@@ -9,7 +9,10 @@ use lurq::{
 use crate::theme::ExtraTypography;
 
 /// Defines [`Icon`] and the code point of each glyph in the bundled `lucide.ttf`, one line per
-/// icon, so the list and the table cannot drift apart.
+/// icon, so the list and the table cannot drift apart. The font names its glyphs as lucide did
+/// before its renames, and some old names now belong to other icons: the design's `circle-check`
+/// is the font's `check-circle-2`, while its `check-circle` is today's `circle-check-big`;
+/// likewise `square-check` is `check-square-2`.
 macro_rules! icons {
   ($($name:ident => $glyph:literal,)*) => {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,6 +34,7 @@ icons! {
   Activity => '\u{e038}',
   AlertCircle => '\u{e077}',
   AlignLeft => '\u{e185}',
+  Archive => '\u{e041}',
   ArrowDown => '\u{e042}',
   ArrowLeft => '\u{e048}',
   ArrowRight => '\u{e049}',
@@ -44,7 +48,7 @@ icons! {
   ChevronRight => '\u{e06f}',
   ChevronUp => '\u{e070}',
   Circle => '\u{e076}',
-  CircleCheck => '\u{e07c}',
+  CircleCheck => '\u{e226}',
   CircleDashed => '\u{e4b0}',
   CircleDot => '\u{e345}',
   CircleHelp => '\u{e082}',
@@ -57,6 +61,7 @@ icons! {
   Code => '\u{e093}',
   CodeXml => '\u{e206}',
   Copy => '\u{e09e}',
+  Database => '\u{e0ad}',
   Download => '\u{e0b2}',
   ExternalLink => '\u{e0b9}',
   FileDiff => '\u{e317}',
@@ -72,6 +77,7 @@ icons! {
   FolderSearch => '\u{e339}',
   FolderX => '\u{e33e}',
   Folders => '\u{e33f}',
+  FormInput => '\u{e21f}',
   Gauge => '\u{e1bf}',
   GitCompareArrows => '\u{e553}',
   GitMerge => '\u{e0e4}',
@@ -81,14 +87,17 @@ icons! {
   History => '\u{e1f5}',
   Inbox => '\u{e0f7}',
   Info => '\u{e0f9}',
+  Key => '\u{e0fd}',
   KeyRound => '\u{e4a3}',
   LayoutDashboard => '\u{e1c1}',
   LayoutTemplate => '\u{e207}',
   Lightbulb => '\u{e1c2}',
+  Link => '\u{e102}',
   ListChecks => '\u{e1d0}',
   ListPlus => '\u{e23f}',
   Loader => '\u{e109}',
   Lock => '\u{e10b}',
+  LockKeyhole => '\u{e531}',
   Maximize => '\u{e112}',
   MessageCircle => '\u{e116}',
   MessageSquare => '\u{e117}',
@@ -105,6 +114,7 @@ icons! {
   Radio => '\u{e142}',
   RefreshCw => '\u{e145}',
   Repeat => '\u{e146}',
+  Rocket => '\u{e286}',
   Save => '\u{e14d}',
   ScanEye => '\u{e536}',
   Search => '\u{e151}',
@@ -115,7 +125,7 @@ icons! {
   SlidersHorizontal => '\u{e29a}',
   Sparkles => '\u{e412}',
   Square => '\u{e167}',
-  SquareCheck => '\u{e16a}',
+  SquareCheck => '\u{e559}',
   Terminal => '\u{e181}',
   Timer => '\u{e1e0}',
   Trash => '\u{e18e}',

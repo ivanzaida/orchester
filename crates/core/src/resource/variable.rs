@@ -27,13 +27,16 @@ pub enum Variable {
   RunAttempt,
   RunBudget,
   RunBranch,
+  /// The revision the run started from.
+  RunBaseRevision,
+  /// The run's latest checkpoint commit; none before its first checkpoint.
   RunRevision,
   StepId,
   StepName,
 }
 
 impl Variable {
-  pub const ALL: [Self; 24] = [
+  pub const ALL: [Self; 25] = [
     Self::TaskId,
     Self::TaskTitle,
     Self::TaskDescription,
@@ -55,6 +58,7 @@ impl Variable {
     Self::RunAttempt,
     Self::RunBudget,
     Self::RunBranch,
+    Self::RunBaseRevision,
     Self::RunRevision,
     Self::StepId,
     Self::StepName,
@@ -84,6 +88,7 @@ impl Variable {
       Self::RunAttempt => "run.attempt",
       Self::RunBudget => "run.budget",
       Self::RunBranch => "run.branch",
+      Self::RunBaseRevision => "run.base_revision",
       Self::RunRevision => "run.revision",
       Self::StepId => "step.id",
       Self::StepName => "step.name",
@@ -103,7 +108,12 @@ impl Variable {
       }
       Self::AgentId | Self::AgentName | Self::AgentRole | Self::AgentModel => VariableGroup::Agent,
       Self::PipelineId | Self::PipelineName | Self::PipelineVersion => VariableGroup::Pipeline,
-      Self::RunId | Self::RunAttempt | Self::RunBudget | Self::RunBranch | Self::RunRevision => VariableGroup::Run,
+      Self::RunId
+      | Self::RunAttempt
+      | Self::RunBudget
+      | Self::RunBranch
+      | Self::RunBaseRevision
+      | Self::RunRevision => VariableGroup::Run,
       Self::StepId | Self::StepName => VariableGroup::Step,
     }
   }

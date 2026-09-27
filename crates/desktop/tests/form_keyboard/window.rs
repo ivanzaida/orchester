@@ -1,6 +1,6 @@
 use orchester_desktop::{activity::OperationSpec, messages::Message};
 
-use crate::harness::Desktop;
+use crate::{github::shows, harness::Desktop};
 
 /// More than the window has stops on these screens.
 const MAX_STOPS: usize = 30;
@@ -18,6 +18,15 @@ fn overview_without_a_form_has_no_tab_stops() {
   // The sidebar, the tabs, New task, View all tasks and the status bar are pointer-only.
   assert!(desktop.stops(MAX_STOPS, false).iter().all(Option::is_none));
   assert!(desktop.stops(MAX_STOPS, true).iter().all(Option::is_none));
+}
+
+/// Lucide's `circle-check` (a check inside a circle, `sQnmq` in `KYnRz`) is `check-circle-2` in
+/// the bundled font; the font's `check-circle` (U+E07C) is today's `circle-check-big`.
+#[test]
+fn tasks_item_draws_a_check_inside_a_circle() {
+  let mut desktop = overview();
+  assert!(shows(&mut desktop, "nav-tasks", "\u{e226}"));
+  assert!(!shows(&mut desktop, "nav-tasks", "\u{e07c}"));
 }
 
 #[test]
