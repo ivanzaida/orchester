@@ -44,6 +44,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::SchemaTooNew { .. } => Message::new("errors.newerSchema"),
     StoreError::Unrepresentable(_) => Message::new("errors.unsupportedPath"),
     StoreError::DuplicateConnectionName(_) => Message::new("errors.connectionNameTaken"),
+    StoreError::DuplicateSecretName { .. } => Message::new("errors.secretNameTaken"),
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }
@@ -56,6 +57,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::ConnectionNotFound(_)
     | StoreError::NotAGitHubConnection(_)
     | StoreError::InvocationNotFound(_)
+    | StoreError::SecretNotFound(_)
     | StoreError::MigrationBrokeReferences(_) => Message::new("errors.storage"),
     StoreError::Publish(PublishError::StaleDraft { latest, .. }) => Message::new("errors.staleDraft").with(
       "version",

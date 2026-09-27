@@ -1456,6 +1456,7 @@
     "connectionNameTaken": "Another connection of this project already has this name.",
     "connectionNotVerified": "The program was not recognized as the chosen CLI, so the connection cannot be saved.",
     "executableNotAbsolute": "Choose the program file by its full path.",
+    "secretNameTaken": "Another secret of this project already has this name in this environment.",
     "roleRequired": "Enter a profile name to save the draft.",
     "connectionRequired": "Choose a connection.",
     "modelRequired": "Choose a model or enter a model id.",
