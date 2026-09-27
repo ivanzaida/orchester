@@ -347,6 +347,11 @@ a pointer-only control acts without taking focus and leaves the focus where it i
 inert item (selected or unavailable navigation item, empty space) clears focus. Escape still
 closes the operations popover.
 
+Exception: tabs inside a dialog are controls of the dialog's form. Import resources' kind tabs
+(`RDOlV`) are Tab stops between the source select and the search, the selected one included, with
+the outer ring; the selected tab keeps its underline and the ring is added. Enter or Space selects
+the focused tab, which keeps the focus. An unavailable tab (Secrets) is no stop.
+
 lurq has one focused state for mouse and keyboard focus. A click on a form control focuses it and
 shows the ring. Canvas group `xURvJ` ("Interaction · Focus") in Foundations, below the status bar
 group:

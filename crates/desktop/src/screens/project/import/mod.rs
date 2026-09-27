@@ -393,11 +393,13 @@ fn body() -> Column {
 }
 
 /// `content` of the body outside its viewport, ending where the viewport's content ends: before
-/// the gutter, as wide as a list's side padding (`space-stack`).
+/// the gutter, as wide as a list's side padding (`space-stack`). It does not clip, so the focus
+/// ring of a control in it, such as a kind tab, reaches into the body's padding.
 fn beside_gutter(content: Element) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_right(ExtraSpacing::Stack.role())
+    .overflow_visible()
     .child(content)
     .into()
 }

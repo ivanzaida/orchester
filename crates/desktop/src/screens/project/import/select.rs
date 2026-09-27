@@ -157,10 +157,12 @@ impl ImportDialog {
       });
     let secrets = Tab::new("import-tab-secrets", ctx.t("projectImport.tabs.secrets"), height)
       .min_width(Dimension::Px(TAB_WIDTHS[5]));
+    // The tabs' focus rings reach out of the row, above, below and left of All.
     Row::new()
       .width(Dimension::Pct(100.0))
       .height(height)
       .spacing(SpacingSize::Sm)
+      .overflow_visible()
       .with_children(tabs.chain([secrets]))
       .into()
   }
