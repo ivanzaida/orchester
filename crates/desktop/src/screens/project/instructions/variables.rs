@@ -308,7 +308,7 @@ impl InstructionEditor {
       .into()
   }
 
-  /// "1–7 of 24 variables" and the page numbers (`TD4PC`).
+  /// "1–7 of 25 variables" and the page numbers (`TD4PC`).
   fn pages(&self, ctx: &Ctx, page: usize, total: usize) -> Element {
     let pages = total.div_ceil(PER_PAGE).max(1);
     let from = if total == 0 { 0 } else { page * PER_PAGE + 1 };

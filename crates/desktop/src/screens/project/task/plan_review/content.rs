@@ -54,7 +54,7 @@ pub(super) fn content(ctx: &mut Ctx, props: &PlanReviewProps, shown: &Plan, deci
     .height(Dimension::Pct(100.0))
     .padding_vertical(SpacingSize::Section)
     .padding_left(SpacingSize::Section)
-    .padding_right(ExtraSpacing::Step.role())
+    .padding_right(ExtraSpacing::BesideGutter.role())
     .spacing(ExtraSpacing::Step.role())
     .child(
       ScrollVertical::new(plan)

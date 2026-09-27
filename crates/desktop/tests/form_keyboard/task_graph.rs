@@ -53,6 +53,9 @@ fn task_graph_progress_lists_parallel_steps_with_their_attempt_and_usage() {
     "task-progress-steps",
     "Complete · attempt 1 · 9.7k tokens ·"
   ));
+  // Complete is a check inside a circle: lucide `circle-check`, the font's `check-circle-2`.
+  assert!(shows(&mut desktop, "task-progress-steps", "\u{e226}"));
+  assert!(!shows(&mut desktop, "task-progress-steps", "\u{e07c}"));
 }
 
 #[test]

@@ -27,6 +27,7 @@ pub enum Place {
   /// A task's page: its latest run.
   Task(TaskId),
   AgentProfile(ResourceId),
+  Secrets,
   Connections,
   Settings,
 }

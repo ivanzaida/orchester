@@ -5,10 +5,10 @@ use lurq::{
 
 use super::tokens::{
   FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_PILL, RADIUS_SELECT_MENU,
-  SPACE_COLUMNS, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR,
-  SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG,
-  SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION, SPACE_SELECT_MENU,
-  SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT, TAB_INDICATOR_STROKE,
+  SPACE_BESIDE_GUTTER, SPACE_COLUMNS, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM,
+  SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR,
+  SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_SECTION,
+  SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -66,10 +66,13 @@ pub enum ExtraSpacing {
   DialogMargin,
   /// Padding of a note field around its text, e.g. the changes a plan needs (`NbNN0`).
   TextArea,
+  /// Section padding beside a scroll gutter: 32 less the 12px gutter, so content still ends 32
+  /// from the edge (`JV8S8` in `ZVdRa`, the Summary column of 02.L2 `A7nVbK`).
+  BesideGutter,
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 24] = [
+  const ALL: [Self; 25] = [
     Self::Hair,
     Self::Mark,
     Self::Tight,
@@ -94,6 +97,7 @@ impl ExtraSpacing {
     Self::SelectMenu,
     Self::DialogMargin,
     Self::TextArea,
+    Self::BesideGutter,
   ];
 
   fn name(self) -> &'static str {
@@ -122,6 +126,7 @@ impl ExtraSpacing {
       Self::SelectMenu => "select-menu",
       Self::DialogMargin => "dialog-margin",
       Self::TextArea => "text-area",
+      Self::BesideGutter => "beside-gutter",
     }
   }
 
@@ -151,6 +156,7 @@ impl ExtraSpacing {
       Self::SelectMenu => SPACE_SELECT_MENU,
       Self::DialogMargin => SPACE_DIALOG_MARGIN,
       Self::TextArea => SPACE_TEXT_AREA,
+      Self::BesideGutter => SPACE_BESIDE_GUTTER,
     }
   }
 

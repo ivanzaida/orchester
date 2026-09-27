@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/desktop", "crates/exec", "crates/ipc", "crates/runner", "crates/store"]
+members = ["crates/core", "crates/desktop", "crates/exec", "crates/ipc", "crates/runner", "crates/store", "crates/vault"]
 
 [workspace.package]
 version = "0.1.0"
@@ -31,9 +31,17 @@ orchester-core = { path = "crates/core" }
 orchester-exec = { path = "crates/exec" }
 orchester-ipc = { path = "crates/ipc" }
 orchester-store = { path = "crates/store" }
+orchester-vault = { path = "crates/vault" }
+# The macOS keychain store of the keyring crates, for `orchester-vault` (generic passwords in the
+# login keychain).
+apple-native-keyring-store = { version = "1", features = ["keychain"] }
 # Local wall-clock time of status bar events and the local day of the daily project budget (the OS
 # time zone); std has no local time.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# The common API of the keyring crates' OS keychain stores, which `orchester-vault` uses on Windows
+# and macOS. Applications that pick their stores link it with the stores they need instead of
+# the `keyring` facade (keyring-rs wiki, "Keyring").
+keyring-core = "1"
 lurq = { version = "0.28.0", default-features = false }
 parking_lot = "0.12"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
@@ -55,7 +63,13 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 win32job = "2"
+# Windows Credential Manager store of the keyring crates, for `orchester-vault`. Without the
+# `search` feature: nothing searches credentials, and it would pull in regex.
+windows-native-keyring-store = { version = "1.1", default-features = false }
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes"] }
+# Wipes a secret value from memory when it is dropped (`orchester_core::secret::SecretValue`).
+# Doing that by hand needs volatile writes, i.e. `unsafe`, which the workspace denies.
+zeroize = "1"
 # Compression of project blob files, as `docs/architecture/storage.md` specifies. The C library is
 # built by `cc` like SQLite already is (rusqlite `bundled`), on Windows and macOS alike.
 zstd = { version = "0.13", default-features = false }

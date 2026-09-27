@@ -72,6 +72,7 @@ impl Opener {
       Place::Instruction(id) => Page::Instructions(InstructionsTab::ProjectRules, Some(id)),
       Place::AgentProfile(id) => Page::Agents(AgentSelection::Profile(id)),
       Place::Task(id) => Page::task(id),
+      Place::Secrets => Page::SECRETS,
       Place::Connections => Page::CONNECTIONS,
       Place::Settings => Page::Settings(SettingsTab::General),
     });

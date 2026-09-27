@@ -146,7 +146,8 @@ impl Fixture {
     self.record(run, &events);
   }
 
-  fn record(&mut self, run: &Run, events: &[RunEvent]) {
+  /// Stores `events`, which `run` just recorded.
+  pub fn record(&mut self, run: &Run, events: &[RunEvent]) {
     self.db.append_events(run, events).expect("append");
   }
 }

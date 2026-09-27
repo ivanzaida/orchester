@@ -153,7 +153,10 @@ impl PromptInput<'_> {
       Variable::RunId => run?.id().to_string(),
       Variable::RunAttempt => self.run?.attempt?.to_string(),
       Variable::RunBranch => run?.branch().as_str().to_owned(),
-      Variable::RunRevision => run?.base().as_str().to_owned(),
+      Variable::RunBaseRevision => run?.base().as_str().to_owned(),
+      // The latest checkpoint as the prompt is made, i.e. when its invocation starts: none
+      // before the run's first checkpoint commit.
+      Variable::RunRevision => run?.last_checkpoint()?.revision().as_str().to_owned(),
       Variable::StepId => self.step.key.as_str().to_owned(),
       Variable::StepName => self.step.name.as_str().to_owned(),
       Variable::RunBudget => run?.budget().to_string(),

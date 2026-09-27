@@ -457,6 +457,22 @@ CREATE TABLE invocation_prompts (
 ) STRICT;
 ",
   r"
+-- Project secrets (07.01): what the user sees of a secret, never its value. The value is in the OS
+-- keychain under the project and secret ids (`orchester_core::secret::VaultKey`). An archived
+-- secret keeps its row, so references to it still resolve, and frees its name in its environment.
+CREATE TABLE secrets (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL
+    CHECK (kind IN ('access_token', 'api_key', 'database_connection', 'deployment_token', 'password')),
+  environment TEXT NOT NULL CHECK (environment IN ('development', 'staging', 'production')),
+  created_at INTEGER NOT NULL,
+  rotated_at INTEGER,
+  archived_at INTEGER
+) STRICT;
+CREATE UNIQUE INDEX secrets_active_names ON secrets (name, environment) WHERE archived_at IS NULL;
+",
+  r"
 -- Approval gates (M7): each result of a gated step is a plan, numbered per run and step, and waits
 -- for a person's decision; requested changes carry the reviewer's note. The text never changes and
 -- a plan is decided once; the run's events hold every decision.

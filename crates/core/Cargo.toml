@@ -17,7 +17,10 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
+# The in-memory secret store and keychain of the secret tests are shared across threads.
+parking_lot.workspace = true
 # Temporary git repositories for reading changes with the real git.
 tempfile.workspace = true

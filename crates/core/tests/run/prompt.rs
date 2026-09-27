@@ -17,7 +17,7 @@ use orchester_core::{
   task::Task,
 };
 
-use crate::fixture::{Config, Logged, key, model, project, task};
+use crate::fixture::{Config, Logged, at, key, model, project, revision, task};
 
 pub(crate) fn builder(instructions: &str) -> AgentProfile {
   AgentProfile::new(
@@ -482,4 +482,44 @@ fn prompt_preview_keeps_placeholders_without_values_and_lists_them() {
       },
     })
   );
+}
+
+#[test]
+fn prompt_run_revision_is_the_latest_checkpoint_and_the_base_where_the_run_started() {
+  let mut prompt = Prompt::new(
+    builder("Role."),
+    step_with("From {{run.base_revision}} to {{run.revision}}."),
+    task("Brief.", &[]),
+  );
+  let base = revision('a');
+  assert_eq!(
+    prompt.input(&[], &[], true).value(Variable::RunBaseRevision).as_deref(),
+    Some(base.as_str())
+  );
+  // Before the run's first checkpoint there is no commit to name.
+  assert_eq!(
+    prompt.input(&[], &[], true).assemble(InjectionEvent::Start),
+    Err(PromptAssemblyError::UnavailableVariable {
+      variable: Variable::RunRevision,
+      section: PromptSource::Step {
+        pipeline: prompt.pipeline,
+        version: number(3),
+        step: key("implement"),
+      },
+    })
+  );
+  let research = prompt.logged.exec("research");
+  prompt.logged.apply(|run| run.start_step(research, at(12)));
+  for (checkpoint, time) in [('b', 13), ('c', 14)] {
+    prompt
+      .logged
+      .apply(|run| run.record_checkpoint(research, revision(checkpoint), at(time)));
+    let text = prompt
+      .input(&[], &[], true)
+      .assemble(InjectionEvent::Start)
+      .expect("the run has a checkpoint")
+      .text;
+    let expected = format!("From {} to {}.", base.as_str(), revision(checkpoint).as_str());
+    assert!(text.contains(&expected), "{text}");
+  }
 }

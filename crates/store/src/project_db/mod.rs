@@ -11,6 +11,7 @@ mod resources;
 mod revision_diffs;
 mod runs;
 mod schema;
+mod secrets;
 mod step_outputs;
 mod tasks;
 
