@@ -219,6 +219,42 @@ fn lifecycle_a_reconnecting_runner_names_the_interrupted_runs() {
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }
 
+/// Holds project `repo`'s runner lock (`.orchester/runner.lock`), as the runner of another
+/// Orchester app does while that app runs the project.
+fn hold_runner_lock(repo: &Path) -> fs::File {
+  let lock = fs::OpenOptions::new()
+    .write(true)
+    .create(true)
+    .truncate(false)
+    .open(repo.join(".orchester").join("runner.lock"))
+    .expect("open the runner lock");
+  lock.try_lock().expect("no runner holds the lock yet");
+  lock
+}
+
+#[test]
+fn lifecycle_a_project_another_app_runs_says_so_until_that_app_closes() {
+  let (runner, _) = programs();
+  let mut other_app = None;
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    other_app = Some(hold_runner_lock(repo));
+  });
+  desktop.wait_until("the runner notice", |desktop| has(desktop, "runner-notice"));
+  for text in [
+    "Could not start the runner",
+    "Another Orchester window is already running this project's runner. Close that window, then restart the runner.",
+  ] {
+    assert!(shows(&mut desktop, "runner-notice", text), "{text}");
+  }
+  assert!(text_of(&mut desktop, "status-runner", "Runner offline"));
+
+  drop(other_app);
+  desktop.click("runner-restart");
+  desktop.wait_until("the runner online", |desktop| {
+    text_of(desktop, "status-runner", "Runner online") && !has(desktop, "runner-notice")
+  });
+}
+
 #[test]
 fn lifecycle_after_a_crash_the_recovery_continues_all_runs() {
   let (runner, fake) = programs();

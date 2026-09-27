@@ -2,12 +2,14 @@
 //! pipeline's own inspector when no step is selected (03.06 `angoF`). Edits are saved as the
 //! draft automatically while the draft rules allow it; Publish opens a confirmation (03.02
 //! `zfjsK`) and publishes the stored draft (03.03 `yf6XH`). What blocks publishing is listed
-//! under the toolbar (03.B `UjHDL`). Running a pipeline and its version history do not exist
-//! yet, so Run and Version history are unavailable.
+//! under the toolbar (03.B `UjHDL`). Version history shows a published version read-only on
+//! the canvas beside the list of versions ([`history_panel`]), where it can be compared with the
+//! draft or restored as the draft. Running a pipeline does not exist yet, so Run is unavailable.
 
 mod autosave;
 mod canvas;
 mod header;
+mod history_panel;
 mod pipeline_inspector;
 mod publish_dialog;
 mod step_card;
@@ -33,10 +35,12 @@ use orchester_core::{
   resource::{Pipeline, PipelineEdit, StepKey, VersionNumber},
   time::Timestamp,
 };
+use orchester_store::StoreError;
 
 use self::{
   autosave::watch_saves,
   canvas::{Canvas, CanvasProps},
+  history_panel::{Current, HistoryPanel, HistoryPanelProps, HistoryState},
   pipeline_inspector::{PipelineInspector, PipelineInspectorProps},
   publish_dialog::publish_dialog,
   step_inspector::{StepInspector, StepInspectorProps},
@@ -47,9 +51,11 @@ use crate::{
   background,
   drafts::{DraftQueue, SaveAction, SaveJob, save_action},
   messages::{self, Message},
+  navigation::route::PipelineView,
   pipelines::{
     data::{OpenError, OpenedPipeline, publish_in},
     editor::EditorState,
+    history::{PublishedVersion, VersionHistory},
     problems::publish_error,
   },
   screens::project::ProjectNav,
@@ -65,6 +71,7 @@ const INSPECTOR_WIDTH: f32 = 304.0;
 pub struct EditorProps {
   pub project: OpenProject,
   pub id: ResourceId,
+  pub view: PipelineView,
 }
 
 impl lurq::app::component::DevtoolsInspectable for EditorProps {}
@@ -107,6 +114,12 @@ impl lurq::app::component::DevtoolsInspectable for Project {}
 struct Loaded(Arc<OpenedPipeline>);
 
 impl lurq::app::component::DevtoolsInspectable for Loaded {}
+
+/// The published versions as the history future carries them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LoadedHistory(Arc<VersionHistory>);
+
+impl lurq::app::component::DevtoolsInspectable for LoadedHistory {}
 
 /// Provided by the editor: its state and the edits children make to it.
 #[derive(Clone)]
@@ -156,6 +169,20 @@ impl EditorHandle {
   /// Replaces every step, e.g. with the starter's; open inspectors start again.
   pub fn replace(&self, change: impl FnOnce(&mut PipelineEdit)) {
     self.edit(change);
+    self.epoch.update(|epoch| *epoch += 1);
+  }
+
+  /// Replaces the steps with those of a published version, `body`, which autosave stores as the
+  /// draft (see [`EditorState::restore`]); the first restored step is selected.
+  pub fn restore(&self, body: &Pipeline) {
+    self.state.update(|state| {
+      if let Some(state) = state {
+        state.restore(body);
+      }
+    });
+    let first = body.steps().first().map(|step| step.key.clone());
+    self.selection.set(first.map_or(Selection::Pipeline, Selection::Step));
+    self.flush();
     self.epoch.update(|epoch| *epoch += 1);
   }
 
@@ -231,6 +258,7 @@ impl Component for PipelineEditor {
         }
       })
     });
+    let history = history_state(ctx, &props, &handle);
     let loaded = load.state().get();
     if let Some(error) = loaded.error {
       return failed(ctx, &error);
@@ -248,7 +276,7 @@ impl Component for PipelineEditor {
         state
       }
     };
-    self.editor(ctx, &props, &handle, &state, &Actions { save, publish })
+    self.editor(ctx, &props, &state, &Actions { save, publish }, &history)
   }
 }
 
@@ -257,11 +285,12 @@ impl PipelineEditor {
     &self,
     ctx: &mut Ctx,
     props: &EditorProps,
-    handle: &EditorHandle,
     state: &EditorState,
     actions: &Actions,
+    history: &HistoryState,
   ) -> Element {
     let Actions { save, publish } = actions;
+    let handle = &self.handle;
     let nav = ctx
       .use_context::<PipelinesNav>()
       .expect("the pipelines screen provides PipelinesNav");
@@ -271,46 +300,49 @@ impl PipelineEditor {
       error: saving.error.clone().filter(|_| !saving.is_pending()),
     };
     let project = props.project.project.name().as_str();
-    let selection = handle.selection.get();
-    let selected_step = match &selection {
-      Selection::Step(key) => state.edit().step(key).cloned(),
-      Selection::Pipeline => None,
-    };
-    let inspector = match selected_step {
-      Some(step) => {
-        let key = format!("step-inspector-{}-{}", step.key, handle.epoch.get());
-        ctx.mount_keyed::<StepInspector>(&key, StepInspectorProps::new(state, step))
-      }
-      None => ctx.mount_keyed::<PipelineInspector>(
-        &format!("pipeline-inspector-{}", handle.epoch.get()),
-        PipelineInspectorProps::new(state),
-      ),
-    };
-    let canvas = ctx.mount_keyed::<Canvas>("pipeline-canvas", CanvasProps::new(state, &selection));
+    let shown = shown_version(props, history, &nav);
     let confirm = self.confirm_publish.clone();
     let mut column = Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(header::topbar(ctx, project, state, &nav, &saving, move || {
         confirm.set(true)
-      }))
-      .child(header::toolbar(ctx, state, handle));
-    if let Some(strip) = header::problems_strip(ctx, state, handle) {
-      column = column.child(strip);
-    }
-    let inspector_panel = Column::new()
+      }));
+    let (canvas, panel) = match props.view.version() {
+      Some(number) => {
+        column = column.child(header::version_toolbar(ctx, state, &nav, number));
+        let canvas = shown.as_ref().map_or_else(
+          || CanvasProps::draft(state, &Selection::Pipeline),
+          |version| CanvasProps::version(state, &version.body),
+        );
+        (canvas, history_panel(ctx, props, state, history))
+      }
+      None => {
+        column = column.child(header::toolbar(ctx, state, handle, &nav));
+        if let Some(strip) = header::problems_strip(ctx, state, handle) {
+          column = column.child(strip);
+        }
+        let selection = handle.selection.get();
+        (
+          CanvasProps::draft(state, &selection),
+          inspector(ctx, handle, state, &selection),
+        )
+      }
+    };
+    let canvas = ctx.mount_keyed::<Canvas>("pipeline-canvas", canvas);
+    let side_panel = Column::new()
       .width(Dimension::Px(INSPECTOR_WIDTH))
       .height(Dimension::Pct(100.0))
       .background(ExtraColor::Surface.role())
       .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .child(inspector);
+      .child(panel);
     let column = column
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
           .flex(1.0)
           .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(canvas))
-          .child(inspector_panel),
+          .child(side_panel),
       )
       .child(self.publish_modal(ctx, state, publish, &props.project));
     // One form for the whole editor; only the inspector's fields and buttons take focus.
@@ -346,6 +378,79 @@ impl PipelineEditor {
       .open(self.confirm_publish.clone())
       .into()
   }
+}
+
+/// The selected step's inspector, or the pipeline's when no step is selected.
+fn inspector(ctx: &mut Ctx, handle: &EditorHandle, state: &EditorState, selection: &Selection) -> Element {
+  let selected_step = match selection {
+    Selection::Step(key) => state.edit().step(key).cloned(),
+    Selection::Pipeline => None,
+  };
+  match selected_step {
+    Some(step) => {
+      let key = format!("step-inspector-{}-{}", step.key, handle.epoch.get());
+      ctx.mount_keyed::<StepInspector>(&key, StepInspectorProps::new(state, step))
+    }
+    None => ctx.mount_keyed::<PipelineInspector>(
+      &format!("pipeline-inspector-{}", handle.epoch.get()),
+      PipelineInspectorProps::new(state),
+    ),
+  }
+}
+
+fn history_panel(ctx: &mut Ctx, props: &EditorProps, state: &EditorState, history: &HistoryState) -> Element {
+  let current = Current {
+    draft: state.draft_number(),
+    has_changes: state.has_changes(),
+    body: state.edit().validate().ok().map(Arc::new),
+  };
+  ctx.mount_keyed::<HistoryPanel>(
+    "pipeline-history-panel",
+    HistoryPanelProps {
+      pipeline: props.id,
+      view: props.view,
+      history: history.clone(),
+      current,
+    },
+  )
+}
+
+/// The published versions, read again whenever a new one is published.
+fn history_state(ctx: &mut Ctx, props: &EditorProps, handle: &EditorHandle) -> HistoryState {
+  let latest = handle
+    .state
+    .get()
+    .and_then(|state| state.latest().map(|latest| latest.number));
+  let deps = (props.project.repo_root.clone(), props.id, latest);
+  let history = ctx.future(deps, |(repo_root, id, _)| async move {
+    let history = background::run(move || VersionHistory::load_in(&repo_root, id)).await?;
+    history
+      .map(|history| LoadedHistory(Arc::new(history)))
+      .map_err(|error: StoreError| {
+        tracing::error!(%error, "cannot read the pipeline's versions");
+        messages::store_error(&error)
+      })
+  });
+  let history = history.state().get();
+  match (history.data, history.error) {
+    (_, Some(error)) => HistoryState::Failed(error),
+    (Some(LoadedHistory(history)), None) => HistoryState::Ready(history),
+    (None, None) => HistoryState::Loading,
+  }
+}
+
+/// The published version the view shows, once the versions are read. A version the pipeline
+/// does not have leads back to the draft in place of the entry that named it.
+fn shown_version(props: &EditorProps, history: &HistoryState, nav: &PipelinesNav) -> Option<PublishedVersion> {
+  let number = props.view.version()?;
+  let HistoryState::Ready(history) = history else {
+    return None;
+  };
+  let found = history.version(number).cloned();
+  if found.is_none() {
+    nav.replace(props.id, PipelineView::Draft);
+  }
+  found
 }
 
 /// The starter's steps with the project's profiles and tools, for "Use starter steps".

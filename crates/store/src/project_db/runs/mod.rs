@@ -2,10 +2,11 @@ mod columns;
 mod legacy;
 mod load;
 
-use std::num::NonZeroU32;
+use std::{collections::BTreeMap, num::NonZeroU32};
 
 use orchester_core::{
-  id::{IdempotencyKey, RunId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  resource::VersionNumber,
   run::{Checkpoint, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber, StepExecutor},
   store::RunStore,
   time::Timestamp,
@@ -16,7 +17,7 @@ use self::{
   columns::{attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text, step_status_columns},
   load::{load_checkpoint, load_events, load_runs},
 };
-use super::{ProjectDb, plans};
+use super::{ProjectDb, plans, resources::version_number};
 use crate::{
   RunStoreError, StoreError,
   rows::{corrupt, encode_json, millis_column, tokens_column},
@@ -102,6 +103,27 @@ impl RunStore for ProjectDb {
       "WHERE status = ?1 ORDER BY number",
       [columns::RUNNING],
     )?)
+  }
+
+  fn runs_by_pipeline_version(
+    &self,
+    pipeline: ResourceId,
+  ) -> Result<BTreeMap<VersionNumber, Vec<RunNumber>>, RunStoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT resource_versions.number, runs.number FROM runs \
+       JOIN resource_versions ON resource_versions.id = runs.pipeline_version_id \
+       WHERE resource_versions.resource_id = ?1 ORDER BY runs.number",
+    )?;
+    let rows = statement
+      .query_map([pipeline.to_string()], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    let mut runs: BTreeMap<VersionNumber, Vec<RunNumber>> = BTreeMap::new();
+    for (version, run) in rows {
+      runs.entry(version_number(version)?).or_default().push(run_number(run)?);
+    }
+    Ok(runs)
   }
 }
 

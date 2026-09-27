@@ -25,7 +25,8 @@ pub fn reconnect_delay(attempt: u32) -> Duration {
 pub enum RunnerFailure {
   /// The runner program is not installed next to the desktop program.
   MissingExecutable { path: PathBuf },
-  /// Another process already serves this project's runner pipe.
+  /// Another Orchester app runs this project: its runner holds the project's runner lock, or
+  /// another process serves the project's runner pipe.
   AlreadyServed,
   /// The runner could not be started or did not complete the handshake; the log has the cause.
   StartFailed,
@@ -34,9 +35,10 @@ pub enum RunnerFailure {
 }
 
 impl RunnerFailure {
-  /// Retrying cannot help while the program itself is missing.
+  /// Retrying cannot help while the program itself is missing, or until the other app that
+  /// runs the project closes; the user restarts the runner then.
   pub fn is_retryable(&self) -> bool {
-    !matches!(self, Self::MissingExecutable { .. })
+    !matches!(self, Self::MissingExecutable { .. } | Self::AlreadyServed)
   }
 }
 

@@ -16,7 +16,7 @@ use tokio::{
 };
 
 use crate::{
-  ClientStream, Endpoint, Event, IpcError, KillOnCloseJob, Request,
+  ClientStream, EXIT_PROJECT_LOCKED, Endpoint, Event, IpcError, KillOnCloseJob, Request,
   frame::{FrameReader, FrameWriter},
   handshake, pipe_owner,
 };
@@ -39,6 +39,9 @@ pub enum LaunchError {
   Job(io::Error),
   #[error("the runner exited before accepting the connection ({status}): {stderr}")]
   RunnerExited { status: ExitStatus, stderr: String },
+  /// The runner exited with [`EXIT_PROJECT_LOCKED`]: another Orchester app runs this project.
+  #[error("another Orchester app is already running this project's runner (the project's runner lock is held)")]
+  ProjectLocked,
   #[error("the runner did not open its pipe within {0:?}")]
   ConnectTimeout(Duration),
   #[error("cannot connect to the runner: {0}")]
@@ -160,6 +163,9 @@ impl RunnerProcess {
   }
 
   async fn exited(self, status: ExitStatus) -> LaunchError {
+    if status.code() == Some(i32::from(EXIT_PROJECT_LOCKED)) {
+      return LaunchError::ProjectLocked;
+    }
     let stderr = match self.stderr.await {
       Ok(stderr) => stderr,
       Err(error) => format!("runner diagnostics unavailable: {error}"),

@@ -20,6 +20,7 @@ use crate::{
   close::Lifecycle,
   messages::{self, Message},
   navigation::{self, Navigation, Places, Start, with_history_input},
+  pipelines::zoom::SessionZooms,
   programs::Programs,
   screens::{
     close_dialog::CloseConfirmation,
@@ -92,6 +93,7 @@ impl Component for Root {
     ctx.provide(programs);
     ctx.provide(vault);
     ctx.provide(navigation.clone());
+    ctx.provide(SessionZooms::default());
     let close = lifecycle.clone();
     ctx
       .window()
