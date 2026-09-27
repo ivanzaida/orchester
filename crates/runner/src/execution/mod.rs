@@ -32,13 +32,16 @@ mod workspace;
 use std::{
   collections::HashMap,
   path::{Path, PathBuf},
-  sync::Arc,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
   time::Duration,
 };
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  run::{InterruptCause, RaisedLimits, RunStatus},
+  run::{InterruptCause, RaisedLimits},
   tokens::TokenBudget,
 };
 use orchester_ipc::{Event, Rejection};
@@ -64,6 +67,10 @@ const STOP_TIMEOUT: Duration = Duration::from_secs(10);
 struct ActiveRun {
   control: mpsc::UnboundedSender<Control>,
   task: JoinHandle<()>,
+  /// Set by the task once it no longer executes the run, before the change that shows it can be
+  /// read: the run settled (paused, stopped at a limit, cancelled, interrupted or ended), waits
+  /// for a person with nothing else to do, or the task failed. The task only ends after.
+  settled: Arc<AtomicBool>,
 }
 
 impl ActiveRun {
@@ -72,6 +79,11 @@ impl ActiveRun {
   /// moment later.
   fn ended(&self) -> bool {
     self.control.is_closed()
+  }
+
+  /// Whether the task still executes the run: it counts among the active runs.
+  fn executes(&self) -> bool {
+    !self.ended() && !self.settled.load(Ordering::Acquire)
   }
 }
 
@@ -105,11 +117,16 @@ impl Scheduler {
     }
   }
 
-  /// Runs being executed right now.
+  /// Runs being executed right now. A run its task settled is not, even while the task still
+  /// ends: the desktop reads the change at once and may start other work in its place.
   pub fn active_runs(&self) -> Vec<RunId> {
     let mut active = self.inner.active.lock();
     active.retain(|_, run| !run.ended());
-    active.keys().copied().collect()
+    active
+      .iter()
+      .filter(|(_, run)| run.executes())
+      .map(|(&run, _)| run)
+      .collect()
   }
 
   /// Creates and starts the run of queued task `task`, or finds the one an earlier request with
@@ -292,24 +309,23 @@ impl Scheduler {
     transition: impl FnOnce(&mut ProjectDb, &Path) -> Result<Prepared, Rejection>,
   ) -> Result<(), Rejection> {
     let _one_at_a_time = self.inner.continuing.lock().await;
-    if let Some(task) = self.settling(run)?
-      && let Err(error) = task.await
-    {
-      tracing::warn!(%run, %error, "the run's task ended abnormally");
-    }
+    self.settled(run).await?;
     self.continue_idle(run, transition)
   }
 
-  /// The task of `run` once it has recorded the run settled and before it has ended, taken over
-  /// to wait for its end; a run its task still executes is not paused.
-  fn settling(&self, run: RunId) -> Result<Option<JoinHandle<()>>, Rejection> {
-    if !self.is_active(run) {
-      return Ok(None);
-    }
-    if idle::load(&self.open()?, run)?.status() == &RunStatus::Running {
-      return Err(Rejection::RunNotPaused);
-    }
-    Ok(self.inner.active.lock().remove(&run).map(|active| active.task))
+  /// Waits for the task of `run` to end once it has settled the run; a run its task still
+  /// executes is not paused.
+  async fn settled(&self, run: RunId) -> Result<(), Rejection> {
+    let ending = {
+      let active = self.inner.active.lock();
+      match active.get(&run) {
+        Some(active) if active.executes() => return Err(Rejection::RunNotPaused),
+        Some(active) => active.control.clone(),
+        None => return Ok(()),
+      }
+    };
+    ending.closed().await;
+    Ok(())
   }
 
   fn is_active(&self, run: RunId) -> bool {
@@ -328,14 +344,16 @@ impl Scheduler {
       });
     }
     let (control, controls) = mpsc::unbounded_channel();
+    let settled = Arc::new(AtomicBool::new(false));
     let context = TaskContext {
       root: self.inner.project_root.clone(),
       notifier: self.inner.notifier.clone(),
       board: self.inner.board.clone(),
       controls,
+      settled: settled.clone(),
     };
     let task = tokio::spawn(RunTask::new(db, prepared, context).drive());
-    active.insert(run, ActiveRun { control, task });
+    active.insert(run, ActiveRun { control, task, settled });
     Ok(())
   }
 }

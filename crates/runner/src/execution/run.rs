@@ -5,13 +5,21 @@
 //! usage and its end from a task of its own ([`super::step::worker`]). Requests for the run
 //! (pause, cancel, the runner stopping) arrive as [`Control`]s.
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+  collections::HashMap,
+  path::PathBuf,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+  time::Duration,
+};
 
 use orchester_core::{
   connection::stream::{AgentEvent, RunnerProblem},
   id::StepExecutionId,
   project::Project,
-  run::{InterruptCause, Invocation, Run, RunError, RunEvent, RunLimit, active_time},
+  run::{InterruptCause, Invocation, Run, RunError, RunEvent, RunLimit, RunStatus, active_time},
   store::ActivityStore,
   task::Task,
   time::Timestamp,
@@ -53,13 +61,14 @@ pub(super) enum ExecutionError {
   Stalled,
 }
 
-/// What the task of a run is given besides the run: where it announces changes and where its
-/// requests arrive.
+/// What the task of a run is given besides the run: where it announces changes, where its
+/// requests arrive and where it tells the scheduler that it no longer executes the run.
 pub(super) struct TaskContext {
   pub(super) root: PathBuf,
   pub(super) notifier: Notifier,
   pub(super) board: Arc<Board>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
+  pub(super) settled: Arc<AtomicBool>,
 }
 
 /// Requests received and not carried out yet; they take effect once every agent has ended.
@@ -83,6 +92,9 @@ pub(super) struct RunTask {
   pub(super) board: Arc<Board>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   listening: bool,
+  /// Set before the change that settles the run is recorded, or once the task stops executing
+  /// the run otherwise; the scheduler no longer counts the run from then on.
+  settled: Arc<AtomicBool>,
   pub(super) pending: Pending,
   /// Agents and command tools at work, by the execution they work on.
   pub(super) agents: HashMap<StepExecutionId, Active>,
@@ -105,6 +117,7 @@ impl RunTask {
       board: context.board,
       controls: context.controls,
       listening: true,
+      settled: context.settled,
       pending: Pending::default(),
       agents: HashMap::new(),
       worker_events,
@@ -119,6 +132,8 @@ impl RunTask {
     let run = self.run.id();
     tracing::info!(%run, "run executing");
     let result = self.steps().await;
+    // A run that waits for a person, or whose task failed, is no longer executed either.
+    self.settled.store(true, Ordering::Release);
     if result.is_err() {
       self.end_agents().await;
     }
@@ -261,12 +276,22 @@ impl RunTask {
     self.root.join(".orchester").join("step-result.schema.json")
   }
 
-  /// Applies a transition, stores its events with the new state and announces the change.
+  /// Applies a transition, stores its events with the new state and announces the change. After
+  /// a transition that settles the run (it no longer runs) the task executes nothing more: it is
+  /// marked settled before the change can be read.
   pub(super) fn transition(
     &mut self,
     transition: impl FnOnce(&mut Run, Timestamp) -> Result<Vec<RunEvent>, RunError>,
   ) -> Result<(), ExecutionError> {
-    Ok(record(&mut self.db, &self.notifier, &mut self.run, transition)?)
+    let settled = &self.settled;
+    let settling = |run: &mut Run, now| {
+      let events = transition(run, now)?;
+      if run.status() != &RunStatus::Running {
+        settled.store(true, Ordering::Release);
+      }
+      Ok(events)
+    };
+    Ok(record(&mut self.db, &self.notifier, &mut self.run, settling)?)
   }
 
   /// Reports a problem around `invocation`'s agent in the run's transcript.

@@ -1,9 +1,10 @@
 //! A request to continue a run that arrives once the run is recorded as stopped, but before the
 //! task that stopped it has ended: the desktop reads the stop as soon as it is announced, while
-//! the task still finishes, which on a busy machine can take a while. The request waits for the
-//! task instead of being refused as if the run were still executing. The task is held at its
-//! last step through the runner's log, so the moment does not depend on timing. Needs `git`. Run
-//! with `cargo test -p orchester-runner --features test-agent --test settling`.
+//! the task still finishes, which on a busy machine can take a while. The run no longer counts as
+//! executing, and the request waits for the task instead of being refused as if the run were
+//! still executing. The task is held at its last step through the runner's log, so the moment
+//! does not depend on timing. Needs `git`. Run with
+//! `cargo test -p orchester-runner --features test-agent --test settling`.
 
 mod support;
 
@@ -44,6 +45,8 @@ async fn settling_a_raise_waits_for_the_task_that_stopped_the_run() {
     stopped.status(),
     &RunStatus::Paused(PauseReason::LimitReached(RunLimit::Tokens))
   );
+  // The task only ends now: the stopped run no longer counts as executing.
+  assert!(scheduler.active_runs().is_empty());
 
   let limits = RaisedLimits {
     budget: TokenBudget::new(2_000_000).expect("above zero"),
