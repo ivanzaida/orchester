@@ -12,7 +12,11 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use crate::{display, messages::Message, tasks::data::PipelineChoice};
+use crate::{
+  display,
+  messages::Message,
+  tasks::{data::PipelineChoice, unreadable::Unreadable},
+};
 
 /// Tabs of the task list. Only tabs whose tasks can be told apart today are available;
 /// queueing, review and completion do not exist yet.
@@ -177,11 +181,53 @@ impl LatestRun {
   }
 }
 
+/// A task's latest run: where it stands, or that it cannot be read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Latest {
+  Run(LatestRun),
+  Unreadable(Unreadable),
+}
+
+impl Latest {
+  /// Where the task stands; `None` when its latest run cannot be read.
+  pub const fn phase(&self) -> Option<TaskPhase> {
+    match self {
+      Self::Run(latest) => Some(latest.phase),
+      Self::Unreadable(_) => None,
+    }
+  }
+
+  pub const fn run(&self) -> Option<&LatestRun> {
+    match self {
+      Self::Run(latest) => Some(latest),
+      Self::Unreadable(_) => None,
+    }
+  }
+
+  /// What the run means for the task now; "Run #9 could not be read".
+  pub fn message(&self) -> Message {
+    match self {
+      Self::Run(latest) => latest.message(),
+      Self::Unreadable(unreadable) => unreadable.title(),
+    }
+  }
+
+  /// The latest run while no runner is connected ([`LatestRun::without_runner`]); a run that
+  /// cannot be read stays as it is.
+  #[must_use]
+  pub fn without_runner(&self) -> Self {
+    match self {
+      Self::Run(latest) => Self::Run(latest.without_runner()),
+      Self::Unreadable(_) => self.clone(),
+    }
+  }
+}
+
 /// How many tasks wait in the queue for their run to start (the status bar's Queued count).
 pub fn queued(tasks: &[Task], phases: &Phases) -> usize {
   tasks
     .iter()
-    .filter(|task| phase_of(task, phases) == TaskPhase::Queued)
+    .filter(|task| phase_of(task, phases) == Some(TaskPhase::Queued))
     .count()
 }
 
@@ -267,8 +313,8 @@ pub struct TaskRow {
   pub key: Arc<str>,
   pub title: Arc<str>,
   pub pipeline: PipelineLabel,
-  /// Where the task stands, from its latest run.
-  pub phase: TaskPhase,
+  /// Where the task stands, from its latest run; `None` when that run cannot be read.
+  pub phase: Option<TaskPhase>,
   /// The dependency / readiness cell: what the task needs before it can be queued, or once it
   /// is queued or has run, where it stands.
   pub detail: Message,
@@ -282,22 +328,24 @@ pub struct TaskRow {
 impl lurq::app::component::DevtoolsInspectable for TaskRow {}
 
 /// The latest run of each task that has one; a task without one is a draft or queued.
-pub type Phases = HashMap<TaskId, LatestRun>;
+pub type Phases = HashMap<TaskId, Latest>;
 
-fn phase_of(task: &Task, phases: &Phases) -> TaskPhase {
+/// Where `task` stands; `None` when its latest run cannot be read.
+pub(super) fn phase_of(task: &Task, phases: &Phases) -> Option<TaskPhase> {
   phases
     .get(&task.id())
-    .map_or_else(|| TaskPhase::of(task, None, None), |latest| latest.phase)
+    .map_or_else(|| Some(TaskPhase::of(task, None, None)), Latest::phase)
 }
 
 impl TaskRow {
-  pub fn new(task: &Task, published: &[PipelineChoice], latest: Option<&LatestRun>) -> Self {
-    let phase = latest.map_or_else(|| TaskPhase::of(task, None, None), |latest| latest.phase);
+  pub fn new(task: &Task, published: &[PipelineChoice], latest: Option<&Latest>) -> Self {
+    let phase = latest.map_or_else(|| Some(TaskPhase::of(task, None, None)), Latest::phase);
     let detail = match (latest, task.status()) {
       (Some(latest), _) => latest.message(),
       (None, TaskStatus::Queued) => Message::new("tasks.progress.queued"),
       (None, TaskStatus::Draft) => Readiness::of(task).message(),
     };
+    let latest = latest.and_then(Latest::run);
     Self {
       id: task.id(),
       key: task.key().to_string().into(),

@@ -13,7 +13,7 @@ use orchester_core::{
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{failed, prepare::Prepared};
+use super::{failed, prepare::Prepared, read_failed};
 
 /// A pause of an idle run: a paused run already is; one waiting for a person's decision has no
 /// agent to settle and pauses at once, returned to be announced; anything else is not running.
@@ -150,7 +150,7 @@ fn used_daily_budget(db: &ProjectDb) -> Result<Option<TokenBudget>, StoreError> 
 
 pub(super) fn load(db: &ProjectDb, run: RunId) -> Result<Run, Rejection> {
   db.run(run)
-    .map_err(|error| failed("cannot read the run", &error))?
+    .map_err(|error| read_failed("cannot read the run", error))?
     .ok_or(Rejection::RunNotFound)
 }
 

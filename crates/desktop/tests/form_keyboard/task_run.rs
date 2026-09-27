@@ -237,7 +237,8 @@ pub(crate) fn has(desktop: &mut Desktop, id: &str) -> bool {
 pub(crate) fn latest_run(repo: &Path) -> Option<orchester_core::run::Run> {
   let db = ProjectDb::open(repo).expect("open the project");
   let task = db.tasks().expect("tasks").into_iter().next()?;
-  db.runs_of_task(task.id()).expect("runs").pop()
+  let latest = db.runs_of_task(task.id()).expect("runs").pop()?;
+  Some(latest.expect("the latest run can be read"))
 }
 
 /// Fills the new task form with `brief` and `budget` and presses Create & run until the task

@@ -12,8 +12,12 @@ use lurq::{
 };
 
 use crate::{
+  tasks::unreadable::Unreadable,
   theme::{ExtraSpacing, ExtraTypography},
-  ui::icon::{Icon, IconSize, icon},
+  ui::{
+    icon::{Icon, IconSize, icon},
+    message_text,
+  },
 };
 
 /// Width of the explanation (`yUyVC`).
@@ -39,6 +43,18 @@ pub(super) fn state(id: &'static str, glyph: Icon, title: &str, text: &str, acti
     )
     .with_children(actions)
     .into()
+}
+
+/// A tab of a task whose latest run cannot be read, but its Summary: nothing the run did can be
+/// shown (not drawn; 02.R draws the Summary).
+pub(super) fn unreadable(ctx: &Ctx, id: &'static str, run: &Unreadable) -> Element {
+  state(
+    id,
+    Icon::AlertCircle,
+    &message_text(ctx, &run.title()),
+    &ctx.t("runs.unreadable.tabDetail"),
+    Vec::new(),
+  )
 }
 
 /// No activity has been reported yet, with why.

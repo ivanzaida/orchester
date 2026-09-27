@@ -25,7 +25,7 @@ use orchester_exec::ProcessRunner;
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::failed;
+use super::{failed, read_failed};
 use crate::{git::Git, worktree::Worktrees};
 
 /// A git query that does not answer within this time counts as failed.
@@ -48,6 +48,7 @@ pub(super) fn prepare(
 ) -> Result<Prepared, Rejection> {
   let store = |error: StoreError| failed("cannot read the project database", &error);
   let task = db.task(task_id).map_err(store)?.ok_or(Rejection::TaskNotFound)?;
+  // Unreadable runs count too: each run of the task has its own branch.
   let earlier = db
     .runs_of_task(task_id)
     .map_err(|error| failed("cannot read runs", &error))?;
@@ -92,7 +93,7 @@ pub(super) fn prepare(
   };
   let mut run = db
     .create_run(key, new, Timestamp::now())
-    .map_err(|error| failed("cannot record the run", &error))?;
+    .map_err(|error| read_failed("cannot record the run", error))?;
   let worktrees = Worktrees::new(root).map_err(|error| failed("cannot find the worktrees", &error))?;
   let worktree = worktrees.path(run.id());
   if run.status() != &RunStatus::Pending {

@@ -83,6 +83,10 @@ pub enum RunStoreError {
   Run(#[from] RunError),
   #[error("run {0} does not exist")]
   RunNotFound(RunId),
+  /// The stored record of run `run` cannot be read back: it breaks the run's rules or a value in
+  /// it cannot be decoded. The record is kept unchanged.
+  #[error("run {run} cannot be read: {source}")]
+  Unreadable { run: RunId, source: StoreError },
   /// Another writer appended to the run's log first; reload the run and retry the transition.
   #[error("run {run} expected event {expected} next, got {found}")]
   SequenceConflict { run: RunId, expected: u64, found: u64 },

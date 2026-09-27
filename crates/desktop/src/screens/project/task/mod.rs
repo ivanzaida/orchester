@@ -21,6 +21,7 @@ mod ready;
 mod retry_limit;
 mod summary;
 mod tab_state;
+mod unreadable;
 mod worktree;
 
 use std::{sync::Arc, time::SystemTime};
@@ -205,10 +206,15 @@ impl Component for TaskScreen {
       .filter(|_| !control.state().get().is_pending())
       .map(|error| control_error_row(&message_text(ctx, &error)));
     let removal = self.removal(ctx, &props, &detail, leftovers.as_ref());
+    let earlier_unreadable = detail
+      .earlier_unreadable
+      .iter()
+      .map(|run| unreadable::earlier_notice(ctx, run));
     column
       .child(self.topbar(ctx, &props, (Some(&detail), removal), &control))
       .with_children(runner_notice)
       .child(heading::heading(ctx, &detail, lost.is_some()))
+      .with_children(earlier_unreadable)
       .with_children(control_error)
       .child(self.tabs(ctx, &props, files))
       .child(body)
@@ -216,7 +222,8 @@ impl Component for TaskScreen {
 }
 
 impl TaskScreen {
-  /// The selected tab; the Summary of a run that succeeded is Ready for review (02.13).
+  /// The selected tab; the Summary of a run that succeeded is Ready for review (02.13). While the
+  /// latest run cannot be read, the Summary is 02.R and no other tab has anything of it to show.
   fn body(
     &self,
     ctx: &mut Ctx,
@@ -225,6 +232,14 @@ impl TaskScreen {
     (lost, files): (Option<Lost>, Option<usize>),
     (checkpointed, leftovers): (Option<CheckpointedLoad>, Option<Result<Leftovers, Message>>),
   ) -> Element {
+    if let Some(run) = &detail.latest_unreadable {
+      return match props.tab {
+        TaskPageTab::Summary => unreadable::summary(ctx, run, &detail.earlier),
+        TaskPageTab::Conversation => tab_state::unreadable(ctx, "conversation-unreadable", run),
+        TaskPageTab::Changes => tab_state::unreadable(ctx, "changes-unreadable", run),
+        TaskPageTab::Activity => tab_state::unreadable(ctx, "activity-unreadable", run),
+      };
+    }
     let live = detail.phase() == TaskPhase::Running && lost.is_none();
     if props.tab == TaskPageTab::Summary
       && let Some(run) = detail.run.as_ref()
@@ -387,7 +402,8 @@ impl TaskScreen {
 impl TaskScreen {
   /// The breadcrumb back to the task list, then the run controls (`ctwcG`) and `removal`, *Remove
   /// worktree* of a run that ended. A run that lost its runner has no controls: nothing can pause,
-  /// cancel or continue it until a runner is back, and the runner notice offers Restart runner.
+  /// cancel or continue it until a runner is back, and the runner notice offers Restart runner. A
+  /// run that cannot be read shows Cancel run unavailable (`asPAJ`).
   fn topbar(
     &self,
     ctx: &Ctx,
@@ -409,11 +425,14 @@ impl TaskScreen {
       .nowrap(),
     );
     let online = props.runner == RunnerState::Online;
-    let buttons = detail
-      .filter(|detail| !detail.lost_its_runner(online))
-      .and_then(|detail| detail.run.as_ref())
-      .map(|run| control_buttons(ctx, run, control, &self.requested))
-      .unwrap_or_default();
+    let buttons = match detail {
+      Some(detail) if detail.latest_unreadable.is_some() => unreadable::controls(ctx),
+      _ => detail
+        .filter(|detail| !detail.lost_its_runner(online))
+        .and_then(|detail| detail.run.as_ref())
+        .map(|run| control_buttons(ctx, run, control, &self.requested))
+        .unwrap_or_default(),
+    };
     page::topbar_with(breadcrumb.into(), buttons.into_iter().chain(removal))
   }
 

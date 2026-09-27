@@ -18,7 +18,10 @@ use crate::{
     CommandEnvironment, Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber,
   },
   revision::Revision,
-  run::{ActivityEntry, Checkpoint, Invocation, InvocationPrompt, NewRun, Plan, Run, RunEvent, RunNumber, StepOutput},
+  run::{
+    ActivityEntry, Checkpoint, Invocation, InvocationPrompt, ListedRun, NewRun, Plan, Run, RunEvent, RunNumber,
+    StepOutput,
+  },
   secret::Secret,
   task::{Task, TaskDetails},
   time::Timestamp,
@@ -252,10 +255,14 @@ pub trait RunStore {
   /// The plans of a run's gated steps, ordered by step and version.
   fn plans(&self, run: RunId) -> Result<Vec<Plan>, Self::Error>;
 
+  /// The run with id `id`. A stored run that cannot be read back is an error, the same one a
+  /// listing reports for it ([`crate::run::UnreadableRun::error`]).
   fn run(&self, id: RunId) -> Result<Option<Run>, Self::Error>;
 
-  /// Runs of a task, ordered by number.
-  fn runs_of_task(&self, task: TaskId) -> Result<Vec<Run>, Self::Error>;
+  /// Runs of a task, ordered by number. The listings of runs read each run on its own: one whose
+  /// stored record cannot be read back is listed as unreadable beside the others; only a listing
+  /// that cannot be read at all fails.
+  fn runs_of_task(&self, task: TaskId) -> Result<Vec<ListedRun<Self::Error>>, Self::Error>;
 
   /// The complete event log of a run, in sequence order.
   fn events(&self, run: RunId) -> Result<Vec<RunEvent>, Self::Error>;
@@ -263,11 +270,11 @@ pub trait RunStore {
   fn latest_checkpoint(&self, run: RunId) -> Result<Option<Checkpoint>, Self::Error>;
 
   /// Interrupted runs of the project, ordered by number, for recovery.
-  fn interrupted_runs(&self) -> Result<Vec<Run>, Self::Error>;
+  fn interrupted_runs(&self) -> Result<Vec<ListedRun<Self::Error>>, Self::Error>;
 
   /// Runs recorded as running, ordered by number: a runner executes them, or the runner or the
   /// session ended before it could record their interruption.
-  fn running_runs(&self) -> Result<Vec<Run>, Self::Error>;
+  fn running_runs(&self) -> Result<Vec<ListedRun<Self::Error>>, Self::Error>;
 
   /// The numbers of the runs that pinned each published version of pipeline `pipeline`, in run
   /// order. A version no run pinned is absent.

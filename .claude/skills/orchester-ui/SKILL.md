@@ -93,6 +93,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `muted` #A3A3A3 | `TextSecondary` |
 | `subtle` #8F8F8F | `TextMuted`, `BorderStrong` |
 | `accent` / `inverse-text` | `Accent` / `TextInverse` — primary action |
+| `danger` #F87171 | `PaletteColor::Danger` — only the *Unreadable* status label's icon and word (`mGbYs`) |
 | `radius-control` 7 / `radius-panel` 12 / nav item 6 | `RadiusSize::Md` / `Lg` / `Sm` |
 | `space-sm/md/lg` 8/16/24 | `SpacingSize::Sm/Md/Lg` |
 | stroke 1 / focus stroke 1.5 / selected tab underline 2 | `BorderSize::Sm` / `Md` / `Lg` |

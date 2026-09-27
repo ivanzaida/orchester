@@ -2,19 +2,20 @@
 //! still recorded as running were cut off, since a new runner executes nothing yet. They are
 //! recorded as interrupted, with a cause that depends on the session: the previous runner's loss
 //! (they continue on their own), or the end of the previous session (they wait for a person). A run
-//! that only waits for a person's decision had no agent at work: it still waits, untouched.
+//! that only waits for a person's decision had no agent at work: it still waits, untouched. A run
+//! whose record cannot be read back is left as it is: it is logged and nothing continues it.
 
 use std::num::NonZeroU32;
 
 use orchester_core::{
   connection::stream::InvocationOutcome,
   id::RunId,
-  run::{InterruptCause, Run},
+  run::{InterruptCause, ListedRun, Run},
   store::{ActivityStore, RunStore},
   time::Timestamp,
 };
 use orchester_ipc::{AttachSession, Event, RefusedRun, Rejection};
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, RunStoreError};
 
 use super::{Scheduler, failed, idle};
 
@@ -35,9 +36,11 @@ impl Scheduler {
     self.inner.board.set_slots(slots);
     let mut db = self.open()?;
     let cause = session.interrupt_cause();
-    let stale = db
-      .running_runs()
-      .map_err(|error| failed("cannot read the running runs", &error))?;
+    let stale = readable(
+      db.running_runs()
+        .map_err(|error| failed("cannot read the running runs", &error))?,
+      "running",
+    );
     let mut attached = Attached::default();
     let cut_off = |run: &Run| !self.is_active(run.id()) && !run.waits_for_a_person();
     let (stale, waiting): (Vec<Run>, Vec<Run>) = stale.into_iter().partition(cut_off);
@@ -68,9 +71,11 @@ impl Scheduler {
   }
 
   fn continue_after_reconnect(&self, db: &ProjectDb) -> Result<Vec<RunId>, Rejection> {
-    let waiting = db
-      .interrupted_runs()
-      .map_err(|error| failed("cannot read the interrupted runs", &error))?;
+    let waiting = readable(
+      db.interrupted_runs()
+        .map_err(|error| failed("cannot read the interrupted runs", &error))?,
+      "interrupted",
+    );
     let mut continued = Vec::new();
     for run in waiting.iter().filter(|run| run.continues_on_reconnect()) {
       let id = run.id();
@@ -89,6 +94,26 @@ impl Scheduler {
       task: run.task(),
     });
   }
+}
+
+/// The runs of `listed`, the `listing` runs, that can be read. One that cannot is never written
+/// over or repaired: it is logged with why, and left as it is.
+fn readable(listed: Vec<ListedRun<RunStoreError>>, listing: &str) -> Vec<Run> {
+  listed
+    .into_iter()
+    .filter_map(|run| match run {
+      Ok(run) => Some(run),
+      Err(unreadable) => {
+        tracing::warn!(
+          run = %unreadable.id,
+          listing,
+          error = %unreadable.error,
+          "a run cannot be read; it is left as it is"
+        );
+        None
+      }
+    })
+    .collect()
 }
 
 /// Records `run`, left running by a runner that is gone, as interrupted by `cause`. Its agent

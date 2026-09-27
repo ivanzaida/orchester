@@ -31,7 +31,12 @@ fn integration_base_branch_is_kept_with_the_run() {
   };
   let second = db.create_run(IdempotencyKey::generate(), new, at(20)).expect("run");
   let reopened = ProjectDb::open(repo.path()).expect("open");
-  let runs = reopened.runs_of_task(first.task()).expect("runs");
+  let runs: Vec<_> = reopened
+    .runs_of_task(first.task())
+    .expect("runs")
+    .into_iter()
+    .map(|run| run.expect("readable run"))
+    .collect();
   assert_eq!(runs[0].base_branch(), None, "the run started on a detached HEAD");
   assert_eq!(runs[1].id(), second.id());
   assert_eq!(runs[1].base_branch(), Some(&branch("main")));

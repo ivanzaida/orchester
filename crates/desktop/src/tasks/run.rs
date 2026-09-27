@@ -133,6 +133,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
     RunRequestError::Rejected(Rejection::Preflight { problems }) => problems.iter().map(preflight_message).collect(),
     RunRequestError::Rejected(Rejection::TaskNotFound) => vec![Message::new("runs.start.taskMissing")],
     RunRequestError::Rejected(Rejection::TaskNotQueued) => vec![Message::new("runs.start.notQueued")],
+    RunRequestError::Rejected(Rejection::RunUnreadable { .. }) => vec![Message::new("runs.unreadable.rejected")],
     RunRequestError::Rejected(
       rejection @ (Rejection::DailyBudgetUsed { .. } | Rejection::NoAgentSlot { .. } | Rejection::ShuttingDown),
     ) => {
@@ -167,6 +168,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::RunNotPaused) => Message::new("runs.control.notPaused"),
     RunRequestError::Rejected(Rejection::RunEnded) => Message::new("runs.control.ended"),
     RunRequestError::Rejected(Rejection::RunNotInterrupted) => Message::new("runs.control.notInterrupted"),
+    RunRequestError::Rejected(Rejection::RunUnreadable { .. }) => Message::new("runs.unreadable.rejected"),
     RunRequestError::Rejected(
       rejection @ (Rejection::DailyBudgetUsed { .. } | Rejection::NoAgentSlot { .. } | Rejection::ShuttingDown),
     ) => capacity_message(rejection),

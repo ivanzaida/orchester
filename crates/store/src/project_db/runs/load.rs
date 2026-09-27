@@ -1,5 +1,6 @@
 //! Reading runs back. Rows are rebuilt through [`Run::restore`] and events through the domain
-//! deserializers, so a damaged row surfaces as `StoreError::Corrupt`.
+//! deserializers, so a damaged row surfaces as `StoreError::Corrupt`. Each run is read on its own:
+//! a run whose record cannot be read back is listed as an [`UnreadableRun`] beside the others.
 
 use std::{
   collections::BTreeMap,
@@ -7,12 +8,12 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ResourceId, RunId},
+  id::{ResourceId, RunId, TaskId},
   resource::StepKey,
   revision::Revision,
   run::{
-    Attempt, BranchName, Checkpoint, EventSequence, Run, RunCreated, RunEvent, RunEventKind, RunPermissions,
-    StepExecution, StoredRun,
+    Attempt, BranchName, Checkpoint, EventSequence, ListedRun, Run, RunCreated, RunEvent, RunEventKind, RunPermissions,
+    StepExecution, StoredRun, UnreadableRun,
   },
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -28,7 +29,7 @@ use super::{
   run_number,
 };
 use crate::{
-  StoreError,
+  RunStoreError, StoreError,
   rows::{budget_value, corrupt, decode_body, decode_document, decode_json, duration_value, parse},
 };
 
@@ -37,12 +38,33 @@ const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_re
                            status, status_reason, failed_step, limit_execution, last_sequence, created_at, \
                            base_branch FROM runs";
 
-pub(super) fn load_runs(connection: &Connection, clause: &str, params: impl Params) -> Result<Vec<Run>, StoreError> {
+/// The runs `clause` selects, each read on its own. Only a run whose id or task cannot be read
+/// fails the listing: it cannot be told which run it is.
+pub(super) fn load_runs(
+  connection: &Connection,
+  clause: &str,
+  params: impl Params,
+) -> Result<Vec<ListedRun<RunStoreError>>, StoreError> {
   let mut statement = connection.prepare(&format!("{SELECT_RUNS} {clause}"))?;
   let rows = statement
-    .query_map(params, RunRow::read)?
+    .query_map(params, |row| Ok((RunIdentity::read(row)?, RunRow::read(row))))?
     .collect::<Result<Vec<_>, _>>()?;
-  rows.into_iter().map(|row| row.into_run(connection)).collect()
+  rows
+    .into_iter()
+    .map(|(identity, row)| {
+      let id: RunId = parse("run id", &identity.id)?;
+      let task: TaskId = parse("task id", &identity.task)?;
+      let restored = row
+        .map_err(StoreError::from)
+        .and_then(|row| row.into_run(connection, (id, task, identity.number)));
+      Ok(restored.map_err(|source| UnreadableRun {
+        id,
+        task,
+        number: run_number(identity.number).ok(),
+        error: RunStoreError::Unreadable { run: id, source },
+      }))
+    })
+    .collect()
 }
 
 pub(super) fn load_events(connection: &Connection, run: RunId) -> Result<Vec<RunEvent>, StoreError> {
@@ -213,10 +235,25 @@ fn sequence_value(sequence: i64) -> Result<EventSequence, StoreError> {
     .ok_or_else(|| corrupt("run event sequence", sequence))
 }
 
-struct RunRow {
+/// The columns that tell which run a row is.
+struct RunIdentity {
   id: String,
   task: String,
   number: i64,
+}
+
+impl RunIdentity {
+  fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
+    Ok(Self {
+      id: row.get(0)?,
+      task: row.get(1)?,
+      number: row.get(2)?,
+    })
+  }
+}
+
+/// The other columns of a run's row.
+struct RunRow {
   snapshot: String,
   branch: String,
   base: String,
@@ -236,9 +273,6 @@ struct RunRow {
 impl RunRow {
   fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
     Ok(Self {
-      id: row.get(0)?,
-      task: row.get(1)?,
-      number: row.get(2)?,
       snapshot: row.get(3)?,
       branch: row.get(4)?,
       base: row.get(5)?,
@@ -255,12 +289,13 @@ impl RunRow {
     })
   }
 
-  fn into_run(self, connection: &Connection) -> Result<Run, StoreError> {
-    let id: RunId = parse("run id", &self.id)?;
+  /// The run `id` of `task`, numbered `number`, with these columns and its other rows.
+  fn into_run(self, connection: &Connection, (id, task, number): (RunId, TaskId, i64)) -> Result<Run, StoreError> {
+    let row = id.to_string();
     let [initial_budget, initial_duration, budget, duration] = self.limits;
     let created = RunCreated {
-      task: parse("task id", &self.task)?,
-      number: run_number(self.number)?,
+      task,
+      number: run_number(number)?,
       snapshot: decode_json("run snapshot", SNAPSHOT_SCHEMA, &self.snapshot)?,
       branch: BranchName::new(&self.branch).map_err(|error| corrupt("run branch", error))?,
       base: Revision::new(&self.base).map_err(|error| corrupt("run base revision", error))?,
@@ -285,11 +320,11 @@ impl RunRow {
       )?,
       budget: budget_value("run budget", budget)?,
       max_duration: duration_value("run time limit", duration)?,
-      step_budgets: load_step_budgets(connection, &self.id)?,
-      permissions: load_permissions(connection, &self.id)?,
+      step_budgets: load_step_budgets(connection, &row)?,
+      permissions: load_permissions(connection, &row)?,
       used: TokensUsed::new(u64::try_from(self.used_tokens).map_err(|_| corrupt("run usage", self.used_tokens))?),
       pause_requested: self.pause_requested,
-      attempts: load_attempts(connection, &self.id)?,
+      attempts: load_attempts(connection, &row)?,
       last_checkpoint: load_checkpoint(connection, id)?,
       last_sequence: sequence_value(self.last_sequence)?,
     };

@@ -270,7 +270,7 @@ fn tabs_filter_and_count_tasks() {
   let drafts = list::rows(&tasks, &[], &Default::default(), TaskTab::Drafts);
   assert_eq!(drafts.len(), 1);
   assert_eq!(&*drafts[0].title, "Incomplete");
-  assert_eq!(drafts[0].phase, orchester_core::run::TaskPhase::Draft);
+  assert_eq!(drafts[0].phase, Some(orchester_core::run::TaskPhase::Draft));
   assert_eq!(
     DraftSummary::of(&tasks),
     DraftSummary {
@@ -379,14 +379,14 @@ fn task_list_reads_run_counts_and_interrupts_running_runs_without_a_runner() {
     list::footer(loaded.tasks.len(), loaded.runs).key,
     "tasks.footer.runs.other"
   );
-  let latest = &loaded.phases[&first];
+  let latest = loaded.phases[&first].run().expect("a readable run");
   assert_eq!(latest.phase, TaskPhase::Running);
   assert_eq!(latest.number.get(), 2);
   assert_eq!(latest.updated_at, support::at(40));
 
   let away = loaded.without_runner();
-  assert_eq!(away.phases[&first].phase, TaskPhase::Interrupted);
-  assert_eq!(away.phases[&second].phase, TaskPhase::Interrupted);
+  assert_eq!(away.phases[&first].phase(), Some(TaskPhase::Interrupted));
+  assert_eq!(away.phases[&second].phase(), Some(TaskPhase::Interrupted));
   assert_eq!(
     away.phases[&first].message().key,
     "tasks.progress.interruptedNoCheckpoint"
@@ -423,7 +423,7 @@ fn task_list_and_page_read_a_run_cancelled_before_it_started() {
 
   let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
   assert_eq!(loaded.runs, 1);
-  assert_eq!(loaded.phases[&task].phase, TaskPhase::Cancelled);
+  assert_eq!(loaded.phases[&task].phase(), Some(TaskPhase::Cancelled));
   let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("read the task");
   let run = detail.run.expect("the task has a run");
   let states: Vec<_> = progress(&run, false, support::at(30))

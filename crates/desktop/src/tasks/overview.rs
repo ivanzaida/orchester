@@ -13,7 +13,7 @@ use orchester_core::{
 
 use super::{
   data::PipelineChoice,
-  list::{Phases, TaskRow},
+  list::{Latest, Phases, TaskRow, phase_of},
 };
 use crate::messages::Message;
 
@@ -40,12 +40,14 @@ impl OverviewTab {
     }
   }
 
-  pub const fn includes(self, phase: TaskPhase) -> bool {
+  /// Whether a task in `phase` is in the tab; one whose latest run cannot be read (`None`) is only
+  /// in All.
+  pub const fn includes(self, phase: Option<TaskPhase>) -> bool {
     match self {
       Self::All => true,
-      Self::Running => matches!(phase, TaskPhase::Running),
-      Self::NeedsYou => matches!(phase, TaskPhase::Waiting),
-      Self::Queued => matches!(phase, TaskPhase::Queued),
+      Self::Running => matches!(phase, Some(TaskPhase::Running)),
+      Self::NeedsYou => matches!(phase, Some(TaskPhase::Waiting)),
+      Self::Queued => matches!(phase, Some(TaskPhase::Queued)),
     }
   }
 
@@ -69,12 +71,6 @@ impl OverviewTab {
   }
 }
 
-fn phase_of(task: &Task, phases: &Phases) -> TaskPhase {
-  phases
-    .get(&task.id())
-    .map_or_else(|| TaskPhase::of(task, None, None), |latest| latest.phase)
-}
-
 /// The project pulse (`C95Z93`) counted from the tasks' latest runs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Pulse {
@@ -87,10 +83,11 @@ pub struct Pulse {
 }
 
 impl Pulse {
-  /// `day_start` is local midnight of today.
+  /// `day_start` is local midnight of today. A run that cannot be read counts nowhere.
   pub fn of(phases: &Phases, day_start: Timestamp) -> Self {
     phases
       .values()
+      .filter_map(Latest::run)
       .fold(Self::default(), |pulse, latest| match latest.phase {
         TaskPhase::Running => Self {
           running: pulse.running + 1,
@@ -137,16 +134,17 @@ pub fn figure(count: usize) -> String {
   count.to_string()
 }
 
-/// Under the overview's task list (`WV44u`): active tasks and completed ones.
+/// Under the overview's task list (`WV44u`): active tasks and completed ones; a task whose latest
+/// run cannot be read is neither.
 pub fn footer(tasks: &[Task], phases: &Phases) -> Message {
   let (active, completed) =
     tasks
       .iter()
       .map(|task| phase_of(task, phases))
       .fold((0, 0), |(active, completed), phase| match phase {
-        TaskPhase::Succeeded | TaskPhase::Merged => (active, completed + 1),
-        TaskPhase::Draft | TaskPhase::Failed | TaskPhase::Cancelled => (active, completed),
-        _ => (active + 1, completed),
+        Some(TaskPhase::Succeeded | TaskPhase::Merged) => (active, completed + 1),
+        Some(TaskPhase::Draft | TaskPhase::Failed | TaskPhase::Cancelled) | None => (active, completed),
+        Some(_) => (active + 1, completed),
       });
   let key = if active == 1 {
     "overview.footer.one"
@@ -188,12 +186,13 @@ impl RecentRun {
   }
 }
 
-/// The `limit` most recently changed latest runs, newest first.
+/// The `limit` most recently changed latest runs, newest first. A run that cannot be read has no
+/// known change to list; its task row shows it.
 pub fn recent_runs(tasks: &[Task], phases: &Phases, limit: usize) -> Vec<RecentRun> {
   let mut recent: Vec<RecentRun> = tasks
     .iter()
     .filter_map(|task| {
-      let latest = phases.get(&task.id())?;
+      let latest = phases.get(&task.id())?.run()?;
       Some(RecentRun {
         task: task.id(),
         key: task.key().to_string().into(),

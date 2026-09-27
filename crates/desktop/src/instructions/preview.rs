@@ -21,7 +21,8 @@ use orchester_store::{ProjectDb, StoreError};
 
 use crate::tasks::detail::run_store_error;
 
-/// A task a preview can be made for, with its runs, newest last.
+/// A task a preview can be made for, with its runs, newest last. A run whose record cannot be read
+/// has no variables to resolve against, so it is not offered; its task page shows it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PreviewTask {
   pub task: Task,
@@ -92,8 +93,10 @@ impl PreviewCatalog {
   pub fn load(db: &ProjectDb) -> Result<Self, StoreError> {
     let mut tasks = Vec::new();
     for task in db.tasks()? {
+      let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
       tasks.push(PreviewTask {
-        runs: db.runs_of_task(task.id()).map_err(run_store_error)?,
+        // An unreadable run cannot be previewed; its task page and task row show why.
+        runs: runs.into_iter().filter_map(Result::ok).collect(),
         task,
       });
     }
