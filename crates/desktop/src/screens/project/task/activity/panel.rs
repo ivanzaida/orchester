@@ -102,6 +102,10 @@ fn tokens(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
   let counted = ctx.t_args("runs.tokens", [("count", count(usage.counted()).as_str())]);
   let cached = ctx.t_args("runs.cachedValue", [("count", count(usage.cached_input).as_str())]);
   let total = ctx.t_args("runs.tokens", [("count", count(run.usage().counted()).as_str())]);
+  // A command tool's program uses no tokens: only the run's total says something.
+  if invocation.model().is_none() {
+    return vec![property(&ctx.t("runs.activity.panel.runTotal"), &total)];
+  }
   vec![
     property(&ctx.t("runs.activity.panel.input"), &count(usage.counted_input())),
     property(&ctx.t("runs.activity.panel.output"), &count(usage.output)),

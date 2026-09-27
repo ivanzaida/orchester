@@ -1772,7 +1772,8 @@
       "waitsForApproval": "Waits for your approval",
       "changesFiles": "Can change files",
       "readsOnly": "Reads the repository",
-      "toolPolicy": "Under the tool’s access policy",
+      "exitCodeDecides": "Its exit code decides the step",
+      "toolUnavailable": "This tool can’t run in this version yet",
       "profileConnectionModel": "{{profile}} · {{connection}} / {{model}}"
     },
     "inspector": {

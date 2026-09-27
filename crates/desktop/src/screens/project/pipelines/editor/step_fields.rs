@@ -70,11 +70,14 @@ pub(super) fn select<T: Clone + PartialEq + Send + Sync + SignalValue + 'static>
     .id(id)
     .width(Dimension::Pct(100.0))
     .child(
-      Select::new(value.clone())
-        .options(options)
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Px(SELECT_HEIGHT))
-        .style(style),
+      Element::from(
+        Select::new(value.clone())
+          .options(options)
+          .width(Dimension::Pct(100.0))
+          .height(Dimension::Px(SELECT_HEIGHT))
+          .style(style),
+      )
+      .id(Arc::<str>::from(format!("{id}-select"))),
     )
     .into()
 }
@@ -307,8 +310,11 @@ pub fn constraints(
       errors.retries.as_ref(),
     ));
   }
+  // A tool step's command uses no tokens, so it has no budget.
+  let budget =
+    matches!(props.step.kind, StepKind::Agent { .. }).then(|| budget_input(ctx, fields, errors.budget.as_ref()));
   column
-    .child(budget_input(ctx, fields, errors.budget.as_ref()))
+    .with_children(budget)
     .with_children(step_permissions::rows(ctx, props, fields, handle))
     .into()
 }

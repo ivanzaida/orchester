@@ -12,7 +12,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::{RepositoryAccess, Step, StepKey};
+use orchester_core::resource::{RepositoryAccess, Step, StepKey, StepKind};
 
 use super::{EditorHandle, step_executor, step_fields};
 use crate::{
@@ -147,11 +147,10 @@ impl Component for StepInspector {
       .child(step_executor::executor(ctx, &props, &self.fields))
       .with_children(step_executor::tool(ctx, &props, &self.nav))
       .with_children(step_fields::model(ctx, &props, &self.fields))
-      .child(step_fields::instructions(
-        ctx,
-        &self.fields,
-        errors.instructions.as_ref(),
-      ))
+      // A tool step's command reads no instructions.
+      .with_children(matches!(props.step.kind, StepKind::Agent { .. }).then(|| {
+        step_fields::instructions(ctx, &self.fields, errors.instructions.as_ref())
+      }))
       .child(step_fields::runs_after(ctx, &props, &self.handle))
       .child(step_fields::route(ctx, &props, &self.fields))
       .child(step_fields::constraints(
