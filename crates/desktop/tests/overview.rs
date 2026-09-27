@@ -177,7 +177,7 @@ fn overview_counts_a_merged_task_as_completed() {
   fixture.db.save_run_merge(&merge).expect("record the merge");
   let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
   let latest = &tasks.phases[&merged];
-  assert_eq!(latest.phase, TaskPhase::Merged);
+  assert_eq!(latest.phase(), Some(TaskPhase::Merged));
   assert_eq!(latest.message().key, "tasks.progress.merged");
   assert_eq!(latest.message().args, [("branch", "main".to_owned())]);
   assert_eq!(Pulse::of(&tasks.phases, support::at(25)).completed_today, 2);

@@ -15,12 +15,12 @@ use orchester_core::{
   command::Command,
   connection::AgentProvider,
   id::{ProjectId, RunId, TaskId},
-  run::{InterruptCause, Run, RunEvent, RunStatus},
+  run::{InterruptCause, ListedRun, Run, RunEvent, RunStatus},
   store::{RunStore, TaskStore},
   time::Timestamp,
 };
 use orchester_ipc::SessionEnd;
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
 use crate::{
   display,
@@ -105,10 +105,11 @@ pub fn interrupted_runs(
 }
 
 /// Runs still recorded as running, and runs recorded as interrupted since `since` (by this
-/// session's runner when it attached), ordered by number.
+/// session's runner when it attached), ordered by number. A run that cannot be read cannot be
+/// continued: it is logged and left out, and its task shows it as unreadable.
 fn left_at_work(db: &ProjectDb, since: Timestamp) -> Result<Vec<Run>, StoreError> {
-  let mut runs = db.running_runs().map_err(detail::run_store_error)?;
-  for run in db.interrupted_runs().map_err(detail::run_store_error)? {
+  let mut runs = readable(db.running_runs().map_err(detail::run_store_error)?);
+  for run in readable(db.interrupted_runs().map_err(detail::run_store_error)?) {
     let interrupted_at = db
       .events(run.id())
       .map_err(detail::run_store_error)?
@@ -120,6 +121,20 @@ fn left_at_work(db: &ProjectDb, since: Timestamp) -> Result<Vec<Run>, StoreError
   }
   runs.sort_by_key(|run| run.number());
   Ok(runs)
+}
+
+/// The runs of `listed` that can be read; the others are logged.
+fn readable(listed: Vec<ListedRun<RunStoreError>>) -> Vec<Run> {
+  listed
+    .into_iter()
+    .filter_map(|run| match run {
+      Ok(run) => Some(run),
+      Err(unreadable) => {
+        tracing::warn!(run = %unreadable.id, error = %unreadable.error, "a run left at work cannot be read");
+        None
+      }
+    })
+    .collect()
 }
 
 fn describe(

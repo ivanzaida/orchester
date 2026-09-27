@@ -24,7 +24,7 @@ use crate::{
     icon::{Icon, IconSize, icon},
     message_text,
     pressable::{pressable, surface},
-    status_label::status_label,
+    status_label::{danger_status_label, status_label},
   },
 };
 
@@ -60,6 +60,24 @@ pub(super) fn status_copy(phase: TaskPhase) -> (Icon, &'static str) {
     TaskPhase::Merged => (Icon::GitMerge, "tasks.status.merged"),
     TaskPhase::Failed => (Icon::CircleX, "tasks.status.failed"),
     TaskPhase::Cancelled => (Icon::Square, "tasks.status.cancelled"),
+  }
+}
+
+/// The icon of a task row's state: where the task stands, or circle-alert when its latest run
+/// cannot be read (`phase` is `None`).
+fn row_glyph(phase: Option<TaskPhase>) -> Icon {
+  phase.map_or(Icon::AlertCircle, |phase| status_copy(phase).0)
+}
+
+/// The status label of a task row or run: where it stands, or *Unreadable* in the danger role when
+/// its run cannot be read (`phase` is `None`, `uEyyL` in `mGbYs`).
+pub(super) fn row_status_label(ctx: &Ctx, phase: Option<TaskPhase>) -> Element {
+  match phase {
+    Some(phase) => {
+      let (glyph, status) = status_copy(phase);
+      status_label(glyph, &ctx.t(status))
+    }
+    None => danger_status_label(Icon::AlertCircle, &ctx.t("tasks.status.unreadable")),
   }
 }
 
@@ -130,7 +148,6 @@ impl Component for QueueRow {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let row = ctx.props::<TaskRow>().clone();
-    let (glyph, status) = status_copy(row.phase);
     // Selecting tasks for a run is not available yet: unselected in `$muted` (`R7idX` in
     // `r2al55`).
     let select = icon(Icon::Square, IconSize::Option, PaletteColor::TextSecondary);
@@ -161,7 +178,7 @@ impl Component for QueueRow {
         PIPELINE_WIDTH,
         column_label(&message_text(ctx, &row.pipeline.message())).text_overflow(TextOverflow::Elipsis),
       ))
-      .child(cell(STATUS_WIDTH, status_label(glyph, &ctx.t(status))))
+      .child(cell(STATUS_WIDTH, row_status_label(ctx, row.phase)))
       .child(cell(READINESS_WIDTH, column_label(&message_text(ctx, &row.detail))))
       .child(open_chevron());
     opens(&self.nav, &row, content)
@@ -171,14 +188,13 @@ impl Component for QueueRow {
 /// A task in the overview's task list (`zemhy`): state tile, title with key and readiness,
 /// status, age.
 pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> Element {
-  let (glyph, status) = status_copy(row.phase);
   let tile = Row::new()
     .size(Dimension::Px(STATE_TILE_SIZE), Dimension::Px(STATE_TILE_SIZE))
     .background(PaletteColor::SurfaceRaised)
     .rounded(ExtraRadius::Notice.role())
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .child(icon(glyph, IconSize::Option, PaletteColor::TextPrimary));
+    .child(icon(row_glyph(row.phase), IconSize::Option, PaletteColor::TextPrimary));
   let metadata = Row::new()
     .spacing(SpacingSize::Xs)
     .child(Text::new(&row.key).variant(TypographyStyle::Caption).nowrap())
@@ -204,7 +220,7 @@ pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> E
         )
         .child(metadata),
     )
-    .child(status_label(glyph, &ctx.t(status)))
+    .child(row_status_label(ctx, row.phase))
     .child(
       Row::new().width(Dimension::Px(TIME_WIDTH)).justify(Justify::End).child(
         Text::new(&message_text(ctx, &display::elapsed(now, row.created_at)))

@@ -282,7 +282,8 @@
       "succeeded": "Completed",
       "merged": "Merged",
       "failed": "Failed",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "unreadable": "Unreadable"
     },
     "readiness": {
       "ready": "Ready to queue",
@@ -403,7 +404,9 @@
         "cancelled": "Run {{run}} · Attempt {{attempt}} · cancelled",
         "cancelledBeforeStart": "Run {{run}} · cancelled before it started",
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
-        "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted"
+        "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted",
+        "unreadable": "Run {{run}} · could not be read",
+        "unreadableUnnumbered": "Its latest run could not be read"
       },
       "tabs": {
         "summary": "Summary",
@@ -412,6 +415,29 @@
         "activity": "Activity",
         "artifacts": "Artifacts"
       }
+    },
+    "unreadable": {
+      "title": "Run #{{run}} could not be read",
+      "titleUnnumbered": "A run could not be read",
+      "detail": {
+        "invalid": "A value in its record is invalid or unknown to this version of Orchester, so where the run stands is unknown. The database file is kept unchanged, so a newer version can still read the run. The log has the details.",
+        "database": "The database could not read its record, so where the run stands is unknown. The database file is kept unchanged. The log has the details."
+      },
+      "actions": "Cancel, pause, continue, merge and Remove worktree are unavailable for run #{{run}} until it can be read.",
+      "actionsUnnumbered": "Cancel, pause, continue, merge and Remove worktree are unavailable for this run until it can be read.",
+      "otherRuns": {
+        "title": "Other runs of this task",
+        "detail": "They were read as usual. Their changes stay on their branches.",
+        "none": "This task has no other runs.",
+        "run": "Run #{{run}}",
+        "runUnnumbered": "Run",
+        "failedAt": "Failed at {{step}}",
+        "cancelledAt": "Cancelled at {{step}} · work kept on {{branch}}",
+        "cancelled": "Cancelled · work kept on {{branch}}",
+        "cancelledBeforeStart": "Cancelled before it started"
+      },
+      "tabDetail": "Nothing this run did can be shown until its record can be read. Summary lists the task’s other runs.",
+      "rejected": "This run could not be read, so it cannot change. The database file is kept unchanged."
     },
     "step": {
       "pending": "Waiting",
@@ -1833,6 +1859,7 @@
     "seconds": "{{count}} s",
     "minutes": "{{count}} min",
     "date": "{{month}} {{day}}, {{year}}",
+    "dayAndClock": "{{month}} {{day}} · {{time}}",
     "month": {
       "jan": "Jan",
       "feb": "Feb",

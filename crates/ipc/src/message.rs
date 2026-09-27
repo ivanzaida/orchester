@@ -269,6 +269,11 @@ pub enum Rejection {
     problems: Vec<PreflightProblem>,
   },
   RunNotFound,
+  /// The run's stored record cannot be read back, so nothing can change it; the record is kept
+  /// unchanged. `detail` says why, for the log.
+  RunUnreadable {
+    detail: String,
+  },
   /// Pause needs a running run.
   RunNotRunning,
   /// Resume and a raised limit need a paused run; a raised step budget one stopped at a step's

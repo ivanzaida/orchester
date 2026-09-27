@@ -25,6 +25,7 @@ mod status;
 mod step;
 mod tool_step;
 mod transition;
+mod unreadable;
 mod usage;
 
 pub use self::{
@@ -52,5 +53,6 @@ pub use self::{
   },
   tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
   transition::RaisedLimits,
+  unreadable::{ListedRun, UnreadableRun},
   usage::TokenUsage,
 };

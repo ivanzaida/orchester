@@ -10,7 +10,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use crate::ui::icon::Icon;
+use crate::{display::MONTH_KEYS, ui::icon::Icon};
 
 /// The icon a kind of secret is shown with (`hAQ7j` in `vxAMD`, `Z0Ruy` in `CQxCb`).
 pub const fn kind_icon(kind: SecretKind) -> Icon {
@@ -41,28 +41,13 @@ pub const fn environment_key(environment: Environment) -> &'static str {
   }
 }
 
-const MONTHS: [&str; 12] = [
-  "time.month.jan",
-  "time.month.feb",
-  "time.month.mar",
-  "time.month.apr",
-  "time.month.may",
-  "time.month.jun",
-  "time.month.jul",
-  "time.month.aug",
-  "time.month.sep",
-  "time.month.oct",
-  "time.month.nov",
-  "time.month.dec",
-];
-
 /// The local calendar date of `at`, e.g. "Sep 20, 2026".
 pub fn date(ctx: &Ctx, at: Timestamp) -> Arc<str> {
   let Some(utc) = chrono::DateTime::from_timestamp_millis(at.unix_millis()) else {
     return ctx.t("secrets.inspector.unknownDate");
   };
   let local = utc.with_timezone(&chrono::Local).date_naive();
-  let month = ctx.t(MONTHS[local.month0() as usize]);
+  let month = ctx.t(MONTH_KEYS[local.month0() as usize]);
   ctx.t_args(
     "time.date",
     [
