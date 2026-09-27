@@ -179,7 +179,12 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
     [("minutes", whole_minutes(run.run.max_duration()).to_string().as_str())],
   );
   let step = run.current_step();
-  let model = step.and_then(|step| step.model.as_deref()).unwrap_or_default();
+  // A tool step's command runs on no model.
+  let command_tool = ctx.t("runs.activity.commandTool");
+  let model = match step {
+    Some(step) if step.tool_step => &*command_tool,
+    _ => step.and_then(|step| step.model.as_deref()).unwrap_or_default(),
+  };
   let permissions = step.and_then(|step| {
     let props = RunPermissionsProps {
       permissions: step.permissions.clone()?,
