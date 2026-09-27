@@ -83,6 +83,27 @@ impl ProjectDb {
     })
   }
 
+  /// Creates the database of `repo_root` at schema `version`, with only the first `version`
+  /// migrations applied, and returns it empty: a migration test fills it with the rows that
+  /// version wrote, then [`ProjectDb::open`] applies the rest.
+  #[cfg(feature = "test-support")]
+  pub fn create_at_version(repo_root: &Path, version: u32) -> Result<Connection, StoreError> {
+    let Some(migrations) = schema::MIGRATIONS.get(..version as usize) else {
+      let supported = u32::try_from(schema::MIGRATIONS.len()).expect("fewer than 2^32 migrations");
+      return Err(StoreError::SchemaTooNew {
+        found: version,
+        supported,
+      });
+    };
+    let database = database_path(repo_root);
+    if database.exists() {
+      return Err(StoreError::AlreadyInitialized(repo_root.to_path_buf()));
+    }
+    let directory = repo_root.join(DIRECTORY);
+    fs::create_dir_all(&directory).map_err(StoreError::io(&directory))?;
+    migrate::open(&database, migrations)
+  }
+
   pub const fn project(&self) -> &Project {
     &self.project
   }

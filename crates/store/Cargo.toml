@@ -18,6 +18,12 @@ sha2.workspace = true
 thiserror.workspace = true
 zstd.workspace = true
 
+[features]
+# `ProjectDb::create_at_version` for the store's own migration tests, which enable it below: a project
+# database at an older schema version, for a test to fill with the rows that version wrote.
+test-support = []
+
 [dev-dependencies]
+orchester-store = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 rusqlite.workspace = true
