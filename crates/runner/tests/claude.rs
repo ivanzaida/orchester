@@ -180,6 +180,7 @@ async fn claude_stopped_at_a_limit_resumes_its_session_once_raised() {
         max_duration: Duration::from_secs(30 * 60),
       },
     )
+    .await
     .expect("the run continues");
   let done = wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);

@@ -187,7 +187,10 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
       let scheduler = scheduler.clone();
       return later(replies, id, run, async move { scheduler.cancel_run(run).await });
     }
-    Command::ResumeRun { run } => accepted(run, scheduler.resume_run(run)),
+    Command::ResumeRun { run } => {
+      let scheduler = scheduler.clone();
+      return later(replies, id, run, async move { scheduler.resume_run(run).await });
+    }
     Command::RaiseLimit {
       run,
       budget,
@@ -197,9 +200,20 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
         budget,
         max_duration: Duration::from_millis(max_duration_ms),
       };
-      accepted(run, scheduler.raise_limit(run, limits))
+      let scheduler = scheduler.clone();
+      return later(
+        replies,
+        id,
+        run,
+        async move { scheduler.raise_limit(run, limits).await },
+      );
     }
-    Command::RaiseStepBudget { run, budget } => accepted(run, scheduler.raise_step_budget(run, budget)),
+    Command::RaiseStepBudget { run, budget } => {
+      let scheduler = scheduler.clone();
+      return later(replies, id, run, async move {
+        scheduler.raise_step_budget(run, budget).await
+      });
+    }
     Command::ChangeRunPermissions {
       run,
       profile,

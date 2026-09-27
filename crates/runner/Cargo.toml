@@ -55,6 +55,10 @@ name = "claude"
 required-features = ["test-agent"]
 
 [[test]]
+name = "settling"
+required-features = ["test-agent"]
+
+[[test]]
 name = "instructions"
 required-features = ["test-agent"]
 
