@@ -4,7 +4,7 @@
 
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
-use lurq::app::events::MouseButton;
+use lurq::app::events::{MouseButton, ScrollPhase};
 use orchester_core::{
   id::{ConnectionId, IdempotencyKey, ResourceId},
   name::Name,
@@ -297,4 +297,46 @@ fn pipeline_history_restoring_the_latest_version_discards_the_draft() {
   desktop.press("pipeline-history-restore");
   assert!(shown(&mut desktop, HISTORY));
   assert!(shows(&mut desktop, "pipeline-history-restore", "Restore v2 as draft"));
+}
+
+fn size(desktop: &mut Desktop, id: &str) -> (f32, f32) {
+  desktop
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .map(|bounds| (bounds.width, bounds.height))
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+}
+
+fn wheel(desktop: &mut Desktop, delta_y: f32) {
+  let (x, y) = (700.0, 500.0);
+  desktop.tree.scroll(x, y, 0.0, 0.0, ScrollPhase::Start);
+  desktop.tree.scroll(x, y, 0.0, delta_y, ScrollPhase::Scroll);
+  desktop.tree.scroll(x, y, 0.0, 0.0, ScrollPhase::End);
+  desktop.pass();
+}
+
+/// A verifier saw the graph's area keep a smaller window's size in the version view after the
+/// window grew; the area must always fill the canvas above the zoom controls' band.
+#[test]
+fn pipeline_history_canvas_follows_the_window_after_it_grows() {
+  let mut desktop = editor();
+  desktop.tree.resize(1200, 800);
+  desktop.pass();
+  wheel(&mut desktop, -120.0);
+  desktop.press("pipeline-zoom-fit");
+  desktop.tree.resize(1440, 960);
+  desktop.pass();
+  desktop.press("pipeline-zoom-full");
+  desktop.press("pipeline-toolbar-history");
+  desktop.wait_for("pipeline-history-compare");
+  desktop.press("pipeline-history-compare");
+  desktop.press("pipeline-version-1");
+  desktop.wait_for(DETAILS);
+  let (canvas, area) = (
+    size(&mut desktop, "pipeline-canvas"),
+    size(&mut desktop, "pipeline-canvas-area"),
+  );
+  assert_eq!(area.0, canvas.0);
+  assert!(area.1 < canvas.1 && area.1 > canvas.1 / 2.0, "{area:?} in {canvas:?}");
 }

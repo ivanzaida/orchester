@@ -239,11 +239,10 @@ impl HistoryPanel {
       let numbers: Vec<String> = version.runs.iter().map(ToString::to_string).collect();
       numbers.join(&ctx.t("common.listSeparator")).into()
     };
-    Column::new()
-      .id("pipeline-version-details")
+    // The text lines up with the row's; the buttons span the panel as the inspector's do.
+    let text = Column::new()
       .width(Dimension::Pct(100.0))
       .padding_horizontal(ExtraSpacing::Stack.role())
-      .padding_bottom(SpacingSize::Sm)
       .spacing(SpacingSize::Md)
       .child(changes)
       .child(
@@ -257,7 +256,13 @@ impl HistoryPanel {
               .color(PaletteColor::TextPrimary)
               .id("pipeline-version-runs"),
           ),
-      )
+      );
+    Column::new()
+      .id("pipeline-version-details")
+      .width(Dimension::Pct(100.0))
+      .padding_bottom(SpacingSize::Sm)
+      .spacing(SpacingSize::Md)
+      .child(text)
       .child(self.actions(ctx, props, version, comparing))
       .into()
   }
@@ -274,6 +279,8 @@ impl HistoryPanel {
     } else {
       ctx.t("pipelines.history.compareLatest")
     };
+    // Comparing the steps the editor holds with themselves shows nothing.
+    let same = props.current.body.as_deref() == Some(&*version.body);
     let nav = self.nav.clone();
     let compare = ActionButton::new(compare_label)
       .icon(Icon::GitCompareArrows)
@@ -286,7 +293,8 @@ impl HistoryPanel {
           PipelineView::Compare(number)
         };
         nav.show(pipeline, view);
-      });
+      })
+      .enabled(comparing || !same);
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)

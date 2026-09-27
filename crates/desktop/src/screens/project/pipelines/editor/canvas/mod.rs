@@ -1,8 +1,8 @@
-//! Pipeline canvas (`C6Bjps` in 03.01 `Q21HOA`): the graph ([`graph`]) in a viewport that
-//! zooms and pans. The zoom controls (`iarCw`, [`controls`]) sit in a band along the bottom
-//! that the graph never runs into; the shortcuts and the wheel are in [`input`]. Dragging the
-//! empty canvas or turning the wheel pans; with the zoom modifier the wheel zooms around the
-//! pointer. Each pipeline keeps its zoom for the session.
+//! Pipeline canvas (`C6Bjps` in 03.01 `Q21HOA`): the graph ([`graph`]) in an area that zooms
+//! and pans, above a band along the bottom with the zoom controls (`iarCw`, [`controls`]) that
+//! the graph never runs into. The shortcuts and the wheel are in [`input`]. Dragging the canvas
+//! or turning the wheel pans; with the zoom modifier the wheel zooms around the pointer. Each
+//! pipeline keeps its zoom for the session.
 
 mod controls;
 mod graph;
@@ -19,8 +19,7 @@ use lurq::{
   },
   components::{Column, Stack},
   core::{ElementRef, Signal},
-  layout::StackAlignment,
-  node::{Element, HitTestBehavior, dimension::Dimension, transform::Transform2D},
+  node::{Element, dimension::Dimension, transform::Transform2D},
 };
 use orchester_core::{
   id::ResourceId,
@@ -29,7 +28,7 @@ use orchester_core::{
 use parking_lot::Mutex;
 
 use self::{
-  controls::{CONTROLS_ROOM, overlay},
+  controls::band,
   graph::{CanvasGraph, GraphProps},
   input::{ZoomCommand, ZoomModifier, shortcut},
 };
@@ -94,7 +93,9 @@ pub struct Canvas {
   /// The part of the canvas the graph shows in, above the zoom controls' band.
   area: ElementRef,
   modifier: ZoomModifier,
-  /// The view a drag of the empty canvas started from.
+  /// Where the published notice ends, in the band under the graph.
+  notice_anchor: ElementRef,
+  /// The view a drag of the canvas started from.
   drag_from: Arc<Mutex<Option<View>>>,
 }
 
@@ -110,6 +111,7 @@ impl Component for Canvas {
       view: ctx.signal(View::new(zooms.get(pipeline))),
       zooms,
       area: ElementRef::new(),
+      notice_anchor: ElementRef::new(),
       modifier: ZoomModifier::default(),
       drag_from: Arc::default(),
     }
@@ -134,7 +136,6 @@ impl Component for Canvas {
         Dimension::Px(viewport.content.height),
       )
       .transform(transform(view, viewport.content))
-      .hit_test(HitTestBehavior::ContentOnly)
       .child(graph);
     let area = Stack::new()
       .id("pipeline-canvas-area")
@@ -142,43 +143,37 @@ impl Component for Canvas {
       .flex(1.0)
       .clip()
       .ref_element(self.area.clone())
-      .child(self.pan_surface(&viewport))
       .child(zoomed);
-    let layers = Column::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .child(area)
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .height(Dimension::Px(CONTROLS_ROOM)),
-      );
     let command: Arc<dyn Fn(ZoomCommand) + Send + Sync> = {
       let viewport = viewport.clone();
       Arc::new(move |command| viewport.command(command))
     };
-    let canvas = Stack::with(
-      StackAlignment::BottomStart,
-      [layers.into(), overlay(ctx, view.zoom(), &command, props.just_published)],
-    )
-    .id("pipeline-canvas")
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel);
+    let canvas = Column::new()
+      .id("pipeline-canvas")
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .background(PaletteColor::SurfacePanel)
+      .child(self.with_pan(area, &viewport))
+      .child(band(
+        ctx,
+        view.zoom(),
+        &command,
+        props.just_published,
+        &self.notice_anchor,
+      ));
     self.with_input(canvas, &viewport)
   }
 }
 
 impl Canvas {
-  /// The empty canvas behind the graph: dragging it with the primary button pans. The other
-  /// buttons stay free, e.g. the side buttons for back and forward.
-  fn pan_surface(&self, viewport: &Viewport) -> Column {
+  /// Dragging the graph's area with the primary button pans; a press that does not move still
+  /// selects the card under it. The other buttons stay free, e.g. the side buttons for back and
+  /// forward.
+  fn with_pan(&self, area: Stack, viewport: &Viewport) -> Stack {
     let (start, stop) = (self.drag_from.clone(), self.drag_from.clone());
     let (from, pan) = (self.drag_from.clone(), viewport.clone());
     let view = self.view.clone();
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
+    area
       .start_drag_buttons(MouseButtonMask::LEFT)
       .on_drag_start(move |_: DragEvent| *start.lock() = Some(view.get()))
       .on_drag_move(move |event: DragEvent| {
@@ -190,7 +185,7 @@ impl Canvas {
   }
 
   /// The wheel pans, or zooms with the zoom modifier; the zoom shortcuts.
-  fn with_input(&self, canvas: Stack, viewport: &Viewport) -> Stack {
+  fn with_input(&self, canvas: Column, viewport: &Viewport) -> Column {
     let (keys, released, pointer, wheel) = (
       self.modifier.clone(),
       self.modifier.clone(),
@@ -252,7 +247,8 @@ impl Viewport {
     self.show(match command {
       ZoomCommand::In => zoom_to(view.zoom().zoomed_in()),
       ZoomCommand::Out => zoom_to(view.zoom().zoomed_out()),
-      ZoomCommand::Full => zoom_to(Zoom::FULL),
+      // As the canvas first shows the pipeline: 100 %, from its top left.
+      ZoomCommand::Full => View::new(Zoom::FULL),
       ZoomCommand::Fit => View::fit(self.content, size),
     });
   }

@@ -13,7 +13,7 @@ use lurq::{
   },
   components::{Column, Row, Stack, Text},
   layout::Alignment,
-  node::{Element, HitTestBehavior, Style, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::resource::{Step, StepKey};
 
@@ -111,8 +111,6 @@ impl Component for CanvasGraph {
       .id("pipeline-canvas-graph")
       .width(Dimension::Px(size.width))
       .height(Dimension::Px(size.height))
-      // Empty canvas lets presses through to the pan surface behind it.
-      .hit_test(HitTestBehavior::ContentOnly)
       .child(description(ctx, &props.description))
       .child(
         Text::new(&ctx.t("pipelines.canvas.trigger"))
