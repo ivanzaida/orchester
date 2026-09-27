@@ -455,8 +455,17 @@ fn plan_review_roles_follow_pencil() {
   let note = theme.typography_style(ExtraTypography::ReviewNote.role());
   assert_eq!((note.font_size, note.line_height), (12.0, 1.6));
   assert_eq!(theme.spacing_value(ExtraSpacing::TextArea.role()), Dimension::Px(14.0));
-  // Agent-written Markdown reads in the grayscale chrome; code keeps the diff's code colors.
+  // Agent-written text `FP6BD`: 12, line height 1.6, in the text color.
+  let agent = theme.typography_style(ExtraTypography::AgentText.role());
+  assert_eq!((agent.font_size, agent.line_height), (12.0, 1.6));
+  assert_eq!(agent.color, Color::from_hex("#EEEEEE"));
+  // Agent-written Markdown reads in the grayscale chrome; code keeps the diff's code colors; a
+  // first-level heading is 14 on the 12px body.
   let markdown = theme.markdown();
+  assert_eq!(
+    markdown.heading_1.text.font_size_scale.map(|scale| scale * 12.0),
+    Some(14.0)
+  );
   assert_eq!(markdown.code_block_box.background, Some(Color::from_hex("#0D1117")));
   assert_eq!(markdown.code_block.text.color, Some(Color::from_hex("#E6EDF3")));
   assert_eq!(markdown.link.text.color, Some(Color::from_hex("#EEEEEE")));

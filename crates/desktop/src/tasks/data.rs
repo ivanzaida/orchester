@@ -1,12 +1,12 @@
 //! Reading and saving tasks through the project database. Every function blocks on SQLite;
 //! the UI calls them off the UI thread.
 
-use std::{path::Path, sync::Arc};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
-  resource::{Pipeline, ResourceKind, VersionNumber},
-  run::RunEvent,
+  resource::{AgentProfile, Pipeline, ResourceKind, VersionNumber},
+  run::{Run, RunEvent, StepExecutor},
   store::{ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
   time::Timestamp,
@@ -15,7 +15,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   detail::run_store_error,
-  list::{LatestRun, Phases},
+  list::{AwaitedPlan, LatestRun, Phases},
 };
 
 /// A pipeline a task can use: one with a published version.
@@ -59,13 +59,8 @@ impl ProjectTasks {
           .map_err(run_store_error)?
           .last()
           .map_or_else(|| latest.created_at(), RunEvent::at);
-        // Only a run waiting on a plan decision needs its plans here.
-        let plans = if latest.awaiting_plan().is_empty() {
-          Vec::new()
-        } else {
-          db.plans(latest.id()).map_err(run_store_error)?
-        };
-        phases.insert(task.id(), LatestRun::of(task, latest, updated_at, &plans));
+        let plan = awaited_plan(&db, latest)?;
+        phases.insert(task.id(), LatestRun::of(task, latest, updated_at, plan));
       }
     }
     Ok(Self {
@@ -96,6 +91,24 @@ impl ProjectTasks {
       ..self.clone()
     }
   }
+}
+
+/// The plan `run` waits on a decision for, with the agent role of the step that proposed it; only
+/// such a run needs its plans and a profile read here.
+fn awaited_plan(db: &ProjectDb, run: &Run) -> Result<Option<AwaitedPlan>, StoreError> {
+  if run.awaiting_plan().is_empty() {
+    return Ok(None);
+  }
+  let plans = db.plans(run.id()).map_err(run_store_error)?;
+  let mut roles = BTreeMap::new();
+  for step in run.snapshot().steps() {
+    if let StepExecutor::Agent { profile, .. } = step.executor()
+      && let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)?
+    {
+      roles.insert(step.key().clone(), Arc::<str>::from(version.body().role().as_str()));
+    }
+  }
+  Ok(AwaitedPlan::of(run, &plans, |step| roles.get(step).cloned()))
 }
 
 /// Pipelines with a published version, ordered by slug. Drafts that were never published

@@ -95,7 +95,7 @@ fn notice(ctx: &Ctx, review: &PlanReview) -> Element {
     .into()
 }
 
-/// The plan as Markdown in the brief's text style; https links open in the browser.
+/// The plan as Markdown in the agent text style (`FP6BD`); https links open in the browser.
 fn plan_text(ctx: &mut Ctx, text: &str) -> Element {
   if text.trim().is_empty() {
     return Text::new(&ctx.t("runs.plan.empty"))
@@ -106,7 +106,7 @@ fn plan_text(ctx: &mut Ctx, text: &str) -> Element {
   let style = {
     let theme = ctx.theme();
     FormTextRole {
-      typography: ExtraTypography::Brief.role(),
+      typography: ExtraTypography::AgentText.role(),
       color: PaletteColor::TextPrimary,
     }
     .resolve(&theme.typography(), &theme.palette())

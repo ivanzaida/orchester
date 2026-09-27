@@ -144,6 +144,8 @@ pub enum ExtraTypography {
   PlanTitle,
   /// A note written to an agent, e.g. the changes a plan needs (`DDXc5` in `NbNN0`): 12, 1.6.
   ReviewNote,
+  /// Text an agent wrote, e.g. a message body or a plan under review (`FP6BD` in `J5MIT`): 12, 1.6.
+  AgentText,
   /// An identifier as the title of a list row, e.g. a secret's name (`B1zGN` in `vxAMD`).
   MonoTitle,
   /// A stored secret shown only as its mask (`FNlaR` in `CQxCb`).
@@ -151,7 +153,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 67] = [
+  const ALL: [Self; 68] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -217,6 +219,7 @@ impl ExtraTypography {
     Self::InspectorNote,
     Self::PlanTitle,
     Self::ReviewNote,
+    Self::AgentText,
     Self::MonoTitle,
     Self::MaskedValue,
   ];
@@ -288,6 +291,7 @@ impl ExtraTypography {
       Self::InspectorNote => "inspector-note",
       Self::PlanTitle => "plan-title",
       Self::ReviewNote => "review-note",
+      Self::AgentText => "agent-text",
       Self::MonoTitle => "mono-title",
       Self::MaskedValue => "masked-value",
     }
@@ -425,6 +429,7 @@ impl ExtraTypography {
       Self::InspectorNote => leading(1.6, style(10.0, FontWeight::Normal, MUTED)),
       Self::PlanTitle => style(19.0, FontWeight::Medium, TEXT),
       Self::ReviewNote => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),
+      Self::AgentText => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),
       Self::MonoTitle => mono(12.0, TEXT),
       Self::MaskedValue => mono(13.0, MUTED),
       icon_role => icon(

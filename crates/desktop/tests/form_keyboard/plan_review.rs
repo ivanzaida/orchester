@@ -127,7 +127,7 @@ fn plan_review_waits_in_the_overview_needs_you_panel() {
   assert!(shows(
     &mut desktop,
     "overview-decision-KON-1",
-    "Plan v1 from Plan waits for your decision."
+    "Plan v1 from Builder waits for your decision."
   ));
   assert!(shows(&mut desktop, "overview-attention", "1"));
   desktop.click("overview-review-plan-KON-1");

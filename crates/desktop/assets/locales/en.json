@@ -213,7 +213,7 @@
       "empty": "Nothing needs you right now. Plan decisions, questions and approvals appear here.",
       "needsInput": "NEEDS INPUT",
       "reviewPlan": "REVIEW PLAN",
-      "planSummary": "Plan v{{version}} from {{step}} waits for your decision. Nothing after it starts until you decide.",
+      "planSummary": "Plan v{{version}} from {{agent}} waits for your decision. Nothing after it starts until you decide.",
       "reviewPlanAction": "Review plan",
       "context": "{{task}} · {{detail}}",
       "open": "Open task  →"

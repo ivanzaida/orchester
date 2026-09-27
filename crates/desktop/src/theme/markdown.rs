@@ -1,8 +1,8 @@
 //! How agent-written Markdown reads (a plan under review, 02.11 `x3lVC`), in the design's
-//! grayscale: the design draws no Markdown, so every value comes from an existing variable.
-//! Headings step up from the body text a little, as a plan sits below its own 19px title (`J7irj`);
-//! code keeps the code colors of the diff (`vEZ42`); rules and quotes use the chrome's borders.
-//! Sizes other than headings follow the text style the caller passes.
+//! grayscale: the design draws no Markdown, so every value comes from an existing variable. The
+//! body is the caller's text style (agent text, 12/1.6, `FP6BD`); headings stay within the plan's
+//! type scale below its 19px title (`J7irj`): 14, 13 and 12, medium; code keeps the code colors of
+//! the diff (`vEZ42`); rules and quotes use the chrome's borders.
 
 use std::sync::Arc;
 
@@ -72,8 +72,8 @@ pub fn markdown() -> ThemeMarkdown {
     blockquote_gap: SPACE_STACK,
     list_marker_gap: SPACE_SM,
     heading: heading(1.0),
-    heading_1: heading(1.3),
-    heading_2: heading(1.15),
+    heading_1: heading(14.0 / 12.0),
+    heading_2: heading(13.0 / 12.0),
     heading_3: heading(1.0),
     heading_4: heading(1.0),
     heading_5: heading(1.0),

@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use orchester_core::{
   id::{ResourceId, TaskId},
-  resource::VersionNumber,
+  resource::{StepKey, VersionNumber},
   run::{PauseReason, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
@@ -78,31 +78,32 @@ pub struct LatestRun {
   pub plan: Option<AwaitedPlan>,
 }
 
-/// A plan a run waits on a decision for (02.11): its version and the step that proposed it.
+/// A plan a run waits on a decision for (02.11): its version and who proposed it, the agent role
+/// of its step (the step's name when its profile version is gone).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AwaitedPlan {
   pub version: PlanVersion,
-  pub step: Arc<str>,
+  pub agent: Arc<str>,
 }
 
 impl AwaitedPlan {
-  /// The plan `run` waits on, among its `plans`; the first in pipeline order when several steps'
-  /// plans wait.
-  pub fn of(run: &Run, plans: &[Plan]) -> Option<Self> {
+  /// The plan `run` waits on, among its `plans`, proposed by `agent`'s step; the first in pipeline
+  /// order when several steps' plans wait.
+  pub fn of(run: &Run, plans: &[Plan], agent: impl Fn(&StepKey) -> Option<Arc<str>>) -> Option<Self> {
     let execution = *run.awaiting_plan().first()?;
     let plan = Plan::latest_of(plans, execution)?;
     let step = run.snapshot().body().step(&plan.step)?;
     Some(Self {
       version: plan.version,
-      step: step.name.as_str().into(),
+      agent: agent(&plan.step).unwrap_or_else(|| step.name.as_str().into()),
     })
   }
 }
 
 impl LatestRun {
-  /// `run`, the latest run of `task`, whose last event was recorded at `updated_at`, with its
-  /// `plans`.
-  pub fn of(task: &Task, run: &Run, updated_at: Timestamp, plans: &[Plan]) -> Self {
+  /// `run`, the latest run of `task`, whose last event was recorded at `updated_at`, with the plan
+  /// it waits on, if any.
+  pub fn of(task: &Task, run: &Run, updated_at: Timestamp, plan: Option<AwaitedPlan>) -> Self {
     Self {
       phase: TaskPhase::of(task, Some(run)),
       number: run.number(),
@@ -112,7 +113,7 @@ impl LatestRun {
       checkpoint: run
         .last_checkpoint()
         .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).into()),
-      plan: AwaitedPlan::of(run, plans),
+      plan,
     }
   }
 

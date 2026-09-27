@@ -114,7 +114,7 @@ fn plan_decision(ctx: &Ctx, row: &TaskRow, plan: &AwaitedPlan, nav: &ProjectNav)
   let version = plan.version.to_string();
   let summary = ctx.t_args(
     "overview.attention.planSummary",
-    [("version", version.as_str()), ("step", &*plan.step)],
+    [("version", version.as_str()), ("agent", &*plan.agent)],
   );
   let (nav, task) = (nav.clone(), row.id);
   let review = ActionButton::new(ctx.t("overview.attention.reviewPlanAction"))

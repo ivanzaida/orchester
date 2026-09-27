@@ -143,7 +143,7 @@ fn overview_needs_you_names_the_plan_that_waits() {
     rows[0].plan,
     Some(AwaitedPlan {
       version: PlanVersion::FIRST,
-      step: "Implement".into(),
+      agent: "Builder".into(),
     })
   );
   assert_eq!(rows[0].detail.key, "tasks.progress.waiting");

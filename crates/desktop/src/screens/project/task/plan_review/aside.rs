@@ -26,11 +26,11 @@ use crate::{
   },
 };
 
-/// Panel width (`e1dTtW`), the note field's height (`NbNN0`) and the version choice's height (the
-/// buttons' height, `u1XBP`).
+/// Panel width (`e1dTtW`), the note field's height (`NbNN0`) and the version choice's height (a
+/// select field, `ZGwlv`).
 const ASIDE_WIDTH: f32 = 360.0;
 const NOTE_HEIGHT: f32 = 132.0;
-const VERSION_HEIGHT: f32 = 36.0;
+const VERSION_HEIGHT: f32 = 40.0;
 
 pub(super) fn aside(
   ctx: &Ctx,
@@ -49,18 +49,25 @@ pub(super) fn aside(
       .map(|criterion| detail(&ctx.t_args("runs.plan.criterion", [("criterion", criterion.as_str())])))
       .collect()
   };
+  // The note is for the plan that waits; an earlier version reads without it. What was typed stays
+  // for when the waiting one is shown again.
+  let deciding = review.shown(shown.get().0).version == review.waiting().version;
+  let request = deciding.then(|| {
+    [
+      Text::new(&ctx.t_args("runs.plan.changesFor", [("agent", &*review.agent)]))
+        .variant(TypographyStyle::FieldLabel)
+        .color(PaletteColor::TextPrimary)
+        .into(),
+      note_field(ctx, note, note_focused),
+      detail(&changes_meaning(ctx, review)),
+    ]
+  });
   let details = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Step.role())
     .child(Text::new(&ctx.t("runs.plan.criteria")).variant(ExtraTypography::CardTitle.role()))
     .with_children(criteria)
-    .child(
-      Text::new(&ctx.t_args("runs.plan.changesFor", [("agent", &*review.agent)]))
-        .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextPrimary),
-    )
-    .child(note_field(ctx, note, note_focused))
-    .child(detail(&changes_meaning(ctx, review)));
+    .with_children(request.into_iter().flatten());
   let properties = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_right(ExtraSpacing::Stack.role())
