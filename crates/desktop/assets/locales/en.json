@@ -486,6 +486,7 @@
         "succeededDetail": "The run’s changes are committed on {{branch}}.",
         "failedTitle": "The run failed at {{step}}",
         "failedDetail": "Activity shows what the agent reported.",
+        "failedCommandDetail": "Activity shows the command, its exit code and its output.",
         "cancelledTitle": "The run was cancelled",
         "cancelledDetail": "Completed work stays on {{branch}}."
       }
@@ -598,7 +599,7 @@
       "rawOutput": "raw output",
       "stderrLine": "stderr  {{line}}",
       "outputTrimmed": "{{count}} earlier lines are not shown",
-      "outputOmitted": "{{size}} of earlier output were not kept",
+      "outputOmitted": "{{size}} of earlier output was not kept",
       "jump": "Jump to latest",
       "jumpNew": "Jump to latest · {{count}} new",
       "working": "{{agent}} is working · last event {{elapsed}} ago",
@@ -1908,8 +1909,8 @@
       "chooseTool": "Choose a tool",
       "profileOption": "{{profile}} · published {{version}}",
       "toolOption": "Tool · {{tool}}",
-      "toolNeedsSecrets": "Needs secrets and approvals · not available yet",
-      "toolAccessRules": "Has access rules · not applied yet",
+      "toolNeedsSecrets": "Not available yet",
+      "toolAccessRules": "Access rules not applied yet",
       "toolCommand": "Runs {{command}} in the step’s worktree",
       "toolCommandHint": "Its exit code decides whether the step passes. Runs keep the tool version they started with.",
       "openTool": "Open tool",
@@ -1932,6 +1933,7 @@
       "instructionsPlaceholder": "What this step should do. Variables from the catalog go in double braces.",
       "runsAfter": "Runs after",
       "route": "When changes are requested",
+      "routeOnFailure": "When the step fails",
       "routeFail": "Fail the run",
       "routeReturn": "Return to {{step}}",
       "maxRetries": "Maximum retries",
@@ -2102,7 +2104,6 @@
       "runHint": "Any other exit code, or running past the timeout, fails the step; its failure route decides what follows. When the program prints more than the limit, the latest output is kept.",
       "environment": "Environment",
       "variables": "Variables · NAME=value per line",
-      "variablesPlaceholder": "RUST_LOG=info",
       "environmentHint": "Added to the cleaned environment every program gets (PATH, HOME, TEMP and the like). Stored and shown in plain text, so never put secrets here.",
       "unavailableTitle": "This tool can’t be edited in this version",
       "httpUnavailable": "HTTP tools use project secrets and runtime approvals, which are not available yet. Steps that call it can’t start.",
@@ -2123,7 +2124,8 @@
       "unused": "No published pipeline calls this tool yet.",
       "use": "{{pipeline}} / {{step}}",
       "versions": "Runs keep the tool version they started with.",
-      "note": "Command tools hold no secrets: the program runs with the cleaned environment and the variables above, and its output is kept in the run’s transcript."
+      "note": "Command tools hold no secrets: the program runs with the cleaned environment and the variables above, and its output is kept in the run’s transcript.",
+      "noteSecrets": "HTTP and database tools use project secrets and runtime approvals, which tool steps cannot use in this version yet."
     },
     "errors": {
       "programRequired": "Enter the program to run.",

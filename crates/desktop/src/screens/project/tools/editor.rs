@@ -19,7 +19,7 @@ use lurq::{
 };
 use orchester_core::{
   name::Name,
-  resource::{Tool, ToolKind, VersionNumber},
+  resource::{Tool, ToolAction, ToolKind, VersionNumber},
 };
 
 use super::{
@@ -93,9 +93,13 @@ impl Component for ToolEditor {
     let context = ctx
       .use_context::<EditorContext>()
       .expect("the tools screen provides the editor context");
+    // A tool of another kind cannot be edited; only its description is shown.
     let text = match &context.editing {
       Editing::New => CommandText::new_tool(),
-      Editing::Tool(entry) => CommandText::of(&entry.tool).unwrap_or_default(),
+      Editing::Tool(entry) => CommandText::of(&entry.tool).unwrap_or_else(|| CommandText {
+        description: entry.tool.description().to_owned(),
+        ..CommandText::default()
+      }),
     };
     Self {
       name: ctx.signal(String::new()),
@@ -181,6 +185,8 @@ impl ToolEditor {
       ),
     };
     let dirty = match (&self.context.editing, &tool) {
+      // Nothing of a tool this version cannot edit can have changed.
+      (Editing::Tool(entry), _) if entry.tool.kind() != ToolKind::Command => false,
       (Editing::Tool(entry), Ok(tool)) => *tool != entry.tool,
       _ => true,
     };
@@ -213,10 +219,14 @@ impl ToolEditor {
   /// Name, kind and what the tool does (`GhoQg`).
   fn heading(&self, ctx: &Ctx, kind: ToolKind) -> Element {
     let description = self.description.get();
-    let description: Arc<str> = if description.trim().is_empty() {
-      ctx.t("tools.editor.noDescription")
-    } else {
-      description.trim().into()
+    // Without a description a stored command tool is its command line, as in the library.
+    let description: Arc<str> = match (description.trim(), &self.context.editing) {
+      ("", Editing::Tool(entry)) => match entry.tool.action() {
+        ToolAction::Command(command) => command.command_line().into(),
+        ToolAction::Http(_) | ToolAction::DatabaseQuery(_) => ctx.t("tools.noDescription"),
+      },
+      ("", Editing::New) => ctx.t("tools.editor.noDescription"),
+      (description, _) => description.into(),
     };
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -226,7 +236,7 @@ impl ToolEditor {
       .spacing(ExtraSpacing::Stack.role())
       .child(
         Row::new()
-          .spacing(ExtraSpacing::Group.role())
+          .spacing(SpacingSize::Md)
           .align_items(Alignment::Center)
           .child(
             Text::new(&self.title(ctx))

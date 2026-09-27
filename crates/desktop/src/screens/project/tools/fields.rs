@@ -6,7 +6,7 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::Signal,
@@ -72,7 +72,6 @@ impl ToolEditor {
         ("tool-arguments", "tools.editor.arguments"),
         &self.arguments,
         arguments,
-        None,
       ))
       .child(hint(ctx, "tools.editor.argumentsHint"))
       .child(property(
@@ -121,7 +120,6 @@ impl ToolEditor {
         ("tool-environment", "tools.editor.variables"),
         &self.environment,
         error,
-        Some(&ctx.t("tools.editor.variablesPlaceholder")),
       ))
       .child(hint(ctx, "tools.editor.environmentHint"))
       .into()
@@ -176,19 +174,16 @@ impl ToolEditor {
     (id, label): (&'static str, &str),
     value: &Signal<String>,
     error: Option<&Message>,
-    placeholder: Option<&str>,
   ) -> Element {
-    let mut input = styled_input(ctx, value.clone(), ExtraTypography::MonoField.role())
+    let input = styled_input(ctx, value.clone(), ExtraTypography::MonoField.role())
       .id(id)
       .textarea()
       .rows(AREA_ROWS.0, AREA_ROWS.1)
       .width(Dimension::Pct(100.0));
-    if let Some(placeholder) = placeholder {
-      input = input.placeholder(placeholder);
-    }
+    // Inset like the text of a single-line field.
     let area = Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(SpacingSize::Md)
+      .padding(ExtraSpacing::Stack.role())
       .background(PaletteColor::SurfaceInput)
       .border(Border::inside(
         BorderSize::Sm,

@@ -74,12 +74,15 @@ impl RunView {
     self.run.id()
   }
 
-  /// The step that is running, else the last one that ran.
+  /// The step that is running, else the one that failed, else the last one that ran.
   pub fn current_step(&self) -> Option<&StepView> {
     self
       .steps
       .iter()
       .find(|step| matches!(step.status, Some(StepStatus::Running | StepStatus::Waiting(_))))
+      // A run that failed stopped at the step that failed, not at one its failure skipped (a step
+      // running beside it that started later).
+      .or_else(|| self.steps.iter().find(|step| step.status == Some(StepStatus::Failed)))
       .or_else(|| {
         self
           .steps

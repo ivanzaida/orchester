@@ -281,8 +281,13 @@ pub fn route(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields) -> Element 
         (RouteChoice(Some(step.key.clone())), label)
       }),
   );
+  // A tool step's command cannot be asked for changes; it can only fail.
+  let key = match props.step.kind {
+    StepKind::Agent { .. } => "pipelines.inspector.route",
+    StepKind::Tool { .. } => "pipelines.inspector.routeOnFailure",
+  };
   labelled(
-    label(ctx, "pipelines.inspector.route"),
+    label(ctx, key),
     select(ctx, "step-route", &fields.route, options, false),
   )
   .into()

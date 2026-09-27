@@ -77,7 +77,14 @@ pub(super) fn inspector(ctx: &Ctx, context: &EditorContext, state: &EditorState)
     )
     .child(used_by(ctx, context, &uses))
     .child(Spacer::new().flex(1.0))
-    .child(Text::new(&ctx.t("tools.inspector.note")).variant(ExtraTypography::Detail.role()))
+    .child(
+      Text::new(&ctx.t(if kind == ToolKind::Command {
+        "tools.inspector.note"
+      } else {
+        "tools.inspector.noteSecrets"
+      }))
+      .variant(ExtraTypography::Detail.role()),
+    )
     .into()
 }
 
