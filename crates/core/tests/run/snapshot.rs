@@ -4,8 +4,9 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{
-    AccessPolicy, AccessWindow, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, DeniedBehavior,
-    InjectionEvent, Instruction, InstructionScope, Pipeline, PromptText, Step, StepKind, Tool, ToolAction,
+    AccessPolicy, AccessWindow, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, CommandArg, CommandProgram,
+    DeniedBehavior, InjectionEvent, Instruction, InstructionScope, Pipeline, PromptText, Step, StepKind, Tool,
+    ToolAction,
   },
   revision::Revision,
   run::{BranchName, PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor},
@@ -32,8 +33,11 @@ fn tool(callers: BTreeMap<ResourceId, AllowedSteps>) -> Tool {
     DeniedBehavior::FailStep,
   )
   .expect("valid policy");
-  let action = CommandAction::new("cargo".into(), vec!["test".into()]).expect("valid command");
-  Tool::new(ToolAction::Command(action), access)
+  let action = CommandAction::new(
+    CommandProgram::new("cargo").expect("valid program"),
+    vec![CommandArg::new("test").expect("valid argument")],
+  );
+  Tool::new("", ToolAction::Command(action), Some(access)).expect("valid tool")
 }
 
 fn build(

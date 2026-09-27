@@ -28,9 +28,10 @@ pub use self::{
   },
   prompt::{PromptError, PromptText},
   tool::{
-    AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, DatabaseQuery,
-    DeniedBehavior, FieldName, FieldNameError, HttpAuth, HttpError, HttpMethod, HttpRequest, RequestTarget,
-    ResponseSource, Tool, ToolAction, ToolError,
+    AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
+    CommandEnvironment, CommandError, CommandProgram, CommandTimeout, DatabaseQuery, DeniedBehavior, ExitCodes,
+    FieldName, FieldNameError, HttpAuth, HttpError, HttpMethod, HttpRequest, OutputLimit, ProgramLocation,
+    RequestTarget, ResponseSource, Tool, ToolAction, ToolError, ToolKind, VariableName,
   },
   variable::{UnknownVariable, Variable},
 };
@@ -98,5 +99,11 @@ impl ResourceBody for Pipeline {
 
 impl ResourceBody for Tool {
   const KIND: ResourceKind = ResourceKind::Tool;
-  const SCHEMA: u32 = 1;
+  /// 2: description, optional access policy and the command tool's timeout, expected exit codes,
+  /// environment and output limit (M10a, 2026-09-27).
+  const SCHEMA: u32 = 2;
+
+  fn upgrade(schema: u32, body: serde_json::Value) -> Option<serde_json::Value> {
+    (schema == 1).then(|| tool::upgrade_from_schema_1(body)).flatten()
+  }
 }

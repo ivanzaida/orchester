@@ -299,10 +299,12 @@ fn pinned_tools(
     })
     .collect();
   for (&id, version) in published.tools {
-    let allowed = body
-      .steps()
-      .iter()
-      .any(|step| version.body().access().allows(pipeline, &step.key));
+    let allowed = body.steps().iter().any(|step| {
+      version
+        .body()
+        .access()
+        .is_some_and(|access| access.allows(pipeline, &step.key))
+    });
     if allowed {
       tools.entry(id).or_insert_with(|| PinnedVersion::of(id, version));
     }
