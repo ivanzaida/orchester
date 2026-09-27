@@ -163,6 +163,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::ContextNote.role()` | 9 muted | preview execution context notes (`HvDGw`, `utiRC` in `TnjFo`) |
 | `ExtraTypography::CellLabel.role()` | 11 muted, 1.5 | table cell label that wraps beside its icon (worktree state `VHSnL` in `Py65X`) |
 | `ExtraTypography::InspectorNote.role()` | 10 muted, 1.6 | note under an inspector's details or actions (model source `xK9v9`, status detail `Thdx2`) |
+| `ExtraTypography::MonoTitle.role()` | mono 12 | identifier as a list row's title, e.g. a secret name (`B1zGN` in `vxAMD`) |
+| `ExtraTypography::MaskedValue.role()` | mono 13 muted | a stored secret shown only as its mask (`FNlaR` in `CQxCb`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

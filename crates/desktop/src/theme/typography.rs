@@ -140,10 +140,14 @@ pub enum ExtraTypography {
   /// A note under an inspector's details or actions: where the models come from, what the
   /// connection's status means (`xK9v9`, `Thdx2` in `JuVaA`).
   InspectorNote,
+  /// An identifier as the title of a list row, e.g. a secret's name (`B1zGN` in `vxAMD`).
+  MonoTitle,
+  /// A stored secret shown only as its mask (`FNlaR` in `CQxCb`).
+  MaskedValue,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 63] = [
+  const ALL: [Self; 65] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -207,6 +211,8 @@ impl ExtraTypography {
     Self::ContextNote,
     Self::CellLabel,
     Self::InspectorNote,
+    Self::MonoTitle,
+    Self::MaskedValue,
   ];
 
   fn name(self) -> &'static str {
@@ -274,6 +280,8 @@ impl ExtraTypography {
       Self::ContextNote => "context-note",
       Self::CellLabel => "cell-label",
       Self::InspectorNote => "inspector-note",
+      Self::MonoTitle => "mono-title",
+      Self::MaskedValue => "masked-value",
     }
   }
 
@@ -407,6 +415,8 @@ impl ExtraTypography {
       Self::ContextNote => style(9.0, FontWeight::Normal, MUTED),
       Self::CellLabel => leading(1.5, style(11.0, FontWeight::Normal, MUTED)),
       Self::InspectorNote => leading(1.6, style(10.0, FontWeight::Normal, MUTED)),
+      Self::MonoTitle => mono(12.0, TEXT),
+      Self::MaskedValue => mono(13.0, MUTED),
       icon_role => icon(
         icon_role
           .icon_size()

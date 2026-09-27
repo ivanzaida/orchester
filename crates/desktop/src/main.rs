@@ -8,6 +8,7 @@ use orchester_desktop::{
   programs::Programs,
   root::{self, Startup},
   runner::{QUIET_STOP_TIMEOUT, Runners},
+  secrets::Vault,
   session::{AppSession, StartupError},
   theme,
 };
@@ -98,6 +99,7 @@ fn startup(session: &Result<AppSession, StartupError>, runtime: &Runtime) -> Sta
         lifecycle: Lifecycle::new(runners, runtime.handle().clone()),
         activity,
         programs: Programs::processes(),
+        vault: Vault::keychain(),
         previous_end: session.previous_end(),
         session_start: session.started_at(),
       }

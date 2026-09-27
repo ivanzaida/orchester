@@ -4,6 +4,7 @@
 use orchester_core::{
   name::{Name, NameError},
   resource::PublishError,
+  secret::{SecretError, VaultError},
 };
 use orchester_store::StoreError;
 
@@ -44,6 +45,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::SchemaTooNew { .. } => Message::new("errors.newerSchema"),
     StoreError::Unrepresentable(_) => Message::new("errors.unsupportedPath"),
     StoreError::DuplicateConnectionName(_) => Message::new("errors.connectionNameTaken"),
+    StoreError::DuplicateSecretName { .. } => Message::new("errors.secretNameTaken"),
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }
@@ -56,6 +58,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::ConnectionNotFound(_)
     | StoreError::NotAGitHubConnection(_)
     | StoreError::InvocationNotFound(_)
+    | StoreError::SecretNotFound(_)
     | StoreError::MigrationBrokeReferences(_) => Message::new("errors.storage"),
     StoreError::Publish(PublishError::StaleDraft { latest, .. }) => Message::new("errors.staleDraft").with(
       "version",
@@ -70,6 +73,27 @@ pub fn store_error(error: &StoreError) -> Message {
       Message::new("agents.permissions.publish.connectionMissing")
     }
     StoreError::Publish(PublishError::Permissions(_)) => Message::new("agents.permissions.publish.notEnforceable"),
+  }
+}
+
+/// A secret that could not be added, replaced or archived. Neither the error nor the message holds
+/// the value: keychain details go to the log only.
+pub fn secret_error(error: &SecretError<StoreError>) -> Message {
+  match error {
+    SecretError::Taken { .. } => Message::new("errors.secretNameTaken"),
+    SecretError::NotFound(_) | SecretError::Archived(_) => Message::new("errors.secretGone"),
+    SecretError::Vault(error) => vault_error(error),
+    SecretError::Store(error) | SecretError::ValueLeftBehind { source: error, .. } => store_error(error),
+    SecretError::RotationNotRecorded { .. } => Message::new("errors.secretRotationNotRecorded"),
+  }
+}
+
+fn vault_error(error: &VaultError) -> Message {
+  match error {
+    VaultError::Unsupported => Message::new("errors.keychainUnsupported"),
+    VaultError::AccessDenied(_) => Message::new("errors.keychainDenied"),
+    VaultError::TooLong { max } => Message::new("errors.secretTooLong").with("max", max.to_string()),
+    VaultError::Failed(_) => Message::new("errors.keychainFailed"),
   }
 }
 
