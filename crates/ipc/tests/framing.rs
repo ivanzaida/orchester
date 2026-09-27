@@ -89,6 +89,27 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
       run,
       profile: ResourceId::generate(),
     },
+    Command::Shutdown {
+      mode: ShutdownMode::FinishAtCheckpoints,
+    },
+    Command::Shutdown {
+      mode: ShutdownMode::Immediate,
+    },
+  ]
+  .into_iter()
+  .chain(plan_commands(run))
+  .enumerate()
+  .map(|(index, command)| Request {
+    id: RequestId::new(index as u64 + 1),
+    command,
+  })
+  .collect()
+}
+
+/// Decisions on plans: an approval, and a request for changes with a note.
+fn plan_commands(run: RunId) -> Vec<Command> {
+  let note = ReviewNote::new("Keep email sign-in.\n\"Quoted\" — é").expect("a note");
+  vec![
     Command::DecidePlan {
       run,
       execution: StepExecutionId::generate(),
@@ -99,28 +120,25 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
       run,
       execution: StepExecutionId::generate(),
       version: PlanVersion::FIRST.next(),
-      decision: PlanDecision::ChangesRequested {
-        note: ReviewNote::new(
-          "Keep email sign-in.
-\"Quoted\" — é",
-        )
-        .expect("a note"),
-      },
-    },
-    Command::Shutdown {
-      mode: ShutdownMode::FinishAtCheckpoints,
-    },
-    Command::Shutdown {
-      mode: ShutdownMode::Immediate,
+      decision: PlanDecision::ChangesRequested { note },
     },
   ]
-  .into_iter()
-  .enumerate()
-  .map(|(index, command)| Request {
-    id: RequestId::new(index as u64 + 1),
-    command,
-  })
-  .collect()
+}
+
+/// A plan proposed, and a decision on a plan that no longer waits.
+fn plan_events(run: RunId, task: TaskId) -> Vec<Event> {
+  vec![
+    Event::PlanProposed {
+      run,
+      task,
+      task_key: "ORC-12".to_owned(),
+      version: PlanVersion::FIRST.next(),
+    },
+    Event::Reply {
+      id: RequestId::new(9),
+      reply: Reply::Rejected(Rejection::PlanNotAwaited),
+    },
+  ]
 }
 
 /// The rejections of a run permissions change.
@@ -192,13 +210,6 @@ fn events(run: RunId, task: TaskId) -> Vec<Event> {
     },
     Event::RunChanged { run, task },
     Event::AgentActivity { run, sequence: 12 },
-    Event::PlanProposed {
-      run,
-      task,
-      task_key: "ORC-12".to_owned(),
-      version: PlanVersion::FIRST.next(),
-    },
-    reply(Reply::Rejected(Rejection::PlanNotAwaited)),
     Event::WorkSummary(WorkSummary {
       agent_slots: NonZeroU32::new(4).expect("above zero"),
       runs: [
@@ -235,7 +246,11 @@ async fn frames_round_trip_every_message() {
     id: RequestId::new(8),
     reply: Reply::Rejected(rejection),
   });
-  let events: Vec<Event> = events(run, task).into_iter().chain(rejected).collect();
+  let events: Vec<Event> = events(run, task)
+    .into_iter()
+    .chain(plan_events(run, task))
+    .chain(rejected)
+    .collect();
   for request in &commands {
     writer.write(request).await.expect("write request");
   }

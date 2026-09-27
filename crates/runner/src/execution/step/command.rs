@@ -18,7 +18,8 @@ use orchester_core::{
   resource::{AgentProfile, InjectionEvent, Instruction, Step, StepKind},
   run::{
     AssembledPrompt, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt, PinnedVersion,
-    PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, RunContext, StepExecutor,
+    PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, Run, RunContext, StepExecutor,
+    StepOutput,
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore},
 };
@@ -148,37 +149,7 @@ impl RunTask {
       .db
       .plans(self.run.id())
       .map_err(|error| problem(error.to_string()))?;
-    let dependencies: Vec<DependencyOutput<'_>> = self
-      .run
-      .snapshot()
-      .body()
-      .steps()
-      .iter()
-      .filter(|dependency| step.depends_on.contains(&dependency.key))
-      .filter_map(|dependency| {
-        let passed = self.run.latest_execution(&dependency.key)?;
-        let attempt = self
-          .run
-          .attempts()
-          .iter()
-          .find(|attempt| attempt.execution(passed.id()).is_some())?;
-        // A gated step's output is the plan that was approved, its latest.
-        let text = Plan::latest_of(&plans, passed.id())
-          .map(|plan| plan.text.as_str())
-          .or_else(|| {
-            outputs
-              .iter()
-              .find(|output| output.execution == passed.id())
-              .map(|output| output.text.as_str())
-          })
-          .unwrap_or_default();
-        Some(DependencyOutput {
-          step: dependency,
-          attempt: attempt.number(),
-          text,
-        })
-      })
-      .collect();
+    let dependencies = dependencies(&self.run, step, &outputs, &plans);
     let instructions = self.pinned_instructions()?;
     let sources: Vec<InstructionSource<'_>> = instructions
       .iter()
@@ -249,4 +220,43 @@ impl RunTask {
     pinned.sort_by(|(left, _), (right, _)| left.cmp(right));
     Ok(pinned.into_iter().map(|(_, instruction)| instruction).collect())
   }
+}
+
+/// The outputs of the passed executions of the steps `step` depends on, in pipeline order: a gated
+/// step's is the plan that was approved, its latest; any other's what it left for the steps after
+/// it.
+fn dependencies<'a>(
+  run: &'a Run,
+  step: &Step,
+  outputs: &'a [StepOutput],
+  plans: &'a [Plan],
+) -> Vec<DependencyOutput<'a>> {
+  run
+    .snapshot()
+    .body()
+    .steps()
+    .iter()
+    .filter(|dependency| step.depends_on.contains(&dependency.key))
+    .filter_map(|dependency| {
+      let passed = run.latest_execution(&dependency.key)?;
+      let attempt = run
+        .attempts()
+        .iter()
+        .find(|attempt| attempt.execution(passed.id()).is_some())?;
+      let text = Plan::latest_of(plans, passed.id())
+        .map(|plan| plan.text.as_str())
+        .or_else(|| {
+          outputs
+            .iter()
+            .find(|output| output.execution == passed.id())
+            .map(|output| output.text.as_str())
+        })
+        .unwrap_or_default();
+      Some(DependencyOutput {
+        step: dependency,
+        attempt: attempt.number(),
+        text,
+      })
+    })
+    .collect()
 }
