@@ -32,13 +32,16 @@ mod workspace;
 use std::{
   collections::HashMap,
   path::{Path, PathBuf},
-  sync::Arc,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
   time::Duration,
 };
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  run::{InterruptCause, RaisedLimits, RunStatus},
+  run::{InterruptCause, RaisedLimits},
   tokens::TokenBudget,
 };
 use orchester_ipc::{Event, Rejection};
@@ -64,6 +67,24 @@ const STOP_TIMEOUT: Duration = Duration::from_secs(10);
 struct ActiveRun {
   control: mpsc::UnboundedSender<Control>,
   task: JoinHandle<()>,
+  /// Set by the task once it no longer executes the run, before the change that shows it can be
+  /// read: the run settled (paused, stopped at a limit, cancelled, interrupted or ended), waits
+  /// for a person with nothing else to do, or the task failed. The task only ends after.
+  settled: Arc<AtomicBool>,
+}
+
+impl ActiveRun {
+  /// Whether the task has ended. It lets go of its requests as it drops its state, once its last
+  /// change is recorded and its agents have ended; its [`JoinHandle`] reports it finished only a
+  /// moment later.
+  fn ended(&self) -> bool {
+    self.control.is_closed()
+  }
+
+  /// Whether the task still executes the run: it counts among the active runs.
+  fn executes(&self) -> bool {
+    !self.ended() && !self.settled.load(Ordering::Acquire)
+  }
 }
 
 /// The runs this runner executes.
@@ -77,8 +98,9 @@ struct Inner {
   notifier: Notifier,
   board: Arc<Board>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
-  /// Held by a request that continues a run, so two cannot both continue it while one waits for
-  /// the run's last task to end.
+  /// Held by a request that may execute a run again (continuing it or deciding its plan), so two
+  /// cannot both start a task for it while one waits for the run's last task to end, and a
+  /// decision reaches a task another request started instead of starting a second one.
   continuing: tokio::sync::Mutex<()>,
 }
 
@@ -95,11 +117,16 @@ impl Scheduler {
     }
   }
 
-  /// Runs being executed right now.
+  /// Runs being executed right now. A run its task settled is not, even while the task still
+  /// ends: the desktop reads the change at once and may start other work in its place.
   pub fn active_runs(&self) -> Vec<RunId> {
     let mut active = self.inner.active.lock();
-    active.retain(|_, run| !run.task.is_finished());
-    active.keys().copied().collect()
+    active.retain(|_, run| !run.ended());
+    active
+      .iter()
+      .filter(|(_, run)| run.executes())
+      .map(|(&run, _)| run)
+      .collect()
   }
 
   /// Creates and starts the run of queued task `task`, or finds the one an earlier request with
@@ -116,7 +143,7 @@ impl Scheduler {
       task: prepared.run.task(),
     });
     if prepared.execute {
-      self.spawn(db, prepared);
+      self.spawn(db, prepared)?;
     }
     Ok(run)
   }
@@ -226,10 +253,12 @@ impl Scheduler {
     ProjectDb::open(&self.inner.project_root).map_err(|error| failed("cannot open the project database", &error))
   }
 
-  /// Hands `control` to the task executing `run`, if one does; `None` when the run is idle.
+  /// Hands `control` to the task executing `run`, if one does; `None` when the run is idle. A task
+  /// that ends before it reads the request drops it unanswered: once the answer fails, the task
+  /// has ended.
   fn ask<T>(&self, run: RunId, control: impl FnOnce(oneshot::Sender<T>) -> Control) -> Option<oneshot::Receiver<T>> {
     let active = self.inner.active.lock();
-    let active = active.get(&run).filter(|active| !active.task.is_finished())?;
+    let active = active.get(&run).filter(|active| !active.ended())?;
     let (answer, answered) = oneshot::channel();
     active.control.send(control(answer)).ok()?;
     Some(answered)
@@ -267,8 +296,7 @@ impl Scheduler {
       run,
       task: prepared.run.task(),
     });
-    self.spawn(db, prepared);
-    Ok(())
+    self.spawn(db, prepared)
   }
 
   /// [`Scheduler::continue_idle`] for a run its task may have settled a moment ago. The task
@@ -281,50 +309,52 @@ impl Scheduler {
     transition: impl FnOnce(&mut ProjectDb, &Path) -> Result<Prepared, Rejection>,
   ) -> Result<(), Rejection> {
     let _one_at_a_time = self.inner.continuing.lock().await;
-    if let Some(task) = self.settling(run)?
-      && let Err(error) = task.await
-    {
-      tracing::warn!(%run, %error, "the run's task ended abnormally");
-    }
+    self.settled(run).await?;
     self.continue_idle(run, transition)
   }
 
-  /// The task of `run` once it has recorded the run settled and before it has ended, taken over
-  /// to wait for its end; a run its task still executes is not paused.
-  fn settling(&self, run: RunId) -> Result<Option<JoinHandle<()>>, Rejection> {
-    if !self.is_active(run) {
-      return Ok(None);
-    }
-    if idle::load(&self.open()?, run)?.status() == &RunStatus::Running {
-      return Err(Rejection::RunNotPaused);
-    }
-    Ok(self.inner.active.lock().remove(&run).map(|active| active.task))
+  /// Waits for the task of `run` to end once it has settled the run; a run its task still
+  /// executes is not paused.
+  async fn settled(&self, run: RunId) -> Result<(), Rejection> {
+    let ending = {
+      let active = self.inner.active.lock();
+      match active.get(&run) {
+        Some(active) if active.executes() => return Err(Rejection::RunNotPaused),
+        Some(active) => active.control.clone(),
+        None => return Ok(()),
+      }
+    };
+    ending.closed().await;
+    Ok(())
   }
 
   fn is_active(&self, run: RunId) -> bool {
-    self
-      .inner
-      .active
-      .lock()
-      .get(&run)
-      .is_some_and(|active| !active.task.is_finished())
+    self.inner.active.lock().get(&run).is_some_and(|active| !active.ended())
   }
 
-  fn spawn(&self, db: ProjectDb, prepared: Prepared) {
+  /// Starts the task that executes `prepared`. A run another task still executes is refused rather
+  /// than left to that task, which does not know the change just recorded.
+  fn spawn(&self, db: ProjectDb, prepared: Prepared) -> Result<(), Rejection> {
     let mut active = self.inner.active.lock();
     let run = prepared.run.id();
-    if active.get(&run).is_some_and(|active| !active.task.is_finished()) {
-      return;
+    if active.get(&run).is_some_and(|active| !active.ended()) {
+      tracing::error!(%run, "another task still executes the run");
+      return Err(Rejection::Failed {
+        detail: format!("another task still executes run {run}"),
+      });
     }
     let (control, controls) = mpsc::unbounded_channel();
+    let settled = Arc::new(AtomicBool::new(false));
     let context = TaskContext {
       root: self.inner.project_root.clone(),
       notifier: self.inner.notifier.clone(),
       board: self.inner.board.clone(),
       controls,
+      settled: settled.clone(),
     };
     let task = tokio::spawn(RunTask::new(db, prepared, context).drive());
-    active.insert(run, ActiveRun { control, task });
+    active.insert(run, ActiveRun { control, task, settled });
+    Ok(())
   }
 }
 
