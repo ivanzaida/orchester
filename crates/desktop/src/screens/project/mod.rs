@@ -127,6 +127,11 @@ impl ProjectNav {
     entry::push(&self.navigator, import_query::open(&path, tab));
   }
 
+  /// Whether Import resources is open over the page shown.
+  pub fn import_shown(&self) -> bool {
+    import_query::tab(&self.navigator.path().get_untracked()).is_some()
+  }
+
   /// Closes Import resources: back to the entry it was opened from when that shows the page under
   /// it, otherwise that page in its place.
   pub fn close_import(&self) {

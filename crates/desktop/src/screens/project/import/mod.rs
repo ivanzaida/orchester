@@ -58,16 +58,48 @@ const BUTTON_HEIGHT: f32 = 36.0;
 
 /// The dialog over the page the path names, while the path carries it; nothing otherwise.
 pub(super) fn dialog(ctx: &mut Ctx, project: &OpenProject) -> Element {
-  let Some(tab) = import_query::tab(&ctx.route_path()) else {
-    return Modal::new(Column::new()).open_when(false).into();
-  };
-  let props = ImportProps {
-    project: project.clone(),
-    tab,
-  };
-  Modal::new(backdrop(ctx.mount_keyed::<ImportDialog>("import-resources", props)))
-    .target(ModalTarget::Root)
-    .into()
+  ctx.mount_keyed::<ImportLayer>("import-layer", project.clone())
+}
+
+/// The modal layer of Import resources. It is open while the path carries the dialog; Escape
+/// closes it like every other dialog, which leaves the dialog's history entry.
+pub struct ImportLayer {
+  open: Signal<bool>,
+}
+
+impl Component for ImportLayer {
+  type Props = OpenProject;
+
+  fn create(ctx: &mut Ctx) -> Self {
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav");
+    let open = ctx.signal(false);
+    ctx.watch(&open, move |open| {
+      if !*open && nav.import_shown() {
+        nav.close_import();
+      }
+    });
+    Self { open }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let tab = import_query::tab(&ctx.route_path());
+    // Follows the path, so that only Escape turns it off while the path still carries the dialog.
+    if self.open.get_untracked() != tab.is_some() {
+      self.open.set(tab.is_some());
+    }
+    let Some(tab) = tab else {
+      return Modal::new(Column::new()).open_when(false);
+    };
+    let props = ImportProps {
+      project: ctx.props::<OpenProject>().clone(),
+      tab,
+    };
+    Modal::new(backdrop(ctx.mount_keyed::<ImportDialog>("import-resources", props)))
+      .target(ModalTarget::Root)
+      .open(self.open.clone())
+  }
 }
 
 #[derive(Clone, PartialEq)]
