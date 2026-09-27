@@ -11,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Spacer, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -167,14 +167,9 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
       ],
     )
   });
-  Column::new()
-    .id("task-this-run")
-    .width(Dimension::Px(PANEL_WIDTH))
-    .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
+  let rows = Column::new()
+    .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Step.role())
-    .background(PaletteColor::SurfacePanel)
-    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Text::new(&ctx.t("runs.summary.thisRun")).variant(ExtraTypography::CardTitle.role()))
     .child(property(&ctx.t("runs.summary.pipeline"), &pipeline))
     .child(styled_property(
@@ -193,8 +188,18 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
     .child(property(&ctx.t("runs.cached"), &cached))
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
-    .with_children(permissions)
-    .child(Spacer::new().flex(1.0))
+    .with_children(permissions);
+  // The rows scroll when a permission change's notices make them taller than the window; the
+  // note stays at the bottom.
+  Column::new()
+    .id("task-this-run")
+    .width(Dimension::Px(PANEL_WIDTH))
+    .height(Dimension::Pct(100.0))
+    .padding(SpacingSize::Lg)
+    .spacing(ExtraSpacing::Step.role())
+    .background(PaletteColor::SurfacePanel)
+    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .child(ScrollVertical::new(rows).width(Dimension::Pct(100.0)).flex(1.0))
     .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()))
     .into()
 }
