@@ -1,4 +1,7 @@
-//! Project database migrations. Append only: never edit a migration that has shipped.
+//! Project database migrations. Append only: never edit a migration that has shipped. Later
+//! migrations live in modules of their own, named after what they add.
+
+mod conversation;
 
 pub(super) const MIGRATIONS: &[&str] = &[
   r"
@@ -526,4 +529,5 @@ BEGIN SELECT RAISE(ABORT, 'a plan keeps its text and is decided once'); END;
 CREATE TRIGGER plans_no_delete BEFORE DELETE ON plans
 BEGIN SELECT RAISE(ABORT, 'plans are never deleted'); END;
 ",
+  conversation::MIGRATION,
 ];
