@@ -38,7 +38,7 @@ use std::{
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  run::{InterruptCause, RaisedLimits},
+  run::{InterruptCause, RaisedLimits, RunStatus},
   tokens::TokenBudget,
 };
 use orchester_ipc::{Event, Rejection};
@@ -77,6 +77,9 @@ struct Inner {
   notifier: Notifier,
   board: Arc<Board>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
+  /// Held by a request that continues a run, so two cannot both continue it while one waits for
+  /// the run's last task to end.
+  continuing: tokio::sync::Mutex<()>,
 }
 
 impl Scheduler {
@@ -87,6 +90,7 @@ impl Scheduler {
         board: Arc::new(Board::new(notifier.clone())),
         notifier,
         active: Mutex::new(HashMap::new()),
+        continuing: tokio::sync::Mutex::new(()),
       }),
     }
   }
@@ -154,19 +158,23 @@ impl Scheduler {
   }
 
   /// Continues paused run `run`; a step it stopped in continues the agent's CLI session.
-  pub fn resume_run(&self, run: RunId) -> Result<(), Rejection> {
-    self.continue_idle(run, |db, root| idle::resume(db, root, run))
+  pub async fn resume_run(&self, run: RunId) -> Result<(), Rejection> {
+    self.continue_settled(run, |db, root| idle::resume(db, root, run)).await
   }
 
   /// Raises the limits of `run`, stopped at a limit, and continues it.
-  pub fn raise_limit(&self, run: RunId, limits: RaisedLimits) -> Result<(), Rejection> {
-    self.continue_idle(run, |db, root| idle::raise(db, root, run, limits))
+  pub async fn raise_limit(&self, run: RunId, limits: RaisedLimits) -> Result<(), Rejection> {
+    self
+      .continue_settled(run, |db, root| idle::raise(db, root, run, limits))
+      .await
   }
 
   /// Raises, for `run` only, the budget of the step it stopped at, and continues the run: the
   /// stopped agent's CLI session continues.
-  pub fn raise_step_budget(&self, run: RunId, budget: TokenBudget) -> Result<(), Rejection> {
-    self.continue_idle(run, |db, root| idle::raise_step_budget(db, root, run, budget))
+  pub async fn raise_step_budget(&self, run: RunId, budget: TokenBudget) -> Result<(), Rejection> {
+    self
+      .continue_settled(run, |db, root| idle::raise_step_budget(db, root, run, budget))
+      .await
   }
 
   /// "Wait for agents to save": starts no new work, asks every active run to pause at its next
@@ -261,6 +269,36 @@ impl Scheduler {
     });
     self.spawn(db, prepared);
     Ok(())
+  }
+
+  /// [`Scheduler::continue_idle`] for a run its task may have settled a moment ago. The task
+  /// records the run paused or stopped at a limit as its last change and ends right after, so the
+  /// desktop can read the settled run and ask to continue it before the task has ended: the
+  /// request then waits for it, and the run is never executed by two tasks.
+  async fn continue_settled(
+    &self,
+    run: RunId,
+    transition: impl FnOnce(&mut ProjectDb, &Path) -> Result<Prepared, Rejection>,
+  ) -> Result<(), Rejection> {
+    let _one_at_a_time = self.inner.continuing.lock().await;
+    if let Some(task) = self.settling(run)?
+      && let Err(error) = task.await
+    {
+      tracing::warn!(%run, %error, "the run's task ended abnormally");
+    }
+    self.continue_idle(run, transition)
+  }
+
+  /// The task of `run` once it has recorded the run settled and before it has ended, taken over
+  /// to wait for its end; a run its task still executes is not paused.
+  fn settling(&self, run: RunId) -> Result<Option<JoinHandle<()>>, Rejection> {
+    if !self.is_active(run) {
+      return Ok(None);
+    }
+    if idle::load(&self.open()?, run)?.status() == &RunStatus::Running {
+      return Err(Rejection::RunNotPaused);
+    }
+    Ok(self.inner.active.lock().remove(&run).map(|active| active.task))
   }
 
   fn is_active(&self, run: RunId) -> bool {

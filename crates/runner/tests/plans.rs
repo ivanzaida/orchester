@@ -253,7 +253,7 @@ async fn plans_a_waiting_run_pauses_and_keeps_waiting_across_a_new_runner() {
       .await,
     Err(Rejection::RunNotRunning)
   );
-  next.resume_run(id).expect("resumed");
+  next.resume_run(id).await.expect("resumed");
   wait_for(root, &mut next_events, id, waiting).await;
   idle(&next).await;
   next
