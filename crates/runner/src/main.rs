@@ -2,7 +2,7 @@
 
 use std::{io, path::PathBuf, process::ExitCode, sync::Arc};
 
-use orchester_ipc::IpcError;
+use orchester_ipc::{EXIT_PROJECT_LOCKED, IpcError};
 use orchester_runner::{
   lock::{LockError, RunnerLock},
   log_file,
@@ -59,7 +59,17 @@ fn main() -> ExitCode {
     Ok(()) => ExitCode::SUCCESS,
     Err(error) => {
       tracing::error!("{error}");
-      ExitCode::FAILURE
+      error.exit_code()
+    }
+  }
+}
+
+impl RunnerError {
+  /// The desktop tells another app's runner from other failures by the exit code.
+  fn exit_code(&self) -> ExitCode {
+    match self {
+      Self::Lock(LockError::AlreadyRunning(_)) => ExitCode::from(EXIT_PROJECT_LOCKED),
+      _ => ExitCode::FAILURE,
     }
   }
 }

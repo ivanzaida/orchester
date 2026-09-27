@@ -170,6 +170,7 @@ locks (`orchester_core::integration`).
   orchester.exe
   orchester-runner.exe
   orchester.db                 application database
+  logs/orchester-<YYYY-MM-DD>.log  desktop log (UTC date), the last 14 days kept
 
 <repo>/.orchester/             excluded through .git/info/exclude (the project's .gitignore is not touched)
   orchester.db                 project database
