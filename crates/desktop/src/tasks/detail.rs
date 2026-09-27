@@ -10,8 +10,8 @@ use orchester_core::{
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
-    ActivityEntry, Invocation, PauseReason, PinnedVersion, Run, RunEventKind, RunLimit, RunStatus, StepExecutor,
-    StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
+    ActivityEntry, Invocation, PauseReason, PinnedVersion, Run, RunEvent, RunEventKind, RunLimit, RunStatus,
+    StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
   task::Task,
@@ -60,6 +60,8 @@ pub struct RunView {
   pub paused_at: Option<Timestamp>,
   /// The run's work was committed as a checkpoint right before it paused.
   pub saved_at_pause: bool,
+  /// When a finished run (succeeded, failed or cancelled) ended.
+  pub finished_at: Option<Timestamp>,
   /// What its step executions left for the steps after them.
   pub outputs: Vec<StepOutput>,
 }
@@ -241,16 +243,38 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     }
     _ => (None, false),
   };
+  let finished_at = finished_at(db, &run)?;
   Ok(RunView {
     invocations,
     outputs: db.step_outputs(run.id())?,
     paused_at,
     saved_at_pause,
+    finished_at,
     pipeline,
     version: pinned.number,
     steps,
     run,
   })
+}
+
+/// When `run` ended, if it did: succeeded, failed or was cancelled.
+fn finished_at(db: &ProjectDb, run: &Run) -> Result<Option<Timestamp>, StoreError> {
+  if !run.status().is_terminal() {
+    return Ok(None);
+  }
+  let events = db.events(run.id()).map_err(run_store_error)?;
+  Ok(
+    events
+      .iter()
+      .rev()
+      .find(|event| {
+        matches!(
+          event.kind(),
+          RunEventKind::Succeeded | RunEventKind::Failed { .. } | RunEventKind::Cancelled
+        )
+      })
+      .map(RunEvent::at),
+  )
 }
 
 /// An agent step's role, CLI and permissions.

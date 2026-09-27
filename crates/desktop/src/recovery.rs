@@ -22,13 +22,15 @@ use orchester_core::{
 use orchester_ipc::SessionEnd;
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::{display, programs::Programs, tasks::detail, workspace::Workspace};
-
-/// Where the runner keeps a run's worktree (`docs/architecture/storage.md`, "Storage layout").
-const WORKTREES_DIR: &str = ".orchester/worktrees";
-
-/// The `git` program, looked up on the `PATH` like the runner does.
-const GIT: &str = "git";
+use crate::{
+  display,
+  programs::Programs,
+  tasks::{
+    changes::{GIT, run_worktree},
+    detail,
+  },
+  workspace::Workspace,
+};
 
 /// A run the previous session left interrupted, as the recovery table lists it (`KzyXA`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -135,7 +137,7 @@ fn describe(
       checkpoint.created_at(),
     )
   });
-  let worktree = root.join(WORKTREES_DIR).join(view.run.id().to_string());
+  let worktree = run_worktree(root, view.run.id());
   Ok(InterruptedRun {
     project_root: root.to_path_buf(),
     project: project.clone(),

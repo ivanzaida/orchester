@@ -9,7 +9,7 @@
 
 use std::sync::{Arc, OnceLock};
 
-use orchester_core::pull_request::diff::{FileDiff, Hunk, LineKind};
+use orchester_core::diff::{FileDiff, Hunk, LineKind};
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxReference, SyntaxSet};
 
 /// Columns between tab stops when a tab is shown as spaces.

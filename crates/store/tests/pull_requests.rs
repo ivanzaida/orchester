@@ -4,10 +4,11 @@ use std::fs;
 
 use orchester_core::{
   connection::GitHubHost,
+  diff::Changes,
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  pull_request::{Changes, CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision},
+  pull_request::{CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision},
   repository::GitHubRepo,
   revision::Revision,
   run::BranchName,

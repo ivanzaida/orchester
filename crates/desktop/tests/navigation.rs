@@ -14,7 +14,9 @@ use orchester_core::id::{ConnectionId, ProjectId, ResourceId, TaskId};
 use orchester_desktop::{
   navigation::{
     Navigation, Places, Start, forward,
-    route::{AgentSelection, ConnectionTab, Page, Route, SettingsTab, TaskPageTab},
+    route::{
+      AgentSelection, ChangedFile, ConnectionTab, Page, Route, SettingsTab, TaskPageTab, changed_file, changes_path,
+    },
     routes,
   },
   project_setup::ProjectDraft,
@@ -124,6 +126,7 @@ fn pages() -> Vec<Page> {
     Page::NewTask,
     Page::task(TaskId::generate()),
     Page::Task(TaskId::generate(), TaskPageTab::Activity),
+    Page::Task(TaskId::generate(), TaskPageTab::Changes),
     Page::PullRequests,
     Page::PullRequest(42),
     Page::Pipelines,
@@ -282,4 +285,32 @@ fn route_project_created_from_a_project_follows_it() {
   assert_eq!(window.path(), second);
   let first = Route::Project(first, Page::OVERVIEW).path();
   assert_eq!(entries(&window.router), [first, second]);
+}
+
+#[test]
+fn route_changes_tab_keeps_the_file_in_its_path() {
+  let (project, task) = (ProjectId::generate(), TaskId::generate());
+  for (path, worktree) in [
+    ("src/auth/github.rs", false),
+    ("docs/plan with space & more?#.md", true),
+    ("naïve/файл.txt", false),
+  ] {
+    let file = ChangedFile {
+      path: path.to_owned(),
+      worktree,
+    };
+    let route = changes_path(project, task, &file);
+    assert_eq!(
+      Route::parse(&route),
+      Some(Route::Project(project, Page::Task(task, TaskPageTab::Changes))),
+      "{route}"
+    );
+    assert!(route.is_ascii(), "{route}");
+    assert_eq!(changed_file(&route), Some(file));
+    let matched = routes(&Places::default()).resolve(&route);
+    assert_ne!(matched.last().map(|leaf| leaf.pattern_raw()), Some("**"), "{route}");
+  }
+  let tab = Route::Project(project, Page::Task(task, TaskPageTab::Changes)).path();
+  assert_eq!(changed_file(&tab), None);
+  assert_eq!(changed_file(&format!("{tab}&file=%zz")), None);
 }

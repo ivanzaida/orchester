@@ -4,24 +4,21 @@
 
 mod checks;
 mod detail;
-pub mod diff;
 mod gh;
 mod sync;
 
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
   checks::{gh_check_rollups_command, parse_gh_check_rollups},
   detail::{
-    DetailRefresh, DiffRead, MAX_DIFF_FILES, MAX_DIFF_LINES, PullRequestHead, RefreshedDetail, RevisionDiff,
-    gh_compare_diff_command, gh_pr_view_command, is_too_large, parse_gh_compare_diff, parse_gh_pr_view,
-    refresh_pull_request,
+    DetailRefresh, DiffRead, PullRequestHead, RefreshedDetail, gh_compare_diff_command, gh_pr_view_command,
+    parse_gh_compare_diff, parse_gh_pr_view, refresh_pull_request,
   },
   gh::{PR_LIST_FIELDS, gh_pr_list_command, gh_rate_limit_command, parse_gh_pr_list, parse_gh_rate_limit},
   sync::{SYNC_LIMIT, SyncFailure, SyncResult, sync_pull_requests},
 };
-use crate::{repository::GitHubRepo, revision::Revision, run::BranchName, time::Timestamp};
+use crate::{diff::Changes, repository::GitHubRepo, revision::Revision, run::BranchName, time::Timestamp};
 
 /// Why a pull request as read from GitHub or from storage is not accepted.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -88,14 +85,6 @@ impl ReviewDecision {
       .into_iter()
       .find(|decision| decision.as_str().eq_ignore_ascii_case(value))
   }
-}
-
-/// Size of a pull request's change.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Changes {
-  pub files: u32,
-  pub additions: u32,
-  pub deletions: u32,
 }
 
 /// GitHub's checks (check runs and commit statuses) of one revision, by outcome.

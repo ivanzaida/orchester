@@ -24,7 +24,9 @@ fn claude_run_names_the_provider_in_activity_and_shows_its_transcript() {
   });
   create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
   wait_long(&mut desktop, "the finished run on the page", |desktop| {
-    run_finished(desktop.repo()) && shows(desktop, "task-notice", "Every step passed")
+    run_finished(desktop.repo())
+      && has(desktop, "task-ready-notice")
+      && shows(desktop, "task-ready-notice", "Ready for your review")
   });
   desktop.click("task-tab-activity");
   wait_long(&mut desktop, "the transcript", |desktop| {

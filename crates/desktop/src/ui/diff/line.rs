@@ -1,7 +1,7 @@
 //! One row of a file's diff, mounted by the virtualised list: a hunk heading (`n32O8`), a diff
 //! line (`vEZ42`: old and new line numbers, the change mark and the highlighted code on the
 //! added, removed or unchanged background) or a note. Rows are read-only and pointer-only; the
-//! feedback affordances of `vEZ42` belong to agent feedback, which this screen does not have.
+//! feedback affordances of `vEZ42` belong to agent feedback, which does not exist yet.
 
 use lurq::{
   app::{
@@ -13,11 +13,11 @@ use lurq::{
   layout::{Alignment, text_style::TextAlign},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::pull_request::diff::LineKind;
+use orchester_core::diff::LineKind;
 
 use super::rows::{DiffRow, FileNote, LineRow};
 use crate::{
-  pull_requests::highlight::TokenKind,
+  highlight::TokenKind,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::icon::{Icon, IconSize, icon},
 };
@@ -42,11 +42,13 @@ const HUNK_PADDING: f32 = 16.0;
 const LINE_GAP: f32 = 10.0;
 
 /// A row, drawn `width` wide: the widest row of the file or the pane, whichever is wider, so
-/// every row's background reaches across while long lines scroll sideways.
+/// every row's background reaches across while long lines scroll sideways. `omitted` is the key
+/// of the note on lines a very large file does not show, which says where to see them.
 #[derive(Clone, PartialEq)]
 pub struct RowProps {
   pub row: DiffRow,
   pub width: f32,
+  pub omitted: &'static str,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RowProps {}
@@ -61,17 +63,17 @@ impl Component for DiffRowView {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let RowProps { row, width } = ctx.props::<RowProps>().clone();
+    let RowProps { row, width, omitted } = ctx.props::<RowProps>().clone();
     let width = Dimension::Px(width);
     match row {
       DiffRow::Hunk { old, new, section, .. } => hunk(ctx, &old, &new, &section, width),
       DiffRow::Line(line) => line_row(ctx, &line, width),
-      DiffRow::Note { note, .. } => note_row(ctx, &note, width),
+      DiffRow::Note { note, .. } => note_row(ctx, &note, omitted, width),
       DiffRow::ScrollbarGap { .. } => {
         let scrollbar = ctx.theme().scrollbar().clone();
         let height = scrollbar.width + 2.0 * scrollbar.resolved_edge_inset();
         Row::new()
-          .id("pull-request-scrollbar-gap")
+          .id("diff-scrollbar-gap")
           .width(width)
           .height(Dimension::Px(height))
           .into()
@@ -108,15 +110,12 @@ fn row_width(row: &DiffRow) -> f32 {
 
 fn hunk(ctx: &Ctx, old: &str, new: &str, section: &str, width: Dimension) -> Element {
   let text = if section.is_empty() {
-    ctx.t_args("pullRequests.diff.hunk", [("old", old), ("new", new)])
+    ctx.t_args("diff.hunk", [("old", old), ("new", new)])
   } else {
-    ctx.t_args(
-      "pullRequests.diff.hunkSection",
-      [("old", old), ("new", new), ("section", section)],
-    )
+    ctx.t_args("diff.hunkSection", [("old", old), ("new", new), ("section", section)])
   };
   Row::new()
-    .id("pull-request-hunk")
+    .id("diff-hunk")
     .width(width)
     .height(Dimension::Px(HUNK_HEIGHT))
     .padding_horizontal(SpacingSize::Md)
@@ -131,13 +130,13 @@ fn line_row(ctx: &Ctx, line: &LineRow, row_width: Dimension) -> Element {
     LineKind::Context => (ExtraColor::CodeBackground, None, ExtraColor::CodeComment, "context"),
     LineKind::Added => (
       ExtraColor::DiffAddedBackground,
-      Some("pullRequests.diff.markAdded"),
+      Some("diff.markAdded"),
       ExtraColor::DiffAddedMark,
       "added",
     ),
     LineKind::Removed => (
       ExtraColor::DiffRemovedBackground,
-      Some("pullRequests.diff.markRemoved"),
+      Some("diff.markRemoved"),
       ExtraColor::DiffRemovedMark,
       "removed",
     ),
@@ -164,13 +163,13 @@ fn line_row(ctx: &Ctx, line: &LineRow, row_width: Dimension) -> Element {
   });
   let mut code = Row::new().align_items(Alignment::Center).with_children(code);
   if line.cut {
-    code = code.child(marker(ctx, "pullRequests.diff.lineCut"));
+    code = code.child(marker(ctx, "diff.lineCut"));
   }
   if line.no_newline {
-    code = code.child(marker(ctx, "pullRequests.diff.noNewline"));
+    code = code.child(marker(ctx, "diff.noNewline"));
   }
   Row::new()
-    .id("pull-request-line")
+    .id("diff-line")
     .describe("kind", kind)
     .width(row_width)
     .height(Dimension::Px(LINE_HEIGHT))
@@ -198,19 +197,19 @@ fn marker(ctx: &Ctx, key: &str) -> Element {
     .into()
 }
 
-fn note_row(ctx: &Ctx, note: &FileNote, width: Dimension) -> Element {
+fn note_row(ctx: &Ctx, note: &FileNote, omitted: &str, width: Dimension) -> Element {
   let text = match note {
-    FileNote::Binary => ctx.t("pullRequests.diff.binary"),
-    FileNote::Mode { old, new } => ctx.t_args("pullRequests.diff.mode", [("old", &**old), ("new", &**new)]),
-    FileNote::Unchanged => ctx.t("pullRequests.diff.unchanged"),
-    FileNote::Empty => ctx.t("pullRequests.diff.empty"),
+    FileNote::Binary => ctx.t("diff.binary"),
+    FileNote::Mode { old, new } => ctx.t_args("diff.mode", [("old", &**old), ("new", &**new)]),
+    FileNote::Unchanged => ctx.t("diff.unchanged"),
+    FileNote::Empty => ctx.t("diff.empty"),
     FileNote::Omitted(lines) => {
       let count = orchester_core::tokens::grouped(u64::from(*lines), &ctx.t("number.groupSeparator"));
-      ctx.t_args("pullRequests.diff.omitted", [("count", count.as_str())])
+      ctx.t_args(omitted, [("count", count.as_str())])
     }
   };
   Row::new()
-    .id("pull-request-note")
+    .id("diff-note")
     .width(width)
     .height(Dimension::Px(HUNK_HEIGHT))
     .padding_horizontal(SpacingSize::Md)

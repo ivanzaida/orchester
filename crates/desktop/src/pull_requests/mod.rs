@@ -4,7 +4,6 @@
 //! them off the UI thread. Only read-only `gh` commands run.
 
 pub mod detail;
-pub mod highlight;
 
 use std::path::Path;
 
