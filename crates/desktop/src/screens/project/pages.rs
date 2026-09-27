@@ -20,7 +20,7 @@ use super::{
   tasks::{TasksProps, TasksScreen},
 };
 use crate::{
-  navigation::route::{self, Page, Route},
+  navigation::route::{self, Page, PipelineView, Route},
   runner::{RunnerStatus, state::RunnerState},
   tasks::usage::ProjectUsage,
   workspace::OpenProject,
@@ -101,7 +101,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
       PullRequestProps { project: open, number },
     ),
     Page::Pipelines => pipelines(ctx, open, None),
-    Page::Pipeline(pipeline) => pipelines(ctx, open, Some(pipeline)),
+    Page::Pipeline(pipeline, view) => pipelines(ctx, open, Some((pipeline, view))),
     Page::Instructions(..) => ctx.mount_keyed::<InstructionsScreen>("instructions", open),
     Page::Agents(_) => ctx.mount_keyed::<AgentsScreen>("agents", open),
     Page::Secrets(_) => ctx.mount_keyed::<SecretsScreen>("secrets", open),
@@ -110,9 +110,9 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
   }
 }
 
-/// The library, or `pipeline` in its editor: one screen, so the library's state survives a
+/// The library, or a pipeline in its editor: one screen, so the library's state survives a
 /// visit to the editor.
-fn pipelines(ctx: &mut Ctx, project: OpenProject, pipeline: Option<ResourceId>) -> Element {
+fn pipelines(ctx: &mut Ctx, project: OpenProject, pipeline: Option<(ResourceId, PipelineView)>) -> Element {
   ctx.mount_keyed::<PipelinesScreen>(
     "pipelines",
     PipelinesProps {

@@ -93,7 +93,25 @@ pub fn task_count(count: usize) -> Message {
   }
 }
 
-/// One line of the change list in the publish confirmation (`LXUS6`).
+/// "No changes", "1 change", "3 changes" between two versions.
+pub fn change_count(count: usize) -> Message {
+  match count {
+    0 => Message::new("pipelines.count.change.none"),
+    1 => Message::new("pipelines.count.change.one"),
+    _ => Message::new("pipelines.count.change.other").with("count", count.to_string()),
+  }
+}
+
+/// "No runs", "1 run", "3 runs" that pinned a version.
+pub fn run_count(count: usize) -> Message {
+  match count {
+    0 => Message::new("pipelines.count.run.none"),
+    1 => Message::new("pipelines.count.run.one"),
+    _ => Message::new("pipelines.count.run.other").with("count", count.to_string()),
+  }
+}
+
+/// One line of the change list in the publish confirmation (`LXUS6`) and the version history.
 pub fn change(change: &PipelineChange) -> Message {
   let PipelineChange::Step { name, change, .. } = change else {
     return Message::new("pipelines.changes.description");

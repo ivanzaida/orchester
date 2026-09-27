@@ -85,6 +85,18 @@ impl Desktop {
     )
   }
 
+  /// A project whose repository `seed` fills once the project exists, e.g. with published
+  /// resources; its screens run no programs.
+  pub fn with_seeded_project(seed: impl FnOnce(&Path)) -> Self {
+    let init: RepoStep<'static> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));
+    Self::start_with(
+      Some(init),
+      no_programs(),
+      PathBuf::from("no-runner.exe"),
+      Some(Box::new(seed)),
+    )
+  }
+
   fn start(with_project: bool, programs: Programs) -> Self {
     let init: Option<RepoStep<'static>> = if with_project {
       Some(Box::new(|repo: &Path| {

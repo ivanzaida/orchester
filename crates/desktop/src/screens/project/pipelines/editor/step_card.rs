@@ -1,6 +1,7 @@
 //! Pipeline step card (`ajikA`): the step's icon, name and number, who runs it and what it
 //! waits for. The selected card has a stronger outline; a step without a profile or tool says
 //! so in the text color (`ipfll` in `UjHDL`). A card is pointer-only: a click selects its step.
+//! The cards of a published version, shown read-only, select nothing.
 
 use lurq::{
   app::{
@@ -50,7 +51,7 @@ pub fn step_card(
   number: usize,
   selected: bool,
   assignables: &Assignables,
-  handle: &EditorHandle,
+  select: Option<&EditorHandle>,
 ) -> Button {
   let unassigned = step.kind.executor().is_none();
   let header = Row::new()
@@ -80,7 +81,6 @@ pub fn step_card(
   } else {
     (BorderSize::Sm, PaletteColor::Border)
   };
-  let (select, key) = (handle.clone(), step.key.clone());
   let content = Column::new()
     .flex(1.0)
     .spacing(ExtraSpacing::Stack.role())
@@ -107,6 +107,10 @@ pub fn step_card(
     .border(Border::inside(stroke, outline))
     .rounded(RadiusSize::Lg)
     .child(content);
-  pressable(card, move || select.select(Selection::Step(key.clone())))
+  let Some(handle) = select else {
+    return card;
+  };
+  let (handle, key) = (handle.clone(), step.key.clone());
+  pressable(card, move || handle.select(Selection::Step(key.clone())))
     .hovered_style(Style::new().border(Border::inside(stroke, PaletteColor::BorderStrong)))
 }

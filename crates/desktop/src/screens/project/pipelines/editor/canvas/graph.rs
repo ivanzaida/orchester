@@ -1,7 +1,7 @@
-//! Pipeline canvas (`C6Bjps`): the description, the steps laid out by dependency level with
-//! their connectors and annotations, the failure route notes, and the zoom controls
-//! (`iarCw`, unavailable). An empty pipeline shows the first-step slot and how to begin (`angoF`). Selecting
-//! a card selects its step.
+//! What the pipeline canvas (`C6Bjps`) draws, at 100 %: the description, the steps laid out by
+//! dependency level with their connectors and annotations, and the failure route notes under
+//! them (`pFKSd`). An empty draft shows the first-step slot and how to begin (`angoF`).
+//! Selecting a card selects its step; a published version is read-only, so its cards do nothing.
 
 use std::sync::Arc;
 
@@ -11,14 +11,14 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollBoth, Spacer, Stack, Text},
-  layout::{Alignment, StackAlignment, layout_kind::Justify},
-  node::{CursorIcon, Element, HitTestBehavior, Style, border::Border, dimension::Dimension},
+  components::{Column, Row, Stack, Text},
+  layout::Alignment,
+  node::{Element, HitTestBehavior, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::resource::{Step, StepKey, VersionNumber};
+use orchester_core::resource::{Step, StepKey};
 
-use super::{
-  EditorHandle, Selection,
+use super::super::{
+  EditorHandle,
   header::{add_step, new_step_name},
   starter_edit,
   step_card::step_card,
@@ -26,81 +26,74 @@ use super::{
 use crate::{
   pipelines::{
     data::Assignables,
-    editor::EditorState,
     layout::{
       CARD_HEIGHT, CARD_WIDTH, CONTENT_MARGIN, Chevron, Direction, FIRST_ROW_Y, GraphLayout, NOTES_BELOW, ORIGIN_X,
       Segment, layout,
     },
+    zoom::Size,
   },
   theme::{CONNECTOR_STROKE, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
-    notice::Notice,
     pressable::{pressable, surface},
   },
 };
 
 /// Positions of the description, trigger label and empty-state explanation (`fSDu6`, `wRjZD`,
 /// `r8A5GG`) and the empty explanation's width; the line pitch of the route notes, and the room
-/// the zoom controls take at the bottom (`iarCw`: 32 high, 24 from the edge).
+/// under the last one.
 const NOTE_PITCH: f32 = 20.0;
-const OVERLAY_ROOM: f32 = 56.0;
+const NOTES_BOTTOM: f32 = 16.0;
 const DESCRIPTION_Y: f32 = 30.0;
 const TRIGGER_Y: f32 = 76.0;
 const EMPTY_EXPLANATION_Y: f32 = 252.0;
 const EMPTY_EXPLANATION_WIDTH: f32 = 460.0;
-/// Zoom controls (`iarCw`) and the published notice (`O8ivsy`).
-const ZOOM_WIDTH: f32 = 152.0;
-const ZOOM_HEIGHT: f32 = 32.0;
-const NOTICE_WIDTH: f32 = 396.0;
-/// The zoom the canvas is always shown at.
-const FULL_SIZE: &str = "100";
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct CanvasProps {
-  steps: Arc<Vec<Step>>,
-  description: Arc<str>,
-  selected: Option<StepKey>,
-  cycle: Option<Vec<StepKey>>,
-  assignables: Assignables,
-  just_published: Option<VersionNumber>,
+pub struct GraphProps {
+  pub steps: Arc<Vec<Step>>,
+  pub description: Arc<str>,
+  pub selected: Option<StepKey>,
+  pub cycle: Option<Vec<StepKey>>,
+  pub assignables: Assignables,
+  /// A published version: nothing can be selected or added.
+  pub read_only: bool,
 }
 
-impl lurq::app::component::DevtoolsInspectable for CanvasProps {}
+impl lurq::app::component::DevtoolsInspectable for GraphProps {}
 
-impl CanvasProps {
-  pub fn new(state: &EditorState, selection: &Selection) -> Self {
-    Self {
-      steps: Arc::new(state.edit().steps().to_vec()),
-      description: state.edit().description().into(),
-      selected: match selection {
-        Selection::Step(key) => Some(key.clone()),
-        Selection::Pipeline => None,
-      },
-      cycle: state.edit().cycle(),
-      assignables: state.assignables().clone(),
-      just_published: state
-        .latest()
-        .filter(|_| state.just_published())
-        .map(|latest| latest.number),
-    }
-  }
-
+impl GraphProps {
   /// The dependency that closes the cycle, as step positions.
   fn closing(&self) -> Option<(usize, usize)> {
     let cycle = self.cycle.as_ref()?;
     let position = |key: &StepKey| self.steps.iter().position(|step| &step.key == key);
     Some((position(cycle.first()?)?, position(cycle.last()?)?))
   }
+
+  fn layout(&self) -> GraphLayout {
+    layout(&self.steps, self.closing())
+  }
+
+  /// The size of everything drawn at 100 %, with the margin around it.
+  pub fn size(&self) -> Size {
+    let graph = self.layout();
+    let width = (graph.right + CONTENT_MARGIN).max(ORIGIN_X + EMPTY_EXPLANATION_WIDTH + CONTENT_MARGIN);
+    let height = if self.steps.is_empty() {
+      EMPTY_EXPLANATION_Y + CARD_HEIGHT + CONTENT_MARGIN
+    } else {
+      graph.bottom + NOTES_BELOW + NOTE_PITCH * routes(&self.steps).count() as f32 + NOTES_BOTTOM
+    };
+    Size { width, height }
+  }
 }
 
-pub struct Canvas {
+pub struct CanvasGraph {
   handle: EditorHandle,
 }
 
-impl Component for Canvas {
-  type Props = CanvasProps;
+impl Component for CanvasGraph {
+  type Props = GraphProps;
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
@@ -111,59 +104,42 @@ impl Component for Canvas {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<CanvasProps>().clone();
-    let graph = layout(&props.steps, props.closing());
-    let notes = route_notes(ctx, &props.steps);
-    let width = (graph.right + CONTENT_MARGIN).max(ORIGIN_X + EMPTY_EXPLANATION_WIDTH + CONTENT_MARGIN);
-    // The route notes sit under the graph (`pFKSd`) and the zoom controls float over the
-    // canvas's bottom-left corner (`iarCw`), so the content ends with room for them.
-    let notes_top = graph.bottom + NOTES_BELOW;
-    let height = if props.steps.is_empty() {
-      EMPTY_EXPLANATION_Y + CARD_HEIGHT + CONTENT_MARGIN
-    } else {
-      notes_top + NOTE_PITCH * notes.len() as f32 + OVERLAY_ROOM
-    };
-    let mut content = Stack::new()
-      .width(Dimension::Px(width))
-      .height(Dimension::Px(height))
+    let props = ctx.props::<GraphProps>().clone();
+    let size = props.size();
+    let graph = props.layout();
+    let content = Stack::new()
+      .id("pipeline-canvas-graph")
+      .width(Dimension::Px(size.width))
+      .height(Dimension::Px(size.height))
+      // Empty canvas lets presses through to the pan surface behind it.
+      .hit_test(HitTestBehavior::ContentOnly)
       .child(description(ctx, &props.description))
       .child(
         Text::new(&ctx.t("pipelines.canvas.trigger"))
           .variant(ExtraTypography::CanvasLabel.role())
           .absolute_position(ORIGIN_X, TRIGGER_Y),
       );
-    content = if props.steps.is_empty() {
-      content
+    if props.steps.is_empty() {
+      return content
         .child(self.first_step_slot(ctx))
-        .child(self.empty_explanation(ctx))
-    } else {
-      let notes = notes.iter().enumerate().map(|(line, note)| {
-        Text::new(note)
+        .child(self.empty_explanation(ctx));
+    }
+    let notes_top = graph.bottom + NOTES_BELOW;
+    let notes = route_notes(ctx, &props.steps)
+      .into_iter()
+      .enumerate()
+      .map(|(line, note)| {
+        Text::new(&note)
           .variant(TypographyStyle::Caption)
           .nowrap()
           .absolute_position(ORIGIN_X, notes_top + NOTE_PITCH * line as f32)
       });
-      self.graph(ctx, content, &props, &graph).with_children(notes)
-    };
-    Stack::with(
-      StackAlignment::BottomStart,
-      [
-        ScrollBoth::new(content)
-          .width(Dimension::Pct(100.0))
-          .height(Dimension::Pct(100.0))
-          .into(),
-        self.overlay(ctx, props.just_published),
-      ],
-    )
-    .id("pipeline-canvas")
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel)
+    self.graph(ctx, content, &props, &graph).with_children(notes)
   }
 }
 
-impl Canvas {
-  fn graph(&self, ctx: &Ctx, mut content: Stack, props: &CanvasProps, graph: &GraphLayout) -> Stack {
+impl CanvasGraph {
+  fn graph(&self, ctx: &Ctx, mut content: Stack, props: &GraphProps, graph: &GraphLayout) -> Stack {
     let cycle_segments = graph.cycle.iter().flat_map(|cycle| cycle.segments.iter());
     for segment in &graph.segments {
       content = content.child(line(segment, PaletteColor::TextMuted));
@@ -213,11 +189,12 @@ impl Canvas {
             .absolute_position(cycle.label.0, cycle.label.1),
         );
     }
+    let select = (!props.read_only).then_some(&self.handle);
     for card in &graph.cards {
       let step = &props.steps[card.index];
       let selected = props.selected.as_ref() == Some(&step.key);
       content = content.child(
-        step_card(ctx, step, card.index + 1, selected, &props.assignables, &self.handle).absolute(
+        step_card(ctx, step, card.index + 1, selected, &props.assignables, select).absolute(
           card.x,
           card.y,
           Dimension::Px(CARD_WIDTH),
@@ -295,57 +272,6 @@ impl Canvas {
       .child(actions)
       .into()
   }
-
-  /// The zoom controls (`iarCw`) and, right after publishing, the published notice
-  /// (`O8ivsy`), over the canvas's bottom edge. The row itself lets clicks and scrolling
-  /// through to the canvas.
-  fn overlay(&self, ctx: &Ctx, published: Option<VersionNumber>) -> Element {
-    let control = |glyph: Icon| icon(glyph, IconSize::Marker, PaletteColor::TextMuted);
-    let controls = Row::new()
-      .id("pipeline-zoom")
-      .describe("state", "unavailable")
-      .width(Dimension::Px(ZOOM_WIDTH))
-      .height(Dimension::Px(ZOOM_HEIGHT))
-      .padding_horizontal(ExtraSpacing::Inline.role())
-      .align_items(Alignment::Center)
-      .justify(Justify::SpaceBetween)
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Sm)
-      .cursor(CursorIcon::NotAllowed)
-      .child(control(Icon::Minus))
-      .child(control(Icon::Plus))
-      .child(
-        Text::new(&ctx.t_args("pipelines.canvas.zoom", [("percent", FULL_SIZE)]))
-          .variant(TypographyStyle::Mono)
-          .color(PaletteColor::TextPrimary),
-      )
-      .child(control(Icon::Maximize))
-      .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted));
-    let mut bar = Row::new()
-      .width(Dimension::Pct(100.0))
-      .hit_test(HitTestBehavior::ContentOnly)
-      .padding_horizontal(ExtraSpacing::Indent.role())
-      .padding_bottom(SpacingSize::Lg)
-      .spacing(SpacingSize::Md)
-      .align_items(Alignment::End)
-      .child(controls)
-      .child(Spacer::new().flex(1.0));
-    if let Some(version) = published {
-      let version = version.to_string();
-      bar = bar.child(
-        Column::new().width(Dimension::Px(NOTICE_WIDTH)).child(
-          Notice::new(
-            Icon::CircleCheck,
-            ctx.t_args("pipelines.published.title", [("version", version.as_str())]),
-            ctx.t_args("pipelines.published.detail", [("version", version.as_str())]),
-          )
-          .id("pipeline-published-notice"),
-        ),
-      );
-    }
-    bar.into()
-  }
 }
 
 fn description(ctx: &Ctx, text: &str) -> Element {
@@ -385,21 +311,27 @@ fn chevron_mark(chevron: Chevron, color: PaletteColor) -> Element {
     .into()
 }
 
+/// Each step with a failure route, with the step it returns to.
+fn routes(steps: &[Step]) -> impl Iterator<Item = (&Step, &Step, u32)> {
+  steps.iter().filter_map(|step| {
+    let route = step.on_failure.as_ref()?;
+    let target = steps.iter().find(|candidate| candidate.key == route.return_to)?;
+    Some((step, target, route.max_retries.get()))
+  })
+}
+
 /// "If Review does not pass, return to Implement. Max 2 retries." for each failure route.
 fn route_notes(ctx: &Ctx, steps: &[Step]) -> Vec<Arc<str>> {
-  steps
-    .iter()
-    .filter_map(|step| {
-      let route = step.on_failure.as_ref()?;
-      let target = steps.iter().find(|candidate| candidate.key == route.return_to)?;
-      Some(ctx.t_args(
+  routes(steps)
+    .map(|(step, target, retries)| {
+      ctx.t_args(
         "pipelines.canvas.routeNote",
         [
           ("step", step.name.as_str()),
           ("target", target.name.as_str()),
-          ("count", route.max_retries.get().to_string().as_str()),
+          ("count", retries.to_string().as_str()),
         ],
-      ))
+      )
     })
     .collect()
 }

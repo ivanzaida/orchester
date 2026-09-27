@@ -8,7 +8,7 @@ use lurq::{app::ctx::Ctx, core::Signal};
 use super::ProjectBar;
 use crate::{
   activity::{Activity, OperationId, Place, Target},
-  navigation::route::{AgentSelection, InstructionsTab, Page, SettingsTab},
+  navigation::route::{AgentSelection, InstructionsTab, Page, PipelineView, SettingsTab},
   runner::Runners,
   screens::project::ProjectNav,
 };
@@ -67,7 +67,7 @@ impl Opener {
       Place::Overview => Page::OVERVIEW,
       Place::Tasks => Page::TASKS,
       Place::PullRequests => Page::PullRequests,
-      Place::Pipeline(id) => Page::Pipeline(id),
+      Place::Pipeline(id) => Page::Pipeline(id, PipelineView::Draft),
       // The instructions screen moves to the tab of the instruction's scope.
       Place::Instruction(id) => Page::Instructions(InstructionsTab::ProjectRules, Some(id)),
       Place::AgentProfile(id) => Page::Agents(AgentSelection::Profile(id)),
