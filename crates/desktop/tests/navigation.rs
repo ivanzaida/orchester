@@ -14,7 +14,7 @@ use orchester_core::id::{ConnectionId, ProjectId, ResourceId, TaskId};
 use orchester_desktop::{
   navigation::{
     Navigation, Places, Start, forward,
-    route::{AgentSelection, ConnectionTab, Page, Route, SettingsTab, TaskPageTab},
+    route::{AgentSelection, ConnectionTab, Page, Route, SettingsTab, TaskPageTab, ToolSelection},
     routes,
   },
   project_setup::ProjectDraft,
@@ -131,6 +131,9 @@ fn pages() -> Vec<Page> {
     Page::Agents(AgentSelection::First),
     Page::Agents(AgentSelection::New),
     Page::Agents(AgentSelection::Profile(ResourceId::generate())),
+    Page::Tools(ToolSelection::Library),
+    Page::Tools(ToolSelection::New),
+    Page::Tools(ToolSelection::Tool(ResourceId::generate())),
     Page::CONNECTIONS,
     Page::Connections(ConnectionTab::GitHub, None),
     Page::Connections(ConnectionTab::AgentProviders, Some(ConnectionId::generate())),

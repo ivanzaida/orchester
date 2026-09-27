@@ -7,7 +7,10 @@ use orchester_core::{
   connection::{AgentProvider, ConnectionKind},
   id::ResourceId,
   permission::AgentPermissions,
-  resource::{AgentProfile, Draft, DraftSaved, ModelId, Pipeline, ResourceKind, Tool, Version, VersionNumber},
+  resource::{
+    AgentProfile, Draft, DraftSaved, ModelId, Pipeline, ResourceKind, Tool, ToolAction, ToolKind, Version,
+    VersionNumber,
+  },
   store::{ConnectionStore, ResourceStore, TaskStore},
   time::Timestamp,
 };
@@ -35,6 +38,11 @@ pub struct ToolChoice {
   pub id: ResourceId,
   pub name: Arc<str>,
   pub version: VersionNumber,
+  pub kind: ToolKind,
+  /// The command line of a command tool.
+  pub command: Option<Arc<str>>,
+  /// Whether a step can run it in this version: a command tool without access rules.
+  pub runnable: bool,
 }
 
 /// What steps of the project's pipelines can be assigned to.
@@ -71,10 +79,17 @@ impl Assignables {
     let mut tools = Vec::new();
     for resource in store.resources(ResourceKind::Tool)? {
       if let Some(version) = store.latest_version::<Tool>(resource.id())? {
+        let tool = version.body();
         tools.push(ToolChoice {
           id: resource.id(),
           name: resource.name().as_str().into(),
           version: version.number(),
+          kind: tool.kind(),
+          command: match tool.action() {
+            ToolAction::Command(command) => Some(command.command_line().into()),
+            ToolAction::Http(_) | ToolAction::DatabaseQuery(_) => None,
+          },
+          runnable: tool.kind().runnable() && tool.access().is_none(),
         });
       }
     }

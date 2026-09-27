@@ -1719,6 +1719,14 @@
       "chooseTool": "Choose a tool",
       "profileOption": "{{profile}} · published {{version}}",
       "toolOption": "Tool · {{tool}}",
+      "toolNeedsSecrets": "Needs secrets and approvals · not available yet",
+      "toolAccessRules": "Has access rules · not applied yet",
+      "toolCommand": "Runs {{command}} in the step’s worktree",
+      "toolCommandHint": "Its exit code decides whether the step passes. Runs keep the tool version they started with.",
+      "openTool": "Open tool",
+      "noCommandTool": "No published command tool yet",
+      "noCommandToolHint": "Tool steps run command tools. Add one in Tools and publish it, then choose it here.",
+      "openTools": "Open Tools",
       "unpublishedExecutor": "Not published",
       "profileRequired": "Required. {{step}} cannot run or be published without a profile.",
       "toolRequired": "Required. {{step}} cannot run or be published without a tool.",
@@ -1813,6 +1821,135 @@
       "failureRoute": "{{step}} · when changes are requested changed",
       "maxRetries": "{{step}} · maximum retries {{from}} → {{to}}",
       "budget": "{{step}} · step budget {{from}} → {{to}} tokens"
+    }
+  },
+  "tools": {
+    "title": "Tools",
+    "description": "Define what agents can do in {{project}}. Connect credentials and control access here.",
+    "breadcrumb": "{{project}}  /  Tools",
+    "breadcrumbTool": "{{project}}  /  Tools  /  {{tool}}",
+    "import": "Import from project",
+    "add": "Add tool",
+    "allTypes": "All types",
+    "counts": {
+      "one": "{{count}} tool · no secret bindings",
+      "other": "{{count}} tools · no secret bindings"
+    },
+    "loadFailed": "Couldn’t load the project’s tools",
+    "noDescription": "No description",
+    "ownership": "Tools and secrets belong to {{project}}. Import from another project to create independent local copies.",
+    "kind": {
+      "command": "Command",
+      "http": "HTTP request",
+      "database": "Database"
+    },
+    "secrets": {
+      "none": "No secrets",
+      "notAvailable": "Needs a secret"
+    },
+    "status": {
+      "ready": "Ready",
+      "draft": "Draft",
+      "unavailable": "Unavailable"
+    },
+    "usage": {
+      "title": "Used in your pipelines",
+      "none": "No published pipeline calls a tool yet. Choose a tool for a tool step in a pipeline, then publish it.",
+      "countOne": "{{count}} tool · v{{version}}",
+      "countOther": "{{count}} tools · v{{version}}"
+    },
+    "empty": {
+      "title": "No tools yet",
+      "detail": "A command tool runs a program in the worktree of the pipeline step that calls it, like a test suite or a linter. Its exit code decides whether the step passes.",
+      "add": "Add command tool"
+    },
+    "create": {
+      "title": "Create a tool",
+      "description": "Choose how the action runs. Configure it next, then publish it for pipeline steps.",
+      "http": "HTTP request",
+      "command": "Command",
+      "mcp": "Import from MCP",
+      "database": "Database query",
+      "pullRequest": "Create pull request",
+      "unavailable": "HTTP, MCP, database and pull request tools need project secrets, approvals or GitHub push, which are not available in this version yet.",
+      "credentials": "Credentials are selected in each tool. Secrets show a read-only list of the tools using them."
+    },
+    "tabs": {
+      "configuration": "Configuration",
+      "inputs": "Inputs & outputs",
+      "access": "Access",
+      "usage": "Usage log"
+    },
+    "saveDraft": "Save draft",
+    "publish": "Publish v{{version}}",
+    "saving": "Saving…",
+    "notSaved": "Not saved",
+    "notPublished": "Not published",
+    "published": "Published v{{version}}",
+    "draftSaved": "Draft saved · {{published}}",
+    "staleDraftSaved": "Draft saved · {{published}} is newer",
+    "unsavedChanges": "Unsaved changes · {{published}}",
+    "version": "v{{version}}",
+    "noVersion": "none",
+    "keepDraft": "Keep this draft",
+    "staleTitle": "A newer version was published after this draft was started",
+    "staleDetail": "This draft is based on {{basedOn}}, but {{published}} is the latest. Keep this draft to publish it over {{published}}, or change it first.",
+    "editor": {
+      "newTitle": "New command tool",
+      "noDescription": "Runs a program in the worktree of the step that calls it.",
+      "name": "Name",
+      "description": "Description",
+      "command": "Command",
+      "program": "Program",
+      "programHint": "A name on the PATH (cargo), a path inside the worktree (scripts/check.sh) or an absolute path.",
+      "arguments": "Arguments · one per line",
+      "argumentsHint": "Passed to the program as they are. No shell reads them, so quotes, * and $ are not special.",
+      "workingDirectory": "Working directory",
+      "worktree": "The worktree of the step that runs it",
+      "run": "Run",
+      "timeout": "Timeout · seconds",
+      "exitCodes": "Exit codes that pass",
+      "outputLimit": "Output kept · KiB",
+      "runHint": "Any other exit code, or running past the timeout, fails the step; its failure route decides what follows. When the program prints more than the limit, the latest output is kept.",
+      "environment": "Environment",
+      "variables": "Variables · NAME=value per line",
+      "environmentHint": "Added to the cleaned environment every program gets (PATH, HOME, TEMP and the like). Stored and shown in plain text, so never put secrets here.",
+      "unavailableTitle": "This tool can’t be edited in this version",
+      "httpUnavailable": "HTTP tools use project secrets and runtime approvals, which are not available yet. Steps that call it can’t start.",
+      "databaseUnavailable": "Database tools use project secrets and runtime approvals, which are not available yet. Steps that call it can’t start."
+    },
+    "inspector": {
+      "title": "Project & access",
+      "owner": "Owner project",
+      "kind": "Kind",
+      "secrets": "Secrets",
+      "access": "Access",
+      "accessSteps": "Pipeline steps that call it",
+      "accessRules": "Access rules · not applied yet",
+      "version": "Version",
+      "draftVersion": "v{{version}} draft",
+      "editAccess": "Edit access rules",
+      "usedBy": "Used by",
+      "unused": "No published pipeline calls this tool yet.",
+      "use": "{{pipeline}} / {{step}}",
+      "versions": "Runs keep the tool version they started with.",
+      "note": "Command tools hold no secrets: the program runs with the cleaned environment and the variables above, and its output is kept in the run’s transcript."
+    },
+    "errors": {
+      "programRequired": "Enter the program to run.",
+      "programOutsideWorktree": "A relative program path must stay inside the worktree.",
+      "controlCharacter": "Line breaks, tabs and other control characters can’t be passed to a program.",
+      "tooLong": "This is too long.",
+      "emptyArgument": "An argument can’t be empty.",
+      "timeout": "Enter whole seconds, from 1 up to {{max}} hours.",
+      "exitCodeNotNumber": "Enter whole numbers separated by commas.",
+      "noExitCodes": "Enter at least one exit code that passes.",
+      "tooManyExitCodes": "Enter at most {{max}} exit codes.",
+      "outputLimit": "Enter whole KiB, from 1 up to {{max}}.",
+      "variableLine": "Write each variable as NAME=value: {{line}}",
+      "variableName": "{{name}} is not a variable name: a letter or underscore, then letters, digits or underscores.",
+      "duplicateVariable": "{{name}} is set more than once.",
+      "variableValue": "The value of {{name}} contains a NUL character."
     }
   },
   "statusBar": {
@@ -1927,6 +2064,26 @@
         "done": "Agent profile draft kept",
         "failed": "Could not keep agent profile draft"
       },
+      "toolCreate": {
+        "running": "Creating tool {{name}}",
+        "done": "Tool created · {{name}}",
+        "failed": "Could not create tool {{name}}"
+      },
+      "toolDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "toolPublish": {
+        "running": "Publishing {{name}} v{{version}}",
+        "done": "Published {{name}} v{{version}}",
+        "failed": "Could not publish {{name}} v{{version}}"
+      },
+      "toolKeepDraft": {
+        "running": "Keeping the draft of {{name}}",
+        "done": "Draft kept · {{name}}",
+        "failed": "Could not keep the draft of {{name}}"
+      },
       "connectionCheck": {
         "running": "Checking {{name}}",
         "done": "Checked {{name}}",
@@ -1997,6 +2154,7 @@
       "tasks": "opens the task list",
       "pipeline": "opens the pipeline",
       "agentProfile": "opens the agent profile",
+      "tool": "opens the tool",
       "connections": "opens Connections",
       "runnerLog": "opens the runner log",
       "settings": "opens Project settings",
@@ -2007,6 +2165,7 @@
       "tasks": "Open tasks",
       "pipeline": "Open pipeline",
       "agentProfile": "Open profile",
+      "tool": "Open tool",
       "connections": "Open connections",
       "settings": "Open settings",
       "pullRequests": "Open pull requests"

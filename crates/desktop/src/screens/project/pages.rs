@@ -16,6 +16,7 @@ use super::{
   settings::SettingsScreen,
   task::{TaskProps, TaskScreen},
   tasks::{TasksProps, TasksScreen},
+  tools::ToolsScreen,
 };
 use crate::{
   navigation::route::{Page, Route},
@@ -98,6 +99,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
     Page::Pipelines => pipelines(ctx, open, None),
     Page::Pipeline(pipeline) => pipelines(ctx, open, Some(pipeline)),
     Page::Agents(_) => ctx.mount_keyed::<AgentsScreen>("agents", open),
+    Page::Tools(_) => ctx.mount_keyed::<ToolsScreen>("tools", open),
     Page::Connections(..) => ctx.mount_keyed::<ConnectionsScreen>("connections", open),
     Page::Settings(_) => ctx.mount_keyed::<SettingsScreen>("settings", open),
   }

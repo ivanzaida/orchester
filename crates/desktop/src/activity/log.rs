@@ -24,6 +24,7 @@ pub enum Place {
   PullRequests,
   Pipeline(ResourceId),
   AgentProfile(ResourceId),
+  Tool(ResourceId),
   Connections,
   Settings,
 }

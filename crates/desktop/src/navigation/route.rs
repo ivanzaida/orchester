@@ -18,6 +18,7 @@ const NEW: &str = "new";
 const PULL_REQUESTS: &str = "pull-requests";
 const PIPELINES: &str = "pipelines";
 const AGENTS: &str = "agents";
+const TOOLS: &str = "tools";
 const CONNECTIONS: &str = "connections";
 const SETTINGS: &str = "settings";
 const LIMITS: &str = "limits";
@@ -66,6 +67,8 @@ pub enum Page {
   Pipeline(ResourceId),
   /// Agent profiles and the one being edited (`WPmtS`).
   Agents(AgentSelection),
+  /// The tool library (`ZFwWl`) or one tool in its editor (`YEWFo`).
+  Tools(ToolSelection),
   /// Connections, the tab and the connection whose details are shown (`a4Lqb`).
   Connections(ConnectionTab, Option<ConnectionId>),
   /// `QV1af`, `c7e729`.
@@ -79,6 +82,15 @@ pub enum AgentSelection {
   First,
   Profile(ResourceId),
   /// A profile being written that is not saved yet.
+  New,
+}
+
+/// What the Tools screen shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolSelection {
+  Library,
+  Tool(ResourceId),
+  /// A command tool being written that is not saved yet.
   New,
 }
 
@@ -110,6 +122,7 @@ pub enum SidebarItem {
   PullRequests,
   Pipelines,
   Agents,
+  Tools,
   Connections,
   Settings,
 }
@@ -202,6 +215,9 @@ impl Page {
       [AGENTS] => Self::Agents(AgentSelection::First),
       [AGENTS, NEW] => Self::Agents(AgentSelection::New),
       [AGENTS, profile] => Self::Agents(AgentSelection::Profile(profile.parse().ok()?)),
+      [TOOLS] => Self::Tools(ToolSelection::Library),
+      [TOOLS, NEW] => Self::Tools(ToolSelection::New),
+      [TOOLS, tool] => Self::Tools(ToolSelection::Tool(tool.parse().ok()?)),
       [CONNECTIONS] => Self::Connections(ConnectionTab::named(tab), None),
       [CONNECTIONS, connection] => Self::Connections(ConnectionTab::named(tab), Some(connection.parse().ok()?)),
       [SETTINGS] => Self::Settings(SettingsTab::General),
@@ -225,6 +241,9 @@ impl Page {
       Self::Agents(AgentSelection::First) => format!("{root}/{AGENTS}"),
       Self::Agents(AgentSelection::New) => format!("{root}/{AGENTS}/{NEW}"),
       Self::Agents(AgentSelection::Profile(profile)) => format!("{root}/{AGENTS}/{profile}"),
+      Self::Tools(ToolSelection::Library) => format!("{root}/{TOOLS}"),
+      Self::Tools(ToolSelection::New) => format!("{root}/{TOOLS}/{NEW}"),
+      Self::Tools(ToolSelection::Tool(tool)) => format!("{root}/{TOOLS}/{tool}"),
       Self::Connections(tab, selected) => {
         let selected = selected.map_or_else(String::new, |connection| format!("/{connection}"));
         with_tab(format!("{root}/{CONNECTIONS}{selected}"), tab.query())
@@ -241,6 +260,7 @@ impl Page {
       Self::PullRequests | Self::PullRequest(_) => SidebarItem::PullRequests,
       Self::Pipelines | Self::Pipeline(_) => SidebarItem::Pipelines,
       Self::Agents(_) => SidebarItem::Agents,
+      Self::Tools(_) => SidebarItem::Tools,
       Self::Connections(..) => SidebarItem::Connections,
       Self::Settings(_) => SidebarItem::Settings,
     }

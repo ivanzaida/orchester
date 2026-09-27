@@ -8,7 +8,7 @@ use lurq::{app::ctx::Ctx, core::Signal};
 use super::ProjectBar;
 use crate::{
   activity::{Activity, OperationId, Place, Target},
-  navigation::route::{AgentSelection, Page, SettingsTab},
+  navigation::route::{AgentSelection, Page, SettingsTab, ToolSelection},
   runner::Runners,
   screens::project::ProjectNav,
 };
@@ -69,6 +69,7 @@ impl Opener {
       Place::PullRequests => Page::PullRequests,
       Place::Pipeline(id) => Page::Pipeline(id),
       Place::AgentProfile(id) => Page::Agents(AgentSelection::Profile(id)),
+      Place::Tool(id) => Page::Tools(ToolSelection::Tool(id)),
       Place::Connections => Page::CONNECTIONS,
       Place::Settings => Page::Settings(SettingsTab::General),
     });

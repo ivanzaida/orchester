@@ -26,6 +26,7 @@ pub use screens::{close_dialog, recovery_dialog};
 pub mod session;
 pub mod tasks;
 pub mod theme;
+pub mod tools;
 mod ui;
 pub use ui::{pressable, unit_input::FieldStroke};
 pub mod workspace;

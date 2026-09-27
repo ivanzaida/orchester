@@ -32,13 +32,14 @@ use crate::{
     describe::step_count,
     library::{LibraryEntry, NewPipeline, StartFrom, StarterText, VersionState, create_in, library_in},
   },
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     backdrop::backdrop,
     button::ActionButton,
     field::{ValueTone, field_error, value_box_sized},
     icon::{Icon, IconSize, icon},
     message_text,
+    notice::ownership_note,
     panel::RecoveryPanel,
     summary_step::summary_step,
   },
@@ -226,7 +227,9 @@ impl Library {
       .spacing(SpacingSize::Md)
       .child(filters)
       .child(ScrollVertical::new(rows).width(Dimension::Pct(100.0)))
-      .child(ownership_note(ctx, project))
+      .child(ownership_note(
+        &ctx.t_args("pipelines.library.ownership", [("project", project)]),
+      ))
       .into()
   }
 
@@ -399,24 +402,6 @@ fn starter_preview(ctx: &Ctx, project: &str) -> Element {
     .child(
       Text::new(&ctx.t_args("pipelines.empty.starterResult", [("project", project)]))
         .variant(ExtraTypography::Detail.role()),
-    )
-    .into()
-}
-
-/// Pipelines belong to the project (`hepfF`).
-fn ownership_note(ctx: &Ctx, project: &str) -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Md)
-    .spacing(ExtraSpacing::Stack.role())
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .rounded(ExtraRadius::Notice.role())
-    .child(icon(Icon::FolderLock, IconSize::Notice, PaletteColor::TextSecondary))
-    .child(
-      Text::new(&ctx.t_args("pipelines.library.ownership", [("project", project)]))
-        .variant(ExtraTypography::Explanation.role())
-        .flex(1.0),
     )
     .into()
 }
