@@ -6,6 +6,7 @@ mod pull_request_diffs;
 mod pull_requests;
 mod repository;
 mod resources;
+mod revision_diffs;
 mod runs;
 mod schema;
 mod step_outputs;

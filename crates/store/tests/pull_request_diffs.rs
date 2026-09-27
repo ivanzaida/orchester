@@ -1,4 +1,5 @@
-//! Pull request diffs per head revision, their text in content-addressed blob files.
+//! Diffs, their text in content-addressed blob files: a pull request's per head revision, and the
+//! diff between two commits.
 
 use std::{fs, path::Path};
 
@@ -10,7 +11,7 @@ use orchester_core::{
   project::{Project, ProjectKey},
   repository::GitHubRepo,
   revision::Revision,
-  store::PullRequestDiffStore,
+  store::{PullRequestDiffStore, RevisionDiffStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -125,4 +126,28 @@ fn a_damaged_blob_is_reported_not_returned() {
     db.pull_request_diff(&kontur(), 42, &revision('1')),
     Err(StoreError::Corrupt { what: "blob", .. })
   ));
+}
+
+#[test]
+fn revision_diff_is_stored_per_pair_of_commits() {
+  let (repo, mut db) = project_repo();
+  assert_eq!(db.revision_diff(&revision('b'), &revision('1')).expect("read"), None);
+  let stored = diff('1', DIFF, 10);
+  db.save_revision_diff(&stored).expect("save");
+  db.save_revision_diff(&diff('2', "", 20)).expect("save");
+  assert_eq!(
+    db.revision_diff(&revision('b'), &revision('1')).expect("read"),
+    Some(stored.clone())
+  );
+  assert_eq!(db.revision_diff(&revision('1'), &revision('b')).expect("read"), None);
+  // The pull request diff of the same text shares its blob.
+  db.save_pull_request_diff(&kontur(), 42, &diff('3', DIFF, 30))
+    .expect("save");
+  assert_eq!(blob_files(repo.path()).len(), 2, "the diff and the empty text");
+  drop(db);
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(
+    reopened.revision_diff(&revision('b'), &revision('1')).expect("read"),
+    Some(stored)
+  );
 }

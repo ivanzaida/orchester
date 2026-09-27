@@ -12,7 +12,7 @@ use super::{
 use crate::{StoreError, rows::corrupt};
 
 /// How a diff blob is labelled in `blobs`.
-const DIFF_MEDIA_TYPE: &str = "text/x-diff";
+pub(super) const DIFF_MEDIA_TYPE: &str = "text/x-diff";
 const COLUMNS: &str = "base_sha, head_sha, diff_blob, synced_at";
 
 impl PullRequestDiffStore for ProjectDb {
@@ -94,31 +94,32 @@ fn stored_number(number: u64) -> Result<i64, StoreError> {
   i64::try_from(number).map_err(|_| StoreError::Unrepresentable("pull request number"))
 }
 
-struct StoredDiff {
+/// A diff's row: its revisions, its blob and when it was read.
+pub(super) struct StoredDiff {
   base: String,
   head: String,
   blob: String,
-  synced_at: i64,
+  read_at: i64,
 }
 
 impl StoredDiff {
-  fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
+  pub(super) fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
     Ok(Self {
       base: row.get(0)?,
       head: row.get(1)?,
       blob: row.get(2)?,
-      synced_at: row.get(3)?,
+      read_at: row.get(3)?,
     })
   }
 
-  fn load(self, db: &ProjectDb) -> Result<RevisionDiff, StoreError> {
-    let revision = |value: &str| Revision::new(value).map_err(|error| corrupt("pull request revision", error));
+  pub(super) fn load(self, db: &ProjectDb) -> Result<RevisionDiff, StoreError> {
+    let revision = |value: &str| Revision::new(value).map_err(|error| corrupt("diff revision", error));
     let content = blobs::get(&db.connection, &db.directory, &BlobHash::stored(self.blob)?)?;
     Ok(RevisionDiff {
       base: revision(&self.base)?,
       head: revision(&self.head)?,
-      text: String::from_utf8(content).map_err(|error| corrupt("pull request diff", error))?,
-      read_at: Timestamp::from_unix_millis(self.synced_at),
+      text: String::from_utf8(content).map_err(|error| corrupt("diff", error))?,
+      read_at: Timestamp::from_unix_millis(self.read_at),
     })
   }
 }

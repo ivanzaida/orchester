@@ -159,6 +159,18 @@ pub trait PullRequestDiffStore {
   fn latest_pull_request_diff(&self, repo: &GitHubRepo, number: u64) -> Result<Option<RevisionDiff>, Self::Error>;
 }
 
+/// Diffs between two commits of the project's repository, read with git: one per pair of commits
+/// (`revision_diffs` with content-addressed blobs), since the diff of two commits does not
+/// change. A cache that is never pruned, written by whoever reads the diff (the desktop).
+pub trait RevisionDiffStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Stores `diff` as the diff from `diff.base` to `diff.head`, replacing a stored one.
+  fn save_revision_diff(&mut self, diff: &RevisionDiff) -> Result<(), Self::Error>;
+
+  fn revision_diff(&self, base: &Revision, head: &Revision) -> Result<Option<RevisionDiff>, Self::Error>;
+}
+
 /// Execution data, written by the runner. A run changes only by appending the events a
 /// transition returned; the resulting state is stored alongside in the same transaction.
 pub trait RunStore {

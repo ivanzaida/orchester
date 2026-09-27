@@ -4,6 +4,7 @@
 //! first [`MAX_LINE_CHARS`] characters and are marked as cut, so a diff never shows less than it
 //! claims without saying so. Pull requests and runs show their changes with it.
 
+pub mod git;
 mod parse;
 mod path;
 mod size;
