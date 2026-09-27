@@ -1,10 +1,12 @@
 mod activity;
 mod blobs;
 mod connections;
+mod import;
 mod invocation_prompts;
 mod limits;
 mod pull_request_diffs;
 mod pull_requests;
+mod read_only;
 mod repository;
 mod resources;
 mod revision_diffs;
@@ -25,6 +27,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
+pub use self::read_only::ReadOnlyProjectDb;
 use crate::{
   StoreError, git_exclude, migrate,
   rows::{corrupt, parse},

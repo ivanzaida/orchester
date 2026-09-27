@@ -202,9 +202,10 @@ immutable published versions `v1..vN`. Runs pin versions; publishing affects new
 
 | Table | Purpose |
 | --- | --- |
-| `resources` | id, kind (`agent_profile`, `instruction`, `pipeline`, `tool`), slug, name, archived, import provenance |
+| `resources` | id, kind (`agent_profile`, `instruction`, `pipeline`, `tool`), slug, name, archived |
 | `resource_drafts` | resource id, body, based-on version, updated at |
 | `resource_versions` | id, resource id, number, body, content hash, published at; unique (resource, number) |
+| `resource_imports` | a resource copied from another project (Import resources): import key, source project (id and name), source resource, source version (none for a draft), imported at; unique (import key, source resource). For display only: the copy does not follow its source |
 | `connections` | kind (GitHub, agent provider, MCP), name, settings, keychain reference, status, last check |
 | `secrets` | name, kind, environment (development, staging, production), created / rotated / archived; unique (name, environment) among secrets not archived. No column holds the value: the keychain entry is named by the project and secret ids (Windows Credential Manager: generic credential `orchester:<project id>/<secret id>`, local to the computer; macOS login keychain: service `orchester:<project id>`, account `<secret id>`). Archiving deletes the value and keeps the row |
 
@@ -224,6 +225,15 @@ the profile's steps, or now, when the profile's agents at work finish the comman
 is committed as a checkpoint and each step continues as a new invocation that resumes its CLI session.
 The connection's CLI must enforce the change for every step of the profile; the published profile
 keeps its permissions unless the change is also saved to its draft.
+
+Import resources copies resources from another project the application database knows. The
+desktop opens that project's database read-only (SQLite refuses writes; nothing is migrated, so a
+database this build has not migrated yet is refused until its project is opened) and writes every
+copy into this project in one transaction: a new resource whose only content is a draft, with its
+`resource_imports` row. What a copy refers to is resolved first: another resource is copied too or
+replaced by one of this project's; a connection or secret is never copied, only mapped to one of
+this project's or left unresolved, and an unresolved one stays named in the copy, which then shows
+it as missing. A tool copy keeps allowed callers only for pipelines copied with it.
 
 ### Tasks and scheduling
 

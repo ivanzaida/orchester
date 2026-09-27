@@ -1,6 +1,6 @@
 use std::{path::Path, time::Duration};
 
-use rusqlite::{Connection, TransactionBehavior};
+use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 
 use crate::StoreError;
 
@@ -24,6 +24,24 @@ pub(crate) fn open(path: &Path, migrations: &[&str]) -> Result<Connection, Store
   connection.pragma_update(None, "foreign_keys", false)?;
   apply(&mut connection, migrations)?;
   connection.pragma_update(None, "foreign_keys", true)?;
+  Ok(connection)
+}
+
+/// Opens `path` only to read it: SQLite refuses every write through the connection, and no
+/// migration runs. The database must be at the schema `migrations` lead to; an older one has to be
+/// opened with [`open`] first, by whoever owns it.
+pub(crate) fn open_read_only(path: &Path, migrations: &[&str]) -> Result<Connection, StoreError> {
+  let connection =
+    Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
+  connection.busy_timeout(BUSY_TIMEOUT)?;
+  let found: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+  let supported = u32::try_from(migrations.len()).expect("fewer than 2^32 migrations");
+  if found > supported {
+    return Err(StoreError::SchemaTooNew { found, supported });
+  }
+  if found < supported {
+    return Err(StoreError::SchemaTooOld { found, supported });
+  }
   Ok(connection)
 }
 
