@@ -1,6 +1,8 @@
 //! A project with tasks and runs in a temporary repository, for tests that read what the
 //! project database holds.
 
+#![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
+
 use std::{collections::BTreeMap, fs, time::Duration};
 
 use orchester_core::{
@@ -12,7 +14,7 @@ use orchester_core::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
   },
   revision::Revision,
-  run::{BranchName, NewRun, PublishedVersions, Run, RunEvent, RunSnapshot},
+  run::{BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot},
   store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
@@ -33,7 +35,8 @@ fn budget(tokens: u64) -> TokenBudget {
   TokenBudget::new(tokens).expect("above zero")
 }
 
-/// A project whose one-step pipeline "Delivery" is published, so tasks can run it.
+/// A project whose one-step pipeline "Delivery" is published, so tasks can run it; its step waits
+/// for a plan decision in [`Fixture::gated`].
 pub struct Fixture {
   pub repo: TempDir,
   pub db: ProjectDb,
@@ -43,6 +46,15 @@ pub struct Fixture {
 
 impl Fixture {
   pub fn new() -> Self {
+    Self::with_gate(false)
+  }
+
+  /// [`Fixture::new`] whose step, Implement, has an approval gate.
+  pub fn gated() -> Self {
+    Self::with_gate(true)
+  }
+
+  fn with_gate(approval_gate: bool) -> Self {
     let repo = tempfile::tempdir().expect("temporary directory");
     fs::create_dir(repo.path().join(".git")).expect("create .git");
     let project = Project::new(
@@ -78,7 +90,7 @@ impl Fixture {
       },
       instructions: PromptText::new("").expect("prompt"),
       depends_on: Default::default(),
-      approval_gate: false,
+      approval_gate,
       on_failure: None,
       budget: None,
     };
@@ -144,6 +156,23 @@ impl Fixture {
     let execution = run.current_attempt().expect("attempt").executions()[0].id();
     let events = run.complete_step(execution, now).expect("complete step");
     self.record(run, &events);
+  }
+
+  /// The gated step of `run` proposes `text` as its next plan at `now`.
+  pub fn propose(&mut self, run: &mut Run, text: &str, now: Timestamp) -> Plan {
+    let execution = run.current_attempt().expect("attempt").executions()[0].id();
+    let earlier = self.db.plans(run.id()).expect("plans");
+    let (events, plan) = run
+      .propose_plan(execution, text.to_owned(), &earlier, now)
+      .expect("proposed");
+    self.db.append_events_with_plan(run, &events, &plan).expect("append");
+    plan
+  }
+
+  /// Records `decision` on `plan` of `run` at `now`.
+  pub fn decide(&mut self, run: &mut Run, plan: &mut Plan, decision: PlanDecision, now: Timestamp) {
+    let events = run.decide_plan(plan, decision, now).expect("decided");
+    self.db.append_events_with_plan(run, &events, plan).expect("append");
   }
 
   /// Stores `events`, which `run` just recorded.

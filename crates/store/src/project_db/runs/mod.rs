@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, num::NonZeroU32};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::VersionNumber,
-  run::{Checkpoint, NewRun, Run, RunEvent, RunEventKind, RunNumber, StepExecutor},
+  run::{Checkpoint, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber, StepExecutor},
   store::RunStore,
   time::Timestamp,
 };
@@ -17,7 +17,7 @@ use self::{
   columns::{attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text, step_status_columns},
   load::{load_checkpoint, load_events, load_runs},
 };
-use super::{ProjectDb, resources::version_number};
+use super::{ProjectDb, plans, resources::version_number};
 use crate::{
   RunStoreError, StoreError,
   rows::{corrupt, encode_json, millis_column, tokens_column},
@@ -55,32 +55,18 @@ impl RunStore for ProjectDb {
   }
 
   fn append_events(&mut self, run: &Run, events: &[RunEvent]) -> Result<(), RunStoreError> {
-    check_events(run, events)?;
-    let transaction = self.connection.transaction()?;
-    let stored: Option<i64> = transaction
-      .query_row(
-        "SELECT last_sequence FROM runs WHERE id = ?1",
-        [run.id().to_string()],
-        |row| row.get(0),
-      )
-      .optional()?;
-    let stored = stored.ok_or(RunStoreError::RunNotFound(run.id()))?;
-    let expected = u64::try_from(stored).map_err(|error| corrupt("run sequence", error))? + 1;
-    let found = events[0].sequence().get();
-    if found != expected {
-      return Err(RunStoreError::SequenceConflict {
-        run: run.id(),
-        expected,
-        found,
-      });
+    self.append(run, events, None)
+  }
+
+  fn append_events_with_plan(&mut self, run: &Run, events: &[RunEvent], plan: &Plan) -> Result<(), RunStoreError> {
+    if plan.run != run.id() {
+      return Err(RunStoreError::EventsMismatch("the plan belongs to another run"));
     }
-    update_run(&transaction, run)?;
-    write_attempts(&transaction, run)?;
-    for event in events {
-      insert_event(&transaction, event)?;
-    }
-    transaction.commit()?;
-    Ok(())
+    self.append(run, events, Some(plan))
+  }
+
+  fn plans(&self, run: RunId) -> Result<Vec<Plan>, RunStoreError> {
+    Ok(plans::of_run(&self.connection, run)?)
   }
 
   fn run(&self, id: RunId) -> Result<Option<Run>, RunStoreError> {
@@ -138,6 +124,41 @@ impl RunStore for ProjectDb {
       runs.entry(version_number(version)?).or_default().push(run_number(run)?);
     }
     Ok(runs)
+  }
+}
+
+impl ProjectDb {
+  /// Appends `events` and stores `run`, and `plan` if given, in one transaction.
+  fn append(&mut self, run: &Run, events: &[RunEvent], plan: Option<&Plan>) -> Result<(), RunStoreError> {
+    check_events(run, events)?;
+    let transaction = self.connection.transaction()?;
+    let stored: Option<i64> = transaction
+      .query_row(
+        "SELECT last_sequence FROM runs WHERE id = ?1",
+        [run.id().to_string()],
+        |row| row.get(0),
+      )
+      .optional()?;
+    let stored = stored.ok_or(RunStoreError::RunNotFound(run.id()))?;
+    let expected = u64::try_from(stored).map_err(|error| corrupt("run sequence", error))? + 1;
+    let found = events[0].sequence().get();
+    if found != expected {
+      return Err(RunStoreError::SequenceConflict {
+        run: run.id(),
+        expected,
+        found,
+      });
+    }
+    update_run(&transaction, run)?;
+    write_attempts(&transaction, run)?;
+    for event in events {
+      insert_event(&transaction, event)?;
+    }
+    if let Some(plan) = plan {
+      plans::save(&transaction, plan)?;
+    }
+    transaction.commit()?;
+    Ok(())
   }
 }
 

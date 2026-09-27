@@ -6,7 +6,7 @@
 use super::{
   attempt::StepExecution,
   state::Run,
-  status::{RunStatus, StepStatus},
+  status::{RunStatus, StepStatus, WaitReason},
 };
 use crate::id::StepExecutionId;
 
@@ -56,5 +56,34 @@ impl Run {
     let mut ready = self.ready_executions();
     ready.truncate(free);
     ready
+  }
+
+  /// Executions of the current attempt whose plan waits for a person's decision, in pipeline
+  /// order.
+  pub fn awaiting_plan(&self) -> Vec<StepExecutionId> {
+    self.current_attempt().map_or_else(Vec::new, |attempt| {
+      attempt
+        .executions()
+        .iter()
+        .filter(|execution| execution.status() == StepStatus::Waiting(WaitReason::Plan))
+        .map(StepExecution::id)
+        .collect()
+    })
+  }
+
+  /// Whether the run can go no further until a person decides: a step waits for a decision (a
+  /// plan, an approval, a message) and no other step works or can start. No agent works for it
+  /// meanwhile, so it holds no agent slot, and waiting is not active agent time.
+  pub fn waits_for_a_person(&self) -> bool {
+    let waiting = self.current_attempt().is_some_and(|attempt| {
+      attempt
+        .executions()
+        .iter()
+        .any(|execution| matches!(execution.status(), StepStatus::Waiting(_)))
+    });
+    self.status() == &RunStatus::Running
+      && waiting
+      && self.running_executions().is_empty()
+      && self.ready_executions().is_empty()
   }
 }

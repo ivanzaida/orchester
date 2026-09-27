@@ -43,6 +43,11 @@ fn access() -> AccessPolicy {
 
 /// The sample pipeline with Run checks calling `tool`.
 fn problems_with(tool: Option<Tool>) -> Vec<PreflightProblem> {
+  problems_of(tool, false)
+}
+
+/// [`problems_with`], Run checks with an approval gate when `gate`; no other step has one.
+fn problems_of(tool: Option<Tool>, gate: bool) -> Vec<PreflightProblem> {
   let config = Config::feature_delivery();
   let checks = ResourceId::generate();
   let steps: Vec<Step> = config
@@ -52,10 +57,11 @@ fn problems_with(tool: Option<Tool>) -> Vec<PreflightProblem> {
     .iter()
     .cloned()
     .map(|mut step| {
+      step.approval_gate = false;
       if step.key == key("checks") {
         step.kind = StepKind::Tool { tool: Some(checks) };
+        step.approval_gate = gate;
       }
-      step.approval_gate = false;
       step
     })
     .collect();
@@ -98,6 +104,15 @@ fn tool_step_preflight_accepts_published_command_tools_only() {
   assert_eq!(
     problems_with(Some(guarded)),
     [PreflightProblem::ToolAccessRules { step: key("checks") }]
+  );
+}
+
+/// Only agent steps propose plans for review: a gate on a tool step cannot be answered.
+#[test]
+fn tool_step_preflight_refuses_an_approval_gate() {
+  assert_eq!(
+    problems_of(Some(Tool::command("", command())), true),
+    [PreflightProblem::ApprovalGate { step: key("checks") }]
   );
 }
 

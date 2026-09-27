@@ -15,10 +15,19 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{failed, prepare::Prepared};
 
-/// A pause of an idle run: a paused run already is, anything else is not running.
-pub(super) fn pause(db: &mut ProjectDb, run: RunId) -> Result<(), Rejection> {
-  match load(db, run)?.status() {
-    RunStatus::Paused(_) => Ok(()),
+/// A pause of an idle run: a paused run already is; one waiting for a person's decision has no
+/// agent to settle and pauses at once, returned to be announced; anything else is not running.
+pub(super) fn pause(db: &mut ProjectDb, run: RunId) -> Result<Option<Run>, Rejection> {
+  let mut run = load(db, run)?;
+  match run.status() {
+    RunStatus::Paused(_) => Ok(None),
+    RunStatus::Running if run.waits_for_a_person() => {
+      let now = Timestamp::now();
+      let mut events = run.request_pause(now).map_err(rejection)?;
+      events.extend(run.pause(now).map_err(rejection)?);
+      store(db, &run, &events)?;
+      Ok(Some(run))
+    }
     _ => Err(Rejection::RunNotRunning),
   }
 }

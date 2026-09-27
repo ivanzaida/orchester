@@ -212,6 +212,9 @@
       "title": "Needs you",
       "empty": "Nothing needs you right now. Plan decisions, questions and approvals appear here.",
       "needsInput": "NEEDS INPUT",
+      "reviewPlan": "REVIEW PLAN",
+      "planSummary": "Plan v{{version}} from {{agent}} waits for your decision. Nothing after it starts until you decide.",
+      "reviewPlanAction": "Review plan",
       "context": "{{task}} · {{detail}}",
       "open": "Open task  →"
     },
@@ -380,6 +383,7 @@
         "pending": "Run {{run}} · starting",
         "starting": "Run {{run}} · Attempt {{attempt}} · starting",
         "working": "Run {{run}} · Attempt {{attempt}} · {{step}} · {{agent}} working",
+        "awaitingPlan": "Run {{run}} · Attempt {{attempt}} · {{pipeline}} {{version}} · {{agent}} finished",
         "pausing": "Run {{run}} · Attempt {{attempt}} · {{step}} · pausing at the next checkpoint",
         "paused": "Run {{run}} · Attempt {{attempt}} · Paused by you at {{time}}",
         "tokenLimit": "Run {{run}} · Attempt {{attempt}} · Stopped at the token limit at {{time}}",
@@ -662,6 +666,49 @@
       "worktreeFromBase": "In the run’s worktree after its base, before its first checkpoint",
       "notCheckpointed": "Not checkpointed"
     },
+    "plan": {
+      "title": "Plan v{{version}} · {{task}}",
+      "notice": {
+        "title": "Your approval is needed",
+        "detail": {
+          "none": "Review plan v{{version}} from {{agent}}.",
+          "one": "Review plan v{{version}} from {{agent}}. {{next}} has not started.",
+          "other": "Review plan v{{version}} from {{agent}}. {{next}} have not started."
+        }
+      },
+      "empty": "The agent left no text for this plan. Request changes to ask for one.",
+      "requestChanges": "Request changes",
+      "requestingChanges": "Requesting changes…",
+      "approve": "Approve plan & continue",
+      "approving": "Approving…",
+      "approveMeaning": {
+        "none": "Approves this plan version and lets the run continue. A revised plan requires another decision.",
+        "one": "Approves this plan version and starts {{next}}. A revised plan requires another decision.",
+        "other": "Approves this plan version and starts {{next}}. A revised plan requires another decision."
+      },
+      "earlier": "Plan v{{version}} is an earlier version. Plan v{{latest}} waits for your decision.",
+      "earlierNote": "You asked: {{note}}",
+      "criteria": "Acceptance criteria",
+      "criterion": "○  {{criterion}}",
+      "noCriteria": "The task has no acceptance criteria.",
+      "changesFor": "Changes for {{agent}}",
+      "notePlaceholder": "Describe what should change in this plan…",
+      "changesMeaning": {
+        "none": "Request changes returns the plan to {{agent}}.",
+        "one": "Request changes returns the plan to {{agent}}. {{next}} stays blocked.",
+        "other": "Request changes returns the plan to {{agent}}. {{next}} stay blocked."
+      },
+      "tokensUsed": "Tokens used",
+      "planVersion": "Plan version",
+      "version": {
+        "awaiting": "v{{version}} · awaiting approval",
+        "approved": "v{{version}} · approved",
+        "changesRequested": "v{{version}} · changes requested"
+      },
+      "errors": {
+        "notAwaited": "This plan no longer waits for a decision. The page shows where the run stands now."
+      }
+    },
     "ready": {
       "status": "Ready for review",
       "meta": "Run #{{run}}  ·  {{pipeline}}  ·  Finished at {{time}}",
@@ -701,7 +748,7 @@
         "command": "Step “{{step}}” calls a command tool that cannot run in this version."
       },
       "toolAccessRules": "Step “{{step}}” calls a command tool with access rules; tool steps cannot apply access rules in this version yet.",
-      "approvalGate": "Step “{{step}}” waits for an approval; approval gates cannot run in this version yet.",
+      "approvalGate": "Step “{{step}}” calls a tool and waits for an approval; only agent steps can propose a plan for review in this version.",
       "profileNotPublished": "Step “{{step}}” uses an agent profile without a published version.",
       "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
@@ -2509,7 +2556,8 @@
       "interruptedOffline": {
         "one": "1 run interrupted · nothing runs until the runner starts",
         "other": "{{count}} runs interrupted · nothing runs until the runner starts"
-      }
+      },
+      "planReady": "Plan ready for review · {{task}}"
     },
     "counts": {
       "agents": "Agents",
@@ -2710,6 +2758,7 @@
       "settings": "opens Project settings",
       "pullRequests": "opens Pull requests",
       "instruction": "opens the instruction",
+      "task": "opens the task",
       "secrets": "opens Secrets"
     },
     "open": {
@@ -2722,6 +2771,7 @@
       "settings": "Open settings",
       "pullRequests": "Open pull requests",
       "instruction": "Open instruction",
+      "task": "Open task",
       "secrets": "Open secrets"
     }
   },

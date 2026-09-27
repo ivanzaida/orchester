@@ -443,3 +443,32 @@ fn instruction_screen_roles_follow_pencil() {
   assert_eq!(style(ExtraTypography::ContextNote).font_size, 9.0);
   assert_eq!(style(ExtraTypography::IconState).font_size, 20.0);
 }
+
+#[test]
+fn plan_review_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  // Plan title `J7irj`: 19/500.
+  let title = theme.typography_style(ExtraTypography::PlanTitle.role());
+  assert_eq!((title.font_size, title.weight), (19.0, FontWeight::Medium));
+  // The note for the agent `DDXc5` in `NbNN0`: 12, line height 1.6, padding 14.
+  let note = theme.typography_style(ExtraTypography::ReviewNote.role());
+  assert_eq!((note.font_size, note.line_height), (12.0, 1.6));
+  assert_eq!(theme.spacing_value(ExtraSpacing::TextArea.role()), Dimension::Px(14.0));
+  // Agent-written text `FP6BD`: 12, line height 1.6, in the text color.
+  let agent = theme.typography_style(ExtraTypography::AgentText.role());
+  assert_eq!((agent.font_size, agent.line_height), (12.0, 1.6));
+  assert_eq!(agent.color, Color::from_hex("#EEEEEE"));
+  // Agent-written Markdown reads in the grayscale chrome; code keeps the diff's code colors; a
+  // first-level heading is 14 on the 12px body.
+  let markdown = theme.markdown();
+  assert_eq!(
+    markdown.heading_1.text.font_size_scale.map(|scale| scale * 12.0),
+    Some(14.0)
+  );
+  assert_eq!(markdown.code_block_box.background, Some(Color::from_hex("#0D1117")));
+  assert_eq!(markdown.code_block.text.color, Some(Color::from_hex("#E6EDF3")));
+  assert_eq!(markdown.link.text.color, Some(Color::from_hex("#EEEEEE")));
+  assert_eq!(markdown.list_marker.text.color, Some(Color::from_hex("#A3A3A3")));
+  assert_eq!(markdown.code_block.text.font_family.as_deref(), Some("Geist Mono"));
+}

@@ -19,7 +19,7 @@ use orchester_core::{
 
 use crate::fixture::{Config, Logged, at, key, model, project, revision, task};
 
-fn builder(instructions: &str) -> AgentProfile {
+pub(crate) fn builder(instructions: &str) -> AgentProfile {
   AgentProfile::new(
     Name::new("Builder").expect("valid role"),
     "Implements the approved plan.".into(),
@@ -30,7 +30,7 @@ fn builder(instructions: &str) -> AgentProfile {
   )
 }
 
-fn step_with(instructions: &str) -> Step {
+pub(crate) fn step_with(instructions: &str) -> Step {
   let config = Config::feature_delivery();
   let mut step = config
     .pipeline_version
@@ -59,7 +59,7 @@ fn instruction(text: &str, targets: AgentTargets, events: &[InjectionEvent], sco
 const BOTH: [InjectionEvent; 2] = [InjectionEvent::Start, InjectionEvent::Resume];
 
 /// Everything but the instructions, for the implement step of Feature delivery v3 run by Builder v2.
-struct Prompt {
+pub(crate) struct Prompt {
   project: orchester_core::project::Project,
   task: Task,
   logged: Logged,
@@ -70,7 +70,7 @@ struct Prompt {
 }
 
 impl Prompt {
-  fn new(profile: AgentProfile, step: Step, task: Task) -> Self {
+  pub(crate) fn new(profile: AgentProfile, step: Step, task: Task) -> Self {
     Self {
       project: project(),
       task,
@@ -82,7 +82,7 @@ impl Prompt {
     }
   }
 
-  fn input<'a>(
+  pub(crate) fn input<'a>(
     &'a self,
     instructions: &'a [InstructionSource<'a>],
     dependencies: &'a [DependencyOutput<'a>],
@@ -108,6 +108,7 @@ impl Prompt {
       },
       instructions,
       dependencies,
+      revision: None,
     }
   }
 }

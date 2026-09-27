@@ -1,5 +1,7 @@
 //! A project with a started run, shared by the tests of the execution tables.
 
+#![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
+
 use std::{collections::BTreeMap, fs, time::Duration};
 
 use orchester_core::{
@@ -34,6 +36,15 @@ pub fn model() -> ModelId {
 
 /// A project with a started run of a one-step pipeline.
 pub fn started_run() -> (TempDir, ProjectDb, Run, StepExecutionId) {
+  run_of_one_step(false)
+}
+
+/// [`started_run`] whose step waits for a plan decision when it finishes.
+pub fn started_gated_run() -> (TempDir, ProjectDb, Run, StepExecutionId) {
+  run_of_one_step(true)
+}
+
+fn run_of_one_step(approval_gate: bool) -> (TempDir, ProjectDb, Run, StepExecutionId) {
   let repo = tempfile::tempdir().expect("temporary directory");
   fs::create_dir(repo.path().join(".git")).expect("create .git");
   let project = Project::new(
@@ -80,7 +91,7 @@ pub fn started_run() -> (TempDir, ProjectDb, Run, StepExecutionId) {
     },
     instructions: PromptText::new("").expect("prompt"),
     depends_on: Default::default(),
-    approval_gate: false,
+    approval_gate,
     on_failure: None,
     budget: None,
   };

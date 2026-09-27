@@ -151,7 +151,8 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::ProfileNotInRun
       | Rejection::PermissionsNotEnforceable { .. }
       | Rejection::NoAgentToRestart
-      | Rejection::NoPendingPermissions,
+      | Rejection::NoPendingPermissions
+      | Rejection::PlanNotAwaited,
     ) => vec![Message::new("runs.start.failed")],
   }
 }
@@ -187,6 +188,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     }
     RunRequestError::Rejected(Rejection::NoAgentToRestart) => Message::new("runs.permissions.errors.noAgentToRestart"),
     RunRequestError::Rejected(Rejection::NoPendingPermissions) => Message::new("runs.permissions.errors.noPending"),
+    RunRequestError::Rejected(Rejection::PlanNotAwaited) => Message::new("runs.plan.errors.notAwaited"),
     RunRequestError::Rejected(
       Rejection::RunNotFound
       | Rejection::ProfileNotInRun
