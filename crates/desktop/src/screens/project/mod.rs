@@ -1,7 +1,7 @@
 //! Project shell: the sidebar (`zo9Py`) beside the open project screen — the overview
 //! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), a task (`RD4pc`, `SfXU1`),
 //! pull requests (`wGtxT`) and one pull request
-//! (`Rrmhf`), instructions (`yRKeF`), agent profiles (`WPmtS`),
+//! (`Rrmhf`), instructions (`yRKeF`), agent profiles (`WPmtS`), secrets (`R99lt`),
 //! connections (`a4Lqb`) or Project settings (`QV1af`), above the status bar (`pmOpt`). The router
 //! renders the screen the path names into the shell's outlet. The shell reads the project's
 //! tasks once and hands them to the sidebar, the screen and the status bar.
@@ -16,6 +16,7 @@ mod pages;
 mod pipelines;
 mod pull_requests;
 mod runner;
+mod secrets;
 mod settings;
 mod sidebar;
 mod task;

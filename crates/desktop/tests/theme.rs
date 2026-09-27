@@ -223,6 +223,18 @@ fn agents_and_connections_roles_follow_pencil() {
 }
 
 #[test]
+fn secrets_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  // `B1zGN` in the secret row `vxAMD`: Geist Mono 12 in `text`.
+  let name = theme.typography_style(ExtraTypography::MonoTitle.role());
+  assert_eq!((name.font_size, &*name.font_family), (12.0, "Geist Mono"));
+  // `FNlaR` in the secret inspector `CQxCb`: Geist Mono 13 in `muted`.
+  let masked = theme.typography_style(ExtraTypography::MaskedValue.role());
+  assert_eq!((masked.font_size, &*masked.font_family), (13.0, "Geist Mono"));
+}
+
+#[test]
 fn pull_request_roles_follow_pencil() {
   let app = themed_app();
   let title = app.theme().typography_style(ExtraTypography::RowTitle.role());
