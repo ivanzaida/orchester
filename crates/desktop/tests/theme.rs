@@ -41,6 +41,7 @@ fn palette_roles_resolve_to_pencil_values() {
     theme.palette_color(ExtraColor::Scrim.role()),
     Color::from_hex("#000000A6")
   );
+  assert_eq!(theme.palette_color(PaletteColor::Danger), Color::from_hex("#F87171"));
 }
 
 #[test]

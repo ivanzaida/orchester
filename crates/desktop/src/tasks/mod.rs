@@ -15,4 +15,5 @@ pub mod plan;
 pub mod progress;
 pub mod run;
 pub mod transcript;
+pub mod unreadable;
 pub mod usage;

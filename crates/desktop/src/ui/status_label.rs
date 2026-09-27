@@ -1,4 +1,5 @@
-//! Status label (`DeizF`): an icon and a word on the hover fill. Status always shows both.
+//! Status label (`DeizF`): an icon and a word on the hover fill. Status always shows both, and
+//! only *Unreadable* is in colour ([`danger_status_label`]).
 
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, SpacingSize},
@@ -15,15 +16,26 @@ const LABEL_HEIGHT: f32 = 26.0;
 const COMPACT_HEIGHT: f32 = 22.0;
 
 pub fn status_label(glyph: Icon, label: &str) -> Element {
-  labelled(glyph, label, ExtraTypography::StatusLabel)
+  labelled(glyph, label, ExtraTypography::StatusLabel, None)
+}
+
+/// The label of a run that cannot be read (*Unreadable*, `uEyyL` in `mGbYs`): its icon and word in
+/// the danger role.
+pub fn danger_status_label(glyph: Icon, label: &str) -> Element {
+  labelled(glyph, label, ExtraTypography::StatusLabel, Some(PaletteColor::Danger))
 }
 
 /// The label as list rows use it, with smaller text (`v7McTX` in `d9bo3`).
 pub fn compact_status_label(glyph: Icon, label: &str) -> Element {
-  labelled(glyph, label, ExtraTypography::CompactStatusLabel)
+  labelled(glyph, label, ExtraTypography::CompactStatusLabel, None)
 }
 
-fn labelled(glyph: Icon, label: &str, typography: ExtraTypography) -> Element {
+/// `color` replaces the text color of the icon and the word.
+fn labelled(glyph: Icon, label: &str, typography: ExtraTypography, color: Option<PaletteColor>) -> Element {
+  let mut word = Text::new(label).variant(typography.role()).nowrap();
+  if let Some(color) = color.clone() {
+    word = word.color(color);
+  }
   Row::new()
     .height(Dimension::Px(LABEL_HEIGHT))
     .padding_horizontal(SpacingSize::Sm)
@@ -31,8 +43,8 @@ fn labelled(glyph: Icon, label: &str, typography: ExtraTypography) -> Element {
     .align_items(Alignment::Center)
     .background(PaletteColor::AccentMuted)
     .rounded(RadiusSize::Sm)
-    .child(icon(glyph, IconSize::Small, PaletteColor::TextPrimary))
-    .child(Text::new(label).variant(typography.role()).nowrap())
+    .child(icon(glyph, IconSize::Small, color.unwrap_or(PaletteColor::TextPrimary)))
+    .child(word)
     .into()
 }
 

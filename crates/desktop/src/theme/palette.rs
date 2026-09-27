@@ -5,8 +5,8 @@ use lurq::{
 
 use super::tokens::{
   ACCENT, BORDER, CANVAS, CODE_BG, CODE_COMMENT, CODE_CONSTANT, CODE_FUNCTION, CODE_KEYWORD, CODE_STRING, CODE_TEXT,
-  CODE_VARIABLE, DIFF_ADD_BG, DIFF_ADD_TEXT, DIFF_REMOVE_BG, DIFF_REMOVE_TEXT, FOCUS_GAP, FOCUS_RING, HAIRLINE, HOVER,
-  INVERSE_TEXT, MUTED, RAISED, SCRIM, SIDEBAR, SUBTLE, SURFACE, TEXT,
+  CODE_VARIABLE, DANGER, DIFF_ADD_BG, DIFF_ADD_TEXT, DIFF_REMOVE_BG, DIFF_REMOVE_TEXT, FOCUS_GAP, FOCUS_RING, HAIRLINE,
+  HOVER, INVERSE_TEXT, MUTED, RAISED, SCRIM, SIDEBAR, SUBTLE, SURFACE, TEXT,
 };
 
 /// Pencil colors without a built-in lurq role, registered as `PaletteColor::Extra`.
@@ -140,8 +140,9 @@ pub fn palette() -> ThemePalette {
     text_secondary: c(MUTED),
     text_muted: c(SUBTLE),
     text_inverse: c(INVERSE_TEXT),
-    // The design has no status colors (status pairs an icon with a label), so the
-    // success/warning/danger/info roles keep lurq defaults until it defines them.
+    // Only the Unreadable status label is in colour (`mGbYs`); status otherwise pairs an icon with a
+    // label, so the success/warning/info roles and danger's muted fill keep lurq defaults.
+    danger: c(DANGER),
     ..ThemePalette::default()
   };
   for extra in ExtraColor::ALL {

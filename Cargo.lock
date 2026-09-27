@@ -2532,6 +2532,7 @@ dependencies = [
  "orchester-vault",
  "parking_lot",
  "rfd",
+ "rusqlite",
  "serde_json",
  "syntect",
  "tempfile",

@@ -18,7 +18,10 @@ use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, StepStat
 use super::super::page;
 use crate::{
   display,
-  tasks::detail::{RunView, StepView, TaskDetail},
+  tasks::{
+    detail::{RunView, StepView, TaskDetail},
+    unreadable::Unreadable,
+  },
   theme::{ExtraSpacing, ExtraTypography},
   ui::{icon::Icon, status_label::status_label},
 };
@@ -26,6 +29,9 @@ use crate::{
 /// `lost`: the run is recorded as running but no runner is connected, so it is interrupted.
 pub(super) fn heading(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Element {
   let title = detail.task.details().title.as_str();
+  if let Some(unreadable) = &detail.latest_unreadable {
+    return page::heading(title, &unreadable_description(ctx, unreadable));
+  }
   match &detail.run {
     Some(run) if *run.run.status() == RunStatus::Succeeded => ready_heading(ctx, title, run, detail.merge.is_some()),
     _ => page::heading(title, &description(ctx, detail, lost)),
@@ -71,6 +77,17 @@ fn ready_heading(ctx: &Ctx, title: &str, run: &RunView, merged: bool) -> Element
         ),
     )
     .into()
+}
+
+/// "Run 131 · could not be read" (`PrBzq` in 02.R).
+fn unreadable_description(ctx: &Ctx, run: &Unreadable) -> Arc<str> {
+  match run.number {
+    Some(number) => ctx.t_args(
+      "runs.page.describe.unreadable",
+      [("run", number.get().to_string().as_str())],
+    ),
+    None => ctx.t("runs.page.describe.unreadableUnnumbered"),
+  }
 }
 
 fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {

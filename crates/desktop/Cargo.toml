@@ -54,5 +54,7 @@ tracing-subscriber.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+# Damages a run's row the way an edit outside Orchester would; the store has no API for that.
+rusqlite.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
