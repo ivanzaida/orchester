@@ -88,15 +88,30 @@ impl ProjectNav {
   /// history goes back to that entry, so the screen does not follow itself in history;
   /// otherwise `page` takes the form's place. Either way the form is not visited again.
   pub fn finish(&self, page: Page) {
-    let opened_from_page = matches!(
-      entry::from(&self.navigator),
-      Some(Route::Project(project, from)) if project == self.project && from.same_screen(&page)
-    );
-    if opened_from_page {
+    if self.opened_from(&page) {
       entry::finish_back(&self.navigator);
     } else {
       self.replace(page);
     }
+  }
+
+  /// Leaves a form without submitting it, for `page`. When the form was opened from the screen
+  /// `page` shows, history goes back to that entry, on the tab it was on; otherwise `page` opens
+  /// as a new entry. The form stays in history either way, as any screen left unfinished does.
+  pub fn leave(&self, page: Page) {
+    if self.opened_from(&page) {
+      self.navigator.back();
+    } else {
+      self.show(page);
+    }
+  }
+
+  /// Whether the current entry was opened from the screen `page` shows, on any tab.
+  fn opened_from(&self, page: &Page) -> bool {
+    matches!(
+      entry::from(&self.navigator),
+      Some(Route::Project(project, from)) if project == self.project && from.same_screen(page)
+    )
   }
 
   /// Opens Connections with Add GitHub connection open, e.g. for a remote on an Enterprise host.

@@ -380,7 +380,7 @@ fn run_action(ctx: &mut Ctx) -> RunAction {
 /// Save as draft or Create & run, so the state says so rather than claiming a saved draft.
 fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, form: &FormState) -> Element {
   let nav = nav.clone();
-  let back = pressable(surface().id("new-task-back"), move || nav.show(Page::TASKS))
+  let back = pressable(surface().id("new-task-back"), move || nav.leave(Page::TASKS))
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));
