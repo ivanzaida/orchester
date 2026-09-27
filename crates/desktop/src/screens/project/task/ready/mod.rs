@@ -39,8 +39,9 @@ const STAGES_HEIGHT: f32 = 44.0;
 const STAGE_HEIGHT: f32 = 24.0;
 const STAGE_LINE: f32 = 2.0;
 const BULLET: f32 = 3.0;
-/// Height of the review actions row (`ksjis`).
+/// Height of the review actions row (`ksjis`) and of the readiness card (`IBuWf`).
 const ACTIONS_HEIGHT: f32 = 44.0;
+const READINESS_HEIGHT: f32 = 76.0;
 
 /// The Summary tab of `run`, which succeeded, in project `project`.
 pub(super) fn ready_for_review(
@@ -78,6 +79,7 @@ fn readiness(ctx: &Ctx) -> Element {
   Row::new()
     .id("task-ready-notice")
     .width(Dimension::Pct(100.0))
+    .min_height(Dimension::Px(READINESS_HEIGHT))
     .padding(SpacingSize::Md)
     .spacing(ExtraSpacing::Group.role())
     .align_items(Alignment::Center)
