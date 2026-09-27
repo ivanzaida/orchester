@@ -131,9 +131,10 @@ impl Pulse {
   }
 }
 
-/// A metric figure as the design draws it: at least two digits ("02", "12").
+/// A count as every figure shows it (Overview metrics and headings, the status bar): the plain
+/// number, "2", "12", "0", never zero-padded (decided 2026-09-27).
 pub fn figure(count: usize) -> String {
-  format!("{count:02}")
+  count.to_string()
 }
 
 /// Under the overview's task list (`WV44u`): active tasks and completed ones.

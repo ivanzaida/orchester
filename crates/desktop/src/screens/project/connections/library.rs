@@ -1,5 +1,5 @@
 //! The connections of the selected tab (`Bc9cT`, `gQDwZ`) beside the selected one's details
-//! (`ez6IT`, `l8BJVr`), or what to add when the tab has none.
+//! (`JuVaA`, `C0jjP`), or what to add when the tab has none.
 
 use std::sync::Arc;
 

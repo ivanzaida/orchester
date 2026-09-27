@@ -246,6 +246,28 @@ fn recovery_dialog_keeps_its_side_margins_in_a_narrow_window() {
   assert_eq!(dialog.width, 800.0 - 2.0 * 32.0);
 }
 
+/// A worktree state is top-aligned (`Py65X`): its 12px icon sits centred in a 16px slot that
+/// lines up with the first line of the label (Inter 11, 16.5px lines), whether the label takes
+/// one line or wraps to two.
+#[test]
+fn recovery_dialog_keeps_the_worktree_icon_with_the_first_line() {
+  let unreadable = run("Website", "PW-14", InterruptCause::QuitNow, WorktreeState::Unknown);
+  let clean = run("Kontur", "ORC-127", InterruptCause::QuitNow, WorktreeState::Clean);
+  let ids = [unreadable.run, clean.run];
+  let mut tree = laid_out(vec![unreadable, clean], 1440, 960);
+  let mut lines = Vec::new();
+  for id in ids {
+    let slot = bounds(&mut tree, &format!("recovery-worktree-icon-{id}"));
+    let label = bounds(&mut tree, &format!("recovery-worktree-label-{id}"));
+    assert_eq!(slot.height, 16.0);
+    assert_eq!(slot.y, label.y, "the state row is top-aligned");
+    let first_line_middle = label.y + 16.5 / 2.0;
+    assert!((slot.y + slot.height / 2.0 - first_line_middle).abs() <= 0.5);
+    lines.push((label.height / 16.5).round());
+  }
+  assert_eq!(lines, [2.0, 1.0], "“Could not read the worktree” wraps beside its icon");
+}
+
 #[test]
 fn unit_input_shows_the_focused_field_stroke_while_focused() {
   assert_eq!(FieldStroke::of(false, false), FieldStroke::Default);

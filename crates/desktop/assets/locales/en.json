@@ -2198,7 +2198,6 @@
     "hints": {
       "agents": "Agents at work of the agent slots of this project’s runner",
       "agentsUnknown": "Agent slots are known once the runner is online",
-      "needsYou": "Not available yet: plan approvals, questions and reviews do not exist in this version",
       "tokens": "{{used}} of {{budget}} tokens today: input + output of all runs in this project, against the daily project budget",
       "tokensUnknown": "Reading today’s token usage",
       "debugBuild": "Orchester {{version}} · development build",

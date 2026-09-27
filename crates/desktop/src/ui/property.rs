@@ -18,7 +18,7 @@ pub enum ValueStyle {
   Text,
   /// An identifier in mono: a remote, a branch, a path.
   Mono,
-  /// A program or file path in the smaller mono of the connection inspectors (`xJ8W9`).
+  /// A program or file path in the smaller mono of the connection inspectors (`bAHUI`, `DIs1e`).
   Path,
   /// Not known (yet), in the subtle color: *Checking…*, *Not signed in*.
   Pending,

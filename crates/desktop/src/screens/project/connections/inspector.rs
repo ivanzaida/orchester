@@ -1,7 +1,8 @@
-//! Selected connection details (`ez6IT` in `a4Lqb`, `pQ0DW` in `RZUKo`): status, provider,
-//! where it runs, how it signs in, the last check, the models it offers and the profiles that
-//! use it. A connection that needs attention says what to do and offers checking again, as
-//! the expired-access state does (04.A).
+//! Selected connection details (`JuVaA` in `a4Lqb`, `pQ0DW` in `RZUKo`): status, provider,
+//! what runs, where it runs, how it signs in, the last check, the models it offers and the
+//! profiles that use it, in a details viewport with a scroll gutter (`xAfju`); the actions and
+//! the status detail are pinned below it (`K9gvh`). A connection that needs attention says what
+//! to do and offers checking again, as the expired-access state does (04.A).
 
 use std::sync::Arc;
 
@@ -39,7 +40,7 @@ use crate::{
   },
 };
 
-/// Inspector width (`ez6IT`) and the longest executable path shown in full.
+/// Inspector width (`JuVaA`) and the longest executable path shown in full.
 const INSPECTOR_WIDTH: f32 = 344.0;
 const PATH_CHARS: usize = 36;
 
@@ -102,9 +103,9 @@ pub fn inspector(
       Some(actions.edit.clone()),
     ))
     .child(status_detail(ctx, connection, status, state.check_error.as_ref()));
-  // The details scroll when they do not fit, their bar in a gutter of its own that takes the
-  // right padding's inner half; the actions and the status detail stay at the bottom, as in
-  // the GitHub inspector.
+  // The details scroll when they do not fit, their thumb in a gutter of its own (`NwsEg`) beside
+  // the right padding; the actions and the status detail stay at the bottom, as in the GitHub
+  // inspector.
   Column::new()
     .id("connection-inspector")
     .width(Dimension::Px(INSPECTOR_WIDTH))
@@ -120,14 +121,14 @@ pub fn inspector(
         .id("connection-inspector-details")
         .width(Dimension::Pct(100.0))
         .flex(1.0)
-        .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
+        .scrollbar(gutter_scrollbar()),
     )
     .child(pinned)
     .into()
 }
 
-/// The design's properties (`CRVwa`…`X4Sz0`) plus the program file, its version and, when it
-/// is a launcher script, what it starts.
+/// Provider, program file, what runs it and its script when it is a launcher, version,
+/// execution, authentication and last check (`wAKbx`…`ouXB3`).
 fn properties(ctx: &Ctx, connection: &AgentConnection, launch: Option<&Launch>) -> Vec<Element> {
   let provider = connection.provider();
   let checked = connection.last_check().map_or_else(
@@ -180,7 +181,7 @@ fn models(ctx: &Ctx, connection: &AgentConnection) -> Element {
   };
   column
     .child(model_chips(ctx, connection.models()))
-    .child(Text::new(&ctx.t(source)).variant(ExtraTypography::Footnote.role()))
+    .child(Text::new(&ctx.t(source)).variant(ExtraTypography::InspectorNote.role()))
     .into()
 }
 
@@ -229,7 +230,7 @@ fn used_by(ctx: &Ctx, uses: &[&ProfileUse], show: &Arc<dyn Fn(ResourceId) + Send
   column.with_children(links).into()
 }
 
-/// What the status means (`Hzhjb`, `FhYJH`): how to sign in, or why the program did not answer.
+/// What the status means (`Thdx2`, `FhYJH`): how to sign in, or why the program did not answer.
 fn status_detail(
   ctx: &Ctx,
   connection: &AgentConnection,
@@ -241,7 +242,7 @@ fn status_detail(
     None => ctx.t(status_detail_key(status, connection.provider())),
   };
   Text::new(&detail)
-    .variant(ExtraTypography::Footnote.role())
+    .variant(ExtraTypography::InspectorNote.role())
     .id("connection-status-detail")
     .into()
 }

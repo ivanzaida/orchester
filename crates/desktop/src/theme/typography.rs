@@ -135,10 +135,15 @@ pub enum ExtraTypography {
   VariableName,
   /// Execution context note of the instruction preview (`HvDGw`, `utiRC` in `TnjFo`): 9 muted.
   ContextNote,
+  /// A table cell's label that wraps beside its icon, e.g. a worktree state (`VHSnL` in `Py65X`).
+  CellLabel,
+  /// A note under an inspector's details or actions: where the models come from, what the
+  /// connection's status means (`xK9v9`, `Thdx2` in `JuVaA`).
+  InspectorNote,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 61] = [
+  const ALL: [Self; 63] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -200,6 +205,8 @@ impl ExtraTypography {
     Self::PromptText,
     Self::VariableName,
     Self::ContextNote,
+    Self::CellLabel,
+    Self::InspectorNote,
   ];
 
   fn name(self) -> &'static str {
@@ -265,6 +272,8 @@ impl ExtraTypography {
       Self::PromptText => "prompt-text",
       Self::VariableName => "variable-name",
       Self::ContextNote => "context-note",
+      Self::CellLabel => "cell-label",
+      Self::InspectorNote => "inspector-note",
     }
   }
 
@@ -396,6 +405,8 @@ impl ExtraTypography {
         ..mono(20.0, TEXT)
       },
       Self::ContextNote => style(9.0, FontWeight::Normal, MUTED),
+      Self::CellLabel => leading(1.5, style(11.0, FontWeight::Normal, MUTED)),
+      Self::InspectorNote => leading(1.6, style(10.0, FontWeight::Normal, MUTED)),
       icon_role => icon(
         icon_role
           .icon_size()

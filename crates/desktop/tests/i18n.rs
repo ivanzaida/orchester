@@ -143,6 +143,8 @@ fn locales_name_task_statuses_as_designed() {
     ("failed", "Failed"),
     ("succeeded", "Completed"),
     ("interrupted", "Interrupted"),
+    ("cancelled", "Cancelled"),
+    ("draft", "Draft"),
   ];
   for (phase, label) in designed {
     assert_eq!(&*status(phase), label, "tasks.status.{phase}");
