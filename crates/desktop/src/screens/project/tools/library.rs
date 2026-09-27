@@ -15,7 +15,7 @@ use lurq::{
 
 use super::{super::ProjectNav, row::tool_row};
 use crate::{
-  navigation::route::{Page, ToolSelection},
+  navigation::route::{Page, PipelineView, ToolSelection},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   tools::data::ProjectTools,
   ui::{
@@ -186,7 +186,9 @@ fn usage(ctx: &Ctx, tools: &ProjectTools, nav: &ProjectNav) -> Element {
       .width(Dimension::Pct(100.0))
       .describe("pipeline", pipeline.name.to_string())
       .child(check_row(Icon::Workflow, &pipeline.name, &result));
-    column = column.child(pressable(row, move || nav.show(Page::Pipeline(id))));
+    column = column.child(pressable(row, move || {
+      nav.show(Page::Pipeline(id, PipelineView::Draft))
+    }));
   }
   column.into()
 }

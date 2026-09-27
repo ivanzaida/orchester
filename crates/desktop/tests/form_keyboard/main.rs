@@ -7,6 +7,7 @@
 
 mod agent_permissions;
 mod agents;
+mod canvas_zoom;
 mod changes;
 mod claude_run;
 mod dialogs;
@@ -18,6 +19,7 @@ mod instructions;
 mod lifecycle;
 mod new_task;
 mod pipeline_editor;
+mod pipeline_history;
 mod plan_review;
 mod project_settings;
 mod project_setup;
