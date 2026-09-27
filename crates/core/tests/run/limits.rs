@@ -4,7 +4,8 @@ use orchester_core::{
   connection::stream::InvocationOutcome,
   id::{InvocationId, RunId},
   run::{
-    Invocation, PauseReason, RaisedLimits, Run, RunError, RunLimit, RunStatus, StepStatus, TaskPhase, active_time,
+    Invocation, InvocationKind, PauseReason, RaisedLimits, Run, RunError, RunLimit, RunStatus, StepStatus, TaskPhase,
+    active_time,
   },
   task::{Task, TaskDetails, TaskStatus},
   tokens::TokensUsed,
@@ -165,7 +166,9 @@ fn run_limits_time_counts_active_agent_time_only() {
     run,
     execution,
     number: 1,
-    model: model("gpt-5.5"),
+    kind: InvocationKind::Agent {
+      model: model("gpt-5.5"),
+    },
     session: None,
     started_at: at(started),
     ended_at: ended.map(at),

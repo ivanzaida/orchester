@@ -74,7 +74,11 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
       ("attempt", attempt.as_str()),
     ],
   );
-  let engine = engine(ctx, step.provider, invocation.model.as_str());
+  // A tool step's command runs no model: the panel names its tool instead of an agent.
+  let (label, engine) = match invocation.model() {
+    Some(model) => ("runs.activity.panel.agent", engine(ctx, step.provider, model.as_str())),
+    None => ("runs.activity.panel.tool", ctx.t("runs.activity.commandTool")),
+  };
   let agent = ctx.t_args(
     "runs.activity.panel.agentValue",
     [
@@ -86,7 +90,7 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
   let invocation_number = invocation.number.to_string();
   vec![
     property(&ctx.t("runs.activity.panel.step"), &step_value),
-    property(&ctx.t("runs.activity.panel.agent"), &agent),
+    property(&ctx.t(label), &agent),
     property(&ctx.t("runs.activity.panel.invocation"), &invocation_number),
     property(&ctx.t("runs.activity.panel.started"), &started),
   ]

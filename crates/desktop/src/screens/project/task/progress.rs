@@ -99,5 +99,6 @@ pub(super) const fn failure_key(failure: Option<StepFailure>) -> &'static str {
     Some(StepFailure::StepBudget) => "runs.progress.failure.stepBudget",
     Some(StepFailure::MergeConflict) => "runs.progress.failure.mergeConflict",
     Some(StepFailure::CheckpointFailed) => "runs.progress.failure.checkpointFailed",
+    Some(StepFailure::CommandFailed) => "runs.progress.failure.commandFailed",
   }
 }

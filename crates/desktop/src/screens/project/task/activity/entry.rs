@@ -14,7 +14,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  connection::stream::{CommandStatus, FileChangeKind, OutputStream, RunnerProblem},
+  connection::stream::{CommandStatus, FileChangeKind, OutputStream, RunnerProblem, ToolCommandResult},
   tokens::compact_tokens,
 };
 
@@ -25,10 +25,11 @@ use super::{
 };
 use crate::{
   display,
-  tasks::transcript::{CommandEntry, Entry, EntryKind},
+  tasks::transcript::{CommandEntry, Entry, EntryKind, ToolCommandEntry},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, UNPARSED_OPACITY},
   ui::{
     icon::{Icon, IconSize, icon},
+    message_text,
     pressable::{pressable, surface},
     status_label::compact_status_label,
   },
@@ -57,42 +58,21 @@ impl Component for TranscriptRowView {
   }
 }
 
-/// Disclosure, step number, step and agent, model and time span, tokens and state (`mDnc3`).
+/// Disclosure, step number, step and agent, model and time span, tokens and state (`mDnc3`). A
+/// tool step names its tool and runs, and has no model and no tokens.
 fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
-  let start = header.started.map(display::clock).unwrap_or_default();
-  let count = header.invocations.to_string();
-  let engine = engine(ctx, header.provider, &header.model);
-  let meta = match header.ended {
-    None => ctx.t_args(
-      "runs.activity.headerRunning",
-      [("engine", &*engine), ("count", &count), ("start", &start)],
-    ),
-    Some(ended) => {
-      let key = if header.invocations == 1 {
-        "runs.activity.headerFinished.one"
-      } else {
-        "runs.activity.headerFinished.other"
-      };
-      let end = display::clock(ended);
-      ctx.t_args(
-        key,
-        [
-          ("engine", &*engine),
-          ("count", &count),
-          ("start", &start),
-          ("end", &end),
-        ],
-      )
-    }
-  };
+  let meta = header_meta(ctx, header);
   let title = ctx.t_args(
     "runs.activity.stepTitle",
     [("step", &*header.step), ("agent", &*header.agent)],
   );
-  let tokens = ctx.t_args(
-    "runs.tokens",
-    [("count", compact_tokens(header.usage.counted()).as_str())],
-  );
+  let tokens = (!header.command).then(|| {
+    let tokens = ctx.t_args(
+      "runs.tokens",
+      [("count", compact_tokens(header.usage.counted()).as_str())],
+    );
+    Text::new(&tokens).variant(TypographyStyle::Mono).nowrap()
+  });
   let (glyph, state) = step_state(header.status);
   let (toggles, key, open) = (row.toggles.clone(), row.key.clone(), header.open);
   let chevron = if open { Icon::ChevronDown } else { Icon::ChevronRight };
@@ -115,9 +95,44 @@ fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
     .child(Text::new(&title).variant(TypographyStyle::Label).nowrap())
     .child(Text::new(&meta).variant(TypographyStyle::Caption).nowrap())
     .child(Spacer::new().flex(1.0))
-    .child(Text::new(&tokens).variant(TypographyStyle::Mono).nowrap())
+    .with_children(tokens)
     .child(compact_status_label(glyph, &ctx.t(state)))
     .into()
+}
+
+/// "Codex / Sol · 1 invocation · 12:01–12:02", "Command tool · run 1 · started 12:05".
+fn header_meta(ctx: &Ctx, header: &Header) -> Arc<str> {
+  let start = header.started.map(display::clock).unwrap_or_default();
+  let count = header.invocations.to_string();
+  let (engine, running, one, other) = if header.command {
+    (
+      ctx.t("runs.activity.commandTool"),
+      "runs.activity.commandHeaderRunning",
+      "runs.activity.commandHeaderFinished.one",
+      "runs.activity.commandHeaderFinished.other",
+    )
+  } else {
+    (
+      engine(ctx, header.provider, &header.model),
+      "runs.activity.headerRunning",
+      "runs.activity.headerFinished.one",
+      "runs.activity.headerFinished.other",
+    )
+  };
+  let Some(ended) = header.ended else {
+    return ctx.t_args(running, [("engine", &*engine), ("count", &count), ("start", &start)]);
+  };
+  let key = if header.invocations == 1 { one } else { other };
+  let end = display::clock(ended);
+  ctx.t_args(
+    key,
+    [
+      ("engine", &*engine),
+      ("count", &count),
+      ("start", &start),
+      ("end", &end),
+    ],
+  )
 }
 
 /// What an entry shows, apart from its time and whether it is open.
@@ -128,6 +143,8 @@ struct Shown {
   body: Option<Arc<str>>,
   /// Lines of the output block, shown while the entry is open.
   output: Option<Vec<Arc<str>>>,
+  /// What the output block leaves out, said above it.
+  omitted: Option<Arc<str>>,
   /// Opens and closes on a press.
   collapsible: bool,
 }
@@ -152,7 +169,7 @@ fn entry_row(ctx: &Ctx, row: &TranscriptRow, entry: &Entry, agent: &Arc<str>, op
           .output
           .as_ref()
           .filter(|lines| !lines.is_empty())
-          .map(|lines| output(ctx, lines)),
+          .map(|lines| output(ctx, lines, shown.omitted.as_deref())),
       );
   }
   let line = Row::new()
@@ -226,8 +243,9 @@ fn glyph(glyph: Icon) -> Element {
     .into()
 }
 
-/// The output block (`bjcu3`): the last lines when there are many, with how many are left out.
-fn output(ctx: &Ctx, lines: &[Arc<str>]) -> Element {
+/// The output block (`bjcu3`): the last lines when there are many, with how many are left out, and
+/// `omitted`, what was not kept of it at all.
+fn output(ctx: &Ctx, lines: &[Arc<str>], omitted: Option<&str>) -> Element {
   let hidden = lines.len().saturating_sub(OUTPUT_LINES);
   let text = lines[hidden..].join("\n");
   Column::new()
@@ -238,6 +256,7 @@ fn output(ctx: &Ctx, lines: &[Arc<str>]) -> Element {
     .background(PaletteColor::SurfaceBase)
     .border_inside(BorderSize::Sm, ExtraColor::Hairline.role())
     .rounded(RadiusSize::Sm)
+    .with_children(omitted.map(|omitted| Text::new(omitted).variant(TypographyStyle::Caption)))
     .with_children((hidden > 0).then(|| {
       Text::new(&ctx.t_args("runs.activity.outputTrimmed", [("count", hidden.to_string().as_str())]))
         .variant(TypographyStyle::Caption)
@@ -257,6 +276,7 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     meta,
     body,
     output: None,
+    omitted: None,
     collapsible: false,
   };
   match &entry.kind {
@@ -316,6 +336,7 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
       plain(Icon::AlertCircle, title, "".into(), body)
     }
     EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),
+    EntryKind::ToolCommand(entry) => tool_command(ctx, entry),
   }
 }
 
@@ -339,6 +360,7 @@ fn unparsed(ctx: &Ctx, lines: &[(OutputStream, Arc<str>)], raw_lines: bool) -> S
     meta: ctx.t("runs.activity.rawOutput"),
     body: None,
     output: Some(text),
+    omitted: None,
     collapsible: !raw_lines,
   }
 }
@@ -370,6 +392,36 @@ fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
     meta,
     body,
     output: Some(entry.output.lines().map(Arc::from).collect()),
+    omitted: None,
+    collapsible: !entry.output.is_empty(),
+  }
+}
+
+/// A tool step's command: its command line, how it ended and the output its tool kept.
+fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
+  let seconds = entry.duration.map(tenths_of_seconds).unwrap_or_default();
+  let code = entry.exit_code.map(|code| code.to_string()).unwrap_or_default();
+  let meta = match (entry.result, entry.exit_code) {
+    (None, _) => ctx.t("runs.activity.commandRunning"),
+    (Some(ToolCommandResult::TimedOut), _) => ctx.t_args("runs.activity.timedOut", [("seconds", seconds.as_str())]),
+    (Some(ToolCommandResult::Stopped), _) => ctx.t("runs.activity.stopped"),
+    (Some(_), Some(_)) => ctx.t_args(
+      "runs.activity.exitDuration",
+      [("code", code.as_str()), ("seconds", seconds.as_str())],
+    ),
+    (Some(_), None) => ctx.t_args("runs.activity.noExitCode", [("seconds", seconds.as_str())]),
+  };
+  let omitted = (entry.omitted_bytes > 0).then(|| {
+    let size = message_text(ctx, &display::byte_size(entry.omitted_bytes));
+    ctx.t_args("runs.activity.outputOmitted", [("size", &*size)])
+  });
+  Shown {
+    glyph: Icon::Terminal,
+    title: entry.command.clone(),
+    meta,
+    body: None,
+    output: Some(entry.output.lines().map(Arc::from).collect()),
+    omitted,
     collapsible: !entry.output.is_empty(),
   }
 }
@@ -414,6 +466,10 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
         [("budget", compact_tokens(*budget).as_str())],
       ),
       None,
+    ),
+    RunnerProblem::ProgramNotFound { program } => (
+      ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
+      Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
     ),
   }
 }

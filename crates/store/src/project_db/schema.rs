@@ -437,4 +437,35 @@ CREATE TABLE run_permissions (
   PRIMARY KEY (run_id, profile_id)
 ) STRICT;
 ",
+  r"
+-- Command tool steps (M10a). A command tool's run is an invocation of its step execution, so its
+-- time counts toward the run's time limit and its output joins the run's transcript. It runs no
+-- model: its `model` is empty.
+ALTER TABLE invocations ADD COLUMN kind TEXT NOT NULL DEFAULT 'agent'
+  CHECK (kind IN ('agent', 'command') AND (kind = 'command') = (model = ''));
+
+-- A tool step fails with `command_failed` when its program exits with a code the tool does not
+-- expect or does not finish in time. SQLite cannot change a CHECK constraint, so the table is
+-- rebuilt, its rows keeping their `rowid` (executions are read in that order).
+CREATE TABLE step_executions_new (
+  id TEXT PRIMARY KEY,
+  attempt_id TEXT NOT NULL REFERENCES attempts (id),
+  step_key TEXT NOT NULL,
+  profile_version_id TEXT,
+  model TEXT,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'waiting', 'passed', 'failed', 'skipped')),
+  wait_reason TEXT CHECK (wait_reason IN ('approval', 'plan', 'message')),
+  failure TEXT CHECK (failure IN ('agent_failed', 'reported_failed', 'not_started', 'step_budget', 'merge_conflict',
+    'checkpoint_failed', 'command_failed')),
+  UNIQUE (attempt_id, step_key),
+  CHECK ((status = 'waiting') = (wait_reason IS NOT NULL)),
+  CHECK ((profile_version_id IS NULL) = (model IS NULL))
+) STRICT;
+INSERT INTO step_executions_new
+  (rowid, id, attempt_id, step_key, profile_version_id, model, status, wait_reason, failure)
+  SELECT rowid, id, attempt_id, step_key, profile_version_id, model, status, wait_reason, failure
+  FROM step_executions;
+DROP TABLE step_executions;
+ALTER TABLE step_executions_new RENAME TO step_executions;
+",
 ];

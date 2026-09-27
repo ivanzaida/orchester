@@ -30,8 +30,11 @@ pub struct StepView {
   pub number: usize,
   pub key: StepKey,
   pub name: Arc<str>,
-  /// The agent role of the step's profile version; `None` for a tool step.
+  /// Who executes the step: the agent role of its profile version, or the name of its tool; `None`
+  /// once that version or tool is gone.
   pub agent: Option<Arc<str>>,
+  /// A tool step: its command tool runs instead of an agent.
+  pub tool_step: bool,
   /// The agent CLI of the profile version's connection, while that connection exists.
   pub provider: Option<AgentProvider>,
   pub model: Option<Arc<str>>,
@@ -199,12 +202,19 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       .unwrap_or_default()
   };
   for (index, step) in run.snapshot().body().steps().iter().enumerate() {
-    let (agent, provider, model, permissions) = match run.snapshot().step(&step.key).map(|pinned| pinned.executor()) {
+    let executor = run.snapshot().step(&step.key).map(|pinned| pinned.executor());
+    let (agent, provider, model, permissions) = match executor {
       Some(StepExecutor::Agent { profile, model, .. }) => {
         let (role, provider, permissions) = agent_step(db, (&run, &invocations), &step.key, *profile)?;
         (role, provider, Some(Arc::<str>::from(model.as_str())), permissions)
       }
-      Some(StepExecutor::Tool { .. }) | None => (None, None, None, None),
+      Some(StepExecutor::Tool { tool }) => {
+        let name = db
+          .resource(tool.resource)?
+          .map(|tool| Arc::<str>::from(tool.name().as_str()));
+        (name, None, None, None)
+      }
+      None => (None, None, None, None),
     };
     let latest = run.latest_execution(&step.key);
     let attempt = latest.and_then(|execution| {
@@ -219,6 +229,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       key: step.key.clone(),
       name: step.name.as_str().into(),
       agent,
+      tool_step: matches!(executor, Some(StepExecutor::Tool { .. })),
       provider,
       model,
       permissions,

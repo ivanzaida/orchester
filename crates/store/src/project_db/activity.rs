@@ -1,10 +1,10 @@
-//! Agent CLI invocations and the transcript of their events, written by the runner.
+//! Agent CLI and command tool invocations and the transcript of their events, written by the runner.
 
 use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome},
   id::{InvocationId, RunId, StepExecutionId},
   resource::ModelId,
-  run::{ActivityEntry, Invocation, StepOutput, TokenUsage},
+  run::{ActivityEntry, Invocation, InvocationKind, StepOutput, TokenUsage},
   store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
@@ -20,8 +20,12 @@ use crate::{
 const EVENT_SCHEMA: u32 = 1;
 const OUTCOME_SCHEMA: u32 = 1;
 
-const SELECT_INVOCATIONS: &str = "SELECT id, run_id, step_execution_id, number, model, session_id, started_at, \
-                                  ended_at, input_tokens, cached_input_tokens, output_tokens, outcome FROM invocations";
+const SELECT_INVOCATIONS: &str = "SELECT id, run_id, step_execution_id, number, kind, model, session_id, \
+                                  started_at, ended_at, input_tokens, cached_input_tokens, output_tokens, outcome \
+                                  FROM invocations";
+/// `kind` of an agent CLI's invocation and of a command tool's.
+const AGENT: &str = "agent";
+const COMMAND: &str = "command";
 
 impl ActivityStore for ProjectDb {
   type Error = StoreError;
@@ -33,38 +37,17 @@ impl ActivityStore for ProjectDb {
     model: &ModelId,
     now: Timestamp,
   ) -> Result<Invocation, StoreError> {
-    let transaction = self.connection.transaction()?;
-    let previous: i64 = transaction.query_row(
-      "SELECT COALESCE(MAX(number), 0) FROM invocations WHERE step_execution_id = ?1",
-      [execution.to_string()],
-      |row| row.get(0),
-    )?;
-    let invocation = Invocation {
-      id: InvocationId::generate(),
-      run,
-      execution,
-      number: u32::try_from(previous + 1).map_err(|_| corrupt("invocation number", previous))?,
-      model: model.clone(),
-      session: None,
-      started_at: now,
-      ended_at: None,
-      usage: TokenUsage::default(),
-      outcome: None,
-    };
-    transaction.execute(
-      "INSERT INTO invocations (id, run_id, step_execution_id, number, model, started_at, input_tokens, \
-       cached_input_tokens, output_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, 0)",
-      params![
-        invocation.id.to_string(),
-        run.to_string(),
-        execution.to_string(),
-        invocation.number,
-        model.as_str(),
-        now.unix_millis(),
-      ],
-    )?;
-    transaction.commit()?;
-    Ok(invocation)
+    let kind = InvocationKind::Agent { model: model.clone() };
+    start(&mut self.connection, run, execution, kind, now)
+  }
+
+  fn start_command_invocation(
+    &mut self,
+    run: RunId,
+    execution: StepExecutionId,
+    now: Timestamp,
+  ) -> Result<Invocation, StoreError> {
+    start(&mut self.connection, run, execution, InvocationKind::Command, now)
   }
 
   fn save_invocation(&mut self, invocation: &Invocation) -> Result<(), StoreError> {
@@ -200,6 +183,52 @@ impl ActivityStore for ProjectDb {
   }
 }
 
+/// Records the next invocation of `execution`.
+fn start(
+  connection: &mut Connection,
+  run: RunId,
+  execution: StepExecutionId,
+  kind: InvocationKind,
+  now: Timestamp,
+) -> Result<Invocation, StoreError> {
+  let transaction = connection.transaction()?;
+  let previous: i64 = transaction.query_row(
+    "SELECT COALESCE(MAX(number), 0) FROM invocations WHERE step_execution_id = ?1",
+    [execution.to_string()],
+    |row| row.get(0),
+  )?;
+  let (kind_column, model) = match &kind {
+    InvocationKind::Agent { model } => (AGENT, model.as_str().to_owned()),
+    InvocationKind::Command => (COMMAND, String::new()),
+  };
+  let invocation = Invocation {
+    id: InvocationId::generate(),
+    run,
+    execution,
+    number: u32::try_from(previous + 1).map_err(|_| corrupt("invocation number", previous))?,
+    kind,
+    session: None,
+    started_at: now,
+    ended_at: None,
+    usage: TokenUsage::default(),
+    outcome: None,
+  };
+  transaction.execute(
+    "INSERT INTO invocations (id, run_id, step_execution_id, number, kind, model, started_at, input_tokens,      cached_input_tokens, output_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 0, 0)",
+    params![
+      invocation.id.to_string(),
+      run.to_string(),
+      execution.to_string(),
+      invocation.number,
+      kind_column,
+      model,
+      now.unix_millis(),
+    ],
+  )?;
+  transaction.commit()?;
+  Ok(invocation)
+}
+
 fn last_sequence(connection: &Connection, run: RunId) -> Result<u64, StoreError> {
   let last: Option<i64> = connection
     .query_row(
@@ -226,6 +255,7 @@ struct InvocationRow {
   run: String,
   execution: String,
   number: i64,
+  kind: String,
   model: String,
   session: Option<String>,
   started_at: i64,
@@ -241,12 +271,13 @@ impl InvocationRow {
       run: row.get(1)?,
       execution: row.get(2)?,
       number: row.get(3)?,
-      model: row.get(4)?,
-      session: row.get(5)?,
-      started_at: row.get(6)?,
-      ended_at: row.get(7)?,
-      tokens: [row.get(8)?, row.get(9)?, row.get(10)?],
-      outcome: row.get(11)?,
+      kind: row.get(4)?,
+      model: row.get(5)?,
+      session: row.get(6)?,
+      started_at: row.get(7)?,
+      ended_at: row.get(8)?,
+      tokens: [row.get(9)?, row.get(10)?, row.get(11)?],
+      outcome: row.get(12)?,
     })
   }
 
@@ -262,7 +293,13 @@ impl InvocationRow {
       run: parse("run id", &self.run)?,
       execution: parse("step execution id", &self.execution)?,
       number: u32::try_from(self.number).map_err(|_| corrupt("invocation number", self.number))?,
-      model: ModelId::new(&self.model).map_err(|error| corrupt("invocation model", error))?,
+      kind: match self.kind.as_str() {
+        AGENT => InvocationKind::Agent {
+          model: ModelId::new(&self.model).map_err(|error| corrupt("invocation model", error))?,
+        },
+        COMMAND => InvocationKind::Command,
+        other => return Err(corrupt("invocation kind", other)),
+      },
       session: self.session,
       started_at: Timestamp::from_unix_millis(self.started_at),
       ended_at: self.ended_at.map(Timestamp::from_unix_millis),

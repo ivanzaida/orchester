@@ -48,7 +48,10 @@ pub(super) struct Header {
   pub(super) execution: StepExecutionId,
   pub(super) number: usize,
   pub(super) step: Arc<str>,
+  /// The agent role, or the tool's name for a tool step.
   pub(super) agent: Arc<str>,
+  /// A tool step: a command tool ran instead of an agent, on no model and with no tokens.
+  pub(super) command: bool,
   pub(super) provider: Option<AgentProvider>,
   pub(super) model: Arc<str>,
   pub(super) invocations: usize,
@@ -153,6 +156,7 @@ fn header(run: &RunView, execution: StepExecutionId, status: StepStatus, toggles
     number: step.number,
     step: step.name.clone(),
     agent: step.agent.clone().unwrap_or_else(|| "".into()),
+    command: step.tool_step,
     provider: step.provider,
     model: step.model.clone().unwrap_or_else(|| "".into()),
     invocations: invocations.len(),
@@ -171,7 +175,9 @@ fn header(run: &RunView, execution: StepExecutionId, status: StepStatus, toggles
 /// Failures start open; commands, reasoning and unparsed lines start closed.
 fn entry_starts_open(entry: &Entry) -> bool {
   match entry.kind {
-    EntryKind::Command(_) | EntryKind::Reasoning(_) | EntryKind::Raw(_) => entry.is_failure(),
+    EntryKind::Command(_) | EntryKind::ToolCommand(_) | EntryKind::Reasoning(_) | EntryKind::Raw(_) => {
+      entry.is_failure()
+    }
     _ => true,
   }
 }
