@@ -14,7 +14,7 @@ use orchester_desktop::{
   close::{CloseKind, session_end},
   runner::{
     QUIET_STOP_TIMEOUT, RequestError, RunRequestError, RunnerStatus, Runners, ShutdownOutcome,
-    state::{RunnerFailure, RunnerState},
+    state::{RunnerFailure, RunnerState, reconnect_delay},
   },
   workspace::OpenProject,
 };
@@ -166,6 +166,44 @@ async fn runner_process_keeps_the_previous_project_running_in_the_background() {
   );
   assert!(!orchester_runner_lock_held(first.path()));
   assert!(!orchester_runner_lock_held(second.path()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runner_process_of_a_project_another_app_runs_fails_until_that_app_closes() {
+  let project = project();
+  let program = runner_program();
+  let this_app = Runners::new(program.clone(), Handle::current(), Activity::new(), Clean);
+  let other_app = Runners::new(program, Handle::current(), Activity::new(), Clean);
+  let mut other_updates = other_app.subscribe();
+  other_app.show(Some(&open(project.path())));
+  wait_for(&mut other_updates, project.path(), |state| {
+    *state == RunnerState::Online
+  })
+  .await;
+
+  let mut updates = this_app.subscribe();
+  this_app.show(Some(&open(project.path())));
+  let failed = wait_for(&mut updates, project.path(), |state| *state != RunnerState::Starting).await;
+  let expected = RunnerState::Failed {
+    cause: RunnerFailure::AlreadyServed,
+    attempts: 0,
+  };
+  assert_eq!(failed, expected);
+  // No retries: nothing changes until the user restarts the runner.
+  tokio::time::sleep(reconnect_delay(1) * 2).await;
+  assert!(!updates.has_changed().expect("the runners outlive the test"));
+  assert_eq!(this_app.status().state(), &expected);
+
+  assert_eq!(
+    other_app.shutdown(Some(QUIET_STOP_TIMEOUT)).await,
+    ShutdownOutcome::Stopped
+  );
+  this_app.restart();
+  wait_for(&mut updates, project.path(), |state| *state == RunnerState::Online).await;
+  assert_eq!(
+    this_app.shutdown(Some(QUIET_STOP_TIMEOUT)).await,
+    ShutdownOutcome::Stopped
+  );
 }
 
 /// Whether a runner holds the project's runner lock (`.orchester/runner.lock`).
