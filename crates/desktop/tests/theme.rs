@@ -143,6 +143,12 @@ fn mono_field_path_follows_pencil() {
   let app = themed_app();
   let path = app.theme().typography_style(ExtraTypography::MonoField.role());
   assert_eq!((&*path.font_family, path.font_size), ("Geist Mono", 12.0));
+  // The environment's `NAME=value` lines are the same mono 12 at 1.6 (`f0e2Hv` in `BGMgO`).
+  let area = app.theme().typography_style(ExtraTypography::MonoArea.role());
+  assert_eq!(
+    (&*area.font_family, area.font_size, area.line_height),
+    ("Geist Mono", 12.0, 1.6)
+  );
 }
 
 #[test]
@@ -153,6 +159,7 @@ fn mono_text_keeps_the_space_before_double_hyphens() {
     TypographyStyle::Mono,
     ExtraTypography::MonoValue.role(),
     ExtraTypography::MonoField.role(),
+    ExtraTypography::MonoArea.role(),
     ExtraTypography::Metric.role(),
   ] {
     assert_eq!(app.theme().typography_style(role).font_features, off);

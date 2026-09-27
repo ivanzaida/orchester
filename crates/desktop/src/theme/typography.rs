@@ -152,10 +152,12 @@ pub enum ExtraTypography {
   MaskedValue,
   /// Uppercase heading of a table column, e.g. "SOURCE / VERSION" (`gHiGc` in `WcIvG`).
   ColumnHeading,
+  /// `NAME=value` lines in a mono text area, e.g. the project's environment (`f0e2Hv` in `BGMgO`).
+  MonoArea,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 69] = [
+  const ALL: [Self; 70] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -225,6 +227,7 @@ impl ExtraTypography {
     Self::MonoTitle,
     Self::MaskedValue,
     Self::ColumnHeading,
+    Self::MonoArea,
   ];
 
   fn name(self) -> &'static str {
@@ -298,6 +301,7 @@ impl ExtraTypography {
       Self::MonoTitle => "mono-title",
       Self::MaskedValue => "masked-value",
       Self::ColumnHeading => "column-heading",
+      Self::MonoArea => "mono-area",
     }
   }
 
@@ -437,6 +441,7 @@ impl ExtraTypography {
       Self::MonoTitle => mono(12.0, TEXT),
       Self::MaskedValue => mono(13.0, MUTED),
       Self::ColumnHeading => style(9.0, FontWeight::Normal, MUTED),
+      Self::MonoArea => leading(1.6, mono(12.0, TEXT)),
       icon_role => icon(
         icon_role
           .icon_size()

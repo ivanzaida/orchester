@@ -1,4 +1,4 @@
-//! Project settings (02.N `QV1af` General, 02.M `c7e729` Limits, Environment not drawn yet): the
+//! Project settings (02.N `QV1af` General, 02.M `c7e729` Limits, 02.O `tXahd` Environment): the
 //! project's name and folder, its GitHub repository and the account it expects, with *Check
 //! again*, linking a repository detected later and *Use signed-in account*; its token budgets and
 //! default time limit; the variables its runs add to the environment of agents and tools.
