@@ -161,6 +161,7 @@
         },
         "unknown": "Could not read the worktree"
       },
+      "viewChanges": "View changes  →",
       "note": "Uncommitted changes are kept in each run’s worktree and are never discarded silently. If you don’t continue now, you can continue each run later from its task page.",
       "dontContinue": "Don't continue",
       "continueAll": {

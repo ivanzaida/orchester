@@ -1,10 +1,11 @@
 //! The start-up recovery dialog (02.E `o8DCd`) rendered headlessly from fixture runs: all or
-//! nothing, with no action per run. The fixtures are test data only.
+//! nothing, with no action per run; uncommitted changes link to the run's Changes tab. The
+//! fixtures are test data only.
 
 use std::{
   path::PathBuf,
   sync::{
-    Arc,
+    Arc, OnceLock,
     atomic::{AtomicUsize, Ordering},
   },
 };
@@ -16,7 +17,7 @@ use lurq::{
 };
 use orchester_core::{
   connection::AgentProvider,
-  id::{RunId, TaskId},
+  id::{ProjectId, RunId, TaskId},
   run::InterruptCause,
   time::Timestamp,
 };
@@ -27,9 +28,17 @@ use orchester_desktop::{
   theme,
 };
 use orchester_ipc::SessionEnd;
+use parking_lot::Mutex;
+
+/// The project the dialog's window shows in these tests.
+fn shown_project() -> ProjectId {
+  static SHOWN: OnceLock<ProjectId> = OnceLock::new();
+  *SHOWN.get_or_init(ProjectId::generate)
+}
 
 fn run(project: &str, key: &str, cause: InterruptCause, worktree: WorktreeState) -> InterruptedRun {
   InterruptedRun {
+    project_id: shown_project(),
     project_root: PathBuf::from(project),
     project: project.into(),
     run: RunId::generate(),
@@ -47,9 +56,10 @@ fn run(project: &str, key: &str, cause: InterruptCause, worktree: WorktreeState)
   }
 }
 
-/// Counts presses of each button: open log, don't continue, continue all.
+/// Counts presses of each button: open log, don't continue, continue all; and records the runs
+/// whose changes were opened.
 #[derive(Default)]
-struct Presses([AtomicUsize; 3]);
+struct Presses([AtomicUsize; 3], Mutex<Vec<RunId>>);
 
 impl Presses {
   fn actions(self: &Arc<Self>) -> RecoveryActions {
@@ -59,10 +69,12 @@ impl Presses {
         presses.0[index].fetch_add(1, Ordering::SeqCst);
       }) as Arc<dyn Fn() + Send + Sync>
     };
+    let presses = Arc::clone(self);
     RecoveryActions {
       open_log: press(0),
       dont_continue: press(1),
       continue_all: press(2),
+      view_changes: Arc::new(move |run: &InterruptedRun| presses.1.lock().push(run.run)),
     }
   }
 
@@ -80,6 +92,7 @@ fn props(
   RecoveryDialogProps {
     previous,
     runs: runs.into(),
+    shown_project: Some(shown_project()),
     continuing,
     error: None,
     actions: presses.actions(),
@@ -209,6 +222,50 @@ fn recovery_dialog_after_a_crash_names_one_run_and_shows_continuing() {
     .click();
   assert_eq!(presses.count(2), 0);
   assert_eq!(presses.count(1), 0);
+}
+
+/// *View changes* (`O5D84`) is under uncommitted changes only, and only for runs of the project
+/// the window shows: another project's task page cannot be opened yet.
+#[test]
+fn recovery_dialog_links_uncommitted_changes_of_the_shown_project() {
+  let presses = Arc::new(Presses::default());
+  let uncommitted = run(
+    "Kontur",
+    "ORC-125",
+    InterruptCause::QuitNow,
+    WorktreeState::Uncommitted(3),
+  );
+  let clean = run("Kontur", "ORC-127", InterruptCause::QuitNow, WorktreeState::Clean);
+  let elsewhere = InterruptedRun {
+    project_id: ProjectId::generate(),
+    ..run(
+      "Website",
+      "PW-14",
+      InterruptCause::QuitNow,
+      WorktreeState::Uncommitted(1),
+    )
+  };
+  let link = |run: &InterruptedRun| format!("recovery-view-changes-{}", run.run);
+  let (linked, unlinked) = (link(&uncommitted), [link(&clean), link(&elsewhere)]);
+  let target = uncommitted.run;
+  let mut tree = mount(
+    SessionEnd::QuitNow,
+    vec![uncommitted, clean, elsewhere],
+    false,
+    &presses,
+  );
+
+  let view = tree
+    .get_element_by_id(&linked)
+    .expect("View changes under 3 files not committed");
+  assert!(contains_text(view, "View changes  →"));
+  for id in &unlinked {
+    assert!(tree.get_element_by_id(id).is_none(), "{id}");
+  }
+  tree.get_element_by_id_mut(&linked).expect("View changes").click();
+  assert_eq!(*presses.1.lock(), [target]);
+  // Opening the changes answers nothing itself.
+  assert_eq!((presses.count(1), presses.count(2)), (0, 0));
 }
 
 #[test]

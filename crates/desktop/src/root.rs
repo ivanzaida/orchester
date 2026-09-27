@@ -155,6 +155,10 @@ impl Root {
       return startup_failed(ctx, error, None);
     }
     // Reading the workspace takes milliseconds; the start route shows nothing until it is known.
+    let shown_project = match &landing.data {
+      Some(Start::Project(project)) => Some(project.project.id()),
+      _ => None,
+    };
     if let Some(start) = landing.data {
       navigation.arrive(start);
     }
@@ -163,6 +167,7 @@ impl Root {
       programs: programs.clone(),
       previous: previous_end,
       session_start,
+      shown_project,
     };
     // The confirmation is a modal, so it takes no space in this column.
     Column::new()
