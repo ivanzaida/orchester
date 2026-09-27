@@ -167,6 +167,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::InspectorNote.role()` | 10 muted, 1.6 | note under an inspector's details or actions (model source `xK9v9`, status detail `Thdx2`) |
 | `ExtraTypography::MonoTitle.role()` | mono 12 | identifier as a list row's title, e.g. a secret name (`B1zGN` in `vxAMD`) |
 | `ExtraTypography::MaskedValue.role()` | mono 13 muted | a stored secret shown only as its mask (`FNlaR` in `CQxCb`) |
+| `ExtraTypography::ColumnHeading.role()` | 9 muted | uppercase heading of a table column, e.g. "SOURCE / VERSION" (`gHiGc` in `WcIvG`) |
 | `ExtraTypography::PlanTitle.role()` | 19/500 | title of the plan under review (`J7irj` in `x3lVC`) |
 | `ExtraTypography::ReviewNote.role()` | 12, 1.6 | a note written to an agent, e.g. the changes a plan needs (`DDXc5` in `NbNN0`) |
 | `ExtraTypography::AgentText.role()` | 12, 1.6 | text an agent wrote: a message body, a plan under review (`FP6BD` in `J5MIT`); also the Markdown body |

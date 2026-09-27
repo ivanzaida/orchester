@@ -23,7 +23,10 @@ use self::{
 };
 use super::ProjectNav;
 use crate::{
-  navigation::route::{Page, PipelineView},
+  navigation::{
+    import::ImportTab,
+    route::{Page, PipelineView},
+  },
   pipelines::library::StarterText,
   workspace::OpenProject,
 };
@@ -66,6 +69,12 @@ impl PipelinesNav {
 
   pub fn changed(&self) {
     self.revision.update(|revision| *revision += 1);
+  }
+
+  /// Opens Import resources on its Pipelines tab.
+  pub fn import(&self) -> impl Fn() + Send + Sync + 'static {
+    let project = self.project.clone();
+    move || project.show_import(ImportTab::Pipelines)
   }
 }
 

@@ -39,6 +39,8 @@ use tokio::runtime::Runtime;
 const PATIENCE: Duration = Duration::from_secs(120);
 /// Between two looks at the tree, background work runs.
 const POLL_PAUSE: Duration = Duration::from_millis(10);
+/// Folder of the other project of [`Desktop::with_other_project`].
+const OTHER_REPO: &str = "personal-website";
 /// The design's window size (`ZBoBm` and the other 1440 screens).
 const WIDTH: u32 = 1440;
 const HEIGHT: u32 = 960;
@@ -87,6 +89,20 @@ impl Desktop {
       Programs::processes(),
       runner,
       Some(Box::new(seed)),
+      None,
+    )
+  }
+
+  /// Kontur, opened at startup and filled by `seed`, and before it another project of the
+  /// workspace, Personal website, in [`Desktop::other_repo`], filled by `seed_other`.
+  pub fn with_other_project(seed_other: impl FnOnce(&Path), seed: impl FnOnce(&Path)) -> Self {
+    let init: RepoStep<'_> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));
+    Self::start_with(
+      Some(init),
+      no_programs(),
+      PathBuf::from("no-runner.exe"),
+      Some(Box::new(seed)),
+      Some(Box::new(seed_other)),
     )
   }
 
@@ -99,6 +115,7 @@ impl Desktop {
       no_programs(),
       PathBuf::from("no-runner.exe"),
       Some(Box::new(seed)),
+      None,
     )
   }
 
@@ -111,7 +128,7 @@ impl Desktop {
       None
     };
     // No runner program exists here; the project shows its runner as unable to start.
-    Self::start_with(init, programs, PathBuf::from("no-runner.exe"), None)
+    Self::start_with(init, programs, PathBuf::from("no-runner.exe"), None, None)
   }
 
   fn start_with<'a>(
@@ -119,6 +136,7 @@ impl Desktop {
     programs: Programs,
     runner: PathBuf,
     seed: Option<RepoStep<'a>>,
+    seed_other: Option<RepoStep<'a>>,
   ) -> Self {
     let with_project = init.is_some();
     let dir = TempDir::new().expect("temporary directory");
@@ -129,6 +147,19 @@ impl Desktop {
       None => fs::create_dir_all(repo.join(".git")).expect("create .git"),
     }
     let session = AppSession::start_at(&dir.path().join("orchester.db")).expect("session starts");
+    if let Some(seed_other) = seed_other {
+      // Created first, so Kontur is the most recently opened project and the one shown.
+      let other = dir.path().join(OTHER_REPO);
+      fs::create_dir_all(other.join(".git")).expect("create the other repository");
+      let new = ProjectDraft {
+        name: "Personal website",
+        repository: Some(&other),
+      }
+      .validate()
+      .expect("valid draft");
+      session.workspace().create(new).expect("the other project is created");
+      seed_other(&other);
+    }
     if with_project {
       let new = ProjectDraft {
         name: "Kontur",
@@ -216,6 +247,11 @@ impl Desktop {
 
   pub fn repo(&self) -> &Path {
     &self.repo
+  }
+
+  /// The repository of the other project [`Desktop::with_other_project`] creates.
+  pub fn other_repo(&self) -> PathBuf {
+    self._dir.path().join(OTHER_REPO)
   }
 
   /// Presses Tab (or Shift+Tab) `count` times and reports, after each press, the focused

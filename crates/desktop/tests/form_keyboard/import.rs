@@ -1,0 +1,317 @@
+//! Import resources (06.04–06.06), opened from the sidebar over the page shown: Personal website's
+//! Preview release and what it refers to are copied into Kontur as drafts, the profile's
+//! connection mapped to Kontur's own. Personal website's database is only read.
+
+use std::{
+  collections::BTreeSet,
+  fs,
+  path::{Path, PathBuf},
+  time::SystemTime,
+};
+
+use lurq::node::element::ElementRef;
+use orchester_core::{
+  connection::{AgentProvider, Connection, ConnectionKind},
+  id::{ConnectionId, ResourceId},
+  name::Name,
+  permission::StepPermissions,
+  resource::{
+    AgentProfile, AgentTargets, InjectionEvent, Instruction, InstructionScope, ModelId, Pipeline, PromptText,
+    ProviderSettings, RepositoryAccess, ResourceKind, Slug, Step, StepKey, StepKind,
+  },
+  store::{ConnectionStore, ResourceStore},
+  time::Timestamp,
+};
+use orchester_desktop::activity::{Place, Target};
+use orchester_store::ProjectDb;
+
+use crate::harness::Desktop;
+
+fn name(value: &str) -> Name {
+  Name::new(value).expect("valid name")
+}
+
+fn codex(db: &mut ProjectDb) -> ConnectionId {
+  let connection = Connection::new(
+    ConnectionId::generate(),
+    name("Codex"),
+    ConnectionKind::Agent(AgentProvider::CodexCli),
+    std::env::temp_dir().join("codex"),
+    Timestamp::now(),
+  )
+  .expect("absolute executable");
+  db.create_connection(&connection).expect("stored");
+  connection.id()
+}
+
+/// What Personal website holds: Preview release v1 runs Builder, whose connection is Codex, and
+/// has Release rules.
+#[derive(Clone, Copy)]
+struct Source {
+  pipeline: ResourceId,
+  connection: ConnectionId,
+}
+
+fn seed_source(repo: &Path) -> Source {
+  let mut db = ProjectDb::open(repo).expect("open Personal website");
+  let now = Timestamp::now();
+  let connection = codex(&mut db);
+  let profile = AgentProfile::new(
+    name("Builder"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    connection,
+    ModelId::new("gpt-5.5").expect("model"),
+    ProviderSettings::default(),
+  );
+  let builder = db
+    .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, now)
+    .expect("profile")
+    .id();
+  db.publish_draft::<AgentProfile>(builder, now).expect("published");
+  let step = Step {
+    key: StepKey::new("build").expect("key"),
+    name: name("Build"),
+    kind: StepKind::Agent {
+      profile: Some(builder),
+      repository: RepositoryAccess::Write,
+      model: None,
+      permissions: StepPermissions::default(),
+    },
+    instructions: PromptText::new("").expect("prompt"),
+    depends_on: BTreeSet::new(),
+    approval_gate: false,
+    on_failure: None,
+    budget: None,
+  };
+  let pipeline = db
+    .create_resource(
+      Slug::new("preview-release").expect("slug"),
+      name("Preview release"),
+      &Pipeline::new(vec![step]).expect("pipeline"),
+      now,
+    )
+    .expect("pipeline")
+    .id();
+  db.publish_draft::<Pipeline>(pipeline, now).expect("published");
+  let rules = Instruction::new(
+    PromptText::new("Keep the changelog.").expect("prompt"),
+    AgentTargets::All,
+    BTreeSet::from([InjectionEvent::Start]),
+    InstructionScope::Pipeline { pipeline },
+  )
+  .expect("instruction");
+  db.create_resource(
+    Slug::new("release-rules").expect("slug"),
+    name("Release rules"),
+    &rules,
+    now,
+  )
+  .expect("instruction");
+  Source { pipeline, connection }
+}
+
+fn database(repo: &Path) -> PathBuf {
+  repo.join(".orchester").join("orchester.db")
+}
+
+fn fingerprint(repo: &Path) -> (Vec<u8>, SystemTime) {
+  let path = database(repo);
+  let modified = fs::metadata(&path)
+    .and_then(|meta| meta.modified())
+    .expect("modified time");
+  (fs::read(&path).expect("the database file"), modified)
+}
+
+fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
+  element.text_content().is_some_and(|content| content.contains(text))
+    || element.children().into_iter().any(|child| contains_text(child, text))
+}
+
+fn shows(desktop: &mut Desktop, id: &str, text: &str) -> bool {
+  let element = desktop
+    .tree
+    .get_element_by_id(id)
+    .unwrap_or_else(|| panic!("{id} is shown"));
+  contains_text(element, text)
+}
+
+fn choose(desktop: &mut Desktop, id: &str, label: &str) {
+  let mut select = desktop
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_select())
+    .unwrap_or_else(|| panic!("the select {id}"));
+  let index = select
+    .labels()
+    .iter()
+    .position(|option| option.contains(label))
+    .unwrap_or_else(|| panic!("{id} offers {label}"));
+  select.commit(index);
+  desktop.pass();
+}
+
+/// Kontur with Personal website beside it, the import open from the sidebar with Preview release
+/// selected and its dependencies shown.
+fn resolving(kontur: impl FnOnce(&Path)) -> (Desktop, Source, ConnectionId) {
+  let mut source = None;
+  let mut own = None;
+  let mut desktop = Desktop::with_other_project(
+    |repo| source = Some(seed_source(repo)),
+    |repo| {
+      let mut db = ProjectDb::open(repo).expect("open Kontur");
+      own = Some(codex(&mut db));
+      drop(db);
+      kontur(repo);
+    },
+  );
+  let (source, own) = (source.expect("seeded"), own.expect("seeded"));
+  desktop.wait_for("nav-import");
+  desktop.press("nav-import");
+  desktop.wait_for("import-dialog");
+  let row = format!("import-resource-{}", source.pipeline);
+  desktop.wait_for(&row);
+  assert!(shows(&mut desktop, "import-destination", "Kontur"));
+  desktop.press(&row);
+  assert!(shows(&mut desktop, "import-selection", "1 selected"));
+  assert!(shows(&mut desktop, "import-selection", "3 dependencies to resolve"));
+  desktop.press("import-resolve");
+  desktop.wait_for(&format!("import-mapping-{}", source.connection));
+  (desktop, source, own)
+}
+
+fn resources(repo: &Path, kind: ResourceKind) -> Vec<(ResourceId, String)> {
+  ProjectDb::open(repo)
+    .expect("open Kontur")
+    .resources(kind)
+    .expect("listed")
+    .into_iter()
+    .map(|resource| (resource.id(), resource.name().as_str().to_owned()))
+    .collect()
+}
+
+#[test]
+fn import_copies_a_pipeline_with_what_it_needs_as_drafts() {
+  let (mut desktop, source, own) = resolving(|_| {});
+  let before = fingerprint(&desktop.other_repo());
+  let connection = format!("import-status-{}", source.connection);
+  assert!(shows(&mut desktop, &connection, "Unresolved"));
+
+  choose(
+    &mut desktop,
+    &format!("import-choice-{}", source.connection),
+    "Use Codex",
+  );
+  assert!(shows(&mut desktop, &connection, "Mapped"));
+  assert!(shows(&mut desktop, "import-readiness", "All dependencies resolved"));
+  assert!(shows(&mut desktop, "import-totals", "3 new copies"));
+  desktop.press("import-submit");
+  desktop.wait_for("pipeline-state");
+
+  let repo = desktop.repo().to_path_buf();
+  let pipelines = resources(&repo, ResourceKind::Pipeline);
+  let profiles = resources(&repo, ResourceKind::AgentProfile);
+  assert_eq!(
+    pipelines.iter().map(|(_, name)| name.as_str()).collect::<Vec<_>>(),
+    ["Preview release"]
+  );
+  assert_eq!(
+    resources(&repo, ResourceKind::Instruction).len(),
+    1,
+    "Release rules came along"
+  );
+  let db = ProjectDb::open(&repo).expect("open Kontur");
+  let (pipeline, builder) = (pipelines[0].0, profiles[0].0);
+  assert_eq!(
+    db.latest_version::<Pipeline>(pipeline).expect("read"),
+    None,
+    "imported as a draft"
+  );
+  let draft = db.draft::<Pipeline>(pipeline).expect("read").expect("a draft");
+  assert_eq!(draft.body().steps()[0].kind.executor(), Some(builder));
+  let profile = db.draft::<AgentProfile>(builder).expect("read").expect("a draft");
+  assert_eq!(profile.body().connection(), own, "Kontur's own connection");
+  assert!(
+    desktop.tree.get_element_by_id("import-dialog").is_none(),
+    "the dialog closed"
+  );
+  let imported = desktop.activity.snapshot();
+  let event = imported.recent().into_iter().next().expect("the import is listed");
+  assert_eq!(event.title().key, "statusBar.operations.import.done.other");
+  assert_eq!(
+    event.target(),
+    &Target::Project {
+      repo_root: repo,
+      place: Place::Pipeline(pipeline)
+    }
+  );
+  assert_eq!(
+    fingerprint(&desktop.other_repo()),
+    before,
+    "Personal website was only read"
+  );
+}
+
+#[test]
+fn import_needs_a_rename_when_kontur_has_the_name() {
+  let (mut desktop, source, _) = resolving(|repo| {
+    let mut db = ProjectDb::open(repo).expect("open Kontur");
+    let own = Pipeline::new(Vec::new()).expect("pipeline");
+    db.create_resource(
+      Slug::new("preview-release").expect("slug"),
+      name("Preview release"),
+      &own,
+      Timestamp::now(),
+    )
+    .expect("Kontur's own pipeline");
+  });
+  let pipeline = format!("import-status-{}", source.pipeline);
+  assert!(shows(&mut desktop, &pipeline, "Name taken"));
+  assert!(shows(
+    &mut desktop,
+    "import-readiness",
+    "Rename Preview release to continue."
+  ));
+
+  choose(
+    &mut desktop,
+    &format!("import-choice-{}", source.pipeline),
+    "Rename copy",
+  );
+  let rename = format!("import-rename-{}", source.pipeline);
+  desktop.wait_for(&rename);
+  desktop
+    .tree
+    .get_element_by_id_mut(&rename)
+    .and_then(|element| element.as_text_input())
+    .expect("the name of the copy")
+    .set_value("Website preview");
+  desktop.pass();
+  assert!(shows(&mut desktop, &pipeline, "Name resolved"));
+  desktop.press("import-submit");
+  desktop.wait_for("pipeline-state");
+
+  let names: BTreeSet<String> = resources(desktop.repo(), ResourceKind::Pipeline)
+    .into_iter()
+    .map(|(_, name)| name)
+    .collect();
+  assert_eq!(
+    names,
+    BTreeSet::from(["Preview release".to_owned(), "Website preview".to_owned()])
+  );
+}
+
+#[test]
+fn import_closes_back_to_the_page_it_was_opened_over() {
+  let (mut desktop, ..) = resolving(|_| {});
+
+  desktop.press("import-close");
+
+  assert!(desktop.tree.get_element_by_id("import-dialog").is_none());
+  assert!(desktop.tree.get_element_by_id("nav-import").is_some());
+  assert_eq!(
+    resources(desktop.repo(), ResourceKind::Pipeline),
+    [],
+    "closing imports nothing"
+  );
+}

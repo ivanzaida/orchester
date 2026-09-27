@@ -4,7 +4,7 @@
 //! catalog (05.03 `EfTiT`, 05.A `m2WjL`) as dialogs. Each instruction follows Draft saved →
 //! Publish vN → Published vN; drafts are saved as they are edited.
 
-mod copy;
+pub(super) mod copy;
 mod editor;
 mod fields;
 mod frame;

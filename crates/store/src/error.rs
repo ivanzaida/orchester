@@ -21,6 +21,9 @@ pub enum StoreError {
   NotInitialized(PathBuf),
   #[error("database schema version {found} is newer than this build supports ({supported})")]
   SchemaTooNew { found: u32, supported: u32 },
+  /// A database opened only to read it has not been migrated to this build's schema yet.
+  #[error("database schema version {found} is older than this build's ({supported}) and was not migrated")]
+  SchemaTooOld { found: u32, supported: u32 },
   /// A migration left rows referring to rows that do not exist; nothing was changed.
   #[error("migrating the database would leave {0} broken references; it was left unchanged")]
   MigrationBrokeReferences(i64),
