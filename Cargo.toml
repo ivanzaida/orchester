@@ -56,6 +56,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 win32job = "2"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes"] }
+# Wipes a secret value from memory when it is dropped (`orchester_core::secret::SecretValue`).
+# Doing that by hand needs volatile writes, i.e. `unsafe`, which the workspace denies.
+zeroize = "1"
 # Compression of project blob files, as `docs/architecture/storage.md` specifies. The C library is
 # built by `cc` like SQLite already is (rusqlite `bundled`), on Windows and macOS alike.
 zstd = { version = "0.13", default-features = false }

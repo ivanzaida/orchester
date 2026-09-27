@@ -16,6 +16,7 @@ pub mod repository;
 pub mod resource;
 pub mod revision;
 pub mod run;
+pub mod secret;
 pub mod store;
 pub mod task;
 pub mod time;

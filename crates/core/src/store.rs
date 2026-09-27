@@ -3,7 +3,7 @@
 
 use crate::{
   connection::{Connection, stream::AgentEvent},
-  id::{ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  id::{ConnectionId, IdempotencyKey, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
   limits::ProjectLimits,
   name::Name,
   pull_request::{PullRequest, RevisionDiff, SyncedPullRequests},
@@ -11,6 +11,7 @@ use crate::{
   resource::{Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   revision::Revision,
   run::{ActivityEntry, Checkpoint, Invocation, NewRun, Run, RunEvent, StepOutput},
+  secret::Secret,
   task::{Task, TaskDetails},
   time::Timestamp,
   tokens::TokensUsed,
@@ -101,6 +102,24 @@ pub trait ConnectionStore {
 
   /// All connections of the project, ordered by name.
   fn connections(&self) -> Result<Vec<Connection>, Self::Error>;
+}
+
+/// Project secrets' metadata. Values are never stored here: they are in the OS keychain
+/// ([`crate::secret::SecretVault`]). Written by the desktop; the runner reads it.
+pub trait SecretStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Stores a new secret. No other active secret of the project has its name in its environment.
+  fn create_secret(&mut self, secret: &Secret) -> Result<(), Self::Error>;
+
+  /// Stores when an existing secret's value was last replaced and whether it is archived.
+  fn save_secret(&mut self, secret: &Secret) -> Result<(), Self::Error>;
+
+  /// The secret, archived or not.
+  fn secret(&self, id: SecretId) -> Result<Option<Secret>, Self::Error>;
+
+  /// The project's secrets that are not archived, ordered by name, then environment.
+  fn secrets(&self) -> Result<Vec<Secret>, Self::Error>;
 }
 
 /// The project's link to its GitHub repository; a project has at most one. Written by the
