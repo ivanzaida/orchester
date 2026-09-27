@@ -82,8 +82,11 @@ impl Component for EnvironmentTab {
       stored: ctx.signal(None),
     };
     let save = save_action(ctx);
-    let status = ctx.props::<EnvironmentProps>().status.clone();
+    let props = ctx.props::<EnvironmentProps>().clone();
+    let status = props.status.clone();
     let stored = tab.stored.clone();
+    // A change made while an earlier one was saving is saved once that save is done.
+    let commit = tab.commit(save.clone(), &props.open);
     ctx.watch(&save.state(), move |state| {
       if state.is_pending() {
         status.set(SettingsSave::Saving);
@@ -102,6 +105,7 @@ impl Component for EnvironmentTab {
             }
           });
           status.set(SettingsSave::Saved);
+          commit();
         }
         (None, None) => {}
       }
