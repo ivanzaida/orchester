@@ -366,6 +366,18 @@ fn scroll_gutter_follows_pencil() {
   assert!(compute_vertical_scrollbar(&scrollbar, 24.0, 24.0, 308.0, 800.0, 800.0, 0.0).is_none());
 }
 
+/// Inspector notes (`xK9v9`, `Thdx2` in `JuVaA`): Inter 10 muted, line height 1.6.
+#[test]
+fn inspector_note_follows_pencil() {
+  let app = themed_app();
+  let note = app.theme().typography_style(ExtraTypography::InspectorNote.role());
+  assert_eq!(
+    (&*note.font_family, note.font_size, note.line_height),
+    ("Inter", 10.0, 1.6)
+  );
+  assert_eq!(note.color, Color::from_hex("#A3A3A3"));
+}
+
 #[test]
 fn activity_roles_follow_pencil() {
   let app = themed_app();

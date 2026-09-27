@@ -1,7 +1,8 @@
-//! Selected GitHub connection (inspector `l8BJVr` in 04.05 `CHa9s`, states 04.C1–C5 `Cr0P2`,
+//! Selected GitHub connection (inspector `C0jjP` in 04.05 `CHa9s`, states 04.C1–C5 `Cr0P2`,
 //! `ve4G9`, `P89Dl`, `kqfaL`, `HwBI7`): host, program, account and scopes, what the project
-//! expects when its repository is linked through it, what to do about the current state, and
-//! the actions. Commands are shown to be copied; Orchester never runs them.
+//! expects when its repository is linked through it and what to do about the current state, in
+//! a details viewport with a scroll gutter (`KAFgT`), and the actions pinned below it (`RlQQ2`).
+//! Commands are shown to be copied; Orchester never runs them.
 
 use std::sync::Arc;
 
@@ -41,7 +42,7 @@ use crate::{
   },
 };
 
-/// Inspector width (`l8BJVr`) and the longest path shown in full.
+/// Inspector width (`C0jjP`) and the longest path shown in full.
 const INSPECTOR_WIDTH: f32 = 344.0;
 const PATH_CHARS: usize = 34;
 
@@ -102,8 +103,8 @@ impl GitHubInspector<'_> {
       .spacing(SpacingSize::Md)
       .with_children(buttons(ctx, &state, actions))
       .with_children(self.error.as_ref().map(|error| field_error(&message_text(ctx, error))));
-    // The details scroll when a state has more to say than fits, their bar in a gutter of its
-    // own that takes the right padding's inner half; the actions stay at the bottom.
+    // The details scroll when a state has more to say than fits, their thumb in a gutter of its
+    // own (`yqhMN`) beside the right padding; the actions stay at the bottom.
     Column::new()
       .id("connection-inspector")
       .width(Dimension::Px(INSPECTOR_WIDTH))
@@ -125,7 +126,7 @@ impl GitHubInspector<'_> {
       .into()
   }
 
-  /// Host, program, path, account, scopes and last check (`ICDP7`).
+  /// Host, program, path, what runs it, account, scopes and last check (`eOpdt`).
   fn properties(&self, ctx: &Ctx, state: &GitHubState) -> Element {
     let connection = self.connection;
     let result = connection.last_check().map(|check| &check.result);
@@ -175,7 +176,7 @@ impl GitHubInspector<'_> {
       .into()
   }
 
-  /// What the state means and what to do (`PTum8`, `Tw2UU`, `xiwXD`, `k3MwL`, `P84nc`, `e8S2F`).
+  /// What the state means and what to do (`uvFb6`, `Tw2UU`, `xiwXD`, `k3MwL`, `P84nc`, `e8S2F`).
   fn hint(&self, ctx: &Ctx, state: &GitHubState) -> Arc<str> {
     match state {
       GitHubState::NotChecked => ctx.t("github.hint.notChecked"),
@@ -217,7 +218,7 @@ fn link_properties(ctx: &Ctx, link: &RepositoryLink) -> Element {
     .into()
 }
 
-/// Check again, then what the state offers, then Edit connection (`nOZ00`, `sd9ip`, `H4bIeb`,
+/// Check again, then what the state offers, then Edit connection (`nOZ00`, `wUapc`, `H4bIeb`,
 /// `MGtNx`, `jPeVy`).
 fn buttons(ctx: &Ctx, state: &GitHubState, actions: &GitHubActions) -> Vec<Element> {
   let gh_answers = !matches!(
