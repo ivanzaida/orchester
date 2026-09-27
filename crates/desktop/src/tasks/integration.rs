@@ -19,7 +19,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{changes::GIT, detail::run_store_error};
-use crate::{messages::Message, programs::Programs};
+use crate::{activity::Running, messages::Message, programs::Programs};
 
 /// Names shown of a longer list of files, which then ends in an ellipsis.
 const SHOWN_FILES: usize = 5;
@@ -57,6 +57,30 @@ impl From<StoreError> for IntegrationProblem {
 }
 
 impl IntegrationProblem {
+  /// Ends the status bar's `running` operation for this problem. A refusal, a conflict or a
+  /// worktree that stays ended the work undone, and the screen that asked says why: `not_done`,
+  /// which the next event replaces (J). Work that could not run fails (H) with a short reason.
+  pub fn end(&self, running: Running, not_done: Message) {
+    let could_not_run = matches!(
+      self,
+      Self::Store(_) | Self::Read(_) | Self::Merge(MergeError::Git(_)) | Self::Cleanup(CleanupError::Git(_))
+    );
+    if !could_not_run {
+      running.finish_as(not_done);
+      return;
+    }
+    let reason = match self {
+      Self::Store(message) => message.clone(),
+      Self::Read(GitError::Run(CommandError::NotFound))
+      | Self::Merge(MergeError::Git(GitError::Run(CommandError::NotFound)))
+      | Self::Cleanup(CleanupError::Git(GitError::Run(CommandError::NotFound))) => {
+        Message::new("runs.merge.failure.brief.gitMissing")
+      }
+      _ => Message::new("runs.merge.failure.brief.git"),
+    };
+    running.fail(reason);
+  }
+
   /// What to tell the user; `separator` joins file names ("a.rs, b.rs").
   pub fn message(&self, separator: &str) -> Message {
     match self {
@@ -102,7 +126,7 @@ fn merge_message(error: &MergeError, separator: &str) -> Message {
 fn git_message(error: &GitError) -> Message {
   match error {
     GitError::Run(CommandError::NotFound) => Message::new("runs.changes.failure.gitMissing"),
-    GitError::Run(_) | GitError::Unrecognized { .. } => Message::new("runs.changes.failure.git"),
+    GitError::Run(_) | GitError::Unrecognized { .. } => Message::new("runs.merge.failure.gitStopped"),
     GitError::Failed(said) => Message::new("runs.merge.failure.git").with("detail", said.clone()),
   }
 }
@@ -147,6 +171,8 @@ pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Mer
   let git = programs.git_work();
   let merge = merge_run(&git, Path::new(GIT), repo_root, (&run, task.key()), Timestamp::now())
     .map_err(IntegrationProblem::Merge)?;
+  // Should recording fail after git merged, merging again finds the work on the branch already
+  // and records it then (`MergeKind::AlreadyMerged`).
   db.save_run_merge(&merge)?;
   let cleanup = clean_up(&git, Path::new(GIT), repo_root, &run, None);
   if let Err(error) = &cleanup {

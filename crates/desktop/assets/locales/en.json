@@ -775,7 +775,12 @@
         "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
         "notSucceeded": "Only a run whose every step passed can be merged.",
         "alreadyMerged": "This run was merged already.",
-        "git": "Git failed: {{detail}}"
+        "git": "Git failed: {{detail}}",
+        "gitStopped": "Git did not finish. Check the repository with git status before you try again.",
+        "brief": {
+          "gitMissing": "git was not found",
+          "git": "git did not finish"
+        }
       }
     },
     "worktree": {
@@ -2837,12 +2842,14 @@
       "runMerge": {
         "running": "Merging {{task}} run #{{run}} into {{branch}}",
         "done": "Merged {{task}} run #{{run}} into {{branch}}",
-        "failed": "Could not merge {{task}} run #{{run}} into {{branch}}"
+        "failed": "Could not merge {{task}} run #{{run}} into {{branch}}",
+        "notDone": "{{task}} run #{{run}} not merged"
       },
       "runCleanup": {
         "running": "Removing the worktrees of {{task}} run #{{run}}",
         "done": "Removed the worktrees of {{task}} run #{{run}}",
-        "failed": "Could not remove the worktrees of {{task}} run #{{run}}"
+        "failed": "Could not remove the worktrees of {{task}} run #{{run}}",
+        "notDone": "Worktrees of {{task}} run #{{run}} not removed"
       },
       "projectEnvironment": {
         "running": "Saving the environment",

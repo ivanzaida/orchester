@@ -61,15 +61,19 @@ pub(super) fn merge_action(ctx: &mut Ctx, open: &OpenProject, detail: &TaskDetai
   });
   ctx.future_action(move |run: RunId| {
     let (programs, activity, separator, open) = (programs.clone(), activity.clone(), separator.clone(), open.clone());
-    let spec = operations::run_merge(&open, task, (&key, number), &branch);
+    let running = activity.start(operations::run_merge(&open, task, (&key, number), &branch));
+    let not_done = Message::new("statusBar.operations.runMerge.notDone")
+      .with("task", key.clone())
+      .with("run", number.to_string());
     async move {
-      let work = async move {
-        let repo_root = open.repo_root.clone();
-        background::run(move || merge_in(&repo_root, &programs, run))
-          .await?
-          .map_err(|problem| problem.message(&separator))
-      };
-      activity.track(spec, work).await
+      let repo_root = open.repo_root.clone();
+      let merged = background::run(move || merge_in(&repo_root, &programs, run)).await;
+      match &merged {
+        Ok(Ok(_)) => running.finish(),
+        Ok(Err(problem)) => problem.end(running, not_done),
+        Err(message) => running.fail(message.clone()),
+      }
+      merged?.map_err(|problem| problem.message(&separator))
     }
   })
 }

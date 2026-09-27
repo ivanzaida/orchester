@@ -151,14 +151,19 @@ fn remove_action(ctx: &mut Ctx) -> RemoveAction {
         .map(|run| run.run.clone())
         .expect("a run's worktrees are removed from its task page");
       let task = &props.detail.task;
-      let spec = operations::run_cleanup(&props.open, task.id(), (&task.key().to_string(), run.number().get()));
+      let (key, number) = (task.key().to_string(), run.number().get());
+      let running = activity.start(operations::run_cleanup(&props.open, task.id(), (&key, number)));
+      let not_done = Message::new("statusBar.operations.runCleanup.notDone")
+        .with("task", key)
+        .with("run", number.to_string());
       let repo_root = props.open.repo_root.clone();
-      let work = async move {
-        background::run(move || remove_in(&repo_root, &programs, &run, &confirmed))
-          .await?
-          .map_err(|problem| problem.message(&separator))
-      };
-      activity.track(spec, work).await
+      let removed = background::run(move || remove_in(&repo_root, &programs, &run, &confirmed)).await;
+      match &removed {
+        Ok(Ok(())) => running.finish(),
+        Ok(Err(problem)) => problem.end(running, not_done),
+        Err(message) => running.fail(message.clone()),
+      }
+      removed?.map_err(|problem| problem.message(&separator))
     }
   })
 }

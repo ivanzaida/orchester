@@ -115,6 +115,11 @@ fn merge_refuses_a_checkout_with_uncommitted_changes_and_touches_nothing() {
     "Your checkout has uncommitted changes: README.md."
   ));
   assert!(shows(&mut desktop, "task-merge-problem", "Nothing was changed."));
+  // The status bar says it was not done, without pinning a failure: the page says why.
+  desktop.wait_until("the status bar", |desktop| {
+    holds(desktop, "status-activity", "KON-1 run #1 not merged")
+  });
+  assert!(!has(&mut desktop, "status-activity-dismiss"), "no failure to dismiss");
   assert_eq!(git(desktop.repo(), &["rev-parse", "main"]), before);
   assert_eq!(
     fs::read_to_string(desktop.repo().join("README.md")).expect("readme"),
