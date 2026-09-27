@@ -3,14 +3,14 @@
 
 mod support;
 
-use std::time::Duration;
+use std::{fmt::Debug, num::NonZeroU32, path::Path, str::FromStr, time::Duration};
 
 use orchester_core::{
   connection::stream::AgentEvent,
   limits::ProjectLimits,
-  run::{PauseReason, Run, RunStatus, TokenUsage},
+  resource::StepKey,
+  run::{Attempt, AttemptReason, AttemptStatus, PauseReason, Run, RunStatus, StepExecution, StepStatus, TokenUsage},
   store::{ActivityStore, RunStore, SettingsStore, TaskStore},
-  task::Task,
   tokens::TokensUsed,
 };
 use orchester_store::ProjectDb;
@@ -62,133 +62,66 @@ fn limits_daily_usage_counts_completed_turns_since_the_day_began() {
   assert_eq!(db.tokens_used_since(at(301)).expect("usage"), TokensUsed::ZERO);
 }
 
-/// Rewrites a migrated project database back into its shape before token budgets (schema 8):
-/// money budget columns, events of schema 1 and no limits table.
-const MONEY_SCHEMA: &str = r#"
-PRAGMA foreign_keys = OFF;
-BEGIN;
-DROP TABLE secrets;
-DROP TABLE invocation_prompts;
-DROP TABLE revision_diffs;
-DROP TABLE run_permissions;
-DROP TABLE run_step_budgets;
-DROP TABLE step_outputs;
-DROP TABLE money_step_budgets_before_tokens;
-ALTER TABLE step_executions DROP COLUMN failure;
-DROP TABLE project_limits;
-DROP TABLE money_budgets_before_tokens;
-DROP INDEX agent_events_by_kind;
-CREATE TABLE tasks_money (
-  id TEXT PRIMARY KEY,
-  number INTEGER NOT NULL UNIQUE CHECK (number > 0),
-  batch_key TEXT NOT NULL,
-  title TEXT NOT NULL,
-  brief TEXT NOT NULL,
-  pipeline_id TEXT,
-  budget_micros INTEGER,
-  budget_currency TEXT,
-  max_duration_ms INTEGER,
-  status TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  CHECK ((budget_micros IS NULL) = (budget_currency IS NULL)),
-  CHECK ((budget_micros IS NULL) = (max_duration_ms IS NULL))
-) STRICT;
-INSERT INTO tasks_money SELECT id, number, batch_key, title, brief, pipeline_id,
-  CASE WHEN budget_tokens IS NULL THEN NULL ELSE 5000000 END,
-  CASE WHEN budget_tokens IS NULL THEN NULL ELSE 'USD' END, max_duration_ms, status, created_at FROM tasks;
-DROP TABLE tasks;
-ALTER TABLE tasks_money RENAME TO tasks;
-CREATE INDEX tasks_by_batch ON tasks (batch_key);
-CREATE TABLE runs_money (
-  id TEXT PRIMARY KEY,
-  number INTEGER NOT NULL UNIQUE CHECK (number > 0),
-  idempotency_key TEXT NOT NULL UNIQUE,
-  task_id TEXT NOT NULL REFERENCES tasks (id),
-  pipeline_version_id TEXT NOT NULL,
-  snapshot TEXT NOT NULL,
-  branch TEXT NOT NULL,
-  base_revision TEXT NOT NULL CHECK (length(base_revision) = 40),
-  currency TEXT NOT NULL,
-  budget_micros INTEGER NOT NULL CHECK (budget_micros > 0),
-  spent_micros INTEGER NOT NULL CHECK (spent_micros >= 0),
-  status TEXT NOT NULL
-    CHECK (status IN ('pending', 'running', 'paused', 'interrupted', 'succeeded', 'failed', 'cancelled')),
-  status_reason TEXT CHECK ((status IN ('interrupted', 'failed')) = (status_reason IS NOT NULL)),
-  failed_step TEXT CHECK ((status = 'failed') = (failed_step IS NOT NULL)),
-  last_sequence INTEGER NOT NULL CHECK (last_sequence > 0),
-  created_at INTEGER NOT NULL
-) STRICT;
-INSERT INTO runs_money SELECT id, number, idempotency_key, task_id, pipeline_version_id, snapshot, branch,
-  base_revision, 'USD', 5000000, 0, status, CASE status WHEN 'paused' THEN NULL ELSE status_reason END, failed_step,
-  last_sequence, created_at FROM runs;
-DROP TABLE runs;
-ALTER TABLE runs_money RENAME TO runs;
-CREATE INDEX runs_by_task ON runs (task_id, number);
-CREATE INDEX runs_by_status ON runs (status, number);
-DROP TRIGGER run_events_no_update;
-UPDATE run_events SET payload = json_set(json_remove(payload, '$.body.max_duration'), '$.schema', 1,
-  '$.body.budget', json('{"micros": 5000000, "currency": "USD"}')) WHERE kind = 'created';
-UPDATE run_events SET payload = json_set(json_remove(payload, '$.body.reason'), '$.schema', 1) WHERE kind = 'paused';
-UPDATE run_events SET payload = json_set(payload, '$.schema', 1) WHERE kind NOT IN ('created', 'paused');
-CREATE TRIGGER run_events_no_update BEFORE UPDATE ON run_events
-BEGIN SELECT RAISE(ABORT, 'run events are append-only'); END;
-PRAGMA user_version = 8;
-COMMIT;
-"#;
+/// A project database at schema 8, before budgets were tokens (see the file).
+const SCHEMA_8: &str = include_str!("fixtures/schema_8_money_budgets.sql");
+const TASK: &str = "01920000-0000-7000-8000-000000000002";
+const RUN: &str = "01920000-0000-7000-8000-000000000009";
+const ATTEMPT: &str = "01920000-0000-7000-8000-00000000000b";
+const EXECUTION: &str = "01920000-0000-7000-8000-00000000000c";
+
+fn id<T: FromStr<Err: Debug>>(value: &str) -> T {
+  value.parse().expect("fixture id")
+}
+
+fn schema_version(database: &Path) -> u32 {
+  Connection::open(database)
+    .expect("open")
+    .pragma_query_value(None, "user_version", |row| row.get(0))
+    .expect("version")
+}
 
 #[test]
 fn limits_migration_converts_money_budgets_to_tokens_and_keeps_the_money_amounts() {
-  let (repo, mut db, mut run, execution) = started_run();
-  let stored = db.task(run.task()).expect("read").expect("task");
-  let mut details = stored.details().clone();
-  details.acceptance_criteria = vec!["Says hello.".to_owned()];
-  let task = Task::from_stored(
-    stored.id(),
-    stored.key().clone(),
-    details,
-    stored.status(),
-    stored.created_at(),
-  );
-  db.save_task(&task).expect("criteria");
-  let mut invocation = db
-    .start_invocation(run.id(), execution, &model(), at(10))
-    .expect("start");
-  invocation.usage = TokenUsage {
-    input: 12_166,
-    cached_input: 2_432,
-    output: 5,
-  };
-  db.save_invocation(&invocation).expect("save");
-  let events = run.pause(at(20)).expect("pause");
-  db.append_events(&run, &events).expect("append");
-  drop(db);
-  let database = repo.path().join(".orchester").join("orchester.db");
-  Connection::open(&database)
-    .expect("open")
-    .execute_batch(MONEY_SCHEMA)
-    .expect("back to money budgets");
+  let repo = tempfile::tempdir().expect("temporary directory");
+  ProjectDb::create_at_version(repo.path(), 8)
+    .expect("schema 8")
+    .execute_batch(SCHEMA_8)
+    .expect("rows of schema 8");
 
   let db = ProjectDb::open(repo.path()).expect("migrate");
-  let migrated_task = db.task(task.id()).expect("read").expect("task");
-  let limits = migrated_task.details().limits.expect("limits kept");
+  let task = db.task(id(TASK)).expect("read").expect("task");
+  let limits = task.details().limits.expect("limits kept");
   assert_eq!(limits.budget(), budget(1_400_000));
   assert_eq!(limits.max_duration(), Duration::from_secs(1_800));
-  assert_eq!(migrated_task.details().title, task.details().title);
-  assert_eq!(migrated_task.details().acceptance_criteria, ["Says hello."]);
-  let migrated = db.run(run.id()).expect("read").expect("run");
-  assert_eq!(migrated.status(), &RunStatus::Paused(PauseReason::Requested));
-  assert_eq!(migrated.budget(), budget(1_400_000));
-  assert_eq!(migrated.created().budget, budget(1_400_000));
-  assert_eq!(migrated.max_duration(), Duration::from_secs(1_800));
+  assert_eq!(task.details().title.as_str(), "Say hello");
+  assert_eq!(task.details().acceptance_criteria, ["Says hello."]);
+  let run = db.run(id(RUN)).expect("read").expect("run");
+  assert_eq!(run.status(), &RunStatus::Paused(PauseReason::Requested));
+  assert_eq!(run.budget(), budget(1_400_000));
+  assert_eq!(run.created().budget, budget(1_400_000));
+  assert_eq!(run.max_duration(), Duration::from_secs(1_800));
   // 12,166 input − 2,432 cached + 5 output.
-  assert_eq!(migrated.used(), TokensUsed::new(9_739));
-  assert_eq!(migrated.attempts(), run.attempts());
+  assert_eq!(run.used(), TokensUsed::new(9_739));
+  let implement = StepExecution::new(
+    id(EXECUTION),
+    StepKey::new("implement").expect("key"),
+    StepStatus::Pending,
+  );
+  let attempt = Attempt::new(
+    id(ATTEMPT),
+    NonZeroU32::MIN,
+    AttemptReason::Initial,
+    AttemptStatus::Active,
+    vec![implement],
+  );
+  assert_eq!(run.attempts(), [attempt]);
   let replayed = Run::replay(&db.events(run.id()).expect("events")).expect("the old log still reads");
-  assert_eq!(replayed.status(), migrated.status());
-  assert_eq!(replayed.budget(), migrated.budget());
+  assert_eq!(replayed.status(), run.status());
+  assert_eq!(replayed.budget(), run.budget());
   assert_eq!(db.invocations(run.id()).expect("invocations").len(), 1);
   drop(db);
 
+  let database = repo.path().join(".orchester").join("orchester.db");
   let connection = Connection::open(&database).expect("open");
   let mut kept = connection
     .prepare("SELECT owner, micros, currency FROM money_budgets_before_tokens ORDER BY owner")
@@ -205,14 +138,10 @@ fn limits_migration_converts_money_budgets_to_tokens_and_keeps_the_money_amounts
       ("task".to_owned(), 5_000_000, "USD".to_owned())
     ]
   );
-  let version: u32 = connection
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("version");
   // Migrated all the way: the same version a new project database starts at.
   let (fresh, ..) = started_run();
-  let fresh_version: u32 = Connection::open(fresh.path().join(".orchester").join("orchester.db"))
-    .expect("open fresh")
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("fresh version");
-  assert_eq!(version, fresh_version);
+  assert_eq!(
+    schema_version(&database),
+    schema_version(&fresh.path().join(".orchester").join("orchester.db"))
+  );
 }

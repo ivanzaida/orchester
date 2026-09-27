@@ -41,9 +41,10 @@ fn step_inspector_tab_follows_the_fields_and_skips_unavailable_ones() {
   // (the first step has no route, so no retries); approval, Duplicate and Remove. Without a
   // profile the step's permissions are one row without a control. The toolbar, the canvas and the
   // status bar take no focus, so Tab wraps to the name.
-  let mut order = vec![None, Some(INSTRUCTIONS)];
-  order.extend(std::iter::repeat_n(None, others + 1));
+  let mut order = vec![Some("step-executor-select"), Some(INSTRUCTIONS)];
+  order.extend(std::iter::repeat_n(None, others));
   order.extend([
+    Some("step-route-select"),
     Some(BUDGET),
     Some("step-approval"),
     Some("step-duplicate"),

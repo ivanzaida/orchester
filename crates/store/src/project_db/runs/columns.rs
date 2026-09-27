@@ -203,6 +203,7 @@ pub(super) const fn step_failure_text(failure: StepFailure) -> &'static str {
     StepFailure::StepBudget => "step_budget",
     StepFailure::MergeConflict => "merge_conflict",
     StepFailure::CheckpointFailed => "checkpoint_failed",
+    StepFailure::CommandFailed => "command_failed",
   }
 }
 
@@ -214,6 +215,7 @@ pub(super) fn parse_step_failure(value: &str) -> Result<StepFailure, StoreError>
     "step_budget" => StepFailure::StepBudget,
     "merge_conflict" => StepFailure::MergeConflict,
     "checkpoint_failed" => StepFailure::CheckpointFailed,
+    "command_failed" => StepFailure::CommandFailed,
     other => return Err(corrupt("step failure", other)),
   })
 }

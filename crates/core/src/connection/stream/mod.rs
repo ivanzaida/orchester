@@ -106,6 +106,37 @@ pub enum AgentEvent {
   RunnerProblem {
     problem: RunnerProblem,
   },
+  /// A tool step started the program of command tool `tool`; `command` is its command line as
+  /// [`crate::resource::CommandAction::command_line`] writes it.
+  ToolCommandStarted {
+    tool: String,
+    command: String,
+  },
+  /// The program ended as `result` says, with `exit_code` when it exited on its own. `output` is
+  /// the end of what it printed (both streams, in order) as far as the tool keeps it; the
+  /// `omitted_bytes` before it were not kept.
+  ToolCommandFinished {
+    tool: String,
+    command: String,
+    result: ToolCommandResult,
+    exit_code: Option<i64>,
+    output: String,
+    omitted_bytes: u64,
+  },
+}
+
+/// How a command tool's program ended, for its step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolCommandResult {
+  /// It exited with a code the tool expects: the step passes.
+  Passed,
+  /// It exited with another code, or could not report one: the step fails.
+  Failed,
+  /// It did not finish within the tool's timeout and was ended: the step fails.
+  TimedOut,
+  /// The run ended it (cancel, a limit, another step's failure); the run decides what follows.
+  Stopped,
 }
 
 /// A problem the runner hit while running a step's agent.
@@ -123,6 +154,8 @@ pub enum RunnerProblem {
   MergeConflict { branch: String, files: Vec<String> },
   /// The execution used its step budget of `budget` tokens; its agent was ended.
   StepBudgetReached { budget: u64 },
+  /// A command tool's `program` is no file on the `PATH` or in the worktree; it was not started.
+  ProgramNotFound { program: String },
 }
 
 impl AgentEvent {
@@ -143,6 +176,8 @@ impl AgentEvent {
       Self::NotSignedIn { .. } => "not_signed_in",
       Self::Raw { .. } => "raw",
       Self::RunnerProblem { .. } => "runner_problem",
+      Self::ToolCommandStarted { .. } => "tool_command_started",
+      Self::ToolCommandFinished { .. } => "tool_command_finished",
     }
   }
 }
@@ -151,13 +186,15 @@ impl AgentEvent {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum InvocationOutcome {
-  /// Every turn completed and the CLI exited with 0.
+  /// Every turn completed and the CLI exited with 0, or a command tool's program exited with a
+  /// code the tool expects.
   Completed,
   /// A turn failed; `message` is what the CLI said.
   TurnFailed { message: String },
   /// The CLI is not signed in; `message` is what it said.
   NotSignedIn { message: String },
-  /// The CLI exited with a failure code without a failed turn.
+  /// The CLI exited with a failure code without a failed turn, or a command tool's program with a
+  /// code the tool does not expect.
   ExitFailed { code: Option<i32> },
   /// The CLI exited with 0 but never reported a completed turn.
   NoResult,
@@ -165,6 +202,8 @@ pub enum InvocationOutcome {
   Terminated,
   /// The CLI was not started; a [`RunnerProblem`] says why.
   NotStarted,
+  /// A command tool's program did not finish within the tool's timeout; it was ended.
+  TimedOut,
 }
 
 impl InvocationOutcome {

@@ -11,7 +11,7 @@ use crate::{
   repository::{GitHubRepo, RepositoryLink},
   resource::{Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   revision::Revision,
-  run::{ActivityEntry, Checkpoint, Invocation, InvocationPrompt, NewRun, Run, RunEvent, StepOutput},
+  run::{ActivityEntry, Checkpoint, Invocation, InvocationPrompt, NewRun, Plan, Run, RunEvent, StepOutput},
   secret::Secret,
   task::{Task, TaskDetails},
   time::Timestamp,
@@ -205,6 +205,14 @@ pub trait RunStore {
   /// appended first and the call fails with a sequence conflict, changing nothing.
   fn append_events(&mut self, run: &Run, events: &[RunEvent]) -> Result<(), Self::Error>;
 
+  /// [`RunStore::append_events`], storing `plan` in the same transaction: the plan the events
+  /// propose ([`Run::propose_plan`]), or the decision on a stored one ([`Run::decide_plan`]). A
+  /// plan's text never changes, and it is decided once.
+  fn append_events_with_plan(&mut self, run: &Run, events: &[RunEvent], plan: &Plan) -> Result<(), Self::Error>;
+
+  /// The plans of a run's gated steps, ordered by step and version.
+  fn plans(&self, run: RunId) -> Result<Vec<Plan>, Self::Error>;
+
   fn run(&self, id: RunId) -> Result<Option<Run>, Self::Error>;
 
   /// Runs of a task, ordered by number.
@@ -223,8 +231,8 @@ pub trait RunStore {
   fn running_runs(&self) -> Result<Vec<Run>, Self::Error>;
 }
 
-/// Agent CLI invocations and their transcripts, written by the runner. Transcript entries are
-/// append-only.
+/// Agent CLI and command tool invocations and their transcripts, written by the runner. Transcript
+/// entries are append-only.
 pub trait ActivityStore {
   type Error: std::error::Error + Send + Sync + 'static;
 
@@ -235,6 +243,15 @@ pub trait ActivityStore {
     run: RunId,
     execution: StepExecutionId,
     model: &ModelId,
+    now: Timestamp,
+  ) -> Result<Invocation, Self::Error>;
+
+  /// Records a new run of a tool step's command tool for `execution` of `run`, numbered after the
+  /// execution's earlier invocations.
+  fn start_command_invocation(
+    &mut self,
+    run: RunId,
+    execution: StepExecutionId,
     now: Timestamp,
   ) -> Result<Invocation, Self::Error>;
 

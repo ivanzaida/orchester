@@ -109,3 +109,18 @@ impl From<Notice> for Element {
     row.into()
   }
 }
+
+/// Who owns what a library lists (`hepfF` in `LRMQW`, `tSmoZ` in `ZFwWl`): a folder lock beside
+/// one explanation line on the raised fill.
+pub fn ownership_note(text: &str) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding(SpacingSize::Md)
+    .spacing(ExtraSpacing::Stack.role())
+    .align_items(Alignment::Center)
+    .background(PaletteColor::SurfaceRaised)
+    .rounded(ExtraRadius::Notice.role())
+    .child(icon(Icon::FolderLock, IconSize::Notice, PaletteColor::TextSecondary))
+    .child(Text::new(text).variant(ExtraTypography::Explanation.role()).flex(1.0))
+    .into()
+}

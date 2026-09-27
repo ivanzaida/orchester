@@ -231,6 +231,17 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
         scheduler.keep_permissions_for_next_invocation(run, profile).await
       });
     }
+    Command::DecidePlan {
+      run,
+      execution,
+      version,
+      ref decision,
+    } => {
+      let (scheduler, decision) = (scheduler.clone(), decision.clone());
+      return later(replies, id, run, async move {
+        scheduler.decide_plan(run, execution, version, decision).await
+      });
+    }
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
   };
   Answer::Reply(Event::Reply { id, reply })

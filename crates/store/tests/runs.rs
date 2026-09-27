@@ -199,8 +199,12 @@ impl Fixture {
     self.apply(&mut run, |run| run.start(at(11)));
     let plan = Self::exec(&run, "plan");
     self.apply(&mut run, |run| run.start_step(plan, at(12)));
-    self.apply(&mut run, |run| run.complete_step(plan, at(13)));
-    self.apply(&mut run, |run| run.decide_plan(plan, PlanDecision::Approved, at(14)));
+    let (events, mut plan) = run.propose_plan(plan, "Plan.".into(), &[], at(13)).expect("proposed");
+    self.db.append_events_with_plan(&run, &events, &plan).expect("append");
+    let events = run
+      .decide_plan(&mut plan, PlanDecision::Approved, at(14))
+      .expect("decided");
+    self.db.append_events_with_plan(&run, &events, &plan).expect("append");
     let implement = Self::exec(&run, "implement");
     self.apply(&mut run, |run| run.start_step(implement, at(15)));
     run

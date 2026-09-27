@@ -11,8 +11,8 @@ use orchester_core::{
   connection::stream::{AgentStream, InvocationOutcome, RunnerProblem},
   id::StepExecutionId,
   resource::ModelId,
-  run::{Invocation, StepExecutor, StepFailure, StepStatus, execution_tokens},
-  store::ActivityStore,
+  run::{Invocation, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
+  store::{ActivityStore, RunStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -20,10 +20,19 @@ use tokio::sync::mpsc;
 
 use self::worker::{Stop, Worker};
 use super::{
+  record::RecordError,
   run::{ExecutionError, RunTask},
   workspace::{Start, Workspace},
 };
 use crate::supervisor::Supervised;
+
+/// How an execution's next invocation continues it: the CLI session it resumes, if its last
+/// invocation reported one, and when that invocation started.
+#[derive(Default)]
+pub(super) struct Continuation {
+  pub(super) session: Option<String>,
+  pub(super) last_started: Option<Timestamp>,
+}
 
 /// An agent at work on one execution of the run.
 pub(super) struct Active {
@@ -41,6 +50,23 @@ pub(super) struct Active {
 }
 
 impl Active {
+  /// A tool step's command at work: it has no step budget and uses no tokens.
+  pub(super) const fn command(
+    stops: mpsc::UnboundedSender<Stop>,
+    workspace: Workspace,
+    invocation: Invocation,
+  ) -> Self {
+    Self {
+      stops,
+      workspace,
+      invocation,
+      budget: None,
+      used: TokensUsed::ZERO,
+      budget_reached: false,
+      abandoned: false,
+    }
+  }
+
   pub(super) fn tell(&self, stop: Stop) {
     // The agent may have exited already; its end is on its way to the run.
     if self.stops.send(stop).is_err() {
@@ -82,7 +108,15 @@ impl RunTask {
       .filter(|execution| !self.agents.contains_key(execution) && !self.run.pause_requested())
       .collect();
     for execution in continuing {
-      if !self.start(execution, Start::Continues)? {
+      // A plan revision works beside the others in a worktree of its own when anything else of
+      // the run works or is ready: its first worktree was merged and removed with the plan.
+      let start =
+        if self.revises_plan(execution)? && (!self.agents.is_empty() || !self.run.ready_executions().is_empty()) {
+          Start::BesideOthers
+        } else {
+          Start::Continues
+        };
+      if !self.start(execution, start)? {
         return Ok(true);
       }
     }
@@ -110,18 +144,21 @@ impl RunTask {
   /// Starts `execution`'s agent in a slot of its own; `false` when no slot is free. An agent that
   /// cannot start fails its step.
   fn start(&mut self, execution: StepExecutionId, start: Start) -> Result<bool, ExecutionError> {
+    if self.is_tool_step(execution) {
+      return self.start_command(execution, start);
+    }
     let work = self.work(execution)?;
     if !self.board.take(self.run.id(), execution, work) {
       return Ok(false);
     }
     let workspace = Workspace::of(&self.root, &self.run, &self.worktree, execution, start);
-    let resume = self.begin_step(execution)?;
+    let continuation = self.begin_step(execution)?;
     let model = self.model(execution)?;
     let mut invocation = self
       .db
       .start_invocation(self.run.id(), execution, &model, Timestamp::now())?;
-    if resume.is_some() {
-      invocation.session.clone_from(&resume);
+    if continuation.session.is_some() {
+      invocation.session.clone_from(&continuation.session);
       self.db.save_invocation(&invocation)?;
     }
     let workspace = match workspace {
@@ -134,7 +171,7 @@ impl RunTask {
         return Ok(true);
       }
     };
-    let (command, provider, prompt) = match self.command(execution, resume.as_deref(), workspace.path()) {
+    let (command, provider, prompt) = match self.command(execution, &continuation, workspace.path()) {
       Ok(started) => started,
       Err(problem) => {
         self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted)?;
@@ -197,23 +234,38 @@ impl RunTask {
     Ok(())
   }
 
-  /// Starts `execution` if it has not started. One that was stopped mid-step continues: the
-  /// session of its last invocation, if the CLI reported one, is resumed.
-  fn begin_step(&mut self, execution: StepExecutionId) -> Result<Option<String>, ExecutionError> {
+  /// Starts `execution` if it has not started. One that was stopped mid-step, or that a reviewer
+  /// sent back, continues: the session of its last invocation, if the CLI reported one, is resumed.
+  fn begin_step(&mut self, execution: StepExecutionId) -> Result<Continuation, ExecutionError> {
     let status = self.run.execution(execution).map(|execution| execution.status());
     if status == Some(StepStatus::Pending) {
       self.transition(|run, now| run.start_step(execution, now))?;
-      return Ok(None);
+      return Ok(Continuation::default());
     }
-    Ok(
-      self
-        .db
-        .invocations(self.run.id())?
-        .into_iter()
-        .rev()
-        .find(|invocation| invocation.execution == execution)
-        .and_then(|invocation| invocation.session),
-    )
+    let last = self
+      .db
+      .invocations(self.run.id())?
+      .into_iter()
+      .rev()
+      .find(|invocation| invocation.execution == execution);
+    Ok(Continuation {
+      last_started: last.as_ref().map(|invocation| invocation.started_at),
+      session: last.and_then(|invocation| invocation.session),
+    })
+  }
+
+  /// Whether `execution` continues because a reviewer sent its plan back: its last invocation
+  /// ended with the plan, so it starts over where the run's graph stands now, not where it worked.
+  fn revises_plan(&self, execution: StepExecutionId) -> Result<bool, ExecutionError> {
+    let plans = self.db.plans(self.run.id()).map_err(RecordError::from)?;
+    let last_started = self
+      .db
+      .invocations(self.run.id())?
+      .into_iter()
+      .rev()
+      .find(|invocation| invocation.execution == execution)
+      .map(|invocation| invocation.started_at);
+    Ok(Plan::awaiting_revision(&plans, execution, last_started).is_some())
   }
 
   fn model(&self, execution: StepExecutionId) -> Result<ModelId, ExecutionError> {
@@ -227,8 +279,9 @@ impl RunTask {
     }
   }
 
-  /// The agent did not start: the problem is reported, the invocation ends and the step fails.
-  fn not_started(
+  /// The agent or command did not start: the problem is reported, the invocation ends and the step
+  /// fails.
+  pub(super) fn not_started(
     &mut self,
     execution: StepExecutionId,
     invocation: &mut Invocation,

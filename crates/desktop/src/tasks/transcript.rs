@@ -1,14 +1,15 @@
 //! The Activity tab's transcript (02.I `SfXU1`): a run's stored agent events turned into the
-//! entries a person reads. A command's start and end become one entry, a permission denial marks
-//! the command it denied, each file of a file change is an entry of its own (it opens the file in
-//! the Changes tab), consecutive unparsed lines become one collapsed entry, and a failed turn
+//! entries a person reads. A command's start and end become one entry (a tool step's command tool
+//! too), a permission denial marks the command it denied, each file of a file change is an entry of
+//! its own (it opens the file in the Changes tab), consecutive unparsed lines become one collapsed
+//! entry, and a failed turn
 //! that repeats the error before it is not shown twice. Session and turn starts carry no text of their own; the
 //! invocation panel shows the session. Nothing else is left out.
 
 use std::sync::Arc;
 
 use orchester_core::{
-  connection::stream::{AgentEvent, CommandStatus, FileChange, OutputStream, RunnerProblem},
+  connection::stream::{AgentEvent, CommandStatus, FileChange, OutputStream, RunnerProblem, ToolCommandResult},
   id::{InvocationId, StepExecutionId},
   run::{ActivityEntry, TokenUsage},
   time::Timestamp,
@@ -28,6 +29,22 @@ pub enum EntryKind {
   Problem(RunnerProblem),
   /// Unparsed lines, in order.
   Raw(Arc<Vec<(OutputStream, Arc<str>)>>),
+  /// A tool step's command tool, from its start to its end.
+  ToolCommand(ToolCommandEntry),
+}
+
+/// A command tool's program that a tool step ran.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolCommandEntry {
+  pub command: Arc<str>,
+  /// `None` while the program runs.
+  pub result: Option<ToolCommandResult>,
+  pub exit_code: Option<i64>,
+  /// The end of the output the tool keeps, after `omitted_bytes` that it did not keep.
+  pub output: Arc<str>,
+  pub omitted_bytes: u64,
+  /// Milliseconds from start to end, when both were seen.
+  pub duration: Option<i64>,
 }
 
 /// A command the agent ran, from its start to its end.
@@ -60,6 +77,10 @@ impl Entry {
   pub fn is_failure(&self) -> bool {
     match &self.kind {
       EntryKind::Command(command) => matches!(command.status, Some(CommandStatus::Failed | CommandStatus::Declined)),
+      EntryKind::ToolCommand(command) => matches!(
+        command.result,
+        Some(ToolCommandResult::Failed | ToolCommandResult::TimedOut)
+      ),
       EntryKind::Error(_) | EntryKind::NotSignedIn(_) | EntryKind::Problem(_) => true,
       _ => false,
     }
@@ -109,6 +130,15 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       AgentEvent::NotSignedIn { message } => entries.push(entry(EntryKind::NotSignedIn(message.as_str().into()))),
       AgentEvent::RunnerProblem { problem } => entries.push(entry(EntryKind::Problem(problem.clone()))),
       AgentEvent::Raw { stream, line } => push_raw(&mut entries, stored, *stream, line),
+      AgentEvent::ToolCommandStarted { command, .. } => entries.push(entry(EntryKind::ToolCommand(ToolCommandEntry {
+        command: command.as_str().into(),
+        result: None,
+        exit_code: None,
+        output: "".into(),
+        omitted_bytes: 0,
+        duration: None,
+      }))),
+      AgentEvent::ToolCommandFinished { .. } => finish_tool_command(&mut entries, stored),
     }
   }
   entries
@@ -169,6 +199,46 @@ fn finish_command(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
     Some(entry) => {
       entry.kind = finished(Some(stored.at.unix_millis() - entry.at.unix_millis()));
     }
+    None => entries.push(Entry {
+      sequence: stored.sequence,
+      part: 0,
+      execution: stored.execution,
+      invocation: stored.invocation,
+      at: stored.at,
+      kind: finished(None),
+    }),
+  }
+}
+
+/// Completes the entry the command's start created, or adds one when the start was not seen.
+fn finish_tool_command(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
+  let AgentEvent::ToolCommandFinished {
+    command,
+    result,
+    exit_code,
+    output,
+    omitted_bytes,
+    ..
+  } = &stored.event
+  else {
+    return;
+  };
+  let finished = |duration| {
+    EntryKind::ToolCommand(ToolCommandEntry {
+      command: command.as_str().into(),
+      result: Some(*result),
+      exit_code: *exit_code,
+      output: output.as_str().into(),
+      omitted_bytes: *omitted_bytes,
+      duration,
+    })
+  };
+  let started = entries.iter_mut().rev().find(|entry| {
+    entry.invocation == stored.invocation
+      && matches!(&entry.kind, EntryKind::ToolCommand(started) if started.result.is_none())
+  });
+  match started {
+    Some(entry) => entry.kind = finished(Some(stored.at.unix_millis() - entry.at.unix_millis())),
     None => entries.push(Entry {
       sequence: stored.sequence,
       part: 0,

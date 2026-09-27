@@ -1,6 +1,9 @@
 use thiserror::Error;
 
-use super::status::{InterruptCause, RunLimit, RunStatus, StepStatus};
+use super::{
+  plan::PlanVersion,
+  status::{InterruptCause, RunLimit, RunStatus, StepStatus},
+};
 use crate::{
   id::{CheckpointId, ResourceId, RunId, StepExecutionId},
   permission::capability::PermissionProblem,
@@ -29,6 +32,8 @@ pub enum RunError {
   GatedStep(StepKey),
   #[error("step `{0}` has no approval gate, so its result needs no decision")]
   NotGated(StepKey),
+  #[error("plan v{0} has been decided already; a revised plan needs a decision of its own")]
+  PlanAlreadyDecided(PlanVersion),
   #[error("the current attempt still has open step executions")]
   OpenExecutions,
   #[error("the run cannot succeed before every step has passed")]

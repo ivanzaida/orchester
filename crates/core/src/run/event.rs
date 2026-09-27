@@ -9,10 +9,9 @@ use super::{
   branch::BranchName,
   number::RunNumber,
   permissions::{PermissionsApply, PermissionsChangedBy},
+  plan::{PlanDecision, PlanVersion},
   snapshot::RunSnapshot,
-  status::{
-    AttemptReason, ContinueTrigger, InterruptCause, PauseReason, PlanDecision, RunFailure, StepFailure, WaitReason,
-  },
+  status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, RunFailure, StepFailure, WaitReason},
 };
 use crate::{
   id::{AttemptId, CheckpointId, ResourceId, RunId, StepExecutionId, TaskId},
@@ -176,8 +175,10 @@ pub enum RunEventKind {
   StepResumed {
     execution: StepExecutionId,
   },
+  /// A person decided on plan `version` of the gated step `execution` waits with.
   PlanDecided {
     execution: StepExecutionId,
+    version: PlanVersion,
     decision: PlanDecision,
   },
   StepPassed {

@@ -1,5 +1,6 @@
-//! Run controls in the task page's topbar (`ctwcG` in 02.10, `ZcYUg` in 02.A, `EGcA7` in 02.L):
-//! Pause run while the run works, Resume run while it is paused or stopped by the daily budget,
+//! Run controls in the task page's topbar (`ctwcG` in 02.10, `ZcYUg` in 02.A, `EGcA7` in 02.L,
+//! `Oc7iw` in 02.11): Pause run while an agent of the run works (not while it only waits for a
+//! decision), Resume run while it is paused or stopped by the daily budget,
 //! Continue run while it is interrupted (the task-level continue after a session ended, which
 //! `o8DCd` leaves undesigned; it takes Resume's place and look), Cancel run until it ends. A
 //! request shows that it is under way ("Pausing…", "Resuming…", "Continuing…", "Cancelling…");
@@ -98,6 +99,8 @@ pub(super) fn control_buttons(
     RunStatus::Running if run.run.pause_requested() || pending == Some(RunControl::Pause) => {
       Some(button("runs.page.pausing", Icon::Loader, "task-pause-run").disabled())
     }
+    // Nothing works while the run only waits for a person: there is nothing to pause.
+    RunStatus::Running if run.run.waits_for_a_person() => None,
     RunStatus::Running => Some(
       button("runs.page.pause", Icon::Pause, "task-pause-run")
         .on_click(press(RunControl::Pause))

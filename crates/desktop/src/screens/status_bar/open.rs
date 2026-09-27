@@ -8,7 +8,7 @@ use lurq::{app::ctx::Ctx, core::Signal};
 use super::ProjectBar;
 use crate::{
   activity::{Activity, OperationId, Place, Target},
-  navigation::route::{AgentSelection, InstructionsTab, Page, SettingsTab},
+  navigation::route::{AgentSelection, InstructionsTab, Page, SettingsTab, ToolSelection},
   runner::Runners,
   screens::project::ProjectNav,
 };
@@ -71,6 +71,8 @@ impl Opener {
       // The instructions screen moves to the tab of the instruction's scope.
       Place::Instruction(id) => Page::Instructions(InstructionsTab::ProjectRules, Some(id)),
       Place::AgentProfile(id) => Page::Agents(AgentSelection::Profile(id)),
+      Place::Task(id) => Page::task(id),
+      Place::Tool(id) => Page::Tools(ToolSelection::Tool(id)),
       Place::Secrets => Page::SECRETS,
       Place::Connections => Page::CONNECTIONS,
       Place::Settings => Page::Settings(SettingsTab::General),

@@ -57,6 +57,7 @@ pub(super) fn prepare(
   let problems = preflight(PreflightInput {
     pipeline: pipeline.as_ref().map(Version::body),
     profiles: &published.profiles,
+    tools: &published.tools,
     connections: &connections,
   });
   if !problems.is_empty() {

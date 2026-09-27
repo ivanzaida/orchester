@@ -7,8 +7,8 @@ use orchester_core::{
   id::{ProjectId, SecretId},
   name::Name,
   resource::{
-    AccessPolicy, AccessWindow, ApprovalMode, CommandAction, DatabaseQuery, DeniedBehavior, HttpAuth, HttpMethod,
-    HttpRequest, Tool, ToolAction,
+    AccessPolicy, AccessWindow, ApprovalMode, CommandAction, CommandArg, CommandProgram, DatabaseQuery, DeniedBehavior,
+    HttpAuth, HttpMethod, HttpRequest, Tool, ToolAction,
   },
   secret::{
     Environment, SecretError, SecretKind, SecretName, SecretNameError, SecretValue, SecretValueError, VaultError,
@@ -123,15 +123,18 @@ fn secret_is_used_by_the_tools_that_refer_to_it() {
       BTreeMap::new(),
     )
     .expect("valid request");
-    Tool::new(ToolAction::Http(request), policy())
+    Tool::new("", ToolAction::Http(request), Some(policy())).expect("valid tool")
   };
   let query = |credentials| {
     let query = DatabaseQuery::new(credentials, "SELECT 1".into()).expect("valid query");
-    Tool::new(ToolAction::DatabaseQuery(query), policy())
+    Tool::new("", ToolAction::DatabaseQuery(query), Some(policy())).expect("valid tool")
   };
-  let command = Tool::new(
-    ToolAction::Command(CommandAction::new("pnpm".into(), vec!["test".into()]).expect("valid command")),
-    policy(),
+  let command = Tool::command(
+    "",
+    CommandAction::new(
+      CommandProgram::new("pnpm").expect("valid program"),
+      vec![CommandArg::new("test").expect("valid argument")],
+    ),
   );
   assert!(tool_uses(&http(HttpAuth::Bearer { secret }), secret));
   assert!(!tool_uses(&http(HttpAuth::Bearer { secret: other }), secret));

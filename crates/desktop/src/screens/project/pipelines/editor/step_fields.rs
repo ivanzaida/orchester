@@ -9,7 +9,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, Select, Text},
+  components::{Button, Column, Row, Select, SelectOption, Text},
   core::{Signal, SignalValue},
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -24,7 +24,7 @@ use super::{
 };
 use crate::{
   messages::Message,
-  pipelines::fields::{Executor, ModelChoice, RouteChoice, model_choices},
+  pipelines::fields::{ModelChoice, RouteChoice, model_choices},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -38,16 +38,16 @@ use crate::{
 
 /// Select and small button heights, instruction rows and the width of inline values
 /// (`F4oXtQ`, `TCmqS`, `LmRHo`, `yeeIR`).
-const SELECT_HEIGHT: f32 = 36.0;
-const SMALL_BUTTON_HEIGHT: f32 = 30.0;
+pub(super) const SELECT_HEIGHT: f32 = 36.0;
+pub(super) const SMALL_BUTTON_HEIGHT: f32 = 30.0;
 const INSTRUCTION_ROWS: (usize, usize) = (3, 12);
 const VALUE_WIDTH: f32 = 96.0;
 
-fn label(ctx: &Ctx, key: &str) -> Text {
+pub(super) fn label(ctx: &Ctx, key: &str) -> Text {
   Text::new(&ctx.t(key)).variant(TypographyStyle::Caption)
 }
 
-fn labelled(label: Text, control: impl Into<Element>) -> Column {
+pub(super) fn labelled(label: Text, control: impl Into<Element>) -> Column {
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Field.role())
@@ -55,11 +55,11 @@ fn labelled(label: Text, control: impl Into<Element>) -> Column {
     .child(control)
 }
 
-fn select<T: Clone + PartialEq + Send + Sync + SignalValue + 'static>(
+pub(super) fn select<T: Clone + PartialEq + Send + Sync + SignalValue + 'static>(
   ctx: &Ctx,
   id: &'static str,
   value: &Signal<T>,
-  options: Vec<(T, Arc<str>)>,
+  options: impl IntoIterator<Item = impl Into<SelectOption<T>>>,
   required: bool,
 ) -> Element {
   let mut style = select_style(ctx, SELECT_HEIGHT);
@@ -70,11 +70,14 @@ fn select<T: Clone + PartialEq + Send + Sync + SignalValue + 'static>(
     .id(id)
     .width(Dimension::Pct(100.0))
     .child(
-      Select::new(value.clone())
-        .options(options)
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Px(SELECT_HEIGHT))
-        .style(style),
+      Element::from(
+        Select::new(value.clone())
+          .options(options)
+          .width(Dimension::Pct(100.0))
+          .height(Dimension::Px(SELECT_HEIGHT))
+          .style(style),
+      )
+      .id(Arc::<str>::from(format!("{id}-select"))),
     )
     .into()
 }
@@ -110,59 +113,6 @@ pub fn header(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, error: Opt
     column = column.child(field_error(&message_text(ctx, error)));
   }
   column.into()
-}
-
-/// Project agent profile or tool (`x9u2n`), required while none is chosen (`rToi2`).
-pub fn executor(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields) -> Element {
-  let tool_step = matches!(props.step.kind, StepKind::Tool { .. });
-  let unset_label = if tool_step {
-    ctx.t("pipelines.inspector.chooseTool")
-  } else {
-    ctx.t("pipelines.inspector.chooseProfile")
-  };
-  let mut options = vec![(Executor::Unset, unset_label)];
-  options.extend(props.assignables.profiles.iter().map(|profile| {
-    let version = profile.version.to_string();
-    let label = ctx.t_args(
-      "pipelines.inspector.profileOption",
-      [("profile", &*profile.name), ("version", version.as_str())],
-    );
-    (Executor::Profile(profile.id), label)
-  }));
-  options.extend(props.assignables.tools.iter().map(|tool| {
-    let label = ctx.t_args("pipelines.inspector.toolOption", [("tool", &*tool.name)]);
-    (Executor::Tool(tool.id), label)
-  }));
-  let current = Executor::of(&props.step);
-  if !options.iter().any(|(value, _)| *value == current) {
-    options.push((current, ctx.t("pipelines.inspector.unpublishedExecutor")));
-  }
-  let unset = current == Executor::Unset;
-  let key = if tool_step {
-    "pipelines.inspector.tool"
-  } else {
-    "pipelines.inspector.profile"
-  };
-  let mut field = labelled(
-    label(ctx, key),
-    select(ctx, "step-executor", &fields.executor, options, unset),
-  );
-  if unset {
-    let required = ctx.t_args(
-      if tool_step {
-        "pipelines.inspector.toolRequired"
-      } else {
-        "pipelines.inspector.profileRequired"
-      },
-      [("step", props.step.name.as_str())],
-    );
-    field = field.child(
-      Text::new(&required)
-        .variant(ExtraTypography::Hint.role())
-        .color(PaletteColor::TextPrimary),
-    );
-  }
-  field.into()
 }
 
 /// Model for this step and the effective model (`nje0G`, `LRvkv`); agent steps only.
@@ -331,8 +281,13 @@ pub fn route(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields) -> Element 
         (RouteChoice(Some(step.key.clone())), label)
       }),
   );
+  // A tool step's command cannot be asked for changes; it can only fail.
+  let key = match props.step.kind {
+    StepKind::Agent { .. } => "pipelines.inspector.route",
+    StepKind::Tool { .. } => "pipelines.inspector.routeOnFailure",
+  };
   labelled(
-    label(ctx, "pipelines.inspector.route"),
+    label(ctx, key),
     select(ctx, "step-route", &fields.route, options, false),
   )
   .into()
@@ -360,8 +315,11 @@ pub fn constraints(
       errors.retries.as_ref(),
     ));
   }
+  // A tool step's command uses no tokens, so it has no budget.
+  let budget =
+    matches!(props.step.kind, StepKind::Agent { .. }).then(|| budget_input(ctx, fields, errors.budget.as_ref()));
   column
-    .child(budget_input(ctx, fields, errors.budget.as_ref()))
+    .with_children(budget)
     .with_children(step_permissions::rows(ctx, props, fields, handle))
     .into()
 }

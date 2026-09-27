@@ -93,7 +93,7 @@ pub fn step_card(
         .text_overflow(TextOverflow::Elipsis),
     )
     .child(
-      Text::new(&message_text(ctx, &outcome_line(step)))
+      Text::new(&message_text(ctx, &outcome_line(step, assignables)))
         .variant(TypographyStyle::Caption)
         .color(PaletteColor::TextMuted)
         .nowrap()

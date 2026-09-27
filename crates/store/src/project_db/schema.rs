@@ -472,4 +472,58 @@ CREATE TABLE secrets (
 ) STRICT;
 CREATE UNIQUE INDEX secrets_active_names ON secrets (name, environment) WHERE archived_at IS NULL;
 ",
+  r"
+-- Command tool steps (M10a). A command tool's run is an invocation of its step execution, so its
+-- time counts toward the run's time limit and its output joins the run's transcript. It runs no
+-- model: its `model` is empty.
+ALTER TABLE invocations ADD COLUMN kind TEXT NOT NULL DEFAULT 'agent'
+  CHECK (kind IN ('agent', 'command') AND (kind = 'command') = (model = ''));
+
+-- A tool step fails with `command_failed` when its program exits with a code the tool does not
+-- expect or does not finish in time. SQLite cannot change a CHECK constraint, so the table is
+-- rebuilt, its rows keeping their `rowid` (executions are read in that order).
+CREATE TABLE step_executions_new (
+  id TEXT PRIMARY KEY,
+  attempt_id TEXT NOT NULL REFERENCES attempts (id),
+  step_key TEXT NOT NULL,
+  profile_version_id TEXT,
+  model TEXT,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'waiting', 'passed', 'failed', 'skipped')),
+  wait_reason TEXT CHECK (wait_reason IN ('approval', 'plan', 'message')),
+  failure TEXT CHECK (failure IN ('agent_failed', 'reported_failed', 'not_started', 'step_budget', 'merge_conflict',
+    'checkpoint_failed', 'command_failed')),
+  UNIQUE (attempt_id, step_key),
+  CHECK ((status = 'waiting') = (wait_reason IS NOT NULL)),
+  CHECK ((profile_version_id IS NULL) = (model IS NULL))
+) STRICT;
+INSERT INTO step_executions_new
+  (rowid, id, attempt_id, step_key, profile_version_id, model, status, wait_reason, failure)
+  SELECT rowid, id, attempt_id, step_key, profile_version_id, model, status, wait_reason, failure
+  FROM step_executions;
+DROP TABLE step_executions;
+ALTER TABLE step_executions_new RENAME TO step_executions;
+",
+  r"
+-- Approval gates (M7): each result of a gated step is a plan, numbered per run and step, and waits
+-- for a person's decision; requested changes carry the reviewer's note. The text never changes and
+-- a plan is decided once; the run's events hold every decision.
+CREATE TABLE plans (
+  run_id TEXT NOT NULL REFERENCES runs (id),
+  step_key TEXT NOT NULL,
+  version INTEGER NOT NULL CHECK (version > 0),
+  step_execution_id TEXT NOT NULL REFERENCES step_executions (id),
+  text TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  decision TEXT CHECK (decision IN ('approved', 'changes_requested')),
+  note TEXT CHECK ((decision IS 'changes_requested') = (note IS NOT NULL)),
+  decided_at INTEGER CHECK ((decision IS NULL) = (decided_at IS NULL)),
+  PRIMARY KEY (run_id, step_key, version)
+) STRICT;
+CREATE TRIGGER plans_decided_once BEFORE UPDATE ON plans
+WHEN OLD.decision IS NOT NULL OR NEW.text IS NOT OLD.text OR NEW.step_execution_id IS NOT OLD.step_execution_id
+  OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT, 'a plan keeps its text and is decided once'); END;
+CREATE TRIGGER plans_no_delete BEFORE DELETE ON plans
+BEGIN SELECT RAISE(ABORT, 'plans are never deleted'); END;
+",
 ];

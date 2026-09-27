@@ -127,7 +127,12 @@ fn run_notice(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
     RunStatus::Failed(_) => plain(
       Icon::AlertCircle,
       "runs.summary.notice.failedTitle",
-      "runs.summary.notice.failedDetail",
+      // A tool step's command reported no agent's account, only how it ended.
+      if run.current_step().is_some_and(|step| step.tool_step) {
+        "runs.summary.notice.failedCommandDetail"
+      } else {
+        "runs.summary.notice.failedDetail"
+      },
     ),
     RunStatus::Cancelled => plain(
       Icon::Square,

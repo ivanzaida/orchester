@@ -15,8 +15,8 @@ use orchester_desktop::{
   navigation::{
     Navigation, Places, Start, forward,
     route::{
-      AgentSelection, ChangedFile, ConnectionTab, InstructionsTab, Page, Route, SettingsTab, TaskPageTab, changed_file,
-      changes_path,
+      AgentSelection, ChangedFile, ConnectionTab, InstructionsTab, Page, Route, SettingsTab, TaskPageTab,
+      ToolSelection, changed_file, changes_path,
     },
     routes,
   },
@@ -137,6 +137,9 @@ fn pages() -> Vec<Page> {
     Page::Agents(AgentSelection::First),
     Page::Agents(AgentSelection::New),
     Page::Agents(AgentSelection::Profile(ResourceId::generate())),
+    Page::Tools(ToolSelection::Library),
+    Page::Tools(ToolSelection::New),
+    Page::Tools(ToolSelection::Tool(ResourceId::generate())),
     Page::SECRETS,
     Page::Secrets(Some(SecretId::generate())),
     Page::CONNECTIONS,

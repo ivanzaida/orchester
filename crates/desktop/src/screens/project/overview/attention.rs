@@ -1,6 +1,7 @@
 //! Beside the overview's task list (`EKUWS`): what needs the user (`jWEn1`) — runs waiting for a
-//! plan decision, an answer or an approval — and the recent activity of the project's runs
-//! (`YJ8PV`, `mBkeJ` events). Rows open their task; they are outside any form, so pointer-only.
+//! plan decision (a review card, `dpeD7`), an answer or an approval (`Mt22P`) — and the recent
+//! activity of the project's runs (`YJ8PV`, `mBkeJ` events). Each opens its task; they are outside
+//! any form, so pointer-only.
 
 use lurq::{
   app::{
@@ -19,11 +20,12 @@ use crate::{
   navigation::route::Page,
   tasks::{
     data::ProjectTasks,
-    list::TaskRow,
+    list::{AwaitedPlan, TaskRow},
     overview::{OverviewTab, RecentRun, figure, recent_runs},
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
+    button::ActionButton,
     icon::{Icon, IconSize, icon},
     message_text,
     pressable::{pressable, surface},
@@ -75,8 +77,12 @@ pub(super) fn attention(ctx: &Ctx, open: &OpenProject, tasks: &ProjectTasks, nav
     .into()
 }
 
-/// A run waiting for the user (`Mt22P`): what it is, the task, and the way to it.
+/// A run waiting for the user: its plan to review (`dpeD7`), or else what it waits for (`Mt22P`),
+/// with the way to its task.
 fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
+  if let Some(plan) = &row.plan {
+    return plan_decision(ctx, row, plan, nav);
+  }
   let (nav, task) = (nav.clone(), row.id);
   let context = ctx.t_args(
     "overview.attention.context",
@@ -100,6 +106,36 @@ fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
       .child(Text::new(&ctx.t("overview.attention.open")).variant(TypographyStyle::Link)),
   )
   .into()
+}
+
+/// A plan waiting for the user's decision (`dpeD7`): "REVIEW PLAN", the task, what waits, and
+/// Review plan, which opens the task on its plan.
+fn plan_decision(ctx: &Ctx, row: &TaskRow, plan: &AwaitedPlan, nav: &ProjectNav) -> Element {
+  let version = plan.version.to_string();
+  let summary = ctx.t_args(
+    "overview.attention.planSummary",
+    [("version", version.as_str()), ("agent", &*plan.agent)],
+  );
+  let (nav, task) = (nav.clone(), row.id);
+  let review = ActionButton::new(ctx.t("overview.attention.reviewPlanAction"))
+    .icon(Icon::ListChecks)
+    .fill_width()
+    .on_click(move || nav.show(Page::task(task)))
+    .render(ctx)
+    .id(format!("overview-review-plan-{}", row.key));
+  Column::new()
+    .id(format!("overview-decision-{}", row.key))
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Stack.role())
+    .child(Text::new(&ctx.t("overview.attention.reviewPlan")).variant(ExtraTypography::Overline.role()))
+    .child(Text::new(&row.title).variant(TypographyStyle::Label))
+    .child(
+      Text::new(&summary)
+        .variant(TypographyStyle::Description)
+        .width(Dimension::Pct(100.0)),
+    )
+    .child(review)
+    .into()
 }
 
 /// Recent activity (`YJ8PV`): the latest change of the most recently changed runs.

@@ -84,7 +84,7 @@ pub(super) struct RunTask {
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   listening: bool,
   pub(super) pending: Pending,
-  /// Agents at work, by the execution they work on.
+  /// Agents and command tools at work, by the execution they work on.
   pub(super) agents: HashMap<StepExecutionId, Active>,
   pub(super) worker_events: mpsc::UnboundedSender<WorkerEvent>,
   events: mpsc::UnboundedReceiver<WorkerEvent>,
@@ -155,7 +155,9 @@ impl RunTask {
         if startable && self.may_start() {
           continue;
         }
-        if self.settle()? {
+        // A run that waits for a person ends its task here: it holds no agent slot meanwhile, and
+        // the decision executes it again.
+        if self.settle()? || self.run.waits_for_a_person() {
           return Ok(());
         }
         return Err(ExecutionError::Stalled);
@@ -194,6 +196,7 @@ impl RunTask {
     match event {
       WorkerEvent::Usage { execution, tokens } => self.on_usage(execution, tokens),
       WorkerEvent::Ended { execution, end } => self.on_ended(execution, &end?),
+      WorkerEvent::CommandEnded { execution, end } => self.on_command_ended(execution, &end?),
     }
   }
 
@@ -234,7 +237,7 @@ impl RunTask {
       let Some(event) = self.events.recv().await else {
         return;
       };
-      if let WorkerEvent::Ended { execution, .. } = event
+      if let WorkerEvent::Ended { execution, .. } | WorkerEvent::CommandEnded { execution, .. } = event
         && self.agents.remove(&execution).is_some()
       {
         self.board.release(execution);
