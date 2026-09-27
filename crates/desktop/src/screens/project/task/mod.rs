@@ -80,6 +80,15 @@ use crate::{
 /// Section tab row (`X7jYe`).
 const TAB_ROW_HEIGHT: f32 = 42.0;
 
+/// What a run left, with the tasks revision and merge it was read at.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LeftoversRead {
+  read_at: (u64, bool),
+  left: LeftBehind,
+}
+
+impl lurq::app::component::DevtoolsInspectable for LeftoversRead {}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TaskProps {
   pub project: OpenProject,
@@ -253,19 +262,38 @@ impl TaskScreen {
       .use_context::<Programs>()
       .expect("the root provides Programs before mounting screens");
     let separator = ctx.t("common.listSeparator");
-    let deps = (props.project.repo_root.clone(), run.run.clone(), props.revision);
-    let load = ctx.future(deps, move |(repo_root, run, _)| {
+    // A merge or a removal changes what is left: until it is read again, what was read before
+    // must not show beside the new merge or reappear after the removal. Runner events for other
+    // runs change nothing here, so what was read stays while they are read again.
+    let changed_by_person = (props.revision.0, detail.merge.is_some());
+    let deps = (
+      props.project.repo_root.clone(),
+      run.run.clone(),
+      props.revision,
+      changed_by_person,
+    );
+    let load = ctx.future(deps, move |(repo_root, run, _, read_at)| {
       let (programs, separator) = (programs.clone(), separator.clone());
       async move {
         background::run(move || leftovers_in(&repo_root, &programs, &run))
           .await?
+          .map(|left| LeftoversRead { read_at, left })
           .map_err(|problem| problem.message(&separator))
       }
     });
     let state = load.state().get();
+    if state.is_pending() && state.data.as_ref().is_none_or(|read| read.read_at != changed_by_person) {
+      return None;
+    }
     match (state.data, state.error) {
       (_, Some(error)) => Some(Err(error)),
-      (Some(LeftBehind(leftovers)), None) => Some(Ok(leftovers)),
+      (
+        Some(LeftoversRead {
+          left: LeftBehind(leftovers),
+          ..
+        }),
+        None,
+      ) => Some(Ok(leftovers)),
       (None, None) => None,
     }
   }
