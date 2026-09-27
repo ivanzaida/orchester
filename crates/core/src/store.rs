@@ -8,6 +8,7 @@ use crate::{
   conversation::Message,
   diff::RevisionDiff,
   id::{ConnectionId, IdempotencyKey, InvocationId, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
+  import::ImportBatch,
   integration::RunMerge,
   limits::ProjectLimits,
   name::Name,
@@ -114,6 +115,17 @@ pub trait ResourceStore {
     resource: ResourceId,
     number: VersionNumber,
   ) -> Result<Option<Version<B>>, Self::Error>;
+}
+
+/// Copies of another project's resources (Import resources). Written by the desktop.
+pub trait ImportStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Creates every copy of `batch` as a resource whose only content is a draft, with where it
+  /// came from and when (the copy's creation), atomically, after checking that the project still has every resource,
+  /// connection and secret the copies rely on and that each copy's slug is free. Repeating the call with the
+  /// same key returns the resources created the first time instead of new ones.
+  fn import(&mut self, batch: &ImportBatch) -> Result<Vec<Resource>, Self::Error>;
 }
 
 /// Project connections. Written by the desktop; the runner only reads them.

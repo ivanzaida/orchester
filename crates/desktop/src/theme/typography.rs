@@ -150,10 +150,12 @@ pub enum ExtraTypography {
   MonoTitle,
   /// A stored secret shown only as its mask (`FNlaR` in `CQxCb`).
   MaskedValue,
+  /// Uppercase heading of a table column, e.g. "SOURCE / VERSION" (`gHiGc` in `WcIvG`).
+  ColumnHeading,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 68] = [
+  const ALL: [Self; 69] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -222,6 +224,7 @@ impl ExtraTypography {
     Self::AgentText,
     Self::MonoTitle,
     Self::MaskedValue,
+    Self::ColumnHeading,
   ];
 
   fn name(self) -> &'static str {
@@ -294,6 +297,7 @@ impl ExtraTypography {
       Self::AgentText => "agent-text",
       Self::MonoTitle => "mono-title",
       Self::MaskedValue => "masked-value",
+      Self::ColumnHeading => "column-heading",
     }
   }
 
@@ -432,6 +436,7 @@ impl ExtraTypography {
       Self::AgentText => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),
       Self::MonoTitle => mono(12.0, TEXT),
       Self::MaskedValue => mono(13.0, MUTED),
+      Self::ColumnHeading => style(9.0, FontWeight::Normal, MUTED),
       icon_role => icon(
         icon_role
           .icon_size()

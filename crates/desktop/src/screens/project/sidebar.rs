@@ -1,5 +1,6 @@
 //! Shell sidebar (`zo9Py`). Overview, Tasks, Pull requests, Pipelines, Instructions, Agents, Tools, Secrets,
-//! Connections and Project settings open their screens; every other entry is shown but unavailable. The runner card
+//! Connections and Project settings open their screens and Import resources opens over the screen shown; every
+//! other entry is shown but unavailable. The runner card
 //! (`O2Jjjf`) is not shown: the status bar reports the runner on every screen.
 
 use lurq::{
@@ -14,7 +15,10 @@ use lurq::{
 
 use super::{ProjectNav, TasksState};
 use crate::{
-  navigation::route::{AgentSelection, InstructionsTab, Page, SettingsTab, ToolSelection},
+  navigation::{
+    import::ImportTab,
+    route::{AgentSelection, InstructionsTab, Page, SettingsTab, ToolSelection},
+  },
   theme::{ExtraColor, ExtraSpacing},
   ui::{brand::brand, icon::Icon, nav_item::NavItem},
   workspace::OpenProject,
@@ -44,11 +48,19 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject, shown: Option<Page>, tasks: &Tasks
         .padding_horizontal(ExtraSpacing::Stack.role())
         .spacing(SpacingSize::Xs)
         .child(NavItem::new("nav-all-projects", Icon::Folders, ctx.t("nav.allProjects")).secondary())
-        .child(NavItem::new("nav-import", Icon::Download, ctx.t("nav.importResources")).secondary()),
+        .child(import_item(ctx, nav)),
     )
     .child(Spacer::new().flex(1.0))
     .child(footer(ctx, shown, nav))
     .into()
+}
+
+/// Import resources (`cyp7s`): opens the import over the page shown.
+fn import_item(ctx: &Ctx, nav: &ProjectNav) -> NavItem {
+  let nav = nav.clone();
+  NavItem::new("nav-import", Icon::Download, ctx.t("nav.importResources"))
+    .secondary()
+    .on_click(move || nav.show_import(ImportTab::All))
 }
 
 /// The current project. Switching needs All projects, which does not exist yet, so the

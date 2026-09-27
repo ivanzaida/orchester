@@ -16,6 +16,7 @@ mod draft_autosave;
 mod github;
 mod harness;
 mod history;
+mod import;
 mod instructions;
 mod integration;
 mod lifecycle;

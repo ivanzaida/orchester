@@ -43,6 +43,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::AlreadyInitialized(_) => Message::new("errors.alreadyInitialized"),
     StoreError::NotInitialized(_) => Message::new("errors.projectMissing"),
     StoreError::SchemaTooNew { .. } => Message::new("errors.newerSchema"),
+    StoreError::SchemaTooOld { .. } => Message::new("errors.olderSchema"),
     StoreError::Unrepresentable(_) => Message::new("errors.unsupportedPath"),
     StoreError::DuplicateConnectionName(_) => Message::new("errors.connectionNameTaken"),
     StoreError::DuplicateSecretName { .. } => Message::new("errors.secretNameTaken"),

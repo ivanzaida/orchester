@@ -170,6 +170,7 @@ impl Library {
         ActionButton::new(ctx.t("pipelines.library.import"))
           .icon(Icon::Download)
           .id("pipelines-import")
+          .on_click(self.nav.import())
           .render(ctx),
       )
       .child(

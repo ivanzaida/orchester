@@ -264,6 +264,17 @@ fn secrets_roles_follow_pencil() {
 }
 
 #[test]
+fn import_roles_follow_pencil() {
+  let app = themed_app();
+  // `gHiGc` in the mapping headings `WcIvG` of 06.05 `QqnDd`: Inter 9 in `muted`.
+  let heading = app.theme().typography_style(ExtraTypography::ColumnHeading.role());
+  assert_eq!(
+    (heading.font_size, &*heading.font_family, heading.weight),
+    (9.0, "Inter", FontWeight::Normal)
+  );
+}
+
+#[test]
 fn pull_request_roles_follow_pencil() {
   let app = themed_app();
   let title = app.theme().typography_style(ExtraTypography::RowTitle.role());

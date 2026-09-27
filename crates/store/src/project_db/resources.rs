@@ -197,7 +197,11 @@ fn check_kind<B: ResourceBody>(connection: &Connection, resource: ResourceId) ->
   }
 }
 
-fn load_resources(connection: &Connection, clause: &str, params: impl Params) -> Result<Vec<Resource>, StoreError> {
+pub(super) fn load_resources(
+  connection: &Connection,
+  clause: &str,
+  params: impl Params,
+) -> Result<Vec<Resource>, StoreError> {
   let mut statement = connection.prepare(&format!("{SELECT_RESOURCES} {clause}"))?;
   let rows = statement
     .query_map(params, ResourceRow::read)?
@@ -282,7 +286,7 @@ impl ResourceRow {
   }
 }
 
-fn encode<B: ResourceBody>(body: &B) -> Result<String, StoreError> {
+pub(super) fn encode<B: ResourceBody>(body: &B) -> Result<String, StoreError> {
   encode_json("resource body", B::SCHEMA, body)
 }
 
@@ -314,7 +318,7 @@ pub(crate) fn version_number(number: i64) -> Result<VersionNumber, StoreError> {
     .ok_or_else(|| corrupt("version number", number))
 }
 
-const fn kind_text(kind: ResourceKind) -> &'static str {
+pub(super) const fn kind_text(kind: ResourceKind) -> &'static str {
   match kind {
     ResourceKind::AgentProfile => "agent_profile",
     ResourceKind::Instruction => "instruction",
