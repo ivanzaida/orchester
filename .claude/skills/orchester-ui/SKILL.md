@@ -143,6 +143,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::MonoValue.role()` | mono 11 | key/value property value, slug (`yeeIR`, `cJsA7`) |
 | `ExtraTypography::MonoField.role()` | mono 12 | path in a field, e.g. the project folder (`ObbY7` in `xZAZc`, `F5KwDR`) |
 | `ExtraTypography::MonoArea.role()` | mono 12, 1.6 | `NAME=value` lines in a mono text area, e.g. the project's environment (`f0e2Hv` in `BGMgO`) |
+| `ExtraTypography::ChangeLine.role()` | 12, 1.4 | a change of a pipeline version in the version history (`o6to5` in `DOroV`) |
 | `ExtraTypography::Instructions.role()` | 12, 1.65 | step instructions (`v1Ky8`) |
 | `ExtraTypography::Hint.role()` | 10 muted, 1.5 | explanation under a field (`k66CB`) |
 | `ExtraTypography::VersionFigure.role()` | 18/500 | version in the publish confirmation (`p8L552`) |

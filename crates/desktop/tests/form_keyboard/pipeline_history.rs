@@ -1,6 +1,7 @@
 //! Version history in the pipeline editor: the published versions newest first with their
-//! changes and runs, a version shown read-only on the canvas, compared with the draft, and
-//! restored as the draft — after a second click while the draft has changes of its own.
+//! changes and runs, a version shown read-only on the canvas, compared with the draft (the steps
+//! the draft changes tagged on the canvas), and restored as the draft — after a second click,
+//! with the button armed as the primary action, while the draft has changes of its own.
 
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
@@ -27,6 +28,7 @@ use crate::{github::contains_text, harness::Desktop};
 const HISTORY: &str = "pipeline-history";
 const DETAILS: &str = "pipeline-version-details";
 const STEP_NAME: &str = "step-name";
+const CHANGED_TAG: &str = "step-card-changed-implement";
 
 fn name(value: &str) -> Name {
   Name::new(value).expect("valid name")
@@ -167,6 +169,14 @@ fn shown(desktop: &mut Desktop, id: &str) -> bool {
   desktop.tree.get_element_by_id(id).is_some()
 }
 
+fn primary(desktop: &mut Desktop, id: &str) -> bool {
+  desktop
+    .tree
+    .get_element_by_id(id)
+    .unwrap_or_else(|| panic!("{id} is shown"))
+    .has_class("primary")
+}
+
 fn back(desktop: &mut Desktop) {
   desktop.tree.mouse_down(720.0, 480.0, MouseButton::Other(4));
   desktop.pass();
@@ -232,12 +242,15 @@ fn pipeline_history_compares_a_version_with_the_draft() {
   });
   assert!(shows(&mut desktop, DETAILS, "Build · renamed from Implement"));
   assert!(shows(&mut desktop, DETAILS, "Build · now waits for approval"));
+  // The step the draft changes carries the tag on the canvas.
+  assert!(shows(&mut desktop, CHANGED_TAG, "Changed in draft v3"));
   desktop.press("pipeline-history-compare");
   desktop.settle("the comparison hidden", |tree| {
     tree
       .get_element_by_id(DETAILS)
       .is_some_and(|details| contains_text(details, "This is the first version"))
   });
+  assert!(!shown(&mut desktop, CHANGED_TAG), "no tag without the comparison");
 }
 
 #[test]
@@ -246,12 +259,17 @@ fn pipeline_history_restore_replaces_the_draft_after_a_second_click() {
   desktop.press("pipeline-version-1");
   desktop.wait_for("pipeline-history-restore");
   assert!(shows(&mut desktop, "pipeline-history-restore", "Restore v1 as draft"));
+  assert!(!primary(&mut desktop, "pipeline-history-restore"));
   desktop.press("pipeline-history-restore");
   assert!(shows(
     &mut desktop,
     "pipeline-history-restore",
     "Replace draft v3? Click again"
   ));
+  assert!(
+    primary(&mut desktop, "pipeline-history-restore"),
+    "armed, it is the primary action"
+  );
   assert!(shown(&mut desktop, HISTORY), "the first click only asks");
   desktop.press("pipeline-history-restore");
   desktop.wait_for(STEP_NAME);

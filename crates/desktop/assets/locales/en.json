@@ -2245,6 +2245,8 @@
       "fromVersionToLatest": "From {{version}} to the latest version",
       "compareInvalid": "Draft v{{draft}} has problems to fix before it can be compared.",
       "noDifferences": "No differences",
+      "changedInDraft": "Changed in draft v{{draft}}",
+      "changedInLatest": "Changed in the latest version",
       "restore": "Restore {{version}} as draft",
       "confirmRestore": "Replace draft v{{draft}}? Click again",
       "backToEditor": "Back to editing",

@@ -1,10 +1,10 @@
-//! Version history, in place of the inspector while a published version is shown: the
-//! pipeline's published versions, newest first, each with when it was published, how much
-//! changed from the version before and how many runs pinned it. The selected version opens with
-//! its changes (or, compared, what the draft changes from it), the runs that used it, and
-//! Compare and Restore as draft. Restoring replaces the draft's steps with the version's; while
-//! the draft has changes of its own, it asks for a second click first. Not drawn in the design:
-//! it reuses the inspector's frame, its property rows and the publish confirmation's change list.
+//! Version history (`DZjhX` in 03.07 `fvPvA`, states `H0l9D`), in place of the inspector while a
+//! published version is shown: the pipeline's published versions, newest first, each with when it
+//! was published, how much changed from the version before and how many runs pinned it. The
+//! selected version opens with its changes (or, compared, what the draft changes from it, 03.08
+//! `Fb42P`), the runs that used it, and Compare and Restore as draft. Restoring replaces the
+//! draft's steps with the version's; while the draft has changes of its own, the first click arms
+//! the button, which turns primary and asks for a second click (03.09 `NmNRM`).
 
 use std::sync::Arc;
 
@@ -26,6 +26,11 @@ use orchester_core::{
 };
 
 use super::EditorHandle;
+
+/// The close button's size (`xTCNm`), and the slot that keeps a change's icon on the first line of
+/// its text (`Q1Geah`).
+const CLOSE_SIZE: f32 = 24.0;
+const CHANGE_ICON_SLOT: f32 = 17.0;
 use crate::{
   display,
   messages::Message,
@@ -132,15 +137,16 @@ impl HistoryPanel {
     let nav = self.nav.clone();
     let close = surface()
       .id("pipeline-history-close")
+      .size(Dimension::Px(CLOSE_SIZE), Dimension::Px(CLOSE_SIZE))
       .align_items(Alignment::Center)
       .justify(Justify::Center)
       .rounded(RadiusSize::Sm)
       .child(icon(Icon::X, IconSize::Dismiss, PaletteColor::TextSecondary));
     Row::new()
       .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Inline.role())
+      .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::History, IconSize::Notice, PaletteColor::TextPrimary))
+      .child(icon(Icon::History, IconSize::Option, PaletteColor::TextPrimary))
       .child(
         Text::new(&ctx.t("pipelines.editor.versionHistory"))
           .variant(TypographyStyle::Title)
@@ -206,7 +212,7 @@ impl HistoryPanel {
     );
     let content = Column::new()
       .flex(1.0)
-      .spacing(ExtraSpacing::Tight.role())
+      .spacing(SpacingSize::Xs)
       .child(title)
       .child(Text::new(&summary).variant(TypographyStyle::Caption));
     let row = surface()
@@ -248,7 +254,7 @@ impl HistoryPanel {
       .child(
         Column::new()
           .width(Dimension::Pct(100.0))
-          .spacing(ExtraSpacing::Field.role())
+          .spacing(ExtraSpacing::Tight.role())
           .child(Text::new(&ctx.t("pipelines.history.runs")).variant(TypographyStyle::Caption))
           .child(
             Text::new(&runs)
@@ -299,13 +305,14 @@ impl HistoryPanel {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(compare.render(ctx))
-      .child(self.restore_button(ctx, props, version).render(ctx))
+      .child(self.restore_button(ctx, props, version))
       .into()
   }
 
   /// Restore as draft. Unavailable when the editor already holds this version's steps; while
-  /// the draft has changes of its own, the first click asks and the second replaces them.
-  fn restore_button(&self, ctx: &Ctx, props: &HistoryPanelProps, version: &PublishedVersion) -> ActionButton {
+  /// the draft has changes of its own, the first click arms it, primary, and the second replaces
+  /// them.
+  fn restore_button(&self, ctx: &Ctx, props: &HistoryPanelProps, version: &PublishedVersion) -> Element {
     let number = version.number;
     let armed = self.confirm.get() == Asked(Some(number));
     let label = if armed {
@@ -325,10 +332,12 @@ impl HistoryPanel {
       version.body.clone(),
       props.pipeline,
     );
-    ActionButton::new(label)
+    let button = ActionButton::new(label)
       .icon(Icon::Undo2)
       .id("pipeline-history-restore")
-      .fill_width()
+      .fill_width();
+    let button = if armed { button.primary() } else { button };
+    let button = button
       .on_click(move || {
         if ask_first {
           confirm.set(Asked(Some(number)));
@@ -339,13 +348,19 @@ impl HistoryPanel {
         nav.replace(pipeline, PipelineView::Draft);
       })
       .enabled(!unchanged)
+      .render(ctx);
+    if armed { button.class("primary") } else { button }
   }
 }
 
-/// What changed from the version before, or that it is the first.
+/// What changed from the version before, or that it is the first (`z2hXA` in `H0l9D`).
 fn version_changes(ctx: &Ctx, version: &PublishedVersion) -> Element {
   let Some(from) = &version.changes else {
-    return change_list(ctx, &ctx.t("pipelines.publish.firstVersion"), &[], None);
+    return Column::new()
+      .id("pipeline-version-changes")
+      .width(Dimension::Pct(100.0))
+      .child(change_text(&ctx.t("pipelines.publish.firstVersion")))
+      .into();
   };
   let heading = ctx.t_args(
     "pipelines.publish.changes",
@@ -374,38 +389,41 @@ fn comparison(ctx: &Ctx, version: &PublishedVersion, current: &Current) -> Eleme
   change_list(ctx, &heading, &found, Some(ctx.t("pipelines.history.noDifferences")))
 }
 
-/// A heading over one line per change (`LXUS6`); `empty` when there are none.
+/// A heading over one line per change (`MoO8N`); `empty` when there are none.
 fn change_list(ctx: &Ctx, heading: &str, found: &[PipelineChange], empty: Option<Arc<str>>) -> Element {
   let mut list = Column::new()
     .id("pipeline-version-changes")
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Inline.role())
+    .spacing(SpacingSize::Sm)
     .child(Text::new(heading).variant(TypographyStyle::Caption));
   if found.is_empty()
     && let Some(empty) = empty
   {
-    list = list.child(
-      Text::new(&empty)
-        .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextPrimary),
-    );
+    list = list.child(change_text(&empty));
   }
   for change in found {
+    // A line that wraps keeps its icon on its first line (`DOroV`).
+    let slot = Row::new()
+      .height(Dimension::Px(CHANGE_ICON_SLOT))
+      .align_items(Alignment::Center)
+      .child(icon(change_icon(change), IconSize::Small, PaletteColor::TextSecondary));
     list = list.child(
       Row::new()
         .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Inline.role())
+        .spacing(SpacingSize::Sm)
         .align_items(Alignment::Start)
-        .child(icon(change_icon(change), IconSize::Small, PaletteColor::TextMuted))
-        .child(
-          Text::new(&message_text(ctx, &describe::change(change)))
-            .variant(TypographyStyle::FieldLabel)
-            .color(PaletteColor::TextPrimary)
-            .flex(1.0),
-        ),
+        .child(slot)
+        .child(change_text(&message_text(ctx, &describe::change(change))).flex(1.0)),
     );
   }
   list.into()
+}
+
+/// A change, or a line in its place (`o6to5`, `nRmqd`).
+fn change_text(text: &str) -> Text {
+  Text::new(text)
+    .variant(ExtraTypography::ChangeLine.role())
+    .width(Dimension::Pct(100.0))
 }
 
 fn change_icon(change: &PipelineChange) -> Icon {

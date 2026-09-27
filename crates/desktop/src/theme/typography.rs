@@ -154,10 +154,12 @@ pub enum ExtraTypography {
   ColumnHeading,
   /// `NAME=value` lines in a mono text area, e.g. the project's environment (`f0e2Hv` in `BGMgO`).
   MonoArea,
+  /// A change a version makes, in the version history (`o6to5` in `DOroV`).
+  ChangeLine,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 70] = [
+  const ALL: [Self; 71] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -228,6 +230,7 @@ impl ExtraTypography {
     Self::MaskedValue,
     Self::ColumnHeading,
     Self::MonoArea,
+    Self::ChangeLine,
   ];
 
   fn name(self) -> &'static str {
@@ -302,6 +305,7 @@ impl ExtraTypography {
       Self::MaskedValue => "masked-value",
       Self::ColumnHeading => "column-heading",
       Self::MonoArea => "mono-area",
+      Self::ChangeLine => "change-line",
     }
   }
 
@@ -442,6 +446,7 @@ impl ExtraTypography {
       Self::MaskedValue => mono(13.0, MUTED),
       Self::ColumnHeading => style(9.0, FontWeight::Normal, MUTED),
       Self::MonoArea => leading(1.6, mono(12.0, TEXT)),
+      Self::ChangeLine => leading(1.4, style(12.0, FontWeight::Normal, TEXT)),
       icon_role => icon(
         icon_role
           .icon_size()

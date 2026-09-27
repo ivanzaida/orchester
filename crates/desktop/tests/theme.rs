@@ -152,6 +152,14 @@ fn mono_field_path_follows_pencil() {
 }
 
 #[test]
+fn version_history_change_lines_follow_pencil() {
+  let app = themed_app();
+  // A change of a version, 12 at 1.4, beside a 17px icon slot: one line of it (`o6to5`, `Q1Geah`).
+  let line = app.theme().typography_style(ExtraTypography::ChangeLine.role());
+  assert_eq!((line.font_size, line.line_height), (12.0, 1.4));
+}
+
+#[test]
 fn mono_text_keeps_the_space_before_double_hyphens() {
   let app = themed_app();
   let off = FontFeatures::from([FontFeature::disable(*b"liga"), FontFeature::disable(*b"calt")]);

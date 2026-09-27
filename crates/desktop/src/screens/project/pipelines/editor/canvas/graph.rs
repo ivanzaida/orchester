@@ -2,6 +2,8 @@
 //! dependency level with their connectors and annotations, and the failure route notes under
 //! them (`pFKSd`). An empty draft shows the first-step slot and how to begin (`angoF`).
 //! Selecting a card selects its step; a published version is read-only, so its cards do nothing.
+//! Compared with the draft, each step the draft changes carries a tag on its card's top edge
+//! (03.08 `Fb42P`).
 
 use std::sync::Arc;
 
@@ -12,10 +14,10 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Stack, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::resource::{Step, StepKey};
+use orchester_core::resource::{Pipeline, PipelineChange, Step, StepKey, changes};
 
 use super::super::{
   EditorHandle,
@@ -49,6 +51,31 @@ const DESCRIPTION_Y: f32 = 30.0;
 const TRIGGER_Y: f32 = 76.0;
 const EMPTY_EXPLANATION_Y: f32 = 252.0;
 const EMPTY_EXPLANATION_WIDTH: f32 = 460.0;
+/// The *Changed in draft* tag's height, centered on its card's top edge, and how far its right end
+/// is from the card's (`Yjlao` in 03.08 `Fb42P`).
+const TAG_HEIGHT: f32 = 20.0;
+const TAG_INSET: f32 = 6.0;
+
+/// A published version compared with what the editor holds: the steps on the canvas the editor
+/// changes, and the draft's number; `None` when the editor holds the latest version.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Compared {
+  draft: Option<u32>,
+  steps: Vec<StepKey>,
+}
+
+impl Compared {
+  pub fn new(version: &Pipeline, current: &Pipeline, draft: Option<u32>) -> Self {
+    let steps = changes(version, current)
+      .into_iter()
+      .filter_map(|change| match change {
+        PipelineChange::Step { key, .. } => Some(key),
+        PipelineChange::Description => None,
+      })
+      .collect();
+    Self { draft, steps }
+  }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GraphProps {
@@ -59,6 +86,8 @@ pub struct GraphProps {
   pub assignables: Assignables,
   /// A published version: nothing can be selected or added.
   pub read_only: bool,
+  /// The version is compared with what the editor holds.
+  pub compared: Option<Compared>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for GraphProps {}
@@ -200,6 +229,23 @@ impl CanvasGraph {
         ),
       );
     }
+    let Some(compared) = &props.compared else {
+      return content;
+    };
+    let label = match compared.draft {
+      Some(draft) => ctx.t_args(
+        "pipelines.history.changedInDraft",
+        [("draft", draft.to_string().as_str())],
+      ),
+      None => ctx.t("pipelines.history.changedInLatest"),
+    };
+    // Drawn after every card, so a tag stays over the card's edge.
+    for card in &graph.cards {
+      let key = &props.steps[card.index].key;
+      if compared.steps.contains(key) {
+        content = content.child(changed_tag(&label, key, (card.x, card.y)));
+      }
+    }
     content
   }
 
@@ -282,6 +328,38 @@ fn description(ctx: &Ctx, text: &str) -> Element {
     .variant(TypographyStyle::Description)
     .color(color)
     .absolute_position(ORIGIN_X, DESCRIPTION_Y)
+    .into()
+}
+
+/// *Changed in draft v5* (`Yjlao`): the compact status label's look with the field stroke, its right
+/// end near the card's, centered on the card's top edge. It takes no pointer: the card under it is
+/// read-only.
+fn changed_tag(label: &str, key: &StepKey, (x, y): (f32, f32)) -> Element {
+  let tag = Row::new()
+    .id(format!("step-card-changed-{key}"))
+    .height(Dimension::Px(TAG_HEIGHT))
+    .padding_horizontal(SpacingSize::Sm)
+    .spacing(ExtraSpacing::Tight.role())
+    .align_items(Alignment::Center)
+    .background(PaletteColor::AccentMuted)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Sm)
+    .child(icon(Icon::Pencil, IconSize::Small, PaletteColor::TextPrimary))
+    .child(
+      Text::new(label)
+        .variant(ExtraTypography::CompactStatusLabel.role())
+        .nowrap(),
+    );
+  Row::new()
+    .absolute(
+      x,
+      y - TAG_HEIGHT / 2.0,
+      Dimension::Px(CARD_WIDTH - TAG_INSET),
+      Dimension::Px(TAG_HEIGHT),
+    )
+    .justify(Justify::End)
+    .pointer_events_none()
+    .child(tag)
     .into()
 }
 
