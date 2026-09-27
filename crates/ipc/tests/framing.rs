@@ -151,6 +151,11 @@ fn conversation_events(run: RunId, task: TaskId) -> Vec<Event> {
       task_key: "ORC-12".to_owned(),
       agent: "Planner".to_owned(),
     },
+    Event::RunReady {
+      run,
+      task,
+      number: orchester_core::run::RunNumber::new(std::num::NonZeroU32::MIN),
+    },
     Event::Reply {
       id: RequestId::new(10),
       reply: Reply::Rejected(Rejection::RunEnded),

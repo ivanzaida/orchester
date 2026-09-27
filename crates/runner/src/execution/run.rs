@@ -34,7 +34,7 @@ use super::{
   board::Board,
   control::{Ack, Control, answer},
   prepare::Prepared,
-  record::{RecordError, record},
+  record::{RecordError, announce_ready, record},
   step::{
     Active,
     worker::{Stop, StopCause, WorkerEvent},
@@ -293,7 +293,12 @@ impl RunTask {
       }
       Ok(events)
     };
-    Ok(record(&mut self.db, &self.notifier, &mut self.run, settling)?)
+    let was_ready = self.run.status() == &RunStatus::Succeeded;
+    record(&mut self.db, &self.notifier, &mut self.run, settling)?;
+    if !was_ready {
+      announce_ready(&self.notifier, &self.run);
+    }
+    Ok(())
   }
 
   /// The task executes the run again after a transition settled it: a follow-up of a run that

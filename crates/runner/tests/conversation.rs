@@ -362,6 +362,29 @@ async fn conversation_a_message_no_agent_read_before_the_run_succeeded_follows_i
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn conversation_a_run_that_succeeds_is_announced_ready_for_review() {
+  let project = codex("Append one line.");
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .expect("the run starts");
+  let ready = async {
+    loop {
+      if let Event::RunReady { run, number, .. } = events.recv().await.expect("the scheduler notifies")
+        && run == id
+      {
+        return number;
+      }
+    }
+  };
+  let number = tokio::time::timeout(PATIENCE, ready)
+    .await
+    .expect("the run is announced ready");
+  assert_eq!(number.get(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn conversation_a_message_written_before_the_run_reaches_its_first_step() {
   let project = codex("Append one line.");
   let root = project.repo.path();

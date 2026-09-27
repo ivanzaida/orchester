@@ -2733,7 +2733,8 @@
         "other": "{{count}} runs interrupted · nothing runs until the runner starts"
       },
       "planReady": "Plan ready for review · {{task}}",
-      "agentAsks": "{{agent}} asks · {{task}}"
+      "agentAsks": "{{agent}} asks · {{task}}",
+      "runReady": "Run #{{run}} ready for review"
     },
     "counts": {
       "agents": "Agents",

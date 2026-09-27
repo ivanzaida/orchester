@@ -363,6 +363,10 @@ impl Session {
         reporter.plan_proposed(task, &task_key, version);
         true
       }
+      Some(Ok(Some(Event::RunReady { task, number, .. }))) => {
+        reporter.run_ready(task, number);
+        true
+      }
       Some(Ok(Some(Event::QuestionAsked {
         task, task_key, agent, ..
       }))) => {

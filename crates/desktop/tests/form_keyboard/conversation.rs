@@ -85,6 +85,10 @@ fn conversation_a_question_is_answered_from_the_composer() {
       && shows(desktop, "conversation-status", "Ready for review")
   });
   assert!(shows(&mut desktop, "task-conversation-panel", "Question · answered"));
+  // The run's readiness replaces the question as the latest event.
+  desktop.wait_until("the ready event", |desktop| {
+    shows(desktop, "status-activity", "Run #1 ready for review")
+  });
   assert_eq!(desktop.value("conversation-input"), "");
   desktop.wait_until("Needs you", |desktop| shows(desktop, "status-needs-you", "0"));
 }

@@ -7,7 +7,10 @@ use std::{
   time::{Instant, SystemTime},
 };
 
-use orchester_core::{id::TaskId, run::PlanVersion};
+use orchester_core::{
+  id::TaskId,
+  run::{PlanVersion, RunNumber},
+};
 use orchester_ipc::WorkSummary;
 use parking_lot::Mutex;
 use tokio::sync::watch;
@@ -236,6 +239,13 @@ impl Reporter {
       .with("agent", agent.to_owned())
       .with("task", task_key.to_owned());
     self.record_for_task(task, title, Place::TaskConversation(task));
+  }
+
+  /// Run `number` of task `task` succeeded: the latest event says it is ready for review and opens
+  /// the task ("Run #128 ready for review").
+  pub(super) fn run_ready(&self, task: TaskId, number: RunNumber) {
+    let title = Message::new("statusBar.activity.runReady").with("run", number.get().to_string());
+    self.record_for_task(task, title, Place::Task(task));
   }
 
   /// Records `title` as the latest event of this runner's project, opening `place`.

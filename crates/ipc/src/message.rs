@@ -10,7 +10,7 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   permission::{AgentPermissions, capability::PermissionProblem},
   resource::StepKey,
-  run::{InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunLimit},
+  run::{InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunLimit, RunNumber},
   tokens::TokenBudget,
 };
 use serde::{Deserialize, Serialize};
@@ -198,6 +198,14 @@ pub enum Event {
     task: TaskId,
     task_key: String,
     version: PlanVersion,
+  },
+  /// Run `run` (number `number`) of task `task` succeeded: it is ready for review, and the status
+  /// bar says so ("Run #128 ready for review"). The run itself changed as an [`Event::RunChanged`]
+  /// says.
+  RunReady {
+    run: RunId,
+    task: TaskId,
+    number: RunNumber,
   },
   /// The agent (`agent`, its role) of a step of run `run` asked a question and its step waits for
   /// the answer: the status bar says so ("Builder asks · ORC-12", `task_key`). The run itself
