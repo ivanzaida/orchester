@@ -200,7 +200,7 @@ impl ActivityTab {
       self.left_at.clone(),
       rows.len(),
     );
-    let scrollbar = gutter_scrollbar(&ctx.theme().scrollbar());
+    let scrollbar = gutter_scrollbar();
     VirtualizedList::new_shared(ctx, rows)
       .list_key("activity-rows")
       .width(Dimension::Pct(100.0))

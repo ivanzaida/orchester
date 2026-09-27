@@ -3,7 +3,10 @@
 
 mod support;
 
-use orchester_core::run::TaskPhase;
+use orchester_core::{
+  run::{TaskPhase, WaitReason},
+  store::RunStore,
+};
 use orchester_desktop::tasks::{
   data::ProjectTasks,
   overview::{OverviewTab, Pulse, figure, footer, recent_runs},
@@ -31,8 +34,40 @@ fn overview_pulse_counts_running_waiting_and_completed_today() {
   assert_eq!(pulse.completed_today, 1);
   // Completed before the day began does not count as today.
   assert_eq!(Pulse::of(&tasks.phases, support::at(35)).completed_today, 0);
-  assert_eq!(figure(pulse.running), "01");
+}
+
+/// Counts are the plain number everywhere (decided 2026-09-27): never zero-padded.
+#[test]
+fn overview_figures_are_plain_numbers() {
+  assert_eq!(figure(0), "0");
+  assert_eq!(figure(2), "2");
   assert_eq!(figure(12), "12");
+  assert_eq!(figure(128), "128");
+}
+
+/// The Overview metric *Need your input*, its *Needs you* heading and tab, and the status bar's
+/// *Needs you* count the same runs.
+#[test]
+fn overview_needs_you_counts_runs_waiting_for_the_user() {
+  let mut fixture = support::Fixture::new();
+  let asking = fixture.task("Add login", support::at(10));
+  let mut run = fixture.started_run(asking, support::at(20));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run
+    .wait_step(execution, WaitReason::Message, support::at(30))
+    .expect("the step waits for a message");
+  fixture.db.append_events(&run, &events).expect("append");
+  let working = fixture.task("Fix zoom", support::at(40));
+  fixture.started_run(working, support::at(50));
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+
+  let pulse = Pulse::of(&tasks.phases, support::at(0));
+  assert_eq!(pulse.needs_input, 1);
+  assert_eq!(pulse.running, 1);
+  assert_eq!(
+    OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases),
+    pulse.needs_input
+  );
 }
 
 #[test]

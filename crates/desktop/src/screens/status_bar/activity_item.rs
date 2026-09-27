@@ -1,5 +1,5 @@
 //! The activity slot (`IRKYz` with its actions): the runner problem's actions (G), the newest
-//! unresolved failure (H), running operations (C, D) or the latest event (A, F).
+//! unresolved failure (H), running operations (C, D) or the latest event (A, F, J).
 
 use std::sync::Arc;
 
@@ -166,13 +166,13 @@ fn several(text: &Arc<str>, log: &ActivityLog, opener: &Opener, hints: &Hints) -
   popover_toggle(row, opener)
 }
 
-/// A, F: the latest event with its time.
+/// A, F, J: the latest event with its time.
 fn latest(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Element {
   let text = event_text(ctx, event);
   let icon = match event.outcome() {
     Outcome::Finished => Icon::Check,
-    // No status bar state (`keJ9Z`) shows work that was not done; the alert icon in the row's
-    // muted color says so without the raised fill of a failure (H).
+    // Work that was not done (state J, `XlbDa`): the alert icon in the row's muted color,
+    // without the raised fill, dismiss or action of a failure (H).
     Outcome::NotDone | Outcome::Failed { .. } => Icon::AlertCircle,
   };
   let row = item("status-activity")

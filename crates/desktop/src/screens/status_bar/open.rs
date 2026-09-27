@@ -77,10 +77,11 @@ impl Opener {
     });
   }
 
-  /// Opens the Tasks screen, the target of the Agents and Queued items.
-  pub fn tasks(&self) -> Option<impl Fn() + Send + Sync + 'static> {
+  /// Opens `page` of the project: the task list for Agents and Queued, Overview › Needs you for
+  /// Needs you.
+  pub fn page(&self, page: Page) -> Option<impl Fn() + Send + Sync + 'static> {
     let nav = self.nav.clone()?;
-    Some(move || nav.show(Page::TASKS))
+    Some(move || nav.show(page))
   }
 
   pub fn open_log(&self) {
