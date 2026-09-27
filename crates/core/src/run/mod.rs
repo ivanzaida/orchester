@@ -13,6 +13,7 @@ mod invocation;
 mod number;
 mod permissions;
 mod phase;
+mod plan;
 mod preflight;
 mod prompt;
 mod result;
@@ -34,18 +35,19 @@ pub use self::{
   number::RunNumber,
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
+  plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},
   preflight::{PreflightInput, PreflightProblem, preflight},
   prompt::{
     AssembledPrompt, CONTINUE_PROMPT, Composition, DependencyOutput, ExcludedInstruction, InstructionSource,
-    InstructionVersion, InvocationPrompt, PipelineInfo, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart,
-    PromptSection, PromptSource, RunContext,
+    InstructionVersion, InvocationPrompt, PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput,
+    PromptPart, PromptSection, PromptSource, RunContext,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
   state::{NewRun, Run, StoredRun},
   status::{
-    AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, PlanDecision, RunFailure, RunLimit,
-    RunStatus, StepFailure, StepStatus, WaitReason,
+    AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus,
+    StepFailure, StepStatus, WaitReason,
   },
   tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
   transition::RaisedLimits,

@@ -278,6 +278,7 @@ impl Resolved<'_> {
       instructions,
       // Outputs of earlier steps exist only while a run executes.
       dependencies: &[],
+      revision: None,
     }
   }
 }

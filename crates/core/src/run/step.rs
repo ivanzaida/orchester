@@ -4,8 +4,9 @@
 use super::{
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
+  plan::{Plan, PlanDecision, PlanReview},
   state::Run,
-  status::{AttemptReason, PlanDecision, RunFailure, StepFailure, StepStatus, WaitReason},
+  status::{AttemptReason, RunFailure, StepFailure, StepStatus, WaitReason},
 };
 use crate::{
   id::{AttemptId, StepExecutionId},
@@ -22,7 +23,7 @@ impl Run {
   }
 
   /// A running step waits for a tool access approval or a message. Waiting for a plan decision
-  /// happens through [`Run::complete_step`] on a gated step.
+  /// happens through [`Run::propose_plan`].
   pub fn wait_step(
     &mut self,
     execution: StepExecutionId,
@@ -41,34 +42,73 @@ impl Run {
     })
   }
 
-  /// A running step finished its work. A gated step waits for a plan decision; any other step
-  /// passes, and the run succeeds once every step has passed.
+  /// A running step without an approval gate finished its work: it passes, and the run succeeds
+  /// once every step has passed. A gated step finishes through [`Run::propose_plan`].
   pub fn complete_step(&mut self, execution: StepExecutionId, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
-    let gated = self.gated(execution)?;
     self.transition(now, |transition| {
-      if gated {
-        return transition.record(RunEventKind::StepWaiting {
-          execution,
-          reason: WaitReason::Plan,
-        });
-      }
       transition.record(RunEventKind::StepPassed { execution })?;
       transition.succeed_if_done()
     })
   }
 
-  /// Records a person's decision on a gated step's result. Approval passes the step; requested
-  /// changes send it back to work, and its revised result needs a new decision.
-  pub fn decide_plan(
+  /// A running gated step finished its work: `text`, its output, becomes the step's next plan —
+  /// numbered after the step's plans among `earlier`, the run's plans so far — and the step waits
+  /// for a person's decision on it. Returns the events and the plan to store with them.
+  pub fn propose_plan(
     &mut self,
     execution: StepExecutionId,
+    text: String,
+    earlier: &[Plan],
+    now: Timestamp,
+  ) -> Result<(Vec<RunEvent>, Plan), RunError> {
+    let step = self
+      .execution(execution)
+      .ok_or(RunError::UnknownExecution(execution))?
+      .step()
+      .clone();
+    let events = self.transition(now, |transition| {
+      transition.record(RunEventKind::StepWaiting {
+        execution,
+        reason: WaitReason::Plan,
+      })
+    })?;
+    let plan = Plan {
+      run: self.id,
+      execution,
+      version: Plan::next_version(earlier, self.id, &step),
+      step,
+      text,
+      created_at: now,
+      review: None,
+    };
+    Ok((events, plan))
+  }
+
+  /// Records a person's `decision` on `plan`, the latest plan of a gated step that waits for one.
+  /// Approval passes the step; requested changes send it back to its agent, and its revised result
+  /// is a new plan that needs a new decision. `plan` gets the decision on success.
+  pub fn decide_plan(
+    &mut self,
+    plan: &mut Plan,
     decision: PlanDecision,
     now: Timestamp,
   ) -> Result<Vec<RunEvent>, RunError> {
-    self.transition(now, |transition| {
-      transition.record(RunEventKind::PlanDecided { execution, decision })?;
+    if plan.run != self.id {
+      return Err(RunError::UnknownExecution(plan.execution));
+    }
+    if plan.review.is_some() {
+      return Err(RunError::PlanAlreadyDecided(plan.version));
+    }
+    let events = self.transition(now, |transition| {
+      transition.record(RunEventKind::PlanDecided {
+        execution: plan.execution,
+        version: plan.version,
+        decision: decision.clone(),
+      })?;
       transition.succeed_if_done()
-    })
+    })?;
+    plan.review = Some(PlanReview { decision, at: now });
+    Ok(events)
   }
 
   /// Fails an active step for `reason` and routes the failure: with a failure route that has
@@ -121,7 +161,8 @@ impl Run {
     })
   }
 
-  fn gated(&self, execution: StepExecutionId) -> Result<bool, RunError> {
+  /// Whether `execution`'s step has an approval gate: its result waits for a plan decision.
+  pub fn is_gated(&self, execution: StepExecutionId) -> Result<bool, RunError> {
     let step = self
       .execution(execution)
       .ok_or(RunError::UnknownExecution(execution))?

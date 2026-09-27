@@ -1,7 +1,8 @@
 //! Recovering runs when the desktop attaches (`docs/architecture/storage.md`, "Lifecycle"): runs
 //! still recorded as running were cut off, since a new runner executes nothing yet. They are
 //! recorded as interrupted, with a cause that depends on the session: the previous runner's loss
-//! (they continue on their own), or the end of the previous session (they wait for a person).
+//! (they continue on their own), or the end of the previous session (they wait for a person). A run
+//! that only waits for a person's decision had no agent at work: it still waits, untouched.
 
 use std::num::NonZeroU32;
 
@@ -38,7 +39,8 @@ impl Scheduler {
       .running_runs()
       .map_err(|error| failed("cannot read the running runs", &error))?;
     let mut attached = Attached::default();
-    for mut run in stale.into_iter().filter(|run| !self.is_active(run.id())) {
+    let cut_off = |run: &Run| !self.is_active(run.id()) && !run.waits_for_a_person();
+    for mut run in stale.into_iter().filter(cut_off) {
       interrupt(&mut db, &mut run, cause)?;
       self.announce(&run);
       attached.interrupted.push(run.id());

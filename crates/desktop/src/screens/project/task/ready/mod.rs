@@ -141,8 +141,8 @@ fn what_changed(ctx: &Ctx, run: &RunView) -> Option<Element> {
     .steps
     .iter()
     .filter(|step| !step.tool_step)
-    .filter_map(|step| run.output(step.execution?))
-    .map(|output| output.text.trim())
+    .filter_map(|step| run.reported(step.execution?))
+    .map(str::trim)
     .filter(|text| !text.is_empty())
     .collect();
   if reported.is_empty() {

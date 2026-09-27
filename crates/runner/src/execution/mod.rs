@@ -6,10 +6,11 @@
 //!
 //! This version executes pipeline graphs of agent steps and of tool steps that run command tools
 //! (`tool`): every step whose dependencies have passed runs, beside the others (see `workspace` for
-//! where each works), with failure routes and retries, step budgets and the outputs of earlier steps
-//! in later prompts. Approval gates and other tools are refused by the preflight. Every agent at
-//! work takes one of the desktop's agent slots, which all runs share, and every command one of the
-//! runner's command slots; the project's daily token budget holds new and continued work back once
+//! where each works), with failure routes and retries, step budgets, approval gates on agent steps
+//! (`plan`) and the outputs of earlier steps in later prompts. Other tools and gates on tool steps
+//! are refused by the preflight. Every agent at work takes one of the desktop's agent slots, which
+//! all runs share, and every command one of the runner's command slots; the project's daily token
+//! budget holds new and continued work back once
 //! today's runs used it.
 
 mod attach;
@@ -19,6 +20,7 @@ mod control;
 mod halt;
 mod idle;
 mod permissions;
+mod plan;
 mod prepare;
 mod record;
 mod run;
@@ -118,13 +120,18 @@ impl Scheduler {
   /// Pauses `run` at its next checkpoint. Returns once the request is recorded; the run is
   /// paused when its active agent invocation has ended and its work is committed.
   pub async fn pause_run(&self, run: RunId) -> Result<(), Rejection> {
-    match self.ask(run, Control::Pause) {
-      Some(answer) => match answer.await {
-        Ok(result) => result,
-        Err(_) => idle::pause(&mut self.open()?, run),
-      },
-      None => idle::pause(&mut self.open()?, run),
+    if let Some(answer) = self.ask(run, Control::Pause)
+      && let Ok(result) = answer.await
+    {
+      return result;
     }
+    if let Some(paused) = idle::pause(&mut self.open()?, run)? {
+      self.inner.notifier.send(Event::RunChanged {
+        run,
+        task: paused.task(),
+      });
+    }
+    Ok(())
   }
 
   /// Cancels `run`: ends its agent, keeps its worktree and branch. Returns once the run is

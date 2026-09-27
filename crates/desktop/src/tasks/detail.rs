@@ -10,7 +10,7 @@ use orchester_core::{
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
-    ActivityEntry, Invocation, PauseReason, PinnedVersion, Run, RunEvent, RunEventKind, RunLimit, RunStatus,
+    ActivityEntry, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent, RunEventKind, RunLimit, RunStatus,
     StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
@@ -67,6 +67,8 @@ pub struct RunView {
   pub finished_at: Option<Timestamp>,
   /// What its step executions left for the steps after them.
   pub outputs: Vec<StepOutput>,
+  /// The plans of its gated steps, by step and version.
+  pub plans: Vec<Plan>,
 }
 
 impl RunView {
@@ -147,6 +149,11 @@ impl RunView {
   /// The output `execution` left, if any.
   pub fn output(&self, execution: StepExecutionId) -> Option<&StepOutput> {
     self.outputs.iter().find(|output| output.execution == execution)
+  }
+
+  /// What `execution` left for the steps after it: a gated step's latest plan, else its output.
+  pub fn reported(&self, execution: StepExecutionId) -> Option<&str> {
+    Plan::output_of(execution, &self.outputs, &self.plans)
   }
 
   /// Invocations of `execution`, in launch order.
@@ -261,6 +268,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   Ok(RunView {
     invocations,
     outputs: db.step_outputs(run.id())?,
+    plans: db.plans(run.id()).map_err(run_store_error)?,
     paused_at,
     saved_at_pause,
     finished_at,

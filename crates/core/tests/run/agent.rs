@@ -72,13 +72,11 @@ fn problems_with(connection: &Connection, permissions: &AgentPermissions) -> Vec
 }
 
 #[test]
-fn preflight_reports_approval_gates_and_unusable_connections() {
+fn preflight_allows_approval_gates_and_reports_unusable_connections() {
   let before = AgentPermissions::before_permissions();
   let signed_in = connection(AgentProvider::CodexCli, SignIn::SignedIn);
-  assert_eq!(
-    problems_with(&signed_in, &before),
-    [PreflightProblem::ApprovalGate { step: key("plan") }]
-  );
+  // The gated Plan step runs: its result waits for a plan decision.
+  assert_eq!(problems_with(&signed_in, &before), []);
   let signed_out = connection(AgentProvider::CodexCli, SignIn::SignedOut);
   assert!(
     problems_with(&signed_out, &before).contains(&PreflightProblem::ConnectionNotUsable {
@@ -95,10 +93,7 @@ fn preflight_reports_approval_gates_and_unusable_connections() {
     NetworkAccess::On,
   );
   let claude = connection(AgentProvider::ClaudeCodeCli, SignIn::SignedIn);
-  assert_eq!(
-    problems_with(&claude, &git),
-    [PreflightProblem::ApprovalGate { step: key("plan") }]
-  );
+  assert_eq!(problems_with(&claude, &git), []);
   assert!(
     problems_with(&claude, &before).contains(&PreflightProblem::PermissionsNotEnforceable {
       step: key("review"),

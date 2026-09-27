@@ -7,11 +7,15 @@ mod support;
 use std::fs;
 
 use orchester_core::{
-  connection::stream::{AgentEvent, CommandStatus, InvocationOutcome, OutputStream},
+  connection::{
+    AgentConnection, CatalogSource, CheckResult, ConnectionCheck, ConnectionStatus, ModelCatalog, SignIn,
+    stream::{AgentEvent, CommandStatus, InvocationOutcome, OutputStream},
+  },
   id::{IdempotencyKey, RunId, TaskId},
   resource::StepKey,
   run::{InterruptCause, PreflightProblem, RunStatus, StepStatus},
-  store::{ActivityStore, RunStore},
+  store::{ActivityStore, ConnectionStore, RunStore},
+  time::Timestamp,
 };
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
@@ -164,17 +168,27 @@ async fn execution_stops_the_agent_and_interrupts_the_run() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn execution_rejects_what_the_preflight_finds_and_tasks_that_are_not_queued() {
-  let project = project(&Setup {
-    approval_gate: true,
-    ..Setup::new("Append one line.")
-  });
+  let project = project(&Setup::new("Append one line."));
   let root = project.repo.path();
+  let mut db = ProjectDb::open(root).expect("open");
+  let stored = db.connections().expect("connections").remove(0);
+  let mut connection = AgentConnection::try_from(stored).expect("an agent connection");
+  connection.record_check(ConnectionCheck {
+    at: Timestamp::now(),
+    result: CheckResult::Available {
+      version: "0.139.0".into(),
+      sign_in: SignIn::SignedOut,
+      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+    },
+  });
+  db.save_connection(&connection.into_connection()).expect("save");
   let (scheduler, _events) = scheduler(root);
   assert_eq!(
     scheduler.start_run(IdempotencyKey::generate(), project.task),
     Err(Rejection::Preflight {
-      problems: vec![PreflightProblem::ApprovalGate {
-        step: StepKey::new("implement").expect("key")
+      problems: vec![PreflightProblem::ConnectionNotUsable {
+        step: StepKey::new("implement").expect("key"),
+        status: ConnectionStatus::SignInRequired,
       }]
     })
   );

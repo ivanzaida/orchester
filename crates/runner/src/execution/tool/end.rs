@@ -38,7 +38,10 @@ impl RunTask {
             self.save(execution, &active, "step failed")?;
             self.fail(execution, failure)
           }
-          None => self.pass(execution, &active),
+          None => {
+            let output = finished.output.as_ref().map(|output| output.text.clone());
+            self.pass(execution, &active, output.unwrap_or_default())
+          }
         }
       }
     }

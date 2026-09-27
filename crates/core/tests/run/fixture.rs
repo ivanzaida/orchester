@@ -13,7 +13,7 @@ use orchester_core::{
     StepKind, Version, VersionNumber,
   },
   revision::Revision,
-  run::{BranchName, NewRun, PublishedVersions, Run, RunEvent, RunNumber, RunSnapshot},
+  run::{BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunNumber, RunSnapshot, StepStatus},
   task::{Task, TaskDetails},
   time::Timestamp,
   tokens::TokenBudget,
@@ -220,12 +220,24 @@ impl Logged {
     self.apply(|run| run.complete_step(execution, at(21)));
   }
 
+  /// Starts `step`, which must be gated, and proposes `text` as its next plan after `earlier`.
+  pub fn propose(&mut self, step: &str, text: &str, earlier: &[Plan]) -> Plan {
+    let execution = self.exec(step);
+    if self.run.execution(execution).map(|execution| execution.status()) == Some(StepStatus::Pending) {
+      self.apply(|run| run.start_step(execution, at(22)));
+    }
+    let (events, plan) = self
+      .run
+      .propose_plan(execution, text.to_owned(), earlier, at(23))
+      .expect("the plan is proposed");
+    self.log.extend(events);
+    plan
+  }
+
   /// Starts, completes and approves the gated `plan` step after `research`.
   pub fn through_plan(&mut self) {
     self.pass("research");
-    let plan = self.exec("plan");
-    self.apply(|run| run.start_step(plan, at(22)));
-    self.apply(|run| run.complete_step(plan, at(23)));
-    self.apply(|run| run.decide_plan(plan, orchester_core::run::PlanDecision::Approved, at(24)));
+    let mut plan = self.propose("plan", "1. Add the provider.", &[]);
+    self.apply(|run| run.decide_plan(&mut plan, PlanDecision::Approved, at(24)));
   }
 }

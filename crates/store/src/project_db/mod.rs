@@ -4,6 +4,7 @@ mod connections;
 mod import;
 mod invocation_prompts;
 mod limits;
+mod plans;
 mod pull_request_diffs;
 mod pull_requests;
 mod read_only;

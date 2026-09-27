@@ -8,11 +8,9 @@ use super::{
   attempt::{Attempt, Checkpoint, StepExecution},
   error::RunError,
   event::{EventSequence, PlannedExecution, RunEvent, RunEventKind},
+  plan::PlanDecision,
   state::Run,
-  status::{
-    AttemptReason, AttemptStatus, ContinueTrigger, PauseReason, PlanDecision, RunLimit, RunStatus, StepStatus,
-    WaitReason,
-  },
+  status::{AttemptReason, AttemptStatus, ContinueTrigger, PauseReason, RunLimit, RunStatus, StepStatus, WaitReason},
 };
 use crate::{
   id::{CheckpointId, StepExecutionId},
@@ -395,10 +393,12 @@ impl Run {
         self.set_step(*execution, StepStatus::Running);
       }
       RunEventKind::StepWaiting { execution, reason } => self.set_step(*execution, StepStatus::Waiting(*reason)),
-      RunEventKind::PlanDecided { execution, decision } => {
+      RunEventKind::PlanDecided {
+        execution, decision, ..
+      } => {
         let status = match decision {
           PlanDecision::Approved => StepStatus::Passed,
-          PlanDecision::ChangesRequested => StepStatus::Running,
+          PlanDecision::ChangesRequested { .. } => StepStatus::Running,
         };
         self.set_step(*execution, status);
       }

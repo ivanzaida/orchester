@@ -12,7 +12,7 @@ use crate::{
   repository::{GitHubRepo, RepositoryLink},
   resource::{Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   revision::Revision,
-  run::{ActivityEntry, Checkpoint, Invocation, InvocationPrompt, NewRun, Run, RunEvent, StepOutput},
+  run::{ActivityEntry, Checkpoint, Invocation, InvocationPrompt, NewRun, Plan, Run, RunEvent, StepOutput},
   secret::Secret,
   task::{Task, TaskDetails},
   time::Timestamp,
@@ -216,6 +216,14 @@ pub trait RunStore {
   /// atomically. The first event must directly follow the stored log; otherwise another writer
   /// appended first and the call fails with a sequence conflict, changing nothing.
   fn append_events(&mut self, run: &Run, events: &[RunEvent]) -> Result<(), Self::Error>;
+
+  /// [`RunStore::append_events`], storing `plan` in the same transaction: the plan the events
+  /// propose ([`Run::propose_plan`]), or the decision on a stored one ([`Run::decide_plan`]). A
+  /// plan's text never changes, and it is decided once.
+  fn append_events_with_plan(&mut self, run: &Run, events: &[RunEvent], plan: &Plan) -> Result<(), Self::Error>;
+
+  /// The plans of a run's gated steps, ordered by step and version.
+  fn plans(&self, run: RunId) -> Result<Vec<Plan>, Self::Error>;
 
   fn run(&self, id: RunId) -> Result<Option<Run>, Self::Error>;
 

@@ -7,10 +7,10 @@
 use std::{fmt, num::NonZeroU32};
 
 use orchester_core::{
-  id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   permission::{AgentPermissions, capability::PermissionProblem},
   resource::StepKey,
-  run::{InterruptCause, PermissionsApply, PreflightProblem, RunLimit},
+  run::{InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunLimit},
   tokens::TokenBudget,
 };
 use serde::{Deserialize, Serialize};
@@ -99,6 +99,16 @@ pub enum Command {
   /// Cancels the pending restarts of an Apply now for `profile` in run `run`: the change applies
   /// from the next invocations. Answered with [`Reply::Accepted`].
   KeepPermissionsForNextInvocation { run: RunId, profile: ResourceId },
+  /// A person's `decision` on plan `version` of gated step execution `execution` of run `run`.
+  /// Approval continues the run's graph; requested changes resume the step's agent session with
+  /// the reviewer's note. Answered with [`Reply::Accepted`] once the decision is recorded, or
+  /// [`Rejection::PlanNotAwaited`] when that plan does not wait for one (any more).
+  DecidePlan {
+    run: RunId,
+    execution: StepExecutionId,
+    version: PlanVersion,
+    decision: PlanDecision,
+  },
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes
   /// the connection.
   Shutdown { mode: ShutdownMode },
@@ -173,6 +183,15 @@ pub enum Event {
   /// The runs this runner executes and its agent slots. Sent after attaching and whenever they
   /// change; each one replaces the one before.
   WorkSummary(WorkSummary),
+  /// Gated step execution of run `run` proposed plan `version`, which waits for a person: the
+  /// status bar says so ("Plan ready for review · ORC-12", `task_key`). The run itself changed as
+  /// an [`Event::RunChanged`] says.
+  PlanProposed {
+    run: RunId,
+    task: TaskId,
+    task_key: String,
+    version: PlanVersion,
+  },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -267,6 +286,9 @@ pub enum Rejection {
   NoAgentToRestart,
   /// No change of the profile's permissions waits for a checkpoint.
   NoPendingPermissions,
+  /// The plan does not wait for a decision: a newer version exists, it was decided already, or
+  /// its step works on it again.
+  PlanNotAwaited,
   /// The runner is stopping and starts no work.
   ShuttingDown,
   /// Starting failed in the runner (database, git worktree); its log has the details.

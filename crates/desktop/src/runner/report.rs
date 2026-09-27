@@ -7,13 +7,14 @@ use std::{
   time::{Instant, SystemTime},
 };
 
+use orchester_core::{id::TaskId, run::PlanVersion};
 use orchester_ipc::WorkSummary;
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
 use super::state::{RunnerEvent, RunnerState};
 use crate::{
-  activity::{Activity, Target},
+  activity::{Activity, Place, Target},
   messages::Message,
 };
 
@@ -160,14 +161,22 @@ impl Shared {
 #[derive(Clone)]
 pub(super) struct Reporter {
   generation: u64,
+  /// The project's name, as the status bar's events name it.
+  project: Arc<str>,
   status: watch::Sender<RunnerStatus>,
   shared: Arc<Shared>,
 }
 
 impl Reporter {
-  pub(super) fn new(generation: u64, status: watch::Sender<RunnerStatus>, shared: Arc<Shared>) -> Self {
+  pub(super) fn new(
+    generation: u64,
+    project: Arc<str>,
+    status: watch::Sender<RunnerStatus>,
+    shared: Arc<Shared>,
+  ) -> Self {
     Self {
       generation,
+      project,
       status,
       shared,
     }
@@ -207,7 +216,23 @@ impl Reporter {
       1 => Message::new("statusBar.activity.runnerReconnectedContinued.one"),
       count => Message::new("statusBar.activity.runnerReconnectedContinued.other").with("count", count.to_string()),
     };
-    self.shared.activity.record(title, Target::RunnerLog);
+    self.shared.activity.record(None, title, Target::RunnerLog);
+  }
+
+  /// A run of task `task` (`task_key`) proposed plan `version`, which waits for the user: the
+  /// latest event says so and opens the task ("Plan ready for review · ORC-12").
+  pub(super) fn plan_proposed(&self, task: TaskId, task_key: &str, version: PlanVersion) {
+    let Some(repo_root) = self.status.borrow().project_root().map(Path::to_path_buf) else {
+      return;
+    };
+    let title = Message::new("statusBar.activity.planReady")
+      .with("task", task_key.to_owned())
+      .with("version", version.to_string());
+    let target = Target::Project {
+      repo_root,
+      place: Place::Task(task),
+    };
+    self.shared.activity.record(Some(self.project.clone()), title, target);
   }
 
   /// The runner's latest work summary.
