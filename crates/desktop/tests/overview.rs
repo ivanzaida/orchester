@@ -10,7 +10,7 @@ use orchester_core::{
 use orchester_desktop::tasks::{
   data::ProjectTasks,
   list::AwaitedPlan,
-  overview::{OverviewTab, Pulse, figure, footer, recent_runs},
+  overview::{OverviewTab, Pulse, activity_empty, figure, footer, recent_runs},
 };
 
 /// A project with a completed, a running and a draft task.
@@ -183,4 +183,13 @@ fn overview_counts_a_merged_task_as_completed() {
   assert_eq!(Pulse::of(&tasks.phases, support::at(25)).completed_today, 2);
   let footer = footer(&tasks.tasks, &tasks.phases);
   assert!(footer.args.contains(&("completed", "2".to_owned())), "{footer:?}");
+}
+
+#[test]
+fn overview_activity_without_runs_says_there_are_none_yet() {
+  let mut fixture = support::Fixture::new();
+  fixture.task("Write docs", support::at(10));
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  assert!(recent_runs(&tasks.tasks, &tasks.phases, 3).is_empty());
+  assert_eq!(activity_empty(&tasks.phases).key, "overview.activity.empty");
 }

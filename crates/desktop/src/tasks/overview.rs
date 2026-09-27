@@ -186,6 +186,20 @@ impl RecentRun {
   }
 }
 
+/// What Recent activity says when [`recent_runs`] lists nothing: that the project has no runs yet,
+/// or, when tasks have runs whose latest cannot be read, that those runs cannot be listed.
+pub fn activity_empty(phases: &Phases) -> Message {
+  let unreadable = phases
+    .values()
+    .filter(|latest| matches!(latest, Latest::Unreadable(_)))
+    .count();
+  match unreadable {
+    0 => Message::new("overview.activity.empty"),
+    1 => Message::new("overview.activity.unreadable.one"),
+    count => Message::new("overview.activity.unreadable.other").with("count", count.to_string()),
+  }
+}
+
 /// The `limit` most recently changed latest runs, newest first. A run that cannot be read has no
 /// known change to list; its task row shows it.
 pub fn recent_runs(tasks: &[Task], phases: &Phases, limit: usize) -> Vec<RecentRun> {

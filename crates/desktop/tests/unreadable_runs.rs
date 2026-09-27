@@ -8,7 +8,7 @@ use orchester_desktop::tasks::{
   data::ProjectTasks,
   detail::TaskDetail,
   list::{self, Latest, TaskTab},
-  overview::{OverviewTab, Pulse, footer},
+  overview::{OverviewTab, Pulse, activity_empty, footer, recent_runs},
 };
 use rusqlite::Connection;
 use support::{Fixture, at};
@@ -109,4 +109,28 @@ fn unreadable_earlier_run_is_named_on_the_page_of_the_latest_run() {
   assert!(detail.latest_unreadable.is_none());
   let ids: Vec<RunId> = detail.earlier_unreadable.iter().map(|run| run.id).collect();
   assert_eq!(ids, [bad.id()]);
+}
+
+/// Recent activity lists no run whose last change is unknown; with nothing else to list it says
+/// why instead of claiming the project has no runs, though the task has an earlier one.
+#[test]
+fn unreadable_latest_run_is_not_reported_as_no_runs_in_recent_activity() {
+  let mut fixture = Fixture::new();
+  let task = fixture.task("Add login", at(10));
+  let mut earlier = fixture.started_run(task, at(20));
+  fixture.succeed(&mut earlier, at(30));
+  let bad = fixture.started_run(task, at(40));
+  tamper(&fixture, bad.id(), "status = 'pending'");
+
+  let loaded = ProjectTasks::load(fixture.repo.path()).expect("one unreadable run does not fail the load");
+  assert!(recent_runs(&loaded.tasks, &loaded.phases, 3).is_empty());
+  assert_eq!(activity_empty(&loaded.phases).key, "overview.activity.unreadable.one");
+
+  let other = fixture.task("Fix zoom", at(50));
+  let bad = fixture.started_run(other, at(60));
+  tamper(&fixture, bad.id(), "status = 'pending'");
+  let loaded = ProjectTasks::load(fixture.repo.path()).expect("unreadable runs do not fail the load");
+  let empty = activity_empty(&loaded.phases);
+  assert_eq!(empty.key, "overview.activity.unreadable.other");
+  assert_eq!(empty.args, [("count", "2".to_owned())]);
 }
