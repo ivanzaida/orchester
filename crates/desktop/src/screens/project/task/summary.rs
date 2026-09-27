@@ -11,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -58,26 +58,59 @@ pub(super) fn summary(
     return retry_limit(ctx, run, step);
   }
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
-  let mut progress = Column::new()
-    .id("task-progress")
-    .flex(1.0)
-    .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Section)
+  let raising = raise.is_some();
+  let content = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_top(SpacingSize::Section)
+    .padding_left(SpacingSize::Section)
+    .padding_right(ExtraSpacing::BesideGutter.role())
     .spacing(ExtraSpacing::Form.role())
     .child(notice(ctx, detail, lost))
-    .with_children(raise);
-  if let Some(run) = &detail.run {
-    progress = progress
-      .child(progress_list(ctx, run, lost.is_some()))
-      .child(Spacer::new().flex(1.0))
-      .with_children(latest(ctx, run));
-  }
+    .with_children(raise)
+    .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())));
+  let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
   Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(progress)
+    .child(progress_column(ctx, content, latest, raising))
     .with_children(detail.run.as_ref().map(|run| this_run(ctx, run, repo_root)))
     .into()
+}
+
+/// The notice, the raise panel and the progress rows (`content`) in a viewport with the scroll
+/// gutter (`ZVdRa`, thumb `PigH4`), so nothing is cut when they are taller than the window.
+/// Latest activity sits at the bottom when there is room. With the raise panel the column is
+/// taller than a 960px window (02.L2), so Latest activity scrolls with it, below the fold;
+/// otherwise it stays below the viewport. lurq cannot make scrolled content at least as tall as
+/// its viewport, which both at once would need.
+fn progress_column(ctx: &Ctx, content: Column, latest: Option<Element>, raising: bool) -> Element {
+  let scrolled = |content: Column| {
+    ScrollVertical::new(content)
+      .id("task-progress-scroll")
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar()))
+  };
+  let column = Column::new()
+    .id("task-progress")
+    .flex(1.0)
+    .height(Dimension::Pct(100.0));
+  if raising {
+    return column
+      .child(scrolled(
+        content.with_children(latest).padding_bottom(SpacingSize::Section),
+      ))
+      .into();
+  }
+  let latest = latest.map(|latest| {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding_top(ExtraSpacing::Form.role())
+      .padding_horizontal(SpacingSize::Section)
+      .padding_bottom(SpacingSize::Section)
+      .child(latest)
+  });
+  column.child(scrolled(content)).with_children(latest).into()
 }
 
 /// Raise the limit to continue (`ZUYM0`), for a run stopped at a limit.

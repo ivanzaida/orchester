@@ -95,6 +95,7 @@ pub const SPACE_PROPERTY: f32 = 15.0;
 pub const SPACE_DIVIDER: f32 = 18.0;
 pub const SPACE_SELECT_MENU: f32 = 4.0;
 pub const SPACE_DIALOG_MARGIN: f32 = 32.0;
+pub const SPACE_BESIDE_GUTTER: f32 = 20.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;

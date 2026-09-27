@@ -375,6 +375,13 @@ fn run_controls_raise_the_step_budget_of_a_run_stopped_at_it_and_continue() {
     "Stopped at limit · attempt 1 · 9.7k tokens ·"
   ));
   assert!(!shows(&mut desktop, "task-progress-steps", "Paused"));
+  // The column scrolls with the raise panel (`ZVdRa`), Latest activity with it, below the rows.
+  assert!(shows(
+    &mut desktop,
+    "task-progress-scroll",
+    "Raise the step budget to continue"
+  ));
+  assert!(shows(&mut desktop, "task-progress-scroll", "Latest activity"));
   assert!(shows(
     &mut desktop,
     "raise-limit",
