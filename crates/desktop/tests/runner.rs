@@ -157,6 +157,26 @@ fn runner_state_does_not_retry_a_missing_program() {
 }
 
 #[test]
+fn runner_state_does_not_retry_a_project_another_app_runs() {
+  // Retrying cannot help until the other app closes; the user restarts the runner then.
+  let state = apply(
+    RunnerState::Online,
+    [
+      RunnerEvent::Dropped(RunnerFailure::Lost),
+      RunnerEvent::LaunchFailed(RunnerFailure::AlreadyServed),
+    ],
+  );
+  assert_eq!(
+    state,
+    RunnerState::Failed {
+      cause: RunnerFailure::AlreadyServed,
+      attempts: 1
+    }
+  );
+  assert!(state.can_restart());
+}
+
+#[test]
 fn runner_state_manual_restart_resets_the_attempts() {
   let failed = RunnerState::Failed {
     cause: RunnerFailure::Lost,

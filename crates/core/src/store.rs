@@ -1,6 +1,8 @@
 //! Persistence boundaries. The local SQLite store implements them today; a server client
 //! will implement the same traits later, so domain code depends only on these.
 
+use std::collections::BTreeMap;
+
 use crate::{
   connection::{Connection, stream::AgentEvent},
   conversation::Message,
@@ -12,7 +14,7 @@ use crate::{
   repository::{GitHubRepo, RepositoryLink},
   resource::{Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   revision::Revision,
-  run::{ActivityEntry, Checkpoint, Invocation, InvocationPrompt, NewRun, Plan, Run, RunEvent, StepOutput},
+  run::{ActivityEntry, Checkpoint, Invocation, InvocationPrompt, NewRun, Plan, Run, RunEvent, RunNumber, StepOutput},
   secret::Secret,
   task::{Task, TaskDetails},
   time::Timestamp,
@@ -82,6 +84,9 @@ pub trait ResourceStore {
   -> Result<Version<B>, Self::Error>;
 
   fn latest_version<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Version<B>>, Self::Error>;
+
+  /// Every published version of a resource, oldest first.
+  fn versions<B: ResourceBody>(&self, resource: ResourceId) -> Result<Vec<Version<B>>, Self::Error>;
 
   fn version<B: ResourceBody>(
     &self,
@@ -230,6 +235,13 @@ pub trait RunStore {
   /// Runs recorded as running, ordered by number: a runner executes them, or the runner or the
   /// session ended before it could record their interruption.
   fn running_runs(&self) -> Result<Vec<Run>, Self::Error>;
+
+  /// The numbers of the runs that pinned each published version of pipeline `pipeline`, in run
+  /// order. A version no run pinned is absent.
+  fn runs_by_pipeline_version(
+    &self,
+    pipeline: ResourceId,
+  ) -> Result<BTreeMap<VersionNumber, Vec<RunNumber>>, Self::Error>;
 }
 
 /// Task conversations. A person's messages are written by the desktop; their delivery states and

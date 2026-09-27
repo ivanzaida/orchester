@@ -109,11 +109,8 @@ async fn second_runner_for_a_project_fails_clearly() {
   let _first = launch(project.path()).await;
 
   match RunnerClient::launch(Path::new(RUNNER), project.path()).await {
-    Err(LaunchError::RunnerExited { status, stderr }) => {
-      assert!(!status.success());
-      assert!(stderr.contains("another runner is already running"), "stderr: {stderr}");
-    }
-    Err(other) => panic!("expected the second runner to exit, got {other}"),
+    Err(LaunchError::ProjectLocked) => {}
+    Err(other) => panic!("expected the second runner to report the held lock, got {other}"),
     Ok(_) => panic!("a second runner connected"),
   }
 }

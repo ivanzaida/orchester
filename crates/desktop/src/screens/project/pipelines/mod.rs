@@ -1,5 +1,5 @@
 //! Pipelines: the library (03.04 `LRMQW`, empty 03.A `MqRT7`) and, once a pipeline is opened,
-//! its editor (03.01 `Q21HOA` and its states).
+//! its editor (03.01 `Q21HOA` and its states) on the draft or on a published version.
 
 mod editor;
 mod library;
@@ -22,7 +22,11 @@ use self::{
   library::{Library, LibraryProps},
 };
 use super::ProjectNav;
-use crate::{navigation::route::Page, pipelines::library::StarterText, workspace::OpenProject};
+use crate::{
+  navigation::route::{Page, PipelineView},
+  pipelines::library::StarterText,
+  workspace::OpenProject,
+};
 
 /// A pipeline to open, as signals and futures carry it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,8 +34,9 @@ pub struct PipelineId(pub ResourceId);
 
 impl lurq::app::component::DevtoolsInspectable for PipelineId {}
 
-/// Provided by [`PipelinesScreen`]: opening a pipeline, going back to the library, and saying
-/// that pipelines changed so the library reads them again.
+/// Provided by [`PipelinesScreen`]: opening a pipeline, going between its draft and its published
+/// versions, going back to the library, and saying that pipelines changed so the library reads
+/// them again.
 #[derive(Clone)]
 pub struct PipelinesNav {
   project: ProjectNav,
@@ -41,7 +46,18 @@ pub struct PipelinesNav {
 impl PipelinesNav {
   pub fn open(&self, id: ResourceId) {
     self.changed();
-    self.project.show(Page::Pipeline(id));
+    self.show(id, PipelineView::Draft);
+  }
+
+  /// Shows `view` of pipeline `id` as a new history entry.
+  pub fn show(&self, id: ResourceId, view: PipelineView) {
+    self.project.show(Page::Pipeline(id, view));
+  }
+
+  /// Shows `view` of pipeline `id` in place of the current entry: after a version was restored
+  /// as the draft, going back does not return to the version it replaced the draft with.
+  pub fn replace(&self, id: ResourceId, view: PipelineView) {
+    self.project.replace(Page::Pipeline(id, view));
   }
 
   pub fn library(&self) {
@@ -56,8 +72,8 @@ impl PipelinesNav {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipelinesProps {
   pub project: OpenProject,
-  /// The pipeline shown in its editor; `None` shows the library.
-  pub open: Option<ResourceId>,
+  /// The pipeline shown in its editor, and what of it; `None` shows the library.
+  pub open: Option<(ResourceId, PipelineView)>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for PipelinesProps {}
@@ -91,7 +107,9 @@ impl Component for PipelinesScreen {
           revision: self.nav.revision.get(),
         },
       ),
-      Some(id) => ctx.mount_keyed::<PipelineEditor>(&format!("pipeline-editor-{id}"), EditorProps { project, id }),
+      Some((id, view)) => {
+        ctx.mount_keyed::<PipelineEditor>(&format!("pipeline-editor-{id}"), EditorProps { project, id, view })
+      }
     }
   }
 }

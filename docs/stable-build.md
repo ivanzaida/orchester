@@ -20,8 +20,9 @@ powershell -File tools/install.ps1
 - To update, close the installed Orchester and run the script again. While it runs from the
   install directory (the desktop or one of its runners), the script refuses and changes nothing;
   it never stops Orchester itself.
-- `orchester.exe` is a console program today, so a console window with its log opens next to
-  the window. Closing that console closes Orchester.
+- The release build of `orchester.exe` is a Windows program without a console, so starting it
+  from Explorer or the Start menu opens only its window. Its log goes to a file (see
+  [Logs](#logs)). Dev builds (`tools/run.ps1`) keep the console and print the log there too.
 
 Options:
 
@@ -48,11 +49,11 @@ Project data is not copied: each project keeps its database in its repository's 
 and both builds open the same one.
 
 - **One app per project at a time.** A project's runner holds `.orchester/runner.lock`, so a
-  second app cannot start another runner for it. The second app shows the generic *Could not
-  start the runner* notice ("The runner could not be started. The log has the details."); *Open
-  runner log* shows that another runner is already running for this project. A runner keeps
-  running while its app shows another project, so quit the other app before opening the project
-  in this one, then use *Restart runner*.
+  second app cannot start another runner for it. The second app shows *Could not start the
+  runner* with "Another Orchester window is already running this project's runner. Close that
+  window, then restart the runner." and does not retry on its own. A runner keeps running while
+  its app shows another project, so quit the other app, then use *Restart runner*. (The runner
+  reports the held lock to the app through its exit code.)
 - **Schema versions.** A newer build migrates a project database when it opens it, and an older
   build then refuses that project ("database schema version … is newer than this build
   supports"). Opening a real project with the dev build can therefore lock the stable build out
@@ -60,11 +61,23 @@ and both builds open the same one.
   dev build of an unmerged branch that adds a migration: that schema version may never exist on
   `master`.
 
+## Logs
+
+- **The app's log** is `logs\orchester-<YYYY-MM-DD>.log` next to the executable (UTC date), so
+  the installed app and the dev build (`target\debug\logs\`) keep separate logs. A session
+  that runs past midnight continues in the next day's file; files older than 14 days are deleted
+  when the app starts and when a new day's file begins. Nothing else in `logs\` is touched. A
+  panic is logged there as well. `RUST_LOG` sets the level as usual (default `info`).
+- **A project's runner log** is `.orchester\logs\runner-<YYYY-MM-DD>.log` in the project's
+  repository, shared by both builds; *Open runner log* opens it. The app's log also has the
+  runner's lines, as the app received them.
+
 ## macOS
 
 There is no install script for macOS yet. The desktop's runner integration is Windows-only (see
-`AGENTS.md`, requirement 0), and the application database next to the executable is not writable
-inside a `.app` bundle. Once the desktop builds and runs on macOS, the same approach applies
+`AGENTS.md`, requirement 0), and the application database and the app's `logs` folder next to the
+executable are not writable inside a `.app` bundle (without a log file the app logs to the console
+only). Once the desktop builds and runs on macOS, the same approach applies
 without a bundle: build with `--target-dir "$HOME/Library/Application Support/Orchester/build"`
 and copy `orchester` and `orchester-runner` into `~/Library/Application Support/Orchester/app`.
 Copy each program to a new file and move it into place rather than overwriting it: macOS can

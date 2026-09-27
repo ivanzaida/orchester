@@ -173,6 +173,16 @@ impl EditorState {
     self.has_draft() && self.save_state() == SaveState::Saved && self.problems().is_empty()
   }
 
+  /// Brings back the steps and description of a published version, `body`, as a new revision
+  /// on top of the latest version: autosave stores it as the draft, or removes the draft when it
+  /// repeats the latest version. Published versions stay as they are, and text that could not be
+  /// used in the replaced steps is forgotten.
+  pub fn restore(&mut self, body: &Pipeline) {
+    self.based_on = self.latest.as_ref().map(|latest| latest.number);
+    self.invalid_fields.clear();
+    self.apply(|edit| *edit = PipelineEdit::new(body.clone()));
+  }
+
   /// The stored draft `body` was published as `number` at `at`; the next edit starts a new
   /// draft from it. Edits made while publishing stay pending and go into that new draft.
   pub fn published(&mut self, number: VersionNumber, at: Timestamp, body: Pipeline) {

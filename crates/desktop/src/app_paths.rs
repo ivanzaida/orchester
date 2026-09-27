@@ -8,6 +8,7 @@ use std::{
 };
 
 const APP_DATABASE: &str = "orchester.db";
+const LOG_DIR: &str = "logs";
 const RUNNER_PROGRAM: &str = "orchester-runner";
 
 /// The application database next to the running executable.
@@ -18,6 +19,11 @@ pub fn app_database_path() -> io::Result<PathBuf> {
 /// The application database for an executable at `executable`.
 pub fn app_database_beside(executable: &Path) -> PathBuf {
   executable.with_file_name(APP_DATABASE)
+}
+
+/// The folder of the application log, beside the application database.
+pub fn log_dir() -> io::Result<PathBuf> {
+  Ok(env::current_exe()?.with_file_name(LOG_DIR))
 }
 
 /// The runner program next to the running executable.

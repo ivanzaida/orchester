@@ -213,9 +213,9 @@ fn launch_failure(error: &LaunchError, runner_exe: &Path) -> RunnerFailure {
         path: runner_exe.to_path_buf(),
       }
     }
-    LaunchError::ForeignPipeServer { .. } | LaunchError::Ipc(IpcError::EndpointInUse { .. }) => {
-      RunnerFailure::AlreadyServed
-    }
+    LaunchError::ProjectLocked
+    | LaunchError::ForeignPipeServer { .. }
+    | LaunchError::Ipc(IpcError::EndpointInUse { .. }) => RunnerFailure::AlreadyServed,
     _ => RunnerFailure::StartFailed,
   }
 }
