@@ -34,7 +34,7 @@ use crate::{
   budget::whole_minutes,
   display,
   tasks::detail::{RunView, TaskDetail},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     message_text,
     property::{ValueStyle, property, styled_property},
@@ -199,7 +199,13 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
     .spacing(ExtraSpacing::Step.role())
     .background(PaletteColor::SurfacePanel)
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(ScrollVertical::new(rows).width(Dimension::Pct(100.0)).flex(1.0))
+    .child(
+      ScrollVertical::new(rows)
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        // A gutter of its own: the bar never covers the right-aligned values.
+        .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
+    )
     .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()))
     .into()
 }
