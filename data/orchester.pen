@@ -136814,7 +136814,7 @@
                                   "fill": "$text"
                                 },
                                 "LTXft": {
-                                  "content": "24",
+                                  "content": "25",
                                   "enabled": true,
                                   "fontSize": 10
                                 }
@@ -136939,7 +136939,7 @@
                                   "fill": "$muted"
                                 },
                                 "LTXft": {
-                                  "content": "5",
+                                  "content": "6",
                                   "enabled": true,
                                   "fontSize": 10
                                 }
@@ -137058,7 +137058,7 @@
                                   "id": "NVrX2",
                                   "name": "Variable total",
                                   "fill": "$muted",
-                                  "content": "All variables · 24",
+                                  "content": "All variables · 25",
                                   "fontFamily": "$font",
                                   "fontSize": 11,
                                   "fontWeight": "normal"
@@ -137252,7 +137252,7 @@
                                   "id": "br44j",
                                   "name": "Variable result range",
                                   "fill": "$muted",
-                                  "content": "1–7 of 24 variables",
+                                  "content": "1–7 of 25 variables",
                                   "fontFamily": "$font",
                                   "fontSize": 10,
                                   "fontWeight": "normal"
@@ -138337,7 +138337,7 @@
                                   "fill": "$text"
                                 },
                                 "LTXft": {
-                                  "content": "24",
+                                  "content": "25",
                                   "enabled": true,
                                   "fontSize": 10
                                 }
@@ -138462,7 +138462,7 @@
                                   "fill": "$muted"
                                 },
                                 "LTXft": {
-                                  "content": "5",
+                                  "content": "6",
                                   "enabled": true,
                                   "fontSize": 10
                                 }
@@ -138581,7 +138581,7 @@
                                   "id": "i8D9p",
                                   "name": "Variable total",
                                   "fill": "$muted",
-                                  "content": "All variables · 24",
+                                  "content": "All variables · 25",
                                   "fontFamily": "$font",
                                   "fontSize": 11,
                                   "fontWeight": "normal"
@@ -138775,7 +138775,7 @@
                                   "id": "l08kW0",
                                   "name": "Variable result range",
                                   "fill": "$muted",
-                                  "content": "1–7 of 24 variables",
+                                  "content": "1–7 of 25 variables",
                                   "fontFamily": "$font",
                                   "fontSize": 10,
                                   "fontWeight": "normal"
