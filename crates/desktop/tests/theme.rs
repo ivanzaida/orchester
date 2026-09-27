@@ -108,6 +108,11 @@ fn getting_started_roles_follow_pencil() {
     theme.spacing_value(ExtraSpacing::BesideGutter.role()),
     Dimension::Px(20.0)
   );
+  // The uncommitted files under a check row's title, which starts after its icon (`gzztk`).
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::CheckIndent.role()),
+    Dimension::Px(28.0)
+  );
   assert_eq!(
     theme.typography_style(ExtraTypography::DialogTitle.role()).font_size,
     20.0

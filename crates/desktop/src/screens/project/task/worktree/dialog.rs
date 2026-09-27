@@ -1,8 +1,8 @@
-//! The confirmation of *Remove worktree*, in the frame of the app's confirmations (`jYL1V`,
-//! `M4vhEv`): a title and what removing does, then each worktree (`l3hyb` rows) with its
-//! uncommitted files named, each branch with whether it is deleted (merged) or kept, the switch
-//! that agrees to discard the uncommitted changes when there are any (`K8ItM`), and Cancel and
-//! Remove.
+//! The confirmation of *Remove worktree* (02.Q `LMrbK`, 02.Q2 `g1HS8`), in the frame of the app's
+//! confirmations (`jYL1V`, `M4vhEv`): a title and what removing does, then each worktree (`l3hyb`
+//! rows) with its uncommitted files named under its title, each branch with whether it is deleted
+//! (merged) or kept, the switch that agrees to discard the uncommitted changes when there are any
+//! (`K8ItM` in `tpwQD`), and Cancel and Remove.
 
 use std::sync::Arc;
 
@@ -98,7 +98,9 @@ pub(super) fn dialog(ctx: &Ctx, dialog: &Dialog) -> Element {
         })
         .map(|switch| {
           let flip = dialog.flip_discard.clone();
-          switch.render(move || flip())
+          Column::new()
+            .padding_top(SpacingSize::Sm)
+            .child(switch.emphasized().render(move || flip()))
         }),
     );
   let content = Column::new()
@@ -113,8 +115,7 @@ pub(super) fn dialog(ctx: &Ctx, dialog: &Dialog) -> Element {
   backdrop(form(dialog.confirm.clone(), content))
 }
 
-/// "Run #3 · .orchester/worktrees/…" or the step's name, then its state; the uncommitted files
-/// under it.
+/// "Run #3" or the step's name, then its state; the uncommitted files under its title (`gzztk`).
 fn worktree_row(ctx: &Ctx, run: &RunView, worktree: &LeftWorktree, separator: &str) -> Element {
   let owner = match worktree.owner {
     WorktreeOwner::Run => ctx.t_args(
@@ -142,13 +143,20 @@ fn worktree_row(ctx: &Ctx, run: &RunView, worktree: &LeftWorktree, separator: &s
     ),
   };
   let listed = (files > 0).then(|| {
-    Text::new(&file_list(&worktree.uncommitted, separator))
-      .variant(ExtraTypography::MonoValue.role())
-      .color(PaletteColor::TextSecondary)
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding_left(ExtraSpacing::CheckIndent.role())
+      .padding_bottom(SpacingSize::Xs)
+      .child(
+        Text::new(&file_list(&worktree.uncommitted, separator))
+          .variant(ExtraTypography::MonoValue.role())
+          .color(PaletteColor::TextSecondary)
+          .width(Dimension::Pct(100.0)),
+      )
   });
   Column::new()
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Tight.role())
+    .spacing(SpacingSize::Xs)
     .child(check_row(glyph, &owner, &state))
     .with_children(listed)
     .into()

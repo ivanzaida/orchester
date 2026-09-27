@@ -99,6 +99,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | form group gap 22 (`xT2ex`, `dCLMl`) | `ExtraSpacing::Form.role()` |
 | lifecycle dialog width 880 at most, 32 from the window's side edges (`um9B1`, `KS2RU`, `BovYZ`) | `theme::LIFECYCLE_DIALOG_WIDTH` / `ExtraSpacing::DialogMargin.role()` (backdrop padding) |
 | Summary column padding beside its scroll gutter, 32 less the 12px gutter (`JV8S8` in `ZVdRa`) | `ExtraSpacing::BesideGutter.role()` |
+| what a check row says under its title, indented past its icon and gap (`gzztk` in `LMrbK`) | `ExtraSpacing::CheckIndent.role()` |
 | note field padding (`NbNN0`, the changes a plan needs) | `ExtraSpacing::TextArea.role()` |
 | agent-written Markdown (a plan under review, 02.11): headings step up from the body, code in the `code-*` colors, quotes and tables in the chrome's borders | lurq `ThemeMarkdown` from `theme::markdown` (headings 14/13/12 medium); call sites pass the text style (`AgentText`) |
 | select menu radius 11 / padding 4 (`u0ByM`) | `ExtraRadius::SelectMenu.role()` / `ExtraSpacing::SelectMenu.role()` |

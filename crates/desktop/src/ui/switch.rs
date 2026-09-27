@@ -22,27 +22,59 @@ pub struct Switch {
   id: &'static str,
   label: Arc<str>,
   on: bool,
+  emphasized: bool,
 }
 
 impl Switch {
   pub fn new(id: &'static str, label: Arc<str>, on: bool) -> Self {
-    Self { id, label, on }
+    Self {
+      id,
+      label,
+      on,
+      emphasized: false,
+    }
+  }
+
+  /// The label in the text color and size of a dialog's body, a little further from the track: a
+  /// switch a dialog's confirmation waits for (`tpwQD` in 02.Q `LMrbK`).
+  pub fn emphasized(mut self) -> Self {
+    self.emphasized = true;
+    self
+  }
+
+  /// The label and its distance from the track.
+  fn label(&self) -> (Text, SpacingSize) {
+    if self.emphasized {
+      (
+        Text::new(&self.label)
+          .variant(TypographyStyle::FieldLabel)
+          .color(PaletteColor::TextPrimary)
+          .nowrap(),
+        ExtraSpacing::Inline.role(),
+      )
+    } else {
+      (
+        Text::new(&self.label).variant(TypographyStyle::Caption).nowrap(),
+        SpacingSize::Sm,
+      )
+    }
   }
 
   /// The switch and its label, faded, not focusable and not flippable: the value is fixed, and the
   /// caller says why (04.B `E1Y9KK`).
   pub fn locked(self) -> Element {
     let (justify, knob, track) = self.look();
+    let (label, gap) = self.label();
     Row::new()
       .id(self.id)
-      .spacing(SpacingSize::Sm)
+      .spacing(gap)
       .align_items(Alignment::Center)
       .cursor(CursorIcon::NotAllowed)
       .describe("checked", if self.on { "true" } else { "false" })
       .describe("state", "locked")
       // Only the track fades: the value beside it stays legible (04.B `lW7Sp`).
       .child(track_row(justify, knob, track).opacity(UNAVAILABLE_OPTION_OPACITY))
-      .child(Text::new(&self.label).variant(TypographyStyle::Caption).nowrap())
+      .child(label)
       .into()
   }
 
@@ -58,16 +90,17 @@ impl Switch {
   pub fn render(self, flip: impl Fn() + Send + Sync + 'static) -> Element {
     let (justify, knob, track) = self.look();
     let switch = track_row(justify, knob, track);
+    let (label, gap) = self.label();
     keyboard_stop(Button::empty().button(), Ring::Outer)
       .id(self.id)
-      .spacing(SpacingSize::Sm)
+      .spacing(gap)
       .align_items(Alignment::Center)
       .rounded(RadiusSize::Sm)
       .cursor(CursorIcon::Pointer)
       .describe("checked", if self.on { "true" } else { "false" })
       .on_click(move |_| flip())
       .child(switch)
-      .child(Text::new(&self.label).variant(TypographyStyle::Caption).nowrap())
+      .child(label)
       .into()
   }
 }

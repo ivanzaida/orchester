@@ -98,6 +98,9 @@ pub const SPACE_DIALOG_MARGIN: f32 = 32.0;
 /// Padding of a note field (`NbNN0`, the changes a plan needs).
 pub const SPACE_TEXT_AREA: f32 = 14.0;
 pub const SPACE_BESIDE_GUTTER: f32 = 20.0;
+/// A check row's detail under its title: the row's icon and the gap after it (`gzztk` in 02.Q
+/// `LMrbK`).
+pub const SPACE_CHECK_INDENT: f32 = 28.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;
