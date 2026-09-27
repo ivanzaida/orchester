@@ -1,0 +1,27 @@
+[package]
+name = "orchester-vault"
+description = "The OS keychain behind Orchester's secret vault: Windows Credential Manager and the macOS keychain."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+orchester-core.workspace = true
+
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+keyring-core.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-native-keyring-store.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store.workspace = true
+
+# The Credential Manager test reads the credentials back through the store directly.
+[target.'cfg(windows)'.dev-dependencies]
+keyring-core.workspace = true
+windows-native-keyring-store.workspace = true

@@ -43,15 +43,16 @@ fn prompt_rejects_unclosed_placeholders() {
 }
 
 #[test]
-fn prompt_catalog_has_the_24_designed_variables() {
+fn prompt_catalog_has_the_25_designed_variables() {
   let names: HashSet<&str> = Variable::ALL.iter().map(|variable| variable.name()).collect();
-  assert_eq!(names.len(), 24);
+  assert_eq!(names.len(), 25);
   for variable in Variable::ALL {
     assert_eq!(variable.name().parse::<Variable>(), Ok(variable));
   }
   for name in [
     "task.acceptance_criteria",
     "project.default_branch",
+    "run.base_revision",
     "run.revision",
     "step.name",
   ] {
@@ -88,7 +89,7 @@ fn prompt_catalog_groups_match_the_design() {
       .count()
   };
   let counts: Vec<usize> = VariableGroup::ALL.into_iter().map(count).collect();
-  assert_eq!(counts, [6, 4, 4, 3, 5, 2]);
+  assert_eq!(counts, [6, 4, 4, 3, 6, 2]);
   assert_eq!(Variable::RunBudget.value_type(), VariableType::Tokens);
   assert_eq!(Variable::TaskAcceptanceCriteria.value_type(), VariableType::StringList);
 }

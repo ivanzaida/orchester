@@ -67,6 +67,7 @@ fn limits_daily_usage_counts_completed_turns_since_the_day_began() {
 const MONEY_SCHEMA: &str = r#"
 PRAGMA foreign_keys = OFF;
 BEGIN;
+DROP TABLE secrets;
 DROP TABLE invocation_prompts;
 DROP TABLE revision_diffs;
 DROP TABLE run_permissions;

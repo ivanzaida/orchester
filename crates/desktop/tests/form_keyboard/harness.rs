@@ -3,6 +3,7 @@
 //! inspectors and dialogs are all reachable, and the focus is read from the tree.
 
 use std::{
+  collections::HashMap,
   fs,
   path::{Path, PathBuf},
   sync::Arc,
@@ -11,7 +12,10 @@ use std::{
 };
 
 use lurq::app::{App, Tree, events::MouseButton};
-use orchester_core::command::{Command, CommandError, CommandOutput, CommandRunner};
+use orchester_core::{
+  command::{Command, CommandError, CommandOutput, CommandRunner},
+  secret::{SecretValue, SecretVault, VaultError, VaultKey},
+};
 use orchester_desktop::{
   activity::Activity,
   close::Lifecycle,
@@ -20,9 +24,11 @@ use orchester_desktop::{
   project_setup::ProjectDraft,
   root::{Root, Startup},
   runner::Runners,
+  secrets::Vault,
   session::AppSession,
   theme,
 };
+use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
@@ -42,6 +48,8 @@ pub struct Desktop {
   pub activity: Activity,
   /// The application's runners, as the root has them.
   pub runners: Runners,
+  /// The keychain secret values go to: in memory, never the keychain of the user running tests.
+  pub vault: Arc<MemoryVault>,
   runner: PathBuf,
   app: App,
   _session: AppSession,
@@ -138,11 +146,13 @@ impl Desktop {
       activity.clone(),
       session.previous_end(),
     );
+    let vault = Arc::new(MemoryVault::default());
     let startup = Startup::Ready {
       workspace: session.workspace().clone(),
       lifecycle: Lifecycle::new(runners.clone(), runtime.handle().clone()),
       activity: activity.clone(),
       programs,
+      vault: Vault::with(vault.clone()),
       previous_end: session.previous_end(),
       session_start: session.started_at(),
     };
@@ -154,6 +164,7 @@ impl Desktop {
       repo,
       activity,
       runners,
+      vault,
       runner,
       app,
       _session: session,
@@ -296,6 +307,29 @@ impl Desktop {
       let key = character.to_string();
       self.key(&key, &key);
     }
+  }
+}
+
+/// A keychain in memory. It keeps what it is given, so tests can check the value arrived.
+#[derive(Default)]
+pub struct MemoryVault(Mutex<HashMap<VaultKey, String>>);
+
+impl MemoryVault {
+  /// The stored values, in no particular order.
+  pub fn values(&self) -> Vec<String> {
+    self.0.lock().values().cloned().collect()
+  }
+}
+
+impl SecretVault for MemoryVault {
+  fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError> {
+    self.0.lock().insert(key.clone(), value.expose().to_owned());
+    Ok(())
+  }
+
+  fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
+    self.0.lock().remove(key);
+    Ok(())
   }
 }
 

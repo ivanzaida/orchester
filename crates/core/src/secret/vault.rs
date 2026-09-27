@@ -1,0 +1,61 @@
+use thiserror::Error;
+
+use super::SecretValue;
+use crate::id::{ProjectId, SecretId};
+
+/// Where a secret's value is kept in the OS keychain: the service `orchester:<project id>` and the
+/// account `<secret id>`. Both ids are UUIDs that never change, so a project whose folder moves
+/// keeps its values; the project database (never committed) is what points at them.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct VaultKey {
+  service: String,
+  account: String,
+}
+
+impl VaultKey {
+  const SERVICE_PREFIX: &str = "orchester:";
+
+  pub fn new(project: ProjectId, secret: SecretId) -> Self {
+    Self {
+      service: format!("{}{project}", Self::SERVICE_PREFIX),
+      account: secret.to_string(),
+    }
+  }
+
+  pub fn service(&self) -> &str {
+    &self.service
+  }
+
+  pub fn account(&self) -> &str {
+    &self.account
+  }
+}
+
+/// Why the keychain did not do what was asked. Details come from the platform's own messages;
+/// keychain APIs never echo a value, and no variant carries one.
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum VaultError {
+  /// This platform has no keychain implementation yet.
+  #[error("storing secrets in the system keychain is not supported on this platform yet")]
+  Unsupported,
+  /// The keychain is locked, or the user or the system refused access.
+  #[error("the system keychain refused access: {0}")]
+  AccessDenied(String),
+  /// The value is longer than the keychain of this platform accepts.
+  #[error("the value is longer than the system keychain accepts ({max} bytes at most)")]
+  TooLong { max: u32 },
+  #[error("the system keychain failed: {0}")]
+  Failed(String),
+}
+
+/// The OS keychain: the only place a secret value is kept (`docs/architecture/storage.md`,
+/// "secrets live only in the OS keychain"). The desktop writes and removes values; reading them
+/// is left to the runner, at tool-call time, once tools can use secrets.
+pub trait SecretVault: Send + Sync {
+  /// Stores `value` under `key`, replacing a value stored there before.
+  fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError>;
+
+  /// Removes the value under `key`. A key without a value is not an error, so removing twice
+  /// succeeds.
+  fn delete(&self, key: &VaultKey) -> Result<(), VaultError>;
+}

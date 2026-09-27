@@ -1134,6 +1134,106 @@
       "appliesDetail": "Runs keep the permissions they launched with. Changing them for a single run is not available yet."
     }
   },
+  "secrets": {
+    "breadcrumb": "{{project}} / Secrets",
+    "title": "Project secrets",
+    "description": "Credentials owned by this project. Tool bindings are managed in Tools.",
+    "import": "Import from project",
+    "add": "Add secret",
+    "loadFailed": "Secrets could not be read",
+    "tabs": {
+      "secrets": "Secrets",
+      "usageLog": "Usage log"
+    },
+    "filter": {
+      "all": "All environments"
+    },
+    "count": {
+      "one": "{{count}} secret",
+      "other": "{{count}} secrets"
+    },
+    "emptyTitle": "No secrets yet",
+    "emptyDetail": "Add the credentials this project’s tools need. A value is kept in the system keychain of this computer, never in the project folder, and is not shown again after saving.",
+    "emptyEnvironment": "No secrets in {{environment}}.",
+    "row": {
+      "scope": "{{project}} · {{environment}} · {{kind}}"
+    },
+    "usage": {
+      "none": "Unused",
+      "one": "1 tool",
+      "other": "{{count}} tools"
+    },
+    "handling": "Tools in this project select the secrets they need. Secret values stay out of agent prompts, variable previews and copied instructions.",
+    "recentAccess": "Recent access",
+    "auditLog": "View audit log →",
+    "recentAccessUnavailable": "Access to secrets is recorded once tools can use them. No tool can use a secret in this version yet.",
+    "ownership": "Tools own credential bindings. Usage history stays linked to the originating run and step.",
+    "replaceValue": "Replace value",
+    "kind": {
+      "accessToken": "Access token",
+      "apiKey": "API key",
+      "databaseConnection": "Database connection",
+      "deploymentToken": "Deployment token",
+      "password": "Password"
+    },
+    "environment": {
+      "development": "Development",
+      "staging": "Staging",
+      "production": "Production"
+    },
+    "property": {
+      "project": "Project",
+      "environment": "Environment",
+      "lastRotated": "Last rotated"
+    },
+    "inspector": {
+      "masked": "•••• •••• •••• ••••",
+      "neverRotated": "Never · added {{date}}",
+      "unknownDate": "Unknown date",
+      "usedBy": {
+        "none": "USED BY · NO TOOLS",
+        "one": "USED BY · 1 TOOL",
+        "other": "USED BY · {{count}} TOOLS"
+      },
+      "notUsed": "No tool uses this secret yet. A tool selects it in its Credentials settings.",
+      "toolsNote": "{{project}} / Tools\nBindings and access rules are edited on the tool.",
+      "usageLog": "View usage log",
+      "archive": "Archive secret"
+    },
+    "dialog": {
+      "addTitle": "Add secret",
+      "addSubtitle": "Save a credential in {{project}}. Link it from a tool’s settings.",
+      "replaceTitle": "Replace value",
+      "replaceSubtitle": "{{name}} in {{project}} / {{environment}}. The new value replaces the stored one.",
+      "name": "Name",
+      "type": "Type",
+      "value": "Secret value",
+      "project": "Project",
+      "environment": "Environment",
+      "nameInvalid": "Start with a capital letter and use capital letters, digits and underscores, such as STAGING_API_KEY.",
+      "nameTooLong": "Use at most {{max}} characters.",
+      "nameTaken": "Already exists in {{project}} / {{environment}}.",
+      "valueHint": "The value is hidden after saving. Replace it later to rotate the credential.",
+      "valueHintTaken": "The value is hidden after saving. Use Replace value to rotate a saved secret.",
+      "valueHintReplace": "The stored value is replaced and cannot be restored. The new value is hidden after saving.",
+      "addNotice": "After saving, select this secret in a tool’s Credentials settings. Tools own their bindings and access policies.",
+      "takenNotice": "Existing secret: {{name}}. To rotate it, use Replace value on the existing secret.",
+      "openExisting": "Open secret",
+      "replaceNotice": "Tools that use this secret get the new value from their next call. The keychain keeps one value per secret, so the old one is gone once you save.",
+      "save": "Save secret",
+      "saving": "Saving…",
+      "replacing": "Replacing…"
+    },
+    "archive": {
+      "title": "Archive {{name}}?",
+      "explanation": "Its value is deleted from the system keychain of this computer and cannot be restored. The secret leaves the secrets of {{project}}, and its name can be used again.",
+      "unused": "No tool uses this secret.",
+      "usedByOne": "1 tool uses this secret. It is not ready until it selects another secret.",
+      "usedByOther": "{{count}} tools use this secret. They are not ready until they select another secret.",
+      "confirm": "Archive secret",
+      "archiving": "Archiving…"
+    }
+  },
   "connections": {
     "breadcrumb": "{{project}} / Connections",
     "title": "Connections",
@@ -1487,7 +1587,22 @@
     "hoursAgo": "{{count}}h ago",
     "daysAgo": "{{count}}d ago",
     "seconds": "{{count}} s",
-    "minutes": "{{count}} min"
+    "minutes": "{{count}} min",
+    "date": "{{month}} {{day}}, {{year}}",
+    "month": {
+      "jan": "Jan",
+      "feb": "Feb",
+      "mar": "Mar",
+      "apr": "Apr",
+      "may": "May",
+      "jun": "Jun",
+      "jul": "Jul",
+      "aug": "Aug",
+      "sep": "Sep",
+      "oct": "Oct",
+      "nov": "Nov",
+      "dec": "Dec"
+    }
   },
   "recovery": {
     "startupFailed": {
@@ -1521,6 +1636,13 @@
     "connectionNameTaken": "Another connection of this project already has this name.",
     "connectionNotVerified": "The program was not recognized as the chosen CLI, so the connection cannot be saved.",
     "executableNotAbsolute": "Choose the program file by its full path.",
+    "secretNameTaken": "Another secret of this project already has this name in this environment.",
+    "secretGone": "This secret no longer exists or was archived.",
+    "secretTooLong": "The value is longer than the system keychain accepts ({{max}} bytes at most).",
+    "secretRotationNotRecorded": "The new value is stored, but the time of the change could not be recorded. The log has the details.",
+    "keychainUnsupported": "Storing secrets in the system keychain is not supported on this platform yet.",
+    "keychainDenied": "The system keychain refused access. Unlock it and try again.",
+    "keychainFailed": "The system keychain could not store the change. The log has the details.",
     "roleRequired": "Enter a profile name to save the draft.",
     "connectionRequired": "Choose a connection.",
     "modelRequired": "Choose a model or enter a model id.",
@@ -1883,6 +2005,7 @@
       "noPreview": "nothing to preview",
       "noRun": "no run chosen",
       "noAttempt": "the step has not started in this run",
+      "noCheckpoint": "no commit yet",
       "notRecorded": "Orchester does not record it yet"
     },
     "groups": {
@@ -1987,9 +2110,13 @@
         "description": "The run’s working branch",
         "availability": "When the working branch is created"
       },
-      "runRevision": {
+      "runBaseRevision": {
         "description": "The revision the run started from",
         "availability": "When the run is created"
+      },
+      "runRevision": {
+        "description": "The run’s latest checkpoint commit",
+        "availability": "After the first commit"
       },
       "stepId": {
         "description": "The step’s key in its pipeline",
@@ -2339,6 +2466,21 @@
         "running": "Creating instruction {{name}}",
         "done": "Instruction created · {{name}}",
         "failed": "Could not create instruction {{name}}"
+      },
+      "secretAdd": {
+        "running": "Saving secret {{name}}",
+        "done": "Secret saved · {{name}}",
+        "failed": "Could not save secret {{name}}"
+      },
+      "secretReplace": {
+        "running": "Replacing the value of {{name}}",
+        "done": "Value replaced · {{name}}",
+        "failed": "Could not replace the value of {{name}}"
+      },
+      "secretArchive": {
+        "running": "Archiving secret {{name}}",
+        "done": "Secret archived · {{name}}",
+        "failed": "Could not archive secret {{name}}"
       }
     },
     "opens": {
@@ -2350,7 +2492,8 @@
       "runnerLog": "opens the runner log",
       "settings": "opens Project settings",
       "pullRequests": "opens Pull requests",
-      "instruction": "opens the instruction"
+      "instruction": "opens the instruction",
+      "secrets": "opens Secrets"
     },
     "open": {
       "overview": "Open overview",
@@ -2360,7 +2503,8 @@
       "connections": "Open connections",
       "settings": "Open settings",
       "pullRequests": "Open pull requests",
-      "instruction": "Open instruction"
+      "instruction": "Open instruction",
+      "secrets": "Open secrets"
     }
   },
   "tokens": {
