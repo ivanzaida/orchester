@@ -67,6 +67,11 @@ fn limits_daily_usage_counts_completed_turns_since_the_day_began() {
 const MONEY_SCHEMA: &str = r#"
 PRAGMA foreign_keys = OFF;
 BEGIN;
+DROP TABLE invocation_prompts;
+ALTER TABLE invocations DROP COLUMN kind;
+DROP TABLE revision_diffs;
+DROP TABLE run_permissions;
+DROP TABLE run_step_budgets;
 DROP TABLE step_outputs;
 DROP TABLE money_step_budgets_before_tokens;
 ALTER TABLE step_executions DROP COLUMN failure;
@@ -203,5 +208,11 @@ fn limits_migration_converts_money_budgets_to_tokens_and_keeps_the_money_amounts
   let version: u32 = connection
     .pragma_query_value(None, "user_version", |row| row.get(0))
     .expect("version");
-  assert_eq!(version, 10);
+  // Migrated all the way: the same version a new project database starts at.
+  let (fresh, ..) = started_run();
+  let fresh_version: u32 = Connection::open(fresh.path().join(".orchester").join("orchester.db"))
+    .expect("open fresh")
+    .pragma_query_value(None, "user_version", |row| row.get(0))
+    .expect("fresh version");
+  assert_eq!(version, fresh_version);
 }

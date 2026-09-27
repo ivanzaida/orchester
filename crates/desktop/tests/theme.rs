@@ -360,3 +360,18 @@ fn activity_roles_follow_pencil() {
   // Unparsed lines `Ane9j`: 60 %.
   assert_eq!(theme::UNPARSED_OPACITY, 0.6);
 }
+
+#[test]
+fn instruction_screen_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  let style = |role: ExtraTypography| theme.typography_style(role.role());
+  assert_eq!(style(ExtraTypography::RuleTitle).font_size, 20.0);
+  let prompt = style(ExtraTypography::PromptText);
+  assert_eq!((prompt.font_size, prompt.line_height), (12.0, 1.8));
+  assert_eq!(&*prompt.font_family, "Geist Mono");
+  let name = style(ExtraTypography::VariableName);
+  assert_eq!((name.font_size, &*name.font_family), (20.0, "Geist Mono"));
+  assert_eq!(style(ExtraTypography::ContextNote).font_size, 9.0);
+  assert_eq!(style(ExtraTypography::IconState).font_size, 20.0);
+}

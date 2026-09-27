@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
   id::{ResourceId, VersionId},
   resource::{
-    AgentProfile, Instruction, InstructionScope, ModelId, Pipeline, Step, StepKey, StepKind, Tool, Version,
+    AgentProfile, Instruction, InstructionTarget, ModelId, Pipeline, Step, StepKey, StepKind, Tool, Version,
     VersionNumber,
   },
 };
@@ -268,19 +268,27 @@ fn resolve_step(step: &Step, published: PublishedVersions<'_>) -> Result<StepSna
   })
 }
 
-/// Whether an instruction reaches any agent of this pipeline.
+/// Whether an instruction reaches an agent of this pipeline at some event: its scope and targets
+/// admit a step whose published profile runs it. Which event it is injected at is decided per
+/// invocation, from the pinned version.
 fn applies(instruction: &Instruction, pipeline: ResourceId, body: &Pipeline, published: PublishedVersions<'_>) -> bool {
-  match instruction.scope() {
-    InstructionScope::Project => true,
-    InstructionScope::AgentRole { role } => body.steps().iter().any(|step| match &step.kind {
-      StepKind::Agent { profile, .. } => profile
-        .and_then(|profile| published.profiles.get(&profile))
-        .is_some_and(|version| version.body().role() == role),
-      StepKind::Tool { .. } => false,
-    }),
-    InstructionScope::Pipeline { pipeline: target } => *target == pipeline,
-    InstructionScope::Step { pipeline: target, step } => *target == pipeline && body.step(step).is_some(),
-  }
+  body.steps().iter().any(|step| {
+    let StepKind::Agent {
+      profile: Some(profile), ..
+    } = &step.kind
+    else {
+      return false;
+    };
+    published.profiles.get(profile).is_some_and(|version| {
+      let target = InstructionTarget {
+        pipeline,
+        step: &step.key,
+        profile: *profile,
+        role: version.body().role(),
+      };
+      instruction.reaches(target).is_ok()
+    })
+  })
 }
 
 /// Tools called by tool steps plus published tools whose access policy admits a step of this

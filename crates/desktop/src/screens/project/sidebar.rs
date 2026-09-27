@@ -1,5 +1,5 @@
-//! Shell sidebar (`zo9Py`). Overview, Tasks, Pull requests, Pipelines, Agents, Tools, Connections and Project
-//! settings open their screens; every other entry is shown but unavailable. The runner card (`O2Jjjf`) is not
+//! Shell sidebar (`zo9Py`). Overview, Tasks, Pull requests, Pipelines, Instructions, Agents, Tools, Connections and
+//! Project settings open their screens; every other entry is shown but unavailable. The runner card (`O2Jjjf`) is not
 //! shown: the status bar reports the runner on every screen.
 
 use lurq::{
@@ -14,7 +14,7 @@ use lurq::{
 
 use super::{ProjectNav, TasksState};
 use crate::{
-  navigation::route::{AgentSelection, Page, SettingsTab, ToolSelection},
+  navigation::route::{AgentSelection, InstructionsTab, Page, SettingsTab, ToolSelection},
   theme::{ExtraColor, ExtraSpacing},
   ui::{brand::brand, icon::Icon, nav_item::NavItem},
   workspace::OpenProject,
@@ -109,7 +109,10 @@ fn primary_navigation(ctx: &Ctx, shown: Option<Page>, tasks: &TasksState, nav: &
       NavItem::new("nav-pipelines", Icon::Workflow, ctx.t("nav.pipelines")),
       Page::Pipelines,
     ),
-    NavItem::new("nav-instructions", Icon::BookOpen, ctx.t("nav.instructions")),
+    item(
+      NavItem::new("nav-instructions", Icon::BookOpen, ctx.t("nav.instructions")),
+      Page::Instructions(InstructionsTab::ProjectRules, None),
+    ),
     item(
       NavItem::new("nav-agents", Icon::Bot, ctx.t("nav.agents")),
       Page::Agents(AgentSelection::First),

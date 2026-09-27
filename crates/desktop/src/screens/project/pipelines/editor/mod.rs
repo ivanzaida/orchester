@@ -35,7 +35,7 @@ use orchester_core::{
 };
 
 use self::{
-  autosave::{DraftQueue, SaveAction, SaveJob, save_action, watch_saves},
+  autosave::watch_saves,
   canvas::{Canvas, CanvasProps},
   pipeline_inspector::{PipelineInspector, PipelineInspectorProps},
   publish_dialog::publish_dialog,
@@ -45,6 +45,7 @@ use super::PipelinesNav;
 use crate::{
   activity::{Activity, OperationSpec, operations},
   background,
+  drafts::{DraftQueue, SaveAction, SaveJob, save_action},
   messages::{self, Message},
   pipelines::{
     data::{OpenError, OpenedPipeline, publish_in},
@@ -91,7 +92,7 @@ type PublishArgs = (PathBuf, ResourceId, Pipeline, OperationSpec);
 type PublishAction = FutureAction<PublishArgs, PublishedDraft, Message>;
 
 struct Actions {
-  save: SaveAction,
+  save: SaveAction<Pipeline>,
   publish: PublishAction,
 }
 
@@ -114,8 +115,8 @@ pub struct EditorHandle {
   selection: Signal<Selection>,
   /// Changes when steps are replaced as a whole, so step inspectors start again from them.
   epoch: Signal<u64>,
-  save: SaveAction,
-  queue: DraftQueue,
+  save: SaveAction<Pipeline>,
+  queue: DraftQueue<Pipeline>,
   /// Set by the editor's render: props are not available when the handle is created.
   project: Signal<Project>,
 }

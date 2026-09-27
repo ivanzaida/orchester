@@ -449,6 +449,14 @@ CREATE TABLE revision_diffs (
 ) STRICT;
 ",
   r"
+-- What each agent CLI launch was told (Instructions): the injection event and the
+-- sources of its prompt in order, as JSON. Written once by the runner before the CLI starts.
+CREATE TABLE invocation_prompts (
+  invocation_id TEXT PRIMARY KEY REFERENCES invocations (id),
+  body TEXT NOT NULL
+) STRICT;
+",
+  r"
 -- Command tool steps (M10a). A command tool's run is an invocation of its step execution, so its
 -- time counts toward the run's time limit and its output joins the run's transcript. It runs no
 -- model: its `model` is empty.

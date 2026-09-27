@@ -400,3 +400,24 @@ pub fn is_running(pid: &str) -> bool {
     output.status.success()
   }
 }
+
+/// Starts the task's run on a runner of its own and kills that runner once the agent works:
+/// its tasks are dropped without recording anything, and its agents end with it, as when the
+/// runner process is killed. The run stays recorded as running with an open invocation.
+pub async fn killed_mid_run(root: &Path, task: TaskId) -> RunId {
+  let runtime = tokio::runtime::Builder::new_multi_thread()
+    .worker_threads(2)
+    .enable_all()
+    .build()
+    .expect("a runtime for the killed runner");
+  let (scheduler, mut events) = scheduler(root);
+  let run = {
+    let _killed_runner = runtime.enter();
+    scheduler
+      .start_run(IdempotencyKey::generate(), task)
+      .expect("the run starts")
+  };
+  wait_for_turns(root, &mut events, run, 1).await;
+  runtime.shutdown_background();
+  run
+}

@@ -35,7 +35,11 @@ pub use self::{
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
   preflight::{PreflightInput, PreflightProblem, preflight},
-  prompt::{CONTINUE_PROMPT, DependencyOutput, PipelineInfo, PromptAssemblyError, PromptInput, PromptSource},
+  prompt::{
+    AssembledPrompt, CONTINUE_PROMPT, Composition, DependencyOutput, ExcludedInstruction, InstructionSource,
+    InstructionVersion, InvocationPrompt, PipelineInfo, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart,
+    PromptSection, PromptSource, RunContext,
+  },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
   state::{NewRun, Run, StoredRun},

@@ -21,6 +21,10 @@ const TASKS: &str = "tasks";
 const NEW: &str = "new";
 const PULL_REQUESTS: &str = "pull-requests";
 const PIPELINES: &str = "pipelines";
+const INSTRUCTIONS: &str = "instructions";
+const AGENT_ROLES: &str = "agent-roles";
+const PIPELINE_OVERRIDES: &str = "pipeline-overrides";
+const STEP_OVERRIDES: &str = "step-overrides";
 const AGENTS: &str = "agents";
 const TOOLS: &str = "tools";
 const CONNECTIONS: &str = "connections";
@@ -73,6 +77,9 @@ pub enum Page {
   Pipelines,
   /// One pipeline in its editor (`Q21HOA`).
   Pipeline(ResourceId),
+  /// Instructions of one scope, and the one being edited (`yRKeF`); the first of the scope
+  /// without one.
+  Instructions(InstructionsTab, Option<ResourceId>),
   /// Agent profiles and the one being edited (`WPmtS`).
   Agents(AgentSelection),
   /// The tool library (`ZFwWl`) or one tool in its editor (`YEWFo`).
@@ -110,6 +117,15 @@ pub enum TaskPageTab {
   Activity,
 }
 
+/// The scope tabs of Instructions (`GfEHL`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InstructionsTab {
+  ProjectRules,
+  AgentRoles,
+  PipelineOverrides,
+  StepOverrides,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConnectionTab {
   All,
@@ -130,6 +146,7 @@ pub enum SidebarItem {
   Tasks,
   PullRequests,
   Pipelines,
+  Instructions,
   Agents,
   Tools,
   Connections,
@@ -221,6 +238,8 @@ impl Page {
       [PULL_REQUESTS, number] => Self::PullRequest(number.parse().ok()?),
       [PIPELINES] => Self::Pipelines,
       [PIPELINES, pipeline] => Self::Pipeline(pipeline.parse().ok()?),
+      [INSTRUCTIONS] => Self::Instructions(InstructionsTab::named(tab), None),
+      [INSTRUCTIONS, instruction] => Self::Instructions(InstructionsTab::named(tab), Some(instruction.parse().ok()?)),
       [AGENTS] => Self::Agents(AgentSelection::First),
       [AGENTS, NEW] => Self::Agents(AgentSelection::New),
       [AGENTS, profile] => Self::Agents(AgentSelection::Profile(profile.parse().ok()?)),
@@ -247,6 +266,10 @@ impl Page {
       Self::PullRequest(number) => format!("{root}/{PULL_REQUESTS}/{number}"),
       Self::Pipelines => format!("{root}/{PIPELINES}"),
       Self::Pipeline(pipeline) => format!("{root}/{PIPELINES}/{pipeline}"),
+      Self::Instructions(tab, selected) => {
+        let selected = selected.map_or_else(String::new, |instruction| format!("/{instruction}"));
+        with_tab(format!("{root}/{INSTRUCTIONS}{selected}"), tab.query())
+      }
       Self::Agents(AgentSelection::First) => format!("{root}/{AGENTS}"),
       Self::Agents(AgentSelection::New) => format!("{root}/{AGENTS}/{NEW}"),
       Self::Agents(AgentSelection::Profile(profile)) => format!("{root}/{AGENTS}/{profile}"),
@@ -268,6 +291,7 @@ impl Page {
       Self::Tasks(_) | Self::NewTask | Self::Task(..) => SidebarItem::Tasks,
       Self::PullRequests | Self::PullRequest(_) => SidebarItem::PullRequests,
       Self::Pipelines | Self::Pipeline(_) => SidebarItem::Pipelines,
+      Self::Instructions(..) => SidebarItem::Instructions,
       Self::Agents(_) => SidebarItem::Agents,
       Self::Tools(_) => SidebarItem::Tools,
       Self::Connections(..) => SidebarItem::Connections,
@@ -338,6 +362,26 @@ const fn task_page_query(tab: TaskPageTab) -> Option<&'static str> {
     TaskPageTab::Summary => None,
     TaskPageTab::Changes => Some(CHANGES),
     TaskPageTab::Activity => Some(ACTIVITY),
+  }
+}
+
+impl InstructionsTab {
+  fn named(tab: Option<&str>) -> Self {
+    match tab {
+      Some(AGENT_ROLES) => Self::AgentRoles,
+      Some(PIPELINE_OVERRIDES) => Self::PipelineOverrides,
+      Some(STEP_OVERRIDES) => Self::StepOverrides,
+      _ => Self::ProjectRules,
+    }
+  }
+
+  const fn query(self) -> Option<&'static str> {
+    match self {
+      Self::ProjectRules => None,
+      Self::AgentRoles => Some(AGENT_ROLES),
+      Self::PipelineOverrides => Some(PIPELINE_OVERRIDES),
+      Self::StepOverrides => Some(STEP_OVERRIDES),
+    }
   }
 }
 

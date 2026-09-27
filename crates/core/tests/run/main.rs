@@ -5,6 +5,7 @@ mod fixture;
 mod lifecycle;
 mod limits;
 mod permissions;
+mod prompt;
 mod recovery;
 mod schedule;
 mod snapshot;

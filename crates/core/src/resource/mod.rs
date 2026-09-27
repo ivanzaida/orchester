@@ -18,7 +18,9 @@ use serde::{Serialize, de::DeserializeOwned};
 
 pub use self::{
   agent_profile::{AgentProfile, ModelId, ModelIdError, ProviderSettings, ProviderSettingsError},
-  instruction::{AgentTargets, InjectionEvent, Instruction, InstructionError, InstructionScope},
+  instruction::{
+    AgentTargets, Exclusion, InjectionEvent, Instruction, InstructionError, InstructionScope, InstructionTarget,
+  },
   lifecycle::{
     Draft, DraftSaved, PublishError, Resource, ResourceKind, Slug, SlugError, Version, VersionNumber, publish,
   },
@@ -26,14 +28,14 @@ pub use self::{
     EditProblem, FailureRoute, Pipeline, PipelineChange, PipelineEdit, PipelineError, RepositoryAccess,
     StarterAssignments, StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, changes, feature_delivery,
   },
-  prompt::{PromptError, PromptText},
+  prompt::{PromptError, PromptText, Rendered},
   tool::{
     AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
     CommandEnvironment, CommandError, CommandProgram, CommandTimeout, DatabaseQuery, DeniedBehavior, ExitCodes,
     FieldName, FieldNameError, HttpAuth, HttpError, HttpMethod, HttpRequest, OutputLimit, ProgramLocation,
     RequestTarget, ResponseSource, Tool, ToolAction, ToolError, ToolKind, VariableName,
   },
-  variable::{UnknownVariable, Variable},
+  variable::{UnknownVariable, Variable, VariableGroup, VariableType},
 };
 use crate::permission::AgentPermissions;
 
@@ -77,7 +79,20 @@ impl ResourceBody for AgentProfile {
 
 impl ResourceBody for Instruction {
   const KIND: ResourceKind = ResourceKind::Instruction;
-  const SCHEMA: u32 = 1;
+  /// 2: targets may name agent profiles (2026-09-27). Bodies of schema 1 have the same shape.
+  const SCHEMA: u32 = 2;
+
+  fn upgrade(schema: u32, body: serde_json::Value) -> Option<serde_json::Value> {
+    (schema == 1).then_some(body)
+  }
+
+  fn check_publishable(&self) -> Result<(), PublishError> {
+    if self.text().is_blank() {
+      Err(PublishError::BlankInstruction)
+    } else {
+      Ok(())
+    }
+  }
 }
 
 impl ResourceBody for Pipeline {

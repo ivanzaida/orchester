@@ -211,6 +211,62 @@ fn run_snapshot_pins_applicable_instructions_only() {
 }
 
 #[test]
+fn run_snapshot_pins_instructions_for_agents_of_the_pipeline_at_any_event() {
+  let config = Config::feature_delivery();
+  let rule = |targets, events: &[InjectionEvent]| {
+    Instruction::new(
+      PromptText::new("Rule.").expect("valid prompt"),
+      targets,
+      events.iter().copied().collect(),
+      InstructionScope::Project,
+    )
+    .expect("valid instruction")
+  };
+  let roles = |role: &str| AgentTargets::Roles(BTreeSet::from([Name::new(role).expect("valid")]));
+  let cases = [
+    (rule(roles("Reviewer"), &[InjectionEvent::Start]), true),
+    (rule(roles("Designer"), &[InjectionEvent::Start]), false),
+    (
+      rule(
+        AgentTargets::Profiles(BTreeSet::from([config.builder])),
+        &[InjectionEvent::Start],
+      ),
+      true,
+    ),
+    (
+      rule(
+        AgentTargets::Profiles(BTreeSet::from([ResourceId::generate()])),
+        &[InjectionEvent::Start],
+      ),
+      false,
+    ),
+    // Injected only when a session resumes, which an invocation of this run may do.
+    (rule(AgentTargets::All, &[InjectionEvent::Resume]), true),
+  ];
+  let ids: Vec<ResourceId> = cases.iter().map(|_| ResourceId::generate()).collect();
+  let instructions: BTreeMap<_, _> = ids
+    .iter()
+    .zip(&cases)
+    .map(|(id, (body, _))| (*id, version(1, body.clone())))
+    .collect();
+  let tools = BTreeMap::new();
+  let published = PublishedVersions {
+    profiles: &config.profiles,
+    tools: &tools,
+    instructions: &instructions,
+  };
+  let snapshot = RunSnapshot::build(config.pipeline, &config.pipeline_version, published).expect("published");
+  let pinned: BTreeSet<ResourceId> = snapshot.instructions().iter().map(|pin| pin.resource).collect();
+  let expected: BTreeSet<ResourceId> = ids
+    .iter()
+    .zip(&cases)
+    .filter(|(_, (_, pinned))| *pinned)
+    .map(|(id, _)| *id)
+    .collect();
+  assert_eq!(pinned, expected);
+}
+
+#[test]
 fn run_snapshot_pins_step_tools_and_tools_allowed_for_the_pipeline() {
   let config = Config::feature_delivery();
   let step_tool = ResourceId::generate();

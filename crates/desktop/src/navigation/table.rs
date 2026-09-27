@@ -52,6 +52,9 @@ fn project_pages(routes: Routes) -> Routes {
     .route("/pull-requests", project::page)
     .route("/pull-requests/:number", project::page)
     .layout("/pipelines", project::page, |routes| selection(routes, "/:pipeline"))
+    .layout("/instructions", project::page, |routes| {
+      selection(routes, "/:instruction")
+    })
     .layout("/agents", project::page, |routes| {
       selection(routes, "/:profile").route("/new", |_ctx| Element::new())
     })
