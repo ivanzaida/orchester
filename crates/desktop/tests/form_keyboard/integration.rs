@@ -99,10 +99,42 @@ fn merge_moves_main_to_the_run_and_clears_its_worktree_and_branch() {
   assert!(!has(&mut desktop, "task-remove-worktree"), "nothing is left to remove");
   assert!(!run_worktree(&desktop).exists());
   assert!(git(desktop.repo(), &["branch", "--list", run.branch().as_str()]).is_empty());
+  merged_conversation_takes_no_messages(&mut desktop);
   // The task list says so too.
   desktop.click("task-breadcrumb");
   desktop.wait_for("task-row-KON-1");
   assert!(shows(&mut desktop, "task-row-KON-1", "Merged"));
+}
+
+/// The Conversation tab of the merged run (02.S2 `m3gLZ`): the notice says where the work went, no
+/// agent reads messages, so the recipient cannot be chosen and the policy about when agents read
+/// is left out, and the permissions, which cannot change any more, have no link.
+fn merged_conversation_takes_no_messages(desktop: &mut Desktop) {
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("task-conversation-panel");
+  assert!(shows(desktop, "conversation-status", "Merged"));
+  desktop.wait_until("what is left of the run", |desktop| {
+    holds(
+      desktop,
+      "task-notice",
+      "Its worktrees and merged branches were removed.",
+    )
+  });
+  assert!(shows(desktop, "task-notice", "Merged into main"));
+  assert!(!has(desktop, "task-conversation-policy"));
+  assert!(shows(desktop, "task-working-context", "Permissions"));
+  assert!(!has(desktop, "task-permissions-view"), "nothing to change");
+  assert!(has(desktop, "conversation-input-closed"));
+  desktop.press("conversation-recipient");
+  let open = desktop
+    .tree
+    .get_element_by_id_mut("conversation-recipient")
+    .and_then(|element| element.as_select())
+    .expect("the recipient select")
+    .is_open();
+  assert!(!open, "the recipient select is disabled");
+  desktop.click("task-tab-summary");
+  desktop.wait_for("task-ready");
 }
 
 #[test]

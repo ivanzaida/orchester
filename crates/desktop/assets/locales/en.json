@@ -757,6 +757,7 @@
       "merging": "Merging…",
       "unavailable": "Merge is unavailable: this run didn’t record the branch your checkout had when it started (it started before Orchester kept it, or on a detached HEAD). Merge its branch yourself with git.",
       "mergedTitle": "Merged into {{branch}}",
+      "noticeDetail": "{{merged}} {{left}}",
       "mergedDetail": {
         "fastForward": "{{branch}} moved forward to {{revision}} at {{time}}.",
         "mergeCommit": "Merge commit {{revision}} joined the run’s work into {{branch}} at {{time}}.",

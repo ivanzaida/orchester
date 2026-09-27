@@ -115,6 +115,26 @@ pub(super) fn readiness(ctx: &Ctx, merge: Option<&RunMerge>, leftovers: Option<&
     .into()
 }
 
+/// Where the run's work went and what is left of the run, as the Conversation tab's notice
+/// (`BsAAT` in 02.S2 `m3gLZ`); what is left is added once it is read.
+pub(in super::super) fn merged_notice(ctx: &Ctx, merge: &RunMerge, leftovers: Option<&Leftovers>) -> Element {
+  let merged = merged_detail(ctx, merge);
+  let detail = match leftovers {
+    Some(leftovers) => ctx.t_args(
+      "runs.merge.noticeDetail",
+      [("merged", &*merged), ("left", &*left_behind(ctx, leftovers))],
+    ),
+    None => merged,
+  };
+  Notice::new(
+    Icon::GitMerge,
+    ctx.t_args("runs.merge.mergedTitle", [("branch", merge.into.as_str())]),
+    detail,
+  )
+  .id("task-notice")
+  .into()
+}
+
 /// "main was fast-forwarded to 1a2b3c4 at 14:40."
 fn merged_detail(ctx: &Ctx, merge: &RunMerge) -> Arc<str> {
   let key = match merge.kind {

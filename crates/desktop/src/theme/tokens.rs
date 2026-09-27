@@ -145,3 +145,6 @@ pub const UNPARSED_OPACITY: f32 = 0.6;
 /// A permission option the connection cannot enforce, or one that is not available yet, at 50 %
 /// (`BNliD` in 04.04 `T1rjv`; the compact 04.B `W0Owo` shows 45 %).
 pub const UNAVAILABLE_OPTION_OPACITY: f32 = 0.5;
+/// A button that cannot be pressed keeps its variant's look at 40 %, primary and secondary alike
+/// (`kLJJb` Button / Disabled state, `HN7cO`, `W4y2y` and `WuZqY` in `angoF`).
+pub const DISABLED_OPACITY: f32 = 0.4;
