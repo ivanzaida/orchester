@@ -42,6 +42,7 @@ fn step_outputs_round_trip_once_per_execution() {
 const BEFORE_STEP_TOKENS: &str = r#"
 PRAGMA foreign_keys = OFF;
 BEGIN;
+DROP TABLE secrets;
 DROP TABLE invocation_prompts;
 DROP TABLE revision_diffs;
 DROP TABLE run_permissions;
