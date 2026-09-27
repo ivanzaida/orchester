@@ -33,8 +33,10 @@ pub(super) struct PlanRequest {
 
 impl Scheduler {
   /// Records `decision` on plan `version` of `execution` in `run` and lets the run go on. Returns
-  /// once the decision is recorded; the run's task, which ended while the run waited, executes it
-  /// again. Needs no free agent slot: the continued run waits for one like any other.
+  /// once the decision is recorded and a task executes the run: the task at work took it, or the
+  /// run's task, which ended while the run waited, is started again. A decision that is not taken
+  /// comes back as the rejection. Needs no free agent slot: the continued run waits for one like
+  /// any other.
   pub async fn decide_plan(
     &self,
     run: RunId,
@@ -47,21 +49,21 @@ impl Scheduler {
       version,
       decision,
     };
+    let _one_at_a_time = self.inner.continuing.lock().await;
     if let Some(answer) = self.ask(run, |ack| Control::DecidePlan(request.clone(), ack))
       && let Ok(result) = answer.await
     {
       return result;
     }
-    // No task executes the run (it waits for the decision), or it ended before it read it.
+    // No task executes the run (it waits for the decision), or its task ended without reading it.
     if self.inner.board.is_stopping() {
       return Err(Rejection::ShuttingDown);
     }
     let mut db = self.open()?;
-    let mut stored = idle::load(&db, run)?;
-    record(&mut db, &self.inner.notifier, &mut stored, request)?;
-    let prepared = Prepared::continuing(&db, &self.inner.project_root, stored)?;
-    self.spawn(db, prepared);
-    Ok(())
+    // A run that cannot continue refuses the decision before it is recorded.
+    let mut prepared = Prepared::continuing(&db, &self.inner.project_root, idle::load(&db, run)?)?;
+    record(&mut db, &self.inner.notifier, &mut prepared.run, request)?;
+    self.spawn(db, prepared)
   }
 }
 
