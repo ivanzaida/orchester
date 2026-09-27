@@ -27,7 +27,7 @@ pub enum ChangeState {
   Applied {
     at: Timestamp,
     checkpoint: Option<Revision>,
-    invocation: Option<u32>,
+    invocation: u32,
   },
 }
 
@@ -90,8 +90,8 @@ pub fn run_permissions(
   }))
 }
 
-/// Pending while an agent of the profile waits to restart; applied while the step's latest
-/// execution is the one that restarted and the run has not ended.
+/// Pending while an agent of the profile waits to restart or its new invocation has not started;
+/// applied while the step's latest execution is the one that restarted and the run has not ended.
 fn change_state(
   db: &ProjectDb,
   (run, invocations): (&Run, &[Invocation]),
@@ -126,10 +126,15 @@ fn change_state(
       }),
     None => None,
   };
-  let invocation = invocations
+  // The agent restarts right after the change is recorded as applied; until its new invocation
+  // has started, the change still reads as being applied.
+  let Some(invocation) = invocations
     .iter()
     .find(|invocation| invocation.execution == applied.execution && invocation.started_at >= applied.at)
-    .map(|invocation| invocation.number);
+    .map(|invocation| invocation.number)
+  else {
+    return Ok(Some(ChangeState::Pending));
+  };
   Ok(Some(ChangeState::Applied {
     at: applied.at,
     checkpoint,

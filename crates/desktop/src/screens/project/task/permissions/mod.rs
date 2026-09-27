@@ -311,7 +311,7 @@ fn state_notice(ctx: &Ctx, props: &RunPermissionsProps, keep: &KeepAction) -> Ve
       checkpoint,
       invocation,
     }) => {
-      let invocation = invocation.map_or_else(String::new, |number| number.to_string());
+      let invocation = invocation.to_string();
       let detail = match checkpoint {
         Some(revision) => ctx.t_args(
           "runs.permissions.appliedDetail",
