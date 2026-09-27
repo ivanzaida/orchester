@@ -73,13 +73,13 @@ pub struct ReadDiff {
   pub base: Revision,
   pub head: Revision,
   pub synced_at: Timestamp,
-  pub diff: Diff,
+  pub diff: Arc<Diff>,
 }
 
 impl ReadDiff {
   fn parse(stored: RevisionDiff) -> Result<Self, DetailError> {
     Ok(Self {
-      diff: Diff::parse(&stored.text)?,
+      diff: Arc::new(Diff::parse(&stored.text)?),
       base: stored.base,
       head: stored.head,
       synced_at: stored.read_at,

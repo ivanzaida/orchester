@@ -853,6 +853,15 @@
         "failed": "GitHub did not return the pull request. Refresh tries again; the log has the details."
       }
     },
+    "diff": {
+      "range": "Full PR · {{base}} → {{revision}}",
+      "rangeHead": "Full PR · {{revision}}",
+      "unified": "Unified",
+      "viewed": "Viewed",
+      "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the pull request in GitHub to see them."
+    }
+  },
+  "diff": {
     "files": {
       "heading": "FILES  {{count}}",
       "search": "Find a file…",
@@ -867,30 +876,23 @@
         "copied": "C"
       }
     },
-    "diff": {
-      "range": "Full PR · {{base}} → {{revision}}",
-      "rangeHead": "Full PR · {{revision}}",
-      "unified": "Unified",
-      "viewed": "Viewed",
-      "meta": {
-        "modified": "Modified · +{{additions}} / −{{deletions}}",
-        "added": "Added · +{{additions}} / −{{deletions}}",
-        "deleted": "Deleted · +{{additions}} / −{{deletions}}",
-        "renamed": "Renamed from {{from}} · +{{additions}} / −{{deletions}}",
-        "copied": "Copied from {{from}} · +{{additions}} / −{{deletions}}"
-      },
-      "hunk": "@@ −{{old}} +{{new}} @@",
-      "hunkSection": "@@ −{{old}} +{{new}} @@ {{section}}",
-      "markAdded": "+",
-      "markRemoved": "−",
-      "lineCut": "Line shortened",
-      "noNewline": "No newline at end of file",
-      "binary": "Binary file: its changes are not shown",
-      "mode": "File mode changed from {{old}} to {{new}}",
-      "unchanged": "The content did not change",
-      "empty": "The file is empty",
-      "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the pull request in GitHub to see them."
-    }
+    "meta": {
+      "modified": "Modified · +{{additions}} / −{{deletions}}",
+      "added": "Added · +{{additions}} / −{{deletions}}",
+      "deleted": "Deleted · +{{additions}} / −{{deletions}}",
+      "renamed": "Renamed from {{from}} · +{{additions}} / −{{deletions}}",
+      "copied": "Copied from {{from}} · +{{additions}} / −{{deletions}}"
+    },
+    "hunk": "@@ −{{old}} +{{new}} @@",
+    "hunkSection": "@@ −{{old}} +{{new}} @@ {{section}}",
+    "markAdded": "+",
+    "markRemoved": "−",
+    "lineCut": "Line shortened",
+    "noNewline": "No newline at end of file",
+    "binary": "Binary file: its changes are not shown",
+    "mode": "File mode changed from {{old}} to {{new}}",
+    "unchanged": "The content did not change",
+    "empty": "The file is empty"
   },
   "agents": {
     "breadcrumb": "{{project}} / Agents",
