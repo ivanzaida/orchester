@@ -117,7 +117,7 @@ impl Component for FileList {
         .variant(TypographyStyle::Caption)
         .into()
     } else {
-      let scrollbar = gutter_scrollbar(&ctx.theme().scrollbar());
+      let scrollbar = gutter_scrollbar();
       VirtualizedList::new_shared(ctx, items)
         .list_key("pull-request-files")
         .width(Dimension::Pct(100.0))

@@ -120,7 +120,7 @@ pub fn inspector(
         .id("connection-inspector-details")
         .width(Dimension::Pct(100.0))
         .flex(1.0)
-        .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
+        .scrollbar(gutter_scrollbar()),
     )
     .child(pinned)
     .into()
