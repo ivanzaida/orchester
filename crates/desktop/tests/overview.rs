@@ -31,8 +31,15 @@ fn overview_pulse_counts_running_waiting_and_completed_today() {
   assert_eq!(pulse.completed_today, 1);
   // Completed before the day began does not count as today.
   assert_eq!(Pulse::of(&tasks.phases, support::at(35)).completed_today, 0);
-  assert_eq!(figure(pulse.running), "01");
+}
+
+/// Counts are the plain number everywhere (decided 2026-09-27): never zero-padded.
+#[test]
+fn overview_figures_are_plain_numbers() {
+  assert_eq!(figure(0), "0");
+  assert_eq!(figure(2), "2");
   assert_eq!(figure(12), "12");
+  assert_eq!(figure(128), "128");
 }
 
 #[test]
