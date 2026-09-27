@@ -126,7 +126,7 @@ impl ImportDialog {
       .into()
   }
 
-  /// The kind tabs (`RDOlV`); Secrets is shown but not available.
+  /// The kind tabs (`RDOlV`), form controls of the dialog; Secrets is shown but not available.
   fn tabs(&self, ctx: &Ctx, shown: ImportTab) -> Element {
     let label = |tab| match tab {
       ImportTab::All => ctx.t("projectImport.tabs.all"),
@@ -150,16 +150,19 @@ impl ImportDialog {
       .map(|((tab, id), width)| {
         let chosen = self.tab.clone();
         Tab::new(id, label(tab), height)
+          .in_form()
           .min_width(Dimension::Px(width))
           .selected(tab == shown)
           .on_click(move || chosen.set(Some(tab)))
       });
     let secrets = Tab::new("import-tab-secrets", ctx.t("projectImport.tabs.secrets"), height)
       .min_width(Dimension::Px(TAB_WIDTHS[5]));
+    // The tabs' focus rings reach out of the row, above, below and left of All.
     Row::new()
       .width(Dimension::Pct(100.0))
       .height(height)
       .spacing(SpacingSize::Sm)
+      .overflow_visible()
       .with_children(tabs.chain([secrets]))
       .into()
   }

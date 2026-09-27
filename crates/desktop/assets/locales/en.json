@@ -95,6 +95,27 @@
       },
       "openLog": "Open runner log",
       "restart": "Restart runner"
+    },
+    "card": {
+      "starting": "Starting local runner",
+      "startingDetail": "Agents can start when it’s ready",
+      "online": "Local runner online",
+      "slots": {
+        "one": "{{used}} of {{slots}} agent slot in use",
+        "other": "{{used}} of {{slots}} agent slots in use"
+      },
+      "slotsUnknown": "Agent slots not reported yet",
+      "reconnecting": "Reconnecting to runner",
+      "attempt": "Attempt {{attempt}} of {{limit}}",
+      "attemptInterrupted": {
+        "one": "Attempt {{attempt}} of {{limit}} · run interrupted",
+        "other": "Attempt {{attempt}} of {{limit}} · runs interrupted"
+      },
+      "offline": "Runner offline",
+      "notStarted": "Could not start · see runner log",
+      "notRestarted": "Could not restart · see runner log",
+      "stopping": "Stopping local runner",
+      "stopped": "Local runner stopped"
     }
   },
   "lifecycle": {
@@ -224,6 +245,10 @@
     "activity": {
       "title": "Recent activity",
       "empty": "No runs yet. Runs appear here as they start and finish.",
+      "unreadable": {
+        "one": "No run to show: the latest run of a task could not be read. The task list marks it.",
+        "other": "No run to show: the latest runs of {{count}} tasks could not be read. The task list marks them."
+      },
       "detail": "{{task}} · {{project}} · {{time}}",
       "queued": "Run #{{run}} is waiting to start",
       "running": "Run #{{run}} is running",
@@ -282,7 +307,8 @@
       "succeeded": "Completed",
       "merged": "Merged",
       "failed": "Failed",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "unreadable": "Unreadable"
     },
     "readiness": {
       "ready": "Ready to queue",
@@ -403,7 +429,9 @@
         "cancelled": "Run {{run}} · Attempt {{attempt}} · cancelled",
         "cancelledBeforeStart": "Run {{run}} · cancelled before it started",
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
-        "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted"
+        "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted",
+        "unreadable": "Run {{run}} · could not be read",
+        "unreadableUnnumbered": "Its latest run could not be read"
       },
       "tabs": {
         "summary": "Summary",
@@ -412,6 +440,29 @@
         "activity": "Activity",
         "artifacts": "Artifacts"
       }
+    },
+    "unreadable": {
+      "title": "Run #{{run}} could not be read",
+      "titleUnnumbered": "A run could not be read",
+      "detail": {
+        "invalid": "A value in its record is invalid or unknown to this version of Orchester, so where the run stands is unknown. The database file is kept unchanged, so a newer version can still read the run. The log has the details.",
+        "database": "The database could not read its record, so where the run stands is unknown. The database file is kept unchanged. The log has the details."
+      },
+      "actions": "Cancel, pause, continue, merge and Remove worktree are unavailable for run #{{run}} until it can be read.",
+      "actionsUnnumbered": "Cancel, pause, continue, merge and Remove worktree are unavailable for this run until it can be read.",
+      "otherRuns": {
+        "title": "Other runs of this task",
+        "detail": "They were read as usual. Their changes stay on their branches.",
+        "none": "This task has no other runs.",
+        "run": "Run #{{run}}",
+        "runUnnumbered": "Run",
+        "failedAt": "Failed at {{step}}",
+        "cancelledAt": "Cancelled at {{step}} · work kept on {{branch}}",
+        "cancelled": "Cancelled · work kept on {{branch}}",
+        "cancelledBeforeStart": "Cancelled before it started"
+      },
+      "tabDetail": "Nothing this run did can be shown until its record can be read. Summary lists the task’s other runs.",
+      "rejected": "This run could not be read, so it cannot change. The database file is kept unchanged."
     },
     "step": {
       "pending": "Waiting",
@@ -757,6 +808,7 @@
       "merging": "Merging…",
       "unavailable": "Merge is unavailable: this run didn’t record the branch your checkout had when it started (it started before Orchester kept it, or on a detached HEAD). Merge its branch yourself with git.",
       "mergedTitle": "Merged into {{branch}}",
+      "noticeDetail": "{{merged}} {{left}}",
       "mergedDetail": {
         "fastForward": "{{branch}} moved forward to {{revision}} at {{time}}.",
         "mergeCommit": "Merge commit {{revision}} joined the run’s work into {{branch}} at {{time}}.",
@@ -1833,6 +1885,7 @@
     "seconds": "{{count}} s",
     "minutes": "{{count}} min",
     "date": "{{month}} {{day}}, {{year}}",
+    "dayAndClock": "{{month}} {{day}} · {{time}}",
     "month": {
       "jan": "Jan",
       "feb": "Feb",
@@ -2245,6 +2298,8 @@
       "fromVersionToLatest": "From {{version}} to the latest version",
       "compareInvalid": "Draft v{{draft}} has problems to fix before it can be compared.",
       "noDifferences": "No differences",
+      "changedInDraft": "Changed in draft v{{draft}}",
+      "changedInLatest": "Changed in the latest version",
       "restore": "Restore {{version}} as draft",
       "confirmRestore": "Replace draft v{{draft}}? Click again",
       "backToEditor": "Back to editing",
@@ -2474,8 +2529,7 @@
     },
     "option": {
       "copy": "New copy · {{name}}",
-      "rename": "Rename copy · {{name}}",
-      "renameBlank": "Rename copy",
+      "rename": "Rename copy",
       "useResource": "Use {{name}} · {{version}}",
       "useConnection": "Use {{name}}",
       "useSecret": "Use {{name}} · {{environment}}",

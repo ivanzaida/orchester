@@ -1,7 +1,7 @@
 //! Shell sidebar (`zo9Py`). Overview, Tasks, Pull requests, Pipelines, Instructions, Agents, Tools, Secrets,
 //! Connections and Project settings open their screens and Import resources opens over the screen shown; every
 //! other entry is shown but unavailable. The runner card
-//! (`O2Jjjf`) is not shown: the status bar reports the runner on every screen.
+//! (`O2Jjjf`) above Project settings shows the project's runner.
 
 use lurq::{
   app::{
@@ -13,14 +13,19 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 
-use super::{ProjectNav, TasksState};
+use super::{ProjectNav, TasksState, runner_card::runner_card};
 use crate::{
   navigation::{
     import::ImportTab,
     route::{AgentSelection, InstructionsTab, Page, SettingsTab, ToolSelection},
   },
+  runner::RunnerStatus,
   theme::{ExtraColor, ExtraSpacing},
-  ui::{brand::brand, icon::Icon, nav_item::NavItem},
+  ui::{
+    brand::brand,
+    icon::{Icon, IconSize, icon},
+    nav_item::NavItem,
+  },
   workspace::OpenProject,
 };
 
@@ -31,8 +36,15 @@ const CURRENT_PROJECT_HEIGHT: f32 = 70.0;
 const SELECTOR_HEIGHT: f32 = 42.0;
 const AVATAR_SIZE: f32 = 24.0;
 
-/// `shown` is the page shown; `None` while the path names no page.
-pub fn sidebar(ctx: &Ctx, open: &OpenProject, shown: Option<Page>, tasks: &TasksState, nav: &ProjectNav) -> Element {
+/// What the sidebar shows besides the navigation: the page shown (`None` while the path names no
+/// page), the project's tasks and its runner.
+pub struct SidebarState<'a> {
+  pub shown: Option<Page>,
+  pub tasks: &'a TasksState,
+  pub runner: &'a RunnerStatus,
+}
+
+pub fn sidebar(ctx: &Ctx, open: &OpenProject, state: &SidebarState<'_>, nav: &ProjectNav) -> Element {
   Column::new()
     .width(Dimension::Px(SIDEBAR_WIDTH))
     .height(Dimension::Pct(100.0))
@@ -40,7 +52,7 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject, shown: Option<Page>, tasks: &Tasks
     .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Column::new().padding_horizontal(SpacingSize::Lg).child(brand(ctx)))
     .child(project_selector(open))
-    .child(primary_navigation(ctx, shown, tasks, nav))
+    .child(primary_navigation(ctx, state.shown, state.tasks, nav))
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
@@ -51,7 +63,7 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject, shown: Option<Page>, tasks: &Tasks
         .child(import_item(ctx, nav)),
     )
     .child(Spacer::new().flex(1.0))
-    .child(footer(ctx, shown, nav))
+    .child(footer(ctx, open, state, nav))
     .into()
 }
 
@@ -63,8 +75,8 @@ fn import_item(ctx: &Ctx, nav: &ProjectNav) -> NavItem {
     .on_click(move || nav.show_import(ImportTab::All))
 }
 
-/// The current project. Switching needs All projects, which does not exist yet, so the
-/// selector has no switch control.
+/// The current project, with the switch mark as drawn. Switching needs All projects, which does
+/// not exist yet, so the selector is not interactive, as All projects is unavailable.
 fn project_selector(open: &OpenProject) -> Element {
   let name = open.project.name().as_str();
   let initial: String = name.chars().next().into_iter().flat_map(char::to_uppercase).collect();
@@ -85,14 +97,15 @@ fn project_selector(open: &OpenProject) -> Element {
         .id("project-selector")
         .width(Dimension::Pct(100.0))
         .height(Dimension::Px(SELECTOR_HEIGHT))
-        .padding(SpacingSize::Sm)
-        .spacing(SpacingSize::Sm)
+        .padding(ExtraSpacing::Field.role())
+        .spacing(ExtraSpacing::Field.role())
         .align_items(Alignment::Center)
         .background(PaletteColor::SurfaceRaised)
         .border(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
         .rounded(RadiusSize::Md)
         .child(avatar)
-        .child(Text::new(name).variant(TypographyStyle::Label).nowrap().flex(1.0)),
+        .child(Text::new(name).variant(TypographyStyle::Label).nowrap().flex(1.0))
+        .child(icon(Icon::ChevronsUpDown, IconSize::Small, PaletteColor::TextSecondary).id("project-selector-switch")),
     )
     .into()
 }
@@ -150,15 +163,18 @@ fn primary_navigation(ctx: &Ctx, shown: Option<Page>, tasks: &TasksState, nav: &
     .into()
 }
 
-fn footer(ctx: &Ctx, shown: Option<Page>, nav: &ProjectNav) -> Element {
+/// The runner card and Project settings (`PAgSR`).
+fn footer(ctx: &Ctx, open: &OpenProject, state: &SidebarState<'_>, nav: &ProjectNav) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(ExtraSpacing::Stack.role())
     .padding_horizontal(SpacingSize::Md)
     .padding_bottom(ExtraSpacing::Step.role())
+    .spacing(ExtraSpacing::Group.role())
+    .child(runner_card(ctx, open, state.runner))
     .child(section_item(
       NavItem::new("nav-settings", Icon::Settings, ctx.t("nav.projectSettings")).compact(),
-      shown,
+      state.shown,
       Page::Settings(SettingsTab::General),
       nav,
     ))

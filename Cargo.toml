@@ -38,6 +38,13 @@ apple-native-keyring-store = { version = "1", features = ["keychain"] }
 # Local wall-clock time of status bar events and the local day of the daily project budget (the OS
 # time zone); std has no local time.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# Compiles the Windows resource script with the application icon and links it into `orchester.exe`
+# (desktop build script, Windows only). It finds the Windows SDK's resource compiler for the MSVC
+# toolchain in use, which the build script cannot do in a few lines.
+embed-resource = "3"
+# Decodes the bundled PNG of the window icon. Already compiled with its PNG decoder for lurq's
+# clipboard (arboard), so it adds no crate to the build.
+image = { version = "0.25", default-features = false, features = ["png"] }
 # The common API of the keyring crates' OS keychain stores, which `orchester-vault` uses on Windows
 # and macOS. Applications that pick their stores link it with the stores they need instead of
 # the `keyring` facade (keyring-rs wiki, "Keyring").

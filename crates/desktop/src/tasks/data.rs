@@ -16,7 +16,8 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   detail::run_store_error,
-  list::{Awaited, AwaitedPlan, AwaitedQuestion, LatestRun, Phases},
+  list::{Awaited, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, Phases},
+  unreadable::Unreadable,
 };
 
 /// A pipeline a task can use: one with a published version.
@@ -34,9 +35,9 @@ pub struct PipelineChoice {
 pub struct ProjectTasks {
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
-  /// The phase of each task that has a run, from its latest run.
+  /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
-  /// Runs started in the project, of every task.
+  /// Runs started in the project, of every task, that can be read.
   pub runs: usize,
   /// Runs recorded as running that lost their agent because no runner is connected; 0 while
   /// one is ([`Self::without_runner`]).
@@ -53,20 +54,13 @@ impl ProjectTasks {
     let mut count = 0;
     for task in &tasks {
       let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
-      count += runs.len();
-      if let Some(latest) = runs.last() {
-        let updated_at = db
-          .events(latest.id())
-          .map_err(run_store_error)?
-          .last()
-          .map_or_else(|| latest.created_at(), RunEvent::at);
-        let awaited = awaited(&db, latest)?;
-        let merge = db.run_merge(latest.id())?;
-        phases.insert(
-          task.id(),
-          LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited),
-        );
-      }
+      count += runs.iter().filter(|run| run.is_ok()).count();
+      let latest = match runs.last() {
+        Some(Ok(latest)) => Latest::Run(latest_run(&db, task, latest)?),
+        Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
+        None => continue,
+      };
+      phases.insert(task.id(), latest);
     }
     Ok(Self {
       tasks: Arc::new(tasks),
@@ -88,7 +82,12 @@ impl ProjectTasks {
       .collect();
     let lost_to_runner = phases
       .iter()
-      .filter(|(task, latest)| self.phases.get(task).is_some_and(|before| before.phase != latest.phase))
+      .filter(|(task, latest)| {
+        self
+          .phases
+          .get(task)
+          .is_some_and(|before| before.phase() != latest.phase())
+      })
       .count();
     Self {
       phases: Arc::new(phases),
@@ -96,6 +95,18 @@ impl ProjectTasks {
       ..self.clone()
     }
   }
+}
+
+/// `latest`, a run of `task`, with when it last changed and what it waits for.
+pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<LatestRun, StoreError> {
+  let updated_at = db
+    .events(latest.id())
+    .map_err(run_store_error)?
+    .last()
+    .map_or_else(|| latest.created_at(), RunEvent::at);
+  let awaited = awaited(db, latest)?;
+  let merge = db.run_merge(latest.id())?;
+  Ok(LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited))
 }
 
 /// The plan `run` waits on a decision for, or the question it waits for an answer to, with the agent

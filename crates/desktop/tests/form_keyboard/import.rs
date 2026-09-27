@@ -25,7 +25,7 @@ use orchester_core::{
 use orchester_desktop::activity::{Place, Target};
 use orchester_store::ProjectDb;
 
-use crate::harness::Desktop;
+use crate::harness::{Desktop, expected};
 
 fn name(value: &str) -> Name {
   Name::new(value).expect("valid name")
@@ -151,6 +151,37 @@ fn choose(desktop: &mut Desktop, id: &str, label: &str) {
   desktop.pass();
 }
 
+fn selected(desktop: &mut Desktop, id: &str) -> Vec<String> {
+  desktop
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_select())
+    .unwrap_or_else(|| panic!("the select {id}"))
+    .selected_labels()
+    .iter()
+    .map(ToString::to_string)
+    .collect()
+}
+
+fn type_name(desktop: &mut Desktop, id: &str, name: &str) {
+  desktop
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_text_input())
+    .expect("the name of the copy")
+    .set_value(name);
+  desktop.pass();
+}
+
+/// Whether `id` is drawn with the error stroke.
+fn invalid(desktop: &mut Desktop, id: &str) -> bool {
+  desktop
+    .tree
+    .get_element_by_id(id)
+    .unwrap_or_else(|| panic!("{id} is shown"))
+    .has_class("invalid")
+}
+
 /// Kontur with Personal website beside it, the import open from the sidebar with Preview release
 /// selected and its dependencies shown.
 fn resolving(kontur: impl FnOnce(&Path)) -> (Desktop, Source, ConnectionId) {
@@ -273,21 +304,28 @@ fn import_needs_a_rename_when_kontur_has_the_name() {
     "Rename Preview release to continue."
   ));
 
-  choose(
-    &mut desktop,
-    &format!("import-choice-{}", source.pipeline),
-    "Rename copy",
-  );
+  let choice = format!("import-choice-{}", source.pipeline);
+  choose(&mut desktop, &choice, "Rename copy");
   let rename = format!("import-rename-{}", source.pipeline);
   desktop.wait_for(&rename);
-  desktop
-    .tree
-    .get_element_by_id_mut(&rename)
-    .and_then(|element| element.as_text_input())
-    .expect("the name of the copy")
-    .set_value("Website preview");
-  desktop.pass();
+  // The name is in the field beside the select, which reads just Rename copy (06.C `FKzQ9`). The
+  // field starts with the source's name, which Kontur has: the field shows the error.
+  assert_eq!(selected(&mut desktop, &choice), ["Rename copy"]);
+  assert!(shows(&mut desktop, &pipeline, "Name taken"));
+  assert!(invalid(&mut desktop, &rename));
+  type_name(&mut desktop, &rename, "");
+  assert!(shows(&mut desktop, &pipeline, "Name needed"));
+  assert!(shows(&mut desktop, &pipeline, "Enter a name for the copy"));
+  assert!(shows(
+    &mut desktop,
+    "import-readiness",
+    "Name the copy of Preview release to continue."
+  ));
+  assert!(invalid(&mut desktop, &rename));
+  type_name(&mut desktop, &rename, "Website preview");
   assert!(shows(&mut desktop, &pipeline, "Name resolved"));
+  assert!(!invalid(&mut desktop, &rename));
+  assert_eq!(selected(&mut desktop, &choice), ["Rename copy"]);
   desktop.press("import-submit");
   desktop.wait_for("pipeline-state");
 
@@ -313,5 +351,57 @@ fn import_closes_back_to_the_page_it_was_opened_over() {
     resources(desktop.repo(), ResourceKind::Pipeline),
     [],
     "closing imports nothing"
+  );
+}
+
+/// Kontur with Personal website beside it, the import open from the sidebar, listing Personal
+/// website's resources.
+fn opened() -> (Desktop, Source) {
+  let mut source = None;
+  let mut desktop = Desktop::with_other_project(|repo| source = Some(seed_source(repo)), |_| {});
+  let source = source.expect("seeded");
+  desktop.wait_for("nav-import");
+  desktop.press("nav-import");
+  desktop.wait_for(&format!("import-resource-{}", source.pipeline));
+  (desktop, source)
+}
+
+#[test]
+fn import_escape_closes_it_like_every_dialog() {
+  let (mut desktop, _) = opened();
+
+  desktop.key("Escape", "Escape");
+
+  assert!(desktop.tree.get_element_by_id("import-dialog").is_none());
+  assert!(desktop.tree.get_element_by_id("nav-import").is_some());
+  // Closed for good: the page under it does not open it again.
+  desktop.pass();
+  assert!(desktop.tree.get_element_by_id("import-dialog").is_none());
+}
+
+#[test]
+fn import_tab_reaches_the_kind_tabs_between_the_source_and_the_search() {
+  let (mut desktop, source) = opened();
+  desktop.tab_to("import-tab-all", 10);
+  let order = [
+    Some("import-tab-pipelines"),
+    Some("import-tab-agents"),
+    Some("import-tab-instructions"),
+    Some("import-tab-tools"),
+    // Secrets cannot be imported: its tab is no stop.
+    Some("import-search"),
+  ];
+  assert_eq!(desktop.stops(order.len(), false), expected(&order));
+
+  // Enter selects the focused tab, which keeps the focus.
+  desktop.tab_to("import-tab-agents", 20);
+  desktop.enter();
+  assert_eq!(desktop.focused().as_deref(), Some("import-tab-agents"));
+  assert!(
+    desktop
+      .tree
+      .get_element_by_id(&format!("import-resource-{}", source.pipeline))
+      .is_none(),
+    "the Agents tab lists no pipeline"
   );
 }

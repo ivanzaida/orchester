@@ -22,8 +22,11 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::permissions::run_permissions;
 pub use super::permissions::{ChangeState, RunPermissions};
+use super::{
+  permissions::run_permissions,
+  unreadable::{EarlierRun, Unreadable},
+};
 
 /// One step of the run's pipeline and its latest execution.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -170,16 +173,26 @@ impl RunView {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TaskDetail {
   pub task: Task,
+  /// The latest run, when it can be read.
   pub run: Option<RunView>,
   /// The merge of the latest run into its base branch, once it was merged.
   pub merge: Option<RunMerge>,
   /// The task's conversation, oldest first.
   pub messages: Vec<Message>,
+  /// The latest run, when it cannot be read (02.R `SUuwV`): `run` is `None`, and the page lists
+  /// the task's other runs instead.
+  pub latest_unreadable: Option<Unreadable>,
+  /// The task's other runs, newest first, while its latest run cannot be read.
+  pub earlier: Vec<EarlierRun>,
+  /// The task's earlier runs that cannot be read, oldest first, while its latest run can be.
+  pub earlier_unreadable: Vec<Unreadable>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskDetail {}
 
 impl TaskDetail {
+  /// Where the task stands, from its latest run; as for a task without runs while that run cannot
+  /// be read.
   pub fn phase(&self) -> TaskPhase {
     TaskPhase::of(&self.task, self.run.as_ref().map(|run| &run.run), self.merge.as_ref())
   }
@@ -194,23 +207,49 @@ impl TaskDetail {
   pub fn load_in(repo_root: &Path, task: TaskId) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let task = db.task(task)?.ok_or(StoreError::TaskNotFound(task))?;
-    let latest = db
-      .runs_of_task(task.id())
-      .map_err(run_store_error)?
-      .into_iter()
-      .next_back();
+    let mut runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
+    let messages = db.messages(task.id())?;
+    let latest = runs.pop();
+    if let Some(Err(latest)) = &latest {
+      let earlier = runs
+        .iter()
+        .rev()
+        .map(|run| EarlierRun::read(&db, &task, run))
+        .collect::<Result<_, _>>()?;
+      return Ok(Self {
+        latest_unreadable: Some(Unreadable::of(latest)),
+        earlier,
+        ..Self::without_runs(task, messages)
+      });
+    }
+    let earlier_unreadable = runs
+      .iter()
+      .filter_map(|run| run.as_ref().err())
+      .map(Unreadable::of)
+      .collect();
+    let latest = latest.and_then(Result::ok);
     let merge = match &latest {
       Some(run) => db.run_merge(run.id())?,
       None => None,
     };
-    let run = latest.map(|run| run_view(&db, run)).transpose()?;
-    let messages = db.messages(task.id())?;
     Ok(Self {
-      task,
-      run,
+      run: latest.map(|run| run_view(&db, run)).transpose()?,
       merge,
-      messages,
+      earlier_unreadable,
+      ..Self::without_runs(task, messages)
     })
+  }
+
+  fn without_runs(task: Task, messages: Vec<Message>) -> Self {
+    Self {
+      task,
+      run: None,
+      merge: None,
+      messages,
+      latest_unreadable: None,
+      earlier: Vec::new(),
+      earlier_unreadable: Vec::new(),
+    }
   }
 }
 

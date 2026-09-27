@@ -106,6 +106,22 @@ pub fn clock(at: Timestamp) -> String {
   clock_time(UNIX_EPOCH + Duration::from_millis(millis))
 }
 
+/// The i18n keys of the months' short names, January first.
+pub const MONTH_KEYS: [&str; 12] = [
+  "time.month.jan",
+  "time.month.feb",
+  "time.month.mar",
+  "time.month.apr",
+  "time.month.may",
+  "time.month.jun",
+  "time.month.jul",
+  "time.month.aug",
+  "time.month.sep",
+  "time.month.oct",
+  "time.month.nov",
+  "time.month.dec",
+];
+
 /// A revision as people read it: its first seven characters.
 pub fn short_revision(revision: &str) -> &str {
   revision.get(..7).unwrap_or(revision)

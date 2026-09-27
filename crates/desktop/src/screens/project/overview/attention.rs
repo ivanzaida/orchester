@@ -21,7 +21,7 @@ use crate::{
   tasks::{
     data::ProjectTasks,
     list::{AwaitedPlan, TaskRow},
-    overview::{OverviewTab, RecentRun, figure, recent_runs},
+    overview::{OverviewTab, RecentRun, activity_empty, figure, recent_runs},
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
@@ -166,7 +166,8 @@ fn activity(ctx: &Ctx, open: &OpenProject, tasks: &ProjectTasks, nav: &ProjectNa
   let recent = recent_runs(&tasks.tasks, &tasks.phases, SHOWN);
   let events: Vec<Element> = if recent.is_empty() {
     vec![
-      Text::new(&ctx.t("overview.activity.empty"))
+      Text::new(&message_text(ctx, &activity_empty(&tasks.phases)))
+        .id("overview-activity-empty")
         .variant(TypographyStyle::Caption)
         .into(),
     ]

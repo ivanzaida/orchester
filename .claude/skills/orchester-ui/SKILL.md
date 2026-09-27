@@ -93,12 +93,14 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `muted` #A3A3A3 | `TextSecondary` |
 | `subtle` #8F8F8F | `TextMuted`, `BorderStrong` |
 | `accent` / `inverse-text` | `Accent` / `TextInverse` — primary action |
+| `danger` #F87171 | `PaletteColor::Danger` — only the *Unreadable* status label's icon and word (`mGbYs`) |
 | `radius-control` 7 / `radius-panel` 12 / nav item 6 | `RadiusSize::Md` / `Lg` / `Sm` |
 | `space-sm/md/lg` 8/16/24 | `SpacingSize::Sm/Md/Lg` |
 | stroke 1 / focus stroke 1.5 / selected tab underline 2 | `BorderSize::Sm` / `Md` / `Lg` |
 | form group gap 22 (`xT2ex`, `dCLMl`) | `ExtraSpacing::Form.role()` |
 | lifecycle dialog width 880 at most, 32 from the window's side edges (`um9B1`, `KS2RU`, `BovYZ`) | `theme::LIFECYCLE_DIALOG_WIDTH` / `ExtraSpacing::DialogMargin.role()` (backdrop padding) |
 | Summary column padding beside its scroll gutter, 32 less the 12px gutter (`JV8S8` in `ZVdRa`) | `ExtraSpacing::BesideGutter.role()` |
+| what a check row says under its title, indented past its icon and gap (`gzztk` in `LMrbK`) | `ExtraSpacing::CheckIndent.role()` |
 | note field padding (`NbNN0`, the changes a plan needs) | `ExtraSpacing::TextArea.role()` |
 | agent-written Markdown (a plan under review, 02.11): headings step up from the body, code in the `code-*` colors, quotes and tables in the chrome's borders | lurq `ThemeMarkdown` from `theme::markdown` (headings 14/13/12 medium); call sites pass the text style (`AgentText`) |
 | select menu radius 11 / padding 4 (`u0ByM`) | `ExtraRadius::SelectMenu.role()` / `ExtraSpacing::SelectMenu.role()` |
@@ -142,6 +144,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::MonoTag.role()` | mono 9 muted | tag beside an inspector title ("STEP 05", `kAJZA`) |
 | `ExtraTypography::MonoValue.role()` | mono 11 | key/value property value, slug (`yeeIR`, `cJsA7`) |
 | `ExtraTypography::MonoField.role()` | mono 12 | path in a field, e.g. the project folder (`ObbY7` in `xZAZc`, `F5KwDR`) |
+| `ExtraTypography::MonoArea.role()` | mono 12, 1.6 | `NAME=value` lines in a mono text area, e.g. the project's environment (`f0e2Hv` in `BGMgO`) |
+| `ExtraTypography::ChangeLine.role()` | 12, 1.4 | a change of a pipeline version in the version history (`o6to5` in `DOroV`) |
 | `ExtraTypography::Instructions.role()` | 12, 1.65 | step instructions (`v1Ky8`) |
 | `ExtraTypography::Hint.role()` | 10 muted, 1.5 | explanation under a field (`k66CB`) |
 | `ExtraTypography::VersionFigure.role()` | 18/500 | version in the publish confirmation (`p8L552`) |

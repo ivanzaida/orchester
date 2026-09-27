@@ -1,7 +1,7 @@
 //! *Remove worktree* for a run that ended (succeeded, failed or cancelled) and still has worktrees
-//! in `.orchester/worktrees/`: its own and those of steps that ran beside others and were kept. No
-//! design exists yet; the button sits in the topbar where the run controls are while a run works
-//! (`ctwcG`), and the confirmation follows the dialogs of the app (`jYL1V`, see [`dialog`]). Git
+//! in `.orchester/worktrees/`: its own and those of steps that ran beside others and were kept. The
+//! button sits in the topbar where the run controls are while a run works (`ctwcG`, 02.P `GIiCb`),
+//! and the confirmation follows the dialogs of the app (`jYL1V`; 02.Q `LMrbK`, see [`dialog`]). Git
 //! removes the worktrees, build output included; committed work stays on the branches, and only
 //! branches whose commits are merged are deleted. A worktree with uncommitted changes is removed
 //! only after the person switched *Discard the uncommitted changes listed above* on, and only with

@@ -82,3 +82,7 @@ without a bundle: build with `--target-dir "$HOME/Library/Application Support/Or
 and copy `orchester` and `orchester-runner` into `~/Library/Application Support/Orchester/app`.
 Copy each program to a new file and move it into place rather than overwriting it: macOS can
 kill a program whose file was changed in place, because it caches the code signature.
+
+Without a bundle, the Dock shows a generic program icon. The application icon for a future
+`.app` bundle is `crates/desktop/assets/icon/orchester.icns`; [app-icon.md](app-icon.md) says
+how the bundle uses it (`CFBundleIconFile`).

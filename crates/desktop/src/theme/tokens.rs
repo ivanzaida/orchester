@@ -14,6 +14,8 @@ pub const MUTED: &str = "#A3A3A3";
 pub const SUBTLE: &str = "#8F8F8F";
 pub const ACCENT: &str = "#E6E6E6";
 pub const INVERSE_TEXT: &str = "#181818";
+/// The one status colour: the *Unreadable* status label's icon and word (Pencil `danger`, `mGbYs`).
+pub const DANGER: &str = "#F87171";
 /// Backdrop behind the close dialog (`a8U756`).
 pub const SCRIM: &str = "#000000A6";
 
@@ -98,6 +100,9 @@ pub const SPACE_DIALOG_MARGIN: f32 = 32.0;
 /// Padding of a note field (`NbNN0`, the changes a plan needs).
 pub const SPACE_TEXT_AREA: f32 = 14.0;
 pub const SPACE_BESIDE_GUTTER: f32 = 20.0;
+/// A check row's detail under its title: the row's icon and the gap after it (`gzztk` in 02.Q
+/// `LMrbK`).
+pub const SPACE_CHECK_INDENT: f32 = 28.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;

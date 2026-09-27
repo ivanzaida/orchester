@@ -1,10 +1,10 @@
-//! Project settings / Environment (not drawn yet; it follows the Limits tab, 02.M `c7e729`): the
+//! Project settings / Environment (02.O `tXahd`, laid out like the Limits tab, 02.M `c7e729`): the
 //! variables the project adds to the environment of every agent CLI and command tool its runs
 //! start, on top of the cleaned environment every program gets, as `NAME=value` lines like a
 //! command tool's (06.02 `YEWFo`). They save when the field is left, once every line is valid; the
 //! topbar says whether all changes are saved. A Rust repository without `CARGO_TARGET_DIR` gets a
-//! suggestion to share one build folder between the runs' worktrees; nothing is set until the
-//! person adds it.
+//! suggestion to share one build folder between the runs' worktrees (`CMSyB`); nothing is set until
+//! the person adds it.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -12,7 +12,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, ScrollVertical, Text},
   core::Signal,
@@ -26,7 +26,7 @@ use crate::{
   background,
   environment::{CARGO_TARGET_DIR, ProjectEnvironment, save_in},
   messages::{self, Message},
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraSpacing, ExtraTypography},
   tools::form::{environment_text, parse_environment},
   ui::{
     button::ActionButton,
@@ -39,8 +39,10 @@ use crate::{
   workspace::OpenProject,
 };
 
-/// Lines the variables field shows before it scrolls, as a command tool's (`YEWFo`).
+/// Lines the variables field shows before it scrolls, as a command tool's (`YEWFo`), and the height
+/// of *Add CARGO_TARGET_DIR* (`IgW07`).
 const AREA_ROWS: (usize, usize) = (4, 12);
+const ADD_TARGET_HEIGHT: f32 = 32.0;
 
 #[derive(Clone)]
 pub struct EnvironmentProps {
@@ -125,8 +127,13 @@ impl Component for EnvironmentTab {
       .padding_vertical(SpacingSize::Lg)
       .padding_horizontal(SpacingSize::Section)
       .spacing(SpacingSize::Md)
-      .child(Text::new(&ctx.t("settings.environment.heading")).variant(ExtraTypography::SectionHeading.role()))
-      .child(Text::new(&ctx.t("settings.environment.detail")).variant(ExtraTypography::Explanation.role()))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(SpacingSize::Sm)
+          .child(Text::new(&ctx.t("settings.environment.heading")).variant(ExtraTypography::SectionHeading.role()))
+          .child(Text::new(&ctx.t("settings.environment.detail")).variant(ExtraTypography::Explanation.role())),
+      )
       .child(self.variables(ctx, error.as_ref(), &commit))
       .with_children(self.suggestion(ctx, &commit))
       .child(
@@ -149,7 +156,7 @@ impl EnvironmentTab {
   /// be used.
   fn variables(&self, ctx: &Ctx, error: Option<&Message>, commit: &Arc<dyn Fn() + Send + Sync>) -> Element {
     let blur = commit.clone();
-    let input = styled_input(ctx, self.text.clone(), ExtraTypography::MonoField.role())
+    let input = styled_input(ctx, self.text.clone(), ExtraTypography::MonoArea.role())
       .id("settings-environment-variables")
       .textarea()
       .rows(AREA_ROWS.0, AREA_ROWS.1)
@@ -167,14 +174,14 @@ impl EnvironmentTab {
           PaletteColor::Border
         },
       ))
-      .rounded(ExtraRadius::Notice.role())
+      .rounded(RadiusSize::Md)
       .child(input);
     let note = error.map_or(FieldNote::None, |error| FieldNote::Error(message_text(ctx, error)));
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(field(&ctx.t("settings.environment.variables"), area.into(), note))
-      .child(Text::new(&ctx.t("settings.environment.hint")).variant(TypographyStyle::Caption))
+      .child(Text::new(&ctx.t("settings.environment.hint")).variant(ExtraTypography::Hint.role()))
       .into()
   }
 
@@ -197,6 +204,7 @@ impl EnvironmentTab {
       .icon(Icon::Plus)
       .id("settings-environment-add-target")
       .in_form()
+      .height(Dimension::Px(ADD_TARGET_HEIGHT))
       .on_click(move || {
         text.update(|text| {
           if !text.is_empty() && !text.ends_with('\n') {
