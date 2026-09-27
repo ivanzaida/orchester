@@ -115,6 +115,7 @@ impl Desktop {
       no_programs(),
       PathBuf::from("no-runner.exe"),
       Some(Box::new(seed)),
+      None,
     )
   }
 
