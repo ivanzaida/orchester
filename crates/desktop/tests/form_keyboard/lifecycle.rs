@@ -297,6 +297,11 @@ fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   });
   assert!(text_of(
     &mut desktop,
+    "task-notice",
+    "Builder was stopped after its turn and its work was committed as a checkpoint."
+  ));
+  assert!(text_of(
+    &mut desktop,
     "task-progress-steps",
     "Stopped at limit · attempt 1 ·"
   ));

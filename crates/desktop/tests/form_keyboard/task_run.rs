@@ -320,6 +320,12 @@ fn run_controls_raise_the_limit_of_a_run_stopped_at_it_and_continue() {
     "task-notice",
     "Stopped at the token limit · checkpoint"
   ));
+  // Token counts arrive when a turn ends, so the agent was stopped after its turn.
+  assert!(shows(
+    &mut desktop,
+    "task-notice",
+    "Builder was stopped after its turn and its work was committed as a checkpoint."
+  ));
   assert!(shows(
     &mut desktop,
     "task-progress-steps",
