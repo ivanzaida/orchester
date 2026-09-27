@@ -7,7 +7,7 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   resource::{AgentProfile, Pipeline, ResourceKind, VersionNumber},
   run::{Run, RunEvent, StepExecutor},
-  store::{ResourceStore, RunStore, TaskStore},
+  store::{MergeStore, ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
   time::Timestamp,
 };
@@ -60,7 +60,11 @@ impl ProjectTasks {
           .last()
           .map_or_else(|| latest.created_at(), RunEvent::at);
         let plan = awaited_plan(&db, latest)?;
-        phases.insert(task.id(), LatestRun::of(task, latest, updated_at, plan));
+        let merge = db.run_merge(latest.id())?;
+        phases.insert(
+          task.id(),
+          LatestRun::of(task, (latest, merge.as_ref()), updated_at, plan),
+        );
       }
     }
     Ok(Self {

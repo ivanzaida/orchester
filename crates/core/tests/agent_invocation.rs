@@ -2,6 +2,7 @@
 //! and how its token usage is counted and shown.
 
 use std::{
+  collections::BTreeMap,
   ffi::OsString,
   path::{Path, PathBuf},
 };
@@ -14,7 +15,7 @@ use orchester_core::{
     rank_installed,
   },
   permission::NetworkAccess,
-  resource::RepositoryAccess,
+  resource::{CommandEnvironment, RepositoryAccess, VariableName},
   run::TokenUsage,
   tokens::compact_tokens,
 };
@@ -130,7 +131,9 @@ fn invocation_resume_continues_the_session_with_the_sandbox_as_configuration() {
       .iter()
       .any(|arg| arg == "-C" || arg == "--sandbox" || arg.contains("dangerously"))
   );
-  let command = resume.command("Continue.".to_owned(), Vec::new()).expect("unicode");
+  let command = resume
+    .command("Continue.".to_owned(), Vec::new(), &CommandEnvironment::default())
+    .expect("unicode");
   assert_eq!(command.current_dir(), Some(Path::new("/repo/.orchester/worktrees/run")));
 }
 
@@ -193,7 +196,7 @@ fn invocation_command_runs_in_the_worktree_with_the_prompt_on_stdin_and_a_clean_
   ]
   .map(|(name, value)| (OsString::from(name), OsString::from(value)));
   let command = invocation(RepositoryAccess::Write, Platform::Windows)
-    .command("Do it".into(), environment)
+    .command("Do it".into(), environment, &CommandEnvironment::default())
     .expect("unicode worktree");
   assert_eq!(command.program(), Path::new("/bin/codex"));
   assert_eq!(command.current_dir(), Some(Path::new("/repo/.orchester/worktrees/run")));
@@ -201,6 +204,32 @@ fn invocation_command_runs_in_the_worktree_with_the_prompt_on_stdin_and_a_clean_
   assert!(!command.inherits_env());
   let names: Vec<&str> = command.env().iter().map(|(name, _)| name.as_str()).collect();
   assert_eq!(names, ["PATH", "Path", "HOME", "CODEX_HOME", "SystemRoot"]);
+}
+
+#[test]
+fn invocation_command_adds_the_project_variables_over_the_allowed_ones() {
+  let environment = [("Path", "C:\\Windows"), ("GH_TOKEN", "secret"), ("HOME", "/home/me")]
+    .map(|(name, value)| (OsString::from(name), OsString::from(value)));
+  let project = CommandEnvironment::new(BTreeMap::from([
+    (variable("CARGO_TARGET_DIR"), "/repo/.orchester/target".to_owned()),
+    (variable("PATH"), "/opt/tools".to_owned()),
+  ]))
+  .expect("valid variables");
+  let command = invocation(RepositoryAccess::Write, Platform::Windows)
+    .command("Do it".into(), environment, &project)
+    .expect("unicode worktree");
+  assert_eq!(
+    command.env(),
+    [
+      ("HOME".to_owned(), "/home/me".to_owned()),
+      ("CARGO_TARGET_DIR".to_owned(), "/repo/.orchester/target".to_owned()),
+      ("PATH".to_owned(), "/opt/tools".to_owned()),
+    ]
+  );
+}
+
+fn variable(name: &str) -> VariableName {
+  VariableName::new(name).expect("a valid variable name")
 }
 
 #[test]

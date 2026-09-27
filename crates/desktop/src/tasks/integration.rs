@@ -1,0 +1,221 @@
+//! Integrating a task's latest run (02.13 `vpgrJ`): merging it into the branch the user's checkout
+//! had when it started, recording the merge, and removing what the run left — its worktrees and
+//! its merged branches — right after the merge, or for a run that ended once a person confirms it.
+//! The rules are core's (`orchester_core::integration`); this reads and records what they need.
+//! Blocks on SQLite and git; the UI calls it off the UI thread.
+
+use std::path::Path;
+
+use orchester_core::{
+  command::CommandError,
+  id::RunId,
+  integration::{
+    Cleanup, CleanupError, GitError, KeepReason, Leftovers, MergeError, RunMerge, clean_up, leftovers, merge_run,
+  },
+  run::Run,
+  store::{MergeStore, RunStore, TaskStore},
+  time::Timestamp,
+};
+use orchester_store::{ProjectDb, StoreError};
+
+use super::{changes::GIT, detail::run_store_error};
+use crate::{activity::Running, messages::Message, programs::Programs};
+
+/// Names shown of a longer list of files, which then ends in an ellipsis.
+const SHOWN_FILES: usize = 5;
+
+/// Why integrating did not happen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IntegrationProblem {
+  Merge(MergeError),
+  Cleanup(CleanupError),
+  Read(GitError),
+  /// The project database could not be read or written.
+  Store(Message),
+  AlreadyMerged,
+  /// Removing kept the worktree at `path`: changes appeared in it after the person saw it.
+  NewChanges {
+    path: String,
+  },
+  /// Git did not remove the worktree at `path`; its message.
+  NotRemoved {
+    path: String,
+    detail: String,
+  },
+}
+
+impl lurq::app::component::DevtoolsInspectable for IntegrationProblem {}
+
+impl From<StoreError> for IntegrationProblem {
+  fn from(error: StoreError) -> Self {
+    tracing::error!(%error, "cannot read or record the run's integration");
+    match error {
+      StoreError::AlreadyMerged(_) => Self::AlreadyMerged,
+      other => Self::Store(crate::messages::store_error(&other)),
+    }
+  }
+}
+
+impl IntegrationProblem {
+  /// Ends the status bar's `running` operation for this problem. A refusal, a conflict or a
+  /// worktree that stays ended the work undone, and the screen that asked says why: `not_done`,
+  /// which the next event replaces (J). Work that could not run fails (H) with a short reason.
+  pub fn end(&self, running: Running, not_done: Message) {
+    let could_not_run = matches!(
+      self,
+      Self::Store(_) | Self::Read(_) | Self::Merge(MergeError::Git(_)) | Self::Cleanup(CleanupError::Git(_))
+    );
+    if !could_not_run {
+      running.finish_as(not_done);
+      return;
+    }
+    let reason = match self {
+      Self::Store(message) => message.clone(),
+      Self::Read(GitError::Run(CommandError::NotFound))
+      | Self::Merge(MergeError::Git(GitError::Run(CommandError::NotFound)))
+      | Self::Cleanup(CleanupError::Git(GitError::Run(CommandError::NotFound))) => {
+        Message::new("runs.merge.failure.brief.gitMissing")
+      }
+      _ => Message::new("runs.merge.failure.brief.git"),
+    };
+    running.fail(reason);
+  }
+
+  /// What to tell the user; `separator` joins file names ("a.rs, b.rs").
+  pub fn message(&self, separator: &str) -> Message {
+    match self {
+      Self::Merge(error) => merge_message(error, separator),
+      Self::Cleanup(CleanupError::NotFinished) => Message::new("runs.worktree.failure.notFinished"),
+      Self::Cleanup(CleanupError::Git(error)) | Self::Read(error) => git_message(error),
+      Self::Store(message) => message.clone(),
+      Self::AlreadyMerged => Message::new("runs.merge.failure.alreadyMerged"),
+      Self::NewChanges { path } => Message::new("runs.worktree.failure.newChanges").with("path", path.clone()),
+      Self::NotRemoved { path, detail } => Message::new("runs.worktree.failure.notRemoved")
+        .with("path", path.clone())
+        .with("detail", detail.clone()),
+    }
+  }
+}
+
+fn merge_message(error: &MergeError, separator: &str) -> Message {
+  let with_files = |key, files: &[String]| Message::new(key).with("files", file_list(files, separator));
+  match error {
+    MergeError::NotSucceeded => Message::new("runs.merge.failure.notSucceeded"),
+    MergeError::NoBaseBranch => Message::new("runs.merge.failure.noBaseBranch"),
+    MergeError::WrongBranch {
+      expected,
+      current: Some(current),
+    } => Message::new("runs.merge.failure.wrongBranch")
+      .with("branch", expected.to_string())
+      .with("current", current.to_string()),
+    MergeError::WrongBranch {
+      expected,
+      current: None,
+    } => Message::new("runs.merge.failure.detached").with("branch", expected.to_string()),
+    MergeError::Uncommitted { files } => with_files("runs.merge.failure.uncommitted", files),
+    MergeError::InProgress => Message::new("runs.merge.failure.inProgress"),
+    MergeError::BranchMissing(branch) => {
+      Message::new("runs.merge.failure.branchMissing").with("branch", branch.to_string())
+    }
+    MergeError::Conflict { files } => with_files("runs.merge.failure.conflict", files),
+    MergeError::Refused(said) => Message::new("runs.merge.failure.refused").with("detail", said.clone()),
+    MergeError::Git(error) => git_message(error),
+  }
+}
+
+fn git_message(error: &GitError) -> Message {
+  match error {
+    GitError::Run(CommandError::NotFound) => Message::new("runs.changes.failure.gitMissing"),
+    GitError::Run(_) | GitError::Unrecognized { .. } => Message::new("runs.merge.failure.gitStopped"),
+    GitError::Failed(said) => Message::new("runs.merge.failure.git").with("detail", said.clone()),
+  }
+}
+
+/// At most [`SHOWN_FILES`] of `files`, joined with `separator`.
+pub fn file_list(files: &[String], separator: &str) -> String {
+  let mut list = files
+    .iter()
+    .take(SHOWN_FILES)
+    .cloned()
+    .collect::<Vec<_>>()
+    .join(separator);
+  if files.len() > SHOWN_FILES {
+    list.push('…');
+  }
+  list
+}
+
+/// A merged run and what clearing up after it did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Merged {
+  pub merge: RunMerge,
+  /// Clearing up can fail on its own; the merge stands either way.
+  pub cleanup: Result<Cleanup, CleanupError>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Merged {}
+
+/// Merges run `run` of the project at `repo_root`, records the merge and removes what the run left
+/// that is safe to remove: its clean worktrees and its merged branches.
+pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Merged, IntegrationProblem> {
+  let mut db = ProjectDb::open(repo_root)?;
+  // Runs are never deleted: a run the task page read is there.
+  let run = db
+    .run(run)
+    .map_err(run_store_error)?
+    .ok_or(IntegrationProblem::Store(Message::new("errors.storage")))?;
+  if db.run_merge(run.id())?.is_some() {
+    return Err(IntegrationProblem::AlreadyMerged);
+  }
+  let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
+  let git = programs.git_work();
+  let merge = merge_run(&git, Path::new(GIT), repo_root, (&run, task.key()), Timestamp::now())
+    .map_err(IntegrationProblem::Merge)?;
+  // Should recording fail after git merged, merging again finds the work on the branch already
+  // and records it then (`MergeKind::AlreadyMerged`).
+  db.save_run_merge(&merge)?;
+  let cleanup = clean_up(&git, Path::new(GIT), repo_root, &run, None);
+  if let Err(error) = &cleanup {
+    tracing::warn!(%error, "the run was merged, but what it left could not be cleared");
+  }
+  Ok(Merged { merge, cleanup })
+}
+
+/// What a run left in the repository, as the task page holds it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LeftBehind(pub Leftovers);
+
+impl lurq::app::component::DevtoolsInspectable for LeftBehind {}
+
+/// What `run` left in the repository at `repo_root`.
+pub fn leftovers_in(repo_root: &Path, programs: &Programs, run: &Run) -> Result<LeftBehind, IntegrationProblem> {
+  leftovers(&programs.runner(), Path::new(GIT), repo_root, run)
+    .map(LeftBehind)
+    .map_err(|error| {
+      tracing::warn!(%error, "cannot read what the run left");
+      IntegrationProblem::Read(error)
+    })
+}
+
+/// Removes what `run` left, discarding uncommitted changes only where `confirmed`, what the person
+/// saw, lists exactly those. A worktree that stays is a problem to show: it changed since, or git
+/// refused.
+pub fn remove_in(
+  repo_root: &Path,
+  programs: &Programs,
+  run: &Run,
+  confirmed: &Leftovers,
+) -> Result<(), IntegrationProblem> {
+  let cleanup = clean_up(&programs.git_work(), Path::new(GIT), repo_root, run, Some(confirmed)).map_err(|error| {
+    tracing::warn!(%error, "cannot remove what the run left");
+    IntegrationProblem::Cleanup(error)
+  })?;
+  match cleanup.kept_worktrees.into_iter().next() {
+    None => Ok(()),
+    Some((worktree, KeepReason::Failed(detail))) => Err(IntegrationProblem::NotRemoved {
+      path: worktree.path,
+      detail,
+    }),
+    Some((worktree, _)) => Err(IntegrationProblem::NewChanges { path: worktree.path }),
+  }
+}

@@ -5,6 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use orchester_core::{
   id::{ResourceId, TaskId},
+  integration::RunMerge,
   resource::{StepKey, VersionNumber},
   run::{PauseReason, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
@@ -76,6 +77,8 @@ pub struct LatestRun {
   pub checkpoint: Option<Arc<str>>,
   /// The plan it waits on a decision for, if it does.
   pub plan: Option<AwaitedPlan>,
+  /// The branch its work was merged into, once it was.
+  pub merged_into: Option<Arc<str>>,
 }
 
 /// A plan a run waits on a decision for (02.11): its version and who proposed it, the agent role
@@ -101,11 +104,17 @@ impl AwaitedPlan {
 }
 
 impl LatestRun {
-  /// `run`, the latest run of `task`, whose last event was recorded at `updated_at`, with the plan
-  /// it waits on, if any.
-  pub fn of(task: &Task, run: &Run, updated_at: Timestamp, plan: Option<AwaitedPlan>) -> Self {
+  /// `run`, the latest run of `task`, merged as `merge` records, whose last event was recorded at
+  /// `updated_at`, with the plan it waits on, if any.
+  pub fn of(
+    task: &Task,
+    (run, merge): (&Run, Option<&RunMerge>),
+    updated_at: Timestamp,
+    plan: Option<AwaitedPlan>,
+  ) -> Self {
     Self {
-      phase: TaskPhase::of(task, Some(run)),
+      phase: TaskPhase::of(task, Some(run), merge),
+      merged_into: merge.map(|merge| merge.into.as_str().into()),
       number: run.number(),
       updated_at,
       daily_budget: run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)),
@@ -146,6 +155,9 @@ impl LatestRun {
       TaskPhase::StoppedAtLimit => Message::new("tasks.progress.stoppedAtLimit"),
       TaskPhase::Interrupted => with_checkpoint("tasks.progress.interrupted", "tasks.progress.interruptedNoCheckpoint"),
       TaskPhase::Succeeded => Message::new("tasks.progress.succeeded"),
+      TaskPhase::Merged => {
+        Message::new("tasks.progress.merged").with("branch", self.merged_into.as_deref().unwrap_or_default().to_owned())
+      }
       TaskPhase::Failed => Message::new("tasks.progress.failed"),
       TaskPhase::Cancelled => Message::new("tasks.progress.cancelled"),
     }
@@ -260,12 +272,12 @@ pub type Phases = HashMap<TaskId, LatestRun>;
 fn phase_of(task: &Task, phases: &Phases) -> TaskPhase {
   phases
     .get(&task.id())
-    .map_or_else(|| TaskPhase::of(task, None), |latest| latest.phase)
+    .map_or_else(|| TaskPhase::of(task, None, None), |latest| latest.phase)
 }
 
 impl TaskRow {
   pub fn new(task: &Task, published: &[PipelineChoice], latest: Option<&LatestRun>) -> Self {
-    let phase = latest.map_or_else(|| TaskPhase::of(task, None), |latest| latest.phase);
+    let phase = latest.map_or_else(|| TaskPhase::of(task, None, None), |latest| latest.phase);
     let detail = match (latest, task.status()) {
       (Some(latest), _) => latest.message(),
       (None, TaskStatus::Queued) => Message::new("tasks.progress.queued"),

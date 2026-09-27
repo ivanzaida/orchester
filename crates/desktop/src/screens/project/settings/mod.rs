@@ -1,8 +1,9 @@
-//! Project settings (02.N `QV1af` General, 02.M `c7e729` Limits): the project's name and
-//! folder, its GitHub repository and the account it expects, with *Check again*, linking a
-//! repository detected later and *Use signed-in account*; its token budgets and default time
-//! limit.
+//! Project settings (02.N `QV1af` General, 02.M `c7e729` Limits, Environment not drawn yet): the
+//! project's name and folder, its GitHub repository and the account it expects, with *Check
+//! again*, linking a repository detected later and *Use signed-in account*; its token budgets and
+//! default time limit; the variables its runs add to the environment of agents and tools.
 
+mod environment;
 mod general;
 mod limits;
 mod work;
@@ -23,7 +24,8 @@ use lurq::{
 use orchester_core::id::ConnectionId;
 
 use self::{
-  limits::{LimitsProps, LimitsSave, LimitsTab},
+  environment::{EnvironmentProps, EnvironmentTab},
+  limits::{LimitsProps, LimitsTab},
   work::{SettingsWork, WorkAction, work_action},
 };
 use super::{ProjectNav, page};
@@ -51,6 +53,16 @@ use crate::{
 /// Tab row height (`z1vSun`).
 const TAB_ROW_HEIGHT: f32 = 42.0;
 
+/// Whether a tab's changes are stored, as the topbar says (`ZtaAU`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SettingsSave {
+  Saved,
+  Saving,
+  Failed(Message),
+}
+
+impl lurq::app::component::DevtoolsInspectable for SettingsSave {}
+
 enum Loaded {
   Loading,
   Ready(ProjectConnections),
@@ -76,8 +88,9 @@ impl Actions {
 }
 
 pub struct SettingsScreen {
-  /// Whether the Limits tab's changes are stored.
-  limits_status: Signal<LimitsSave>,
+  /// Whether the Limits and Environment tabs' changes are stored.
+  limits_status: Signal<SettingsSave>,
+  environment_status: Signal<SettingsSave>,
   /// Bumped after a change, to read the project's connections and link again.
   revision: Signal<u64>,
   /// A `gh` chosen for github.com while the project has no connection there.
@@ -98,7 +111,8 @@ impl Component for SettingsScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     let screen = Self {
-      limits_status: ctx.signal(LimitsSave::Saved),
+      limits_status: ctx.signal(SettingsSave::Saved),
+      environment_status: ctx.signal(SettingsSave::Saved),
       revision: ctx.signal(0_u64),
       program: ctx.signal(None),
       program_for: ctx.signal(None),
@@ -126,6 +140,7 @@ impl Component for SettingsScreen {
     let (tab_key, description_key) = match tab {
       SettingsTab::General => ("settings.tabs.general", "settings.description"),
       SettingsTab::Limits => ("settings.tabs.limits", "settings.limits.description"),
+      SettingsTab::Environment => ("settings.tabs.environment", "settings.environment.description"),
     };
     let breadcrumb = ctx.t_args(
       "settings.breadcrumb",
@@ -137,6 +152,13 @@ impl Component for SettingsScreen {
         LimitsProps {
           open: open.clone(),
           status: self.limits_status.clone(),
+        },
+      ),
+      (_, SettingsTab::Environment) => ctx.mount_keyed::<EnvironmentTab>(
+        "settings-environment",
+        EnvironmentProps {
+          open: open.clone(),
+          status: self.environment_status.clone(),
         },
       ),
       (Loaded::Loading, SettingsTab::General) => Column::new().flex(1.0).into(),
@@ -236,15 +258,17 @@ impl SettingsScreen {
     }
   }
 
-  /// "All changes saved" in the topbar of the Limits tab (`ZtaAU`).
+  /// "All changes saved" in the topbar of the Limits (`ZtaAU`) and Environment tabs.
   fn save_status(&self, ctx: &Ctx, tab: SettingsTab) -> Option<Element> {
-    if tab != SettingsTab::Limits {
-      return None;
-    }
-    let text = match self.limits_status.get() {
-      LimitsSave::Saved => ctx.t("settings.limits.saved"),
-      LimitsSave::Saving => ctx.t("settings.limits.saving"),
-      LimitsSave::Failed(error) => message_text(ctx, &error),
+    let status = match tab {
+      SettingsTab::General => return None,
+      SettingsTab::Limits => self.limits_status.get(),
+      SettingsTab::Environment => self.environment_status.get(),
+    };
+    let text = match status {
+      SettingsSave::Saved => ctx.t("settings.saved"),
+      SettingsSave::Saving => ctx.t("settings.saving"),
+      SettingsSave::Failed(error) => message_text(ctx, &error),
     };
     Some(
       Text::new(&text)
@@ -270,6 +294,11 @@ impl SettingsScreen {
       [
         tab("settings-tab-general", "settings.tabs.general", SettingsTab::General),
         tab("settings-tab-limits", "settings.tabs.limits", SettingsTab::Limits),
+        tab(
+          "settings-tab-environment",
+          "settings.tabs.environment",
+          SettingsTab::Environment,
+        ),
       ],
     )
   }

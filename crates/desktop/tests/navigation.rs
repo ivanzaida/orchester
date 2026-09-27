@@ -157,6 +157,7 @@ fn pages() -> Vec<Page> {
     Page::Connections(ConnectionTab::AgentProviders, Some(ConnectionId::generate())),
     Page::Settings(SettingsTab::General),
     Page::Settings(SettingsTab::Limits),
+    Page::Settings(SettingsTab::Environment),
   ]
 }
 

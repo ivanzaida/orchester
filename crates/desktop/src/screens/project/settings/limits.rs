@@ -22,6 +22,7 @@ use orchester_core::{
 
 use super::{
   super::ProjectNav,
+  SettingsSave,
   general::{CONTENT_WIDTH, readback, sized_setting_row},
 };
 use crate::{
@@ -45,21 +46,11 @@ use crate::{
 const VALUE_WIDTH: f32 = 240.0;
 const INPUT_HEIGHT: f32 = 36.0;
 
-/// Whether the Limits tab's changes are stored, as its topbar says.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum LimitsSave {
-  Saved,
-  Saving,
-  Failed(Message),
-}
-
-impl lurq::app::component::DevtoolsInspectable for LimitsSave {}
-
 #[derive(Clone)]
 pub struct LimitsProps {
   pub open: OpenProject,
   /// Written by the tab, read by the settings topbar.
-  pub status: Signal<LimitsSave>,
+  pub status: Signal<SettingsSave>,
 }
 
 impl PartialEq for LimitsProps {
@@ -120,14 +111,14 @@ impl Component for LimitsTab {
     let (stored, nav) = (tab.stored.clone(), tab.nav.clone());
     ctx.watch(&save.state(), move |state| {
       if state.is_pending() {
-        status.set(LimitsSave::Saving);
+        status.set(SettingsSave::Saving);
         return;
       }
       match (&state.data, &state.error) {
-        (_, Some(error)) => status.set(LimitsSave::Failed(error.clone())),
+        (_, Some(error)) => status.set(SettingsSave::Failed(error.clone())),
         (Some(saved), None) => {
           stored.set(Some(*saved));
-          status.set(LimitsSave::Saved);
+          status.set(SettingsSave::Saved);
           // New task and the status bar read the limits again.
           nav.tasks_changed();
         }

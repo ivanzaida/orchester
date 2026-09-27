@@ -292,9 +292,11 @@ impl From<VariableName> for String {
   }
 }
 
-/// Variables the tool sets for its program, on top of the cleaned environment every program
-/// Orchester starts gets (see [`crate::connection::invocation::agent_environment`]). They are
-/// stored and shown in plain text, so they hold no secrets.
+/// Variables added on top of the cleaned environment every program Orchester starts gets (see
+/// [`crate::connection::invocation::agent_environment`]): the ones a command tool sets for its
+/// program, and the ones a project adds for every agent CLI and command tool its runs start
+/// (Project settings › Environment). They are stored and shown in plain text, so they hold no
+/// secrets.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "BTreeMap<VariableName, String>", into = "BTreeMap<VariableName, String>")]
 pub struct CommandEnvironment(BTreeMap<VariableName, String>);
@@ -319,6 +321,22 @@ impl CommandEnvironment {
 
   pub fn is_empty(&self) -> bool {
     self.0.is_empty()
+  }
+
+  /// The value of `name`, compared without regard to case as Windows does.
+  pub fn get(&self, name: &str) -> Option<&str> {
+    self
+      .iter()
+      .find(|(variable, _)| variable.as_str().eq_ignore_ascii_case(name))
+      .map(|(_, value)| value)
+  }
+
+  /// Sets these variables in `variables`, replacing ones of the same name without regard to case.
+  pub fn add_to(&self, variables: &mut Vec<(String, String)>) {
+    for (name, value) in self.iter() {
+      variables.retain(|(existing, _)| !existing.eq_ignore_ascii_case(name.as_str()));
+      variables.push((name.as_str().to_owned(), value.to_owned()));
+    }
   }
 }
 

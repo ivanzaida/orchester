@@ -3,6 +3,7 @@
 //!
 //! - `print <n>`: prints `line 1` … `line <n>` on standard output;
 //! - `stderr <text>`: prints `<text>` on standard error;
+//! - `env <name>`: prints `<name>=<value>` of its environment, or `<name> is not set`;
 //! - `write <file> <text>`: writes `<text>` to `<file>` in its working directory;
 //! - `fail-once <file>`: exits with 1 after creating `<file>` in its working directory, unless the file exists;
 //! - `spawn-sleeper`: starts a copy of itself that sleeps for ten minutes and prints `child pid: <pid>`;
@@ -38,6 +39,14 @@ fn main() -> ExitCode {
         Ok(())
       }
       "write" => write(rest.next(), rest.next()),
+      "env" => {
+        let name = rest.next().unwrap_or_default();
+        match std::env::var(name) {
+          Ok(value) => println!("{name}={value}"),
+          Err(_) => println!("{name} is not set"),
+        }
+        Ok(())
+      }
       "fail-once" => match fail_once(rest.next()) {
         Ok(true) => return ExitCode::from(1),
         Ok(false) => Ok(()),

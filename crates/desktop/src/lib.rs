@@ -11,6 +11,7 @@ pub mod close;
 pub mod connections;
 pub mod display;
 pub mod drafts;
+pub mod environment;
 mod external;
 pub mod highlight;
 pub mod i18n;

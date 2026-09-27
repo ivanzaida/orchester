@@ -14,7 +14,7 @@ use orchester_core::{
   store::{ActivityStore, RunStore},
   tokens::{TokenBudget, TokensUsed},
 };
-use orchester_ipc::Rejection;
+use orchester_ipc::{Event, Rejection};
 use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
@@ -232,6 +232,39 @@ async fn control_time_limit_counts_active_time_and_stops_the_agent() {
   let db = ProjectDb::open(root).expect("open");
   let argv = reported(&db, id, "argv: ");
   assert!(argv[1].contains("exec resume"), "{}", argv[1]);
+}
+
+/// A run whose start failed stays pending. Cancelling it ends it without an attempt, and the
+/// task's runs still read.
+#[tokio::test(flavor = "multi_thread")]
+async fn control_cancel_ends_a_pending_run_that_never_started() {
+  let project = project(&Setup::new("Keep working."));
+  let root = project.repo.path();
+  // The run's branch exists already, so its worktree cannot be created and the run never starts.
+  git(root, &["branch", "orchester/orc-1-run-1"]);
+  let (scheduler, mut events) = scheduler(root);
+  assert!(scheduler.start_run(IdempotencyKey::generate(), project.task).is_err());
+  let db = ProjectDb::open(root).expect("open");
+  let [pending] = db
+    .runs_of_task(project.task)
+    .expect("runs")
+    .try_into()
+    .expect("one run");
+  assert_eq!(pending.status(), &RunStatus::Pending);
+
+  tokio::time::timeout(PATIENCE, scheduler.cancel_run(pending.id()))
+    .await
+    .expect("answered in time")
+    .expect("the run is cancelled");
+  let cancelled = db.run(pending.id()).expect("read").expect("run");
+  assert_eq!(cancelled.status(), &RunStatus::Cancelled);
+  assert!(cancelled.attempts().is_empty());
+  assert_eq!(db.runs_of_task(project.task).expect("runs"), vec![cancelled]);
+  let told = std::iter::from_fn(|| events.try_recv().ok())
+    .any(|event| matches!(event, Event::RunChanged { run, .. } if run == pending.id()));
+  assert!(told, "the desktop is told that the run changed");
+  assert!(scheduler.active_runs().is_empty());
+  assert_eq!(scheduler.cancel_run(pending.id()).await, Err(Rejection::RunEnded));
 }
 
 #[tokio::test(flavor = "multi_thread")]

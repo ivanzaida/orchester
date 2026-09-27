@@ -6,6 +6,7 @@ pub mod changes;
 pub mod data;
 pub mod detail;
 pub mod form;
+pub mod integration;
 pub mod list;
 pub mod overview;
 pub mod permissions;

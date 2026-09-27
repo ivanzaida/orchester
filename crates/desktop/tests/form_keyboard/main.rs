@@ -17,6 +17,7 @@ mod harness;
 mod history;
 mod import;
 mod instructions;
+mod integration;
 mod lifecycle;
 mod new_task;
 mod pipeline_editor;

@@ -47,6 +47,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::Unrepresentable(_) => Message::new("errors.unsupportedPath"),
     StoreError::DuplicateConnectionName(_) => Message::new("errors.connectionNameTaken"),
     StoreError::DuplicateSecretName { .. } => Message::new("errors.secretNameTaken"),
+    StoreError::AlreadyMerged(_) => Message::new("runs.merge.failure.alreadyMerged"),
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }

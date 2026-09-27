@@ -2,7 +2,9 @@
 //! and pans, above a band along the bottom with the zoom controls (`iarCw`, [`controls`]) that
 //! the graph never runs into. The shortcuts and the wheel are in [`input`]. Dragging the canvas
 //! or turning the wheel pans; with the zoom modifier the wheel zooms around the pointer. Each
-//! pipeline keeps its zoom for the session.
+//! pipeline keeps its zoom for the session. While the published notice (`O8ivsy`) floats over the
+//! bottom of the area, panning and fitting leave that part free, so the route notes under the
+//! graph can be brought out from under it at any window size.
 
 mod controls;
 mod graph;
@@ -28,7 +30,7 @@ use orchester_core::{
 use parking_lot::Mutex;
 
 use self::{
-  controls::band,
+  controls::{NoticeRefs, band},
   graph::{CanvasGraph, GraphProps},
   input::{ZoomCommand, ZoomModifier, shortcut},
 };
@@ -93,8 +95,8 @@ pub struct Canvas {
   /// The part of the canvas the graph shows in, above the zoom controls' band.
   area: ElementRef,
   modifier: ZoomModifier,
-  /// Where the published notice ends, in the band under the graph.
-  notice_anchor: ElementRef,
+  /// Where the published notice is anchored and drawn.
+  notice: NoticeRefs,
   /// The view a drag of the canvas started from.
   drag_from: Arc<Mutex<Option<View>>>,
 }
@@ -111,7 +113,7 @@ impl Component for Canvas {
       view: ctx.signal(View::new(zooms.get(pipeline))),
       zooms,
       area: ElementRef::new(),
-      notice_anchor: ElementRef::new(),
+      notice: NoticeRefs::default(),
       modifier: ZoomModifier::default(),
       drag_from: Arc::default(),
     }
@@ -124,6 +126,7 @@ impl Component for Canvas {
       zooms: self.zooms.clone(),
       pipeline: props.pipeline,
       area: self.area.clone(),
+      notice: props.just_published.map(|_| self.notice.clone()),
       content: props.graph.size(),
     };
     let view = self.view.get().within(viewport.content, viewport.size());
@@ -154,13 +157,7 @@ impl Component for Canvas {
       .height(Dimension::Pct(100.0))
       .background(PaletteColor::SurfacePanel)
       .child(self.with_pan(area, &viewport))
-      .child(band(
-        ctx,
-        view.zoom(),
-        &command,
-        props.just_published,
-        &self.notice_anchor,
-      ));
+      .child(band(ctx, view.zoom(), &command, props.just_published, &self.notice));
     self.with_input(canvas, &viewport)
   }
 }
@@ -224,14 +221,19 @@ struct Viewport {
   zooms: SessionZooms,
   pipeline: ResourceId,
   area: ElementRef,
+  /// The published notice, while it is shown.
+  notice: Option<NoticeRefs>,
   content: Size,
 }
 
 impl Viewport {
+  /// The part of the graph's area the graph is shown in: all of it but what the published notice
+  /// covers along its bottom.
   fn size(&self) -> Size {
+    let covered = self.notice.as_ref().map_or(0.0, |notice| notice.covered(&self.area));
     Size {
       width: self.area.width(),
-      height: self.area.height(),
+      height: self.area.height() - covered,
     }
   }
 

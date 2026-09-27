@@ -1,11 +1,30 @@
 //! Zooming the pipeline canvas: the zoom controls, the zoom shortcuts (which stay with a focused
 //! text field), the wheel with and without the zoom modifier, fitting the pipeline into view,
-//! and each pipeline keeping its zoom for the session.
+//! each pipeline keeping its zoom for the session, and the published notice never hiding the
+//! route notes for good.
+
+use std::{num::NonZeroU32, path::Path};
 
 use lurq::{
-  app::{Tree, events::ScrollPhase},
+  app::{
+    Tree,
+    events::{MouseButton, ScrollPhase},
+  },
+  core::ElementRect,
   node::element::ElementRef,
 };
+use orchester_core::{
+  id::ConnectionId,
+  name::Name,
+  permission::StepPermissions,
+  resource::{
+    AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
+    StepKind,
+  },
+  store::ResourceStore,
+  time::Timestamp,
+};
+use orchester_store::ProjectDb;
 
 use crate::harness::Desktop;
 
@@ -163,4 +182,155 @@ fn canvas_zoom_is_kept_for_the_pipeline_when_it_is_opened_again() {
   desktop.press("pipeline-row");
   desktop.wait_for(LEVEL);
   assert_eq!(level(&mut desktop), "90%");
+}
+
+fn name(value: &str) -> Name {
+  Name::new(value).expect("valid name")
+}
+
+fn key(value: &str) -> StepKey {
+  StepKey::new(value).expect("valid key")
+}
+
+/// A published Builder profile and the unpublished pipeline Delivery, shaped like the design's
+/// (`yf6XH`): Research, Plan, Implement, then Run checks beside Review, then Create pull request.
+/// A failed check returns to Implement, which the route note under the graph says.
+fn delivery(repo: &Path) {
+  let mut db = ProjectDb::open(repo).expect("open the project database");
+  let now = Timestamp::now();
+  let profile = AgentProfile::new(
+    name("Builder"),
+    String::new(),
+    PromptText::new("Build.").expect("valid prompt"),
+    ConnectionId::generate(),
+    ModelId::new("gpt-5.5").expect("valid model"),
+    ProviderSettings::default(),
+  );
+  let builder = db
+    .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, now)
+    .expect("profile")
+    .id();
+  db.publish_draft::<AgentProfile>(builder, now)
+    .expect("publish the profile");
+  let step = |value: &str, title: &str, after: &[&str]| Step {
+    key: key(value),
+    name: name(title),
+    kind: StepKind::Agent {
+      profile: Some(builder),
+      repository: RepositoryAccess::Write,
+      model: None,
+      permissions: StepPermissions::default(),
+    },
+    instructions: PromptText::new("").expect("valid prompt"),
+    depends_on: after.iter().map(|dependency| key(dependency)).collect(),
+    approval_gate: false,
+    on_failure: None,
+    budget: None,
+  };
+  let checks = Step {
+    on_failure: Some(FailureRoute {
+      return_to: key("implement"),
+      max_retries: NonZeroU32::new(2).expect("above zero"),
+    }),
+    ..step("checks", "Run checks", &["implement"])
+  };
+  let steps = vec![
+    step("research", "Research", &[]),
+    step("plan", "Plan", &["research"]),
+    step("implement", "Implement", &["plan"]),
+    checks,
+    step("review", "Review", &["implement"]),
+    step("pr", "Create pull request", &["checks", "review"]),
+  ];
+  let pipeline = Pipeline::new(steps).expect("valid pipeline");
+  db.create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, now)
+    .expect("pipeline");
+}
+
+/// Delivery published from its editor, at the design's window size: the published notice shows.
+fn published() -> Desktop {
+  let mut desktop = Desktop::with_seeded_project(delivery);
+  desktop.wait_for("nav-pipelines");
+  desktop.press("nav-pipelines");
+  desktop.wait_for("pipeline-row");
+  desktop.press("pipeline-row");
+  desktop.wait_for(NAME);
+  desktop.press("pipeline-publish");
+  desktop.wait_for("publish-confirm");
+  desktop.press("publish-confirm");
+  desktop.wait_for("pipeline-published-notice");
+  desktop
+}
+
+fn bounds(desktop: &mut Desktop, id: &str) -> ElementRect {
+  desktop
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+}
+
+fn resize(desktop: &mut Desktop, width: u32, height: u32) {
+  desktop.tree.resize(width, height);
+  desktop.pass();
+}
+
+/// Waits until the inspector shows the step named `title`, which a press on its card selected.
+fn selects(desktop: &mut Desktop, title: &str) {
+  desktop.settle(title, |tree| {
+    tree
+      .get_element_by_id_mut(NAME)
+      .and_then(|element| element.as_text_input())
+      .is_some_and(|input| input.value() == title)
+  });
+}
+
+/// A verifier saw the published notice cover the end of the route notes in windows smaller than
+/// the design, where neither panning nor Fit brought them out. The notice's part of the canvas is
+/// left free when fitting and panning; at the design's size the canvas shows as before.
+#[test]
+fn canvas_published_notice_never_hides_the_end_of_the_graph() {
+  let mut desktop = published();
+  // At the design's size the pipeline shows at 100 % from its top left, as before.
+  assert_eq!(level(&mut desktop), "100%");
+  desktop.press("step-card-pr");
+  selects(&mut desktop, "Create pull request");
+  desktop.press("step-card-research");
+  selects(&mut desktop, "Research");
+
+  resize(&mut desktop, 1200, 800);
+  desktop.press("pipeline-zoom-fit");
+  let percent: f32 = level(&mut desktop).trim_end_matches('%').parse().expect("a percentage");
+  let (area, graph, notice) = (
+    bounds(&mut desktop, "pipeline-canvas-area"),
+    bounds(&mut desktop, "pipeline-canvas-graph"),
+    bounds(&mut desktop, "pipeline-published-notice"),
+  );
+  assert!(notice.y < area.y + area.height, "the notice covers the canvas");
+  // The shown level is rounded: the fitted graph is at least half a percent smaller.
+  let fitted_bottom = area.y + graph.height * (percent - 0.5) / 100.0;
+  assert!(
+    fitted_bottom <= notice.y,
+    "Fit at {percent}% ends the graph at {fitted_bottom}, under the notice at {}",
+    notice.y
+  );
+
+  // Panned to its end at 100 %, the graph ends above the notice: the last card is where it is
+  // only when the notice's part of the canvas is left free.
+  resize(&mut desktop, 1280, 720);
+  desktop.press(LEVEL);
+  wheel(&mut desktop, -4000.0);
+  let (area, graph, notice, card) = (
+    bounds(&mut desktop, "pipeline-canvas-area"),
+    bounds(&mut desktop, "pipeline-canvas-graph"),
+    bounds(&mut desktop, "pipeline-published-notice"),
+    bounds(&mut desktop, "step-card-pr"),
+  );
+  let scrolled = graph.height - (notice.y - area.y);
+  assert!(scrolled > 0.0, "the graph is taller than the free part of the canvas");
+  let (x, y) = (card.x + card.width / 2.0, card.y - scrolled + 20.0);
+  desktop.tree.mouse_down(x, y, MouseButton::Left);
+  desktop.tree.mouse_up(x, y, MouseButton::Left);
+  desktop.pass();
+  selects(&mut desktop, "Create pull request");
 }

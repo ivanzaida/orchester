@@ -1,6 +1,6 @@
 //! How an agent step starts its CLI: the provider's argv ([`CodexInvocation`],
 //! [`ClaudeInvocation`]), the worktree as working directory, the prompt on standard input and a
-//! cleaned environment ([`agent_environment`]).
+//! cleaned environment ([`agent_environment`]) with the variables the project adds.
 
 mod claude;
 mod codex;
@@ -14,7 +14,7 @@ pub use self::{
   claude::{ClaudeInvocation, ClaudeSession},
   codex::CodexInvocation,
 };
-use crate::command::Command;
+use crate::{command::Command, resource::CommandEnvironment};
 
 /// The operating system an invocation is built for. Builders take it as a value so both
 /// variants can be built and tested on either platform.
@@ -105,13 +105,14 @@ pub enum InvocationError {
 }
 
 /// The command of an agent CLI: `args` after the program, in the worktree, with `prompt` on
-/// standard input and only the allowed part of `environment`.
+/// standard input, the allowed part of `environment` and the variables the project adds
+/// (`project`), which replace ones of the same name.
 fn agent_command(
   executable: &Path,
   args: Vec<OsString>,
   worktree: &Path,
   prompt: String,
-  environment: impl IntoIterator<Item = (OsString, OsString)>,
+  (environment, project): (impl IntoIterator<Item = (OsString, OsString)>, &CommandEnvironment),
 ) -> Result<Command, InvocationError> {
   let args = args
     .into_iter()
@@ -121,10 +122,12 @@ fn agent_command(
         .map_err(|_| InvocationError::NotUnicode(worktree.to_path_buf()))
     })
     .collect::<Result<Vec<_>, _>>()?;
+  let mut variables = agent_environment(environment);
+  project.add_to(&mut variables);
   Ok(
     Command::new(executable, args)
       .with_current_dir(worktree)
-      .with_environment(agent_environment(environment))
+      .with_environment(variables)
       .with_stdin(prompt),
   )
 }

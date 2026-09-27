@@ -152,3 +152,35 @@ fn overview_needs_you_names_the_plan_that_waits() {
   assert_eq!(offline.lost_to_runner, 0);
   assert_eq!(OverviewTab::NeedsYou.count(&offline.tasks, &offline.phases), 1);
 }
+
+/// A task whose run was merged into its branch reads as Merged and counts as completed, like one
+/// that only succeeded.
+#[test]
+fn overview_counts_a_merged_task_as_completed() {
+  use orchester_core::{
+    integration::{MergeKind, RunMerge},
+    revision::Revision,
+    run::BranchName,
+    store::MergeStore,
+  };
+  let (mut fixture, _) = project();
+  let merged = fixture.task("Add sign-out", support::at(70));
+  let mut run = fixture.started_run(merged, support::at(80));
+  fixture.succeed(&mut run, support::at(90));
+  let merge = RunMerge {
+    run: run.id(),
+    into: BranchName::new("main").expect("valid branch"),
+    revision: Revision::new(&"b".repeat(40)).expect("revision"),
+    kind: MergeKind::FastForward,
+    merged_at: support::at(95),
+  };
+  fixture.db.save_run_merge(&merge).expect("record the merge");
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let latest = &tasks.phases[&merged];
+  assert_eq!(latest.phase, TaskPhase::Merged);
+  assert_eq!(latest.message().key, "tasks.progress.merged");
+  assert_eq!(latest.message().args, [("branch", "main".to_owned())]);
+  assert_eq!(Pulse::of(&tasks.phases, support::at(25)).completed_today, 2);
+  let footer = footer(&tasks.tasks, &tasks.phases);
+  assert!(footer.args.contains(&("completed", "2".to_owned())), "{footer:?}");
+}
