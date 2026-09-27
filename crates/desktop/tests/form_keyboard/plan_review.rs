@@ -39,6 +39,12 @@ fn reviewing(desktop: &mut Desktop, version: &str) {
   });
 }
 
+/// Whether the status bar's latest event names the plan of KON-1. It comes with the runner's
+/// notice of the plan, apart from the pages, which read the run.
+fn plan_event_shown(desktop: &mut Desktop) -> bool {
+  has(desktop, "status-activity") && shows(desktop, "status-activity", "Plan ready for review · KON-1")
+}
+
 fn waiting_run(desktop: &Desktop) -> bool {
   latest_run(desktop.repo()).is_some_and(|run| run.waits_for_a_person())
 }
@@ -68,7 +74,7 @@ fn plan_review_shows_the_plan_and_approving_continues_the_run() {
   assert!(!has(&mut desktop, "task-pause-run"));
   // The status bar counts the run and its latest event names the plan.
   desktop.wait_until("the status bar", |desktop| {
-    shows(desktop, "status-needs-you", "1") && shows(desktop, "status-activity", "Plan ready for review · KON-1")
+    shows(desktop, "status-needs-you", "1") && plan_event_shown(desktop)
   });
   assert!(waiting_run(&desktop));
 
@@ -128,6 +134,7 @@ fn plan_review_waits_in_the_overview_needs_you_panel() {
   // The status bar's latest event opens the task too.
   desktop.click("nav-overview");
   desktop.wait_until("the overview", |desktop| has(desktop, "overview-decision-KON-1"));
+  desktop.wait_until("the plan's event in the status bar", plan_event_shown);
   desktop.click("status-activity");
   reviewing(&mut desktop, "1");
 }
