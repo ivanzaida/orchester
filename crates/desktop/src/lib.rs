@@ -22,7 +22,7 @@ pub mod repository;
 pub mod root;
 pub mod runner;
 mod screens;
-pub use screens::{close_dialog, recovery_dialog};
+pub use screens::{close_dialog, recovery_dialog, status_bar};
 pub mod session;
 pub mod tasks;
 pub mod theme;

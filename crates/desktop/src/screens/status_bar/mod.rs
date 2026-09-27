@@ -51,6 +51,9 @@ pub struct ProjectBar {
   pub runner: RunnerStatus,
   /// Queued tasks; `None` while the tasks are read.
   pub queued: Option<usize>,
+  /// Runs waiting for the user, the Overview's *Need your input*; `None` while the tasks are
+  /// read.
+  pub needs_you: Option<usize>,
   /// The project's limits and today's usage; `None` while they are read.
   pub usage: Option<ProjectUsage>,
   /// Runs recorded as running while no runner is connected; `None` while the tasks are read.

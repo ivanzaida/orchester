@@ -44,7 +44,7 @@ use crate::{
     route::{Page, Route},
   },
   runner::{RunnerStatus, Runners, state::RunnerState},
-  tasks::{data::ProjectTasks, list, usage::ProjectUsage},
+  tasks::{data::ProjectTasks, list, overview::OverviewTab, usage::ProjectUsage},
   workspace::OpenProject,
 };
 
@@ -204,6 +204,9 @@ impl Component for ProjectShell {
       repo_root: open.repo_root.clone(),
       runner: status,
       queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
+      needs_you: tasks
+        .ready()
+        .map(|tasks| OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases)),
       usage,
       lost_to_runner: tasks.ready().map(|tasks| tasks.lost_to_runner),
     };
