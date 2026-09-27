@@ -1,6 +1,7 @@
 //! Project instructions in the prompts agents receive: those injected at start in a new session's
 //! prompt on standard input, those injected at resume when a session continues, each invocation
-//! with the sources of its prompt, and the versions the run pinned when it started. Against
+//! with the sources of its prompt, the versions the run pinned when it started, and the run's
+//! revisions its prompts name. Against
 //! `orchester-fake-codex`; needs `git`. Run with
 //! `cargo test -p orchester-runner --features test-agent --test instructions`.
 
@@ -9,17 +10,18 @@ mod support;
 use std::{collections::BTreeSet, num::NonZeroU32, path::Path};
 
 use orchester_core::{
-  id::ResourceId,
+  connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
+  id::{IdempotencyKey, ResourceId},
   name::Name,
-  resource::{AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, Slug},
-  run::{PromptPart, PromptSource, RunStatus},
+  resource::{AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, Slug, StepKey},
+  run::{PromptPart, PromptSource, RunFailure, RunStatus, StepFailure, StepStatus},
   store::{ActivityStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_ipc::AttachSession;
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, killed_mid_run, project, reported, scheduler, wait_for};
+use self::support::{Setup, StepSpec, git, killed_mid_run, project, reported, scheduler, wait_for};
 
 fn rule(text: &str, targets: AgentTargets, events: &[InjectionEvent]) -> Instruction {
   Instruction::new(
@@ -171,4 +173,79 @@ async fn instructions_for_resuming_reach_a_continued_session_in_their_pinned_ver
   assert!(prompt.contains("## Resume checks"), "{prompt}");
   assert!(prompt.contains("Run git status first."), "{prompt}");
   assert!(!prompt.contains("Something else."), "{prompt}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn instructions_run_revision_names_the_checkpoint_a_step_starts_after() {
+  let mut setup = Setup::new("Say hello.");
+  setup.steps = vec![
+    StepSpec::new("first", "First", "Start from {{run.base_revision}}.", &[]),
+    StepSpec::new("second", "Second", "Look at {{run.revision}}.", &["first"]),
+  ];
+  let project = project(&setup);
+  let root = project.repo.path();
+  let base = git(root, &["rev-parse", "HEAD"]);
+  let (scheduler, mut events) = scheduler(root);
+  let run = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .expect("the run starts");
+  let finished = wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
+
+  // Each step committed a checkpoint on the run's branch: the first's lies below the second's.
+  let branch = finished.branch().as_str();
+  let first = git(root, &["rev-parse", &format!("{branch}~1")]);
+  assert_eq!(
+    git(root, &["log", "-1", "--format=%s", &first]),
+    "ORC-1: First (run #1)"
+  );
+  let last = git(root, &["rev-parse", branch]);
+  assert_eq!(
+    finished
+      .last_checkpoint()
+      .map(|checkpoint| checkpoint.revision().as_str()),
+    Some(last.as_str())
+  );
+  let prompt = prompts(&ProjectDb::open(root).expect("open"), run);
+  assert!(prompt.contains(&format!("Start from {base}.")), "{prompt}");
+  assert!(prompt.contains(&format!("Look at {first}.")), "{prompt}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn instructions_run_revision_before_the_first_checkpoint_fails_the_step_and_names_it() {
+  let mut setup = Setup::new("Say hello.");
+  setup.steps = vec![StepSpec::new("first", "First", "Look at {{run.revision}}.", &[])];
+  let project = project(&setup);
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let run = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .expect("the run starts");
+  let finished = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
+
+  let first = StepKey::new("first").expect("key");
+  assert_eq!(
+    finished.status(),
+    &RunStatus::Failed(RunFailure::StepFailed(first.clone()))
+  );
+  let execution = finished.latest_execution(&first).expect("the step has an execution");
+  assert_eq!(execution.status(), StepStatus::Failed);
+  assert_eq!(execution.failure(), Some(StepFailure::NotStarted));
+  assert!(finished.last_checkpoint().is_none());
+  let db = ProjectDb::open(root).expect("open");
+  let invocations = db.invocations(run).expect("invocations");
+  assert_eq!(invocations.len(), 1);
+  assert_eq!(invocations[0].outcome, Some(InvocationOutcome::NotStarted));
+  // The CLI never started; the step's activity says which variable had no value.
+  assert!(reported(&db, run, "argv: ").is_empty());
+  let problem = AgentEvent::RunnerProblem {
+    problem: RunnerProblem::UnavailableVariable {
+      variable: "run.revision".into(),
+    },
+  };
+  assert!(
+    db.activity(run, 0)
+      .expect("activity")
+      .iter()
+      .any(|entry| entry.event == problem)
+  );
 }

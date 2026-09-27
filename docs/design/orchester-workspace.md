@@ -829,7 +829,7 @@ The Builder preview now accounts for seven individual sources: role, Implementat
 
 The Variables control is visible beside the prompt editor. The catalog searches names and descriptions, groups variables by source, and shows type, explanation, current value and availability. Selecting a variable does not modify the prompt; Insert writes its expression at the retained cursor and creates one undoable edit. Escape cancels insertion. Lists need a defined rendering format before implementation.
 
-The count of 24 in the mockup refers to this proposed catalog, not a discovered runtime API:
+The count of 25 in the mockup refers to this proposed catalog, not a discovered runtime API:
 
 | Group | Variable | Type | Availability |
 | --- | --- | --- | --- |
@@ -854,11 +854,14 @@ The count of 24 in the mockup refers to this proposed catalog, not a discovered 
 | Run | `run.attempt` | integer | Attempt created |
 | Run | `run.budget` | integer, tokens | Run limits configured |
 | Run | `run.branch` | string | Working branch created |
-| Run | `run.revision` | string | Commit available |
+| Run | `run.base_revision` | string | Run created |
+| Run | `run.revision` | string | After the run's first checkpoint commit |
 | Step | `step.id` | string | Step selected |
 | Step | `step.name` | string | Step selected |
 
 The sample syntax is `{{task.title}}`. Variables are evaluated as data, not executable expressions. Secret values are excluded from this catalog. Missing values must not silently become empty text: explain the unavailable phase and offer an appropriate injection point or an explicitly configured fallback.
+
+`run.base_revision` is the revision the run started from. `run.revision` is the run's latest checkpoint commit; a step's prompt gets the latest checkpoint at the time its invocation starts. Before the first checkpoint it has no value: an agent whose prompt uses it does not start, and its step fails naming the variable.
 
 The unavailable-variable frame demonstrates `run.revision` before the first commit. Required policy blocks injection; the user can choose a later injection event or explicitly configure a fallback. The UI must not fabricate a revision or silently insert an empty string.
 

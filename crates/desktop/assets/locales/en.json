@@ -1881,6 +1881,7 @@
       "noPreview": "nothing to preview",
       "noRun": "no run chosen",
       "noAttempt": "the step has not started in this run",
+      "noCheckpoint": "no commit yet",
       "notRecorded": "Orchester does not record it yet"
     },
     "groups": {
@@ -1985,9 +1986,13 @@
         "description": "The run’s working branch",
         "availability": "When the working branch is created"
       },
-      "runRevision": {
+      "runBaseRevision": {
         "description": "The revision the run started from",
         "availability": "When the run is created"
+      },
+      "runRevision": {
+        "description": "The run’s latest checkpoint commit",
+        "availability": "After the first commit"
       },
       "stepId": {
         "description": "The step’s key in its pipeline",

@@ -1,8 +1,13 @@
 //! Instructions (05.01 `yRKeF`): the sidebar opens the screen, New instruction creates a draft,
 //! the prompt is saved as it is typed, Publish v1 publishes it, and the preview, the resolved
-//! prompt and the variable catalog show the prompt it takes part in.
+//! prompt and the variable catalog show the prompt it takes part in, for a new run or a recorded
+//! one.
 
-use std::{collections::BTreeSet, path::Path, time::Duration};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  path::Path,
+  time::Duration,
+};
 
 use orchester_core::{
   id::{ConnectionId, IdempotencyKey},
@@ -12,14 +17,16 @@ use orchester_core::{
     AgentProfile, Instruction, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceKind, Slug,
     Step, StepKey, StepKind,
   },
-  store::{ResourceStore, TaskStore},
+  revision::Revision,
+  run::{BranchName, NewRun, PublishedVersions, RunSnapshot},
+  store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
   tokens::TokenBudget,
 };
 use orchester_store::ProjectDb;
 
-use crate::harness::Desktop;
+use crate::{github::shows, harness::Desktop};
 
 fn name(value: &str) -> Name {
   Name::new(value).expect("valid name")
@@ -75,6 +82,88 @@ fn seed(repo: &Path) {
   };
   db.create_tasks(IdempotencyKey::generate(), vec![details], now)
     .expect("task");
+}
+
+fn revision(hex_digit: char) -> Revision {
+  Revision::new(&hex_digit.to_string().repeat(40)).expect("valid revision")
+}
+
+/// Two cancelled runs of the seeded task, both started from `aaaa…`: run 1 recorded a checkpoint
+/// commit `bbbb…` on Implement, run 2 none.
+fn seed_runs(repo: &Path) {
+  let mut db = ProjectDb::open(repo).expect("open");
+  let task = db.tasks().expect("tasks").remove(0);
+  let pipeline = task.details().pipeline.expect("the task has a pipeline");
+  let version = db
+    .latest_version::<Pipeline>(pipeline)
+    .expect("read")
+    .expect("published");
+  let mut profiles = BTreeMap::new();
+  for resource in db.resources(ResourceKind::AgentProfile).expect("profiles") {
+    let profile = db.latest_version::<AgentProfile>(resource.id()).expect("read");
+    profiles.insert(resource.id(), profile.expect("published"));
+  }
+  let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
+  let published = PublishedVersions {
+    profiles: &profiles,
+    tools: &tools,
+    instructions: &instructions,
+  };
+  let snapshot = RunSnapshot::build(pipeline, &version, published).expect("snapshot");
+  for (number, checkpoint) in [(1, Some(revision('b'))), (2, None)] {
+    let new = NewRun {
+      task: task.id(),
+      snapshot: snapshot.clone(),
+      branch: BranchName::new(&format!("orchester/orc-1-run-{number}")).expect("branch"),
+      base: revision('a'),
+      budget: TokenBudget::new(1_000_000).expect("budget"),
+      max_duration: Duration::from_secs(1_800),
+    };
+    let now = Timestamp::now();
+    let mut run = db.create_run(IdempotencyKey::generate(), new, now).expect("run");
+    let mut events = run.start(now).expect("start");
+    let implement = run
+      .latest_execution(&StepKey::new("implement").expect("key"))
+      .expect("Implement is ready")
+      .id();
+    events.extend(run.start_step(implement, now).expect("start Implement"));
+    if let Some(checkpoint) = checkpoint {
+      events.extend(run.record_checkpoint(implement, checkpoint, now).expect("checkpoint"));
+    }
+    events.extend(run.cancel(now).expect("cancel"));
+    db.append_events(&run, &events).expect("append");
+  }
+}
+
+/// Chooses the preview's run with the keyboard, `down` options below the chosen one ("New run",
+/// then the newest run). Pressing the select focuses it; Escape closes the menu it opened.
+fn choose_run(desktop: &mut Desktop, down: usize) {
+  desktop.wait_for("instruction-preview-run");
+  desktop.press("instruction-preview-run");
+  desktop.key("Escape", "Escape");
+  desktop.enter();
+  for _ in 0..down {
+    desktop.key("ArrowDown", "ArrowDown");
+  }
+  desktop.enter();
+}
+
+/// The catalog's Run group with `variable` chosen.
+fn show_variable(desktop: &mut Desktop, variable: &str) {
+  desktop.click("instruction-variables");
+  desktop.wait_for("variable-catalog");
+  desktop.click("variables-run");
+  let row = format!("variable-{variable}");
+  desktop.wait_for(&row);
+  desktop.click(&row);
+  desktop.wait_for("variable-details");
+}
+
+fn close_catalog(desktop: &mut Desktop) {
+  desktop.click("variable-catalog-close");
+  desktop.settle("the catalog closed", |tree| {
+    tree.get_element_by_id("variable-catalog").is_none()
+  });
 }
 
 fn seeded() -> Desktop {
@@ -180,4 +269,49 @@ fn instructions_variable_catalog_inserts_the_chosen_expression() {
     tree.get_element_by_id("variable-catalog").is_none()
   });
   assert_eq!(desktop.value("instruction-prompt"), "Work on {{run.branch}}");
+}
+
+#[test]
+fn instructions_run_revision_is_the_chosen_runs_latest_checkpoint() {
+  let mut desktop = Desktop::with_runner(
+    "no-runner.exe".into(),
+    |repo| std::fs::create_dir_all(repo.join(".git")).expect("create .git"),
+    |repo| {
+      seed(repo);
+      seed_runs(repo);
+    },
+  );
+  create_rule(&mut desktop);
+  desktop.click("instruction-prompt");
+  desktop.type_text("Look at {{run.revision}}");
+  let (base, checkpoint) = (revision('a'), revision('b'));
+
+  // Run 2 has no checkpoint: the rule keeps its placeholder and the catalog says why.
+  choose_run(&mut desktop, 1);
+  assert!(shows(&mut desktop, "instruction-preview-run", "Run 002"));
+  desktop.click("instruction-source-1");
+  desktop.wait_for("instruction-viewer");
+  assert!(shows(&mut desktop, "instruction-viewer", "Look at {{run.revision}}"));
+  assert!(shows(&mut desktop, "instruction-viewer", "no value yet: run.revision"));
+  desktop.click("instruction-viewer-close");
+  show_variable(&mut desktop, "run.revision");
+  assert!(shows(&mut desktop, "variable-details", "Unavailable · no commit yet"));
+  assert!(shows(&mut desktop, "variable-details", "After the first commit"));
+  desktop.click("variable-run.base_revision");
+  assert!(shows(&mut desktop, "variable-details", base.as_str()));
+  close_catalog(&mut desktop);
+
+  // Run 1 committed a checkpoint: that is the revision, in the catalog and in the prompt.
+  choose_run(&mut desktop, 1);
+  assert!(shows(&mut desktop, "instruction-preview-run", "Run 001"));
+  show_variable(&mut desktop, "run.revision");
+  assert!(shows(&mut desktop, "variable-details", checkpoint.as_str()));
+  close_catalog(&mut desktop);
+  desktop.click("instruction-source-1");
+  desktop.wait_for("instruction-viewer");
+  assert!(shows(
+    &mut desktop,
+    "instruction-viewer",
+    &format!("Look at {}", checkpoint.as_str())
+  ));
 }
