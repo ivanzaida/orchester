@@ -127,13 +127,15 @@ pub enum ExtraTypography {
   IconEvent,
   /// Icon of an empty, loading or failed state of a tab (`qgZru` in `hig8O`), 20px.
   IconState,
+  /// A table cell's label that wraps beside its icon, e.g. a worktree state (`VHSnL` in `Py65X`).
+  CellLabel,
   /// A note under an inspector's details or actions: where the models come from, what the
   /// connection's status means (`xK9v9`, `Thdx2` in `JuVaA`).
   InspectorNote,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 58] = [
+  const ALL: [Self; 59] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -191,6 +193,7 @@ impl ExtraTypography {
     Self::IconEntry,
     Self::IconEvent,
     Self::IconState,
+    Self::CellLabel,
     Self::InspectorNote,
   ];
 
@@ -253,6 +256,7 @@ impl ExtraTypography {
       Self::IconEntry => "icon-entry",
       Self::IconEvent => "icon-event",
       Self::IconState => "icon-state",
+      Self::CellLabel => "cell-label",
       Self::InspectorNote => "inspector-note",
     }
   }
@@ -371,6 +375,7 @@ impl ExtraTypography {
       Self::IconEntry => icon(13.0),
       Self::IconEvent => icon(14.0),
       Self::IconState => icon(20.0),
+      Self::CellLabel => leading(1.5, style(11.0, FontWeight::Normal, MUTED)),
       Self::InspectorNote => leading(1.6, style(10.0, FontWeight::Normal, MUTED)),
     }
   }

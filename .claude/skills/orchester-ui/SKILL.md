@@ -156,6 +156,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::Code.role()` | mono 12, 1.6, `code-text` | diff code and change mark; tokens color with `ExtraColor::Code*` (`DQMrs`) |
 | `ExtraTypography::Output.role()` | mono 11 muted, 1.6 | command output in the agent transcript (`mMUyR` in `N4SlQq`) |
 | `ExtraTypography::IconEntry.role()` / `IconEvent` / `IconState` | lucide 13 / 14 / 20 | transcript entry glyph (`DQmo9`), activity event glyph (`xQYdP` in `mBkeJ`), tab state icon (`qgZru` in `hig8O`) |
+| `ExtraTypography::CellLabel.role()` | 11 muted, 1.5 | table cell label that wraps beside its icon (worktree state `VHSnL` in `Py65X`) |
 | `ExtraTypography::InspectorNote.role()` | 10 muted, 1.6 | note under an inspector's details or actions (model source `xK9v9`, status detail `Thdx2`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,

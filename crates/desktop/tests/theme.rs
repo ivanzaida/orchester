@@ -366,6 +366,18 @@ fn scroll_gutter_follows_pencil() {
   assert!(compute_vertical_scrollbar(&scrollbar, 24.0, 24.0, 308.0, 800.0, 800.0, 0.0).is_none());
 }
 
+/// Worktree state label (`VHSnL` in `Py65X`): Inter 11 muted, line height 1.5.
+#[test]
+fn cell_label_follows_pencil() {
+  let app = themed_app();
+  let label = app.theme().typography_style(ExtraTypography::CellLabel.role());
+  assert_eq!(
+    (&*label.font_family, label.font_size, label.line_height),
+    ("Inter", 11.0, 1.5)
+  );
+  assert_eq!(label.color, Color::from_hex("#A3A3A3"));
+}
+
 /// Inspector notes (`xK9v9`, `Thdx2` in `JuVaA`): Inter 10 muted, line height 1.6.
 #[test]
 fn inspector_note_follows_pencil() {
