@@ -526,4 +526,13 @@ BEGIN SELECT RAISE(ABORT, 'a plan keeps its text and is decided once'); END;
 CREATE TRIGGER plans_no_delete BEFORE DELETE ON plans
 BEGIN SELECT RAISE(ABORT, 'plans are never deleted'); END;
 ",
+  r"
+-- Project settings › Environment: variables added to the environment of every agent CLI and command
+-- tool the project's runs start. Plain values, never secrets; names are distinct without regard to
+-- case, as Windows compares them.
+CREATE TABLE project_environment (
+  name TEXT PRIMARY KEY COLLATE NOCASE,
+  value TEXT NOT NULL
+) STRICT;
+",
 ];

@@ -209,6 +209,19 @@ pub fn task_draft(open: &OpenProject, title: &str) -> OperationSpec {
   .quiet()
 }
 
+/// Saving Project settings › Environment; only its outcome is listed.
+pub fn project_environment(open: &OpenProject) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.projectEnvironment.running",
+    done: "statusBar.operations.projectEnvironment.done",
+    failed: "statusBar.operations.projectEnvironment.failed",
+  }
+  .unnamed()
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::Settings))
+  .quiet()
+}
+
 /// A change to an agent profile. Publishing and keeping a draft carry only the profile's id,
 /// so their copy does not name it.
 pub fn profile_change(open: &OpenProject, change: &ProfileChange) -> OperationSpec {

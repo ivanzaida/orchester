@@ -1598,14 +1598,15 @@
     "title": "Project settings",
     "description": "Name, folder and GitHub account for {{project}}.",
     "loadFailed": "Couldn’t read the project’s settings",
+    "saved": "All changes saved",
+    "saving": "Saving…",
     "tabs": {
       "general": "General",
-      "limits": "Limits"
+      "limits": "Limits",
+      "environment": "Environment"
     },
     "limits": {
       "description": "Defaults and limits for {{project}}. They apply to new tasks and runs in this project.",
-      "saved": "All changes saved",
-      "saving": "Saving…",
       "tokenBudgets": "Token budgets",
       "max": "Maximum run budget",
       "maxDetail": "The largest token budget a task, a run or a raised limit may have. Budget fields reject larger values and name this maximum. There is no minimum beyond more than 0.",
@@ -1623,6 +1624,18 @@
       },
       "changesTitle": "Changes apply to new runs",
       "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum."
+    },
+    "environment": {
+      "description": "Variables {{project}} adds for its agents and command tools.",
+      "heading": "Environment variables",
+      "detail": "Added to the environment of every agent CLI and command tool this project’s runs start, on top of the cleaned environment every program gets (PATH, HOME, TEMP and the like). A command tool’s own variables win over these.",
+      "variables": "Variables · NAME=value per line",
+      "hint": "Stored and shown in plain text, so never put secrets here.",
+      "targetTitle": "Share one build folder between run worktrees",
+      "targetDetail": "Each run works in its own worktree, and Cargo builds each one into a target folder of its own, often 10–20 GB. With CARGO_TARGET_DIR every run builds into .orchester/target beside the worktrees instead.",
+      "addTarget": "Add CARGO_TARGET_DIR",
+      "changesTitle": "Changes apply to the next agent or command that starts",
+      "changesDetail": "An agent or command already running keeps the environment it started with."
     },
     "general": {
       "project": "Project",
@@ -2714,6 +2727,11 @@
         "running": "Archiving secret {{name}}",
         "done": "Secret archived · {{name}}",
         "failed": "Could not archive secret {{name}}"
+      },
+      "projectEnvironment": {
+        "running": "Saving the environment",
+        "done": "Environment saved",
+        "failed": "Could not save the environment"
       }
     },
     "opens": {

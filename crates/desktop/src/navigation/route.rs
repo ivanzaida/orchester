@@ -31,6 +31,7 @@ const SECRETS: &str = "secrets";
 const CONNECTIONS: &str = "connections";
 const SETTINGS: &str = "settings";
 const LIMITS: &str = "limits";
+const ENVIRONMENT: &str = "environment";
 const TAB_QUERY: &str = "tab";
 const AGENT_PROVIDERS: &str = "agent-providers";
 const GITHUB: &str = "github";
@@ -141,6 +142,7 @@ pub enum ConnectionTab {
 pub enum SettingsTab {
   General,
   Limits,
+  Environment,
 }
 
 /// The sidebar item a page belongs to: Tasks stays selected on a task or the new task form.
@@ -259,6 +261,7 @@ impl Page {
       [CONNECTIONS, connection] => Self::Connections(ConnectionTab::named(tab), Some(connection.parse().ok()?)),
       [SETTINGS] => Self::Settings(SettingsTab::General),
       [SETTINGS, LIMITS] => Self::Settings(SettingsTab::Limits),
+      [SETTINGS, ENVIRONMENT] => Self::Settings(SettingsTab::Environment),
       _ => return None,
     })
   }
@@ -295,6 +298,7 @@ impl Page {
       }
       Self::Settings(SettingsTab::General) => format!("{root}/{SETTINGS}"),
       Self::Settings(SettingsTab::Limits) => format!("{root}/{SETTINGS}/{LIMITS}"),
+      Self::Settings(SettingsTab::Environment) => format!("{root}/{SETTINGS}/{ENVIRONMENT}"),
     }
   }
 

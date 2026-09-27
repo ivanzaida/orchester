@@ -1,4 +1,4 @@
-//! Project settings (02.N General, 02.M Limits) and the linked repository in New task. Only the
+//! Project settings (02.N General, 02.M Limits, Environment) and the linked repository in New task. Only the
 //! settings form's buttons take Tab stops; the tabs are pointer-only. Buttons that run `gh` or
 //! `git` are not pressed: the tests never run the real programs.
 
@@ -204,4 +204,75 @@ fn project_settings_new_task_shows_the_linked_repository() {
   desktop.wait_for("new-task-base-branch");
   assert!(shows(&mut desktop, "new-task-repository", "ivanzaida/kontur"));
   assert!(shows(&mut desktop, "new-task-base-branch", "main"));
+}
+
+const VARIABLES: &str = "settings-environment-variables";
+
+fn set_variables(desktop: &mut Desktop, text: &str) {
+  desktop
+    .tree
+    .get_element_by_id_mut(VARIABLES)
+    .and_then(|element| element.as_text_input())
+    .expect("the variables field")
+    .set_value(text);
+  desktop.pass();
+}
+
+fn stored_environment(repo: &Path) -> Vec<(String, String)> {
+  ProjectDb::open(repo)
+    .expect("open")
+    .project_environment()
+    .expect("environment")
+    .iter()
+    .map(|(name, value)| (name.to_string(), value.to_owned()))
+    .collect()
+}
+
+#[test]
+fn project_settings_environment_saves_valid_variables_and_suggests_a_shared_build_folder() {
+  let mut desktop = Desktop::with_project();
+  std::fs::write(desktop.repo().join("Cargo.toml"), "[workspace]\n").expect("a Rust repository");
+  settings(&mut desktop);
+  desktop.click("settings-tab-environment");
+  desktop.wait_for("settings-environment-target");
+  assert!(shows(
+    &mut desktop,
+    "settings-environment-target",
+    "Share one build folder between run worktrees"
+  ));
+  // A line that is not NAME=value says so and saves nothing when the field is left.
+  desktop.tab_to(VARIABLES, 5);
+  set_variables(&mut desktop, "RUST_LOG info");
+  desktop.tab();
+  assert!(shows(
+    &mut desktop,
+    "settings-environment",
+    "Write each variable as NAME=value: RUST_LOG info"
+  ));
+  assert!(stored_environment(desktop.repo()).is_empty());
+  desktop.tab_to(VARIABLES, 5);
+  set_variables(&mut desktop, "RUST_LOG=info");
+  desktop.tab();
+  let repo = desktop.repo().to_path_buf();
+  desktop.settle("the saved variable", |_| stored_environment(&repo).len() == 1);
+  // The suggestion adds the shared folder beside the worktrees and saves it.
+  desktop.click("settings-environment-add-target");
+  let target = repo.join(".orchester").join("target").to_string_lossy().into_owned();
+  desktop.settle("the saved build folder", |_| stored_environment(&repo).len() == 2);
+  assert_eq!(
+    stored_environment(&repo),
+    [
+      ("CARGO_TARGET_DIR".to_owned(), target.clone()),
+      ("RUST_LOG".to_owned(), "info".to_owned())
+    ]
+  );
+  assert!(desktop.value(VARIABLES).contains(&format!("CARGO_TARGET_DIR={target}")));
+  desktop.settle("the suggestion to go", |tree| {
+    tree.get_element_by_id("settings-environment-target").is_none()
+  });
+  desktop.settle("the saved status", |tree| {
+    tree
+      .get_element_by_id("settings-save-status")
+      .is_some_and(|status| contains_text(status, "All changes saved"))
+  });
 }

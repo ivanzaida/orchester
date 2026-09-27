@@ -9,7 +9,9 @@ use crate::{
   name::Name,
   pull_request::{PullRequest, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
-  resource::{Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
+  resource::{
+    CommandEnvironment, Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber,
+  },
   revision::Revision,
   run::{ActivityEntry, Checkpoint, Invocation, InvocationPrompt, NewRun, Plan, Run, RunEvent, StepOutput},
   secret::Secret,
@@ -47,6 +49,13 @@ pub trait SettingsStore {
   fn project_limits(&self) -> Result<ProjectLimits, Self::Error>;
 
   fn save_project_limits(&mut self, limits: &ProjectLimits) -> Result<(), Self::Error>;
+
+  /// Variables the project adds to the environment of every agent CLI and command tool its runs
+  /// start (Project settings › Environment); none until some are added.
+  fn project_environment(&self) -> Result<CommandEnvironment, Self::Error>;
+
+  /// Replaces the project's environment additions with `environment`.
+  fn save_project_environment(&mut self, environment: &CommandEnvironment) -> Result<(), Self::Error>;
 }
 
 /// Versioned configuration resources. Reading a body of the wrong kind is an error, not `None`.

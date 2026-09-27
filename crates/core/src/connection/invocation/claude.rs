@@ -27,6 +27,7 @@ use super::{InvocationError, agent_command};
 use crate::{
   command::Command,
   permission::{capability::EnforcedPermissions, claude::permission_args},
+  resource::CommandEnvironment,
 };
 
 /// Which session an invocation works in.
@@ -92,13 +93,20 @@ impl ClaudeInvocation<'_> {
     args.into_iter().map(OsString::from).collect()
   }
 
-  /// The command that runs the step: in the worktree, with `prompt` on standard input and only
-  /// the allowed part of `environment`.
+  /// The command that runs the step: in the worktree, with `prompt` on standard input, the
+  /// allowed part of `environment` and the variables the project adds (`project`).
   pub fn command(
     &self,
     prompt: String,
     environment: impl IntoIterator<Item = (OsString, OsString)>,
+    project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
-    agent_command(self.executable, self.args(), self.worktree, prompt, environment)
+    agent_command(
+      self.executable,
+      self.args(),
+      self.worktree,
+      prompt,
+      (environment, project),
+    )
   }
 }

@@ -1,6 +1,7 @@
 mod activity;
 mod blobs;
 mod connections;
+mod environment;
 mod invocation_prompts;
 mod limits;
 mod plans;
