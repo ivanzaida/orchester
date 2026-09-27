@@ -41,7 +41,9 @@ fn task_graph_progress_lists_parallel_steps_with_their_attempt_and_usage() {
     run_finished(desktop.repo())
   });
   wait_long(&mut desktop, "the finished progress", |desktop| {
-    has(desktop, "task-progress-steps") && shows(desktop, "task-notice", "Every step passed")
+    has(desktop, "task-progress-steps")
+      && has(desktop, "task-ready-notice")
+      && shows(desktop, "task-ready-notice", "Ready for your review")
   });
   for step in ["Implement · Builder", "Checks · Builder", "Review · Builder"] {
     assert!(shows(&mut desktop, "task-progress-steps", step), "{step}");

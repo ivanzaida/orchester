@@ -438,6 +438,17 @@ CREATE TABLE run_permissions (
 ) STRICT;
 ",
   r"
+-- The diff between two commits, read with git: a run's changes from its base to a checkpoint (the
+-- task page's Changes tab). The diff of two commits does not change (a cache, desktop-written).
+CREATE TABLE revision_diffs (
+  base_sha TEXT NOT NULL,
+  head_sha TEXT NOT NULL,
+  diff_blob TEXT NOT NULL REFERENCES blobs (sha256),
+  read_at INTEGER NOT NULL,
+  PRIMARY KEY (base_sha, head_sha)
+) STRICT;
+",
+  r"
 -- Project secrets (07.01): what the user sees of a secret, never its value. The value is in the OS
 -- keychain under the project and secret ids (`orchester_core::secret::VaultKey`). An archived
 -- secret keeps its row, so references to it still resolve, and frees its name in its environment.

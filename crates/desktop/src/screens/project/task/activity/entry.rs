@@ -1,5 +1,6 @@
 //! One transcript row: a step execution header (`mDnc3`) or an entry (`N4SlQq`) — time, glyph,
-//! a one-line header with right-aligned meta, optional body text and an optional output block.
+//! a one-line header with right-aligned meta, optional body text and an optional output block. A
+//! file change entry opens its file in the Changes tab (↗).
 
 use std::sync::Arc;
 
@@ -19,12 +20,13 @@ use orchester_core::{
 };
 
 use super::{
-  super::heading::step_state,
+  super::{super::ProjectNav, heading::step_state},
   engine,
   rows::{Header, RowKind, TranscriptRow},
 };
 use crate::{
   display,
+  navigation::route::ChangedFile,
   tasks::transcript::{CommandEntry, Entry, EntryKind},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, UNPARSED_OPACITY},
   ui::{
@@ -52,7 +54,12 @@ impl Component for TranscriptRowView {
     let row = ctx.props::<TranscriptRow>().clone();
     match &row.kind {
       RowKind::Header(header) => header_row(ctx, &row, header),
-      RowKind::Entry { entry, agent, open } => entry_row(ctx, &row, entry, agent, *open),
+      RowKind::Entry { entry, agent, open } => {
+        let nav = ctx
+          .use_context::<ProjectNav>()
+          .expect("the project shell provides ProjectNav");
+        entry_row(ctx, &row, entry, (agent, *open), &nav)
+      }
     }
   }
 }
@@ -130,9 +137,17 @@ struct Shown {
   output: Option<Vec<Arc<str>>>,
   /// Opens and closes on a press.
   collapsible: bool,
+  /// The repository path a press opens in the Changes tab.
+  opens: Option<Arc<str>>,
 }
 
-fn entry_row(ctx: &Ctx, row: &TranscriptRow, entry: &Entry, agent: &Arc<str>, open: bool) -> Element {
+fn entry_row(
+  ctx: &Ctx,
+  row: &TranscriptRow,
+  entry: &Entry,
+  (agent, open): (&Arc<str>, bool),
+  nav: &ProjectNav,
+) -> Element {
   let shown = shown(ctx, entry, agent, row.raw);
   let raw = matches!(entry.kind, EntryKind::Raw(_));
   let open = open || (raw && row.raw);
@@ -175,6 +190,9 @@ fn entry_row(ctx: &Ctx, row: &TranscriptRow, entry: &Entry, agent: &Arc<str>, op
     .child(glyph(shown.glyph))
     .child(content);
   let line = if raw { line.opacity(UNPARSED_OPACITY) } else { line };
+  if let Some(path) = &shown.opens {
+    return opens_file(nav, row, path, line.into());
+  }
   if !shown.collapsible || (raw && row.raw) {
     return line.into();
   }
@@ -185,11 +203,32 @@ fn entry_row(ctx: &Ctx, row: &TranscriptRow, entry: &Entry, agent: &Arc<str>, op
     .into()
 }
 
+/// `line`, pressed to open the changed file at `path` in the Changes tab (↗).
+fn opens_file(nav: &ProjectNav, row: &TranscriptRow, path: &Arc<str>, line: Element) -> Element {
+  let (nav, task, file) = (
+    nav.clone(),
+    row.task,
+    ChangedFile {
+      path: path.to_string(),
+      worktree: false,
+    },
+  );
+  pressable(surface(), move || nav.show_changes(task, &file))
+    .id(format!("activity-open-file:{path}"))
+    .width(Dimension::Pct(100.0))
+    .child(line)
+    .into()
+}
+
 fn entry_header(shown: &Shown, open: bool) -> Element {
-  let disclosure = shown.collapsible.then(|| {
-    let chevron = if open { Icon::ChevronDown } else { Icon::ChevronRight };
-    icon(chevron, IconSize::Small, PaletteColor::TextMuted)
-  });
+  let disclosure = if shown.opens.is_some() {
+    Some(icon(Icon::ArrowUpRight, IconSize::Small, PaletteColor::TextMuted))
+  } else {
+    shown.collapsible.then(|| {
+      let chevron = if open { Icon::ChevronDown } else { Icon::ChevronRight };
+      icon(chevron, IconSize::Small, PaletteColor::TextMuted)
+    })
+  };
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(GLYPH_SIZE))
@@ -258,6 +297,7 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     body,
     output: None,
     collapsible: false,
+    opens: None,
   };
   match &entry.kind {
     EntryKind::Message(text) => plain(
@@ -276,14 +316,19 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
       )
     },
     EntryKind::Command(entry) => command(ctx, entry),
-    EntryKind::FileChange(changes) => {
-      let (glyph, key) = match changes.first().map(|change| change.kind) {
-        Some(FileChangeKind::Added) => (Icon::FilePlus, "runs.activity.fileAdded"),
-        Some(FileChangeKind::Deleted) => (Icon::FileMinus, "runs.activity.fileDeleted"),
-        Some(FileChangeKind::Modified) | None => (Icon::FilePenLine, "runs.activity.fileModified"),
+    EntryKind::FileChange(change) => {
+      let (glyph, key) = match change.kind {
+        FileChangeKind::Added => (Icon::FilePlus, "runs.activity.fileAdded"),
+        FileChangeKind::Deleted => (Icon::FileMinus, "runs.activity.fileDeleted"),
+        FileChangeKind::Modified => (Icon::FilePenLine, "runs.activity.fileModified"),
       };
-      let paths: Vec<&str> = changes.iter().map(|change| in_worktree(&change.path)).collect();
-      plain(glyph, paths.join(", ").into(), ctx.t(key), None)
+      // Git's paths use `/` whatever the CLI reported.
+      let path: Arc<str> = in_worktree(&change.path).replace('\\', "/").into();
+      let meta = ctx.t_args("runs.activity.fileMeta", [("status", &*ctx.t(key))]);
+      Shown {
+        opens: Some(path.clone()),
+        ..plain(glyph, path, meta, None)
+      }
     }
     EntryKind::Usage(usage) => {
       let meta = ctx.t_args(
@@ -340,6 +385,7 @@ fn unparsed(ctx: &Ctx, lines: &[(OutputStream, Arc<str>)], raw_lines: bool) -> S
     body: None,
     output: Some(text),
     collapsible: !raw_lines,
+    opens: None,
   }
 }
 
@@ -371,6 +417,7 @@ fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
     body,
     output: Some(entry.output.lines().map(Arc::from).collect()),
     collapsible: !entry.output.is_empty(),
+    opens: None,
   }
 }
 
