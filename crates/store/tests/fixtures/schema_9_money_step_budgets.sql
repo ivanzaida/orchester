@@ -1,0 +1,78 @@
+-- A project database at schema 9, before step budgets were tokens, as that version wrote it: the
+-- one-step `delivery` pipeline published with a step budget of 2.50 USD and a draft of it that
+-- changes the budget to 1 EUR; a started run pinned to the published version, its log in event
+-- schema 2. Run and task budgets were tokens already; agent profiles had no permissions yet.
+-- Ids end in 01 project, 02 task, 03 task batch, 04 connection, 05/06 `builder` profile/version,
+-- 07/08 `delivery` pipeline/version, 09 run, 0a run idempotency key, 0b attempt, 0c step execution.
+
+INSERT INTO project (id, key, name) VALUES ('01920000-0000-7000-8000-000000000001', 'ORC', 'Kontur');
+UPDATE counters SET next = 2 WHERE name IN ('task', 'run');
+
+INSERT INTO tasks (id, number, batch_key, title, brief, pipeline_id, budget_tokens, max_duration_ms, status,
+  created_at)
+VALUES ('01920000-0000-7000-8000-000000000002', 1, '01920000-0000-7000-8000-000000000003', 'Say hello', '', NULL,
+  1000000, 1800000, 'draft', 1);
+
+INSERT INTO resources (id, kind, slug, name, created_at) VALUES
+  ('01920000-0000-7000-8000-000000000005', 'agent_profile', 'builder', 'Builder', 2),
+  ('01920000-0000-7000-8000-000000000007', 'pipeline', 'delivery', 'Delivery', 4);
+INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES
+  ('01920000-0000-7000-8000-000000000006', '01920000-0000-7000-8000-000000000005', 1, json('{"schema": 1, "body": {
+    "role": "Builder", "responsibilities": "", "instructions": "Build.",
+    "connection": "01920000-0000-7000-8000-000000000004", "model": "gpt-5.5", "settings": {}}}'), 3),
+  ('01920000-0000-7000-8000-000000000008', '01920000-0000-7000-8000-000000000007', 1, json('{"schema": 1, "body": {
+    "steps": [{"key": "implement", "name": "Implement",
+      "kind": {"agent": {"profile": "01920000-0000-7000-8000-000000000005", "repository": "write"}},
+      "instructions": "", "depends_on": [], "approval_gate": false, "on_failure": null,
+      "budget": {"micros": 2500000, "currency": "USD"}}]}}'), 5);
+INSERT INTO resource_drafts (resource_id, body, based_on, updated_at)
+VALUES ('01920000-0000-7000-8000-000000000007', json('{"schema": 1, "body": {
+    "steps": [{"key": "implement", "name": "Implement",
+      "kind": {"agent": {"profile": "01920000-0000-7000-8000-000000000005", "repository": "write"}},
+      "instructions": "", "depends_on": [], "approval_gate": false, "on_failure": null,
+      "budget": {"micros": 1000000, "currency": "EUR"}}]}}'), 1, 100);
+
+INSERT INTO runs (id, number, idempotency_key, task_id, pipeline_version_id, snapshot, branch, base_revision,
+  initial_budget_tokens, initial_max_duration_ms, budget_tokens, max_duration_ms, used_tokens, pause_requested, status,
+  status_reason, failed_step, last_sequence, created_at)
+VALUES ('01920000-0000-7000-8000-000000000009', 1, '01920000-0000-7000-8000-00000000000a',
+  '01920000-0000-7000-8000-000000000002', '01920000-0000-7000-8000-000000000008', json('{"schema": 1, "body": {
+    "pipeline": {"resource": "01920000-0000-7000-8000-000000000007", "version": "01920000-0000-7000-8000-000000000008",
+      "number": 1},
+    "body": {"steps": [{"key": "implement", "name": "Implement",
+      "kind": {"agent": {"profile": "01920000-0000-7000-8000-000000000005", "repository": "write"}},
+      "instructions": "", "depends_on": [], "approval_gate": false, "on_failure": null,
+      "budget": {"micros": 2500000, "currency": "USD"}}]},
+    "steps": [{"key": "implement", "executor": {"type": "agent", "model": "gpt-5.5", "model_overridden": false,
+      "profile": {"resource": "01920000-0000-7000-8000-000000000005", "version": "01920000-0000-7000-8000-000000000006",
+        "number": 1}}}],
+    "instructions": [], "tools": []}}'),
+  'orchester/orc-1-run-1', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1000000, 1800000, 1000000, 1800000, 0, 0,
+  'running', NULL, NULL, 3, 6);
+INSERT INTO attempts (id, run_id, number, reason, failed_step, return_to, status)
+VALUES ('01920000-0000-7000-8000-00000000000b', '01920000-0000-7000-8000-000000000009', 1, 'initial', NULL, NULL,
+  'active');
+INSERT INTO step_executions (id, attempt_id, step_key, profile_version_id, model, status, wait_reason)
+VALUES ('01920000-0000-7000-8000-00000000000c', '01920000-0000-7000-8000-00000000000b', 'implement',
+  '01920000-0000-7000-8000-000000000006', 'gpt-5.5', 'pending', NULL);
+
+INSERT INTO run_events (run_id, sequence, at, kind, payload) VALUES
+  ('01920000-0000-7000-8000-000000000009', 1, 6, 'created', json('{"schema": 2, "body": {"kind": "created",
+    "task": "01920000-0000-7000-8000-000000000002", "number": 1,
+    "snapshot": {
+      "pipeline": {"resource": "01920000-0000-7000-8000-000000000007",
+        "version": "01920000-0000-7000-8000-000000000008", "number": 1},
+      "body": {"steps": [{"key": "implement", "name": "Implement",
+        "kind": {"agent": {"profile": "01920000-0000-7000-8000-000000000005", "repository": "write"}},
+        "instructions": "", "depends_on": [], "approval_gate": false, "on_failure": null,
+        "budget": {"micros": 2500000, "currency": "USD"}}]},
+      "steps": [{"key": "implement", "executor": {"type": "agent", "model": "gpt-5.5", "model_overridden": false,
+        "profile": {"resource": "01920000-0000-7000-8000-000000000005",
+          "version": "01920000-0000-7000-8000-000000000006", "number": 1}}}],
+      "instructions": [], "tools": []},
+    "branch": "orchester/orc-1-run-1", "base": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "budget": 1000000, "max_duration": 1800000}}')),
+  ('01920000-0000-7000-8000-000000000009', 2, 7, 'started', json('{"schema": 2, "body": {"kind": "started"}}')),
+  ('01920000-0000-7000-8000-000000000009', 3, 7, 'attempt_started', json('{"schema": 2, "body": {
+    "kind": "attempt_started", "attempt": "01920000-0000-7000-8000-00000000000b", "number": 1, "reason": "initial",
+    "executions": [{"id": "01920000-0000-7000-8000-00000000000c", "step": "implement"}]}}'));
