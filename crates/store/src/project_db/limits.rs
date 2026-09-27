@@ -1,6 +1,7 @@
-//! Project settings › Limits, one row; a project that never changed them uses the defaults.
+//! Project settings › Limits, one row; a project that never changed them uses the defaults. The
+//! environment additions of Project settings › Environment are in [`super::environment`].
 
-use orchester_core::{limits::ProjectLimits, store::SettingsStore};
+use orchester_core::{limits::ProjectLimits, resource::CommandEnvironment, store::SettingsStore};
 use rusqlite::{OptionalExtension, params};
 
 use super::ProjectDb;
@@ -47,5 +48,13 @@ impl SettingsStore for ProjectDb {
       ],
     )?;
     Ok(())
+  }
+
+  fn project_environment(&self) -> Result<CommandEnvironment, StoreError> {
+    super::environment::load(&self.connection)
+  }
+
+  fn save_project_environment(&mut self, environment: &CommandEnvironment) -> Result<(), StoreError> {
+    super::environment::save(&mut self.connection, environment)
   }
 }

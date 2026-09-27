@@ -197,3 +197,25 @@ async fn execution_rejects_what_the_preflight_finds_and_tasks_that_are_not_queue
     Err(Rejection::TaskNotFound)
   );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn execution_records_the_branch_the_checkout_has_when_the_run_starts() {
+  let on_main = project(&Setup::new("Append one line."));
+  let run = run_to_the_end(on_main.repo.path(), on_main.task).await;
+  assert_eq!(run.base_branch().map(|branch| branch.as_str()), Some("main"));
+  assert_eq!(run.base().as_str(), git(on_main.repo.path(), &["rev-parse", "main"]));
+
+  let detached = project(&Setup::new("Append one line."));
+  git(detached.repo.path(), &["switch", "--quiet", "--detach", "main"]);
+  let run = run_to_the_end(detached.repo.path(), detached.task).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(run.base_branch(), None, "a detached HEAD has no branch to merge into");
+}
+
+async fn run_to_the_end(root: &std::path::Path, task: TaskId) -> orchester_core::run::Run {
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), task)
+    .expect("the run starts");
+  wait_for(root, &mut events, id, |run| run.status().is_terminal()).await
+}

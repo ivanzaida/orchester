@@ -1,6 +1,7 @@
 //! How a command tool's program starts: which files the program may be, and the process that runs
 //! it — its arguments as they are, the step's worktree as working directory, the cleaned environment
-//! every program Orchester starts gets plus the tool's own variables, and no standard input. Which
+//! every program Orchester starts gets plus the project's variables and the tool's own, and no
+//! standard input. Which
 //! candidate exists is decided by the caller, which owns the file system; how the file starts
 //! (Windows command scripts included) is decided by the process runner.
 
@@ -9,7 +10,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use super::command::{CommandAction, CommandArg, ProgramLocation};
+use super::command::{CommandAction, CommandArg, CommandEnvironment, ProgramLocation};
 use crate::{
   command::Command,
   connection::invocation::{Platform, agent_environment},
@@ -42,30 +43,29 @@ impl CommandAction {
   }
 
   /// The `PATH` the program is looked up in and starts with: the tool's own `PATH` variable when it
-  /// sets one, else `inherited`.
-  pub fn search_path(&self, inherited: Option<OsString>) -> Option<OsString> {
+  /// sets one, else the one the project adds (`project`), else `inherited`.
+  pub fn search_path(&self, project: &CommandEnvironment, inherited: Option<OsString>) -> Option<OsString> {
     self
       .environment()
-      .iter()
-      .find(|(name, _)| name.as_str().eq_ignore_ascii_case("PATH"))
-      .map(|(_, value)| OsString::from(value))
+      .get("PATH")
+      .or_else(|| project.get("PATH"))
+      .map(OsString::from)
       .or(inherited)
   }
 
   /// The process that runs `program` (a file [`Self::program_candidates`] found) in `worktree`,
-  /// with the allowed part of `environment` and the tool's variables, which replace ones of the
-  /// same name.
+  /// with the allowed part of `environment`, then the variables the project adds (`project`), then
+  /// the tool's; each replaces one of the same name.
   pub fn process(
     &self,
     program: &Path,
     worktree: &Path,
     environment: impl IntoIterator<Item = (OsString, OsString)>,
+    project: &CommandEnvironment,
   ) -> Command {
     let mut variables = agent_environment(environment);
-    for (name, value) in self.environment().iter() {
-      variables.retain(|(existing, _)| !existing.eq_ignore_ascii_case(name.as_str()));
-      variables.push((name.as_str().to_owned(), value.to_owned()));
-    }
+    project.add_to(&mut variables);
+    self.environment().add_to(&mut variables);
     Command::new(program, self.args().iter().map(CommandArg::as_str))
       .with_current_dir(worktree)
       .with_environment(variables)

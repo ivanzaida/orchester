@@ -2,11 +2,13 @@ use std::{num::NonZeroU32, time::Duration};
 
 use orchester_core::{
   id::RunId,
-  run::{AttemptReason, AttemptStatus, PauseReason, Run, RunError, RunEventKind, RunNumber, RunStatus, StepStatus},
+  run::{
+    AttemptReason, AttemptStatus, PauseReason, Run, RunError, RunEventKind, RunNumber, RunStatus, StepStatus, StoredRun,
+  },
   tokens::TokensUsed,
 };
 
-use crate::fixture::{Config, Logged, at, new_run, revision};
+use crate::fixture::{Config, Logged, at, new_run, revision, stored};
 
 const PAUSED: RunStatus = RunStatus::Paused(PauseReason::Requested);
 
@@ -127,6 +129,39 @@ fn run_lifecycle_pending_run_can_be_cancelled() {
   logged.apply(|run| run.cancel(at(12)));
   assert_eq!(logged.run.status(), &RunStatus::Cancelled);
   assert!(logged.run.attempts().is_empty());
+}
+
+/// A run cancelled before its first attempt is a finished run like any other: its stored state
+/// and its event log both read back.
+#[test]
+fn run_lifecycle_run_cancelled_before_it_started_restores_and_replays() {
+  let mut logged = Logged::pending();
+  logged.apply(|run| run.cancel(at(12)));
+  let kinds: Vec<_> = logged.log.iter().map(|event| event.kind().name()).collect();
+  assert_eq!(kinds, ["created", "cancelled"]);
+  assert_eq!(Run::restore(stored(&logged.run)), Ok(logged.run.clone()));
+  assert_eq!(Run::replay(&logged.log), Ok(logged.run));
+}
+
+#[test]
+fn run_lifecycle_restore_rejects_attempts_that_contradict_the_status() {
+  let started = Logged::started().run;
+  let pending = StoredRun {
+    status: RunStatus::Pending,
+    ..stored(&started)
+  };
+  assert!(matches!(Run::restore(pending), Err(RunError::Inconsistent(_))));
+  let unstarted = stored(&Logged::pending().run);
+  for status in [RunStatus::Running, PAUSED, RunStatus::Succeeded] {
+    let never_ran = StoredRun {
+      status: status.clone(),
+      ..unstarted.clone()
+    };
+    assert!(
+      matches!(Run::restore(never_ran), Err(RunError::Inconsistent(_))),
+      "{status:?}"
+    );
+  }
 }
 
 #[test]

@@ -60,6 +60,8 @@ pub enum StoreError {
   DuplicateSecretName { name: String, environment: &'static str },
   #[error("secret {0} does not exist")]
   SecretNotFound(SecretId),
+  #[error("run {0} was merged already")]
+  AlreadyMerged(RunId),
 }
 
 impl StoreError {

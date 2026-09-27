@@ -176,7 +176,7 @@ fn untracked_diff(
 
 /// `git <args>` in `directory`, with git's messages in English. Git takes no optional locks: a read
 /// beside an agent at work must not refresh the worktree's index while the runner commits in it.
-fn git_command<'a>(git: &Path, directory: &Path, args: impl IntoIterator<Item = &'a str>) -> Command {
+pub(crate) fn git_command<'a>(git: &Path, directory: &Path, args: impl IntoIterator<Item = &'a str>) -> Command {
   Command::new(git, args)
     .with_current_dir(directory)
     .with_env("LC_ALL", "C")

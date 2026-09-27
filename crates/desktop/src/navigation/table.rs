@@ -65,7 +65,9 @@ fn project_pages(routes: Routes) -> Routes {
     .layout("/connections", project::page, |routes| {
       selection(routes, "/:connection")
     })
-    .layout("/settings", project::page, |routes| selection(routes, "/limits"))
+    .layout("/settings", project::page, |routes| {
+      selection(routes, "/limits").route("/environment", |_ctx| Element::new())
+    })
     .fallback(|_ctx| Element::new())
 }
 

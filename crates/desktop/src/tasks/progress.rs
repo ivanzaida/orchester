@@ -98,6 +98,8 @@ pub fn progress(run: &RunView, lost: bool, now: Timestamp) -> Vec<ProgressRow> {
 
 fn state(run: &RunView, step: &StepView, lost: bool) -> ProgressState {
   match (run.run.status(), step.status) {
+    // Cancelled before its first attempt: no step will run, as if its executions were skipped.
+    (RunStatus::Cancelled, None) => ProgressState::Cancelled,
     (_, None | Some(StepStatus::Pending)) => ProgressState::Waiting,
     (RunStatus::Paused(PauseReason::Requested), Some(StepStatus::Running)) => ProgressState::Paused,
     (RunStatus::Paused(PauseReason::LimitReached(_)), Some(StepStatus::Running)) => ProgressState::StoppedAtLimit,

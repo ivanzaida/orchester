@@ -9,6 +9,7 @@ pub mod conversation;
 pub mod diff;
 pub mod github;
 pub mod id;
+pub mod integration;
 pub mod limits;
 pub mod name;
 pub mod permission;

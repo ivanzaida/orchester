@@ -232,6 +232,7 @@
       "stoppedAtLimit": "Run #{{run}} stopped at its limit",
       "interrupted": "Run #{{run}} was interrupted",
       "succeeded": "Run #{{run}} completed",
+      "merged": "Run #{{run}} merged",
       "failed": "Run #{{run}} failed",
       "cancelled": "Run #{{run}} was cancelled"
     }
@@ -279,6 +280,7 @@
       "stoppedAtLimit": "Stopped at limit",
       "interrupted": "Interrupted",
       "succeeded": "Completed",
+      "merged": "Merged",
       "failed": "Failed",
       "cancelled": "Cancelled"
     },
@@ -302,6 +304,7 @@
       "interrupted": "Last checkpoint {{checkpoint}}",
       "interruptedNoCheckpoint": "No checkpoint yet",
       "succeeded": "Every step passed",
+      "merged": "Merged into {{branch}}",
       "failed": "Run failed",
       "cancelled": "Run cancelled"
     },
@@ -398,6 +401,7 @@
         "succeeded": "Run {{run}} · Attempt {{attempt}} · every step passed",
         "failed": "Run {{run}} · Attempt {{attempt}} · failed at {{step}}",
         "cancelled": "Run {{run}} · Attempt {{attempt}} · cancelled",
+        "cancelledBeforeStart": "Run {{run}} · cancelled before it started",
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
         "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted"
       },
@@ -483,7 +487,7 @@
         "pausingTitle": "Pausing at the next checkpoint",
         "pausingDetail": "The agent finishes the invocation it is running and its work is committed as a checkpoint; then the run pauses. Nothing in the worktree is lost.",
         "askingTitle": "{{agent}} asks you a question",
-        "askingDetail": "Answer it in the Conversation tab. {{step}} goes on with your answer.",
+        "askingDetail": "Answer it in the task conversation. {{step}} goes on with your answer.",
         "pausedTitle": "Paused at checkpoint {{checkpoint}}",
         "pausedNoCheckpointTitle": "Paused",
         "pausedDetail": "Work is preserved. No new steps or tool calls start until you resume this run.",
@@ -661,6 +665,8 @@
       "worktreeTooLargeTitle": "The changes not checkpointed are too large to show here",
       "worktreeTooLargeDetail": "The run’s worktree changes {{files}} files and {{lines}} lines of tracked files beyond its checkpoint, more than Orchester shows ({{maxFiles}} files or {{maxLines}} lines).",
       "worktreeFailedTitle": "Couldn’t read the changes not checkpointed",
+      "worktreeRemovedTitle": "The run’s worktree was removed",
+      "worktreeRemovedDetail": "The run ended and its worktree is gone. What it committed, up to its latest checkpoint, is shown.",
       "notCheckpointedHeading": "NOT CHECKPOINTED  {{count}}",
       "omitted": "{{count}} more changed lines are not shown; the file is too large. Read them with git on the run’s branch.",
       "range": "{{from}} → {{to}}",
@@ -743,6 +749,81 @@
       "agents": "Agents on this run",
       "agentDetail": "{{engine}} · {{steps}}",
       "openConversation": "Open conversation"
+    },
+    "merge": {
+      "status": "Merged",
+      "merge": "Merge into {{branch}}",
+      "mergeUnknown": "Merge into your branch",
+      "merging": "Merging…",
+      "unavailable": "Merge is unavailable: this run didn’t record the branch your checkout had when it started (it started before Orchester kept it, or on a detached HEAD). Merge its branch yourself with git.",
+      "mergedTitle": "Merged into {{branch}}",
+      "mergedDetail": {
+        "fastForward": "{{branch}} moved forward to {{revision}} at {{time}}.",
+        "mergeCommit": "Merge commit {{revision}} joined the run’s work into {{branch}} at {{time}}.",
+        "alreadyMerged": "{{branch}} already had the run’s work at {{revision}}; recorded at {{time}}."
+      },
+      "left": {
+        "nothing": "Its worktrees and merged branches were removed.",
+        "branches": "Its worktrees were removed. Kept, not merged: {{branches}}.",
+        "worktree": {
+          "one": "One of its worktrees is left. Remove worktree in the top bar says what it holds.",
+          "other": "{{count}} of its worktrees are left. Remove worktrees in the top bar says what they hold."
+        }
+      },
+      "failure": {
+        "title": "Not merged into {{branch}}",
+        "wrongBranch": "Your checkout is on {{current}}, not {{branch}}. Switch it to {{branch}}, then merge again. Nothing was changed.",
+        "detached": "Your checkout has a detached HEAD. Switch it to {{branch}}, then merge again. Nothing was changed.",
+        "uncommitted": "Your checkout has uncommitted changes: {{files}}. Commit or stash them yourself, then merge again. Nothing was changed.",
+        "inProgress": "A merge, cherry-pick or revert is in progress in your checkout. Finish or abort it, then merge again. Nothing was changed.",
+        "conflict": "The run’s changes conflict with your branch in {{files}}. The merge was undone, so your checkout is as it was. Merge the run’s branch yourself to resolve the conflicts.",
+        "branchMissing": "The run’s branch {{branch}} no longer exists, so there is nothing to merge.",
+        "refused": "Git didn’t merge, and the merge was undone: {{detail}}",
+        "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
+        "notSucceeded": "Only a run whose every step passed can be merged.",
+        "alreadyMerged": "This run was merged already.",
+        "git": "Git failed: {{detail}}",
+        "gitStopped": "Git did not finish. Check the repository with git status before you try again.",
+        "brief": {
+          "gitMissing": "git was not found",
+          "git": "git did not finish"
+        }
+      }
+    },
+    "worktree": {
+      "remove": {
+        "one": "Remove worktree",
+        "other": "Remove worktrees"
+      },
+      "removing": "Removing…",
+      "title": {
+        "one": "Remove the worktree of run #{{run}}?",
+        "other": "Remove the worktrees of run #{{run}}?"
+      },
+      "explanation": {
+        "one": "Removes it from .orchester/worktrees with everything in it, build output included. Committed work stays on the branches: a branch whose commits are merged is deleted, the others are kept.",
+        "other": "Removes them from .orchester/worktrees with everything in them, build output included. Committed work stays on the branches: a branch whose commits are merged is deleted, the others are kept."
+      },
+      "runOwner": "Run #{{run}}",
+      "stepOwner": "{{step}} · ran beside other steps",
+      "state": {
+        "clean": "No uncommitted changes",
+        "uncommitted": {
+          "one": "1 file not committed",
+          "other": "{{count}} files not committed"
+        },
+        "missing": "Folder already gone"
+      },
+      "branch": {
+        "deleted": "deleted · merged",
+        "kept": "kept · not merged"
+      },
+      "discard": "Discard the uncommitted changes listed above",
+      "failure": {
+        "notFinished": "Only a run that ended can have its worktrees removed.",
+        "newChanges": "Nothing was removed from {{path}}: changes appeared in it after this dialog listed them. Look at them, then remove it again.",
+        "notRemoved": "Git didn’t remove {{path}}: {{detail}}"
+      }
     },
     "preflight": {
       "pipelineNotPublished": "The task’s pipeline has no published version.",
@@ -848,6 +929,7 @@
       "stopped": "Stopped",
       "interrupted": "Interrupted",
       "ready": "Ready for review",
+      "merged": "Merged",
       "ended": "Ended"
     },
     "to": {
@@ -885,7 +967,7 @@
       "attach": "Attach",
       "send": "Send",
       "sending": "Sending…",
-      "closed": "This run has ended, so no agent reads messages to it."
+      "closed": "No agent of this run reads messages any more."
     },
     "explanation": {
       "notStarted": "Messages reach the first step when the run starts.",
@@ -894,6 +976,7 @@
       "queued": "Messages stay queued until the run continues.",
       "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
       "readyNoAgent": "No agent step of this run can be asked again.",
+      "merged": "This run's work was merged. Messages no longer reach its agents.",
       "ended": "This run has ended. Messages no longer reach its agents."
     },
     "errors": {
@@ -1677,14 +1760,15 @@
     "title": "Project settings",
     "description": "Name, folder and GitHub account for {{project}}.",
     "loadFailed": "Couldn’t read the project’s settings",
+    "saved": "All changes saved",
+    "saving": "Saving…",
     "tabs": {
       "general": "General",
-      "limits": "Limits"
+      "limits": "Limits",
+      "environment": "Environment"
     },
     "limits": {
       "description": "Defaults and limits for {{project}}. They apply to new tasks and runs in this project.",
-      "saved": "All changes saved",
-      "saving": "Saving…",
       "tokenBudgets": "Token budgets",
       "max": "Maximum run budget",
       "maxDetail": "The largest token budget a task, a run or a raised limit may have. Budget fields reject larger values and name this maximum. There is no minimum beyond more than 0.",
@@ -1702,6 +1786,18 @@
       },
       "changesTitle": "Changes apply to new runs",
       "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum."
+    },
+    "environment": {
+      "description": "Variables {{project}} adds for its agents and command tools.",
+      "heading": "Environment variables",
+      "detail": "Added to the environment of every agent CLI and command tool this project’s runs start, on top of the cleaned environment every program gets (PATH, HOME, TEMP and the like). A command tool’s own variables win over these.",
+      "variables": "Variables · NAME=value per line",
+      "hint": "Stored and shown in plain text, so never put secrets here.",
+      "targetTitle": "Share one build folder between run worktrees",
+      "targetDetail": "Each run works in its own worktree, and Cargo builds each one into a target folder of its own, often 10–20 GB. With CARGO_TARGET_DIR every run builds into .orchester/target beside the worktrees instead.",
+      "addTarget": "Add CARGO_TARGET_DIR",
+      "changesTitle": "Changes apply to the next agent or command that starts",
+      "changesDetail": "An agent or command already running keeps the environment it started with."
     },
     "general": {
       "project": "Project",
@@ -2825,6 +2921,23 @@
         "running": "Archiving secret {{name}}",
         "done": "Secret archived · {{name}}",
         "failed": "Could not archive secret {{name}}"
+      },
+      "runMerge": {
+        "running": "Merging {{task}} run #{{run}} into {{branch}}",
+        "done": "Merged {{task}} run #{{run}} into {{branch}}",
+        "failed": "Could not merge {{task}} run #{{run}} into {{branch}}",
+        "notDone": "{{task}} run #{{run}} not merged"
+      },
+      "runCleanup": {
+        "running": "Removing the worktrees of {{task}} run #{{run}}",
+        "done": "Removed the worktrees of {{task}} run #{{run}}",
+        "failed": "Could not remove the worktrees of {{task}} run #{{run}}",
+        "notDone": "Worktrees of {{task}} run #{{run}} not removed"
+      },
+      "projectEnvironment": {
+        "running": "Saving the environment",
+        "done": "Environment saved",
+        "failed": "Could not save the environment"
       }
     },
     "opens": {

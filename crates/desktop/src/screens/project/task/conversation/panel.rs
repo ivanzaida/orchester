@@ -346,6 +346,7 @@ fn heading(ctx: &Ctx, state: PanelState) -> Element {
     PanelState::Stopped => (Icon::OctagonPause, "conversation.status.stopped"),
     PanelState::Interrupted => (Icon::CirclePause, "conversation.status.interrupted"),
     PanelState::Ready => (Icon::GitPullRequest, "conversation.status.ready"),
+    PanelState::Merged => (Icon::GitMerge, "conversation.status.merged"),
     PanelState::Ended => (Icon::Square, "conversation.status.ended"),
   };
   Row::new()
@@ -402,6 +403,7 @@ fn explanation(ctx: &Ctx, conversation: &Conversation) -> Arc<str> {
     (PanelState::Paused | PanelState::Stopped | PanelState::Interrupted, _) => ctx.t("conversation.explanation.queued"),
     (PanelState::Ready, Some(agent)) => ctx.t_args("conversation.explanation.ready", [("agent", agent)]),
     (PanelState::Ready, None) => ctx.t("conversation.explanation.readyNoAgent"),
+    (PanelState::Merged, _) => ctx.t("conversation.explanation.merged"),
     (PanelState::Ended, _) => ctx.t("conversation.explanation.ended"),
   }
 }

@@ -35,6 +35,8 @@ pub enum PanelState {
   Interrupted,
   /// Ready for review: a message asks the agent again.
   Ready,
+  /// Its work was merged into its base branch: no agent reads messages any more.
+  Merged,
   /// Failed or cancelled: no agent reads messages any more.
   Ended,
 }
@@ -49,13 +51,14 @@ impl PanelState {
       TaskPhase::StoppedAtLimit => Self::Stopped,
       TaskPhase::Interrupted => Self::Interrupted,
       TaskPhase::Succeeded => Self::Ready,
+      TaskPhase::Merged => Self::Merged,
       TaskPhase::Failed | TaskPhase::Cancelled => Self::Ended,
     }
   }
 
   /// Whether a message written now can reach an agent of the task.
   pub const fn takes_messages(self) -> bool {
-    !matches!(self, Self::Ended)
+    !matches!(self, Self::Merged | Self::Ended)
   }
 }
 

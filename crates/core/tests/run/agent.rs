@@ -8,7 +8,8 @@ use orchester_core::{
     AgentConnection, AgentProvider, CatalogSource, CheckResult, Connection, ConnectionCheck, ConnectionKind,
     ConnectionStatus, GitHubHost, ModelCatalog, SignIn,
   },
-  id::ConnectionId,
+  id::{ConnectionId, RunId},
+  integration::{MergeKind, RunMerge},
   name::Name,
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess, StepCommands,
@@ -19,7 +20,7 @@ use orchester_core::{
   task::{Task, TaskStatus},
 };
 
-use crate::fixture::{Config, Logged, at, key, task, task_key, version};
+use crate::fixture::{Config, Logged, at, key, revision, task, task_key, version};
 
 #[test]
 fn branch_for_run_uses_the_lowercase_task_key_and_ordinal() {
@@ -196,7 +197,7 @@ fn preflight_reports_tool_steps_unpublished_profiles_and_missing_pipelines() {
 #[test]
 fn task_phase_follows_the_task_and_its_latest_run() {
   let draft = task("Brief.", &["Works"]);
-  assert_eq!(TaskPhase::of(&draft, None), TaskPhase::Draft);
+  assert_eq!(TaskPhase::of(&draft, None, None), TaskPhase::Draft);
   let queued = Task::from_stored(
     draft.id(),
     draft.key().clone(),
@@ -204,21 +205,49 @@ fn task_phase_follows_the_task_and_its_latest_run() {
     TaskStatus::Queued,
     draft.created_at(),
   );
-  assert_eq!(TaskPhase::of(&queued, None), TaskPhase::Queued);
+  assert_eq!(TaskPhase::of(&queued, None, None), TaskPhase::Queued);
   let mut logged = Logged::pending();
-  assert_eq!(TaskPhase::of(&queued, Some(&logged.run)), TaskPhase::Queued);
+  assert_eq!(TaskPhase::of(&queued, Some(&logged.run), None), TaskPhase::Queued);
   logged.apply(|run| run.start(at(11)));
-  assert_eq!(TaskPhase::of(&queued, Some(&logged.run)), TaskPhase::Running);
-  assert!(TaskPhase::of(&queued, Some(&logged.run)).is_active());
+  assert_eq!(TaskPhase::of(&queued, Some(&logged.run), None), TaskPhase::Running);
+  assert!(TaskPhase::of(&queued, Some(&logged.run), None).is_active());
   assert_eq!(
-    TaskPhase::of(&queued, Some(&logged.run)).without_runner(),
+    TaskPhase::of(&queued, Some(&logged.run), None).without_runner(),
     TaskPhase::Interrupted
   );
   let research = logged.exec("research");
   logged.apply(|run| run.start_step(research, at(12)));
   logged.apply(|run| run.fail_step(research, StepFailure::AgentFailed, at(13)));
-  assert_eq!(TaskPhase::of(&queued, Some(&logged.run)), TaskPhase::Failed);
+  assert_eq!(TaskPhase::of(&queued, Some(&logged.run), None), TaskPhase::Failed);
   assert_eq!(TaskPhase::Failed.without_runner(), TaskPhase::Failed);
   assert_eq!(TaskPhase::Waiting.without_runner(), TaskPhase::Waiting);
   assert_eq!(TaskPhase::Queued.without_runner(), TaskPhase::Queued);
+}
+
+#[test]
+fn task_phase_is_merged_once_the_run_that_succeeded_is_merged() {
+  let task = task("Brief.", &["Works"]);
+  let mut logged = Logged::started();
+  logged.through_plan();
+  for step in ["implement", "checks", "review", "pr"] {
+    logged.pass(step);
+  }
+  assert_eq!(TaskPhase::of(&task, Some(&logged.run), None), TaskPhase::Succeeded);
+  let merge = RunMerge {
+    run: logged.run.id(),
+    into: BranchName::new("main").expect("valid branch"),
+    revision: revision('b'),
+    kind: MergeKind::FastForward,
+    merged_at: at(30),
+  };
+  assert_eq!(TaskPhase::of(&task, Some(&logged.run), Some(&merge)), TaskPhase::Merged);
+  let earlier = RunMerge {
+    run: RunId::generate(),
+    ..merge
+  };
+  assert_eq!(
+    TaskPhase::of(&task, Some(&logged.run), Some(&earlier)),
+    TaskPhase::Succeeded,
+    "the merge of another run does not count"
+  );
 }

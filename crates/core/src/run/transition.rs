@@ -178,7 +178,7 @@ impl Run {
   }
 
   /// Stops the run for good. Open step executions are skipped; completed work and artifacts
-  /// stay as they are.
+  /// stay as they are. A pending run ends without an attempt.
   pub fn cancel(&mut self, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
     self.transition(now, |transition| {
       transition.skip_open()?;

@@ -17,6 +17,7 @@ use orchester_core::{
     git::{GitDiffError, RevisionChanges, RevisionDiffError, WorktreeRead, read_revision_diff, read_worktree_changes},
   },
   id::RunId,
+  integration::WORKTREES_DIR,
   revision::Revision,
   time::Timestamp,
 };
@@ -24,9 +25,6 @@ use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
 use crate::{messages::Message, programs::Programs};
-
-/// Where the runner keeps a run's worktree (`docs/architecture/storage.md`, "Storage layout").
-const WORKTREES_DIR: &str = ".orchester/worktrees";
 
 /// The `git` program, looked up on the `PATH` like the runner does.
 pub const GIT: &str = "git";
@@ -73,8 +71,10 @@ impl Checkpointed {
 /// checkpointed yet, or that was kept when a run stopped without its checkpoint.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotCheckpointed {
-  /// Nothing beyond its commit, or no worktree (yet, or any more).
+  /// Nothing beyond its commit, or no worktree yet.
   Clean,
+  /// The run ended and its worktree was removed; its checkpoints are all there is.
+  Removed,
   Read(Arc<ReadChanges>),
   TooLarge {
     from: Revision,
@@ -148,11 +148,20 @@ pub fn checkpointed_in(
   })
 }
 
-/// What the worktree of `run` holds beyond its commit.
-pub fn not_checkpointed_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<NotCheckpointed, ChangesError> {
+/// What the worktree of `run` holds beyond its commit; `ended` when the run ended, so a missing
+/// worktree was removed rather than not created yet.
+pub fn not_checkpointed_in(
+  repo_root: &Path,
+  programs: &Programs,
+  (run, ended): (RunId, bool),
+) -> Result<NotCheckpointed, ChangesError> {
   let worktree = run_worktree(repo_root, run);
   if !worktree.is_dir() {
-    return Ok(NotCheckpointed::Clean);
+    return Ok(if ended {
+      NotCheckpointed::Removed
+    } else {
+      NotCheckpointed::Clean
+    });
   }
   let read = read_worktree_changes(&programs.runner(), Path::new(GIT), &worktree)?;
   Ok(match read.read {

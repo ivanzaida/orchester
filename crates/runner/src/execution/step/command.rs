@@ -1,5 +1,6 @@
 //! The agent CLI command of an agent step, for the provider of its profile's connection (Codex or
-//! Claude Code): the connection and settings, the worktree it works in, and the prompt assembled for
+//! Claude Code): the connection and settings, the worktree it works in, the variables the project
+//! adds to its environment (read at each start), and the prompt assembled for
 //! its injection event: for a new session the whole prompt with the instructions injected at start,
 //! the outputs of the steps it runs after (and, for Codex, the result schema); for a session that
 //! resumes the continue prompt with the instructions injected at resume. A gated step a reviewer
@@ -21,7 +22,7 @@ use orchester_core::{
     PinnedVersion, PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, Run, RunContext,
     StepExecutor, StepOutput,
   },
-  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore},
+  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, SettingsStore},
 };
 
 use super::{super::run::RunTask, Continuation};
@@ -90,6 +91,10 @@ impl RunTask {
       .iter()
       .find_map(|(name, value)| (name == REASONING_EFFORT).then_some(value));
     let provider = connection.provider();
+    let environment = self
+      .db
+      .project_environment()
+      .map_err(|error| problem(error.to_string()))?;
     let command = match provider {
       AgentProvider::CodexCli => CodexInvocation {
         executable: connection.executable(),
@@ -102,7 +107,7 @@ impl RunTask {
         resume,
         output_schema: Some(&self.schema_path()),
       }
-      .command(prompt, std::env::vars_os()),
+      .command(prompt, std::env::vars_os(), &environment),
       AgentProvider::ClaudeCodeCli => ClaudeInvocation {
         executable: connection.executable(),
         model: model.as_str(),
@@ -111,7 +116,7 @@ impl RunTask {
         worktree,
         session: ClaudeSession::continuing(resume),
       }
-      .command(prompt, std::env::vars_os()),
+      .command(prompt, std::env::vars_os(), &environment),
     };
     command
       .map(|command| (command, provider, sources))

@@ -16,7 +16,7 @@ use orchester_core::{
   conversation::{self, AgentMessage, Delivery, Message, MessageBody},
   id::{RunId, StepExecutionId},
   run::{Invocation, Run, RunStatus, StepExecutor, StepFailure, StepOutcome, StepOutput},
-  store::ConversationStore,
+  store::{ConversationStore, MergeStore},
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
@@ -82,13 +82,22 @@ impl Scheduler {
   }
 }
 
-/// What delivering messages does to `run` while no task executes it: an ended run takes none, a
-/// succeeded one is followed up and executes again, one whose agent waits for an answer executes
+/// What delivering messages does to `run` while no task executes it: an ended or merged run takes
+/// none, a succeeded one is followed up and executes again, one whose agent waits for an answer executes
 /// again to resume it; anything else keeps them queued.
 fn deliver_idle(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Option<Prepared>, Rejection> {
   let mut stored = idle::load(db, run)?;
   match stored.status() {
     RunStatus::Failed(_) | RunStatus::Cancelled => Err(Rejection::RunEnded),
+    // Its work was merged into its base branch: the task is done.
+    RunStatus::Succeeded
+      if db
+        .run_merge(run)
+        .map_err(|error| failed("cannot read the run's merge", &error))?
+        .is_some() =>
+    {
+      Err(Rejection::RunEnded)
+    }
     RunStatus::Succeeded => {
       let messages = db
         .messages(stored.task())

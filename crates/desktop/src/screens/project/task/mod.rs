@@ -3,8 +3,9 @@
 //! the tabs, and the Summary (`uVIxb`, `F5Lsi`; the plan review 02.11 `x3lVC` while a plan waits for
 //! a decision), Conversation (02.12 `jgqPe`), Changes or Activity (02.I `SfXU1`) tab. The run is
 //! read from the project database and read again whenever the runner reports a change or a message
-//! is sent; its changes up to its latest checkpoint are read again when it records a new one.
-//! Artifacts come in a later milestone and are shown unavailable.
+//! is sent; its changes up to its latest checkpoint are read again when it records a new one. Once
+//! the run ended, what it left in the repository is read too: Ready for review merges it, and
+//! *Remove worktree* clears it. Artifacts come in a later milestone and are shown unavailable.
 
 mod activity;
 mod changes;
@@ -20,6 +21,7 @@ mod ready;
 mod retry_limit;
 mod summary;
 mod tab_state;
+mod worktree;
 
 use std::{sync::Arc, time::SystemTime};
 
@@ -36,6 +38,7 @@ use lurq::{
 };
 use orchester_core::{
   id::TaskId,
+  integration::Leftovers,
   limits::ProjectLimits,
   run::{RunStatus, TaskPhase},
 };
@@ -46,16 +49,20 @@ use self::{
   controls::{ControlAction, RunControl, control_action, control_buttons},
   notice::Lost,
   plan_review::{PlanReviewPanel, PlanReviewProps},
+  ready::{ReadyForReview, ReadyProps},
+  worktree::{RemoveWorktree, RemoveWorktreeProps},
 };
 use super::{ProjectNav, page, runner::connection_notice};
 use crate::{
-  background, messages,
+  background,
+  messages::{self, Message},
   navigation::route::{ChangedFile, Page, TaskPageTab},
   programs::Programs,
   runner::{Runners, state::RunnerState},
   tasks::{
     changes::checkpointed_in,
     detail::{RunView, TaskDetail},
+    integration::{LeftBehind, leftovers_in},
     plan::PlanReview,
   },
   theme::ExtraSpacing,
@@ -72,6 +79,15 @@ use crate::{
 
 /// Section tab row (`X7jYe`).
 const TAB_ROW_HEIGHT: f32 = 42.0;
+
+/// What a run left, with the tasks revision and merge it was read at.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LeftoversRead {
+  read_at: (u64, bool),
+  left: LeftBehind,
+}
+
+impl lurq::app::component::DevtoolsInspectable for LeftoversRead {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TaskProps {
@@ -116,11 +132,13 @@ impl Component for TaskScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     control_action(ctx);
+    let focus_composer = ctx.signal(false);
+    ctx.provide(conversation::ComposerFocus(focus_composer.clone()));
     Self {
       requested: ctx.signal(None),
       retry: ctx.signal(0),
       reload: ctx.signal(0),
-      focus_composer: ctx.signal(false),
+      focus_composer,
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
@@ -167,7 +185,7 @@ impl Component for TaskScreen {
         ),
       };
       return column
-        .child(self.topbar(ctx, &props, None, &control))
+        .child(self.topbar(ctx, &props, (None, None), &control))
         .child(centered(panel.into()));
     };
     let online = props.runner == RunnerState::Online;
@@ -177,7 +195,8 @@ impl Component for TaskScreen {
       Some(CheckpointedLoad::Ready(checkpointed)) => checkpointed.files(),
       _ => None,
     };
-    let body = self.body(ctx, &props, &detail, (lost, files), checkpointed);
+    let leftovers = self.leftovers(ctx, &props, &detail);
+    let body = self.body(ctx, &props, &detail, (lost, files), (checkpointed, leftovers.clone()));
     let runner_notice = connection_notice(ctx, &props.runner, props.runner_since, &self.runners).map(padded);
     let control_error = control
       .state()
@@ -185,8 +204,9 @@ impl Component for TaskScreen {
       .error
       .filter(|_| !control.state().get().is_pending())
       .map(|error| control_error_row(&message_text(ctx, &error)));
+    let removal = self.removal(ctx, &props, &detail, leftovers.as_ref());
     column
-      .child(self.topbar(ctx, &props, Some(&detail), &control))
+      .child(self.topbar(ctx, &props, (Some(&detail), removal), &control))
       .with_children(runner_notice)
       .child(heading::heading(ctx, &detail, lost.is_some()))
       .with_children(control_error)
@@ -203,7 +223,7 @@ impl TaskScreen {
     props: &TaskProps,
     detail: &Arc<TaskDetail>,
     (lost, files): (Option<Lost>, Option<usize>),
-    checkpointed: Option<CheckpointedLoad>,
+    (checkpointed, leftovers): (Option<CheckpointedLoad>, Option<Result<Leftovers, Message>>),
   ) -> Element {
     let live = detail.phase() == TaskPhase::Running && lost.is_none();
     if props.tab == TaskPageTab::Summary
@@ -213,16 +233,16 @@ impl TaskScreen {
       return plan_review(ctx, detail, run, review);
     }
     match (props.tab, detail.run.as_ref()) {
-      (TaskPageTab::Summary, Some(run)) if *run.run.status() == RunStatus::Succeeded => {
-        let ask = self.ask_agent(props.task);
-        ready::ready_for_review(
-          ctx,
-          run,
-          checkpointed.as_ref(),
-          props.project.project.name().as_str(),
-          &ask,
-        )
-      }
+      (TaskPageTab::Summary, Some(run)) if *run.run.status() == RunStatus::Succeeded => ctx
+        .mount_keyed::<ReadyForReview>(
+          &format!("task-ready-{}", run.id()),
+          ReadyProps {
+            detail: detail.clone(),
+            checkpointed,
+            open: props.project.clone(),
+            leftovers,
+          },
+        ),
       (TaskPageTab::Conversation, _) => conversation::conversation_tab(
         ctx,
         detail,
@@ -259,18 +279,71 @@ impl TaskScreen {
     }
   }
 
-  /// Ask agent and Open conversation of a run ready for review: the Conversation tab, with the
-  /// focus in the composer for Ask agent.
-  fn ask_agent(&self, task: TaskId) -> ready::Ask {
-    let (nav, focus) = (self.nav.clone(), self.focus_composer.clone());
-    let open = self.nav.clone();
-    ready::Ask {
-      ask: Arc::new(move || {
-        focus.set(true);
-        nav.show(Page::Task(task, TaskPageTab::Conversation));
-      }),
-      open: Arc::new(move || open.show(Page::Task(task, TaskPageTab::Conversation))),
+  /// What the latest run left in the repository once it ended: its worktrees and branches, read
+  /// again whenever the task is; `None` while it has not ended.
+  fn leftovers(&self, ctx: &mut Ctx, props: &TaskProps, detail: &TaskDetail) -> Option<Result<Leftovers, Message>> {
+    let run = detail.run.as_ref().filter(|run| run.run.status().is_terminal())?;
+    let programs = ctx
+      .use_context::<Programs>()
+      .expect("the root provides Programs before mounting screens");
+    let separator = ctx.t("common.listSeparator");
+    // A merge or a removal changes what is left: until it is read again, what was read before
+    // must not show beside the new merge or reappear after the removal. Runner events for other
+    // runs change nothing here, so what was read stays while they are read again.
+    let changed_by_person = (props.revision.0, detail.merge.is_some());
+    let deps = (
+      props.project.repo_root.clone(),
+      run.run.clone(),
+      props.revision,
+      changed_by_person,
+    );
+    let load = ctx.future(deps, move |(repo_root, run, _, read_at)| {
+      let (programs, separator) = (programs.clone(), separator.clone());
+      async move {
+        background::run(move || leftovers_in(&repo_root, &programs, &run))
+          .await?
+          .map(|left| LeftoversRead { read_at, left })
+          .map_err(|problem| problem.message(&separator))
+      }
+    });
+    let state = load.state().get();
+    if state.is_pending() && state.data.as_ref().is_none_or(|read| read.read_at != changed_by_person) {
+      return None;
     }
+    match (state.data, state.error) {
+      (_, Some(error)) => Some(Err(error)),
+      (
+        Some(LeftoversRead {
+          left: LeftBehind(leftovers),
+          ..
+        }),
+        None,
+      ) => Some(Ok(leftovers)),
+      (None, None) => None,
+    }
+  }
+
+  /// *Remove worktree* in the topbar, while a run that ended still has worktrees.
+  fn removal(
+    &self,
+    ctx: &mut Ctx,
+    props: &TaskProps,
+    detail: &Arc<TaskDetail>,
+    leftovers: Option<&Result<Leftovers, Message>>,
+  ) -> Option<Element> {
+    let run = detail.run.as_ref()?;
+    let leftovers = leftovers?
+      .as_ref()
+      .ok()
+      .filter(|leftovers| !leftovers.worktrees.is_empty())?;
+    Some(ctx.mount_keyed::<RemoveWorktree>(
+      &format!("task-remove-worktree-{}", run.id()),
+      RemoveWorktreeProps {
+        open: props.project.clone(),
+        detail: detail.clone(),
+        leftovers: leftovers.clone(),
+      },
+    ))
   }
 
   /// The latest run's changes from its base to its latest checkpoint, read again when it records
@@ -311,10 +384,16 @@ impl TaskScreen {
 }
 
 impl TaskScreen {
-  /// The breadcrumb back to the task list, then the run controls (`ctwcG`). A run that lost
-  /// its runner has none: nothing can pause, cancel or continue it until a runner is back, and
-  /// the runner notice offers Restart runner.
-  fn topbar(&self, ctx: &Ctx, props: &TaskProps, detail: Option<&TaskDetail>, control: &ControlAction) -> Element {
+  /// The breadcrumb back to the task list, then the run controls (`ctwcG`) and `removal`, *Remove
+  /// worktree* of a run that ended. A run that lost its runner has no controls: nothing can pause,
+  /// cancel or continue it until a runner is back, and the runner notice offers Restart runner.
+  fn topbar(
+    &self,
+    ctx: &Ctx,
+    props: &TaskProps,
+    (detail, removal): (Option<&TaskDetail>, Option<Element>),
+    control: &ControlAction,
+  ) -> Element {
     let nav = self.nav.clone();
     let key = detail.map_or_else(String::new, |detail| detail.task.key().to_string());
     let breadcrumb = pressable(surface().id("task-breadcrumb"), move || nav.show(Page::TASKS)).child(
@@ -334,7 +413,7 @@ impl TaskScreen {
       .and_then(|detail| detail.run.as_ref())
       .map(|run| control_buttons(ctx, run, control, &self.requested))
       .unwrap_or_default();
-    page::topbar_with(breadcrumb.into(), buttons)
+    page::topbar_with(breadcrumb.into(), buttons.into_iter().chain(removal))
   }
 
   /// Summary, Changes with the count of files changed up to the latest checkpoint, and Activity;

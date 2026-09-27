@@ -37,6 +37,11 @@ use crate::{
   },
 };
 
+/// Puts the focus in the conversation's composer once it shows (Ask agent, Reply); provided by the
+/// task page.
+#[derive(Clone)]
+pub(super) struct ComposerFocus(pub(super) Signal<bool>);
+
 /// What the tab needs besides the task.
 pub(super) struct TabContext<'a> {
   pub(super) repo_root: &'a Path,
