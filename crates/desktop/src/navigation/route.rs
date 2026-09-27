@@ -6,10 +6,13 @@
 //! on a file keeps the file in the `file` query, which the tab reads itself (see
 //! [`changes_path`]), so the typed routes stay plain values.
 
-use std::fmt::Write as _;
+use std::{fmt::Write as _, num::NonZeroU32};
 
 use lurq::app::ctx::Ctx;
-use orchester_core::id::{ConnectionId, ProjectId, ResourceId, SecretId, TaskId};
+use orchester_core::{
+  id::{ConnectionId, ProjectId, ResourceId, SecretId, TaskId},
+  resource::VersionNumber,
+};
 
 use crate::tasks::{list::TaskTab, overview::OverviewTab};
 
@@ -43,6 +46,9 @@ const CHANGES: &str = "changes";
 const FILE_QUERY: &str = "file";
 const FROM_QUERY: &str = "from";
 const WORKTREE: &str = "worktree";
+const VERSION_QUERY: &str = "version";
+const COMPARE_QUERY: &str = "compare";
+const DRAFT: &str = "draft";
 
 /// A screen of the window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,8 +82,8 @@ pub enum Page {
   PullRequest(u64),
   /// The library (`LRMQW`).
   Pipelines,
-  /// One pipeline in its editor (`Q21HOA`).
-  Pipeline(ResourceId),
+  /// One pipeline in its editor (`Q21HOA`), on its draft or a published version.
+  Pipeline(ResourceId, PipelineView),
   /// Instructions of one scope, and the one being edited (`yRKeF`); the first of the scope
   /// without one.
   Instructions(InstructionsTab, Option<ResourceId>),
@@ -92,6 +98,15 @@ pub enum Page {
   Connections(ConnectionTab, Option<ConnectionId>),
   /// `QV1af`, `c7e729`.
   Settings(SettingsTab),
+}
+
+/// What the pipeline editor shows: the draft to edit, or a published version read-only beside
+/// the version history, alone or compared with the draft.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PipelineView {
+  Draft,
+  Version(VersionNumber),
+  Compare(VersionNumber),
 }
 
 /// The profile the Agents screen shows.
@@ -230,6 +245,7 @@ impl Page {
     match (self, other) {
       (Self::Overview(_), Self::Overview(_)) | (Self::Tasks(_), Self::Tasks(_)) => true,
       (Self::Task(task, _), Self::Task(other, _)) => task == other,
+      (Self::Pipeline(pipeline, _), Self::Pipeline(other, _)) => pipeline == other,
       _ => self == other,
     }
   }
@@ -244,7 +260,7 @@ impl Page {
       [PULL_REQUESTS] => Self::PullRequests,
       [PULL_REQUESTS, number] => Self::PullRequest(number.parse().ok()?),
       [PIPELINES] => Self::Pipelines,
-      [PIPELINES, pipeline] => Self::Pipeline(pipeline.parse().ok()?),
+      [PIPELINES, pipeline] => Self::Pipeline(pipeline.parse().ok()?, PipelineView::named(query)),
       [INSTRUCTIONS] => Self::Instructions(InstructionsTab::named(tab), None),
       [INSTRUCTIONS, instruction] => Self::Instructions(InstructionsTab::named(tab), Some(instruction.parse().ok()?)),
       [AGENTS] => Self::Agents(AgentSelection::First),
@@ -274,7 +290,7 @@ impl Page {
       Self::PullRequests => format!("{root}/{PULL_REQUESTS}"),
       Self::PullRequest(number) => format!("{root}/{PULL_REQUESTS}/{number}"),
       Self::Pipelines => format!("{root}/{PIPELINES}"),
-      Self::Pipeline(pipeline) => format!("{root}/{PIPELINES}/{pipeline}"),
+      Self::Pipeline(pipeline, view) => format!("{root}/{PIPELINES}/{pipeline}{}", view.query()),
       Self::Instructions(tab, selected) => {
         let selected = selected.map_or_else(String::new, |instruction| format!("/{instruction}"));
         with_tab(format!("{root}/{INSTRUCTIONS}{selected}"), tab.query())
@@ -303,7 +319,7 @@ impl Page {
       Self::Overview(_) => SidebarItem::Overview,
       Self::Tasks(_) | Self::NewTask | Self::Task(..) => SidebarItem::Tasks,
       Self::PullRequests | Self::PullRequest(_) => SidebarItem::PullRequests,
-      Self::Pipelines | Self::Pipeline(_) => SidebarItem::Pipelines,
+      Self::Pipelines | Self::Pipeline(..) => SidebarItem::Pipelines,
       Self::Instructions(..) => SidebarItem::Instructions,
       Self::Agents(_) => SidebarItem::Agents,
       Self::Tools(_) => SidebarItem::Tools,
@@ -316,9 +332,14 @@ impl Page {
 
 /// The tab a query names, if it names one.
 fn tab_query(query: &str) -> Option<&str> {
+  query_value(query, TAB_QUERY)
+}
+
+/// The value of `name` in `query`, if it has one.
+fn query_value<'a>(query: &'a str, name: &str) -> Option<&'a str> {
   query
     .split('&')
-    .find_map(|pair| pair.strip_prefix(TAB_QUERY)?.strip_prefix('='))
+    .find_map(|pair| pair.strip_prefix(name)?.strip_prefix('='))
 }
 
 /// `path` on `tab`; the default tab (`None`) is left out.
@@ -376,6 +397,37 @@ const fn task_page_query(tab: TaskPageTab) -> Option<&'static str> {
     TaskPageTab::Summary => None,
     TaskPageTab::Changes => Some(CHANGES),
     TaskPageTab::Activity => Some(ACTIVITY),
+  }
+}
+
+impl PipelineView {
+  /// The view a query names. Without a version, or with one that is not a version number, it is
+  /// the draft, as an unknown tab is a screen's first tab.
+  fn named(query: &str) -> Self {
+    let Some(version) = query_value(query, VERSION_QUERY).and_then(|version| version.parse::<NonZeroU32>().ok()) else {
+      return Self::Draft;
+    };
+    let version = VersionNumber::new(version);
+    match query_value(query, COMPARE_QUERY) {
+      Some(DRAFT) => Self::Compare(version),
+      _ => Self::Version(version),
+    }
+  }
+
+  fn query(self) -> String {
+    match self {
+      Self::Draft => String::new(),
+      Self::Version(version) => format!("?{VERSION_QUERY}={}", version.get()),
+      Self::Compare(version) => format!("?{VERSION_QUERY}={}&{COMPARE_QUERY}={DRAFT}", version.get()),
+    }
+  }
+
+  /// The published version shown, if one is.
+  pub const fn version(self) -> Option<VersionNumber> {
+    match self {
+      Self::Draft => None,
+      Self::Version(version) | Self::Compare(version) => Some(version),
+    }
   }
 }
 

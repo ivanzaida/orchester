@@ -2,7 +2,7 @@
 //! paths that name nothing lead to the nearest place that exists; the start screen, a created
 //! project and the way back to the start take the history entries they should.
 
-use std::{fs, path::Path, sync::Arc};
+use std::{fs, num::NonZeroU32, path::Path, sync::Arc};
 
 use lurq::{
   app::{App, Tree, component::Component, ctx::Ctx},
@@ -10,12 +10,15 @@ use lurq::{
   node::Element,
   router::RouterHandle,
 };
-use orchester_core::id::{ConnectionId, ProjectId, ResourceId, SecretId, TaskId};
+use orchester_core::{
+  id::{ConnectionId, ProjectId, ResourceId, SecretId, TaskId},
+  resource::VersionNumber,
+};
 use orchester_desktop::{
   navigation::{
     Navigation, Places, Start, forward,
     route::{
-      AgentSelection, ChangedFile, ConnectionTab, InstructionsTab, Page, Route, SettingsTab, TaskPageTab,
+      AgentSelection, ChangedFile, ConnectionTab, InstructionsTab, Page, PipelineView, Route, SettingsTab, TaskPageTab,
       ToolSelection, changed_file, changes_path,
     },
     routes,
@@ -118,6 +121,10 @@ impl Window {
   }
 }
 
+fn version(number: u32) -> VersionNumber {
+  VersionNumber::new(NonZeroU32::new(number).expect("versions start at 1"))
+}
+
 fn pages() -> Vec<Page> {
   vec![
     Page::OVERVIEW,
@@ -131,7 +138,9 @@ fn pages() -> Vec<Page> {
     Page::PullRequests,
     Page::PullRequest(42),
     Page::Pipelines,
-    Page::Pipeline(ResourceId::generate()),
+    Page::Pipeline(ResourceId::generate(), PipelineView::Draft),
+    Page::Pipeline(ResourceId::generate(), PipelineView::Version(version(2))),
+    Page::Pipeline(ResourceId::generate(), PipelineView::Compare(version(3))),
     Page::Instructions(InstructionsTab::ProjectRules, None),
     Page::Instructions(InstructionsTab::StepOverrides, Some(ResourceId::generate())),
     Page::Agents(AgentSelection::First),
@@ -215,6 +224,43 @@ fn route_tabs_are_part_of_the_path() {
   assert_eq!(roles, format!("/project/{project}/instructions?tab=agent-roles"));
   let rules = Route::Project(project, Page::Instructions(InstructionsTab::ProjectRules, None)).path();
   assert_eq!(rules, format!("/project/{project}/instructions"));
+}
+
+#[test]
+fn route_pipeline_version_and_comparison_are_part_of_the_path() {
+  let (project, pipeline) = (ProjectId::generate(), ResourceId::generate());
+  let draft = Route::Project(project, Page::Pipeline(pipeline, PipelineView::Draft)).path();
+  assert_eq!(draft, format!("/project/{project}/pipelines/{pipeline}"));
+  let shown = Route::Project(project, Page::Pipeline(pipeline, PipelineView::Version(version(2)))).path();
+  assert_eq!(shown, format!("{draft}?version=2"));
+  let compared = Route::Project(project, Page::Pipeline(pipeline, PipelineView::Compare(version(2)))).path();
+  assert_eq!(compared, format!("{draft}?version=2&compare=draft"));
+  // Comparing with anything but the draft is not a view; the version alone is shown.
+  assert_eq!(
+    Route::parse(&format!("{draft}?version=2&compare=v1")),
+    Some(Route::Project(
+      project,
+      Page::Pipeline(pipeline, PipelineView::Version(version(2)))
+    ))
+  );
+  // A view is one screen: moving between versions keeps the editor.
+  assert!(
+    Page::Pipeline(pipeline, PipelineView::Draft)
+      .same_screen(&Page::Pipeline(pipeline, PipelineView::Version(version(1))))
+  );
+  assert!(
+    !Page::Pipeline(pipeline, PipelineView::Draft)
+      .same_screen(&Page::Pipeline(ResourceId::generate(), PipelineView::Draft))
+  );
+}
+
+#[test]
+fn route_pipeline_version_that_is_not_a_number_is_the_draft() {
+  let (project, pipeline) = (ProjectId::generate(), ResourceId::generate());
+  let draft = Route::Project(project, Page::Pipeline(pipeline, PipelineView::Draft));
+  for bad in ["?version=0", "?version=two", "?version=-1", "?compare=draft"] {
+    assert_eq!(Route::parse(&format!("{}{bad}", draft.path())), Some(draft), "{bad}");
+  }
 }
 
 #[test]
