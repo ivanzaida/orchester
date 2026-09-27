@@ -6,7 +6,7 @@
 use lurq::app::{App, Tree, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
 use orchester_desktop::{
   activity::Activity,
-  app_log, app_paths,
+  app_icon, app_log, app_paths,
   close::{CloseKind, Lifecycle, session_end},
   i18n,
   messages::Message,
@@ -54,8 +54,10 @@ fn main() {
   };
 
   let title = app.i18n().t("app.name");
+  let icon = app_icon::window_icon().expect("the bundled window icon is a valid PNG; covered by tests/app_icon.rs");
   WinitWindow::new(app, tree)
     .with_title(&title)
+    .with_icon(icon)
     // A 1440x960 screen between the 32px custom title bar and the 28px status bar; the app
     // draws both bars itself.
     .with_size(1440, 1020)

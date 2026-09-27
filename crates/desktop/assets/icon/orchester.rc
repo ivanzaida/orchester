@@ -1,0 +1,3 @@
+// Windows resources of orchester.exe, compiled by crates/desktop/build.rs. Paths are relative to
+// crates/desktop, where Cargo runs the build script. The first icon becomes the program's icon.
+1 ICON "assets/icon/orchester.ico"
