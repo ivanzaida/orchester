@@ -140,15 +140,6 @@ pub enum StepFailure {
   CommandFailed,
 }
 
-/// A person's decision on a gated step's result.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PlanDecision {
-  Approved,
-  /// The step returns to work; its revised result needs a new decision.
-  ChangesRequested,
-}
-
 /// Why an attempt was started.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

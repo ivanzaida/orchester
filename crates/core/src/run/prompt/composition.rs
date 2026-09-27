@@ -12,6 +12,14 @@ use crate::resource::{Exclusion, InjectionEvent, Instruction, InstructionTarget,
 const RESULT_INSTRUCTIONS: &str = "End with your result: the outcome `done` when the step is complete, or `failed` \
                                    when you could not complete it, and a short summary of what you did for the \
                                    steps that run after this one.";
+/// What a gated step's session is told on top: a person reviews its summary as the plan.
+const GATED_RESULT_INSTRUCTIONS: &str = "A person reviews your summary before the steps after this one start: make \
+                                         it the complete result of this step (for a plan, the whole plan), in \
+                                         Markdown.";
+/// What a resumed session of a gated step is told when a reviewer sent its plan back.
+const REVISE_PROMPT: &str = "A person reviewed your result for this step and requested changes. Revise it as they \
+                             ask, then end with the complete revised result: it replaces the earlier one for the \
+                             reviewer and for the steps after this one.";
 
 /// One section of a prompt and where it came from.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -203,8 +211,8 @@ fn step_section(input: &PromptInput<'_>) -> PromptSection {
   )
 }
 
-/// Brief and criteria, the outputs of earlier steps, and how to report the result: plain text,
-/// already laid out.
+/// Brief and criteria, the outputs of earlier steps, the changes a reviewer requested to the step's
+/// plan, and how to report the result: plain text, already laid out.
 fn task_section(input: &PromptInput<'_>) -> PromptSection {
   let details = input.task.details();
   let mut text = String::new();
@@ -214,8 +222,19 @@ fn task_section(input: &PromptInput<'_>) -> PromptSection {
     text.push_str(&criteria(&details.acceptance_criteria));
   }
   push_dependencies(&mut text, input.dependencies);
+  if let Some(revision) = input.revision {
+    // Writing to a String cannot fail.
+    let _ = writeln!(text, "\n# Changes requested to your plan v{}", revision.version);
+    push_block(&mut text, "Your earlier result for this step:");
+    push_block(&mut text, revision.plan);
+    push_block(&mut text, "The reviewer asks:");
+    push_block(&mut text, revision.note.as_str());
+  }
   text.push_str("\n# When you finish\n");
   push_block(&mut text, RESULT_INSTRUCTIONS);
+  if input.step.approval_gate {
+    push_block(&mut text, GATED_RESULT_INSTRUCTIONS);
+  }
   PromptSection {
     source: PromptSource::Task { task: input.task.id() },
     name: input.task.key().to_string(),
@@ -229,7 +248,19 @@ fn task_section(input: &PromptInput<'_>) -> PromptSection {
 fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[PromptSection]) -> String {
   let mut text = String::new();
   if event == InjectionEvent::Resume {
-    text.push_str(CONTINUE_PROMPT);
+    match input.revision {
+      Some(revision) => {
+        text.push_str(REVISE_PROMPT);
+        // Writing to a String cannot fail.
+        let _ = write!(
+          text,
+          "\n\nWhat should change in plan v{}:\n\n{}",
+          revision.version,
+          revision.note.as_str()
+        );
+      }
+      None => text.push_str(CONTINUE_PROMPT),
+    }
   }
   let mut part = None;
   for section in sections {

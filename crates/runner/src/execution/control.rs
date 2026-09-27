@@ -5,7 +5,7 @@ use orchester_core::{id::ResourceId, run::InterruptCause};
 use orchester_ipc::Rejection;
 use tokio::sync::oneshot;
 
-use super::permissions::PermissionsChange;
+use super::{permissions::PermissionsChange, plan::PlanRequest};
 
 /// Answers a request once it is carried out.
 pub(super) type Ack = oneshot::Sender<Result<(), Rejection>>;
@@ -19,6 +19,8 @@ pub(super) enum Control {
   ChangePermissions(PermissionsChange, Ack),
   /// Keep a pending change of a profile's permissions for the next invocations.
   KeepPermissions(ResourceId, Ack),
+  /// Record a person's decision on a plan; answered once it is recorded.
+  DecidePlan(PlanRequest, Ack),
   /// The runner stops: end the agent and record the run as interrupted.
   Interrupt(InterruptCause),
 }

@@ -95,6 +95,8 @@ pub const SPACE_PROPERTY: f32 = 15.0;
 pub const SPACE_DIVIDER: f32 = 18.0;
 pub const SPACE_SELECT_MENU: f32 = 4.0;
 pub const SPACE_DIALOG_MARGIN: f32 = 32.0;
+/// Padding of a note field (`NbNN0`, the changes a plan needs).
+pub const SPACE_TEXT_AREA: f32 = 14.0;
 pub const SPACE_BESIDE_GUTTER: f32 = 20.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).

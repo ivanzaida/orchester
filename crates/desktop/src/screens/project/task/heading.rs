@@ -85,6 +85,7 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
   let step_name = step.map_or("", |step| &step.name);
   let agent = step.and_then(|step| step.agent.as_deref()).unwrap_or_default();
   let time = run.paused_at.map(display::clock).unwrap_or_default();
+  let version = run.version.to_string();
   let args = [
     ("run", number.as_str()),
     ("attempt", attempt.as_str()),
@@ -92,9 +93,13 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     ("agent", agent),
     ("time", time.as_str()),
     ("steps", parallel.as_str()),
+    ("pipeline", &run.pipeline),
+    ("version", version.as_str()),
   ];
+  let awaiting_plan = run.run.waits_for_a_person() && !run.run.awaiting_plan().is_empty();
   let key = match (run.run.status(), step) {
     (RunStatus::Running, _) if lost => "runs.page.describe.interrupted",
+    (RunStatus::Running, _) if awaiting_plan => "runs.page.describe.awaitingPlan",
     (RunStatus::Pending, _) => "runs.page.describe.pending",
     (RunStatus::Running, _) if run.run.pause_requested() => "runs.page.describe.pausing",
     (RunStatus::Running, Some(_)) if working.len() > 1 => "runs.page.describe.workingParallel",

@@ -3,9 +3,10 @@
 //! a run with any problem does not start.
 //!
 //! This version of the runner executes graphs of agent steps on the Codex and Claude Code CLIs and
-//! of tool steps that run published command tools — parallel steps, failure routes and retries
-//! included. HTTP and database tools (secrets, approvals), tools with access rules and approval
-//! gates are reported as not supported yet rather than skipped.
+//! of tool steps that run published command tools — parallel steps, failure routes, retries and
+//! approval gates on agent steps (plan review) included. HTTP and database tools (secrets,
+//! approvals), tools with access rules and approval gates on tool steps are reported as not
+//! supported yet rather than skipped.
 
 use std::collections::BTreeMap;
 
@@ -32,7 +33,7 @@ pub enum PreflightProblem {
   ToolNotRunnable { step: StepKey, kind: ToolKind },
   /// The step's command tool carries access rules; tool steps do not apply access rules yet.
   ToolAccessRules { step: StepKey },
-  /// Approval gates (plan approval) cannot be answered yet.
+  /// The step runs a tool and has an approval gate: only agent steps propose plans for review.
   ApprovalGate { step: StepKey },
   /// The step's agent profile has no published version.
   ProfileNotPublished { step: StepKey },
@@ -80,11 +81,11 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
   let mut problems = Vec::new();
   for step in pipeline.steps() {
     let key = || step.key.clone();
-    if step.approval_gate {
-      problems.push(PreflightProblem::ApprovalGate { step: key() });
-    }
     let profile = match &step.kind {
       StepKind::Tool { tool } => {
+        if step.approval_gate {
+          problems.push(PreflightProblem::ApprovalGate { step: key() });
+        }
         let tool = tool.and_then(|tool| input.tools.get(&tool)).map(Version::body);
         problems.extend(tool_problem(tool, key()));
         continue;

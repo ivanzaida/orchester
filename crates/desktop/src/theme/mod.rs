@@ -4,6 +4,7 @@
 //! `RadiusSize`, `BorderSize`, `ShadowStyle`); design values live only in `tokens`.
 
 mod form;
+mod markdown;
 mod metrics;
 mod palette;
 mod shadow;
@@ -56,6 +57,7 @@ pub fn install(app: &mut App) {
   theme.set_spacing(metrics::spacing());
   theme.set_border_sizes(metrics::border_sizes());
   theme.set_shadows(shadow::shadows());
+  theme.set_markdown(markdown::markdown());
   // Bind first: the guard returned by `form()` must be released before `set_form` locks.
   let current_form = theme.form().clone();
   theme.set_form(form::form(current_form));

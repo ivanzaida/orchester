@@ -6,7 +6,10 @@ pub mod bar;
 mod log;
 pub mod operations;
 
-use std::time::{Instant, SystemTime};
+use std::{
+  sync::Arc,
+  time::{Instant, SystemTime},
+};
 
 use lurq::app::ctx::Ctx;
 use tokio::sync::watch;
@@ -92,9 +95,12 @@ impl Activity {
     result
   }
 
-  /// Something that finished without being started here, e.g. the runner reconnecting.
-  pub fn record(&self, title: Message, target: Target) {
-    self.log.send_modify(|log| log.record(title, target, SystemTime::now()));
+  /// Something that finished without being started here, e.g. the runner reconnecting or a run
+  /// proposing a plan in `project`.
+  pub fn record(&self, project: Option<Arc<str>>, title: Message, target: Target) {
+    self
+      .log
+      .send_modify(|log| log.record(project, title, target, SystemTime::now()));
   }
 
   /// The user opened the failure's object or dismissed it.

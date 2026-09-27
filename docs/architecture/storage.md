@@ -105,6 +105,15 @@ at work takes one.
   sessions only), so its CLI exit and final message decide. Claude Code runs without a schema
   (`--json-schema` could not be verified): the prompt asks for the same result as the final
   message, and when it is not one the CLI's `is_error` and exit decide.
+- **Approval gates.** A step with an approval gate that passes proposes its output (the summary of its
+  structured result, else its final message; its prompt asks for the complete result) as the next
+  plan of that step in the run, and waits for a person (plan review, 02.11). While nothing else of the
+  run works or can start, the run's task ends: it holds no agent slot, and waiting is not active agent
+  time. *Approve* passes the step; the steps after it read the approved plan as its output. *Request
+  changes* carries a note: the step's next invocation resumes its CLI session told what should change
+  (a new session, when the CLI reported none, gets its earlier plan and the note), and its result is the
+  next version, which needs a decision of its own. A run that only waits keeps waiting across a new
+  runner or session (it is not interrupted); a pause of it is immediate, and a decision needs it running.
 - **Sessions.** Codex reports its session (`thread.started`); a Claude Code session gets an id
   Orchester chose (`--session-id`), which the CLI reports back (`system/init`). Continuing a step
   resumes the session its last invocation reported (`codex exec resume`, `claude --resume`).
@@ -244,7 +253,7 @@ keeps its permissions unless the change is also saved to its draft.
 | `attempts` | run, number, status, reason |
 | `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, merge conflict, checkpoint failed, command failed; step budget only in records of earlier versions) |
 | `step_outputs` | step execution, run, step, outcome (done, failed, or none when the final message was not a structured result), text — what the step left for the steps after it, read into their prompts with its source; append-only |
-| `plans` | run, version, body blob, decision (proposed, approved, changes requested) |
+| `plans` | run, step, version (per run and step, from 1), step execution, text, created; decision (none while proposed, approved, changes requested with the reviewer's note) and when — written with the run events that propose or decide it; the text never changes and a plan is decided once |
 | `checkpoints` | run, step execution, revision, agent state blob |
 | `run_events` | run, sequence, time, kind, payload — append-only |
 | `evidence` | run, revision, kind (criteria, tests, review, browser), result, blob |

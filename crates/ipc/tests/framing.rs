@@ -2,13 +2,13 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   connection::AgentProvider,
-  id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     capability::{PermissionOption, PermissionProblem, Unavailable},
   },
   resource::StepKey,
-  run::{PermissionsApply, PreflightProblem, RunLimit},
+  run::{PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, ReviewNote, RunLimit},
   tokens::TokenBudget,
 };
 use orchester_ipc::{
@@ -97,12 +97,48 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
     },
   ]
   .into_iter()
+  .chain(plan_commands(run))
   .enumerate()
   .map(|(index, command)| Request {
     id: RequestId::new(index as u64 + 1),
     command,
   })
   .collect()
+}
+
+/// Decisions on plans: an approval, and a request for changes with a note.
+fn plan_commands(run: RunId) -> Vec<Command> {
+  let note = ReviewNote::new("Keep email sign-in.\n\"Quoted\" — é").expect("a note");
+  vec![
+    Command::DecidePlan {
+      run,
+      execution: StepExecutionId::generate(),
+      version: PlanVersion::FIRST,
+      decision: PlanDecision::Approved,
+    },
+    Command::DecidePlan {
+      run,
+      execution: StepExecutionId::generate(),
+      version: PlanVersion::FIRST.next(),
+      decision: PlanDecision::ChangesRequested { note },
+    },
+  ]
+}
+
+/// A plan proposed, and a decision on a plan that no longer waits.
+fn plan_events(run: RunId, task: TaskId) -> Vec<Event> {
+  vec![
+    Event::PlanProposed {
+      run,
+      task,
+      task_key: "ORC-12".to_owned(),
+      version: PlanVersion::FIRST.next(),
+    },
+    Event::Reply {
+      id: RequestId::new(9),
+      reply: Reply::Rejected(Rejection::PlanNotAwaited),
+    },
+  ]
 }
 
 /// The rejections of a run permissions change.
@@ -160,8 +196,8 @@ fn events(run: RunId, task: TaskId) -> Vec<Event> {
     })),
     reply(Reply::Rejected(Rejection::Preflight {
       problems: vec![
-        PreflightProblem::ApprovalGate {
-          step: StepKey::new("plan").expect("key"),
+        PreflightProblem::ToolAccessRules {
+          step: StepKey::new("deploy").expect("key"),
         },
         PreflightProblem::NoCommits,
       ],
@@ -210,7 +246,11 @@ async fn frames_round_trip_every_message() {
     id: RequestId::new(8),
     reply: Reply::Rejected(rejection),
   });
-  let events: Vec<Event> = events(run, task).into_iter().chain(rejected).collect();
+  let events: Vec<Event> = events(run, task)
+    .into_iter()
+    .chain(plan_events(run, task))
+    .chain(rejected)
+    .collect();
   for request in &commands {
     writer.write(request).await.expect("write request");
   }

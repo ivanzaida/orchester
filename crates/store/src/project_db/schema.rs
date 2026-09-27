@@ -503,4 +503,27 @@ INSERT INTO step_executions_new
 DROP TABLE step_executions;
 ALTER TABLE step_executions_new RENAME TO step_executions;
 ",
+  r"
+-- Approval gates (M7): each result of a gated step is a plan, numbered per run and step, and waits
+-- for a person's decision; requested changes carry the reviewer's note. The text never changes and
+-- a plan is decided once; the run's events hold every decision.
+CREATE TABLE plans (
+  run_id TEXT NOT NULL REFERENCES runs (id),
+  step_key TEXT NOT NULL,
+  version INTEGER NOT NULL CHECK (version > 0),
+  step_execution_id TEXT NOT NULL REFERENCES step_executions (id),
+  text TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  decision TEXT CHECK (decision IN ('approved', 'changes_requested')),
+  note TEXT CHECK ((decision IS 'changes_requested') = (note IS NOT NULL)),
+  decided_at INTEGER CHECK ((decision IS NULL) = (decided_at IS NULL)),
+  PRIMARY KEY (run_id, step_key, version)
+) STRICT;
+CREATE TRIGGER plans_decided_once BEFORE UPDATE ON plans
+WHEN OLD.decision IS NOT NULL OR NEW.text IS NOT OLD.text OR NEW.step_execution_id IS NOT OLD.step_execution_id
+  OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT, 'a plan keeps its text and is decided once'); END;
+CREATE TRIGGER plans_no_delete BEFORE DELETE ON plans
+BEGIN SELECT RAISE(ABORT, 'plans are never deleted'); END;
+",
 ];

@@ -20,8 +20,8 @@
 //! continued session at work with it), it appends `continued` to `README.md` and ends the same way. A new
 //! session takes its id from `--session-id`.
 //!
-//! On standard error it reports its arguments, the names of its environment variables, the first line of the prompt
-//! and its process id, like `orchester-fake-codex`.
+//! On standard error it reports its arguments, the names of its environment variables, the prompt (its first line, then
+//! each line) and its process id, like `orchester-fake-codex`.
 
 #![allow(
   clippy::print_stdout,
@@ -59,6 +59,9 @@ fn main() -> ExitCode {
   eprintln!("argv: {}", args.join(" "));
   eprintln!("env: {}", names.join(","));
   eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
+  for line in prompt.lines() {
+    eprintln!("prompt| {line}");
+  }
   eprintln!("pid: {}", std::process::id());
   if prompt.contains("Please sign in") {
     print!("{NOT_SIGNED_IN}");
