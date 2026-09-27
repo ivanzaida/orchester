@@ -200,6 +200,23 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
       accepted(run, scheduler.raise_limit(run, limits))
     }
     Command::RaiseStepBudget { run, budget } => accepted(run, scheduler.raise_step_budget(run, budget)),
+    Command::ChangeRunPermissions {
+      run,
+      profile,
+      ref permissions,
+      apply,
+    } => {
+      let (scheduler, permissions) = (scheduler.clone(), permissions.clone());
+      return later(replies, id, run, async move {
+        scheduler.change_permissions(run, profile, permissions, apply).await
+      });
+    }
+    Command::KeepPermissionsForNextInvocation { run, profile } => {
+      let scheduler = scheduler.clone();
+      return later(replies, id, run, async move {
+        scheduler.keep_permissions_for_next_invocation(run, profile).await
+      });
+    }
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
   };
   Answer::Reply(Event::Reply { id, reply })

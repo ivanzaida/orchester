@@ -44,14 +44,8 @@ impl RunTask {
       .body()
       .step(key)
       .expect("executions name snapshot steps");
-    let (
-      StepKind::Agent {
-        repository,
-        permissions,
-        ..
-      },
-      Some(StepExecutor::Agent { profile, model, .. }),
-    ) = (&step.kind, self.run.snapshot().step(key).map(|step| step.executor()))
+    let (StepKind::Agent { .. }, Some(StepExecutor::Agent { profile, model, .. })) =
+      (&step.kind, self.run.snapshot().step(key).map(|step| step.executor()))
     else {
       return Err(problem(format!("step `{key}` is not an agent step")));
     };
@@ -74,10 +68,12 @@ impl RunTask {
       None => self.prompt(execution, step, profile.resource, &body)?,
     };
     // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
-    // because an agent never starts with permissions that are not enforced.
-    let enforced = body
-      .permissions()
-      .narrowed(*repository, permissions)
+    // because an agent never starts with permissions that are not enforced. The run's permissions
+    // for the profile, if they were changed for it, else the profile's, narrowed by the step.
+    let enforced = self
+      .run
+      .step_permissions(key, body.permissions())
+      .expect("an agent step of the run has permissions")
       .enforced_on(connection.provider(), Platform::current())
       .map_err(|error| problem(error.to_string()))?;
     let effort = body

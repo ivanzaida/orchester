@@ -488,6 +488,38 @@ fn runs_stopped_at_a_step_budget_round_trip_with_the_raised_budget() {
   assert_eq!(Run::replay(&events), Ok(run));
 }
 
+#[test]
+fn runs_changed_permissions_round_trip_while_pending_and_after_applying() {
+  use orchester_core::{
+    connection::{AgentProvider, invocation::Platform},
+    permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
+    run::{Checkpoint, PermissionsApply},
+  };
+  let mut fixture = Fixture::new();
+  let mut run = fixture.implementing();
+  let implement = Fixture::exec(&run, "implement");
+  let profile = run.profile_of(&key("implement")).expect("agent step");
+  let permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::On,
+  );
+  let codex = (AgentProvider::CodexCli, Platform::MacOs);
+  fixture.apply(&mut run, |run| {
+    run.change_permissions(profile, permissions, PermissionsApply::Now, codex, at(16))
+  });
+  let stored = fixture.db.run(run.id()).expect("load").expect("exists");
+  assert!(stored.restarts_for_permissions(implement));
+  assert_eq!(stored, run);
+  fixture.apply(&mut run, |run| run.record_checkpoint(implement, revision('e'), at(17)));
+  let checkpoint = run.last_checkpoint().map(Checkpoint::id);
+  fixture.apply(&mut run, |run| run.apply_permissions(implement, checkpoint, at(18)));
+  let stored = fixture.db.run(run.id()).expect("load").expect("exists");
+  assert_eq!(stored, run);
+  let events = fixture.db.events(run.id()).expect("events");
+  assert_eq!(Run::replay(&events), Ok(run));
+}
+
 /// Two runners' worth of writers (each run's task has its own connection) record transitions of
 /// their runs at the same time: every write waits for the other instead of failing as locked.
 #[test]

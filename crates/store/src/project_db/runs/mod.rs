@@ -23,6 +23,7 @@ use crate::{
 };
 
 const SNAPSHOT_SCHEMA: u32 = 1;
+const PERMISSIONS_SCHEMA: u32 = 1;
 /// Schema 2: token budgets. Schema 1 logs are upgraded when read (`legacy`).
 const EVENT_SCHEMA: u32 = 2;
 
@@ -200,6 +201,16 @@ fn update_run(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError
       run.id().to_string(),
       step.as_str(),
       tokens_column("step budget", budget.get())?
+    ])?;
+  }
+  let mut permissions = transaction.prepare_cached(
+    "INSERT INTO run_permissions (run_id, profile_id, body) VALUES (?1, ?2, ?3)      ON CONFLICT (run_id, profile_id) DO UPDATE SET body = excluded.body",
+  )?;
+  for (profile, changed) in run.all_changed_permissions() {
+    permissions.execute(params![
+      run.id().to_string(),
+      profile.to_string(),
+      encode_json("run permissions", PERMISSIONS_SCHEMA, changed)?
     ])?;
   }
   Ok(())

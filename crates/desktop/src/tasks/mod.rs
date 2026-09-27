@@ -7,6 +7,7 @@ pub mod detail;
 pub mod form;
 pub mod list;
 pub mod overview;
+pub mod permissions;
 pub mod progress;
 pub mod run;
 pub mod transcript;

@@ -7,6 +7,7 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   connection::{AgentConnection, invocation::Platform},
   id::ResourceId,
+  permission::AgentPermissions,
   resource::{
     AgentProfile, Draft, ModelId, Pipeline, PublishError, ResourceKind, Slug, StepKind, Version, VersionNumber,
   },
@@ -253,4 +254,22 @@ pub fn apply_in(repo_root: &Path, change: ProfileChange) -> Result<ResourceId, S
     ProfileChange::Publish(id) => publish(&mut db, id, now).map(|_| id),
     ProfileChange::KeepDraft(id) => keep_draft_over_latest(&mut db, id, now).map(|()| id),
   }
+}
+
+/// Adds run permissions to profile `id`'s draft (started from the latest version when it has
+/// none), as *Also save to the profile* in the run permissions popover asks; the draft keeps its
+/// other changes. Returns the version the draft publishes as.
+pub fn save_permissions_to_draft(
+  repo_root: &Path,
+  id: ResourceId,
+  permissions: AgentPermissions,
+) -> Result<u32, StoreError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  let latest = db.latest_version::<AgentProfile>(id)?;
+  let body = match db.draft::<AgentProfile>(id)? {
+    Some(draft) => draft.body().clone(),
+    None => latest.as_ref().ok_or(StoreError::ResourceNotFound(id))?.body().clone(),
+  };
+  save_draft(&mut db, id, body.with_permissions(permissions), Timestamp::now())?;
+  Ok(latest.map_or(1, |latest| latest.number().get().saturating_add(1)))
 }

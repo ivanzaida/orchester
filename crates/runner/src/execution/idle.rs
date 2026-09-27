@@ -139,13 +139,13 @@ fn used_daily_budget(db: &ProjectDb) -> Result<Option<TokenBudget>, StoreError> 
   Ok(limits.daily_budget_used(today).then(|| limits.daily_budget()))
 }
 
-fn load(db: &ProjectDb, run: RunId) -> Result<Run, Rejection> {
+pub(super) fn load(db: &ProjectDb, run: RunId) -> Result<Run, Rejection> {
   db.run(run)
     .map_err(|error| failed("cannot read the run", &error))?
     .ok_or(Rejection::RunNotFound)
 }
 
-fn store(db: &mut ProjectDb, run: &Run, events: &[RunEvent]) -> Result<(), Rejection> {
+pub(super) fn store(db: &mut ProjectDb, run: &Run, events: &[RunEvent]) -> Result<(), Rejection> {
   db.append_events(run, events)
     .map_err(|error| failed("cannot record the run's change", &error))
 }

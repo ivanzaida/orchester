@@ -139,7 +139,7 @@ impl Component for TaskScreen {
     let online = props.runner == RunnerState::Online;
     let lost = detail.lost_its_runner(online).then(|| Lost::of(&props.runner));
     let body = match props.tab {
-      TaskPageTab::Summary => summary::summary(ctx, &detail, props.limits, lost),
+      TaskPageTab::Summary => summary::summary(ctx, &detail, props.limits, lost, &props.project.repo_root),
       TaskPageTab::Activity => ctx.mount_keyed::<ActivityTab>(
         "task-activity",
         ActivityProps {

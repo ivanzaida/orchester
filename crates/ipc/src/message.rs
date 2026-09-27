@@ -7,8 +7,10 @@
 use std::{fmt, num::NonZeroU32};
 
 use orchester_core::{
-  id::{IdempotencyKey, RunId, TaskId},
-  run::{InterruptCause, PreflightProblem, RunLimit},
+  id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  permission::{AgentPermissions, capability::PermissionProblem},
+  resource::StepKey,
+  run::{InterruptCause, PermissionsApply, PreflightProblem, RunLimit},
   tokens::TokenBudget,
 };
 use serde::{Deserialize, Serialize};
@@ -84,6 +86,19 @@ pub enum Command {
   /// it: the stopped agent's CLI session continues. Answered with [`Reply::Accepted`] once it
   /// runs again.
   RaiseStepBudget { run: RunId, budget: TokenBudget },
+  /// Run `run` uses `permissions` for agent profile `profile` from the next invocation of each of
+  /// its steps; with [`PermissionsApply::Now`] the profile's agents at work also restart at their
+  /// next checkpoint, resuming their CLI sessions. Answered with [`Reply::Accepted`] once the
+  /// change is recorded.
+  ChangeRunPermissions {
+    run: RunId,
+    profile: ResourceId,
+    permissions: AgentPermissions,
+    apply: PermissionsApply,
+  },
+  /// Cancels the pending restarts of an Apply now for `profile` in run `run`: the change applies
+  /// from the next invocations. Answered with [`Reply::Accepted`].
+  KeepPermissionsForNextInvocation { run: RunId, profile: ResourceId },
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes
   /// the connection.
   Shutdown { mode: ShutdownMode },
@@ -241,6 +256,17 @@ pub enum Rejection {
   NoAgentSlot {
     slots: NonZeroU32,
   },
+  /// No step of the run uses the agent profile whose permissions were to change.
+  ProfileNotInRun,
+  /// The connection's CLI cannot enforce the permissions for `step`.
+  PermissionsNotEnforceable {
+    step: StepKey,
+    problem: PermissionProblem,
+  },
+  /// Apply now needs an agent of the profile at work in a running run.
+  NoAgentToRestart,
+  /// No change of the profile's permissions waits for a checkpoint.
+  NoPendingPermissions,
   /// The runner is stopping and starts no work.
   ShuttingDown,
   /// Starting failed in the runner (database, git worktree); its log has the details.

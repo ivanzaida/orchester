@@ -32,6 +32,9 @@ pub struct CommandChip {
   id: String,
   command: Arc<str>,
   action: Action,
+  /// Outlined in the text color: the command differs from what it is compared with (a command
+  /// added for a run, `IWbGO` in 02.J).
+  changed: bool,
 }
 
 impl CommandChip {
@@ -40,7 +43,13 @@ impl CommandChip {
       id,
       command,
       action: Action::None,
+      changed: false,
     }
+  }
+
+  pub const fn changed(mut self, changed: bool) -> Self {
+    self.changed = changed;
+    self
   }
 
   /// Pressing the entry removes the command.
@@ -58,6 +67,11 @@ impl CommandChip {
 
 impl From<CommandChip> for Element {
   fn from(chip: CommandChip) -> Self {
+    let stroke = if chip.changed {
+      PaletteColor::TextPrimary
+    } else {
+      PaletteColor::Border
+    };
     let (handler, state, glyph, text_color, background) = match chip.action {
       Action::None => {
         return Row::new()
@@ -66,7 +80,7 @@ impl From<CommandChip> for Element {
           .padding_horizontal(ExtraSpacing::Inline.role())
           .align_items(Alignment::Center)
           .background(PaletteColor::SurfaceRaised)
-          .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+          .border(Border::inside(BorderSize::Sm, stroke))
           .rounded(RadiusSize::Sm)
           .child(command(&chip.command, PaletteColor::TextPrimary))
           .into();
@@ -94,10 +108,11 @@ impl From<CommandChip> for Element {
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .background(background)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .border(Border::inside(BorderSize::Sm, stroke))
       .rounded(RadiusSize::Sm)
       .cursor(CursorIcon::Pointer)
       .describe("state", state)
+      .describe("changed", if chip.changed { "true" } else { "false" })
       .on_click(move |_| handler())
       .child(command(&chip.command, text_color))
       .child(icon(glyph, IconSize::Small, PaletteColor::TextMuted))

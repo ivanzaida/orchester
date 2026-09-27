@@ -4,14 +4,14 @@
 //! limits and usage in the "This run" panel (`F5Lsi`). A run whose step used up its retries shows
 //! 02.B (`J3JZaT`) instead.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Spacer, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -34,7 +34,7 @@ use crate::{
   budget::whole_minutes,
   display,
   tasks::detail::{RunView, TaskDetail},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     message_text,
     property::{ValueStyle, property, styled_property},
@@ -50,6 +50,7 @@ pub(super) fn summary(
   detail: &TaskDetail,
   limits: Option<ProjectLimits>,
   lost: Option<Lost>,
+  repo_root: &Path,
 ) -> Element {
   if let Some(run) = &detail.run
     && let RunStatus::Failed(RunFailure::RetriesExhausted(step)) = run.run.status()
@@ -75,7 +76,7 @@ pub(super) fn summary(
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .child(progress)
-    .with_children(detail.run.as_ref().map(|run| this_run(ctx, run)))
+    .with_children(detail.run.as_ref().map(|run| this_run(ctx, run, repo_root)))
     .into()
 }
 
@@ -128,7 +129,7 @@ fn latest(ctx: &Ctx, run: &RunView) -> Option<Element> {
 }
 
 /// The run's pinned configuration, its limits and usage (`F5Lsi`).
-fn this_run(ctx: &mut Ctx, run: &RunView) -> Element {
+fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
   let version = run.version.to_string();
   let pipeline = ctx.t_args(
     "runs.summary.pipelineValue",
@@ -150,6 +151,10 @@ fn this_run(ctx: &mut Ctx, run: &RunView) -> Element {
     let props = RunPermissionsProps {
       permissions: step.permissions.clone()?,
       step: step.clone(),
+      run: run.id(),
+      run_number: run.run.number().get(),
+      live: !run.run.status().is_terminal(),
+      repo_root: repo_root.to_path_buf(),
     };
     Some(ctx.mount_keyed::<RunPermissionsRow>(&format!("task-permissions-{}", step.key), props))
   });
@@ -162,14 +167,9 @@ fn this_run(ctx: &mut Ctx, run: &RunView) -> Element {
       ],
     )
   });
-  Column::new()
-    .id("task-this-run")
-    .width(Dimension::Px(PANEL_WIDTH))
-    .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
+  let rows = Column::new()
+    .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Step.role())
-    .background(PaletteColor::SurfacePanel)
-    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Text::new(&ctx.t("runs.summary.thisRun")).variant(ExtraTypography::CardTitle.role()))
     .child(property(&ctx.t("runs.summary.pipeline"), &pipeline))
     .child(styled_property(
@@ -188,8 +188,24 @@ fn this_run(ctx: &mut Ctx, run: &RunView) -> Element {
     .child(property(&ctx.t("runs.cached"), &cached))
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
-    .with_children(permissions)
-    .child(Spacer::new().flex(1.0))
+    .with_children(permissions);
+  // The rows scroll when a permission change's notices make them taller than the window; the
+  // note stays at the bottom.
+  Column::new()
+    .id("task-this-run")
+    .width(Dimension::Px(PANEL_WIDTH))
+    .height(Dimension::Pct(100.0))
+    .padding(SpacingSize::Lg)
+    .spacing(ExtraSpacing::Step.role())
+    .background(PaletteColor::SurfacePanel)
+    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .child(
+      ScrollVertical::new(rows)
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        // A gutter of its own: the bar never covers the right-aligned values.
+        .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
+    )
     .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()))
     .into()
 }

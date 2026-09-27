@@ -47,6 +47,10 @@ name = "step_budget"
 required-features = ["test-agent"]
 
 [[test]]
+name = "run_permissions"
+required-features = ["test-agent"]
+
+[[test]]
 name = "claude"
 required-features = ["test-agent"]
 

@@ -426,4 +426,15 @@ CREATE TABLE run_step_budgets (
   PRIMARY KEY (run_id, step_key)
 ) STRICT;
 ",
+  r"
+-- Permissions changed for one run (02.J): per run and agent profile, the permissions the run uses
+-- instead of the profile's, the agents that restart with them at their next checkpoint and the last
+-- one that did. Current state; the run's events hold every change.
+CREATE TABLE run_permissions (
+  run_id TEXT NOT NULL REFERENCES runs (id),
+  profile_id TEXT NOT NULL,
+  body TEXT NOT NULL,
+  PRIMARY KEY (run_id, profile_id)
+) STRICT;
+",
 ];

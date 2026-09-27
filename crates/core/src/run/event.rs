@@ -8,13 +8,15 @@ use serde::{Deserialize, Serialize};
 use super::{
   branch::BranchName,
   number::RunNumber,
+  permissions::{PermissionsApply, PermissionsChangedBy},
   snapshot::RunSnapshot,
   status::{
     AttemptReason, ContinueTrigger, InterruptCause, PauseReason, PlanDecision, RunFailure, StepFailure, WaitReason,
   },
 };
 use crate::{
-  id::{AttemptId, CheckpointId, RunId, StepExecutionId, TaskId},
+  id::{AttemptId, CheckpointId, ResourceId, RunId, StepExecutionId, TaskId},
+  permission::AgentPermissions,
   resource::StepKey,
   revision::Revision,
   time::Timestamp,
@@ -127,6 +129,24 @@ pub enum RunEventKind {
   Interrupted {
     cause: InterruptCause,
   },
+  /// The run uses `permissions` for agent profile `profile` from now on (02.J); with
+  /// [`PermissionsApply::Now`] its agents at work restart at their next checkpoint.
+  PermissionsChanged {
+    profile: ResourceId,
+    permissions: AgentPermissions,
+    apply: PermissionsApply,
+    by: PermissionsChangedBy,
+  },
+  /// The pending restarts of `profile`'s agents are cancelled; the change applies from their next
+  /// invocations.
+  PermissionsRestartCancelled {
+    profile: ResourceId,
+  },
+  /// `execution`'s agent ended at `checkpoint` and continues with the changed permissions.
+  PermissionsApplied {
+    execution: StepExecutionId,
+    checkpoint: Option<CheckpointId>,
+  },
   /// Continues an interrupted run from `from`, its last checkpoint (`None` if it had none).
   Continued {
     trigger: ContinueTrigger,
@@ -194,7 +214,8 @@ impl RunEventKind {
       | Self::StepPassed { execution }
       | Self::StepFailed { execution, .. }
       | Self::StepSkipped { execution }
-      | Self::CheckpointRecorded { execution, .. } => Some(*execution),
+      | Self::CheckpointRecorded { execution, .. }
+      | Self::PermissionsApplied { execution, .. } => Some(*execution),
       _ => None,
     }
   }
@@ -210,6 +231,9 @@ impl RunEventKind {
       Self::LimitRaised { .. } => "limit_raised",
       Self::StepBudgetRaised { .. } => "step_budget_raised",
       Self::Interrupted { .. } => "interrupted",
+      Self::PermissionsChanged { .. } => "permissions_changed",
+      Self::PermissionsRestartCancelled { .. } => "permissions_restart_cancelled",
+      Self::PermissionsApplied { .. } => "permissions_applied",
       Self::Continued { .. } => "continued",
       Self::Succeeded => "succeeded",
       Self::Failed { .. } => "failed",
