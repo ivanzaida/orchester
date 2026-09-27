@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use super::Entity;
+use super::{Entity, references};
 use crate::{
   connection::Connection,
   id::{ConnectionId, ResourceId, SecretId},
@@ -205,6 +205,17 @@ impl Catalog {
 
   pub fn secret(&self, id: SecretId) -> Option<&Secret> {
     self.secrets.iter().find(|secret| secret.id() == id)
+  }
+
+  /// The resources whose default content ([`CatalogResource::default_pick`]) refers to `entity`,
+  /// e.g. the pipelines that run a profile.
+  pub fn users(&self, entity: Entity) -> impl Iterator<Item = &CatalogResource> {
+    let wanted = entity.uuid();
+    self.resources.iter().filter(move |resource| {
+      resource
+        .content(resource.default_pick())
+        .is_some_and(|content| references::values(&content.to_value()).contains(&wanted))
+    })
   }
 
   /// Whether `entity` is in the catalog.
