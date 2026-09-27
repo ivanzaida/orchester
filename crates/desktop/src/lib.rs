@@ -12,6 +12,7 @@ pub mod display;
 pub mod drafts;
 mod external;
 pub mod i18n;
+pub mod instructions;
 pub mod messages;
 pub mod navigation;
 pub mod pipelines;

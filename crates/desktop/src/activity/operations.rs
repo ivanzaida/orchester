@@ -125,6 +125,53 @@ pub fn pipeline(repo_root: &Path, id: ResourceId) -> Target {
   }
 }
 
+/// Autosave of an instruction draft; only its outcome is listed.
+pub fn instruction_draft(open: &OpenProject, id: ResourceId, name: &str) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.instructionDraft.running",
+    done: "statusBar.operations.instructionDraft.done",
+    failed: "statusBar.operations.instructionDraft.failed",
+  }
+  .named(name)
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::Instruction(id)))
+  .quiet()
+}
+
+pub fn instruction_publish(open: &OpenProject, id: ResourceId, name: &str, version: u32) -> OperationSpec {
+  let message = |key| {
+    Message::new(key)
+      .with("name", name.to_owned())
+      .with("version", version.to_string())
+  };
+  OperationSpec::new(
+    message("statusBar.operations.instructionPublish.running"),
+    message("statusBar.operations.instructionPublish.done"),
+    message("statusBar.operations.instructionPublish.failed"),
+  )
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::Instruction(id)))
+}
+
+/// Creating an instruction; it opens the new instruction once it exists (see [`instruction`]).
+pub fn instruction_create(open: &OpenProject, name: &str) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.instructionCreate.running",
+    done: "statusBar.operations.instructionCreate.done",
+    failed: "statusBar.operations.instructionCreate.failed",
+  }
+  .named(name)
+  .project(open.project.name().as_str())
+}
+
+/// The target of a created instruction in the project at `repo_root`.
+pub fn instruction(repo_root: &Path, id: ResourceId) -> Target {
+  Target::Project {
+    repo_root: repo_root.to_path_buf(),
+    place: Place::Instruction(id),
+  }
+}
+
 pub fn project_create(name: &str, repo_root: &Path) -> OperationSpec {
   Wording {
     running: "statusBar.operations.projectCreate.running",

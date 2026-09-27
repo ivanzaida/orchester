@@ -14,7 +14,7 @@ use orchester_core::id::{ConnectionId, ProjectId, ResourceId, TaskId};
 use orchester_desktop::{
   navigation::{
     Navigation, Places, Start, forward,
-    route::{AgentSelection, ConnectionTab, Page, Route, SettingsTab, TaskPageTab},
+    route::{AgentSelection, ConnectionTab, InstructionsTab, Page, Route, SettingsTab, TaskPageTab},
     routes,
   },
   project_setup::ProjectDraft,
@@ -128,6 +128,8 @@ fn pages() -> Vec<Page> {
     Page::PullRequest(42),
     Page::Pipelines,
     Page::Pipeline(ResourceId::generate()),
+    Page::Instructions(InstructionsTab::ProjectRules, None),
+    Page::Instructions(InstructionsTab::StepOverrides, Some(ResourceId::generate())),
     Page::Agents(AgentSelection::First),
     Page::Agents(AgentSelection::New),
     Page::Agents(AgentSelection::Profile(ResourceId::generate())),
@@ -200,6 +202,10 @@ fn route_tabs_are_part_of_the_path() {
   assert_eq!(Route::parse(&queue), Some(Route::Project(project, Page::TASKS)));
   let unknown = format!("/project/{project}?tab=nothing");
   assert_eq!(Route::parse(&unknown), Some(Route::Project(project, Page::OVERVIEW)));
+  let roles = Route::Project(project, Page::Instructions(InstructionsTab::AgentRoles, None)).path();
+  assert_eq!(roles, format!("/project/{project}/instructions?tab=agent-roles"));
+  let rules = Route::Project(project, Page::Instructions(InstructionsTab::ProjectRules, None)).path();
+  assert_eq!(rules, format!("/project/{project}/instructions"));
 }
 
 #[test]

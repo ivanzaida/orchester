@@ -13,6 +13,7 @@ mod draft_autosave;
 mod github;
 mod harness;
 mod history;
+mod instructions;
 mod lifecycle;
 mod new_task;
 mod pipeline_editor;
