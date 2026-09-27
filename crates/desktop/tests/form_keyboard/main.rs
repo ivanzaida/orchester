@@ -18,6 +18,7 @@ mod instructions;
 mod lifecycle;
 mod new_task;
 mod pipeline_editor;
+mod plan_review;
 mod project_settings;
 mod project_setup;
 mod pull_request_detail;

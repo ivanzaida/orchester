@@ -99,6 +99,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | form group gap 22 (`xT2ex`, `dCLMl`) | `ExtraSpacing::Form.role()` |
 | lifecycle dialog width 880 at most, 32 from the window's side edges (`um9B1`, `KS2RU`, `BovYZ`) | `theme::LIFECYCLE_DIALOG_WIDTH` / `ExtraSpacing::DialogMargin.role()` (backdrop padding) |
 | Summary column padding beside its scroll gutter, 32 less the 12px gutter (`JV8S8` in `ZVdRa`) | `ExtraSpacing::BesideGutter.role()` |
+| note field padding (`NbNN0`, the changes a plan needs) | `ExtraSpacing::TextArea.role()` |
+| agent-written Markdown (a plan under review, 02.11): headings step up from the body, code in the `code-*` colors, quotes and tables in the chrome's borders | lurq `ThemeMarkdown` from `theme::markdown`; call sites pass the text style (`Brief`) |
 | select menu radius 11 / padding 4 (`u0ByM`) | `ExtraRadius::SelectMenu.role()` / `ExtraSpacing::SelectMenu.role()` |
 | switch track radius 8, knob round (`K8ItM`) | `ExtraRadius::Pill.role()` |
 | unparsed transcript lines at 60 % (`Ane9j`) | `theme::UNPARSED_OPACITY` |
@@ -165,6 +167,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::InspectorNote.role()` | 10 muted, 1.6 | note under an inspector's details or actions (model source `xK9v9`, status detail `Thdx2`) |
 | `ExtraTypography::MonoTitle.role()` | mono 12 | identifier as a list row's title, e.g. a secret name (`B1zGN` in `vxAMD`) |
 | `ExtraTypography::MaskedValue.role()` | mono 13 muted | a stored secret shown only as its mask (`FNlaR` in `CQxCb`) |
+| `ExtraTypography::PlanTitle.role()` | 19/500 | title of the plan under review (`J7irj` in `x3lVC`) |
+| `ExtraTypography::ReviewNote.role()` | 12, 1.6 | a note written to an agent, e.g. the changes a plan needs (`DDXc5` in `NbNN0`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

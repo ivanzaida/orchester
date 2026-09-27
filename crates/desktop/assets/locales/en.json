@@ -383,7 +383,7 @@
         "pending": "Run {{run}} · starting",
         "starting": "Run {{run}} · Attempt {{attempt}} · starting",
         "working": "Run {{run}} · Attempt {{attempt}} · {{step}} · {{agent}} working",
-        "awaitingPlan": "Run {{run}} · Attempt {{attempt}} · {{pipeline}} v{{version}} · {{agent}} finished",
+        "awaitingPlan": "Run {{run}} · Attempt {{attempt}} · {{pipeline}} {{version}} · {{agent}} finished",
         "pausing": "Run {{run}} · Attempt {{attempt}} · {{step}} · pausing at the next checkpoint",
         "paused": "Run {{run}} · Attempt {{attempt}} · Paused by you at {{time}}",
         "tokenLimit": "Run {{run}} · Attempt {{attempt}} · Stopped at the token limit at {{time}}",

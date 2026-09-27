@@ -4,11 +4,12 @@
 mod support;
 
 use orchester_core::{
-  run::{TaskPhase, WaitReason},
+  run::{PlanVersion, TaskPhase, WaitReason},
   store::RunStore,
 };
 use orchester_desktop::tasks::{
   data::ProjectTasks,
+  list::AwaitedPlan,
   overview::{OverviewTab, Pulse, figure, footer, recent_runs},
 };
 
@@ -125,4 +126,29 @@ fn overview_activity_lists_the_latest_runs_newest_first() {
   assert_eq!(recent[1].title().key, "overview.activity.succeeded");
   assert_eq!(recent[1].title().args, vec![("run", "1".to_owned())]);
   assert_eq!(recent_runs(&tasks.tasks, &tasks.phases, 1).len(), 1);
+}
+
+/// A run waiting on a plan decision counts in Needs you, and its row names the plan that waits.
+#[test]
+fn overview_needs_you_names_the_plan_that_waits() {
+  let mut fixture = support::Fixture::gated();
+  let task = fixture.task("Add login", support::at(10));
+  let mut run = fixture.started_run(task, support::at(20));
+  fixture.propose(&mut run, "1. Add the provider.", support::at(30));
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  assert_eq!(Pulse::of(&tasks.phases, support::at(0)).needs_input, 1);
+  let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
+  assert_eq!(rows.len(), 1);
+  assert_eq!(
+    rows[0].plan,
+    Some(AwaitedPlan {
+      version: PlanVersion::FIRST,
+      step: "Implement".into(),
+    })
+  );
+  assert_eq!(rows[0].detail.key, "tasks.progress.waiting");
+  // No agent works for it, so it still waits while no runner is connected.
+  let offline = tasks.without_runner();
+  assert_eq!(offline.lost_to_runner, 0);
+  assert_eq!(OverviewTab::NeedsYou.count(&offline.tasks, &offline.phases), 1);
 }
