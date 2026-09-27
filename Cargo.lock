@@ -2575,6 +2575,7 @@ dependencies = [
  "orchester-ipc",
  "orchester-store",
  "parking_lot",
+ "rusqlite",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",

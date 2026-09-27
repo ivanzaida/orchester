@@ -250,6 +250,7 @@ async fn control_cancel_ends_a_pending_run_that_never_started() {
     .expect("runs")
     .try_into()
     .expect("one run");
+  let pending = pending.expect("readable run");
   assert_eq!(pending.status(), &RunStatus::Pending);
 
   tokio::time::timeout(PATIENCE, scheduler.cancel_run(pending.id()))
@@ -259,7 +260,13 @@ async fn control_cancel_ends_a_pending_run_that_never_started() {
   let cancelled = db.run(pending.id()).expect("read").expect("run");
   assert_eq!(cancelled.status(), &RunStatus::Cancelled);
   assert!(cancelled.attempts().is_empty());
-  assert_eq!(db.runs_of_task(project.task).expect("runs"), vec![cancelled]);
+  let runs: Vec<_> = db
+    .runs_of_task(project.task)
+    .expect("runs")
+    .into_iter()
+    .map(|run| run.expect("readable run"))
+    .collect();
+  assert_eq!(runs, vec![cancelled]);
   let told = std::iter::from_fn(|| events.try_recv().ok())
     .any(|event| matches!(event, Event::RunChanged { run, .. } if run == pending.id()));
   assert!(told, "the desktop is told that the run changed");
