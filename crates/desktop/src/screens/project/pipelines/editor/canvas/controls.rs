@@ -1,7 +1,8 @@
 //! The band along the canvas's bottom edge: the zoom controls (`iarCw`: zoom out, zoom in, the
 //! level — which goes back to 100 % — and fit) and, right after publishing, the published
 //! notice (`O8ivsy`). The notice is taller than the band, so it floats over the canvas, anchored
-//! to the band's right end with its bottom level with the controls'.
+//! to the band's right end with its bottom level with the controls'; [`NoticeRefs::covered`] says
+//! how much of the graph's area it covers.
 
 use std::sync::Arc;
 
@@ -39,13 +40,30 @@ const BAND_HEIGHT: f32 = 56.0;
 
 type Command = Arc<dyn Fn(ZoomCommand) + Send + Sync>;
 
-/// The band; `anchor` marks where the published notice ends.
+/// Where the published notice ends in the band, and where it is drawn over the canvas.
+#[derive(Clone, Default)]
+pub struct NoticeRefs {
+  anchor: ElementRef,
+  drawn: ElementRef,
+}
+
+impl NoticeRefs {
+  /// How far up from the bottom of `area` the drawn notice reaches; nothing before it is laid out.
+  pub fn covered(&self, area: &ElementRef) -> f32 {
+    if !self.drawn.is_attached() || self.drawn.height() <= 0.0 {
+      return 0.0;
+    }
+    (area.y() + area.height() - self.drawn.y()).clamp(0.0, area.height())
+  }
+}
+
+/// The band, with the published notice when `published`.
 pub fn band(
   ctx: &Ctx,
   zoom: Zoom,
   command: &Command,
   published: Option<VersionNumber>,
-  anchor: &ElementRef,
+  notice: &NoticeRefs,
 ) -> Element {
   let bar = Row::new()
     .width(Dimension::Pct(100.0))
@@ -61,21 +79,24 @@ pub fn band(
       Column::new()
         .width(Dimension::Px(NOTICE_WIDTH))
         .height(Dimension::Px(ZOOM_HEIGHT))
-        .ref_element(anchor.clone()),
+        .ref_element(notice.anchor.clone()),
     );
   let Some(version) = published else {
     return bar.into();
   };
   let version = version.to_string();
-  let notice = Column::new().width(Dimension::Px(NOTICE_WIDTH)).child(
-    Notice::new(
-      Icon::CircleCheck,
-      ctx.t_args("pipelines.published.title", [("version", version.as_str())]),
-      ctx.t_args("pipelines.published.detail", [("version", version.as_str())]),
-    )
-    .id("pipeline-published-notice"),
-  );
-  let floating = Popup::new(anchor.clone(), notice)
+  let drawn = Column::new()
+    .width(Dimension::Px(NOTICE_WIDTH))
+    .ref_element(notice.drawn.clone())
+    .child(
+      Notice::new(
+        Icon::CircleCheck,
+        ctx.t_args("pipelines.published.title", [("version", version.as_str())]),
+        ctx.t_args("pipelines.published.detail", [("version", version.as_str())]),
+      )
+      .id("pipeline-published-notice"),
+    );
+  let floating = Popup::new(notice.anchor.clone(), drawn)
     .open_when(true)
     .placement(Placement::TopEnd)
     // Above the anchor with a negative gap of the anchor's height: the notice ends where it does.
