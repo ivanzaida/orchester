@@ -11,7 +11,10 @@ use std::{
   time::{Duration, Instant},
 };
 
-use lurq::app::{App, Tree, events::MouseButton};
+use lurq::{
+  app::{App, Tree, events::MouseButton},
+  core::ElementRect,
+};
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
@@ -289,16 +292,30 @@ impl Desktop {
     self.pass();
   }
 
-  /// A pointer press and release in the middle of `id`, as a user clicks.
-  pub fn press(&mut self, id: &str) {
-    let bounds = self
+  /// Where `id` is laid out in the window.
+  pub fn bounds(&mut self, id: &str) -> ElementRect {
+    self
       .tree
       .get_element_by_id_mut(id)
       .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"));
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  }
+
+  /// A pointer press and release in the middle of `id`, as a user clicks.
+  pub fn press(&mut self, id: &str) {
+    let bounds = self.bounds(id);
     let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
     self.tree.mouse_down(x, y, MouseButton::Left);
     self.tree.mouse_up(x, y, MouseButton::Left);
+    self.pass();
+  }
+
+  /// The pointer moves over the middle of `id`.
+  pub fn hover(&mut self, id: &str) {
+    let bounds = self.bounds(id);
+    self
+      .tree
+      .mouse_move(bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
     self.pass();
   }
 

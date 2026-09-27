@@ -88,7 +88,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `hover` #2C2C2C | `AccentMuted` — hover, selected nav item, status label |
 | `border` #363636 | `Border` |
 | `hairline` #2B2B2B | `ExtraColor::Hairline.role()` — row and section dividers |
-| backdrop #000000A6 (`a8U756`) | `ExtraColor::Scrim.role()` — behind dialogs |
+| backdrop #000000A6 (`a8U756`) over the screen only, not the title or status bar | `ExtraColor::Scrim.role()` — behind dialogs, through `ui::backdrop` |
 | `text` #EEEEEE | `TextPrimary`, `BorderFocus` |
 | `muted` #A3A3A3 | `TextSecondary` |
 | `subtle` #8F8F8F | `TextMuted`, `BorderStrong` |
