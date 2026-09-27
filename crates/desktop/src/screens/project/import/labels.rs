@@ -159,19 +159,17 @@ pub(super) fn source_detail(ctx: &Ctx, source: &Catalog, item: &Item) -> Arc<str
         ConnectionKind::Agent(provider) => ctx.t(program_key(*provider)),
         ConnectionKind::GitHub { .. } => ctx.t("projectImport.github"),
       });
-      separated(
-        ctx,
-        &[&[ctx.t("projectImport.kind.connection")][..], program.as_slice()].concat(),
-      )
+      let mut parts = vec![ctx.t("projectImport.kind.connection")];
+      parts.extend(program);
+      separated(ctx, &parts)
     }
     Entity::Secret(id) => {
       let environment = source
         .secret(id)
         .map(|secret| ctx.t(environment_key(secret.environment())));
-      separated(
-        ctx,
-        &[&[ctx.t("projectImport.kind.secret")][..], environment.as_slice()].concat(),
-      )
+      let mut parts = vec![ctx.t("projectImport.kind.secret")];
+      parts.extend(environment);
+      separated(ctx, &parts)
     }
   }
 }
