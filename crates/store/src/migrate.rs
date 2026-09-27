@@ -1,18 +1,24 @@
-use std::{path::Path, time::Duration};
+use std::{
+  path::Path,
+  thread,
+  time::{Duration, Instant},
+};
 
-use rusqlite::{Connection, TransactionBehavior};
+use rusqlite::{Connection, TransactionBehavior, ffi};
 
 use crate::StoreError;
 
-/// How long a write waits for the other process (desktop or runner) to release the lock.
+/// How long opening, a read or a write waits for the other process (desktop or runner) to let go
+/// of the database.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+/// The pause before opening again while a process that is going away still maps the database's
+/// shared memory.
+const REOPEN_PAUSE: Duration = Duration::from_millis(20);
 
 /// Opens `path` in WAL mode and applies the forward-only `migrations` not yet recorded in
 /// `user_version`. A database written by a newer build is refused rather than guessed at.
 pub(crate) fn open(path: &Path, migrations: &[&str]) -> Result<Connection, StoreError> {
-  let mut connection = Connection::open(path)?;
-  connection.pragma_update_and_check(None, "journal_mode", "WAL", |_| Ok(()))?;
-  connection.busy_timeout(BUSY_TIMEOUT)?;
+  let mut connection = connect(path)?;
   // Every transaction here writes. Taking the write lock when it begins lets it wait for the
   // other writers (the desktop, the tasks of the runs) instead of failing: a transaction that
   // started reading cannot wait for the lock without risking a deadlock, so SQLite refuses it
@@ -25,6 +31,30 @@ pub(crate) fn open(path: &Path, migrations: &[&str]) -> Result<Connection, Store
   apply(&mut connection, migrations)?;
   connection.pragma_update(None, "foreign_keys", true)?;
   Ok(connection)
+}
+
+/// Opens `path` in WAL mode, waiting at most [`BUSY_TIMEOUT`] while the other process holds it:
+/// SQLite's busy handler waits for its locks, from the first read on. A process that crashed or
+/// was killed lets go of its locks on the shared memory of the write-ahead log (`-shm`) before
+/// Windows unmaps that file from it. The next process to open the database takes itself for the
+/// first one and resets the file, which fails with "disk I/O error" while the file is still
+/// mapped; opening is tried again until the map is gone. Every other error comes back at once.
+fn connect(path: &Path) -> Result<Connection, rusqlite::Error> {
+  let deadline = Instant::now() + BUSY_TIMEOUT;
+  loop {
+    let connection = Connection::open(path)?;
+    connection.busy_timeout(BUSY_TIMEOUT)?;
+    match connection.pragma_update_and_check(None, "journal_mode", "WAL", |_| Ok(())) {
+      Ok(()) => return Ok(connection),
+      Err(error) if shared_memory_still_mapped(&error) && Instant::now() < deadline => thread::sleep(REOPEN_PAUSE),
+      Err(error) => return Err(error),
+    }
+  }
+}
+
+/// Whether the first read failed to reset the shared memory file: another process still maps it.
+fn shared_memory_still_mapped(error: &rusqlite::Error) -> bool {
+  matches!(error, rusqlite::Error::SqliteFailure(failure, _) if failure.extended_code == ffi::SQLITE_IOERR_TRUNCATE)
 }
 
 fn apply(connection: &mut Connection, migrations: &[&str]) -> Result<(), StoreError> {
