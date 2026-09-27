@@ -17,6 +17,7 @@ mod pages;
 mod pipelines;
 mod pull_requests;
 mod runner;
+mod runner_card;
 mod secrets;
 mod settings;
 mod sidebar;
@@ -41,7 +42,10 @@ use orchester_core::{
 };
 
 pub(crate) use self::pages::page;
-use self::{pages::Shown, sidebar::sidebar};
+use self::{
+  pages::Shown,
+  sidebar::{SidebarState, sidebar},
+};
 use super::status_bar::{ProjectBar, StatusBar, StatusBarProps};
 use crate::{
   background,
@@ -269,7 +273,7 @@ impl Component for ProjectShell {
     });
     let bar = ProjectBar {
       repo_root: open.repo_root.clone(),
-      runner: status,
+      runner: status.clone(),
       queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
       needs_you: tasks
         .ready()
@@ -284,7 +288,16 @@ impl Component for ProjectShell {
         Row::new()
           .width(Dimension::Pct(100.0))
           .flex(1.0)
-          .child(sidebar(ctx, &open, page, &tasks, &self.nav))
+          .child(sidebar(
+            ctx,
+            &open,
+            &SidebarState {
+              shown: page,
+              tasks: &tasks,
+              runner: &status,
+            },
+            &self.nav,
+          ))
           .child(
             Column::new()
               .flex(1.0)

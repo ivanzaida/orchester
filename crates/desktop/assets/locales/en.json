@@ -95,6 +95,27 @@
       },
       "openLog": "Open runner log",
       "restart": "Restart runner"
+    },
+    "card": {
+      "starting": "Starting local runner",
+      "startingDetail": "Agents can start when it’s ready",
+      "online": "Local runner online",
+      "slots": {
+        "one": "{{used}} of {{slots}} agent slot in use",
+        "other": "{{used}} of {{slots}} agent slots in use"
+      },
+      "slotsUnknown": "Agent slots not reported yet",
+      "reconnecting": "Reconnecting to runner",
+      "attempt": "Attempt {{attempt}} of {{limit}}",
+      "attemptInterrupted": {
+        "one": "Attempt {{attempt}} of {{limit}} · run interrupted",
+        "other": "Attempt {{attempt}} of {{limit}} · runs interrupted"
+      },
+      "offline": "Runner offline",
+      "notStarted": "Could not start · see runner log",
+      "notRestarted": "Could not restart · see runner log",
+      "stopping": "Stopping local runner",
+      "stopped": "Local runner stopped"
     }
   },
   "lifecycle": {

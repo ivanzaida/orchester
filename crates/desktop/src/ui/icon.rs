@@ -48,6 +48,7 @@ icons! {
   ChevronLeft => '\u{e06e}',
   ChevronRight => '\u{e06f}',
   ChevronUp => '\u{e070}',
+  ChevronsUpDown => '\u{e211}',
   Circle => '\u{e076}',
   CircleCheck => '\u{e226}',
   CircleDashed => '\u{e4b0}',
