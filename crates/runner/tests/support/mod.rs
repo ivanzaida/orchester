@@ -5,6 +5,7 @@
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
+pub mod hold;
 pub mod tools;
 
 use std::{
