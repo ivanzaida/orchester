@@ -13,6 +13,7 @@ mod history_panel;
 mod pipeline_inspector;
 mod publish_dialog;
 mod step_card;
+mod step_executor;
 mod step_fields;
 mod step_inspector;
 mod step_permissions;

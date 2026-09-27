@@ -134,11 +134,13 @@ fn stages(run: &RunView) -> Element {
     .into()
 }
 
-/// What the steps reported when they finished (`Wegul`); nothing when none did.
+/// What the agent steps reported when they finished (`Wegul`); nothing when none did. A tool step's
+/// output says how its command ended, which is not a change.
 fn what_changed(ctx: &Ctx, run: &RunView) -> Option<Element> {
   let reported: Vec<&str> = run
     .steps
     .iter()
+    .filter(|step| !step.tool_step)
     .filter_map(|step| run.output(step.execution?))
     .map(|output| output.text.trim())
     .filter(|text| !text.is_empty())

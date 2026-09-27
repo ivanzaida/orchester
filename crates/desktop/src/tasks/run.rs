@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
-  resource::{AgentProfile, Pipeline, ResourceKind, Version},
+  resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version},
   run::{PreflightInput, PreflightProblem, RunLimit, preflight},
   store::{ConnectionStore, ResourceStore, TaskStore},
   task::{QueueError, Task, TaskDetails, TaskStatus},
@@ -71,18 +71,24 @@ fn check(db: &ProjectDb, details: &TaskDetails) -> Result<Vec<PreflightProblem>,
     Some(pipeline) => db.latest_version::<Pipeline>(pipeline)?,
     None => None,
   };
-  let mut profiles: BTreeMap<ResourceId, Version<AgentProfile>> = BTreeMap::new();
-  for resource in db.resources(ResourceKind::AgentProfile)? {
-    if let Some(version) = db.latest_version::<AgentProfile>(resource.id())? {
-      profiles.insert(resource.id(), version);
-    }
-  }
   let connections = db.connections()?;
   Ok(preflight(PreflightInput {
     pipeline: pipeline.as_ref().map(Version::body),
-    profiles: &profiles,
+    profiles: &latest::<AgentProfile>(db, ResourceKind::AgentProfile)?,
+    tools: &latest::<Tool>(db, ResourceKind::Tool)?,
     connections: &connections,
   }))
+}
+
+/// The latest published version of every resource of `kind`.
+fn latest<B: ResourceBody>(db: &ProjectDb, kind: ResourceKind) -> Result<BTreeMap<ResourceId, Version<B>>, StoreError> {
+  let mut versions = BTreeMap::new();
+  for resource in db.resources(kind)? {
+    if let Some(version) = db.latest_version::<B>(resource.id())? {
+      versions.insert(resource.id(), version);
+    }
+  }
+  Ok(versions)
 }
 
 /// What a person reads for a preflight problem.
@@ -92,7 +98,20 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
   match problem {
     PreflightProblem::PipelineNotPublished => Message::new("runs.preflight.pipelineNotPublished"),
     PreflightProblem::NoSteps => Message::new("runs.preflight.noSteps"),
-    PreflightProblem::ToolStep { step: key } => step("runs.preflight.toolStep", key),
+    PreflightProblem::ToolNotPublished { step: key } => step("runs.preflight.toolNotPublished", key),
+    PreflightProblem::ToolNotRunnable {
+      step: key,
+      kind: ToolKind::Http,
+    } => step("runs.preflight.toolNotRunnable.http", key),
+    PreflightProblem::ToolNotRunnable {
+      step: key,
+      kind: ToolKind::Database,
+    } => step("runs.preflight.toolNotRunnable.database", key),
+    PreflightProblem::ToolNotRunnable {
+      step: key,
+      kind: ToolKind::Command,
+    } => step("runs.preflight.toolNotRunnable.command", key),
+    PreflightProblem::ToolAccessRules { step: key } => step("runs.preflight.toolAccessRules", key),
     PreflightProblem::ApprovalGate { step: key } => step("runs.preflight.approvalGate", key),
     PreflightProblem::ProfileNotPublished { step: key } => step("runs.preflight.profileNotPublished", key),
     PreflightProblem::ConnectionMissing { step: key } => step("runs.preflight.connectionMissing", key),

@@ -69,6 +69,7 @@ PRAGMA foreign_keys = OFF;
 BEGIN;
 DROP TABLE secrets;
 DROP TABLE invocation_prompts;
+ALTER TABLE invocations DROP COLUMN kind;
 DROP TABLE revision_diffs;
 DROP TABLE run_permissions;
 DROP TABLE run_step_budgets;

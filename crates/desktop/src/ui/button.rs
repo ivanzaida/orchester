@@ -49,6 +49,8 @@ pub struct ActionButton {
   roomy: bool,
   compact: bool,
   in_form: bool,
+  /// The icon and label start at the left instead of the middle.
+  start: bool,
   id: Option<&'static str>,
 }
 
@@ -65,6 +67,7 @@ impl ActionButton {
       roomy: false,
       compact: false,
       in_form: false,
+      start: false,
       id: None,
     }
   }
@@ -132,6 +135,12 @@ impl ActionButton {
     self
   }
 
+  /// The icon and label at the left, as the full-width choices of a side panel (`oeTlM`, `BBL80`).
+  pub fn start(mut self) -> Self {
+    self.start = true;
+    self
+  }
+
   pub fn fill_width(mut self) -> Self {
     self.width = Some(Dimension::Pct(100.0));
     self
@@ -190,7 +199,7 @@ impl ActionButton {
       .border(Border::inside(BorderSize::Sm, border))
       .rounded(role.radius)
       .align_items(Alignment::Center)
-      .justify(Justify::Center)
+      .justify(if self.start { Justify::Start } else { Justify::Center })
       .child(content);
     if self.roomy {
       button = button.padding_horizontal(SpacingSize::Md);

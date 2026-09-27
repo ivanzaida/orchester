@@ -21,7 +21,7 @@ use tokio::{
   time::{Instant, sleep},
 };
 
-use super::super::Notifier;
+use super::super::{Notifier, tool::CommandFinished};
 use crate::supervisor::{ProcessEvent, ProcessExit, Supervised};
 
 /// Transcript entries are written at least this often while the CLI prints…
@@ -69,6 +69,11 @@ pub(in super::super) enum WorkerEvent {
   Ended {
     execution: StepExecutionId,
     end: Result<Finished, StoreError>,
+  },
+  /// A command tool's program ended; `Err` when recording what it did failed.
+  CommandEnded {
+    execution: StepExecutionId,
+    end: Result<CommandFinished, StoreError>,
   },
 }
 

@@ -1,12 +1,12 @@
 //! The Activity transcript built from stored agent events.
 
 use orchester_core::{
-  connection::stream::{AgentEvent, CommandStatus, OutputStream},
+  connection::stream::{AgentEvent, CommandStatus, OutputStream, ToolCommandResult},
   id::{InvocationId, StepExecutionId},
   run::{ActivityEntry, TokenUsage},
   time::Timestamp,
 };
-use orchester_desktop::tasks::transcript::{EntryKind, entries};
+use orchester_desktop::tasks::transcript::{EntryKind, ToolCommandEntry, entries};
 
 fn stored(events: Vec<AgentEvent>) -> Vec<ActivityEntry> {
   let (execution, invocation) = (StepExecutionId::generate(), InvocationId::generate());
@@ -157,5 +157,41 @@ fn transcript_shows_a_cli_that_is_not_signed_in_as_a_failure() {
     entries[0].kind,
     EntryKind::NotSignedIn("Not logged in · Please run /login".into())
   );
+  assert!(entries[0].is_failure());
+}
+
+#[test]
+fn transcript_joins_a_tool_steps_command_and_keeps_how_it_ended() {
+  let activity = stored(vec![
+    AgentEvent::ToolCommandStarted {
+      tool: "Run tests".into(),
+      command: "cargo test".into(),
+    },
+    AgentEvent::ToolCommandFinished {
+      tool: "Run tests".into(),
+      command: "cargo test".into(),
+      result: ToolCommandResult::TimedOut,
+      exit_code: None,
+      output: "running 3 tests".into(),
+      omitted_bytes: 2_048,
+    },
+  ]);
+  let entries = entries(&activity);
+  assert_eq!(entries.len(), 1);
+  let EntryKind::ToolCommand(command) = &entries[0].kind else {
+    panic!("a tool command entry, got {:?}", entries[0].kind);
+  };
+  assert_eq!(
+    command,
+    &ToolCommandEntry {
+      command: "cargo test".into(),
+      result: Some(ToolCommandResult::TimedOut),
+      exit_code: None,
+      output: "running 3 tests".into(),
+      omitted_bytes: 2_048,
+      duration: Some(1_000),
+    }
+  );
+  // A command that ran out of time is a failure: its entry starts open.
   assert!(entries[0].is_failure());
 }

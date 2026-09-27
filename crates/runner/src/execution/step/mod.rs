@@ -41,6 +41,23 @@ pub(super) struct Active {
 }
 
 impl Active {
+  /// A tool step's command at work: it has no step budget and uses no tokens.
+  pub(super) const fn command(
+    stops: mpsc::UnboundedSender<Stop>,
+    workspace: Workspace,
+    invocation: Invocation,
+  ) -> Self {
+    Self {
+      stops,
+      workspace,
+      invocation,
+      budget: None,
+      used: TokensUsed::ZERO,
+      budget_reached: false,
+      abandoned: false,
+    }
+  }
+
   pub(super) fn tell(&self, stop: Stop) {
     // The agent may have exited already; its end is on its way to the run.
     if self.stops.send(stop).is_err() {
@@ -110,6 +127,9 @@ impl RunTask {
   /// Starts `execution`'s agent in a slot of its own; `false` when no slot is free. An agent that
   /// cannot start fails its step.
   fn start(&mut self, execution: StepExecutionId, start: Start) -> Result<bool, ExecutionError> {
+    if self.is_tool_step(execution) {
+      return self.start_command(execution, start);
+    }
     let work = self.work(execution)?;
     if !self.board.take(self.run.id(), execution, work) {
       return Ok(false);
@@ -227,8 +247,9 @@ impl RunTask {
     }
   }
 
-  /// The agent did not start: the problem is reported, the invocation ends and the step fails.
-  fn not_started(
+  /// The agent or command did not start: the problem is reported, the invocation ends and the step
+  /// fails.
+  pub(super) fn not_started(
     &mut self,
     execution: StepExecutionId,
     invocation: &mut Invocation,

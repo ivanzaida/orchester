@@ -37,8 +37,8 @@ pub enum ProgressState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ExecutionUsage {
   pub attempt: NonZeroU32,
-  /// Counted tokens of all its invocations.
-  pub tokens: u64,
+  /// Counted tokens of all its invocations; `None` for a tool step, whose command uses none.
+  pub tokens: Option<u64>,
   /// Active agent time of all its invocations.
   pub active: Duration,
 }
@@ -121,7 +121,7 @@ fn usage(run: &RunView, step: &StepView, now: Timestamp) -> Option<ExecutionUsag
   let millis: i64 = invocations.iter().map(|invocation| invocation.active_millis(now)).sum();
   Some(ExecutionUsage {
     attempt: step.attempt?,
-    tokens: invocations.iter().map(|invocation| invocation.usage.counted()).sum(),
+    tokens: (!step.tool_step).then(|| invocations.iter().map(|invocation| invocation.usage.counted()).sum()),
     active: Duration::from_millis(u64::try_from(millis).unwrap_or_default()),
   })
 }

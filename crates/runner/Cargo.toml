@@ -26,8 +26,18 @@ name = "orchester-fake-claude"
 path = "tests/support/fake_claude.rs"
 required-features = ["test-agent"]
 
+# A harmless program for the command tool tests (prints, writes a file, sleeps, exits with a code).
+[[bin]]
+name = "orchester-test-command"
+path = "tests/support/test_command.rs"
+required-features = ["test-agent"]
+
 [[test]]
 name = "execution"
+required-features = ["test-agent"]
+
+[[test]]
+name = "tools"
 required-features = ["test-agent"]
 
 [[test]]

@@ -126,7 +126,7 @@ pub enum StepFailure {
   AgentFailed,
   /// The agent finished and reported that it could not do the step.
   ReportedFailed,
-  /// The agent could not be started.
+  /// The agent, or a command tool's program, could not be started.
   NotStarted,
   /// Legacy: versions before step budgets stopped the run at its limit failed an execution that
   /// used its step's budget. Such failures are still read; none is recorded any more.
@@ -135,6 +135,9 @@ pub enum StepFailure {
   MergeConflict,
   /// The step's changes could not be committed or merged.
   CheckpointFailed,
+  /// A command tool's program exited with a code the tool does not expect, or did not finish
+  /// within the tool's timeout.
+  CommandFailed,
 }
 
 /// A person's decision on a gated step's result.

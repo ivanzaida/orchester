@@ -84,6 +84,7 @@ icons! {
   GitPullRequest => '\u{e0e5}',
   GitPullRequestClosed => '\u{e35a}',
   GitPullRequestDraft => '\u{e35b}',
+  Globe => '\u{e0e8}',
   History => '\u{e1f5}',
   Inbox => '\u{e0f7}',
   Info => '\u{e0f9}',
