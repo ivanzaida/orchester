@@ -3,7 +3,8 @@
 mod support;
 
 use orchester_core::{
-  resource::{Pipeline, StepKey},
+  id::ResourceId,
+  resource::{Pipeline, StepKey, VersionNumber},
   run::{StepOutcome, StepOutput},
   store::{ActivityStore, ResourceStore, RunStore},
 };
@@ -36,59 +37,34 @@ fn step_outputs_round_trip_once_per_execution() {
   assert_eq!(db.step_outputs(run.id()).expect("outputs"), [first]);
 }
 
-/// Takes a migrated project database back to its shape before step outputs and token step budgets
-/// (schema 9), with the published pipeline's step budget and a draft's written as money, as they were
-/// stored then.
-const BEFORE_STEP_TOKENS: &str = r#"
-PRAGMA foreign_keys = OFF;
-BEGIN;
-DROP TABLE secrets;
-DROP TABLE invocation_prompts;
-ALTER TABLE invocations DROP COLUMN kind;
-DROP TABLE revision_diffs;
-DROP TABLE run_permissions;
-DROP TABLE run_step_budgets;
-ALTER TABLE runs DROP COLUMN limit_execution;
-DROP TABLE step_outputs;
-DROP TABLE money_step_budgets_before_tokens;
-ALTER TABLE step_executions DROP COLUMN failure;
-DROP TRIGGER resource_versions_no_update;
-UPDATE resource_versions SET body = json_set(body, '$.body.steps[0].budget',
-  json('{"micros": 2500000, "currency": "USD"}'));
-CREATE TRIGGER resource_versions_no_update BEFORE UPDATE ON resource_versions
-BEGIN SELECT RAISE(ABORT, 'published resource versions are immutable'); END;
-INSERT INTO resource_drafts (resource_id, body, based_on, updated_at)
-  SELECT resource_id, json_set(body, '$.body.steps[0].budget', json('{"micros": 1000000, "currency": "EUR"}')), number,
-    100
-  FROM resource_versions WHERE resource_id IN (SELECT id FROM resources WHERE kind = 'pipeline');
-PRAGMA user_version = 9;
-COMMIT;
-"#;
+/// A project database at schema 9, before step budgets were tokens (see the file).
+const SCHEMA_9: &str = include_str!("fixtures/schema_9_money_step_budgets.sql");
+const PIPELINE: &str = "01920000-0000-7000-8000-000000000007";
+const PIPELINE_VERSION: &str = "01920000-0000-7000-8000-000000000008";
+const RUN: &str = "01920000-0000-7000-8000-000000000009";
 
 #[test]
 fn step_outputs_migration_reads_money_step_budgets_as_none_and_keeps_them() {
-  let (repo, db, run, _) = started_run();
-  let pipeline = run.snapshot().pipeline();
-  drop(db);
-  let database = repo.path().join(".orchester").join("orchester.db");
-  Connection::open(&database)
-    .expect("open")
-    .execute_batch(BEFORE_STEP_TOKENS)
-    .expect("back to money step budgets");
+  let repo = tempfile::tempdir().expect("temporary directory");
+  ProjectDb::create_at_version(repo.path(), 9)
+    .expect("schema 9")
+    .execute_batch(SCHEMA_9)
+    .expect("rows of schema 9");
 
   let db = ProjectDb::open(repo.path()).expect("migrate");
+  let pipeline: ResourceId = PIPELINE.parse().expect("fixture id");
   let version = db
-    .version::<Pipeline>(pipeline.resource, pipeline.number)
+    .version::<Pipeline>(pipeline, VersionNumber::FIRST)
     .expect("read")
     .expect("published version");
   assert_eq!(version.body().steps()[0].budget, None);
-  let draft = db.draft::<Pipeline>(pipeline.resource).expect("read").expect("draft");
+  let draft = db.draft::<Pipeline>(pipeline).expect("read").expect("draft");
   assert_eq!(draft.body().steps()[0].budget, None);
   // Runs pinned the version before; their snapshots still read.
-  assert!(db.run(run.id()).expect("read").is_some());
+  assert!(db.run(RUN.parse().expect("fixture id")).expect("read").is_some());
   drop(db);
 
-  let connection = Connection::open(&database).expect("open");
+  let connection = Connection::open(repo.path().join(".orchester").join("orchester.db")).expect("open");
   let mut kept = connection
     .prepare("SELECT owner, owner_id, step_key, micros, currency FROM money_step_budgets_before_tokens ORDER BY owner")
     .expect("prepare");
@@ -104,14 +80,14 @@ fn step_outputs_migration_reads_money_step_budgets_as_none_and_keeps_them() {
     [
       (
         "draft".to_owned(),
-        pipeline.resource.to_string(),
+        PIPELINE.to_owned(),
         "implement".to_owned(),
         1_000_000,
         "EUR".to_owned()
       ),
       (
         "version".to_owned(),
-        pipeline.version.to_string(),
+        PIPELINE_VERSION.to_owned(),
         "implement".to_owned(),
         2_500_000,
         "USD".to_owned()
