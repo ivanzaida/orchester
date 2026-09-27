@@ -161,6 +161,8 @@ enum Answer {
 
 fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request: &Request) -> Answer {
   let id = request.id;
+  // A request about a run is answered once it is carried out, with a scheduler handle of its own.
+  let handle = scheduler.clone();
   let reply = match request.command {
     Command::Attach { session, agent_slots } => match scheduler.attach(session, agent_slots) {
       Ok(attached) => Reply::Attached {
@@ -179,18 +181,9 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
       Ok(run) => Reply::RunStarted { run },
       Err(rejection) => Reply::Rejected(rejection),
     },
-    Command::PauseRun { run } => {
-      let scheduler = scheduler.clone();
-      return later(replies, id, run, async move { scheduler.pause_run(run).await });
-    }
-    Command::CancelRun { run } => {
-      let scheduler = scheduler.clone();
-      return later(replies, id, run, async move { scheduler.cancel_run(run).await });
-    }
-    Command::ResumeRun { run } => {
-      let scheduler = scheduler.clone();
-      return later(replies, id, run, async move { scheduler.resume_run(run).await });
-    }
+    Command::PauseRun { run } => return later(replies, id, run, async move { handle.pause_run(run).await }),
+    Command::CancelRun { run } => return later(replies, id, run, async move { handle.cancel_run(run).await }),
+    Command::ResumeRun { run } => return later(replies, id, run, async move { handle.resume_run(run).await }),
     Command::RaiseLimit {
       run,
       budget,
@@ -200,19 +193,15 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
         budget,
         max_duration: Duration::from_millis(max_duration_ms),
       };
-      let scheduler = scheduler.clone();
+      return later(replies, id, run, async move { handle.raise_limit(run, limits).await });
+    }
+    Command::RaiseStepBudget { run, budget } => {
       return later(
         replies,
         id,
         run,
-        async move { scheduler.raise_limit(run, limits).await },
+        async move { handle.raise_step_budget(run, budget).await },
       );
-    }
-    Command::RaiseStepBudget { run, budget } => {
-      let scheduler = scheduler.clone();
-      return later(replies, id, run, async move {
-        scheduler.raise_step_budget(run, budget).await
-      });
     }
     Command::ChangeRunPermissions {
       run,
@@ -220,15 +209,14 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
       ref permissions,
       apply,
     } => {
-      let (scheduler, permissions) = (scheduler.clone(), permissions.clone());
+      let permissions = permissions.clone();
       return later(replies, id, run, async move {
-        scheduler.change_permissions(run, profile, permissions, apply).await
+        handle.change_permissions(run, profile, permissions, apply).await
       });
     }
     Command::KeepPermissionsForNextInvocation { run, profile } => {
-      let scheduler = scheduler.clone();
       return later(replies, id, run, async move {
-        scheduler.keep_permissions_for_next_invocation(run, profile).await
+        handle.keep_permissions_for_next_invocation(run, profile).await
       });
     }
     Command::DecidePlan {
@@ -237,9 +225,9 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
       version,
       ref decision,
     } => {
-      let (scheduler, decision) = (scheduler.clone(), decision.clone());
+      let decision = decision.clone();
       return later(replies, id, run, async move {
-        scheduler.decide_plan(run, execution, version, decision).await
+        handle.decide_plan(run, execution, version, decision).await
       });
     }
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
