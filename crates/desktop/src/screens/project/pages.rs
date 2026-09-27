@@ -21,7 +21,7 @@ use super::{
   tools::ToolsScreen,
 };
 use crate::{
-  navigation::route::{self, Page, Route},
+  navigation::route::{self, Page, PipelineView, Route},
   runner::{RunnerStatus, state::RunnerState},
   tasks::usage::ProjectUsage,
   workspace::OpenProject,
@@ -104,7 +104,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
       PullRequestProps { project: open, number },
     ),
     Page::Pipelines => pipelines(ctx, open, None, shown.resources),
-    Page::Pipeline(pipeline) => pipelines(ctx, open, Some(pipeline), shown.resources),
+    Page::Pipeline(pipeline, view) => pipelines(ctx, open, Some((pipeline, view)), shown.resources),
     Page::Instructions(..) => ctx.mount_keyed::<InstructionsScreen>(&format!("instructions-{}", shown.resources), open),
     Page::Agents(_) => ctx.mount_keyed::<AgentsScreen>(&format!("agents-{}", shown.resources), open),
     Page::Tools(_) => ctx.mount_keyed::<ToolsScreen>(&format!("tools-{}", shown.resources), open),
@@ -114,9 +114,14 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
   }
 }
 
-/// The library, or `pipeline` in its editor: one screen, so the library's state survives a
+/// The library, or a pipeline in its editor: one screen, so the library's state survives a
 /// visit to the editor, until resources are imported (`resources`).
-fn pipelines(ctx: &mut Ctx, project: OpenProject, pipeline: Option<ResourceId>, resources: u64) -> Element {
+fn pipelines(
+  ctx: &mut Ctx,
+  project: OpenProject,
+  pipeline: Option<(ResourceId, PipelineView)>,
+  resources: u64,
+) -> Element {
   ctx.mount_keyed::<PipelinesScreen>(
     &format!("pipelines-{resources}"),
     PipelinesProps {

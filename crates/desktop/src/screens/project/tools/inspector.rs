@@ -17,7 +17,7 @@ use orchester_core::resource::ToolKind;
 use super::{Editing, EditorContext, editor::EditorState, row::kind_key};
 use crate::{
   agents::data::VersionState,
-  navigation::route::Page,
+  navigation::route::{Page, PipelineView},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{button::ActionButton, icon::Icon, property::property},
 };
@@ -130,7 +130,7 @@ fn used_by(ctx: &Ctx, context: &EditorContext, uses: &[crate::tools::data::ToolU
         .compact()
         .start()
         .fill_width()
-        .on_click(move || nav.show(Page::Pipeline(pipeline)))
+        .on_click(move || nav.show(Page::Pipeline(pipeline, PipelineView::Draft)))
         .render(ctx),
     );
   }

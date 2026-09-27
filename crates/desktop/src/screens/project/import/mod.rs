@@ -37,7 +37,7 @@ use crate::{
   navigation::{
     Navigation,
     import::{self as import_query, ImportTab},
-    route::{AgentSelection, Page, ToolSelection},
+    route::{AgentSelection, Page, PipelineView, ToolSelection},
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
@@ -387,7 +387,7 @@ fn footer_bar(children: Vec<Element>) -> Element {
 fn page_of(copy: &CopiedResource) -> Page {
   let id = copy.resource().id();
   match copy.content() {
-    Content::Pipeline(_) => Page::Pipeline(id),
+    Content::Pipeline(_) => Page::Pipeline(id, PipelineView::Draft),
     Content::AgentProfile(_) => Page::Agents(AgentSelection::Profile(id)),
     Content::Instruction(instruction) => Page::Instructions(tab_of(instruction.scope()), Some(id)),
     Content::Tool(_) => Page::Tools(ToolSelection::Tool(id)),

@@ -152,6 +152,15 @@ impl ResourceStore for ProjectDb {
     Ok(found.pop())
   }
 
+  fn versions<B: ResourceBody>(&self, resource: ResourceId) -> Result<Vec<Version<B>>, StoreError> {
+    check_kind::<B>(&self.connection, resource)?;
+    load_versions(
+      &self.connection,
+      "WHERE resource_id = ?1 ORDER BY number",
+      [resource.to_string()],
+    )
+  }
+
   fn version<B: ResourceBody>(
     &self,
     resource: ResourceId,
@@ -301,7 +310,7 @@ fn decode<B: ResourceBody>(text: &str) -> Result<B, StoreError> {
   decode_body(WHAT, upgraded)
 }
 
-fn version_number(number: i64) -> Result<VersionNumber, StoreError> {
+pub(crate) fn version_number(number: i64) -> Result<VersionNumber, StoreError> {
   u32::try_from(number)
     .ok()
     .and_then(NonZeroU32::new)
