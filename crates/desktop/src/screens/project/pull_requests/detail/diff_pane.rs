@@ -18,7 +18,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  pull_request::diff::{FileChange, FileDiff},
+  diff::{FileChange, FileDiff},
   revision::Revision,
 };
 use parking_lot::Mutex;

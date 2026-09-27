@@ -8,12 +8,9 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   connection::GitHubLogin,
+  diff::{Diff, DiffParseError, RevisionDiff},
   github::GhCli,
-  pull_request::{
-    DiffRead, PullRequest, RevisionDiff, SyncFailure,
-    diff::{Diff, DiffParseError},
-    refresh_pull_request,
-  },
+  pull_request::{DiffRead, PullRequest, SyncFailure, refresh_pull_request},
   repository::{GitHubRepo, RepositoryLink},
   revision::Revision,
   store::{ConnectionStore, PullRequestDiffStore, PullRequestStore, RepositoryStore},
@@ -66,7 +63,7 @@ pub enum DiffState {
   /// No diff is stored and none was read.
   Unknown,
   Read(Arc<ReadDiff>),
-  /// The pull request is too large to read here (see `is_too_large`).
+  /// The pull request is too large to read here (see `Changes::is_too_large`).
   TooLarge,
 }
 
@@ -85,7 +82,7 @@ impl ReadDiff {
       diff: Diff::parse(&stored.text)?,
       base: stored.base,
       head: stored.head,
-      synced_at: stored.synced_at,
+      synced_at: stored.read_at,
     })
   }
 }

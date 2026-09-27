@@ -2,9 +2,8 @@
 //! them, and `pull_request_syncs`: when that was.
 
 use orchester_core::{
-  pull_request::{
-    Changes, CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision, SyncedPullRequests,
-  },
+  diff::Changes,
+  pull_request::{CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision, SyncedPullRequests},
   repository::GitHubRepo,
   revision::Revision,
   run::BranchName,

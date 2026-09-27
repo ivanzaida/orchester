@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use orchester_core::pull_request::diff::{FileChange, FileDiff, LineKind, ModeChange};
+use orchester_core::diff::{FileChange, FileDiff, LineKind, ModeChange};
 
 use crate::pull_requests::highlight::{FileTokens, LineTokens, plain};
 

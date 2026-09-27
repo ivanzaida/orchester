@@ -3,7 +3,7 @@
 //! for what those pull requests do not contain: renames, a pure rename, a deletion, a binary
 //! file, a mode change, quoted and spaced names, and a missing newline at the end of a file.
 
-use orchester_core::pull_request::diff::{
+use orchester_core::diff::{
   Diff, DiffParseError, FileChange, FileDiff, LineKind, MAX_FILE_LINES, MAX_LINE_CHARS, ModeChange,
 };
 

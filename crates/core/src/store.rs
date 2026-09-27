@@ -3,10 +3,11 @@
 
 use crate::{
   connection::{Connection, stream::AgentEvent},
+  diff::RevisionDiff,
   id::{ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   limits::ProjectLimits,
   name::Name,
-  pull_request::{PullRequest, RevisionDiff, SyncedPullRequests},
+  pull_request::{PullRequest, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
   resource::{Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   revision::Revision,

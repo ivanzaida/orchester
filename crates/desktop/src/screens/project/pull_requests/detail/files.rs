@@ -17,7 +17,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::pull_request::diff::{FileChange, FileDiff};
+use orchester_core::diff::{FileChange, FileDiff};
 
 use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},

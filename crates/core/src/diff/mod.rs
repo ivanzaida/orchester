@@ -1,18 +1,31 @@
-//! A pull request's changes as a unified diff (`git diff` format, as GitHub serves it): files,
-//! their hunks and lines with old and new line numbers. Built only by [`Diff::parse`]. Very large
-//! files keep their first [`MAX_FILE_LINES`] lines and count the rest as omitted; very long lines
-//! keep their first [`MAX_LINE_CHARS`] characters and are marked as cut, so a diff never shows
-//! less than it claims without saying so.
+//! Changes as a unified diff (`git diff` format, as git and GitHub write it): files, their hunks
+//! and lines with old and new line numbers. Built only by [`Diff::parse`]. Very large files keep
+//! their first [`MAX_FILE_LINES`] lines and count the rest as omitted; very long lines keep their
+//! first [`MAX_LINE_CHARS`] characters and are marked as cut, so a diff never shows less than it
+//! claims without saying so. Pull requests and runs show their changes with it.
 
 mod parse;
 mod path;
+mod size;
 
 use thiserror::Error;
+
+pub use self::size::{Changes, MAX_DIFF_FILES, MAX_DIFF_LINES};
+use crate::{revision::Revision, time::Timestamp};
 
 /// Lines of one file a diff keeps; later lines are counted in [`FileDiff::omitted_lines`].
 pub const MAX_FILE_LINES: usize = 5_000;
 /// Characters of one line a diff keeps; a longer line is [`DiffLine::is_cut`].
 pub const MAX_LINE_CHARS: usize = 1_000;
+
+/// The unified diff from `base` to `head`, read at `read_at`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RevisionDiff {
+  pub base: Revision,
+  pub head: Revision,
+  pub text: String,
+  pub read_at: Timestamp,
+}
 
 /// Why a text is not a unified diff. `line` counts from 1.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]

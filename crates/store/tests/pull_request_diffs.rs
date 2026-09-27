@@ -4,10 +4,10 @@ use std::{fs, path::Path};
 
 use orchester_core::{
   connection::GitHubHost,
+  diff::RevisionDiff,
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  pull_request::RevisionDiff,
   repository::GitHubRepo,
   revision::Revision,
   store::PullRequestDiffStore,
@@ -44,7 +44,7 @@ fn diff(head: char, text: &str, synced_at: i64) -> RevisionDiff {
     base: revision('b'),
     head: revision(head),
     text: text.to_owned(),
-    synced_at: Timestamp::from_unix_millis(synced_at),
+    read_at: Timestamp::from_unix_millis(synced_at),
   }
 }
 

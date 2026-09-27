@@ -1,7 +1,7 @@
 //! `pr_revisions`: the diff of a pull request per head revision, its text in a blob.
 
 use orchester_core::{
-  pull_request::RevisionDiff, repository::GitHubRepo, revision::Revision, store::PullRequestDiffStore, time::Timestamp,
+  diff::RevisionDiff, repository::GitHubRepo, revision::Revision, store::PullRequestDiffStore, time::Timestamp,
 };
 use rusqlite::{OptionalExtension, Row, params};
 
@@ -26,7 +26,7 @@ impl PullRequestDiffStore for ProjectDb {
       &self.directory,
       DIFF_MEDIA_TYPE,
       diff.text.as_bytes(),
-      diff.synced_at,
+      diff.read_at,
     )?;
     transaction.execute(
       "INSERT INTO pr_revisions (host, owner, name, number, head_sha, base_sha, diff_blob, synced_at) \
@@ -41,7 +41,7 @@ impl PullRequestDiffStore for ProjectDb {
         diff.head.as_str(),
         diff.base.as_str(),
         blob.as_str(),
-        diff.synced_at.unix_millis(),
+        diff.read_at.unix_millis(),
       ],
     )?;
     transaction.commit()?;
@@ -118,7 +118,7 @@ impl StoredDiff {
       base: revision(&self.base)?,
       head: revision(&self.head)?,
       text: String::from_utf8(content).map_err(|error| corrupt("pull request diff", error))?,
-      synced_at: Timestamp::from_unix_millis(self.synced_at),
+      read_at: Timestamp::from_unix_millis(self.synced_at),
     })
   }
 }

@@ -13,7 +13,7 @@ use lurq::{
   layout::{Alignment, text_style::TextAlign},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::pull_request::diff::LineKind;
+use orchester_core::diff::LineKind;
 
 use super::rows::{DiffRow, FileNote, LineRow};
 use crate::{

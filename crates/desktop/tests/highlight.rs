@@ -2,7 +2,7 @@
 //! with the JavaScript grammar, a file without a grammar, and what a line shows of tabs and
 //! control characters.
 
-use orchester_core::pull_request::diff::Diff;
+use orchester_core::diff::Diff;
 use orchester_desktop::pull_requests::highlight::{Token, TokenKind, highlight, plain};
 
 fn file_diff(path: &str, lines: &[&str]) -> Diff {
