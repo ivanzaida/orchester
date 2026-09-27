@@ -29,8 +29,10 @@ use crate::{
   },
 };
 
-/// Inspector width (`CQxCb`) and the height of a tool link (`iYp1a`).
+/// Inspector width (`CQxCb`), the height of the stored value box (`D4Jja`) and of a tool link
+/// (`iYp1a`).
 const INSPECTOR_WIDTH: f32 = 328.0;
+const STORED_VALUE_HEIGHT: f32 = 41.0;
 const TOOL_LINK_HEIGHT: f32 = 40.0;
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
@@ -105,6 +107,7 @@ fn stored_value(ctx: &Ctx) -> Element {
   Row::new()
     .id("secret-stored-value")
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(STORED_VALUE_HEIGHT))
     .padding(ExtraSpacing::Stack.role())
     .spacing(ExtraSpacing::Inline.role())
     .align_items(Alignment::Center)

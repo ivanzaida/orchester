@@ -96,7 +96,8 @@ impl SecretDialog {
       .id("secret-dialog-close")
       .size(Dimension::Px(CLOSE_SIZE), Dimension::Px(CLOSE_SIZE))
       .align_items(Alignment::Center)
-      .justify(Justify::Center)
+      // The icon ends where the fields end (`ct5lH`); the rest of the control lies to its left.
+      .justify(Justify::End)
       .rounded(RadiusSize::Md)
       .cursor(CursorIcon::Pointer)
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
@@ -156,11 +157,12 @@ impl SecretDialog {
       )),
       NameCheck::Empty | NameCheck::Free(_) => None,
     };
+    // The note under the field says what is wrong; the field keeps its border (`p7EPA` in 07.A).
     let input = text_input(
       ctx,
       "secret-name",
       self.name.clone(),
-      note.is_some(),
+      false,
       TypographyStyle::FieldLabel,
     )
     .height(Dimension::Px(FIELD_HEIGHT));
@@ -213,8 +215,9 @@ impl SecretDialog {
       (DialogPurpose::Add, NameCheck::Taken(_)) => "secrets.dialog.valueHintTaken",
       (DialogPurpose::Add, _) => "secrets.dialog.valueHint",
     };
+    // One line in `subtle` (`HvhIF`): the footnote size without the hint's line spacing.
     let hint = Text::new(&ctx.t(hint))
-      .variant(ExtraTypography::Hint.role())
+      .variant(ExtraTypography::Footnote.role())
       .color(PaletteColor::TextMuted);
     labelled(&ctx.t("secrets.dialog.value"), input.into(), Some(hint.into()))
   }
