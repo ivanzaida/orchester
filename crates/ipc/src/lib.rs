@@ -11,6 +11,7 @@
 //! provide an [`Endpoint`] with the same shape.
 
 mod error;
+mod exit_code;
 pub mod frame;
 mod handshake;
 mod log_path;
@@ -29,6 +30,7 @@ mod transport;
 #[cfg(windows)]
 pub use client::{CommandSender, EventReceiver, LaunchError, RunnerClient, RunnerProcess};
 pub use error::{FrameError, IpcError};
+pub use exit_code::EXIT_PROJECT_LOCKED;
 pub use handshake::{Handshake, PROTOCOL_VERSION, handshake};
 #[cfg(windows)]
 pub use job::KillOnCloseJob;
