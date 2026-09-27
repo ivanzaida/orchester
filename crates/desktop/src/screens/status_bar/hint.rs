@@ -22,7 +22,6 @@ pub enum HintAnchor {
   Runner,
   Activity,
   Agents,
-  NeedsYou,
   Tokens,
   Version,
 }
@@ -41,7 +40,6 @@ pub struct Anchors {
   runner: ElementRef,
   activity: ElementRef,
   agents: ElementRef,
-  needs_you: ElementRef,
   tokens: ElementRef,
   version: ElementRef,
 }
@@ -52,7 +50,6 @@ impl Anchors {
       HintAnchor::Runner => &self.runner,
       HintAnchor::Activity => &self.activity,
       HintAnchor::Agents => &self.agents,
-      HintAnchor::NeedsYou => &self.needs_you,
       HintAnchor::Tokens => &self.tokens,
       HintAnchor::Version => &self.version,
     }

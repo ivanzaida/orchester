@@ -72,7 +72,7 @@ pub(super) fn summary(
   Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(progress_column(ctx, content, latest, raising))
+    .child(progress_column(content, latest, raising))
     .with_children(detail.run.as_ref().map(|run| this_run(ctx, run, repo_root)))
     .into()
 }
@@ -83,13 +83,13 @@ pub(super) fn summary(
 /// taller than a 960px window (02.L2), so Latest activity scrolls with it, below the fold;
 /// otherwise it stays below the viewport. lurq cannot make scrolled content at least as tall as
 /// its viewport, which both at once would need.
-fn progress_column(ctx: &Ctx, content: Column, latest: Option<Element>, raising: bool) -> Element {
+fn progress_column(content: Column, latest: Option<Element>, raising: bool) -> Element {
   let scrolled = |content: Column| {
     ScrollVertical::new(content)
       .id("task-progress-scroll")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
-      .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar()))
+      .scrollbar(gutter_scrollbar())
   };
   let column = Column::new()
     .id("task-progress")
@@ -237,7 +237,7 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
         .width(Dimension::Pct(100.0))
         .flex(1.0)
         // A gutter of its own: the bar never covers the right-aligned values.
-        .scrollbar(gutter_scrollbar(&ctx.theme().scrollbar())),
+        .scrollbar(gutter_scrollbar()),
     )
     .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()))
     .into()

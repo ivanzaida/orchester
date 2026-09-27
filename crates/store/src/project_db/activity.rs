@@ -4,14 +4,14 @@ use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome},
   id::{InvocationId, RunId, StepExecutionId},
   resource::ModelId,
-  run::{ActivityEntry, Invocation, StepOutput, TokenUsage},
+  run::{ActivityEntry, Invocation, InvocationPrompt, StepOutput, TokenUsage},
   store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::{ProjectDb, step_outputs};
+use super::{ProjectDb, invocation_prompts, step_outputs};
 use crate::{
   StoreError,
   rows::{corrupt, decode_json, encode_json, parse},
@@ -100,6 +100,14 @@ impl ActivityStore for ProjectDb {
       .query_map([run.to_string()], InvocationRow::read)?
       .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter().map(InvocationRow::into_invocation).collect()
+  }
+
+  fn save_invocation_prompt(&mut self, invocation: InvocationId, prompt: &InvocationPrompt) -> Result<(), StoreError> {
+    invocation_prompts::save(&self.connection, invocation, prompt)
+  }
+
+  fn invocation_prompt(&self, invocation: InvocationId) -> Result<Option<InvocationPrompt>, StoreError> {
+    invocation_prompts::of_invocation(&self.connection, invocation)
   }
 
   fn append_activity(

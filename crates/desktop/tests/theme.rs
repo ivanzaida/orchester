@@ -3,7 +3,10 @@ use lurq::{
     App,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  layout::text_style::{FontFeature, FontFeatures, FontWeight},
+  layout::{
+    scrollbar::{ScrollBarPlacement, compute_vertical_scrollbar},
+    text_style::{FontFeature, FontFeatures, FontWeight},
+  },
   node::{BackgroundColor, BoxShadow, color::Color, dimension::Dimension},
 };
 use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography};
@@ -344,6 +347,54 @@ fn select_menu_roles_follow_pencil() {
   assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
 }
 
+/// Scroll gutter (`nf9DG` in `NwsEg`, 04.01 `JuVaA`): a 12px gutter of its own; the thumb is 4px
+/// in `border`, radius 2, centred in the gutter, 4px from the viewport's top and bottom, at least
+/// 24px long and as long as the visible share of the track; no track.
+#[test]
+fn scroll_gutter_follows_pencil() {
+  let scrollbar = theme::gutter_scrollbar();
+  assert!(scrollbar.placement == ScrollBarPlacement::Reserved);
+  assert_eq!((scrollbar.width, scrollbar.thumb_radius), (4.0, 2.0));
+  assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
+  assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
+  assert_eq!(scrollbar.min_thumb_length, 24.0);
+  // A 344px inspector with its 24 / 12 side padding: a 308px viewport, twice as tall content.
+  let thumb = compute_vertical_scrollbar(&scrollbar, 24.0, 24.0, 308.0, 800.0, 1600.0, 0.0)
+    .expect("the thumb shows while the content overflows");
+  let gutter_start = 24.0 + 308.0 - 12.0;
+  assert_eq!(
+    (thumb.thumb_x - gutter_start, thumb.thumb_width),
+    (4.0, 4.0),
+    "centred in the 12px gutter"
+  );
+  assert_eq!((thumb.thumb_y, thumb.thumb_height), (24.0 + 4.0, (800.0 - 8.0) / 2.0));
+  assert!(compute_vertical_scrollbar(&scrollbar, 24.0, 24.0, 308.0, 800.0, 800.0, 0.0).is_none());
+}
+
+/// Worktree state label (`VHSnL` in `Py65X`): Inter 11 muted, line height 1.5.
+#[test]
+fn cell_label_follows_pencil() {
+  let app = themed_app();
+  let label = app.theme().typography_style(ExtraTypography::CellLabel.role());
+  assert_eq!(
+    (&*label.font_family, label.font_size, label.line_height),
+    ("Inter", 11.0, 1.5)
+  );
+  assert_eq!(label.color, Color::from_hex("#A3A3A3"));
+}
+
+/// Inspector notes (`xK9v9`, `Thdx2` in `JuVaA`): Inter 10 muted, line height 1.6.
+#[test]
+fn inspector_note_follows_pencil() {
+  let app = themed_app();
+  let note = app.theme().typography_style(ExtraTypography::InspectorNote.role());
+  assert_eq!(
+    (&*note.font_family, note.font_size, note.line_height),
+    ("Inter", 10.0, 1.6)
+  );
+  assert_eq!(note.color, Color::from_hex("#A3A3A3"));
+}
+
 #[test]
 fn activity_roles_follow_pencil() {
   let app = themed_app();
@@ -364,4 +415,19 @@ fn activity_roles_follow_pencil() {
   assert_eq!(theme.radius_value(ExtraRadius::Pill.role()), 8.0);
   // Unparsed lines `Ane9j`: 60 %.
   assert_eq!(theme::UNPARSED_OPACITY, 0.6);
+}
+
+#[test]
+fn instruction_screen_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  let style = |role: ExtraTypography| theme.typography_style(role.role());
+  assert_eq!(style(ExtraTypography::RuleTitle).font_size, 20.0);
+  let prompt = style(ExtraTypography::PromptText);
+  assert_eq!((prompt.font_size, prompt.line_height), (12.0, 1.8));
+  assert_eq!(&*prompt.font_family, "Geist Mono");
+  let name = style(ExtraTypography::VariableName);
+  assert_eq!((name.font_size, &*name.font_family), (20.0, "Geist Mono"));
+  assert_eq!(style(ExtraTypography::ContextNote).font_size, 9.0);
+  assert_eq!(style(ExtraTypography::IconState).font_size, 20.0);
 }

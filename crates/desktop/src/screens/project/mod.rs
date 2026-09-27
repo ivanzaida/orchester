@@ -1,13 +1,14 @@
 //! Project shell: the sidebar (`zo9Py`) beside the open project screen — the overview
 //! (`Twtqc`), the task list (`J9467`), the new task form (`l2YA4`), a task (`RD4pc`, `SfXU1`),
 //! pull requests (`wGtxT`) and one pull request
-//! (`Rrmhf`), agent profiles (`WPmtS`),
+//! (`Rrmhf`), instructions (`yRKeF`), agent profiles (`WPmtS`),
 //! connections (`a4Lqb`) or Project settings (`QV1af`), above the status bar (`pmOpt`). The router
 //! renders the screen the path names into the shell's outlet. The shell reads the project's
 //! tasks once and hands them to the sidebar, the screen and the status bar.
 
 mod agents;
 pub(crate) mod connections;
+mod instructions;
 mod new_task;
 mod overview;
 mod page;
@@ -47,7 +48,7 @@ use crate::{
     route::{self, ChangedFile, Page, Route},
   },
   runner::{RunnerStatus, Runners, state::RunnerState},
-  tasks::{data::ProjectTasks, list, usage::ProjectUsage},
+  tasks::{data::ProjectTasks, list, overview::OverviewTab, usage::ProjectUsage},
   workspace::OpenProject,
 };
 
@@ -233,6 +234,9 @@ impl Component for ProjectShell {
       repo_root: open.repo_root.clone(),
       runner: status,
       queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
+      needs_you: tasks
+        .ready()
+        .map(|tasks| OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases)),
       usage,
       lost_to_runner: tasks.ready().map(|tasks| tasks.lost_to_runner),
     };

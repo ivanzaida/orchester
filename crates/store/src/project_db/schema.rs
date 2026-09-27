@@ -448,4 +448,12 @@ CREATE TABLE revision_diffs (
   PRIMARY KEY (base_sha, head_sha)
 ) STRICT;
 ",
+  r"
+-- What each agent CLI launch was told (Instructions): the injection event and the
+-- sources of its prompt in order, as JSON. Written once by the runner before the CLI starts.
+CREATE TABLE invocation_prompts (
+  invocation_id TEXT PRIMARY KEY REFERENCES invocations (id),
+  body TEXT NOT NULL
+) STRICT;
+",
 ];

@@ -127,10 +127,23 @@ pub enum ExtraTypography {
   IconEvent,
   /// Icon of an empty, loading or failed state of a tab (`qgZru` in `hig8O`), 20px.
   IconState,
+  /// Title of the instruction being edited (`sjJOc` in `yRKeF`), 20/500.
+  RuleTitle,
+  /// Instruction prompt text, edited and resolved (`g2Tkg`, `iJdsS`): mono 12, 1.8.
+  PromptText,
+  /// Name of the variable shown in the catalog (`Z69wX` in `EfTiT`): mono 20/500.
+  VariableName,
+  /// Execution context note of the instruction preview (`HvDGw`, `utiRC` in `TnjFo`): 9 muted.
+  ContextNote,
+  /// A table cell's label that wraps beside its icon, e.g. a worktree state (`VHSnL` in `Py65X`).
+  CellLabel,
+  /// A note under an inspector's details or actions: where the models come from, what the
+  /// connection's status means (`xK9v9`, `Thdx2` in `JuVaA`).
+  InspectorNote,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 57] = [
+  const ALL: [Self; 63] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -188,6 +201,12 @@ impl ExtraTypography {
     Self::IconEntry,
     Self::IconEvent,
     Self::IconState,
+    Self::RuleTitle,
+    Self::PromptText,
+    Self::VariableName,
+    Self::ContextNote,
+    Self::CellLabel,
+    Self::InspectorNote,
   ];
 
   fn name(self) -> &'static str {
@@ -249,6 +268,12 @@ impl ExtraTypography {
       Self::IconEntry => "icon-entry",
       Self::IconEvent => "icon-event",
       Self::IconState => "icon-state",
+      Self::RuleTitle => "rule-title",
+      Self::PromptText => "prompt-text",
+      Self::VariableName => "variable-name",
+      Self::ContextNote => "context-note",
+      Self::CellLabel => "cell-label",
+      Self::InspectorNote => "inspector-note",
     }
   }
 
@@ -291,6 +316,29 @@ fn icon(font_size: f32) -> TextStyle {
 }
 
 impl ExtraTypography {
+  /// The size of an icon role; `None` for a text role.
+  const fn icon_size(self) -> Option<f32> {
+    match self {
+      Self::IconSmall => Some(12.0),
+      Self::IconMarker => Some(13.0),
+      Self::IconButton => Some(15.0),
+      Self::IconNav => Some(17.0),
+      Self::IconDismiss => Some(14.0),
+      Self::IconOption => Some(16.0),
+      Self::IconNotice => Some(18.0),
+      Self::IconFeature => Some(19.0),
+      Self::IconPanel => Some(24.0),
+      Self::IconWindowControl => Some(14.0),
+      Self::IconSelect => Some(SELECT_ICON_SIZE),
+      Self::IconLarge => Some(22.0),
+      Self::IconRow => Some(20.0),
+      Self::IconEntry => Some(13.0),
+      Self::IconEvent => Some(14.0),
+      Self::IconState => Some(20.0),
+      _ => None,
+    }
+  }
+
   fn style(self) -> TextStyle {
     match self {
       Self::SectionHeading => style(15.0, FontWeight::Medium, TEXT),
@@ -325,17 +373,6 @@ impl ExtraTypography {
       Self::Brief => leading(1.7, style(13.0, FontWeight::Normal, TEXT)),
       Self::DialogTitle => style(20.0, FontWeight::Medium, TEXT),
       Self::Explanation => leading(1.6, style(12.0, FontWeight::Normal, MUTED)),
-      Self::IconSmall => icon(12.0),
-      Self::IconMarker => icon(13.0),
-      Self::IconButton => icon(15.0),
-      Self::IconNav => icon(17.0),
-      Self::IconDismiss => icon(14.0),
-      Self::IconOption => icon(16.0),
-      Self::IconNotice => icon(18.0),
-      Self::IconFeature => icon(19.0),
-      Self::IconPanel => icon(24.0),
-      Self::IconWindowControl => icon(14.0),
-      Self::IconSelect => icon(SELECT_ICON_SIZE),
       Self::CanvasLabel => TextStyle {
         letter_spacing: 1.0,
         ..mono(9.0, SUBTLE)
@@ -347,11 +384,9 @@ impl ExtraTypography {
       Self::Hint => leading(1.5, style(10.0, FontWeight::Normal, MUTED)),
       Self::VersionFigure => style(18.0, FontWeight::Medium, TEXT),
       Self::Summary => leading(1.6, style(13.0, FontWeight::Normal, MUTED)),
-      Self::IconLarge => icon(22.0),
       Self::CompactStatusLabel => style(10.0, FontWeight::Medium, TEXT),
       Self::InspectorTitle => style(18.0, FontWeight::Medium, TEXT),
       Self::RowTitle => style(15.0, FontWeight::Medium, TEXT),
-      Self::IconRow => icon(20.0),
       Self::PullRequestTitle => style(24.0, FontWeight::Medium, TEXT),
       Self::PullRequestContext => mono(11.0, MUTED),
       Self::FileListHeading => style(10.0, FontWeight::Medium, MUTED),
@@ -363,9 +398,20 @@ impl ExtraTypography {
       Self::DiffLineNumber => mono(11.0, CODE_COMMENT),
       Self::Code => leading(1.6, mono(12.0, CODE_TEXT)),
       Self::Output => leading(1.6, mono(11.0, MUTED)),
-      Self::IconEntry => icon(13.0),
-      Self::IconEvent => icon(14.0),
-      Self::IconState => icon(20.0),
+      Self::RuleTitle => style(20.0, FontWeight::Medium, TEXT),
+      Self::PromptText => leading(1.8, mono(12.0, TEXT)),
+      Self::VariableName => TextStyle {
+        weight: FontWeight::Medium,
+        ..mono(20.0, TEXT)
+      },
+      Self::ContextNote => style(9.0, FontWeight::Normal, MUTED),
+      Self::CellLabel => leading(1.5, style(11.0, FontWeight::Normal, MUTED)),
+      Self::InspectorNote => leading(1.6, style(10.0, FontWeight::Normal, MUTED)),
+      icon_role => icon(
+        icon_role
+          .icon_size()
+          .expect("every role without a text style is an icon"),
+      ),
     }
   }
 }

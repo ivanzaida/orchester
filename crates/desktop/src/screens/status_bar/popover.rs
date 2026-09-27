@@ -167,8 +167,8 @@ fn running_row(ctx: &mut Ctx, operation: &Operation, opener: &Opener) -> Element
 fn recent_row(ctx: &Ctx, event: &Event, opener: &Opener) -> Element {
   let icon = match event.outcome() {
     Outcome::Finished => Icon::Check,
-    // No status bar state (`keJ9Z`) shows work that was not done; the alert icon in the row's
-    // muted color says so without the raised fill of a failure (H).
+    // Work that was not done (state J, `XlbDa`) is a finished row with the alert icon, in the
+    // row's muted color, without the raised fill of a failure (H).
     Outcome::NotDone | Outcome::Failed { .. } => Icon::AlertCircle,
   };
   let color = if event.is_unresolved() {
@@ -283,6 +283,7 @@ fn opens_key(target: &Target) -> Option<&'static str> {
       Place::Tasks => "statusBar.opens.tasks",
       Place::PullRequests => "statusBar.opens.pullRequests",
       Place::Pipeline(_) => "statusBar.opens.pipeline",
+      Place::Instruction(_) => "statusBar.opens.instruction",
       Place::AgentProfile(_) => "statusBar.opens.agentProfile",
       Place::Connections => "statusBar.opens.connections",
       Place::Settings => "statusBar.opens.settings",
@@ -299,6 +300,7 @@ pub fn open_key(target: &Target) -> &'static str {
       Place::Tasks => "statusBar.open.tasks",
       Place::PullRequests => "statusBar.open.pullRequests",
       Place::Pipeline(_) => "statusBar.open.pipeline",
+      Place::Instruction(_) => "statusBar.open.instruction",
       Place::AgentProfile(_) => "statusBar.open.agentProfile",
       Place::Connections => "statusBar.open.connections",
       Place::Settings => "statusBar.open.settings",

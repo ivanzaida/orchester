@@ -121,15 +121,19 @@ pub const FOCUS_GAP: &str = "#101010";
 pub const FOCUS_WIDTH: f32 = 2.0;
 pub const FOCUS_EXTENT: f32 = 4.0;
 
-/// Overlay scrollbar of a long select menu (`g3poI`): a 4px `border` thumb, radius 2, no track.
-pub const SELECT_SCROLLBAR_WIDTH: f32 = 4.0;
-pub const SELECT_SCROLLBAR_RADIUS: f32 = 2.0;
-/// Scroll thumb of the select menu (`YD8PV`): 3px from the menu's outer right edge and 11px (the
-/// corner radius) from its top and bottom, so it never enters a rounded corner; at least 24px long.
+/// Scroll thumb of a long select menu (`g3poI`) and of a scroll gutter (`nf9DG` in `JuVaA`): 4px
+/// wide in `border`, radius 2, at least 24px long, no track.
+pub const SCROLLBAR_WIDTH: f32 = 4.0;
+pub const SCROLLBAR_RADIUS: f32 = 2.0;
+pub const SCROLLBAR_MIN_THUMB: f32 = 24.0;
+pub const NO_TRACK: &str = "#00000000";
+/// Select menu thumb (`YD8PV`): 3px from the menu's outer right edge and 11px (the corner radius)
+/// from its top and bottom, so it never enters a rounded corner.
 pub const SELECT_SCROLLBAR_EDGE_INSET: f32 = 3.0;
 pub const SELECT_SCROLLBAR_END_INSET: f32 = 11.0;
-pub const SELECT_SCROLLBAR_MIN_THUMB: f32 = 24.0;
-pub const NO_TRACK: &str = "#00000000";
+/// Scroll gutter thumb (`nf9DG` in `NwsEg`): centred in the 12px gutter, 4px from either side,
+/// and 4px from the viewport's top and bottom.
+pub const GUTTER_SCROLLBAR_INSET: f32 = 4.0;
 
 /// Unparsed CLI lines in the agent transcript are muted to 60 % (`Ane9j` in `SfXU1`).
 pub const UNPARSED_OPACITY: f32 = 0.6;

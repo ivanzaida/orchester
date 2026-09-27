@@ -47,33 +47,63 @@ impl PromptText {
   /// The text with every placeholder replaced by `value(variable)` and `\{{` escapes turned
   /// into `{{`. The first variable without a value is returned instead: a prompt never goes
   /// out with a placeholder silently left empty.
-  pub fn render(&self, mut value: impl FnMut(Variable) -> Option<String>) -> Result<String, Variable> {
+  pub fn render(&self, value: impl FnMut(Variable) -> Option<String>) -> Result<String, Variable> {
+    let rendered = self.render_marked(value);
+    match rendered.unavailable.first() {
+      Some(variable) => Err(*variable),
+      None => Ok(rendered.text),
+    }
+  }
+
+  /// [`Self::render`] for showing a prompt before it is sent: a variable without a value keeps
+  /// its placeholder as written, and is listed.
+  pub fn render_marked(&self, mut value: impl FnMut(Variable) -> Option<String>) -> Rendered {
     let text = &self.text;
-    let mut rendered = String::with_capacity(text.len());
+    let mut rendered = Rendered {
+      text: String::with_capacity(text.len()),
+      unavailable: Vec::new(),
+    };
     let mut start = 0;
     while let Some(open) = text[start..].find(OPEN) {
       let offset = start + open;
       let inner_start = offset + OPEN.len();
       if text[..offset].ends_with(ESCAPE) {
-        rendered.push_str(&text[start..offset - ESCAPE.len_utf8()]);
-        rendered.push_str(OPEN);
+        rendered.text.push_str(&text[start..offset - ESCAPE.len_utf8()]);
+        rendered.text.push_str(OPEN);
         start = inner_start;
         continue;
       }
       let inner_len = text[inner_start..]
         .find(CLOSE)
         .expect("construction checked that every placeholder is closed");
+      let end = inner_start + inner_len + CLOSE.len();
       let variable = text[inner_start..inner_start + inner_len]
         .trim()
         .parse::<Variable>()
         .expect("construction checked that every placeholder names a variable");
-      rendered.push_str(&text[start..offset]);
-      rendered.push_str(&value(variable).ok_or(variable)?);
-      start = inner_start + inner_len + CLOSE.len();
+      rendered.text.push_str(&text[start..offset]);
+      match value(variable) {
+        Some(value) => rendered.text.push_str(&value),
+        None => {
+          rendered.text.push_str(&text[offset..end]);
+          if !rendered.unavailable.contains(&variable) {
+            rendered.unavailable.push(variable);
+          }
+        }
+      }
+      start = end;
     }
-    rendered.push_str(&text[start..]);
-    Ok(rendered)
+    rendered.text.push_str(&text[start..]);
+    rendered
   }
+}
+
+/// Prompt text with the values it could be given.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rendered {
+  pub text: String,
+  /// Variables without a value, in order of first use; their placeholders are left as written.
+  pub unavailable: Vec<Variable>,
 }
 
 impl TryFrom<String> for PromptText {

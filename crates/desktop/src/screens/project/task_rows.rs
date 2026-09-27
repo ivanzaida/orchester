@@ -28,13 +28,14 @@ use crate::{
   },
 };
 
-/// Task table cell widths and row heights (`B5FaIC`, `clVjO`).
+/// Task table cell widths and row heights (`B5FaIC`, `clVjO`). Status fits the longest status,
+/// "Stopped at limit" (`BHqwT`, cell `VizsW`); dependency / readiness fits its longest text on one
+/// line (`S2kP9L`).
 const SELECT_WIDTH: f32 = 18.0;
 const KEY_WIDTH: f32 = 72.0;
 const PIPELINE_WIDTH: f32 = 136.0;
-/// Wider than `B5FaIC`'s 112, so the longest status, "Stopped at limit" (`BHqwT`), fits.
 const STATUS_WIDTH: f32 = 128.0;
-const READINESS_WIDTH: f32 = 146.0;
+const READINESS_WIDTH: f32 = 184.0;
 const OPEN_WIDTH: f32 = 14.0;
 const HEADING_HEIGHT: f32 = 28.0;
 const TABLE_ROW_HEIGHT: f32 = 48.0;
@@ -44,7 +45,8 @@ const LIST_ROW_HEIGHT: f32 = 78.0;
 const STATE_TILE_SIZE: f32 = 32.0;
 const TIME_WIDTH: f32 = 60.0;
 
-/// The task status label (`DeizF`), as its variants in `P3HONM` draw it.
+/// The task status label (`DeizF`), as its variants in `P3HONM` draw it; what each means for the
+/// task is the row's last column (`r2al55`).
 pub(super) fn status_copy(phase: TaskPhase) -> (Icon, &'static str) {
   match phase {
     TaskPhase::Draft => (Icon::Pencil, "tasks.status.draft"),
@@ -128,8 +130,9 @@ impl Component for QueueRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let row = ctx.props::<TaskRow>().clone();
     let (glyph, status) = status_copy(row.phase);
-    // Selecting tasks for a run is not available yet (`R7idX`).
-    let select = icon(Icon::Square, IconSize::Option, PaletteColor::TextMuted);
+    // Selecting tasks for a run is not available yet: unselected in `$muted` (`R7idX` in
+    // `r2al55`).
+    let select = icon(Icon::Square, IconSize::Option, PaletteColor::TextSecondary);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(TABLE_ROW_HEIGHT))

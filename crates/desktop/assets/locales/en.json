@@ -1857,6 +1857,299 @@
       "budget": "{{step}} · step budget {{from}} → {{to}} tokens"
     }
   },
+  "variables": {
+    "title": "Variables",
+    "subtitle": "{{project}} / {{task}}",
+    "all": "All variables",
+    "completeness": "All supported variables\nfor this project.",
+    "search": "Search name or description…",
+    "total": "{{group}} · {{count}}",
+    "order": "Catalog order",
+    "range": "{{from}}–{{to}} of {{total}} variables",
+    "typeInGroup": "{{type}} · {{group}}",
+    "valueAt": "VALUE AT {{event}} · {{context}}",
+    "newRun": "A NEW RUN",
+    "emptyValue": "Empty",
+    "unavailable": "Unavailable · {{reason}}",
+    "available": "Available",
+    "source": "Source",
+    "insert": "Insert {{expression}}",
+    "whenUnavailable": "When this value is unavailable",
+    "requireValue": "Require value · block injection",
+    "noFallback": "Fallback values are not available yet: the agent does not start until the value exists.",
+    "hint": "Availability depends on the task and injection point. Missing values are flagged before the agent starts.",
+    "unavailableHint": "This value is never silently replaced with empty text. Choose a run that has it, or another variable.",
+    "reasons": {
+      "noPreview": "nothing to preview",
+      "noRun": "no run chosen",
+      "noAttempt": "the step has not started in this run",
+      "notRecorded": "Orchester does not record it yet"
+    },
+    "groups": {
+      "task": "Task",
+      "project": "Project",
+      "agent": "Agent",
+      "pipeline": "Pipeline",
+      "run": "Run",
+      "step": "Step"
+    },
+    "types": {
+      "string": "String",
+      "stringList": "List of strings",
+      "attachmentList": "List of attachments",
+      "timestamp": "Timestamp",
+      "repository": "Repository",
+      "integer": "Integer",
+      "tokens": "Tokens"
+    },
+    "catalog": {
+      "taskId": {
+        "description": "The task’s key: the project key and the task’s number",
+        "availability": "After task creation"
+      },
+      "taskTitle": {
+        "description": "The title of the current task",
+        "availability": "When a task is selected"
+      },
+      "taskDescription": {
+        "description": "The outcome described in the task brief",
+        "availability": "When a task is selected"
+      },
+      "taskAcceptanceCriteria": {
+        "description": "The task’s acceptance criteria · List",
+        "availability": "When a task is selected; may be empty"
+      },
+      "taskAttachments": {
+        "description": "References to the task’s attachments · List",
+        "availability": "When a task is selected; may be empty"
+      },
+      "taskCreatedAt": {
+        "description": "When the task was created",
+        "availability": "After task creation"
+      },
+      "projectId": {
+        "description": "The project’s identifier",
+        "availability": "When a project is selected"
+      },
+      "projectName": {
+        "description": "The selected project’s display name",
+        "availability": "When a project is selected"
+      },
+      "projectRepository": {
+        "description": "The repository connected to the project",
+        "availability": "When a repository is connected"
+      },
+      "projectDefaultBranch": {
+        "description": "The repository’s default branch",
+        "availability": "When repository metadata is loaded"
+      },
+      "agentId": {
+        "description": "The agent profile’s identifier",
+        "availability": "When an agent is assigned"
+      },
+      "agentName": {
+        "description": "The name of the agent profile",
+        "availability": "When an agent is assigned"
+      },
+      "agentRole": {
+        "description": "The role assigned to this agent",
+        "availability": "When an agent is assigned"
+      },
+      "agentModel": {
+        "description": "The model the agent runs on",
+        "availability": "When a model is selected"
+      },
+      "pipelineId": {
+        "description": "The pipeline’s identifier",
+        "availability": "When a pipeline is selected"
+      },
+      "pipelineName": {
+        "description": "The name of the pipeline",
+        "availability": "When a pipeline is selected"
+      },
+      "pipelineVersion": {
+        "description": "The published pipeline version the run uses",
+        "availability": "When a published version is selected"
+      },
+      "runId": {
+        "description": "The run’s identifier",
+        "availability": "When the run is created"
+      },
+      "runAttempt": {
+        "description": "The attempt of the step’s execution",
+        "availability": "When the attempt is created"
+      },
+      "runBudget": {
+        "description": "The run’s token budget in force",
+        "availability": "When run limits are configured"
+      },
+      "runBranch": {
+        "description": "The run’s working branch",
+        "availability": "When the working branch is created"
+      },
+      "runRevision": {
+        "description": "The revision the run started from",
+        "availability": "When the run is created"
+      },
+      "stepId": {
+        "description": "The step’s key in its pipeline",
+        "availability": "When a step is selected"
+      },
+      "stepName": {
+        "description": "The name of the step",
+        "availability": "When a step is selected"
+      }
+    }
+  },
+  "instructions": {
+    "errors": {
+      "blankText": "Write the instruction before you publish it.",
+      "roleRequired": "Choose the role the rule applies to.",
+      "pipelineRequired": "Choose the pipeline the rule applies in.",
+      "stepRequired": "Choose the step the rule applies to.",
+      "targetsRequired": "Choose the agents the rule applies to.",
+      "settingsInvalid": "These settings cannot be saved together."
+    },
+    "title": "Instructions",
+    "description": "Define how agents work in {{project}}. Rules, roles and overrides stay in this project.",
+    "breadcrumb": "{{project}}  /  Instructions",
+    "loadFailed": "Instructions could not be read",
+    "new": "New instruction",
+    "removed": "Removed",
+    "pipelineStep": "{{pipeline}} › {{step}}",
+    "tabs": {
+      "projectRules": "Project rules",
+      "agentRoles": "Agent roles",
+      "pipelineOverrides": "Pipeline overrides",
+      "stepOverrides": "Step overrides"
+    },
+    "library": {
+      "projectRules": "PROJECT RULES",
+      "agentRoles": "AGENT ROLE RULES",
+      "pipelineOverrides": "PIPELINE OVERRIDES",
+      "stepOverrides": "STEP OVERRIDES",
+      "metadata": "{{version}} · {{appliesTo}}",
+      "storage": "Owned by {{project}}.\nVersioned with every run."
+    },
+    "empty": {
+      "projectTitle": "No project rules yet",
+      "projectDetail": "A project rule is added to the prompts of the agents it applies to, when they start or resume a step.",
+      "rolesTitle": "No agent role rules yet",
+      "rolesDetail": "An agent role rule is added to the prompt of every agent with that role, after the profile’s own role instructions.",
+      "pipelinesTitle": "No pipeline overrides yet",
+      "pipelinesDetail": "A pipeline override is added to the prompts of the agents in one pipeline, after the project rules.",
+      "stepsTitle": "No step overrides yet",
+      "stepsDetail": "A step override is added to the prompt of one pipeline step, after the step’s own instructions.",
+      "needsProfile": "Add an agent profile first: a role rule applies to the agents of a role.",
+      "needsPipeline": "Add a pipeline first: an override applies in one pipeline.",
+      "needsStep": "Add a step to a pipeline first: a step override applies to one step."
+    },
+    "version": {
+      "draft": "v{{version}} draft",
+      "draftOf": "draft v{{version}}",
+      "published": "v{{version}}",
+      "draftLabel": "Draft v{{version}}"
+    },
+    "kind": {
+      "projectRule": "Project rule",
+      "agentRole": "Agent role rule",
+      "pipeline": "Pipeline override",
+      "step": "Step override"
+    },
+    "state": {
+      "draft": "{{kind}} · Draft v{{version}}",
+      "published": "{{kind}} · Published v{{published}}"
+    },
+    "status": {
+      "saving": "Saving draft…",
+      "notSaved": "Not saved · fix the marked fields",
+      "draftSaved": "Draft saved · Published v{{version}}",
+      "draftNeverPublished": "Draft saved · Not published",
+      "published": "Published v{{version}}",
+      "staleDraft": "Draft based on v{{basedOn}} · v{{version}} was published since"
+    },
+    "publish": "Publish v{{version}}",
+    "publishEffect": "Publishing applies to new runs. Active runs keep v{{version}}.",
+    "publishEffectFirst": "Publishing makes the rule apply to new runs.",
+    "settings": {
+      "applyTo": "Apply to",
+      "injectAt": "Inject at",
+      "role": "Role",
+      "pipeline": "Pipeline",
+      "step": "Step",
+      "choose": "Choose…"
+    },
+    "targets": {
+      "all": "All agents",
+      "profile": "{{role}} profile ({{slug}})"
+    },
+    "events": {
+      "start": "Agent start",
+      "resume": "Agent resume",
+      "startAndResume": "Agent start & resume"
+    },
+    "prompt": "Prompt",
+    "promptPlaceholder": "Write the rule as the agent should read it. Variables such as the task title fill in values of the run.",
+    "variables": "{ }  Variables",
+    "preview": {
+      "title": "Injection preview",
+      "modeDraft": "DRAFT PREVIEW · {{context}}",
+      "modePublished": "PREVIEW · {{context}}",
+      "recordedRun": "recorded run context",
+      "newRun": "a run started now",
+      "draftSubstituted": "Draft rule substituted for its published version",
+      "publishedOnly": "Published rules only",
+      "task": "{{key}} · {{title}}",
+      "agentStep": "{{role}} · {{step}}",
+      "run": "Run {{number}} · Try {{attempt}}",
+      "newRunOption": "New run",
+      "sourceCount": "{{count}} SOURCES · ASSEMBLY ORDER",
+      "excluded": "Excluded: {{name}} {{version}}\n{{reason}}",
+      "viewFull": "View full prompt",
+      "noTasks": "Create a task to preview the prompt this rule takes part in.",
+      "noPipeline": "The task’s pipeline has no published version yet, so there is no prompt to preview.",
+      "noAgentSteps": "No step of the task’s pipeline runs a published agent profile."
+    },
+    "excluded": {
+      "otherRole": "Applies to another role only.",
+      "otherPipeline": "Applies in another pipeline.",
+      "otherStep": "Applies to another step.",
+      "otherEvent": "Injected at another event.",
+      "onlyFor": "Applies to {{agents}} only."
+    },
+    "sources": {
+      "agentRole": "Agent role",
+      "named": "{{name}} · v{{version}}",
+      "rule": "{{kind}} · {{version}}",
+      "step": "Step instructions",
+      "stepOf": "{{step}} · {{pipeline}} v{{version}}",
+      "task": "Task context",
+      "taskDetail": "Brief, criteria & results of earlier steps"
+    },
+    "viewer": {
+      "title": "Effective instructions",
+      "context": "{{project}} / {{task}} · {{role}} · {{step}} · {{event}}",
+      "copy": "Copy full prompt",
+      "copied": "Copied",
+      "copyFailed": "Could not copy",
+      "sourceCount": "{{count}} SOURCES · INCLUDED IN ORDER",
+      "origin": "{{kind}} · {{event}}",
+      "empty": "No text.",
+      "resolved": "Source {{index}} of {{count}} · {{resolved}} variables resolved at this injection event",
+      "unresolved": "Source {{index}} of {{count}} · {{resolved}} variables resolved · no value yet: {{unavailable}}",
+      "note": "Preview only. Existing runs keep the instruction versions they started with.",
+      "originDraft": "{{kind}} · {{event}} · Draft substituted for published v{{version}}",
+      "noteDraft": "Draft preview only. Existing runs keep the instruction versions they started with."
+    },
+    "create": {
+      "title": "New instruction",
+      "explanation": "The rule starts as a draft for every agent at start. Publishing makes it apply to new runs in {{project}}.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Git conventions",
+      "appliesIn": "Applies in",
+      "create": "Create draft"
+    }
+  },
   "statusBar": {
     "runner": {
       "starting": "Starting runner…",
@@ -1907,7 +2200,6 @@
     "hints": {
       "agents": "Agents at work of the agent slots of this project’s runner",
       "agentsUnknown": "Agent slots are known once the runner is online",
-      "needsYou": "Not available yet: plan approvals, questions and reviews do not exist in this version",
       "tokens": "{{used}} of {{budget}} tokens today: input + output of all runs in this project, against the daily project budget",
       "tokensUnknown": "Reading today’s token usage",
       "debugBuild": "Orchester {{version}} · development build",
@@ -2032,6 +2324,21 @@
         "running": "Opening pull request #{{name}} in the browser",
         "done": "Opened pull request #{{name}} in the browser",
         "failed": "Could not open pull request #{{name}} in the browser"
+      },
+      "instructionDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "instructionPublish": {
+        "running": "Publishing {{name}} v{{version}}",
+        "done": "Published {{name}} v{{version}}",
+        "failed": "Could not publish {{name}} v{{version}}"
+      },
+      "instructionCreate": {
+        "running": "Creating instruction {{name}}",
+        "done": "Instruction created · {{name}}",
+        "failed": "Could not create instruction {{name}}"
       }
     },
     "opens": {
@@ -2042,7 +2349,8 @@
       "connections": "opens Connections",
       "runnerLog": "opens the runner log",
       "settings": "opens Project settings",
-      "pullRequests": "opens Pull requests"
+      "pullRequests": "opens Pull requests",
+      "instruction": "opens the instruction"
     },
     "open": {
       "overview": "Open overview",
@@ -2051,7 +2359,8 @@
       "agentProfile": "Open profile",
       "connections": "Open connections",
       "settings": "Open settings",
-      "pullRequests": "Open pull requests"
+      "pullRequests": "Open pull requests",
+      "instruction": "Open instruction"
     }
   },
   "tokens": {

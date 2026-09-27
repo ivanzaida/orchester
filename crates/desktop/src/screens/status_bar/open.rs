@@ -8,7 +8,7 @@ use lurq::{app::ctx::Ctx, core::Signal};
 use super::ProjectBar;
 use crate::{
   activity::{Activity, OperationId, Place, Target},
-  navigation::route::{AgentSelection, Page, SettingsTab},
+  navigation::route::{AgentSelection, InstructionsTab, Page, SettingsTab},
   runner::Runners,
   screens::project::ProjectNav,
 };
@@ -68,16 +68,19 @@ impl Opener {
       Place::Tasks => Page::TASKS,
       Place::PullRequests => Page::PullRequests,
       Place::Pipeline(id) => Page::Pipeline(id),
+      // The instructions screen moves to the tab of the instruction's scope.
+      Place::Instruction(id) => Page::Instructions(InstructionsTab::ProjectRules, Some(id)),
       Place::AgentProfile(id) => Page::Agents(AgentSelection::Profile(id)),
       Place::Connections => Page::CONNECTIONS,
       Place::Settings => Page::Settings(SettingsTab::General),
     });
   }
 
-  /// Opens the Tasks screen, the target of the Agents and Queued items.
-  pub fn tasks(&self) -> Option<impl Fn() + Send + Sync + 'static> {
+  /// Opens `page` of the project: the task list for Agents and Queued, Overview › Needs you for
+  /// Needs you.
+  pub fn page(&self, page: Page) -> Option<impl Fn() + Send + Sync + 'static> {
     let nav = self.nav.clone()?;
-    Some(move || nav.show(Page::TASKS))
+    Some(move || nav.show(page))
   }
 
   pub fn open_log(&self) {

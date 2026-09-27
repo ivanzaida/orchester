@@ -2,7 +2,8 @@
 //! is not the program file itself. One rule for both inspectors: *Runs with* names the program
 //! that starts (`cmd.exe` for a command script, `Node.js` for an npm launcher), and *Script*
 //! follows only when that program runs a file other than the program file, i.e. the Node.js
-//! script of a launcher, in the program path's style (`xJ8W9`). No design node shows it yet.
+//! script of a launcher, in the program path's style (`NrLLz` and `fhoLS` in `JuVaA`, `tmOw7`
+//! in `C0jjP`).
 
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_exec::launch::{Launch, Via};

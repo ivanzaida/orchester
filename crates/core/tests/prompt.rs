@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use orchester_core::resource::{PromptError, PromptText, Variable};
+use orchester_core::resource::{PromptError, PromptText, Variable, VariableGroup, VariableType};
 
 #[test]
 fn prompt_lists_catalog_variables_in_first_use_order() {
@@ -65,4 +65,30 @@ fn prompt_escaped_braces_are_literal_text() {
     .expect("escaped placeholders are not parsed");
   assert_eq!(prompt.variables(), [Variable::TaskTitle]);
   assert!(PromptText::new(r"\{{unclosed").is_ok());
+}
+
+#[test]
+fn prompt_marked_rendering_keeps_placeholders_without_values() {
+  let prompt = PromptText::new(r"On {{ run.branch }} for {{task.title}}, \{{literal}} and {{run.branch}}.").unwrap();
+  let rendered = prompt.render_marked(|variable| (variable == Variable::TaskTitle).then(|| "Sign-in".to_owned()));
+  assert_eq!(
+    rendered.text,
+    "On {{ run.branch }} for Sign-in, {{literal}} and {{run.branch}}."
+  );
+  assert_eq!(rendered.unavailable, [Variable::RunBranch]);
+  assert_eq!(prompt.render(|_| None), Err(Variable::RunBranch));
+}
+
+#[test]
+fn prompt_catalog_groups_match_the_design() {
+  let count = |group| {
+    Variable::ALL
+      .iter()
+      .filter(|variable| variable.group() == group)
+      .count()
+  };
+  let counts: Vec<usize> = VariableGroup::ALL.into_iter().map(count).collect();
+  assert_eq!(counts, [6, 4, 4, 3, 5, 2]);
+  assert_eq!(Variable::RunBudget.value_type(), VariableType::Tokens);
+  assert_eq!(Variable::TaskAcceptanceCriteria.value_type(), VariableType::StringList);
 }

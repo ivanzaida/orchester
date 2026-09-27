@@ -36,7 +36,9 @@ use crate::{
 
 /// Header icon tile (`Ivo7b`), header row and action bar heights (`EkIqH`, `bJD3f`) and the
 /// fixed table columns (`ZvJv8`, `LQdz1`, `vAi6i`, `uM7WA`); the task column takes the rest.
+/// The worktree state's icon sits in a slot as high as the first line of its label (`Ar3RO`).
 const ICON_TILE: f32 = 36.0;
+const STATE_ICON_SLOT: f32 = 16.0;
 const HEADER_ROW_HEIGHT: f32 = 36.0;
 const ACTIONS_HEIGHT: f32 = 76.0;
 const DURING_WIDTH: f32 = 140.0;
@@ -306,8 +308,8 @@ fn checkpoint(ctx: &Ctx, run: &InterruptedRun) -> Element {
   }
 }
 
-/// "3 files not committed" with *View changes* under it, or "No uncommitted changes" (`DP204`,
-/// `Bph2U`).
+/// "3 files not committed" with *View changes* under it, "No uncommitted changes" or "Could not
+/// read the worktree" (`BwjS0`, `Bv9Wc`, `Py65X`).
 fn worktree(ctx: &Ctx, run: &InterruptedRun, link: Option<Element>) -> Element {
   let (glyph, text, color) = match run.worktree {
     WorktreeState::Clean => (
@@ -334,15 +336,22 @@ fn worktree(ctx: &Ctx, run: &InterruptedRun, link: Option<Element>) -> Element {
       PaletteColor::TextSecondary,
     ),
   };
-  // A label longer than the column wraps beside the icon instead of being cut.
+  // A label longer than the column wraps beside the icon instead of being cut; the icon stays
+  // with its first line.
+  let slot = Row::new()
+    .id(format!("recovery-worktree-icon-{}", run.run))
+    .height(Dimension::Px(STATE_ICON_SLOT))
+    .align_items(Alignment::Center)
+    .child(icon(glyph, IconSize::Small, color.clone()));
   let state = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Tight.role())
-    .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Small, color.clone()))
+    .align_items(Alignment::Start)
+    .child(slot)
     .child(
       Text::new(&text)
-        .variant(TypographyStyle::Caption)
+        .id(format!("recovery-worktree-label-{}", run.run))
+        .variant(ExtraTypography::CellLabel.role())
         .color(color)
         .flex(1.0),
     );
