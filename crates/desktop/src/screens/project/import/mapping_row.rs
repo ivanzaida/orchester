@@ -1,6 +1,7 @@
 //! One row of the dependency mapping (`HfNoA`): the source resource, connection or secret and the
-//! content it takes; how it is resolved in this project, with the name typed for a renamed copy;
-//! and what that means.
+//! content it takes; how it is resolved in this project, with the name typed for a renamed copy
+//! beside the select (`ixzlL`, 06.C `FKzQ9`); and what that means. A row with a problem strokes the
+//! name field as every field error does.
 
 use std::sync::Arc;
 
@@ -8,19 +9,19 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Select, Text, TextOverflow},
+  components::{Column, Row, Select, Text, TextInput, TextOverflow},
   core::Signal,
   layout::Alignment,
-  node::{Element, SelectStyle, border::Border, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::import::{Choice, Entity};
 
 use super::ChoiceState;
 use crate::{
   theme::{ExtraColor, ExtraTypography},
-  ui::field::{select_style, select_trigger, text_input},
+  ui::field::{select_style, text_input},
 };
 
 /// Row, select and column sizes (`HfNoA`, `u8vYa`, `a2i3d`, `galyn`).
@@ -108,25 +109,13 @@ impl Component for MappingRow {
               .options(props.options.clone())
               .width(Dimension::Pct(100.0))
               .height(Dimension::Px(SELECT_HEIGHT))
-              .style(mapping_style(ctx)),
+              .style(select_style(ctx, SELECT_HEIGHT)),
           )
           .id(format!("import-choice-{key}")),
         ),
       );
     if self.choice.get().0 == Choice::Rename {
-      target = target.child(
-        text_input(
-          ctx,
-          "import-rename",
-          self.name.clone(),
-          props.problem,
-          TypographyStyle::Caption,
-        )
-        .id(format!("import-rename-{key}"))
-        .height(Dimension::Px(SELECT_HEIGHT))
-        .flex(1.0)
-        .placeholder(&ctx.t("projectImport.renamePlaceholder")),
-      );
+      target = target.child(self.name_field(ctx, &key, props.problem));
     }
     Row::new()
       .id(format!("import-mapping-{key}"))
@@ -154,12 +143,38 @@ impl Component for MappingRow {
   }
 }
 
-/// A select drawn like a field, its value in the smaller text of the mapping (`ObbY7` in `u8vYa`).
-fn mapping_style(ctx: &Ctx) -> SelectStyle {
-  let trigger = select_trigger(ctx, SELECT_HEIGHT)
-    .typography(TypographyStyle::Caption)
-    .text_color(PaletteColor::TextPrimary);
-  select_style(ctx, SELECT_HEIGHT).trigger(trigger)
+impl MappingRow {
+  /// The name of a renamed copy (`THeD2`): the select's look, its placeholder in the subtle color,
+  /// and the error stroke while the row has a problem.
+  fn name_field(&self, ctx: &Ctx, key: &str, problem: bool) -> TextInput {
+    let placeholder = {
+      let theme = ctx.theme();
+      FormTextRole {
+        typography: TypographyStyle::FieldLabel,
+        color: PaletteColor::TextMuted,
+      }
+      .resolve(&theme.typography(), &theme.palette())
+    };
+    let field = text_input(
+      ctx,
+      "import-rename",
+      self.name.clone(),
+      problem,
+      TypographyStyle::FieldLabel,
+    )
+    .id(format!("import-rename-{key}"))
+    .height(Dimension::Px(SELECT_HEIGHT))
+    .flex(1.0)
+    .placeholder(&ctx.t("projectImport.renamePlaceholder"))
+    .placeholder_style(placeholder);
+    if problem {
+      field
+        .border(Border::inside(BorderSize::Md, PaletteColor::TextPrimary))
+        .class("invalid")
+    } else {
+      field
+    }
+  }
 }
 
 /// A fixed-width cell of a line over a smaller line (`a2i3d`, `galyn`).

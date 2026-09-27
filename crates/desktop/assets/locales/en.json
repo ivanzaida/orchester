@@ -2476,8 +2476,7 @@
     },
     "option": {
       "copy": "New copy · {{name}}",
-      "rename": "Rename copy · {{name}}",
-      "renameBlank": "Rename copy",
+      "rename": "Rename copy",
       "useResource": "Use {{name}} · {{version}}",
       "useConnection": "Use {{name}}",
       "useSecret": "Use {{name}} · {{environment}}",

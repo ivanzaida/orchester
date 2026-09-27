@@ -151,6 +151,37 @@ fn choose(desktop: &mut Desktop, id: &str, label: &str) {
   desktop.pass();
 }
 
+fn selected(desktop: &mut Desktop, id: &str) -> Vec<String> {
+  desktop
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_select())
+    .unwrap_or_else(|| panic!("the select {id}"))
+    .selected_labels()
+    .iter()
+    .map(ToString::to_string)
+    .collect()
+}
+
+fn type_name(desktop: &mut Desktop, id: &str, name: &str) {
+  desktop
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_text_input())
+    .expect("the name of the copy")
+    .set_value(name);
+  desktop.pass();
+}
+
+/// Whether `id` is drawn with the error stroke.
+fn invalid(desktop: &mut Desktop, id: &str) -> bool {
+  desktop
+    .tree
+    .get_element_by_id(id)
+    .unwrap_or_else(|| panic!("{id} is shown"))
+    .has_class("invalid")
+}
+
 /// Kontur with Personal website beside it, the import open from the sidebar with Preview release
 /// selected and its dependencies shown.
 fn resolving(kontur: impl FnOnce(&Path)) -> (Desktop, Source, ConnectionId) {
@@ -273,21 +304,28 @@ fn import_needs_a_rename_when_kontur_has_the_name() {
     "Rename Preview release to continue."
   ));
 
-  choose(
-    &mut desktop,
-    &format!("import-choice-{}", source.pipeline),
-    "Rename copy",
-  );
+  let choice = format!("import-choice-{}", source.pipeline);
+  choose(&mut desktop, &choice, "Rename copy");
   let rename = format!("import-rename-{}", source.pipeline);
   desktop.wait_for(&rename);
-  desktop
-    .tree
-    .get_element_by_id_mut(&rename)
-    .and_then(|element| element.as_text_input())
-    .expect("the name of the copy")
-    .set_value("Website preview");
-  desktop.pass();
+  // The name is in the field beside the select, which reads just Rename copy (06.C `FKzQ9`). The
+  // field starts with the source's name, which Kontur has: the field shows the error.
+  assert_eq!(selected(&mut desktop, &choice), ["Rename copy"]);
+  assert!(shows(&mut desktop, &pipeline, "Name taken"));
+  assert!(invalid(&mut desktop, &rename));
+  type_name(&mut desktop, &rename, "");
+  assert!(shows(&mut desktop, &pipeline, "Name needed"));
+  assert!(shows(&mut desktop, &pipeline, "Enter a name for the copy"));
+  assert!(shows(
+    &mut desktop,
+    "import-readiness",
+    "Name the copy of Preview release to continue."
+  ));
+  assert!(invalid(&mut desktop, &rename));
+  type_name(&mut desktop, &rename, "Website preview");
   assert!(shows(&mut desktop, &pipeline, "Name resolved"));
+  assert!(!invalid(&mut desktop, &rename));
+  assert_eq!(selected(&mut desktop, &choice), ["Rename copy"]);
   desktop.press("import-submit");
   desktop.wait_for("pipeline-state");
 
