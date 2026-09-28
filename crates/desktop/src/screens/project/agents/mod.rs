@@ -20,7 +20,10 @@ use lurq::{
   },
   components::{Column, Row},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::id::ResourceId;
@@ -64,6 +67,8 @@ pub struct EditorContext {
   pub editing: Editing,
   pub change: ChangeAction,
   pub nav: ProjectNav,
+  /// Where the profile list is scrolled, shared with the screen around the editor.
+  pub list_scroll: ScrollState,
 }
 
 /// Agents of the project, and the revision they were read at.
@@ -79,6 +84,8 @@ pub struct AgentsScreen {
   /// Bumped after a change, to read the profiles again.
   revision: Signal<u64>,
   nav: ProjectNav,
+  /// Where the list is scrolled: kept by the screen, so a tab that goes inactive and back keeps it.
+  list_scroll: ScrollState,
 }
 
 impl Component for AgentsScreen {
@@ -98,7 +105,11 @@ impl Component for AgentsScreen {
         reload.update(|revision| *revision += 1);
       }
     });
-    Self { revision, nav }
+    Self {
+      revision,
+      nav,
+      list_scroll: ScrollState::new(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -159,6 +170,7 @@ impl AgentsScreen {
       editing,
       change,
       nav: self.nav.clone(),
+      list_scroll: self.list_scroll.clone(),
     });
     ctx.mount_keyed::<ProfileEditor>(&key, ())
   }
@@ -166,7 +178,7 @@ impl AgentsScreen {
   /// The page without an editor: loading, failed, or no profiles yet.
   fn page(&self, ctx: &Ctx, open: &OpenProject, agents: Option<&ProjectAgents>, content: Element) -> Element {
     let breadcrumb = ctx.t_args("agents.breadcrumb", [("project", open.project.name().as_str())]);
-    let list = agents.map(|agents| profile_list(ctx, agents, ListSelection::None, &self.nav));
+    let list = agents.map(|agents| profile_list(ctx, agents, ListSelection::None, (&self.nav, &self.list_scroll)));
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))

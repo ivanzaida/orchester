@@ -223,6 +223,7 @@ impl InstructionEditor {
         .padding_top(SpacingSize::Lg)
         .child(input),
     )
+    .with_scroll_state(self.prompt_scroll.clone())
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .background(PaletteColor::SurfaceInput)

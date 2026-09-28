@@ -1,5 +1,6 @@
-//! The application database next to the executable: known projects and the session log used
-//! to detect that the previous run of Orchester ended abnormally.
+//! The application database next to the executable: known projects, the session log used to
+//! detect that the previous run of Orchester ended abnormally, and the state of the window
+//! (`ui_state`) that outlives a session, such as its tabs.
 
 use std::path::{Path, PathBuf};
 
@@ -11,7 +12,8 @@ use crate::{
   rows::{corrupt, parse, path_text},
 };
 
-const MIGRATIONS: &[&str] = &[r"
+const MIGRATIONS: &[&str] = &[
+  r"
 CREATE TABLE projects (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -27,7 +29,14 @@ CREATE TABLE sessions (
   ended_at INTEGER,
   end_kind TEXT
 ) STRICT;
-"];
+",
+  r"
+CREATE TABLE ui_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+) STRICT;
+",
+];
 
 /// Identifies the running session in the session log.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -161,6 +170,25 @@ impl AppDb {
     let session = SessionId(transaction.last_insert_rowid());
     transaction.commit()?;
     Ok((session, previous))
+  }
+
+  /// The window state stored under `key`; `None` when nothing was stored.
+  pub fn ui_state(&self, key: &str) -> Result<Option<String>, StoreError> {
+    Ok(
+      self
+        .connection
+        .query_row("SELECT value FROM ui_state WHERE key = ?1", [key], |row| row.get(0))
+        .optional()?,
+    )
+  }
+
+  /// Stores `value` under `key`, in place of what was stored there.
+  pub fn set_ui_state(&mut self, key: &str, value: &str) -> Result<(), StoreError> {
+    self.connection.execute(
+      "INSERT INTO ui_state (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+      params![key, value],
+    )?;
+    Ok(())
   }
 
   pub fn end_session(&mut self, session: SessionId, end: SessionEnd, now: Timestamp) -> Result<(), StoreError> {

@@ -120,6 +120,13 @@ pub enum Command {
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes
   /// the connection.
   Shutdown { mode: ShutdownMode },
+  /// No window tab shows the project any more: stop, but only while the runner has no work, so
+  /// nothing it does is interrupted. Work is a run it executes (an agent at work, a step waiting
+  /// for an agent slot, a checkpoint being saved) or a request that may execute one again being
+  /// carried out. Idle, it answers [`Reply::Stopping`], then stops as
+  /// [`ShutdownMode::FinishAtCheckpoints`] does with nothing to finish, ending with
+  /// [`Event::Stopped`]; with work it answers [`Rejection::Busy`] and goes on.
+  StopIfIdle,
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -248,6 +255,9 @@ pub enum Reply {
     continued: Vec<RunId>,
     refused: Vec<RefusedRun>,
   },
+  /// The answer to [`Command::StopIfIdle`] when the runner had no work: [`Event::Stopped`]
+  /// follows.
+  Stopping,
   Rejected(Rejection),
 }
 
@@ -324,6 +334,8 @@ pub enum Rejection {
   PlanNotAwaited,
   /// The runner is stopping and starts no work.
   ShuttingDown,
+  /// [`Command::StopIfIdle`] while the runner has work.
+  Busy,
   /// Starting failed in the runner (database, git worktree); its log has the details.
   Failed {
     detail: String,

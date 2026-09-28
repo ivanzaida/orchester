@@ -107,6 +107,7 @@ impl SettingsScreen {
     form(
       None,
       ScrollVertical::new(content)
+        .with_scroll_state(self.scroll.clone())
         .id("settings-general")
         .width(Dimension::Pct(100.0))
         .flex(1.0),

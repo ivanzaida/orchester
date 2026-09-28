@@ -14,7 +14,7 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -87,6 +87,9 @@ pub struct ProjectForm {
   /// The chosen project folder.
   folder: Signal<Option<ChosenPath>>,
   github: SetupGitHub,
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
 }
 
 impl Component for ProjectForm {
@@ -97,13 +100,14 @@ impl Component for ProjectForm {
     let actions = Actions::of(ctx);
     ctx.watch(&actions.create.state(), move |state| {
       if let Some(project) = state.data.clone() {
-        navigation.open_project(project);
+        navigation.open_created(project);
       }
     });
     let form = Self {
       name: ctx.signal(String::new()),
       folder: ctx.signal(None),
       github: SetupGitHub::new(ctx),
+      scroll: ScrollState::new(),
     };
     // A newly chosen folder is detected at once.
     let (folder, github, detect) = (form.folder.clone(), form.github.clone(), actions.detect.clone());
@@ -186,11 +190,7 @@ impl Component for ProjectForm {
       };
       Arc::new(move || create.run(creation.clone())) as Arc<dyn Fn() + Send + Sync>
     });
-    let status = match (&folder, blocked) {
-      (None, _) => ctx.t("setup.project.chooseFolderToContinue"),
-      (Some(_), true) => ctx.t("setup.project.needsRepository"),
-      (Some(_), false) => ctx.t("setup.project.createExplanation"),
-    };
+    let status = status_line(ctx, folder.is_some(), blocked);
     let footer = Column::new()
       .width(Dimension::Pct(100.0))
       // Create's focus ring reaches above the footer, into the fields' bottom padding.
@@ -203,10 +203,25 @@ impl Component for ProjectForm {
       .height(Dimension::Pct(100.0))
       .child(topbar(ctx, shown_name))
       .child(heading(ctx))
-      .child(ScrollVertical::new(fields).width(Dimension::Pct(100.0)).flex(1.0))
+      .child(
+        ScrollVertical::new(fields)
+          .with_scroll_state(self.scroll.clone())
+          .width(Dimension::Pct(100.0))
+          .flex(1.0),
+      )
       .child(footer)
       .child(self.github.panel(ctx, &actions.detect, folder.clone(), &project));
     form(submit, page)
+  }
+}
+
+/// What the footer says beside Create: to choose a folder, that the folder needs a repository, or
+/// what Create does.
+fn status_line(ctx: &Ctx, folder_chosen: bool, blocked: bool) -> Arc<str> {
+  match (folder_chosen, blocked) {
+    (false, _) => ctx.t("setup.project.chooseFolderToContinue"),
+    (true, true) => ctx.t("setup.project.needsRepository"),
+    (true, false) => ctx.t("setup.project.createExplanation"),
   }
 }
 

@@ -119,6 +119,10 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | focus ring, outer / inset: spreads `focus-width` 2 and `focus-extent` 4 (`xURvJ`, `Oz9EN`) | `ExtraShadow::FocusRing.role()` / `FocusRingInset.role()`, applied only through `ui::pressable::Ring` |
 | `code-bg`, `code-text`, `code-keyword`, `code-string`, `code-function`, `code-variable`, `code-constant`, `code-comment` (`vEZ42`) | `ExtraColor::CodeBackground` / `CodeText` / `CodeKeyword` / `CodeString` / `CodeFunction` / `CodeVariable` / `CodeConstant` / `CodeComment` — code and diff only |
 | `diff-add-bg` / `diff-add-text`, `diff-remove-bg` / `diff-remove-text` (`vEZ42`) | `ExtraColor::DiffAddedBackground` / `DiffAddedMark`, `DiffRemovedBackground` / `DiffRemovedMark` |
+| `canvas` fully transparent, where the tab strip's edge fade ends (`xpSC0`) | `ExtraColor::CanvasClear.role()` |
+| macOS traffic lights #FF5F57 / #FEBC2E / #28C840 (`R3RtGs` in `V70DN`) | `ExtraColor::TrafficClose` / `TrafficMinimize` / `TrafficZoom` |
+| title bar tab avatar and close button radius 4 (`b9QQb`, `OvWLh` in `nAKyb`) | `ExtraRadius::TabControl.role()` |
+| switcher row *Open in new tab* radius 5 (`NcJQ0`) | `ExtraRadius::RowAction.role()` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |
@@ -180,6 +184,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::PlanTitle.role()` | 19/500 | title of the plan under review (`J7irj` in `x3lVC`) |
 | `ExtraTypography::ReviewNote.role()` | 12, 1.6 | a note written to an agent, e.g. the changes a plan needs (`DDXc5` in `NbNN0`) |
 | `ExtraTypography::AgentText.role()` | 12, 1.6 | text an agent wrote: a message body, a plan under review (`FP6BD` in `J5MIT`); also the Markdown body |
+| `ExtraTypography::TabInitial.role()` | 9/600 | a project's initial in a title bar tab's avatar (`T0R2Hv` in `nAKyb`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

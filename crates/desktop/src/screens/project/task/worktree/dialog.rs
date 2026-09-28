@@ -50,7 +50,7 @@ pub(super) struct Dialog<'a> {
   pub(super) cancel: Arc<dyn Fn() + Send + Sync>,
 }
 
-pub(super) fn dialog(ctx: &Ctx, dialog: &Dialog) -> Element {
+pub(super) fn dialog(ctx: &mut Ctx, dialog: &Dialog) -> Element {
   let run = dialog
     .props
     .detail
@@ -112,7 +112,7 @@ pub(super) fn dialog(ctx: &Ctx, dialog: &Dialog) -> Element {
     .child(header)
     .child(body)
     .child(actions(ctx, dialog));
-  backdrop(form(dialog.confirm.clone(), content))
+  backdrop(ctx, form(dialog.confirm.clone(), content))
 }
 
 /// "Run #3" or the step's name, then its state; the uncommitted files under its title (`gzztk`).

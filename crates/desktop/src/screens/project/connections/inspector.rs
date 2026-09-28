@@ -12,6 +12,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
+  layout::layout_kind::ScrollState,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -64,7 +65,7 @@ pub struct InspectorState<'a> {
 pub fn inspector(
   ctx: &Ctx,
   connection: &AgentConnection,
-  state: &InspectorState,
+  (state, scroll): (&InspectorState, &ScrollState),
   actions: &InspectorActions,
 ) -> Element {
   let status = connection.status();
@@ -119,6 +120,7 @@ pub fn inspector(
     .child(
       ScrollVertical::new(details)
         .id("connection-inspector-details")
+        .with_scroll_state(scroll.clone())
         .width(Dimension::Pct(100.0))
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),

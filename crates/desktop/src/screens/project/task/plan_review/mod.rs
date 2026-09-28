@@ -18,6 +18,7 @@ use lurq::{
   },
   components::Row,
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -100,6 +101,10 @@ pub struct PlanReviewPanel {
   note_focused: Signal<bool>,
   shown: Signal<Shown>,
   requested: Signal<Option<Choice>>,
+  /// Where the plan and the details are scrolled: kept by the panel, so a tab that goes inactive
+  /// and back keeps them.
+  plan_scroll: ScrollState,
+  details_scroll: ScrollState,
 }
 
 impl Component for PlanReviewPanel {
@@ -108,6 +113,8 @@ impl Component for PlanReviewPanel {
   fn create(ctx: &mut Ctx) -> Self {
     decision_action(ctx);
     Self {
+      plan_scroll: ScrollState::new(),
+      details_scroll: ScrollState::new(),
       note: ctx.signal(String::new()),
       note_focused: ctx.signal(false),
       shown: ctx.signal(Shown(None)),
@@ -119,8 +126,14 @@ impl Component for PlanReviewPanel {
     let props = ctx.props::<PlanReviewProps>().clone();
     let action = decision_action(ctx);
     let shown = props.review.shown(self.shown.get().0).clone();
-    let content = content::content(ctx, &props, &shown, &self.decisions(&props.review, &action));
-    let aside = aside::aside(ctx, &props, &self.note, &self.note_focused, &self.shown);
+    let decisions = self.decisions(&props.review, &action);
+    let content = content::content(ctx, &props, (&shown, &self.plan_scroll), &decisions);
+    let aside = aside::aside(
+      ctx,
+      &props,
+      (&self.note, &self.note_focused),
+      (&self.shown, &self.details_scroll),
+    );
     form(
       None,
       Row::new()

@@ -12,7 +12,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text, TextOverflow},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::time::Timestamp;
@@ -69,7 +69,7 @@ pub(super) fn earlier_notice(ctx: &Ctx, run: &Unreadable) -> Element {
 
 /// The Summary of a task whose latest run `run` cannot be read, with the task's `earlier` runs,
 /// newest first (`w6AfG`); it scrolls with the scroll gutter when the runs outgrow the window.
-pub(super) fn summary(ctx: &Ctx, run: &Unreadable, earlier: &[EarlierRun]) -> Element {
+pub(super) fn summary(ctx: &Ctx, (run, scroll): (&Unreadable, &ScrollState), earlier: &[EarlierRun]) -> Element {
   let actions = Row::new()
     .id("task-unreadable-actions")
     .width(Dimension::Pct(100.0))
@@ -99,6 +99,7 @@ pub(super) fn summary(ctx: &Ctx, run: &Unreadable, earlier: &[EarlierRun]) -> El
     .child(other_runs(ctx, earlier));
   ScrollVertical::new(content)
     .id("task-unreadable")
+    .with_scroll_state(scroll.clone())
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .scrollbar(gutter_scrollbar())

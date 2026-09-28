@@ -13,19 +13,22 @@ use orchester_desktop::{
   i18n,
   runner::Runners,
   status_bar::{ProjectBar, StatusBar, StatusBarProps},
+  tabs::feed::WindowFeed,
   theme,
 };
 use orchester_ipc::SessionEnd;
 use tokio::runtime::Runtime;
 
-/// Provides the session's activity, as the root does, above the bar.
+/// Provides the session's activity and the window's feed of it, as the root does, above the bar.
 struct Shell;
 
 impl Component for Shell {
   type Props = StatusBarProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    ctx.provide(Activity::new());
+    let activity = Activity::new();
+    ctx.provide(WindowFeed::new(&activity));
+    ctx.provide(activity);
     Self
   }
 

@@ -16,7 +16,10 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, Style, dimension::Dimension},
 };
 use orchester_core::{
@@ -90,6 +93,9 @@ pub struct HistoryPanel {
   handle: EditorHandle,
   nav: PipelinesNav,
   confirm: Signal<Asked>,
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
 }
 
 impl Component for HistoryPanel {
@@ -97,6 +103,7 @@ impl Component for HistoryPanel {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
+      scroll: ScrollState::new(),
       handle: ctx
         .use_context::<EditorHandle>()
         .expect("the editor provides EditorHandle"),
@@ -170,7 +177,11 @@ impl HistoryPanel {
         list = list.child(self.details(ctx, props, version));
       }
     }
-    ScrollVertical::new(list).width(Dimension::Pct(100.0)).flex(1.0).into()
+    ScrollVertical::new(list)
+      .with_scroll_state(self.scroll.clone())
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .into()
   }
 
   /// A version: its number, "Latest" on the newest, how long ago it was published, and how much

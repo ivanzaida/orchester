@@ -32,7 +32,9 @@ orchester.exe (desktop, UI)
 ```
 
 - The desktop owns the window and all user-authored changes. It starts one runner
-  per project that has work, and talks to it over a local IPC channel (a named pipe on Windows,
+  per project a window tab shows, keeps it while the project has work (a run in progress or
+  waiting for an agent slot, a checkpoint being saved) after its last tab closed, and then stops it
+  with `StopIfIdle`, which the runner refuses while it has work. It talks to it over a local IPC channel (a named pipe on Windows,
   a Unix domain socket in the user's private `$TMPDIR/orchester/` folder on macOS; the desktop
   checks that the process serving it is the runner it started): commands down (start, pause, resume, cancel, deliver message, approval decision), events up
   (state changes, progress, output). It reads state directly from the project database.
@@ -268,7 +270,7 @@ when a Windows installer exists.
 | `projects` | id, name, repository path, added / last opened |
 | `settings` | application settings (locale, runner limits, agent slots) as key → JSON |
 | `sessions` | id, pid, started / ended, `end_kind`: clean, runs_paused, quit_now; still open means crash |
-| `ui_state` | last project, window placement, drafts not tied to a project |
+| `ui_state` | key → text: the window's tabs (`tabs`: their locations in order and the active one, without history); later window placement and drafts not tied to a project |
 
 A session row is written at start with `ended_at = NULL`. A clean exit fills it; a row still
 open at the next start means the previous session crashed.

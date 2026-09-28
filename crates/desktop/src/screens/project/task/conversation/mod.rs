@@ -15,6 +15,7 @@ use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::integration::Leftovers;
@@ -60,6 +61,8 @@ pub(super) struct TabContext<'a> {
   pub(super) focus: &'a Signal<bool>,
   /// Bumped once a message is stored, so the task is read again.
   pub(super) reload: &'a Signal<u64>,
+  /// Where the active work is scrolled.
+  pub(super) scroll: &'a ScrollState,
 }
 
 pub(super) fn conversation_tab(ctx: &mut Ctx, detail: &Arc<TaskDetail>, tab: &TabContext<'_>) -> Element {
@@ -129,6 +132,7 @@ fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>, open: b
     .height(Dimension::Pct(100.0))
     .child(
       ScrollVertical::new(content)
+        .with_scroll_state(tab.scroll.clone())
         .width(Dimension::Pct(100.0))
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),

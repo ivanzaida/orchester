@@ -321,3 +321,26 @@ async fn lifecycle_two_runs_of_one_project_both_settle_at_their_checkpoints() {
     assert!(run.last_checkpoint().is_some(), "each run's work is committed");
   }
 }
+
+/// The runner has work while a run executes and none once it settled: only then may a runner no
+/// tab shows stop.
+#[tokio::test(flavor = "multi_thread")]
+async fn lifecycle_scheduler_is_idle_only_while_no_run_executes() {
+  let project = project(&Setup::new("Work slowly."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  scheduler.attach(fresh(SessionEnd::Clean), slots(1)).expect("attached");
+  assert!(scheduler.is_idle(), "nothing runs yet");
+
+  let run = start(&scheduler, project.task);
+  assert!(!scheduler.is_idle(), "a run executes");
+  wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
+  let settled = async {
+    while !scheduler.is_idle() {
+      tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+  };
+  tokio::time::timeout(PATIENCE, settled)
+    .await
+    .expect("idle once the run ended");
+}

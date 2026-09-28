@@ -154,7 +154,8 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::PermissionsNotEnforceable { .. }
       | Rejection::NoAgentToRestart
       | Rejection::NoPendingPermissions
-      | Rejection::PlanNotAwaited,
+      | Rejection::PlanNotAwaited
+      | Rejection::Busy,
     ) => vec![Message::new("runs.start.failed")],
   }
 }
@@ -202,7 +203,8 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::TaskNotFound
       | Rejection::TaskNotQueued
       | Rejection::Preflight { .. }
-      | Rejection::Failed { .. },
+      | Rejection::Failed { .. }
+      | Rejection::Busy,
     ) => Message::new("runs.control.failed"),
   }
 }

@@ -13,7 +13,10 @@ use lurq::{
   },
   components::{Column, Modal, ModalTarget, Row, ScrollVertical, Spacer, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{name::Name, resource::StarterStep};
@@ -73,6 +76,9 @@ pub struct Library {
   /// Mount key of the dialog, so each opening starts with empty fields.
   dialog_opened: Signal<u64>,
   nav: PipelinesNav,
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
 }
 
 impl Component for Library {
@@ -94,6 +100,7 @@ impl Component for Library {
       dialog_start: ctx.signal(StartFrom::Starter),
       dialog_opened: ctx.signal(0),
       nav,
+      scroll: ScrollState::new(),
     }
   }
 
@@ -227,7 +234,11 @@ impl Library {
       .flex(1.0)
       .spacing(SpacingSize::Md)
       .child(filters)
-      .child(ScrollVertical::new(rows).width(Dimension::Pct(100.0)))
+      .child(
+        ScrollVertical::new(rows)
+          .with_scroll_state(self.scroll.clone())
+          .width(Dimension::Pct(100.0)),
+      )
       .child(ownership_note(
         &ctx.t_args("pipelines.library.ownership", [("project", project)]),
       ))
@@ -309,7 +320,8 @@ impl Library {
       open: self.dialog_open.clone(),
     };
     let key = format!("new-pipeline-{}", self.dialog_opened.get());
-    Modal::new(backdrop(ctx.mount_keyed::<NewPipelineDialog>(&key, props)))
+    let dialog = ctx.mount_keyed::<NewPipelineDialog>(&key, props);
+    Modal::new(backdrop(ctx, dialog))
       .target(ModalTarget::Root)
       .open(self.dialog_open.clone())
       .into()
