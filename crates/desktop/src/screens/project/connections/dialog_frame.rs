@@ -1,6 +1,7 @@
 //! The frame shared by the connection dialogs (`IAN4P` in 04.02, `d8yPD5` in 04.06): header
-//! with title, owning project and Close (`osMan`), scrolling fields, and Cancel and Save
-//! connection with why saving is not possible yet (`InHni`).
+//! with title, owning project and Close (`osMan`), fields scrolling beside the scroll gutter
+//! (`aqguY` in 04.E `yRb2k`), and Cancel and Save connection with why saving is not possible yet
+//! (`InHni`).
 
 use lurq::{
   app::{
@@ -16,7 +17,7 @@ use lurq::{
 use super::DialogContext;
 use crate::{
   messages::Message,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     backdrop::backdrop,
     button::{ActionButton, SKIPPED_BY_TAB},
@@ -65,9 +66,25 @@ pub(super) fn dialog(
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(RadiusSize::Lg)
     .child(header(ctx, title, context))
-    .child(ScrollVertical::new(fields).width(Dimension::Pct(100.0)).flex(1.0))
+    .child(
+      ScrollVertical::new(padded(fields))
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .scrollbar(gutter_scrollbar()),
+    )
     .child(actions(ctx, context, bar));
   backdrop(ctx, form(submit, dialog))
+}
+
+/// The form's padding: 28 all round but 16 at the right, beside the 12px gutter (`cJGKL`).
+fn padded(fields: Element) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_vertical(ExtraSpacing::Rail.role())
+    .padding_left(ExtraSpacing::Rail.role())
+    .padding_right(SpacingSize::Md)
+    .child(fields)
+    .into()
 }
 
 fn header(ctx: &Ctx, title: &str, context: &DialogContext) -> Element {

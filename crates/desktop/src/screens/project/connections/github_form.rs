@@ -44,7 +44,6 @@ impl GitHubDialog {
   pub(super) fn form(&self, ctx: &Ctx, program: &GhProgram, pick: &PickAction) -> Element {
     let mut column = Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(ExtraSpacing::Rail.role())
       .spacing(ExtraSpacing::Form.role())
       .child(pair(self.name_field(ctx), type_field(ctx, &self.kind, self.editing())))
       .child(pair(self.host_field(ctx), program_field(ctx, program)));

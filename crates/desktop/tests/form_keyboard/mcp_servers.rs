@@ -209,6 +209,88 @@ fn mcp_dialog_traps_tab_and_names_what_blocks_saving() {
   }
 }
 
+/// Chooses the option of the select `id` whose label contains `label`.
+fn choose(desktop: &mut Desktop, id: &str, label: &str) {
+  let mut select = desktop
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_select())
+    .unwrap_or_else(|| panic!("the select {id}"));
+  let index = select
+    .labels()
+    .iter()
+    .position(|option| option.contains(label))
+    .unwrap_or_else(|| panic!("{id} offers {label}"));
+  select.commit(index);
+  desktop.pass();
+}
+
+#[test]
+fn mcp_dialog_says_when_there_is_no_secret_to_add() {
+  let mut desktop = Desktop::with_project();
+  open_mcp_tab(&mut desktop);
+  desktop.wait_for("empty-add-connection");
+  desktop.click("add-connection");
+  desktop.wait_for("mcp-add-secret");
+  // Without secrets the button cannot be pressed and says why; Tab passes over it.
+  assert!(shows(&mut desktop, "mcp-add-secret", "This project has no secrets"));
+  assert!(
+    desktop
+      .tree
+      .get_element_by_id_mut("mcp-add-secret")
+      .and_then(|element| element.as_select())
+      .is_none()
+  );
+  let stops = desktop.stops(PRESSES, false);
+  assert!(!stops.contains(&Some("mcp-add-secret".to_owned())));
+}
+
+#[test]
+fn mcp_dialog_adds_a_variable_from_a_secret() {
+  let mut desktop = Desktop::with_project();
+  seed_servers(desktop.repo());
+  open_mcp_tab(&mut desktop);
+  desktop.wait_for(INSPECTOR);
+  desktop.click("add-connection");
+  desktop.wait_for("mcp-add-secret");
+  assert!(shows(&mut desktop, "mcp-add-secret", "Add a variable from a secret…"));
+  desktop.tab_to("mcp-variables", PRESSES);
+  desktop.type_text("DOCS_INDEX=docs");
+  choose(&mut desktop, "mcp-add-secret", "DOCS_TOKEN (staging)");
+  assert_eq!(
+    desktop.value("mcp-variables"),
+    "DOCS_INDEX=docs
+DOCS_TOKEN=${secret:DOCS_TOKEN@staging}"
+  );
+  assert!(shows(&mut desktop, "mcp-add-secret", "Add a variable from a secret…"));
+}
+
+#[test]
+fn mcp_dialog_says_who_starts_a_program_and_who_reaches_a_remote_server() {
+  let mut desktop = Desktop::with_project();
+  let ids = seed_servers(desktop.repo());
+  open_mcp_tab(&mut desktop);
+  desktop.wait_for(INSPECTOR);
+  desktop.click("edit-connection");
+  desktop.wait_for("connection-dialog");
+  assert!(shows(&mut desktop, "connection-dialog", "Started by"));
+  assert!(shows(
+    &mut desktop,
+    "mcp-started-by",
+    "The agent’s CLI, with each agent"
+  ));
+  desktop.click("connection-cancel");
+  desktop.click(&format!("connection-{}", ids[1]));
+  desktop.wait_until("the remote server's details", |desktop| {
+    shows(desktop, INSPECTOR, "Remote MCP")
+  });
+  desktop.click("edit-connection");
+  desktop.wait_for("connection-dialog");
+  assert!(shows(&mut desktop, "connection-dialog", "Reached by"));
+  assert!(!shows(&mut desktop, "connection-dialog", "Started by"));
+  assert!(shows(&mut desktop, "mcp-started-by", "The agent’s CLI, over HTTP"));
+}
+
 fn agent_connection(db: &mut ProjectDb, repo: &Path, provider: AgentProvider) -> ConnectionId {
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),

@@ -1776,6 +1776,7 @@
         "arguments": "Arguments",
         "folder": "Starts in",
         "startedBy": "Started by",
+        "reachedBy": "Reached by",
         "endpoint": "Endpoint"
       },
       "typeStdio": "Program on this computer",
@@ -1819,7 +1820,6 @@
         "folderHint": "A folder in the worktree, or an absolute path. Claude Code starts every server in the worktree.",
         "argumentsHint": "One argument per line, passed as written.",
         "variablesHint": "One NAME=value per line. ${secret:NAME@environment} takes the value of a project secret.",
-        "fromSecret": "Variable from a secret",
         "addSecret": "Add a variable from a secret…",
         "noSecrets": "This project has no secrets",
         "urlPlaceholder": "https://mcp.example.dev/mcp",
