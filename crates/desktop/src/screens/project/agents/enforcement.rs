@@ -95,8 +95,8 @@ fn heading(ctx: &Ctx, connection: &AgentConnection) -> Element {
     .into()
 }
 
-/// One row per setting (`F5JRp`, `FSFlp`, `A9ogd`). Network reads *stays on* wherever the
-/// connection cannot enforce off, whatever was chosen, as the locked switch beside it shows.
+/// One row per setting (`F5JRp`, `FSFlp`, `A9ogd`), and one for the extra writable folders (not drawn). Network reads
+/// *stays on* wherever the connection cannot enforce off, whatever was chosen, as the locked switch beside it shows.
 fn setting_rows(
   ctx: &Ctx,
   provider: AgentProvider,
@@ -123,7 +123,7 @@ fn setting_rows(
       }),
     ),
   ];
-  rows
+  let mut rows: Vec<Element> = rows
     .into_iter()
     .map(|(setting, name)| {
       let how = mechanism(ctx, enforced.mechanism(setting), enforced.permissions());
@@ -137,7 +137,21 @@ fn setting_rows(
       };
       row(glyph, &title, &how)
     })
-    .collect()
+    .collect();
+  // Extra writable folders, after repository access as on the tab, when the agent gets any.
+  if let Some(folders) = enforced.writable_folders() {
+    let name = ctx.t("agents.permissions.folders");
+    let title = ctx.t_args("agents.permissions.enforcement.enforced", [("setting", &*name)]);
+    rows.insert(
+      1,
+      row(
+        Icon::CircleCheck,
+        &title,
+        &mechanism(ctx, folders, enforced.permissions()),
+      ),
+    );
+  }
+  rows
 }
 
 fn not_enforceable(ctx: &Ctx, problem: &PermissionProblem) -> Element {

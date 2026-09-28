@@ -1,7 +1,8 @@
 //! Agent profile editor (`xT2ex`) with the page around it: the topbar says where the profile
 //! stands in the lifecycle (`X3zkKN`) and offers Save draft and Publish vN (`j5YWqt`). The
 //! editor has the tabs Profile, Permissions and Used in pipelines (`A7phQ`, see `tabs`); the
-//! profile fields are in `fields`, the permissions in `permissions`.
+//! profile fields are in `fields`, the permissions in `permissions` (extra writable folders in
+//! `folders`).
 
 use std::{
   ops::{Deref, DerefMut},
@@ -109,6 +110,9 @@ pub struct ProfileEditor {
   /// The command being added to the allowed commands, as typed.
   pub(super) new_command: Signal<String>,
   pub(super) command_error: Signal<Option<Message>>,
+  /// The folder being added to the extra writable folders, as typed.
+  pub(super) new_folder: Signal<String>,
+  pub(super) folder_error: Signal<Option<Message>>,
   /// Whether the form holds edits not saved yet, for closing its tab.
   pub(super) unsaved: Option<EditMark>,
   /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
@@ -246,6 +250,8 @@ impl ProfileEditor {
       mcp: ctx.signal(McpChoice(profile.mcp_servers().clone())),
       new_command: ctx.signal(String::new()),
       command_error: ctx.signal(None),
+      new_folder: ctx.signal(String::new()),
+      folder_error: ctx.signal(None),
       unsaved: None,
       scroll: ScrollState::new(),
       context: context.clone(),
@@ -289,6 +295,8 @@ impl ProfileEditor {
       mcp: ctx.signal(McpChoice::default()),
       new_command: ctx.signal(String::new()),
       command_error: ctx.signal(None),
+      new_folder: ctx.signal(String::new()),
+      folder_error: ctx.signal(None),
       unsaved: None,
       scroll: ScrollState::new(),
       context: context.clone(),

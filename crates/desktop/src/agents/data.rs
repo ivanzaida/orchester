@@ -11,12 +11,12 @@ use orchester_core::{
   resource::{
     AgentProfile, Draft, ModelId, Pipeline, PublishError, ResourceKind, Slug, StepKind, Version, VersionNumber,
   },
-  store::{ConnectionStore, McpServerStore, ResourceStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SettingsStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::connections::data::agent_connections;
+use crate::{connections::data::agent_connections, environment::CARGO_TARGET_DIR};
 
 /// Slug of a profile whose role has no ASCII letters or digits.
 const FALLBACK_SLUG: &str = "agent";
@@ -102,6 +102,9 @@ pub struct ProjectAgents {
   pub steps: Arc<Vec<StepUse>>,
   /// The project's MCP servers, which a profile can give its agents.
   pub mcp: Arc<Vec<McpServer>>,
+  /// The build folder Project settings › Environment sets (`CARGO_TARGET_DIR`), which the
+  /// Permissions tab suggests as an extra writable folder.
+  pub target_dir: Option<Arc<str>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProjectAgents {}
@@ -109,13 +112,17 @@ impl lurq::app::component::DevtoolsInspectable for ProjectAgents {}
 impl ProjectAgents {
   pub fn load<S>(store: &S) -> Result<Self, StoreError>
   where
-    S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError> + McpServerStore<Error = StoreError>,
+    S: ResourceStore<Error = StoreError>
+      + ConnectionStore<Error = StoreError>
+      + McpServerStore<Error = StoreError>
+      + SettingsStore<Error = StoreError>,
   {
     Ok(Self {
       profiles: Arc::new(profiles(store)?),
       connections: Arc::new(agent_connections(store.connections()?)),
       steps: Arc::new(step_uses(store)?),
       mcp: Arc::new(store.mcp_servers()?),
+      target_dir: store.project_environment()?.get(CARGO_TARGET_DIR).map(Arc::from),
     })
   }
 

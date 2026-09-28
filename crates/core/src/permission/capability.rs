@@ -13,6 +13,9 @@
 //!   confine an arbitrary command to the worktree (its own sandbox is not supported on Windows and is not used), and it
 //!   can block its web tools but not network use by commands.
 //! - Asking before commands needs the permission-request flow, which no connection has yet.
+//! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
+//!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
+//!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -98,10 +101,14 @@ pub enum Mechanism {
   CodexSandboxNetworkOff,
   /// `sandbox_workspace_write.network_access=true`.
   CodexSandboxNetworkOn,
+  /// `sandbox_workspace_write.writable_roots=[…]`: the sandbox also lets commands write there.
+  CodexWritableRoots,
   /// `--disallowedTools Edit Write NotebookEdit`.
   ClaudeEditToolsRemoved,
   /// `--permission-mode acceptEdits`, edits in the working directory.
   ClaudeAcceptEdits,
+  /// `--add-dir <folder>`: the edit tools may also write there; commands were never confined.
+  ClaudeAddDir,
   /// `--allowedTools "Bash(<prefix>:*)"`, one rule per command.
   ClaudeAllowedTools,
   /// WebFetch and WebSearch stay available.
@@ -187,6 +194,8 @@ pub struct EnforcedPermissions {
   repository: Mechanism,
   commands: Mechanism,
   network: Mechanism,
+  /// How the extra writable folders are granted, when the agent gets any.
+  writable_folders: Option<Mechanism>,
   /// Network off was chosen but cannot be enforced, so network stays on.
   network_stays_on: Option<Unavailable>,
 }
@@ -204,6 +213,12 @@ impl EnforcedPermissions {
       PermissionSetting::Commands => self.commands,
       PermissionSetting::Network => self.network,
     }
+  }
+
+  /// How the CLI grants the extra writable folders; `None` when the agent gets none (it only reads,
+  /// or none are listed).
+  pub const fn writable_folders(&self) -> Option<Mechanism> {
+    self.writable_folders
   }
 
   /// Why network is on although off was chosen.
@@ -251,11 +266,19 @@ impl AgentPermissions {
         (mechanism, Some(reason))
       }
     };
+    let writable_folders = permissions
+      .granted_folders()
+      .is_some_and(|folders| !folders.is_empty())
+      .then_some(match provider {
+        AgentProvider::CodexCli => Mechanism::CodexWritableRoots,
+        AgentProvider::ClaudeCodeCli => Mechanism::ClaudeAddDir,
+      });
     Ok(EnforcedPermissions {
       permissions,
       repository,
       commands,
       network,
+      writable_folders,
       network_stays_on,
     })
   }

@@ -65,6 +65,6 @@ impl AgentPermissions {
       (NetworkAccess::On, StepNetwork::AsProfile) => NetworkAccess::On,
       _ => NetworkAccess::Off,
     };
-    Self::new(repository, commands, network)
+    Self::new(repository, commands, network).with_writable_folders(self.writable_folders.clone())
   }
 }

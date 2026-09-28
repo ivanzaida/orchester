@@ -5,9 +5,11 @@
 //! instructions injected at start, the outputs of the steps it runs after (and, for Codex, the
 //! result schema); for a session that resumes the continue prompt with the instructions injected at
 //! resume. A gated step a reviewer sent back is told what should change instead (the plan
-//! revision).
+//! revision). The extra writable folders its permissions grant are resolved in the repository at
+//! each start, and those under `.orchester/` that do not exist yet are created: the CLIs ignore a
+//! folder that does not exist.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use orchester_core::{
   command::Command,
@@ -17,7 +19,7 @@ use orchester_core::{
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
-  permission::capability::EnforcedPermissions,
+  permission::{FolderBounds, capability::EnforcedPermissions},
   resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKind},
   run::{
     AssembledPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
@@ -55,6 +57,7 @@ struct Cli<'a> {
   model: &'a ModelId,
   effort: Option<&'a str>,
   enforced: &'a EnforcedPermissions,
+  writable_roots: &'a [PathBuf],
   worktree: &'a Path,
   resume: Option<&'a str>,
   environment: &'a CommandEnvironment,
@@ -102,6 +105,7 @@ impl RunTask {
       .expect("an agent step of the run has permissions")
       .enforced_on(connection.provider(), Platform::current())
       .map_err(|error| problem(error.to_string()))?;
+    let writable_roots = self.writable_roots(&enforced)?;
     let environment = self
       .db
       .project_environment()
@@ -116,6 +120,7 @@ impl RunTask {
         .iter()
         .find_map(|(name, value)| (name == REASONING_EFFORT).then_some(value)),
       enforced: &enforced,
+      writable_roots: &writable_roots,
       worktree,
       resume: continuation.session.as_deref(),
       environment: &environment,
@@ -128,6 +133,37 @@ impl RunTask {
       mcp_file,
       mcp_left_out: left_out,
     })
+  }
+
+  /// The extra writable folders `enforced` grants, resolved in the project's repository, the missing
+  /// ones created; or why one cannot be given (it was moved, or now lies somewhere refused).
+  fn writable_roots(&self, enforced: &EnforcedPermissions) -> Result<Vec<PathBuf>, RunnerProblem> {
+    let Some(folders) = enforced
+      .permissions()
+      .granted_folders()
+      .filter(|folders| !folders.is_empty())
+    else {
+      return Ok(Vec::new());
+    };
+    let bounds = FolderBounds::new(&self.root, std::env::home_dir().as_deref())
+      .map_err(|error| problem(format!("cannot read the repository {}: {error}", self.root.display())))?;
+    let resolved = folders
+      .resolve(&bounds)
+      .map_err(|(folder, error)| problem(format!("extra writable folder {folder}: {error}")))?;
+    resolved
+      .into_iter()
+      .map(|folder| {
+        if folder.is_missing() {
+          std::fs::create_dir_all(folder.path()).map_err(|error| {
+            problem(format!(
+              "cannot create the extra writable folder {}: {error}",
+              folder.path().display()
+            ))
+          })?;
+        }
+        Ok(folder.path().to_path_buf())
+      })
+      .collect()
   }
 
   /// The pinned profile version and the agent connection it runs on.
@@ -164,6 +200,7 @@ impl RunTask {
         reasoning_effort: cli.effort,
         access: cli.enforced.permissions().repository(),
         network: cli.enforced.permissions().network(),
+        writable_roots: cli.writable_roots,
         worktree: cli.worktree,
         platform: Platform::current(),
         resume: cli.resume,
@@ -176,6 +213,7 @@ impl RunTask {
         model: cli.model.as_str(),
         effort: cli.effort,
         permissions: cli.enforced,
+        writable_roots: cli.writable_roots,
         worktree: cli.worktree,
         session: ClaudeSession::continuing(cli.resume),
         mcp: file.as_ref().map(|(file, servers)| (file.path(), servers.as_slice())),
