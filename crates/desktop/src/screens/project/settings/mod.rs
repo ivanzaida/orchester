@@ -289,10 +289,9 @@ impl SettingsScreen {
   fn tabs(&self, ctx: &Ctx, selected: SettingsTab) -> Element {
     let height = Dimension::Pct(100.0);
     let tab = |id, key, tab: SettingsTab| {
-      let nav = self.nav.clone();
       Tab::new(id, ctx.t(key), height)
         .selected(selected == tab)
-        .on_click(move || nav.show(Page::Settings(tab)))
+        .link(self.nav.link(Page::Settings(tab)))
     };
     tab_row(
       Dimension::Px(TAB_ROW_HEIGHT),

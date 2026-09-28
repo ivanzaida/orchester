@@ -157,7 +157,6 @@ fn project_bar(ctx: &Ctx, open: &OpenProject) -> Element {
 }
 
 fn heading(ctx: &Ctx, open: &OpenProject, nav: &ProjectNav) -> Element {
-  let nav = nav.clone();
   Row::new()
     .width(Dimension::Pct(100.0))
     .justify(Justify::SpaceBetween)
@@ -179,7 +178,7 @@ fn heading(ctx: &Ctx, open: &OpenProject, nav: &ProjectNav) -> Element {
         .id("new-task")
         .height(Dimension::Px(NEW_TASK_HEIGHT))
         .roomy()
-        .on_click(move || nav.show(Page::NewTask))
+        .link(nav.link(Page::NewTask))
         .render(ctx),
     )
     .into()

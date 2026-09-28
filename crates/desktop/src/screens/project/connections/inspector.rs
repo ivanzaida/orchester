@@ -35,6 +35,7 @@ use crate::{
   ui::{
     button::ActionButton,
     icon::Icon,
+    link::Link,
     message_text,
     property::{ValueStyle, property, styled_property},
     status_label::status_label as label,
@@ -50,7 +51,8 @@ type Handler = Arc<dyn Fn() + Send + Sync>;
 pub struct InspectorActions {
   pub check: Option<Handler>,
   pub edit: Handler,
-  pub show_profile: Arc<dyn Fn(ResourceId) + Send + Sync>,
+  /// A link to a profile that uses it.
+  pub profile: Arc<dyn Fn(ResourceId) -> Link + Send + Sync>,
 }
 
 pub struct InspectorState<'a> {
@@ -84,7 +86,7 @@ pub fn inspector(
       Icon::RefreshCw,
       actions.check.clone(),
     ))
-    .child(used_by(ctx, &state.uses, &actions.show_profile));
+    .child(used_by(ctx, &state.uses, &actions.profile));
   let pinned = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_right(ExtraSpacing::Stack.role())
@@ -203,11 +205,10 @@ pub fn model_chips(ctx: &Ctx, models: &[CatalogModel]) -> Element {
 }
 
 /// Read-only links to the profiles on this connection (`zeEAI`, `Hxczz`).
-fn used_by(ctx: &Ctx, uses: &[&ProfileUse], show: &Arc<dyn Fn(ResourceId) + Send + Sync>) -> Element {
+fn used_by(ctx: &Ctx, uses: &[&ProfileUse], profile: &Arc<dyn Fn(ResourceId) -> Link + Send + Sync>) -> Element {
   let links: Vec<Element> = uses
     .iter()
     .map(|used| {
-      let (show, profile) = (show.clone(), used.profile);
       let text = ctx.t_args(
         "connections.usedByLink",
         [("role", &*used.role), ("model", &*used.model)],
@@ -216,7 +217,7 @@ fn used_by(ctx: &Ctx, uses: &[&ProfileUse], show: &Arc<dyn Fn(ResourceId) + Send
         .icon(Icon::ExternalLink)
         .fill_width()
         .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
-        .on_click(move || show(profile))
+        .link(profile(used.profile))
         .render(ctx)
     })
     .collect();

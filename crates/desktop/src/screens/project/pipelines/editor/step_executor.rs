@@ -109,7 +109,6 @@ pub fn tool(ctx: &Ctx, props: &StepInspectorProps, nav: &ProjectNav) -> Option<E
   let chosen = tool
     .and_then(|id| props.assignables.tool(id))
     .filter(|tool| tool.runnable);
-  let nav = nav.clone();
   let (line, hint, button, target): (Arc<str>, Arc<str>, Arc<str>, Page) = match chosen {
     Some(tool) => (
       ctx.t_args(
@@ -148,7 +147,7 @@ pub fn tool(ctx: &Ctx, props: &StepInspectorProps, nav: &ProjectNav) -> Option<E
           .in_form()
           .fill_width()
           .height(Dimension::Px(SMALL_BUTTON_HEIGHT))
-          .on_click(move || nav.show(target))
+          .link(nav.link(target))
           .render(ctx),
       )
       .into(),

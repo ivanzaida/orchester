@@ -25,6 +25,7 @@ use crate::{
   ui::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
+    link::Link,
     message_text,
     property::{ValueStyle, property, styled_property},
   },
@@ -35,8 +36,7 @@ const PANEL_WIDTH: f32 = 300.0;
 const AGENT_HEIGHT: f32 = 44.0;
 const AGENT_GLYPH: f32 = 28.0;
 
-pub(super) fn run_details(ctx: &Ctx, run: &RunView, project: &str, open: &Arc<dyn Fn() + Send + Sync>) -> Element {
-  let open = open.clone();
+pub(super) fn run_details(ctx: &Ctx, run: &RunView, project: &str, open: Link) -> Element {
   let version = run.version.to_string();
   let pipeline = ctx.t_args(
     "runs.summary.pipelineValue",
@@ -82,7 +82,7 @@ pub(super) fn run_details(ctx: &Ctx, run: &RunView, project: &str, open: &Arc<dy
         .icon(Icon::MessagesSquare)
         .id("task-open-conversation")
         .fill_width()
-        .on_click(move || open())
+        .link(open)
         .render(ctx),
     )
     .into()

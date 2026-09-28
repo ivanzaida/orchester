@@ -28,6 +28,7 @@ use crate::{
     route::{Page, PipelineView},
   },
   pipelines::library::StarterText,
+  ui::link::Link,
   workspace::OpenProject,
 };
 
@@ -57,14 +58,29 @@ impl PipelinesNav {
     self.project.show(Page::Pipeline(id, view));
   }
 
+  /// A link to `view` of pipeline `id` (see `ui::link`).
+  pub fn link(&self, id: ResourceId, view: PipelineView) -> Link {
+    self.project.link(Page::Pipeline(id, view))
+  }
+
+  /// A link from the library to pipeline `id`, as [`Self::open`] opens it.
+  pub fn open_link(&self, id: ResourceId) -> Link {
+    let nav = self.clone();
+    Link::new(self.project.tabs(), move |open| {
+      nav.changed();
+      nav.project.open(Page::Pipeline(id, PipelineView::Draft), open);
+    })
+  }
+
   /// Shows `view` of pipeline `id` in place of the current entry: after a version was restored
   /// as the draft, going back does not return to the version it replaced the draft with.
   pub fn replace(&self, id: ResourceId, view: PipelineView) {
     self.project.replace(Page::Pipeline(id, view));
   }
 
-  pub fn library(&self) {
-    self.project.show(Page::Pipelines);
+  /// A link to the library (see `ui::link`).
+  pub fn library_link(&self) -> Link {
+    self.project.link(Page::Pipelines)
   }
 
   pub fn changed(&self) {

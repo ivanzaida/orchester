@@ -14,7 +14,7 @@ use orchester_core::tokens::{compact_tokens, grouped};
 use super::{
   ProjectBar,
   hint::{HintAnchor, Hints},
-  item::{clickable, glyph, item, label, separator, value},
+  item::{glyph, item, label, pressed, separator, value},
   open::Opener,
 };
 use crate::{
@@ -24,7 +24,7 @@ use crate::{
     overview::{OverviewTab, figure},
     usage::ProjectUsage,
   },
-  ui::icon::Icon,
+  ui::{icon::Icon, link::Press},
 };
 
 pub fn counts(ctx: &Ctx, project: Option<&ProjectBar>, opener: &Opener, hints: &Hints) -> Element {
@@ -93,7 +93,7 @@ fn agents(ctx: &Ctx, project: &ProjectBar, unknown: &str, hints: &Hints) -> Butt
 /// Overview on its Needs you tab.
 fn opens(row: Button, opener: &Opener, page: Page) -> Element {
   match opener.page(page) {
-    Some(open) => clickable(row, open).into(),
+    Some(link) => pressed(row, Press::Link(link)).into(),
     None => row.into(),
   }
 }

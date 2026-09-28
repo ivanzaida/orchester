@@ -23,7 +23,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{pressable, surface},
+    pressable::surface,
     status_label::{danger_status_label, status_label},
   },
 };
@@ -99,8 +99,9 @@ fn open_chevron() -> Element {
 
 /// `row` as a surface that opens the task's page.
 fn opens(nav: &ProjectNav, row: &TaskRow, content: Row) -> Element {
-  let (nav, task) = (nav.clone(), row.id);
-  pressable(surface(), move || nav.show(Page::task(task)))
+  nav
+    .link(Page::task(row.id))
+    .on(surface())
     .id(format!("task-row-{}", row.key))
     .width(Dimension::Pct(100.0))
     .describe("task", row.key.clone())

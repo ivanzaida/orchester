@@ -26,8 +26,9 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY},
   ui::{
     icon::{Icon, IconSize, icon},
+    link::Link,
     message_text,
-    pressable::{opens_place, pressable, surface},
+    pressable::{pressable, surface},
     status_label::status_label,
   },
   workspace::{ProjectData, ProjectEntry},
@@ -157,11 +158,8 @@ pub(super) fn project_row(
     .child(cell(&opened, OPENED_WIDTH, PaletteColor::TextSecondary));
   let content = if openable {
     let (action, repo_root) = (rows.open.clone(), project.repo_root.clone());
-    opens_place(
-      content.hovered_style(Style::new().background(PaletteColor::SurfaceRaised)),
-      rows.tabs,
-      move |open| action.run((repo_root.clone(), open)),
-    )
+    Link::new(rows.tabs, move |open| action.run((repo_root.clone(), open)))
+      .on(content.hovered_style(Style::new().background(PaletteColor::SurfaceRaised)))
   } else {
     content.focusable(false)
   };

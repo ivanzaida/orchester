@@ -214,12 +214,11 @@ fn failed(ctx: &Ctx, error: &Message) -> Element {
 
 /// No profiles yet. A profile needs a connection, so without one the way there is offered.
 fn empty(ctx: &Ctx, agents: &ProjectAgents, nav: &ProjectNav) -> Element {
-  let nav = nav.clone();
   if agents.connections.is_empty() {
     let action = ActionButton::new(ctx.t("agents.openConnections"))
       .icon(Icon::Plug)
       .id("agents-open-connections")
-      .on_click(move || nav.show(Page::CONNECTIONS))
+      .link(nav.link(Page::CONNECTIONS))
       .render(ctx);
     return RecoveryPanel::new(Icon::Bot, &ctx.t("agents.emptyTitle"), &ctx.t("agents.needsConnection"))
       .action(action)
@@ -229,7 +228,7 @@ fn empty(ctx: &Ctx, agents: &ProjectAgents, nav: &ProjectNav) -> Element {
     .primary()
     .icon(Icon::Plus)
     .id("empty-new-agent")
-    .on_click(move || nav.show(Page::Agents(AgentSelection::New)))
+    .link(nav.link(Page::Agents(AgentSelection::New)))
     .render(ctx);
   RecoveryPanel::new(Icon::Bot, &ctx.t("agents.emptyTitle"), &ctx.t("agents.emptyDetail"))
     .action(action)

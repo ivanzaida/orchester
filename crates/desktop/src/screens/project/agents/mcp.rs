@@ -44,13 +44,17 @@ impl ProfileEditor {
       .overflow_visible()
       .child(Text::new(&ctx.t("agents.permissions.mcp.label")).variant(TypographyStyle::Label));
     if servers.is_empty() {
-      let nav = self.context.nav.clone();
       let add = ActionButton::new(ctx.t("agents.permissions.mcp.add"))
         .icon(Icon::Plus)
         .id("agent-mcp-add")
         .in_form()
         .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
-        .on_click(move || nav.show(Page::Connections(ConnectionTab::McpServers, None)))
+        .link(
+          self
+            .context
+            .nav
+            .link(Page::Connections(ConnectionTab::McpServers, None)),
+        )
         .render(ctx);
       return column
         .child(hint(ctx, "agents.permissions.mcp.none"))

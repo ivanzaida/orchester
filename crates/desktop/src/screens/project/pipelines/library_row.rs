@@ -23,7 +23,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{pressable, surface},
+    pressable::surface,
     status_label::status_label,
   },
 };
@@ -148,5 +148,5 @@ pub fn library_row(ctx: &Ctx, entry: &LibraryEntry, nav: &PipelinesNav) -> Eleme
     ))
     .child(cell(&published, PUBLISHED_WIDTH, PaletteColor::TextSecondary))
     .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
-  pressable(row, move || open.open(id)).into()
+  open.open_link(id).on(row).into()
 }

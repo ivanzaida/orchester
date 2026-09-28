@@ -31,6 +31,7 @@ use crate::{
   ui::{
     button::ActionButton,
     icon::Icon,
+    link::Link,
     message_text,
     property::{ValueStyle, property, styled_property},
     status_label::status_label as label,
@@ -46,7 +47,8 @@ pub struct McpActions {
   /// Turns the server off when it is on, on when it is off; `None` while other work runs.
   pub toggle: Option<Handler>,
   pub edit: Handler,
-  pub show_profile: Arc<dyn Fn(ResourceId) + Send + Sync>,
+  /// A link to a profile that uses it.
+  pub profile: Arc<dyn Fn(ResourceId) -> Link + Send + Sync>,
 }
 
 pub struct McpInspector<'a> {
@@ -80,7 +82,7 @@ impl McpInspector<'_> {
         Icon::RefreshCw,
         None,
       ))
-      .child(self.used_by(ctx, &actions.show_profile));
+      .child(self.used_by(ctx, &actions.profile));
     let toggle_key = if self.server.enabled() {
       "connections.mcp.turnOff"
     } else {
@@ -227,17 +229,16 @@ impl McpInspector<'_> {
   }
 
   /// Read-only links to the profiles that give the server to their agents (`c3NuQu`).
-  fn used_by(&self, ctx: &Ctx, show: &Arc<dyn Fn(ResourceId) + Send + Sync>) -> Element {
+  fn used_by(&self, ctx: &Ctx, profile: &Arc<dyn Fn(ResourceId) -> Link + Send + Sync>) -> Element {
     let links: Vec<Element> = self
       .uses
       .iter()
       .map(|used| {
-        let (show, profile) = (show.clone(), used.profile);
         ActionButton::new(ctx.t_args("connections.mcp.usedByLink", [("role", &*used.role)]))
           .icon(Icon::ExternalLink)
           .fill_width()
           .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
-          .on_click(move || show(profile))
+          .link(profile(used.profile))
           .render(ctx)
       })
       .collect();
