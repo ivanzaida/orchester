@@ -42,6 +42,12 @@ Canonical screens and states, in canvas order:
 | 01.A · Setup blocked / Restore provider access | `Q7htyU` | [Preview](previews/Q7htyU.png) |
 | 01.C1–C10 · GitHub detection states (compact, see [GitHub](#github)) | `fL24i`, `rwnig`, `JjJiN`, `Yz9Ig`, `MMSQ9`, `fhqgC`, `C1JtM`, `v85QyU`, `w1Pvl`, `MTPqL` | not exported yet |
 | 01.D · Change GitHub account or access (panel) | `hNPA1` | not exported yet |
+| 01.06 · All projects | `Z7IZZ` | not exported yet |
+| 01.06 A · Remove from list / Confirm | `EtMXj` | not exported yet |
+| 01.06 B · Project switcher / Open | `n9vdhp` | not exported yet |
+| 01.06 C · All projects / No projects in the list | `A4FJG` | not exported yet |
+| 01.06 D · Open project folder failed | `ucI7v` | not exported yet |
+| 01.06 E · Rows before their counts are read (compact) | `t8TEOZ` | not exported yet |
 | 02.01 · Orchestrator / New conversation | `dOIrp` | [Preview](previews/dOIrp.png) |
 | 02.02 · Orchestrator / Task proposal | `I7TCI` | [Preview](previews/I7TCI.png) |
 | 02.03 · Tasks / Select drafts to run | `J9467` | [Preview](previews/J9467.png) |
@@ -141,7 +147,7 @@ Canonical screens and states, in canvas order:
 
 There are 82 full screen frames; earlier screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap.
 
-- Getting started: first launch → project folder → project with detected GitHub repository → runner/agents → ready. Setup blocking, compact empty-project feedback (`RlwqW`), the *Change GitHub account or access* panel (01.D, x 1568 / y 426) and the ten GitHub detection states (01.C1–C10, x 2128–4808, rows at y 100, 512 and 980) are in `GojEY` (height 1400; section height 3920) below the main flow.
+- Getting started: first launch → project folder → project with detected GitHub repository → runner/agents → ready. Setup blocking, compact empty-project feedback (`RlwqW`), the *Change GitHub account or access* panel (01.D, x 1568 / y 426) and the ten GitHub detection states (01.C1–C10, x 2128–4808, rows at y 100, 512 and 980) are in `GojEY` (height 1400) below the main flow. All projects, its removal, the project switcher and their states are in `wa6B7` ("All projects · list, removal, switcher", y 3920, height 2208: 01.06, 01.06 A, 01.06 B in row 1, 01.06 C, D, E in row 2; section height 6224); see [All projects](#all-projects).
 - Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue, and the compact task-rows board `r2al55` (x 3088 / y 1148, row 2). The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. Pause and retry are alternatives in `O4vgKt`, with 02.B2 `z2xET` at x 3088; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Application lifecycle states (close with active work, runner connection, recovery on start) and the sidebar runner card states are in `Z7Fyr8`. Agent execution states (Activity transcript, run permissions, permission request, stopped at limit) with the compact Activity, Apply now and token budget states, plus Project settings / Limits and General (row 3, with the time-limit select board `u5Vn2` at x 1568 / y 2592) and the step-budget and daily-budget stops 02.L2 / 02.L3 (row 4, y 3260), with Project settings / Environment 02.O `tXahd` beside them at x 3088 under 02.N, are in `BnxJ1` (height 4312). Merging a run and removing its worktrees are in `gdgT2` ("States · Review, merge & worktrees": 02.P, 02.P2, 02.P3 in row 1; the compact merge board 02.P states, 02.Q and 02.Q2 in row 2). The unreadable run and the task conversation as built are in `GvUXd` ("States · Unreadable run & task conversation": the compact task-rows board for Merged and Unreadable, 02.R and 02.S in row 1; 02.S2 at x 48 in row 2). Group positions are y 160 / 1376 / 3640 / 5904 / 7120 / 8216 / 10832 / 15240 / 17504 respectively; the section height is 19768.
 - Pipelines: the visual editor is separate from task execution. `UJUi0` holds edit → publish confirmation → published. `t9zWUe` holds the library (the Pipelines navigation destination) → new pipeline → an empty pipeline in the editor. `rBy9L` holds the empty library and the publish-blocked editor. `r8rPaS` holds the version history: viewing v4 → compare v3 with the draft → restore v3 (row 1) and the compact history-panel states (row 2). Group positions are y 160 / 1376 / 2592 / 3808; the section height is 5664.
 - Agents & connections: connections → add provider → assign connection/model in the agent profile (`kOGgX` row 1), then the profile's Permissions tab (04.04), the GitHub connection (04.05) and Add GitHub connection (04.06) in row 2; expired-access recovery, the compact state 04.B (options the connection can't enforce) and the GitHub connection states 04.C1–C5 (x 2108 / 2492 / 2876 / 3260 / 3644) are in `DLRW5` (now at y 2424; section height 3640).
@@ -706,7 +712,7 @@ runs only when there are some (*Attempt 2 of 5*), and a runner that never starte
 not start · see runner log*. Stopping and stopped, not drawn, read *Stopping local runner* (loader)
 and *Local runner stopped* (unplug) without a second line. Not built: selecting the offline card
 does not open the notice actions; *Restart runner* and *Open runner log* stay in the status bar
-and the Overview notice. The selector does not switch projects until All projects exists.
+and the Overview notice. The selector opens the project switcher (01.06 B, see [All projects](#all-projects)).
 
 **Session ended abnormally (`o8DCd`).** On the next start after *Quit now* or a crash, a modal: "The last session ended before agents could save". "Orchester stopped unexpectedly on Sep 23 at 14:12 and three runs were interrupted. Nothing has been restarted. Continue all of them from their last checkpoints, or none; work after a checkpoint is not counted as done." A table lists each interrupted run: task (key, title, project · run), *Interrupted during* (step, agent role · provider · model), *Reason*, *Last checkpoint* (commit, time saved), *Worktree* ("3 files not committed" with View changes, "No uncommitted changes", or "Could not read the worktree") — no per-run action. The runs may come from several open projects. A run stopped during an external tool call says "outcome unknown", and a notice asks the user to check the target before continuing, because continuing repeats the step from its checkpoint. Footer: *Open runner log*, *Don't continue* (runs stay interrupted and can each be continued later from their task conversation), *Continue all 3 from checkpoints* (primary). Uncommitted changes are never discarded silently. After *Wait for agents to save*, no dialog appears; runs are simply paused. User decision (2026-09-24): the modal is all or nothing — *Continue all N from checkpoints* or *Don't continue*; rows have no per-run action. Runs not continued stay interrupted and can each be continued later from their task conversation; that task-level action is not designed yet.
 
@@ -799,6 +805,51 @@ The *Enforced by <CLI>* panel lists each setting with the mechanism the chosen c
 The fixture shows all three Builder settings enforced by Codex. If exec-policy rules turn out not to apply to `codex exec`, *Allowed commands* becomes a disabled option for Codex profiles (then only *Any command in the worktree* remains, which the sandbox enforces). Sandbox behaviour differs by platform (Codex's sandbox on Windows is the least certain); the capability check must run per machine, and whatever is missing is disabled with its reason, never silently treated as enforced.
 
 Proposed copy namespaces: `agents.permissions.*`, `agents.permissions.enforcement.*`, `pipelines.step.permissions.*`, `runs.permissions.*`, `runs.permissionRequest.*`.
+
+## All projects
+
+Drawn 2026-09-28 (`wa6B7`) and implemented. **All projects** (01.06 `Z7IZZ`, route `/projects`)
+lists the projects the application database knows, most recently opened first. It sits outside
+any project, like first launch: the welcome topbar, no sidebar, and a status bar without the
+project items. The sidebar's *All projects* item and the switcher open it; the app starts on it
+when the most recently used project cannot be opened (a first launch without projects still opens
+01.01).
+
+- **Rows** (`tBszO`): initial tile, name, folder (mono), status, *Active runs*, *Needs you*, *Last
+  opened*, the × that removes it from the list and, when it opens, the chevron. Selecting the row
+  opens the project's Overview as a new history entry. The list, folders, folder checks and runner
+  states are known at once; the counts are read from each project's database without migrating
+  it, and show a dash until read (01.06 E `t8TEOZ`). Active runs counts runs with an agent at
+  work, only while the project's runner is online; *Needs you* counts runs waiting for a person.
+- **Status**: *Runner not started* (no runner in this session), *Runner starting*, *Runner
+  online*, *Reconnecting*, *Runner stopping*, *Runner stopped*, *Runner offline*; *Folder missing*
+  (folder-x) with *The folder is not there any more…* under the path; *Can't be opened*
+  (circle-alert) with the reason (e.g. data from a newer version). Neither of the last two opens.
+- **Open project folder…** opens the project a folder already keeps (e.g. one removed from the
+  list), and registers it again. A failure is the error line `tmE5H` (01.06 D `ucI7v`) naming the
+  folder; it stays until the next attempt. **Add project** opens setup (01.02); its *Back* returns
+  to where setup was opened.
+- **Remove from list** (01.06 A `EtMXj`): the application database forgets the project; its folder
+  and `.orchester` data stay on disk, as the dialog says. Enter confirms, Escape or *Cancel*
+  closes. A removed project's history entries lead to All projects. Implemented, not drawn yet:
+  while agents are at work in the project *Remove from list* is unavailable and the action bar
+  says *Agents are at work in {name}. Remove it once its runs are paused or finished.*; when the
+  project's runner runs without agent work, removing it stops that runner at checkpoints.
+- **Empty** (01.06 C `A4FJG`): *No projects in the list* under the same heading and actions.
+- **Switcher** (01.06 B `n9vdhp`): the sidebar's project selector opens a menu in the select
+  menu's style: RECENT (the five most recently opened projects whose folder is there, the shown one
+  checked), *All projects*, *Add project*. Choosing another project opens its Overview as a new
+  history entry (Back returns); one that cannot be opened any more leads to All projects. Rows are
+  pointer-only like the rest of the sidebar; Escape or a click outside closes the menu. Pending the
+  tabs work: the *Open in new tab* button (`NcJQ0`).
+- **Runners**: switching keeps the previous project's runner running in the background, as
+  `Runners::show` already did; All projects shows no project and stops nothing.
+
+Deviations: *Last opened* reads as relative time (*2d ago*), as *Last published* in the pipelines
+library, rather than the fixture's *Today* / *Sep 12*; the × has no tooltip (lurq has no tooltip
+for a pressable yet).
+
+Copy namespace `projects.*`.
 
 ## First project setup
 
