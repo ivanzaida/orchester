@@ -95,8 +95,9 @@ fn profile(
 }
 
 /// A project with a Codex and a Claude connection, a Builder on Codex, a published Reviewer on
-/// Claude allowing three commands, a Scout draft on Claude with commands it cannot confine, and a
-/// pipeline whose review step keeps two of the Reviewer's commands.
+/// Claude allowing three commands, a Scout draft on Claude with commands it cannot confine, an
+/// Explorer draft on Claude with network off, which Claude cannot keep, and a pipeline whose review
+/// step keeps two of the Reviewer's commands.
 fn seeded() -> Desktop {
   let desktop = Desktop::with_project();
   let mut db = ProjectDb::open(desktop.repo()).expect("project database");
@@ -123,6 +124,17 @@ fn seeded() -> Desktop {
     "Scout",
     claude,
     AgentPermissions::new(RepositoryAccess::ReadOnly, any, NetworkAccess::On),
+    false,
+  );
+  profile(
+    &mut db,
+    "Explorer",
+    claude,
+    AgentPermissions::new(
+      RepositoryAccess::ReadOnly,
+      CommandPermission::Allowed(commands(&["git"])),
+      NetworkAccess::Off,
+    ),
     false,
   );
   let review = Step {
@@ -225,6 +237,42 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
     );
   }
   assert_eq!(stops.contains(&Some("agent-network".to_owned())), network_off_enforced);
+}
+
+/// Whether the knob of the switch `id` sits at the right of its track, where it is on.
+fn switched_on(desktop: &mut Desktop, id: &str) -> bool {
+  let switch = desktop.bounds(id);
+  let knob = desktop.bounds(&format!("{id}-knob"));
+  knob.x + knob.width / 2.0 > switch.x + TRACK_WIDTH / 2.0
+}
+
+/// The switch's track width (`K8ItM`).
+const TRACK_WIDTH: f32 = 28.0;
+
+#[test]
+fn agent_permissions_locked_network_switch_shows_the_network_a_run_gets() {
+  let mut desktop = seeded();
+  permissions_of(&mut desktop, "Explorer");
+  // Explorer chose network off; Claude cannot keep commands off the network, so runs have it on.
+  assert!(shows(
+    &mut desktop,
+    "Off is unavailable on this connection: Claude Code CLI"
+  ));
+  assert!(switched_on(&mut desktop, "agent-network"));
+  let label = desktop
+    .tree
+    .get_element_by_id("agent-network")
+    .is_some_and(|switch| contains_text(switch, "On") && !contains_text(switch, "Off"));
+  assert!(label, "the switch's label says On");
+  // Locked: no Tab stop, and a press changes nothing.
+  assert!(
+    !desktop
+      .stops(MAX_STOPS, false)
+      .contains(&Some("agent-network".to_owned()))
+  );
+  desktop.press("agent-network");
+  assert!(switched_on(&mut desktop, "agent-network"));
+  assert!(!shows(&mut desktop, "Unsaved changes"));
 }
 
 #[test]

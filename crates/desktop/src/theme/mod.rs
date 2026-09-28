@@ -38,6 +38,8 @@ pub const UNPARSED_OPACITY: f32 = tokens::UNPARSED_OPACITY;
 pub const UNAVAILABLE_OPTION_OPACITY: f32 = tokens::UNAVAILABLE_OPTION_OPACITY;
 /// Opacity of a button that cannot be pressed, over its variant's own colors (`kLJJb`).
 pub const DISABLED_OPACITY: f32 = tokens::DISABLED_OPACITY;
+/// Opacity of a switch whose value is fixed, track and label as one group (`lW7Sp`).
+pub const LOCKED_SWITCH_OPACITY: f32 = tokens::LOCKED_SWITCH_OPACITY;
 
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),

@@ -253,6 +253,17 @@ impl AgentPermissions {
     })
   }
 
+  /// The network access a run on `provider` gets on `platform`: the chosen one, or on when off
+  /// cannot be enforced there (as [`Self::enforced_on`] runs it).
+  pub const fn effective_network(&self, provider: AgentProvider, platform: Platform) -> NetworkAccess {
+    match self.network {
+      NetworkAccess::Off if !support(provider, platform, PermissionOption::NetworkOff).is_enforced() => {
+        NetworkAccess::On
+      }
+      network => network,
+    }
+  }
+
   /// These permissions with every option `provider` cannot enforce on `platform` reset to the most
   /// restrictive one it can, and the options that were reset. Used when a profile's connection
   /// changes; the editor shows the resets before publishing. A setting without any enforceable

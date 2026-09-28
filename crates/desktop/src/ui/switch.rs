@@ -11,7 +11,7 @@ use lurq::{
 };
 
 use super::pressable::{Ring, keyboard_stop};
-use crate::theme::{ExtraRadius, ExtraSpacing, UNAVAILABLE_OPTION_OPACITY};
+use crate::theme::{ExtraRadius, ExtraSpacing, LOCKED_SWITCH_OPACITY};
 
 /// Track and knob sizes (`K8ItM`, knob `Y0aZS`).
 const TRACK_WIDTH: f32 = 28.0;
@@ -36,7 +36,8 @@ impl Switch {
   }
 
   /// The label in the text color and size of a dialog's body, a little further from the track: a
-  /// switch a dialog's confirmation waits for (`tpwQD` in 02.Q `LMrbK`).
+  /// switch a dialog's confirmation waits for (`tpwQD` in 02.Q `LMrbK`), or the state a setting's
+  /// switch is in (`q43RMP` in `lW7Sp`).
   pub fn emphasized(mut self) -> Self {
     self.emphasized = true;
     self
@@ -60,36 +61,26 @@ impl Switch {
     }
   }
 
-  /// The switch and its label, faded, not focusable and not flippable: the value is fixed, and the
-  /// caller says why (04.B `E1Y9KK`).
+  /// The switch and its label, faded together as one row, not focusable and not flippable: the
+  /// value is fixed, and the caller says why (04.B `lW7Sp`).
   pub fn locked(self) -> Element {
-    let (justify, knob, track) = self.look();
     let (label, gap) = self.label();
     Row::new()
       .id(self.id)
       .spacing(gap)
       .align_items(Alignment::Center)
+      .opacity(LOCKED_SWITCH_OPACITY)
       .cursor(CursorIcon::NotAllowed)
       .describe("checked", if self.on { "true" } else { "false" })
       .describe("state", "locked")
-      // Only the track fades: the value beside it stays legible (04.B `lW7Sp`).
-      .child(track_row(justify, knob, track).opacity(UNAVAILABLE_OPTION_OPACITY))
+      .child(self.track())
       .child(label)
       .into()
   }
 
-  fn look(&self) -> (Justify, PaletteColor, PaletteColor) {
-    if self.on {
-      (Justify::End, PaletteColor::TextPrimary, PaletteColor::AccentMuted)
-    } else {
-      (Justify::Start, PaletteColor::TextSecondary, PaletteColor::SurfaceRaised)
-    }
-  }
-
   /// The switch and its label; a press anywhere on them flips it.
   pub fn render(self, flip: impl Fn() + Send + Sync + 'static) -> Element {
-    let (justify, knob, track) = self.look();
-    let switch = track_row(justify, knob, track);
+    let switch = self.track();
     let (label, gap) = self.label();
     keyboard_stop(Button::empty().button(), Ring::Outer)
       .id(self.id)
@@ -103,21 +94,39 @@ impl Switch {
       .child(label)
       .into()
   }
-}
 
-fn track_row(justify: Justify, knob: PaletteColor, track: PaletteColor) -> Row {
-  Row::new()
-    .size(Dimension::Px(TRACK_WIDTH), Dimension::Px(TRACK_HEIGHT))
-    .padding(ExtraSpacing::Hair.role())
-    .align_items(Alignment::Center)
-    .justify(justify)
-    .background(track)
-    .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .rounded(ExtraRadius::Pill.role())
-    .child(
-      Row::new()
-        .size(Dimension::Px(KNOB_SIZE), Dimension::Px(KNOB_SIZE))
-        .background(knob)
-        .rounded(ExtraRadius::Pill.role()),
-    )
+  /// The track with its knob: off in the raised surface with a muted knob at the left (`K8ItM`),
+  /// on in the accent with an inverse knob at the right (`E1Y9KK`).
+  fn track(&self) -> Row {
+    let (justify, track, border, knob) = if self.on {
+      (
+        Justify::End,
+        PaletteColor::Accent,
+        PaletteColor::Accent,
+        PaletteColor::TextInverse,
+      )
+    } else {
+      (
+        Justify::Start,
+        PaletteColor::SurfaceRaised,
+        PaletteColor::Border,
+        PaletteColor::TextSecondary,
+      )
+    };
+    Row::new()
+      .size(Dimension::Px(TRACK_WIDTH), Dimension::Px(TRACK_HEIGHT))
+      .padding(ExtraSpacing::Hair.role())
+      .align_items(Alignment::Center)
+      .justify(justify)
+      .background(track)
+      .border_inside(BorderSize::Sm, border)
+      .rounded(ExtraRadius::Pill.role())
+      .child(
+        Row::new()
+          .id(format!("{}-knob", self.id))
+          .size(Dimension::Px(KNOB_SIZE), Dimension::Px(KNOB_SIZE))
+          .background(knob)
+          .rounded(ExtraRadius::Pill.role()),
+      )
+  }
 }

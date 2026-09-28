@@ -229,6 +229,54 @@ fn permissions_codex_refuses_a_command_list_and_keeps_network_on_where_it_cannot
 }
 
 #[test]
+fn permissions_effective_network_is_on_where_off_cannot_be_enforced() {
+  let offline = permissions(RepositoryAccess::ReadOnly, allowed(&["git"]), NetworkAccess::Off);
+  let online = permissions(RepositoryAccess::ReadOnly, allowed(&["git"]), NetworkAccess::On);
+  for platform in PLATFORMS {
+    assert_eq!(
+      offline.effective_network(AgentProvider::ClaudeCodeCli, platform),
+      NetworkAccess::On
+    );
+    assert_eq!(
+      online.effective_network(AgentProvider::ClaudeCodeCli, platform),
+      NetworkAccess::On
+    );
+    let enforced = offline
+      .enforced_on(AgentProvider::ClaudeCodeCli, platform)
+      .expect("enforceable");
+    assert_eq!(enforced.permissions().network(), NetworkAccess::On);
+  }
+  let codex = permissions(
+    RepositoryAccess::Write,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::Off,
+  );
+  assert_eq!(
+    codex.effective_network(AgentProvider::CodexCli, Platform::Windows),
+    NetworkAccess::On
+  );
+  assert_eq!(
+    codex.effective_network(AgentProvider::CodexCli, Platform::MacOs),
+    NetworkAccess::Off
+  );
+  // Settings that cannot run leave the network's answer alone.
+  let unconfined = permissions(
+    RepositoryAccess::ReadOnly,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::Off,
+  );
+  assert!(
+    unconfined
+      .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
+      .is_err()
+  );
+  assert_eq!(
+    unconfined.effective_network(AgentProvider::ClaudeCodeCli, Platform::Windows),
+    NetworkAccess::On
+  );
+}
+
+#[test]
 fn permissions_claude_refuses_unconfined_commands() {
   let any = permissions(
     RepositoryAccess::ReadOnly,
