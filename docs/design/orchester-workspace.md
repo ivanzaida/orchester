@@ -445,6 +445,14 @@ it in the window. Added for tabs on 2026-09-28:
   window's title after it opened.
 - macOS Cmd+click: lurq's mouse events carry Ctrl, Shift and Alt only, so the window follows the
   Cmd key's presses to tell a Cmd+click.
+- Links inside pages (2026-09-28, branch `claude/tab-links`) open the same way as the switcher's
+  rows: task, pipeline, library, profile, tool, connection, instruction, secret and pull request
+  rows, page tabs, sidebar items, breadcrumbs, the Overview's cards, the status bar's counts and
+  its activity item and popover rows, and buttons that only go to another page (*New task*,
+  *Open connections*, *Open tool*). All read the press through `ui::link::Link`. Enter or Space on
+  a focused link opens it in the current tab whatever keys are held. Submitting a form, a dialog's
+  result, a redirect after an action, *Import resources* (a dialog over the page), closing the
+  version history and *Ask agent* (which also focuses the composer) stay in the current tab.
 - The inactive tabs are mounted offstage: their pages keep their state (fields, scroll positions)
   but are not rendered, laid out or painted until the tab is active again. Each project's tasks,
   usage and runner status are read once for all its tabs.
