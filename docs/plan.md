@@ -147,7 +147,8 @@ are covered only by data tests. Verify them in the app and fix what differs from
 
 ## L · Depends on a lurq release
 
-Done on lurq branch `claude/tabs-gaps` (commits `cfb43d3`, `8c89453`, `7c0016e` on top of 0.29.0). The user releases it
+Done on lurq branch `claude/tabs-gaps` (commits `cfb43d3`, `8c89453`, `7c0016e`, plus the text-input fixes `78a6e4a`
+and `2b9f173`, on top of 0.29.0). The user releases it
 (expected 0.30.0: the popup default is a behaviour change). First task after the release: bump `lurq` in the workspace
 `Cargo.toml`, `cargo update -p lurq`, run `tools/check.ps1` and the full `form_keyboard ::`, then L1–L3.
 
@@ -177,6 +178,15 @@ lurq's popups, overlays and selects now consume the press that closes them (`Out
 No app change is expected. **Done when** the tab list (`tabs/strip/list.rs`), the project switcher, the permissions
 popover and the selects are checked: a press outside closes them without activating what is underneath, and a
 headless test covers the tab list case.
+
+### L4 · Verify text inputs after the text fixes (UI)
+
+The same lurq release fixes old text-input bugs: multi-line inputs no longer shift when a taller glyph is typed (new
+`VerticalAlign::LineBox`), a selection is the text's height instead of the whole line box, the caret sits before the
+first glyph at a line start, and the caret blinks (every 530 ms) in an idle window. Multi-line text now sits about 3px
+lower than before, at its correct baseline. No Orchester code change is expected. **Done when** an independent design
+verification of a focused multi-line field (the New task brief, a conversation composer) and of a selection in a single-
+and a multi-line input reports no blocking or major mismatches, and anything it finds is fixed or listed here.
 
 ## P · Product decisions waiting for the user
 
