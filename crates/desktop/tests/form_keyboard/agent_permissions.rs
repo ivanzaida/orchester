@@ -212,7 +212,13 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
   assert!(shows(&mut desktop, "Ask before running commands · later"));
   let network_off_enforced = cfg!(not(windows));
   assert_eq!(
-    shows(&mut desktop, "Off is unavailable on this connection: Codex CLI"),
+    shows(
+      &mut desktop,
+      concat!(
+        "Off is unavailable on this connection: Codex CLI can’t block network use by commands, ",
+        "so network stays on. The run summary says so."
+      )
+    ),
     !network_off_enforced
   );
   // Only options that can be chosen are form controls; the tabs are pointer-only.
@@ -256,7 +262,10 @@ fn agent_permissions_locked_network_switch_shows_the_network_a_run_gets() {
   // Explorer chose network off; Claude cannot keep commands off the network, so runs have it on.
   assert!(shows(
     &mut desktop,
-    "Off is unavailable on this connection: Claude Code CLI"
+    concat!(
+      "Off is unavailable on this connection: Claude Code CLI can’t block network use by commands, ",
+      "so network stays on. The run summary says so."
+    )
   ));
   assert!(switched_on(&mut desktop, "agent-network"));
   let label = desktop

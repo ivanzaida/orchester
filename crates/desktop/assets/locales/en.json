@@ -1374,7 +1374,7 @@
       "unavailable": {
         "cannotLimitCommands": "Unavailable on this connection: {{cli}} can’t limit commands to a list.",
         "cannotConfineCommands": "Unavailable on this connection: {{cli}} can’t confine commands to the worktree.",
-        "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t keep commands off the network here, so network stays on. The run summary says so."
+        "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so."
       },
       "enforcement": {
         "title": "Enforced by {{cli}}",
