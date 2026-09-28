@@ -1392,7 +1392,7 @@
         },
         "editWorktree": {
           "title": "Edit files in the task worktree",
-          "detail": "Create and change files only inside this task’s worktree."
+          "detail": "Create and change files only in this task’s worktree and the extra writable folders."
         },
         "askBefore": {
           "title": "Ask before running commands · later",
@@ -1404,7 +1404,7 @@
         },
         "any": {
           "title": "Any command in the worktree",
-          "detail": "Commands run inside the sandbox and cannot change files outside the worktree."
+          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders."
         }
       },
       "addCommand": "Add command",
