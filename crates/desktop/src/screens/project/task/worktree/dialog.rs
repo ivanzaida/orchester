@@ -26,7 +26,7 @@ use crate::{
     backdrop::backdrop,
     button::ActionButton,
     check_row::check_row,
-    field::field_error,
+    field::wrapping_field_error,
     form::{Submit, form},
     icon::Icon,
     message_text,
@@ -179,9 +179,11 @@ fn actions(ctx: &Ctx, dialog: &Dialog) -> Element {
     (false, 1) => "runs.worktree.remove.one",
     (false, _) => "runs.worktree.remove.other",
   };
+  // While git removes the worktrees the primary waits with a loader (`nf0IL` in 02.Q states `XIEn8`).
+  let glyph = if dialog.pending { Icon::Loader } else { Icon::FolderX };
   let confirm = ActionButton::new(ctx.t(label))
     .primary()
-    .icon(Icon::FolderX)
+    .icon(glyph)
     .id("remove-worktree-confirm")
     .in_form()
     .height(Dimension::Px(BUTTON_HEIGHT));
@@ -192,18 +194,22 @@ fn actions(ctx: &Ctx, dialog: &Dialog) -> Element {
   let cancel = dialog.cancel.clone();
   Row::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ACTIONS_HEIGHT))
+    // 76 high as drawn; a reason longer than two lines makes it taller rather than being cut off.
+    .min_height(Dimension::Px(ACTIONS_HEIGHT))
+    .padding_vertical(ExtraSpacing::Step.role())
     .padding_horizontal(ExtraSpacing::Rail.role())
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .with_children(dialog.error.as_ref().map(|error| {
-      Column::new()
+    // A failure takes the room left of the buttons and wraps there (`Xv3RZ`).
+    .child(match &dialog.error {
+      Some(error) => Column::new()
         .id("remove-worktree-error")
         .flex(1.0)
-        .child(field_error(&message_text(ctx, error)))
-    }))
-    .child(Spacer::new().flex(1.0))
+        .child(wrapping_field_error(&message_text(ctx, error)))
+        .into(),
+      None => Element::from(Spacer::new().flex(1.0)),
+    })
     .child(
       ActionButton::new(ctx.t("common.cancel"))
         .id("remove-worktree-cancel")

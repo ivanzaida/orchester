@@ -46,7 +46,7 @@ pub(super) fn state(id: &'static str, glyph: Icon, title: &str, text: &str, acti
 }
 
 /// A tab of a task whose latest run cannot be read, but its Summary: nothing the run did can be
-/// shown (not drawn; 02.R draws the Summary).
+/// shown (02.R2 `lmlkQ`; 02.R draws the Summary).
 pub(super) fn unreadable(ctx: &Ctx, id: &'static str, run: &Unreadable) -> Element {
   state(
     id,

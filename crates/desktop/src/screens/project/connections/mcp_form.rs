@@ -1,6 +1,7 @@
-//! Fields of the MCP server dialog, laid out like the connection dialog's (`dCLMl`): name and
-//! type, transport and who starts or reaches the server, then a program's file, folder, arguments
-//! and variables, or a URL and its bearer token. Where a secret goes is said in a notice.
+//! Fields of the MCP server dialog (`cJGKL` in 04.E `yRb2k`, 04.E2 `Qvhc6`; errors as in 04.E3
+//! `Hpycl`): name and type, transport and who starts or reaches the server, then a program's file,
+//! folder, arguments and variables, or a URL and its bearer token. Where a secret goes is said in a
+//! notice.
 
 use std::sync::Arc;
 
@@ -9,12 +10,14 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Select, Text},
+  components::{Column, Row, Select, SelectOption, Text},
   core::Signal,
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 
 use super::{
+  super::secrets::labels::environment_key,
   DialogMode,
   form::{fixed, pair, select_field, type_field},
   mcp_dialog::{BearerChoice, InsertSecret, McpDialog},
@@ -24,36 +27,41 @@ use crate::{
   messages::Message,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
-    field::{FieldNote, ValueTone, field, select_style, styled_input, text_input, value_box},
+    button::{ActionButton, select_button},
+    field::{FieldNote, field, select_style, styled_input, text_input},
     icon::Icon,
     message_text,
     notice::Notice,
   },
 };
 
-/// Field height (`Iitmk`), and the lines the argument and variable areas show before they scroll.
+/// Field height (`Iitmk`), the lines the argument and variable areas show before they scroll, and
+/// the height of *Add a variable from a secret…* (`Pdcuk`).
 const FIELD_HEIGHT: f32 = 40.0;
 const AREA_ROWS: (usize, usize) = (3, 8);
+const ADD_SECRET_HEIGHT: f32 = 30.0;
 
 impl McpDialog {
   pub(super) fn form(&self, ctx: &Ctx, errors: &McpServerErrors) -> Element {
     let editing = matches!(self.context.mode, DialogMode::EditMcp(_));
     let transport = self.transport.get();
-    let reached = match transport {
-      TransportChoice::Stdio => "connections.mcp.startedByCli",
-      TransportChoice::Http => "connections.mcp.reachedByCli",
+    // A program is started by the agent's CLI, a remote server reached by it (04.E, 04.E2 `Qvhc6`).
+    let (reached_label, reached) = match transport {
+      TransportChoice::Stdio => ("connections.mcp.property.startedBy", "connections.mcp.startedByCli"),
+      TransportChoice::Http => ("connections.mcp.property.reachedBy", "connections.mcp.reachedByCli"),
     };
+    // The secret button's focus ring reaches past the form's columns into its padding.
     let column = Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(ExtraSpacing::Rail.role())
       .spacing(ExtraSpacing::Form.role())
+      .overflow_visible()
       .child(pair(
         self.name_field(ctx, errors.name.as_ref()),
         type_field(ctx, &self.kind, editing),
       ))
       .child(pair(
         self.transport_field(ctx),
-        fixed(ctx, "mcp-started-by", "connections.mcp.property.startedBy", reached),
+        fixed(ctx, "mcp-started-by", reached_label, reached),
       ));
     let column = match transport {
       TransportChoice::Stdio => column.with_children(self.stdio_fields(ctx, errors)),
@@ -148,59 +156,68 @@ impl McpDialog {
         (
           "mcp-arguments",
           "connections.mcp.property.arguments",
-          "connections.mcp.dialog.argumentsHint",
+          hint(ctx, "connections.mcp.dialog.argumentsHint"),
         ),
         &self.arguments,
         errors.arguments.as_ref(),
       ),
       area_field(
         ctx,
-        (
-          "mcp-variables",
-          "connections.mcp.variables",
-          "connections.mcp.dialog.variablesHint",
-        ),
+        ("mcp-variables", "connections.mcp.variables", self.variables_hint(ctx)),
         &self.variables,
         errors.variables.as_ref(),
       ),
-      self.insert_secret(ctx),
     ]
   }
 
-  /// *Add a variable from a secret*: a select of the project's secrets; the chosen one becomes a
-  /// `NAME=${secret:NAME@environment}` line.
+  /// The variables hint with *Add a variable from a secret…* at its right (`w6jcyL`).
+  fn variables_hint(&self, ctx: &Ctx) -> Element {
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Md)
+      .align_items(Alignment::Center)
+      .overflow_visible()
+      .child(
+        Column::new()
+          .flex(1.0)
+          .child(hint(ctx, "connections.mcp.dialog.variablesHint")),
+      )
+      .child(self.insert_secret(ctx))
+      .into()
+  }
+
+  /// *Add a variable from a secret…* (`Pdcuk`): the project's secrets in the select menu, each by
+  /// its name with its environment under it (the menu is only as wide as the button); the chosen
+  /// one becomes a `NAME=${secret:NAME@environment}` line. Without secrets it cannot be pressed
+  /// and says so.
   fn insert_secret(&self, ctx: &Ctx) -> Element {
-    let label = ctx.t("connections.mcp.dialog.fromSecret");
     if self.context.secrets.is_empty() {
-      let none = ctx.t("connections.mcp.dialog.noSecrets");
-      let control = value_box(ctx, "mcp-add-secret", &none, ValueTone::Unavailable, None);
-      return field(&label, control, FieldNote::None);
+      return ActionButton::new(ctx.t("connections.mcp.dialog.noSecrets"))
+        .icon(Icon::KeyRound)
+        .compact()
+        .id("mcp-add-secret")
+        .height(Dimension::Px(ADD_SECRET_HEIGHT))
+        .disabled()
+        .render(ctx);
     }
-    let options = self.context.secrets.iter().map(|secret| {
-      let label = ctx.t_args(
-        "connections.mcp.secretName",
-        [
-          ("name", secret.name().as_str()),
-          ("environment", secret.environment().as_str()),
-        ],
-      );
-      (InsertSecret(Some(secret.id())), label)
-    });
-    let select = Select::new(self.insert.clone())
-      .options(options.collect::<Vec<_>>())
-      .placeholder(ctx.t("connections.mcp.dialog.addSecret"))
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(FIELD_HEIGHT))
-      .style(select_style(ctx, FIELD_HEIGHT));
-    let control = Column::new()
-      .id("mcp-add-secret")
-      .width(Dimension::Pct(100.0))
-      .child(select);
-    field(
-      &ctx.t("connections.mcp.dialog.fromSecret"),
-      control.into(),
-      FieldNote::None,
-    )
+    let options = self
+      .context
+      .secrets
+      .iter()
+      .map(|secret| {
+        SelectOption::new(InsertSecret(Some(secret.id())), secret.name().as_str())
+          .detail(ctx.t(environment_key(secret.environment())))
+      })
+      .collect();
+    let face = (Icon::KeyRound, ctx.t("connections.mcp.dialog.addSecret"));
+    Element::from(select_button(
+      ctx,
+      self.insert.clone(),
+      options,
+      face,
+      ADD_SECRET_HEIGHT,
+    ))
+    .id("mcp-add-secret")
   }
 
   fn http_fields(&self, ctx: &Ctx, errors: &McpServerErrors) -> Vec<Element> {
@@ -264,11 +281,11 @@ fn hint(ctx: &Ctx, key: &str) -> Element {
   Text::new(&ctx.t(key)).variant(ExtraTypography::Hint.role()).into()
 }
 
-/// A mono area drawn like a field, lines of `value`, with its label, error and hint, as Project
+/// A mono area drawn like a field, lines of `value`, with its label, error and `hint`, as Project
 /// settings › Environment draws its variables (`BGMgO`).
 fn area_field(
   ctx: &Ctx,
-  (id, label, hint_key): (&'static str, &str, &str),
+  (id, label, hint): (&'static str, &str, Element),
   value: &Signal<String>,
   error: Option<&Message>,
 ) -> Element {
@@ -295,7 +312,8 @@ fn area_field(
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
+    .overflow_visible()
     .child(field(&ctx.t(label), area.into(), note))
-    .child(hint(ctx, hint_key))
+    .child(hint)
     .into()
 }

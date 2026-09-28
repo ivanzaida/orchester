@@ -379,11 +379,12 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
       let (title, body) = problem_text(ctx, problem);
       plain(Icon::AlertCircle, title, "".into(), body)
     }
+    // A server the agent works without: unplugged (04.G `a2PR7K`).
     EntryKind::McpServer(server, problem) => {
       let (title, body, said) = mcp_server_text(ctx, server.as_deref(), problem);
       Shown {
         output: said.map(|said| vec![said]),
-        ..plain(Icon::Plug, title, "".into(), Some(body))
+        ..plain(Icon::Unplug, title, "".into(), Some(body))
       }
     }
     EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),

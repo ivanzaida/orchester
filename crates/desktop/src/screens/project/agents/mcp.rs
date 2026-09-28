@@ -1,5 +1,5 @@
-//! MCP servers on the Permissions tab (not drawn yet; built from the setting rows of 04.04 `T1rjv`
-//! and the switch `K8ItM`): a switch per project server says whether the profile's agents get it,
+//! MCP servers on the Permissions tab (04.F `VI4c6`, after the settings of 04.04 `T1rjv`, with the
+//! switch `K8ItM`): a switch per project server says whether the profile's agents get it,
 //! with where it runs, and why an agent would work without a chosen one (turned off, or a folder
 //! Claude Code cannot start it in). The enforcement panel's MCP rows say what the chosen CLI enforces
 //! for them (`orchester_core::permission::mcp`).

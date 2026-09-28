@@ -10,17 +10,19 @@ use lurq::{
     events::mouse_event::{MouseButton, MouseEvent},
     theme::{BorderSize, FormButtonRole, SpacingSize, TypographyStyle},
   },
-  components::{Button, Row, Text},
+  components::{Button, Row, Select, SelectOption, Text},
+  core::{Signal, signal::SignalValue},
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  node::{CursorIcon, Element, SelectPartStyle, Style, border::Border, dimension::Dimension},
 };
 
 use super::{
+  field::select_style,
   icon::{Icon, IconSize, icon},
   link::{Link, Press},
   pressable::{Ring, TAB_STOP},
 };
-use crate::theme::DISABLED_OPACITY;
+use crate::theme::{DISABLED_OPACITY, ExtraShadow};
 
 /// lurq's tab index for a control that Tab passes over.
 pub const SKIPPED_BY_TAB: i32 = -1;
@@ -246,4 +248,58 @@ fn with_interaction(button: Button, role: &FormButtonRole, in_form: bool) -> But
     .cursor(CursorIcon::Pointer)
     .hovered_style(state(role.background_hover.clone(), role.border_hover.clone()))
     .active_style(state(role.background_active.clone(), role.border_active.clone()))
+}
+
+/// A select drawn as a compact secondary button `height` high with `glyph` and `label`, e.g. *Add a
+/// variable from a secret…* (`Pdcuk` in 04.E `yRb2k`: an 11/500 label beside a 12px icon). Its face
+/// stays the same whatever is chosen, so the menu (`u0ByM`) marks no option as chosen; lurq makes
+/// it as wide as the button, so an option that needs more says the rest in its detail line. A Tab
+/// stop, with the outer focus ring while focused, like a button in a form; its parents let the ring
+/// show past them.
+pub fn select_button<T>(
+  ctx: &Ctx,
+  value: Signal<T>,
+  options: Vec<SelectOption<T>>,
+  (glyph, label): (Icon, Arc<str>),
+  height: f32,
+) -> Select<T>
+where
+  T: Clone + PartialEq + Send + Sync + 'static + SignalValue,
+  Vec<T>: SignalValue,
+{
+  let role = ctx.theme().form().button.secondary.clone();
+  let text = role.text.color.clone();
+  let face = move |_| {
+    Row::new()
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(icon(glyph, IconSize::Small, text.clone()))
+      .child(
+        Text::new(&label)
+          .variant(TypographyStyle::Link)
+          .color(text.clone())
+          .nowrap(),
+      )
+  };
+  let state = |background, border| {
+    SelectPartStyle::new()
+      .background(background)
+      .border_inside(BorderSize::Sm, border)
+  };
+  let style = select_style(ctx, height)
+    .trigger(
+      state(role.background, role.border)
+        .rounded(role.radius)
+        .padding(role.padding)
+        .min_height(height),
+    )
+    .trigger_hovered(state(role.background_hover, role.border_hover))
+    .trigger_open(state(role.background_active, role.border_active))
+    .trigger_focused(SelectPartStyle::new().box_shadow(ExtraShadow::FocusRing.role()))
+    .single_checkmark(false);
+  Select::new(value)
+    .options(options)
+    .trigger(face)
+    .height(Dimension::Px(height))
+    .style(style)
 }

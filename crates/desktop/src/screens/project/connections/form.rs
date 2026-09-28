@@ -59,7 +59,6 @@ impl ConnectionDialog {
     let project = self.context.project.project.name().as_str();
     Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(ExtraSpacing::Rail.role())
       .spacing(ExtraSpacing::Form.role())
       .child(pair(
         self.name_field(ctx),

@@ -34,7 +34,7 @@ use crate::{
 };
 
 /// The MCP servers the agent gets, read-only: they come from the profile version and are not changed for
-/// a run (not drawn yet; laid out like a setting of `G2l6MT`).
+/// a run (`mKDBS` in 02.J `NNRH8`).
 fn mcp_servers(ctx: &Ctx, props: &RunPermissionsProps) -> Element {
   let servers = &props.permissions.mcp_servers;
   let text = if servers.is_empty() {

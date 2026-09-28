@@ -2,8 +2,8 @@
 //! adding and editing an agent provider (04.02 `h6CmJ`) or a GitHub connection (04.06
 //! `D4mDB`), GitHub's details and states (04.05 `CHa9s`, 04.C1–C5) with the account panel
 //! (01.D `hNPA1`), checking a connection again when it needs attention (04.A `RZUKo`), and the
-//! project's MCP servers: their rows and details as 04.A draws an MCP connection, adding and editing
-//! one (`mcp_dialog`, not drawn yet), turning one on and off. The search is not available yet.
+//! project's MCP servers: their rows and details (04.D `QdLRd`), adding and editing one
+//! (`mcp_dialog`, 04.E `yRb2k`), turning one on and off. The search is not available yet.
 
 mod actions;
 mod dialog;

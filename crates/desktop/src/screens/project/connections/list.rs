@@ -1,4 +1,4 @@
-//! A connection in the project list (`sFtAz` as in `d9bo3`, `iYGKy`, `enoFW`): icon, name and what it
+//! A connection in the project list (`sFtAz` as in `d9bo3`, `iYGKy`, `zh2zU`): icon, name and what it
 //! runs, its type, how many agents or repositories use it, its status and a chevron. The selected
 //! row is raised.
 
@@ -135,7 +135,7 @@ pub fn github_row(
   row(content, state, link)
 }
 
-/// An MCP server (`enoFW` in 04.A `RZUKo`): how the agent's CLI reaches it, the profiles that give it
+/// An MCP server (`zAFzk`, `zh2zU`, `YHRmd` in 04.D `QdLRd`): how the agent's CLI reaches it, the profiles that give it
 /// to their agents, and whether it is on.
 pub fn mcp_row(ctx: &Ctx, server: &McpServer, state: &RowState, link: Link) -> Element {
   let usage_key = if state.uses == 1 {

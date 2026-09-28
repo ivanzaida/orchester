@@ -3,7 +3,8 @@
 //! and its `.orchester` data as staying on disk (`l3hyb` rows), and Cancel and *Remove from list*.
 //! Only the application database forgets the project; a runner it has in this session stops at
 //! checkpoints. While agents are at work in the project it cannot be removed: the dialog says so
-//! and *Remove from list* is unavailable (not drawn yet). Escape or Cancel closes it.
+//! at the left of the actions and *Remove from list* is unavailable (01.06 F `glurU`). Escape or
+//! Cancel closes it.
 
 use std::sync::Arc;
 
@@ -30,7 +31,7 @@ use crate::{
     backdrop::backdrop,
     button::ActionButton,
     check_row::check_row,
-    field::field_error,
+    field::wrapping_field_error,
     form::{Submit, form},
     icon::Icon,
     message_text,
@@ -190,18 +191,22 @@ fn actions(
   let cancel = props.open.clone();
   Row::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ACTIONS_HEIGHT))
+    // 76 high as drawn; a reason longer than two lines makes it taller rather than being cut off.
+    .min_height(Dimension::Px(ACTIONS_HEIGHT))
+    .padding_vertical(ExtraSpacing::Step.role())
     .padding_horizontal(ExtraSpacing::Rail.role())
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .with_children(problem.map(|problem| {
-      Column::new()
+    // The reason takes the room left of the buttons and wraps there (`flqtP`).
+    .child(match problem {
+      Some(problem) => Column::new()
         .id("remove-project-problem")
         .flex(1.0)
-        .child(field_error(&message_text(ctx, problem)))
-    }))
-    .child(Spacer::new().flex(1.0))
+        .child(wrapping_field_error(&message_text(ctx, problem)))
+        .into(),
+      None => Element::from(Spacer::new().flex(1.0)),
+    })
     .child(
       ActionButton::new(ctx.t("common.cancel"))
         .id("remove-project-cancel")

@@ -458,6 +458,19 @@ fn cell_label_follows_pencil() {
   assert_eq!(label.color, Color::from_hex("#A3A3A3"));
 }
 
+/// A field error that wraps beside its icon (`foNvP` in `glurU`, `eeksu` in `XIEn8`): Inter 11 in
+/// the text color, line height 1.5.
+#[test]
+fn wrapping_error_follows_pencil() {
+  let app = themed_app();
+  let error = app.theme().typography_style(ExtraTypography::WrappingError.role());
+  assert_eq!(
+    (&*error.font_family, error.font_size, error.line_height),
+    ("Inter", 11.0, 1.5)
+  );
+  assert_eq!(error.color, Color::from_hex("#EEEEEE"));
+}
+
 /// Inspector notes (`xK9v9`, `Thdx2` in `JuVaA`): Inter 10 muted, line height 1.6.
 #[test]
 fn inspector_note_follows_pencil() {

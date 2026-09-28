@@ -1,7 +1,7 @@
 //! A task whose latest run cannot be read (02.R `SUuwV`): Cancel run shown unavailable in the
 //! topbar (`asPAJ`), and as the Summary the emphasized notice (`J9tqH`), why the run's actions are
 //! unavailable (`AZI67`) and the task's other runs (`Msc86`). An earlier run that cannot be read
-//! shows the same notice below the heading of the latest run's page (not drawn yet).
+//! shows the same notice below the heading of the latest run's page (02.R3 `cP8oh`).
 
 use std::sync::Arc;
 
@@ -56,7 +56,7 @@ fn notice(ctx: &Ctx, run: &Unreadable) -> Notice {
   .emphasized()
 }
 
-/// An earlier run of the task that cannot be read, below the page heading (not drawn yet).
+/// An earlier run of the task that cannot be read, below the page heading (`hD7nI` in 02.R3 `cP8oh`).
 pub(super) fn earlier_notice(ctx: &Ctx, run: &Unreadable) -> Element {
   Column::new()
     .id(format!("task-unreadable-{}", run.id))

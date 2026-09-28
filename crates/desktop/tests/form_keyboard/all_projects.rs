@@ -10,6 +10,7 @@ use lurq::app::events::MouseButton;
 use crate::{
   github::{contains_text, shows},
   harness::{Desktop, expected},
+  task_run::{create_and_run, init_repository, programs, seed},
 };
 
 const BACK: MouseButton = MouseButton::Other(4);
@@ -193,4 +194,38 @@ fn all_projects_counts_come_from_each_project() {
       .get_element_by_id("project-row-1")
       .is_some_and(|row| !contains_text(row, "—"))
   });
+}
+
+#[test]
+fn all_projects_removal_waits_while_agents_are_at_work() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
+  create_and_run(&mut desktop, "Keep working.", "1400000");
+  desktop.wait_until("Pause run", |desktop| has(desktop, "task-pause-run"));
+  desktop.press("nav-all-projects");
+  desktop.wait_for("project-remove-0");
+  desktop.press("project-remove-0");
+  desktop.wait_until("the reason", |desktop| has(desktop, "remove-project-problem"));
+  assert!(shows(
+    &mut desktop,
+    "remove-project-problem",
+    "Agents are at work in Kontur. Remove it once its runs are paused or finished."
+  ));
+  // Remove from list cannot be pressed; the reason wraps left of the buttons (01.06 F `glurU`).
+  assert_eq!(
+    desktop.stops(2, false),
+    expected(&[Some("remove-project-cancel"), Some("remove-project-cancel")])
+  );
+  let (problem, cancel) = (
+    desktop.bounds("remove-project-problem"),
+    desktop.bounds("remove-project-cancel"),
+  );
+  assert!(
+    problem.x + problem.width <= cancel.x,
+    "{problem:?} runs under {cancel:?}"
+  );
+  assert!(
+    problem.height > cancel.height / 2.0,
+    "the reason wraps onto a second line"
+  );
 }

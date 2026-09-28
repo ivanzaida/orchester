@@ -1,4 +1,4 @@
-//! Selected MCP server's details (`pQ0DW` in 04.A `RZUKo`): name, whether it is on, how the agent's
+//! Selected MCP server's details (`OXa0o` in 04.D `QdLRd`): name, whether it is on, how the agent's
 //! CLI reaches it (type, program or endpoint, arguments, folder), how it authenticates, its
 //! variables (a secret by its name only), its tools and the profiles that give it to their agents.
 //! Orchester never talks to a server itself, so *Refresh tools* and *Test connection* are shown
@@ -38,7 +38,7 @@ use crate::{
   },
 };
 
-/// Inspector width (`pQ0DW`).
+/// Inspector width (`OXa0o`).
 const INSPECTOR_WIDTH: f32 = 344.0;
 
 type Handler = Arc<dyn Fn() + Send + Sync>;

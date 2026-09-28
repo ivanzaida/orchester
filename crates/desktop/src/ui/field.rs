@@ -56,20 +56,24 @@ pub fn field_error(text: &str) -> Element {
     .into()
 }
 
-/// [`field_error`] in a narrow column: the reason wraps within the column's width.
+/// The slot that keeps a wrapping error's icon on its first line: one 11/1.5 line (`TGURL` in
+/// 01.06 F `glurU`, `OG5pW` in 02.Q states `XIEn8`).
+const ERROR_ICON_SLOT: f32 = 16.5;
+
+/// [`field_error`] in a narrow column: the reason wraps within the column's width, and its icon
+/// stays with the first line.
 pub fn wrapping_field_error(text: &str) -> Element {
+  let slot = Row::new()
+    .height(Dimension::Px(ERROR_ICON_SLOT))
+    .align_items(Alignment::Center)
+    .child(icon(Icon::AlertCircle, IconSize::Small, PaletteColor::TextPrimary));
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
-    .align_items(Alignment::Center)
+    .align_items(Alignment::Start)
     .describe("role", "field-error")
-    .child(icon(Icon::AlertCircle, IconSize::Small, PaletteColor::TextPrimary))
-    .child(
-      Text::new(text)
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary)
-        .flex(1.0),
-    )
+    .child(slot)
+    .child(Text::new(text).variant(ExtraTypography::WrappingError.role()).flex(1.0))
     .into()
 }
 
