@@ -63,7 +63,8 @@ fn spawn(command: &Command) -> Result<Child, CommandError> {
 
 /// The process that runs `command`, ready to start: launched through what [`launch::resolve`]
 /// finds, with its arguments, directory and environment, standard input piped when the command
-/// has input (otherwise empty), output piped and no console window. For callers that stream a
+/// has input (otherwise empty), output piped and no console window. Secret variables are set last;
+/// the returned process holds their values, so it is not logged. For callers that stream a
 /// program's output instead of waiting for it, such as the runner with agent CLIs.
 pub fn prepare(command: &Command) -> Result<Process, CommandError> {
   let launch = launch::resolve(command.program());
@@ -76,6 +77,12 @@ pub fn prepare(command: &Command) -> Result<Process, CommandError> {
     .args(launch.leading_args())
     .args(command.args())
     .envs(command.env().iter().map(|(key, value)| (key, value)))
+    .envs(
+      command
+        .secret_env()
+        .iter()
+        .map(|variable| (variable.name(), variable.expose())),
+    )
     .stdin(if command.stdin().is_some() {
       Stdio::piped()
     } else {

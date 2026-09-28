@@ -31,6 +31,7 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
     platform,
     resume: None,
     output_schema: None,
+    mcp: None,
   }
 }
 

@@ -7,17 +7,17 @@
 use serde_json::Value;
 
 use super::{AgentEvent, CommandStatus, FileChange, FileChangeKind, OutputStream};
-use crate::run::TokenUsage;
+use crate::{connection::mcp::McpServerProblem, run::TokenUsage};
 
 /// The event one line of Codex output reports. Standard error carries Codex's own diagnostics,
-/// which are kept as raw lines.
+/// which are kept as raw lines, except that an MCP server did not start.
 pub fn parse_codex_line(stream: OutputStream, line: &str) -> AgentEvent {
   let raw = || AgentEvent::Raw {
     stream,
     line: line.to_owned(),
   };
   if stream == OutputStream::Stderr {
-    return raw();
+    return mcp_failure(line).unwrap_or_else(raw);
   }
   let Ok(value) = serde_json::from_str::<Value>(line) else {
     return raw();
@@ -37,9 +37,10 @@ fn parse_event(value: &Value) -> Option<AgentEvent> {
     "turn.failed" => Some(AgentEvent::TurnFailed {
       message: readable(&text(value.get("error")?, "message")?),
     }),
-    "error" => Some(AgentEvent::Error {
-      message: readable(&text(value, "message")?),
-    }),
+    "error" => {
+      let message = readable(&text(value, "message")?);
+      Some(mcp_failure(&message).unwrap_or(AgentEvent::Error { message }))
+    }
     "item.started" => started_item(value.get("item")?),
     "item.completed" => completed_item(value.get("item")?),
     _ => None,
@@ -139,4 +140,32 @@ fn readable(message: &str) -> String {
     current = next.filter(Value::is_object);
   }
   found.unwrap_or_else(|| message.to_owned())
+}
+
+/// Codex's report that an MCP server did not start, which is not an error of the turn. Codex 0.139
+/// logged `MCP startup failed: <reason>` on standard error without the server's name (probe
+/// 2026-09-28, not signed in); its source reports "MCP client for `<server>` failed to start:
+/// <reason>" as an error event, which was not observed.
+fn mcp_failure(message: &str) -> Option<AgentEvent> {
+  const NAMED: &str = "MCP client for `";
+  const NAMED_END: &str = "` failed to start";
+  const UNNAMED: &str = "MCP startup failed: ";
+  if let Some(start) = message.find(NAMED) {
+    let rest = &message[start + NAMED.len()..];
+    let (server, after) = rest.split_once(NAMED_END)?;
+    let detail = after.trim_start_matches(':').trim();
+    return Some(AgentEvent::McpServer {
+      server: Some(server.to_owned()),
+      problem: McpServerProblem::FailedToStart {
+        detail: (!detail.is_empty()).then(|| detail.to_owned()),
+      },
+    });
+  }
+  let start = message.find(UNNAMED)?;
+  Some(AgentEvent::McpServer {
+    server: None,
+    problem: McpServerProblem::FailedToStart {
+      detail: Some(message[start + UNNAMED.len()..].trim().to_owned()),
+    },
+  })
 }

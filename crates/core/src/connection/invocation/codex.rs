@@ -2,13 +2,13 @@
 //!
 //! `codex -a never exec --json --ignore-user-config --ignore-rules -m <model>
 //!  [-c model_reasoning_effort=<e>] --sandbox <mode> [-c windows.sandbox=elevated]
-//!  [-c sandbox_workspace_write.network_access=true] [--output-schema <file>] -C <worktree> -`
+//!  [-c sandbox_workspace_write.network_access=true] [<MCP servers>] [--output-schema <file>] -C <worktree> -`
 //!
 //! and continues a session after a pause or a limit with
 //!
 //! `codex -a never exec resume --json --ignore-user-config --ignore-rules -m <model>
 //!  [-c model_reasoning_effort=<e>] -c sandbox_mode=<mode> [-c windows.sandbox=elevated]
-//!  [-c sandbox_workspace_write.network_access=true] <session> -`
+//!  [-c sandbox_workspace_write.network_access=true] [<MCP servers>] <session> -`
 //!
 //! in the worktree as the process's working directory.
 //!
@@ -22,7 +22,8 @@
 //!   cannot enforce a command list. Network access is a setting of the `workspace-write` sandbox only; the `read-only`
 //!   sandbox has none.
 //! - `--ignore-user-config` and `--ignore-rules` keep the user's own configuration (MCP servers, default model,
-//!   execution rules) out of the run.
+//!   execution rules) out of the run. The MCP servers the profile chooses are passed as configuration overrides
+//!   ([`CodexMcp`]), their secrets through the process environment only.
 //! - The prompt goes on standard input (`-`); free-form text in arguments would not survive the `.cmd` launcher on
 //!   Windows.
 //! - The environment is cleaned: see [`super::agent_environment`].
@@ -32,7 +33,7 @@
 
 use std::{ffi::OsString, path::Path};
 
-use super::{InvocationError, Platform, agent_command};
+use super::{CodexMcp, InvocationError, Platform, agent_command};
 use crate::{
   command::Command,
   permission::NetworkAccess,
@@ -56,6 +57,8 @@ pub struct CodexInvocation<'a> {
   pub resume: Option<&'a str>,
   /// The file holding the step result schema, for a new session.
   pub output_schema: Option<&'a Path>,
+  /// The MCP servers the invocation gives the agent, if any.
+  pub mcp: Option<&'a CodexMcp>,
 }
 
 impl CodexInvocation<'_> {
@@ -95,6 +98,9 @@ impl CodexInvocation<'_> {
       args.push("-c".into());
       args.push("sandbox_workspace_write.network_access=true".into());
     }
+    if let Some(mcp) = self.mcp {
+      args.extend(mcp.args().iter().map(OsString::from));
+    }
     match self.resume {
       Some(session) => args.push(session.into()),
       None => {
@@ -123,7 +129,7 @@ impl CodexInvocation<'_> {
       self.args(),
       self.worktree,
       prompt,
-      (environment, project),
+      (environment, project, self.mcp.map_or(&[][..], CodexMcp::secrets)),
     )
   }
 }

@@ -7,6 +7,7 @@
 
 pub mod capability;
 pub mod claude;
+pub mod mcp;
 mod narrow;
 
 use std::fmt;

@@ -57,7 +57,7 @@ impl Launch {
   }
 
   /// Refuses `args` that `cmd.exe` would change on the way to a script's program.
-  pub(crate) fn check_args(&self, args: &[String]) -> Result<(), CommandError> {
+  pub fn check_args(&self, args: &[String]) -> Result<(), CommandError> {
     if self.via != Via::CommandScript {
       return Ok(());
     }

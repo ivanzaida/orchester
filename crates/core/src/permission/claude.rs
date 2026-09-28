@@ -11,6 +11,8 @@
 //!   probe: it can change files, so a read-only step must not have it).
 //! - Network off cannot be enforced (commands keep network access, and Claude Code's own sandbox is not supported on
 //!   Windows), so network stays on; when off was chosen the web tools are still removed.
+//! - The tools of the MCP servers the invocation gives the agent are allowed with one `mcp__<server>` rule per server;
+//!   without a rule, print mode denies them. The servers themselves run outside these permissions.
 //! - The disallowed list repeats what `--tools` leaves out that the permissions deny, so a tool list that grows in a
 //!   later CLI version does not widen them.
 //!
@@ -18,14 +20,16 @@
 //! behaviour of these flags with a model turn is unverified: the probe's CLI was not signed in.
 
 use super::{CommandPermission, NetworkAccess, RepositoryAccess, capability::EnforcedPermissions};
+use crate::connection::mcp::McpServerName;
 
 const READ_TOOLS: [&str; 4] = ["Read", "Glob", "Grep", "TodoWrite"];
 const EDIT_TOOLS: [&str; 3] = ["Edit", "Write", "NotebookEdit"];
 const WEB_TOOLS: [&str; 2] = ["WebFetch", "WebSearch"];
 const COMMAND_TOOL: &str = "Bash";
 
-/// The permission arguments of a Claude Code invocation that runs with `enforced`.
-pub fn permission_args(enforced: &EnforcedPermissions) -> Vec<String> {
+/// The permission arguments of a Claude Code invocation that runs with `enforced` and gives the agent the MCP
+/// servers `mcp`.
+pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName]) -> Vec<String> {
   let permissions = enforced.permissions();
   let commands = match permissions.commands() {
     CommandPermission::Allowed(commands) => commands.entries(),
@@ -65,9 +69,10 @@ pub fn permission_args(enforced: &EnforcedPermissions) -> Vec<String> {
     args.push("--disallowedTools".to_owned());
     args.extend(denied.into_iter().map(str::to_owned));
   }
-  if !commands.is_empty() {
+  if !commands.is_empty() || !mcp.is_empty() {
     args.push("--allowedTools".to_owned());
     args.extend(commands.iter().map(|entry| format!("{COMMAND_TOOL}({entry}:*)")));
+    args.extend(mcp.iter().map(|server| format!("mcp__{server}")));
   }
   args
 }

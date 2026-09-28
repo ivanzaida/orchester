@@ -46,14 +46,20 @@ pub enum VaultError {
   TooLong { max: u32 },
   #[error("the system keychain failed: {0}")]
   Failed(String),
+  /// The keychain has no value under the key: it was removed, or never stored on this computer.
+  #[error("the system keychain has no value for this secret")]
+  NotFound,
 }
 
 /// The OS keychain: the only place a secret value is kept (`docs/architecture/storage.md`,
-/// "secrets live only in the OS keychain"). The desktop writes and removes values; reading them
-/// is left to the runner, at tool-call time, once tools can use secrets.
+/// "secrets live only in the OS keychain"). The desktop writes and removes values; the runner
+/// reads them when an agent starts, for the MCP servers the agent gets.
 pub trait SecretVault: Send + Sync {
   /// Stores `value` under `key`, replacing a value stored there before.
   fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError>;
+
+  /// The value under `key`; [`VaultError::NotFound`] when there is none.
+  fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError>;
 
   /// Removes the value under `key`. A key without a value is not an error, so removing twice
   /// succeeds.

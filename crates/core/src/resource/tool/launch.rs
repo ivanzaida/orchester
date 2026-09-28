@@ -10,7 +10,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use super::command::{CommandAction, CommandArg, CommandEnvironment, ProgramLocation};
+use super::command::{CommandAction, CommandArg, CommandEnvironment, CommandProgram, ProgramLocation};
 use crate::{
   command::Command,
   connection::invocation::{Platform, agent_environment},
@@ -19,12 +19,13 @@ use crate::{
 /// Extensions Windows starts a program file by, in the order they are tried after a bare name.
 const WINDOWS_EXTENSIONS: [&str; 4] = ["exe", "cmd", "bat", "com"];
 
-impl CommandAction {
+impl CommandProgram {
   /// Files the program may be on `platform`, in search order: a bare name in each folder of
   /// `path` (the `PATH` the program starts with), a relative path in `worktree`, an absolute path
   /// as it is. On Windows a name without one of the program extensions is also tried with each.
-  pub fn program_candidates(&self, worktree: &Path, path: Option<&OsStr>, platform: Platform) -> Vec<PathBuf> {
-    let bases: Vec<PathBuf> = match self.program().location() {
+  /// Command tools and MCP servers look their programs up this way.
+  pub fn candidates(&self, worktree: &Path, path: Option<&OsStr>, platform: Platform) -> Vec<PathBuf> {
+    let bases: Vec<PathBuf> = match self.location() {
       ProgramLocation::OnPath(name) => path
         .map(|path| {
           std::env::split_paths(path)
@@ -40,6 +41,13 @@ impl CommandAction {
       .into_iter()
       .flat_map(|base| with_extensions(base, platform))
       .collect()
+  }
+}
+
+impl CommandAction {
+  /// Files the program may be on `platform`; see [`CommandProgram::candidates`].
+  pub fn program_candidates(&self, worktree: &Path, path: Option<&OsStr>, platform: Platform) -> Vec<PathBuf> {
+    self.program().candidates(worktree, path, platform)
   }
 
   /// The `PATH` the program is looked up in and starts with: the tool's own `PATH` variable when it
