@@ -26,7 +26,7 @@ use super::{
   Scheduler,
   control::{Ack, Control, answer},
   failed, idle,
-  prepare::Prepared,
+  prepare::{self, Prepared},
   run::{ExecutionError, RunTask},
   step::Active,
 };
@@ -141,7 +141,8 @@ fn merged(db: &ProjectDb, run: RunId) -> Result<bool, Rejection> {
 }
 
 /// Follows up `run`, which succeeded, for the oldest message queued for one of its agents; `None`
-/// when no queued message reaches one.
+/// when no queued message reaches one. Its agent continues in the run's worktree, so a run whose
+/// worktree was removed is refused and keeps its messages queued.
 fn follow_up(db: &mut ProjectDb, root: &Path, mut run: Run) -> Result<Option<Prepared>, Rejection> {
   let messages = db
     .messages(run.task())
@@ -149,6 +150,9 @@ fn follow_up(db: &mut ProjectDb, root: &Path, mut run: Run) -> Result<Option<Pre
   let Some(step) = conversation::follow_up_step(&run, &messages) else {
     return Ok(None);
   };
+  // Refused before the run changes: a follow-up without its worktree would be recorded as running
+  // with no agent at work.
+  prepare::existing_worktree(root, run.id())?;
   let events = run.follow_up(&step, Timestamp::now()).map_err(idle::rejection)?;
   idle::store(db, &run, &events)?;
   tracing::info!(run = %run.id(), %step, "follow-up started");

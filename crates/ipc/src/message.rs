@@ -113,8 +113,9 @@ pub enum Command {
   /// the run's next invocation boundary. A step waiting for an answer to its agent's question
   /// resumes now; a run that succeeded works again on a follow-up of its last agent step (Ask
   /// agent); an agent at work reads them once its turn is over; a paused or stopped run keeps them
-  /// queued until it continues. Answered with [`Reply::Accepted`] once that is arranged, or
-  /// [`Rejection::RunEnded`] for a run that failed or was cancelled.
+  /// queued until it continues. Answered with [`Reply::Accepted`] once that is arranged,
+  /// [`Rejection::RunEnded`] for a run that failed, was cancelled or was merged, or
+  /// [`Rejection::WorktreeRemoved`] when the run's worktree is gone; the messages then stay queued.
   DeliverMessages { run: RunId },
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes
   /// the connection.
@@ -283,6 +284,9 @@ pub enum Rejection {
   RunNotInterrupted,
   /// The run has ended: there is nothing to cancel, and no agent reads messages to it.
   RunEnded,
+  /// The run's worktree was removed, so its agent cannot continue there: a follow-up (Ask agent)
+  /// is refused before the run changes, and its messages stay queued.
+  WorktreeRemoved,
   /// The run stopped at `limit`; it continues only with a raised limit.
   LimitNotRaised {
     limit: RunLimit,

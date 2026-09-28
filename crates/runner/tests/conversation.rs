@@ -4,7 +4,8 @@
 //! Ask agent after a run succeeded continues the last agent step's session and records a new
 //! checkpoint; a run waiting for an answer cancels; a message written before the run reaches its first
 //! step; a message written to a run ready for review while no runner was attached follows it up once
-//! one attaches, and one to a merged, failed or cancelled run stays queued. Needs `git`.
+//! one attaches, and one to a merged, failed or cancelled run stays queued; Ask agent is refused once
+//! the run's worktree was removed. Needs `git`.
 //! Run with `cargo test -p orchester-runner --features test-agent --test conversation conversation`.
 
 mod support;
@@ -438,6 +439,32 @@ async fn conversation_messages_to_a_merged_failed_or_cancelled_run_stay_queued_w
       .expect("stored");
     assert_eq!(queued.delivery(), Some(Delivery::Queued));
   }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn conversation_ask_agent_is_refused_once_the_run_s_worktree_was_removed() {
+  let (project, scheduler, _, ready) = ended_run("Append one line.").await;
+  let (root, id) = (project.repo.path(), ready.id());
+  let worktree = root.join(".orchester").join("worktrees").join(id.to_string());
+  git(root, &["worktree", "remove", worktree.to_str().expect("a UTF-8 path")]);
+  let message = send(root, project.task, Some(id), "Add a second line.");
+  assert_eq!(scheduler.deliver_messages(id).await, Err(Rejection::WorktreeRemoved));
+  drop(scheduler);
+  // Nor does a runner that attaches follow it up.
+  let (next, _events) = support::scheduler(root);
+  next
+    .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .expect("attached");
+  assert!(next.active_runs().is_empty());
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(db.run(id).expect("read").expect("run"), ready, "the run is as it was");
+  assert_eq!(db.invocations(id).expect("invocations").len(), 1);
+  let stored = conversation(root, project.task);
+  let queued = stored
+    .iter()
+    .find(|stored| stored.id() == message.id())
+    .expect("stored");
+  assert_eq!(queued.delivery(), Some(Delivery::Queued));
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -62,6 +62,15 @@ impl Leftovers {
   pub fn uncommitted(&self) -> usize {
     self.worktrees.iter().map(|worktree| worktree.uncommitted.len()).sum()
   }
+
+  /// Whether the run's own worktree is still there. Its agent works in it when it is asked again,
+  /// so once it was removed (or its folder deleted) no agent of the run can continue.
+  pub fn keeps_run_worktree(&self) -> bool {
+    self
+      .worktrees
+      .iter()
+      .any(|worktree| worktree.owner == WorktreeOwner::Run && !worktree.missing)
+  }
 }
 
 /// Why something was not cleared.
