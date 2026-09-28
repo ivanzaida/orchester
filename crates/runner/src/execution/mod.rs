@@ -134,6 +134,22 @@ impl Scheduler {
       .collect()
   }
 
+  /// Waits for the run tasks registered when called to end, without stopping them. Closing each
+  /// task's control receiver signals that its final state and agent work have settled.
+  pub async fn wait_for_current_tasks(&self) {
+    let controls: Vec<_> = self
+      .inner
+      .active
+      .lock()
+      .values()
+      .filter(|run| !run.ended())
+      .map(|run| run.control.clone())
+      .collect();
+    for control in controls {
+      control.closed().await;
+    }
+  }
+
   /// Whether the runner has no work: no run executes (an agent at work, a step waiting for an
   /// agent slot, a checkpoint being saved) and no request that may execute one again is under way.
   pub fn is_idle(&self) -> bool {

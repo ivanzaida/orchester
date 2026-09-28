@@ -20,7 +20,9 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, killed_mid_run, project, reported, scheduler, wait_for, wait_for_turns};
+use self::support::{
+  PATIENCE, Setup, killed_mid_run, project, reported, scheduler, wait_for, wait_for_idle, wait_for_turns,
+};
 
 fn slots(count: u32) -> NonZeroU32 {
   NonZeroU32::new(count).expect("above zero")
@@ -335,12 +337,6 @@ async fn lifecycle_scheduler_is_idle_only_while_no_run_executes() {
   let run = start(&scheduler, project.task);
   assert!(!scheduler.is_idle(), "a run executes");
   wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
-  let settled = async {
-    while !scheduler.is_idle() {
-      tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-  };
-  tokio::time::timeout(PATIENCE, settled)
-    .await
-    .expect("idle once the run ended");
+  wait_for_idle(&scheduler).await;
+  assert!(scheduler.is_idle(), "the settled run leaves the runner idle");
 }

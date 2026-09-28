@@ -10,7 +10,7 @@
 
 mod support;
 
-use std::{path::Path, time::Duration};
+use std::path::Path;
 
 use orchester_core::{
   connection::AgentProvider,
@@ -28,7 +28,8 @@ use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
 use self::support::{
-  PATIENCE, Setup, StepSpec, TestProject, git, project, reported, scheduler, tools::ToolSpec, wait_for, wait_for_turns,
+  PATIENCE, Setup, StepSpec, TestProject, git, project, reported, scheduler, tools::ToolSpec, wait_for, wait_for_idle,
+  wait_for_turns,
 };
 
 fn codex(brief: &'static str) -> TestProject {
@@ -74,18 +75,6 @@ fn agent_messages(messages: &[Message]) -> Vec<(AgentMessage, String)> {
       Sender::Person { .. } => None,
     })
     .collect()
-}
-
-/// Waits until no task executes a run of `scheduler`.
-async fn idle(scheduler: &Scheduler) {
-  let settled = async {
-    while !scheduler.active_runs().is_empty() {
-      tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-  };
-  tokio::time::timeout(PATIENCE, settled)
-    .await
-    .expect("the run's task ends while it waits");
 }
 
 fn ended(run: &Run) -> bool {
@@ -167,7 +156,7 @@ async fn a_question_waits_and_the_answer_resumes_the_session(provider: AgentProv
   assert!(asked[0].awaits_answer(&waiting, &asked));
   assert_eq!(questions(&mut events), [("ORC-1".to_owned(), "Builder".to_owned())]);
   // The waiting run holds no agent slot: its task has ended.
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
 
   let answer = send(root, project.task, Some(id), "Yes, keep it.");
   scheduler.deliver_messages(id).await.expect("the step resumes");
@@ -219,7 +208,7 @@ async fn ask_agent_follows_up_a_run_ready_for_review(provider: AgentProvider) {
   let ready = wait_for(root, &mut events, id, ended).await;
   assert_eq!(ready.status(), &RunStatus::Succeeded);
   let reviewed = ready.last_checkpoint().expect("a checkpoint").revision().clone();
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
 
   send(root, project.task, Some(id), "Add a second line.");
   scheduler.deliver_messages(id).await.expect("followed up");
@@ -282,7 +271,7 @@ async fn conversation_a_run_waiting_for_an_answer_cancels_and_takes_no_message_a
     .start_run(IdempotencyKey::generate(), project.task)
     .expect("the run starts");
   wait_for(root, &mut events, id, Run::waits_for_a_person).await;
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
   scheduler.cancel_run(id).await.expect("cancelled");
   let run = wait_for(root, &mut events, id, ended).await;
   assert_eq!(run.status(), &RunStatus::Cancelled);
@@ -311,7 +300,7 @@ async fn conversation_an_answer_written_without_a_runner_resumes_the_step_when_o
     .start_run(IdempotencyKey::generate(), project.task)
     .expect("the run starts");
   wait_for(root, &mut events, id, Run::waits_for_a_person).await;
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
   drop(scheduler);
   // No runner is attached: the desktop stores the answer, and nobody is told.
   send(root, project.task, Some(id), "Yes, keep it.");
@@ -344,7 +333,7 @@ async fn ended_run(brief: &'static str) -> (TestProject, Scheduler, mpsc::Unboun
     .start_run(IdempotencyKey::generate(), project.task)
     .expect("the run starts");
   let run = wait_for(&root, &mut events, id, ended).await;
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
   (project, scheduler, events, run)
 }
 
@@ -366,11 +355,11 @@ async fn conversation_a_message_written_without_a_runner_follows_up_the_ready_ru
     .expect("attached again");
   let run = wait_for(root, &mut events, id, |run| ended(run) && followed_up(run)).await;
   assert_eq!(run.status(), &RunStatus::Succeeded, "ready for review again");
-  idle(&next).await;
+  wait_for_idle(&next).await;
   next
     .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
     .expect("attached once more");
-  idle(&next).await;
+  wait_for_idle(&next).await;
   let db = ProjectDb::open(root).expect("open");
   assert_eq!(db.invocations(id).expect("invocations").len(), 2, "one follow-up");
   let prompt = reported(&db, id, "prompt| ");
@@ -402,7 +391,7 @@ async fn conversation_messages_to_a_merged_failed_or_cancelled_run_stay_queued_w
       .start_run(IdempotencyKey::generate(), project.task)
       .expect("the run starts");
     wait_for(project.repo.path(), &mut events, id, Run::waits_for_a_person).await;
-    idle(&scheduler).await;
+    wait_for_idle(&scheduler).await;
     (project, scheduler, events, id)
   };
   cancelled_scheduler.cancel_run(waiting).await.expect("cancelled");
@@ -501,7 +490,7 @@ async fn conversation_a_message_no_agent_read_before_the_run_succeeded_follows_i
   let stored = conversation(root, project.task);
   assert!(matches!(stored[0].delivery(), Some(Delivery::Acknowledged { .. })));
   // The follow-up's task counted the run as executed until it succeeded again.
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

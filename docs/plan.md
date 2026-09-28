@@ -77,12 +77,6 @@ store retries a read while a crashed runner's shared memory is still mapped (`cr
 `--test-threads=16`, or kept with a comment saying why. Tests: `cargo test -p orchester-desktop --test form_keyboard
 lifecycle`, then the full `form_keyboard ::`.
 
-### T2 · Poll-free plan tests (non-UI)
-
-`crates/runner/tests/plans.rs` has an `idle()` helper that polls `active_runs()` with a 20 ms sleep. Wait on an observed
-event or state instead, with a bounded timeout. **Done when** no test in `crates/runner/tests/` sleeps to wait for state.
-Tests: all runner test binaries with `--features test-agent`.
-
 ### T3 · Serialize the remaining run request fallbacks (non-UI)
 
 `continue_runs` and reconnect continuation are synchronous and do not take the continue lock; the pause, cancel and
@@ -198,3 +192,5 @@ workaround.
 ## Done
 
 Move finished tasks here: `ID · title · commit or branch`.
+
+T2 · Poll-free plan tests · branch `codex/poll-free-plan-tests`.
