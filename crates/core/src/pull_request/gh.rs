@@ -82,7 +82,7 @@ enum Check {
 /// Without `statusCheckRollup` in the output a pull request has no checks until
 /// [`PullRequest::with_checks`] gives it the counted ones.
 pub fn parse_gh_pr_list(repo: &GitHubRepo, output: &CommandOutput) -> Result<Vec<PullRequest>, RepositoryError> {
-  if !output.success {
+  if !output.success() {
     return Err(classify_failure(repo, &output.stderr));
   }
   let listed: Vec<Listed> =
@@ -193,7 +193,7 @@ pub fn parse_gh_rate_limit(repo: &GitHubRepo, output: &CommandOutput) -> Result<
     /// Unix seconds.
     reset: i64,
   }
-  if !output.success {
+  if !output.success() {
     return Err(classify_failure(repo, &output.stderr));
   }
   let limits: Limits = serde_json::from_str(output.stdout.trim()).map_err(|error| unrecognized(&error.to_string()))?;

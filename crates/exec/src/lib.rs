@@ -6,7 +6,6 @@
 
 mod console;
 
-pub use console::hide_window;
 pub mod launch;
 #[cfg(unix)]
 pub mod process_group;
@@ -50,7 +49,7 @@ impl CommandRunner for ProcessRunner {
       joined_input(writer)?;
     }
     Ok(CommandOutput {
-      success: status.success(),
+      code: status.code(),
       stdout: joined(stdout)?,
       stderr: joined(stderr)?,
     })

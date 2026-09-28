@@ -66,7 +66,7 @@ pub(super) struct TabContext<'a> {
 }
 
 pub(super) fn conversation_tab(ctx: &mut Ctx, detail: &Arc<TaskDetail>, tab: &TabContext<'_>) -> Element {
-  let conversation = Conversation::of(detail, tab.lost.is_some());
+  let conversation = Conversation::of(detail, tab.lost.is_some(), tab.leftovers);
   let open = conversation.state.takes_messages();
   let props = ConversationProps {
     repo_root: tab.repo_root.to_path_buf(),

@@ -3,7 +3,9 @@
 //! session; a question makes its step wait without an agent slot and the answer resumes the session;
 //! Ask agent after a run succeeded continues the last agent step's session and records a new
 //! checkpoint; a run waiting for an answer cancels; a message written before the run reaches its first
-//! step. Needs `git`.
+//! step; a message written to a run ready for review while no runner was attached follows it up once
+//! one attaches, and one to a merged, failed or cancelled run stays queued; Ask agent is refused once
+//! the run's worktree was removed. Needs `git`.
 //! Run with `cargo test -p orchester-runner --features test-agent --test conversation conversation`.
 
 mod support;
@@ -14,9 +16,10 @@ use orchester_core::{
   connection::AgentProvider,
   conversation::{AgentMessage, Delivery, Message, MessageBody, Recipient, Sender},
   id::{IdempotencyKey, RunId, TaskId},
+  integration::{MergeKind, RunMerge},
   resource::{InjectionEvent, StepKey},
-  run::{AttemptReason, Run, RunStatus, StepStatus, WaitReason},
-  store::{ActivityStore, ConversationStore, RunStore},
+  run::{AttemptReason, BranchName, Run, RunStatus, StepStatus, WaitReason},
+  store::{ActivityStore, ConversationStore, MergeStore, RunStore},
   time::Timestamp,
 };
 use orchester_ipc::{AttachSession, Event, Rejection};
@@ -322,6 +325,146 @@ async fn conversation_an_answer_written_without_a_runner_resumes_the_step_when_o
   assert_eq!(db.invocations(id).expect("invocations").len(), 2);
   let prompt = reported(&db, id, "prompt| ");
   assert!(prompt.iter().any(|line| line == "Yes, keep it."), "{prompt:?}");
+}
+
+fn followed_up(run: &Run) -> bool {
+  matches!(
+    run.current_attempt().map(|attempt| attempt.reason()),
+    Some(AttemptReason::FollowUp { .. })
+  )
+}
+
+/// A run of a new project with `brief`, once it has ended and no task executes it any more, with the
+/// project and its events.
+async fn ended_run(brief: &'static str) -> (TestProject, Scheduler, mpsc::UnboundedReceiver<Event>, Run) {
+  let project = codex(brief);
+  let root = project.repo.path().to_path_buf();
+  let (scheduler, mut events) = scheduler(&root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .expect("the run starts");
+  let run = wait_for(&root, &mut events, id, ended).await;
+  idle(&scheduler).await;
+  (project, scheduler, events, run)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn conversation_a_message_written_without_a_runner_follows_up_the_ready_run_once_one_attaches() {
+  let (project, scheduler, _, ready) = ended_run("Append one line.").await;
+  assert_eq!(ready.status(), &RunStatus::Succeeded);
+  let (root, id) = (project.repo.path(), ready.id());
+  drop(scheduler);
+  // No runner is attached: the desktop stores the message, and nobody is told.
+  send(root, project.task, Some(id), "Add a second line.");
+  let (next, mut events) = support::scheduler(root);
+  next
+    .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .expect("attached");
+  // Attaching again while the follow-up works starts no second one.
+  next
+    .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .expect("attached again");
+  let run = wait_for(root, &mut events, id, |run| ended(run) && followed_up(run)).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded, "ready for review again");
+  idle(&next).await;
+  next
+    .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .expect("attached once more");
+  idle(&next).await;
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(db.invocations(id).expect("invocations").len(), 2, "one follow-up");
+  let prompt = reported(&db, id, "prompt| ");
+  assert!(prompt.iter().any(|line| line == "Add a second line."), "{prompt:?}");
+  let stored = conversation(root, project.task);
+  assert!(matches!(stored[0].delivery(), Some(Delivery::Acknowledged { .. })));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn conversation_messages_to_a_merged_failed_or_cancelled_run_stay_queued_when_a_runner_attaches() {
+  let (merged, merged_scheduler, _, succeeded) = ended_run("Append one line.").await;
+  let checkpoint = succeeded.last_checkpoint().expect("a checkpoint").revision().clone();
+  ProjectDb::open(merged.repo.path())
+    .expect("open")
+    .save_run_merge(&RunMerge {
+      run: succeeded.id(),
+      into: BranchName::new("main").expect("branch"),
+      revision: checkpoint,
+      kind: MergeKind::FastForward,
+      merged_at: Timestamp::now(),
+    })
+    .expect("merged");
+  let (failed, failed_scheduler, _, failure) = ended_run("Please fail.").await;
+  assert!(matches!(failure.status(), RunStatus::Failed(_)));
+  let (cancelled, cancelled_scheduler, mut events, waiting) = {
+    let project = codex("Ask first.");
+    let (scheduler, mut events) = scheduler(project.repo.path());
+    let id = scheduler
+      .start_run(IdempotencyKey::generate(), project.task)
+      .expect("the run starts");
+    wait_for(project.repo.path(), &mut events, id, Run::waits_for_a_person).await;
+    idle(&scheduler).await;
+    (project, scheduler, events, id)
+  };
+  cancelled_scheduler.cancel_run(waiting).await.expect("cancelled");
+  wait_for(cancelled.repo.path(), &mut events, waiting, ended).await;
+  let runs = [
+    (merged, merged_scheduler, succeeded.id()),
+    (failed, failed_scheduler, failure.id()),
+    (cancelled, cancelled_scheduler, waiting),
+  ];
+  for (project, scheduler, id) in runs {
+    let root = project.repo.path();
+    drop(scheduler);
+    let before = ProjectDb::open(root)
+      .expect("open")
+      .run(id)
+      .expect("read")
+      .expect("run");
+    let message = send(root, project.task, Some(id), "Add a second line.");
+    let (next, _events) = support::scheduler(root);
+    next
+      .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+      .expect("attached");
+    assert!(next.active_runs().is_empty(), "nothing executes {:?}", before.status());
+    let after = ProjectDb::open(root)
+      .expect("open")
+      .run(id)
+      .expect("read")
+      .expect("run");
+    assert_eq!(after, before, "the run is as it was");
+    let stored = conversation(root, project.task);
+    let queued = stored
+      .iter()
+      .find(|stored| stored.id() == message.id())
+      .expect("stored");
+    assert_eq!(queued.delivery(), Some(Delivery::Queued));
+  }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn conversation_ask_agent_is_refused_once_the_run_s_worktree_was_removed() {
+  let (project, scheduler, _, ready) = ended_run("Append one line.").await;
+  let (root, id) = (project.repo.path(), ready.id());
+  let worktree = root.join(".orchester").join("worktrees").join(id.to_string());
+  git(root, &["worktree", "remove", worktree.to_str().expect("a UTF-8 path")]);
+  let message = send(root, project.task, Some(id), "Add a second line.");
+  assert_eq!(scheduler.deliver_messages(id).await, Err(Rejection::WorktreeRemoved));
+  drop(scheduler);
+  // Nor does a runner that attaches follow it up.
+  let (next, _events) = support::scheduler(root);
+  next
+    .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .expect("attached");
+  assert!(next.active_runs().is_empty());
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(db.run(id).expect("read").expect("run"), ready, "the run is as it was");
+  assert_eq!(db.invocations(id).expect("invocations").len(), 1);
+  let stored = conversation(root, project.task);
+  let queued = stored
+    .iter()
+    .find(|stored| stored.id() == message.id())
+    .expect("stored");
+  assert_eq!(queued.delivery(), Some(Delivery::Queued));
 }
 
 #[tokio::test(flavor = "multi_thread")]

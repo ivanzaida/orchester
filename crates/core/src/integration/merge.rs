@@ -125,14 +125,14 @@ fn merge(
   }
   if git.is_ancestor(&base, &head)? {
     let output = git.output(&["merge", "--ff-only", "--no-edit", &head])?;
-    if !output.success {
+    if !output.success() {
       return Err(MergeError::Refused(message(&output)));
     }
     return Ok((revision(&head)?, MergeKind::FastForward));
   }
   let title = format!("Merge {task} run #{}", run.number().get());
   let output = git.output(&["merge", "--no-ff", "--no-edit", "-m", &title, &head])?;
-  if !output.success {
+  if !output.success() {
     return Err(undo(&git, message(&output)));
   }
   let merged = git.stdout(&["rev-parse", "--verify", "HEAD"])?;

@@ -155,7 +155,11 @@ at work takes one.
   run succeeded with the result it had; its attempt stays recorded as failed and decides nothing. A
   run that succeeds while messages are still queued for its agents (e.g. written while a tool step
   ran) is followed up at once. A run whose work was merged into its base branch takes no messages. A
-  question answered while no runner was attached resumes its step once a runner attaches.
+  question answered while no runner was attached resumes its step once a runner attaches, and a run
+  that succeeded, was not merged and was written to meanwhile is followed up then, once; messages to
+  a merged, failed or cancelled run stay queued. A follow-up needs the run's worktree: once a person
+  removed it, the run is not followed up (the runner refuses with *worktree removed* before changing
+  it) and messages to it stay queued.
 - **Tool steps (M10a).** A tool step runs a published command tool: its program with fixed
   arguments, no shell, found on the `PATH` or in the worktree and started like every program
   (command scripts, the cleaned environment plus the tool's variables, no console window, its
