@@ -1,11 +1,12 @@
 //! Extra writable folders on the Permissions tab (implemented, not drawn yet; built from the
-//! allowed commands of 04.04 `T1rjv`: the entries `bpmzN`, the field `mwPz8` and *Add command*,
-//! and the notice with an action of Project settings › Environment `CMSyB`). Folders outside the
+//! allowed commands of 04.04 `T1rjv`: the field `mwPz8` and *Add command*, then the entries
+//! `bpmzN`, one per line and as wide as the column since paths are long, and the notice with an
+//! action of Project settings › Environment `CMSyB`). Folders outside the
 //! task worktree that an agent which edits files may also write to; each is checked when it is
 //! added (`crate::agents::folders`). When Environment sets `CARGO_TARGET_DIR` and the profile does
 //! not list it yet, a notice offers to add it; nothing is added until the person does.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -26,7 +27,7 @@ use crate::{
   ui::{
     button::ActionButton,
     command_chip::CommandChip,
-    field::{field_error, text_input},
+    field::{text_input, wrapping_field_error},
     form::form,
     icon::Icon,
     message_text,
@@ -34,10 +35,11 @@ use crate::{
   },
 };
 
-/// Folder field width: a path needs more room than a command (`mwPz8` is 180), and the height of
-/// the entries beside it (`bpmzN`).
+/// Folder field width: a path needs more room than a command (`mwPz8` is 180), the height of the
+/// entries beside it (`bpmzN`), and of a notice's action (`IgW07` in `CMSyB`).
 const FOLDER_INPUT_WIDTH: f32 = 280.0;
 const FOLDER_HEIGHT: f32 = 26.0;
+const NOTICE_ACTION_HEIGHT: f32 = 32.0;
 
 impl ProfileEditor {
   /// The extra writable folders, a field to add one, what they mean, and the suggestion to add
@@ -47,14 +49,13 @@ impl ProfileEditor {
     let folders = permissions.writable_folders().clone();
     let entries = folders.entries().iter().enumerate().map(|(index, folder)| {
       let (permissions, removed) = (self.permissions.clone(), folder.clone());
-      Element::from(
-        CommandChip::new(format!("agent-folder-{index}"), folder.as_str().into()).on_remove(move || {
-          permissions.update(|permissions| {
-            let rest = without_folder(permissions.writable_folders(), &removed);
-            permissions.set_writable_folders(rest);
-          });
-        }),
-      )
+      let chip = CommandChip::new(format!("agent-folder-{index}"), folder.as_str().into()).on_remove(move || {
+        permissions.update(|permissions| {
+          let rest = without_folder(permissions.writable_folders(), &removed);
+          permissions.set_writable_folders(rest);
+        });
+      });
+      Element::from(chip.fill())
     });
     let add = self.add_folder();
     let input = text_input(
@@ -79,17 +80,23 @@ impl ProfileEditor {
       }
       None => add_button.on_click(|| {}).enabled(false),
     };
-    let row = Row::new()
+    // The field first, so it keeps its place (and the focus) as folders are added; then one folder
+    // per line: paths are long, and a long one ends in an ellipsis before its remove icon.
+    let row = Column::new()
       .width(Dimension::Pct(100.0))
-      .wrap()
       .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
       .overflow_visible()
-      .with_children(entries)
-      .child(input)
-      .child(add_button.render(ctx));
+      .child(
+        Row::new()
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .overflow_visible()
+          .child(input)
+          .child(add_button.render(ctx)),
+      )
+      .with_children(entries);
     let note: Element = match self.folder_error.get() {
-      Some(error) => field_error(&message_text(ctx, &error)),
+      Some(error) => wrapping_field_error(&message_text(ctx, &error)),
       None if permissions.repository() == RepositoryAccess::ReadOnly => hint(ctx, "agents.permissions.foldersReadOnly"),
       None if folders.is_empty() => hint(ctx, "agents.permissions.noFolders"),
       None => hint(ctx, "agents.permissions.foldersMeaning"),
@@ -149,13 +156,12 @@ impl ProfileEditor {
       return None;
     }
     let (permissions, error) = (self.permissions.clone(), self.folder_error.clone());
-    let added = target.clone();
+    let added = suggested_entry(&target, &repo_root);
     let add = ActionButton::new(ctx.t("agents.permissions.addTargetFolder"))
       .icon(Icon::Plus)
-      .compact()
       .id("agent-add-target-folder")
       .in_form()
-      .height(Dimension::Px(FOLDER_HEIGHT))
+      .height(Dimension::Px(NOTICE_ACTION_HEIGHT))
       .on_click(move || {
         let list = permissions.get_untracked().writable_folders().clone();
         match with_folder(&list, &added, &repo_root) {
@@ -180,6 +186,19 @@ impl ProfileEditor {
       .id("agent-target-folder")
       .into(),
     )
+  }
+}
+
+/// The folder `target` as the profile lists it: relative to the repository root when it lies inside
+/// the repository, so the profile means the same folder in another checkout.
+fn suggested_entry(target: &str, repo_root: &Path) -> String {
+  match Path::new(target).strip_prefix(repo_root) {
+    Ok(inside) if !inside.as_os_str().is_empty() => inside
+      .components()
+      .map(|part| part.as_os_str().to_string_lossy())
+      .collect::<Vec<_>>()
+      .join("/"),
+    _ => target.to_owned(),
   }
 }
 

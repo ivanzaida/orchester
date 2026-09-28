@@ -12,7 +12,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 
 use crate::{
-  agent_permissions::{MAX_STOPS, permissions_of, seeded, shows},
+  agent_permissions::{MAX_STOPS, contains_text, permissions_of, seeded, shows},
   harness::Desktop,
 };
 
@@ -79,10 +79,35 @@ fn writable_folders_add_a_checked_folder_and_refuse_the_checkout() {
   ));
   assert!(shows(&mut desktop, "Extra writable folders · enforced"));
   assert!(shows(&mut desktop, "sandbox · writable roots"));
+  // A long folder ends in an ellipsis inside the column; its entry never reaches past it.
+  let long = desktop
+    .repo()
+    .parent()
+    .expect("a parent")
+    .join("a-shared-build-folder-".repeat(6));
+  std::fs::create_dir_all(&long).expect("folder");
+  set_folder(&mut desktop, long.to_str().expect("unicode"));
+  desktop.enter();
+  desktop.wait_for("agent-folder-1");
+  let (entry, column) = (desktop.bounds("agent-folder-1"), desktop.bounds("agent-folders"));
+  assert!(
+    entry.x + entry.width <= column.x + column.width + 0.5,
+    "{entry:?} in {column:?}"
+  );
+  desktop.press("agent-folder-1");
+  desktop.settle("the long folder removed", |tree| {
+    tree.get_element_by_id("agent-folder-1").is_none()
+  });
   desktop.press("agent-save-draft");
   let saved = |desktop: &mut Desktop| drafted_folders(desktop, "Builder") == [".orchester/target"];
   desktop.wait_until("the saved draft", saved);
+  desktop.wait_until("the saved profile read again", |desktop| {
+    !shows(desktop, "Unsaved changes")
+  });
   // Pressing the entry removes the folder again.
+  // The saved profile is read again into a fresh editor, which opens on its first tab.
+  desktop.press("agent-tab-permissions");
+  desktop.wait_for("agent-folder-0");
   desktop.press("agent-folder-0");
   desktop.settle("no folder", |tree| tree.get_element_by_id("agent-folder-0").is_none());
   assert!(!shows(&mut desktop, "Extra writable folders · enforced"));
@@ -111,6 +136,9 @@ fn writable_folders_suggest_the_build_folder_environment_sets() {
   ));
   desktop.press("agent-add-target-folder");
   desktop.wait_for("agent-folder-0");
+  // Inside the repository the folder is listed relative to its root.
+  let entry = desktop.tree.get_element_by_id("agent-folder-0").expect("the entry");
+  assert!(contains_text(entry, ".orchester/target") && !contains_text(entry, &target));
   desktop.settle("the suggestion to go", |tree| {
     tree.get_element_by_id("agent-target-folder").is_none()
   });

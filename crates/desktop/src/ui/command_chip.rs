@@ -1,12 +1,13 @@
 //! Command entry (`bpmzN`): an allowed command in mono with a trailing icon. With an action it is a
 //! form control: a press anywhere on it, or Enter or Space while it has the focus, removes the
-//! command (`x`) or adds it back (`plus`, for a command a step leaves out).
+//! command (`x`) or adds it back (`plus`, for a command a step leaves out). A filling entry takes
+//! the width of its row and ends long text (a folder path) in an ellipsis before its icon.
 
 use std::sync::Arc;
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
-  components::{Button, Row, Text},
+  components::{Button, Row, Text, TextOverflow},
   layout::Alignment,
   node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
@@ -35,6 +36,8 @@ pub struct CommandChip {
   /// Outlined in the text color: the command differs from what it is compared with (a command
   /// added for a run, `IWbGO` in 02.J).
   changed: bool,
+  /// Takes the width of its row; long text ends in an ellipsis.
+  fill: bool,
 }
 
 impl CommandChip {
@@ -44,7 +47,14 @@ impl CommandChip {
       command,
       action: Action::None,
       changed: false,
+      fill: false,
     }
+  }
+
+  /// The entry takes the width of its row and shortens long text with an ellipsis.
+  pub const fn fill(mut self) -> Self {
+    self.fill = true;
+    self
   }
 
   pub const fn changed(mut self, changed: bool) -> Self {
@@ -100,8 +110,18 @@ impl From<CommandChip> for Element {
         PaletteColor::SurfacePanel,
       ),
     };
+    let text = command(&chip.command, text_color);
+    let (width, text) = if chip.fill {
+      (
+        Dimension::Pct(100.0),
+        text.text_overflow(TextOverflow::Elipsis).flex(1.0),
+      )
+    } else {
+      (Dimension::Auto, text)
+    };
     keyboard_stop(Button::empty().button(), Ring::Outer)
       .id(chip.id)
+      .width(width)
       .height(Dimension::Px(HEIGHT))
       .padding_left(ExtraSpacing::Inline.role())
       .padding_right(ExtraSpacing::Tight.role())
@@ -114,7 +134,7 @@ impl From<CommandChip> for Element {
       .describe("state", state)
       .describe("changed", if chip.changed { "true" } else { "false" })
       .on_click(move |_| handler())
-      .child(command(&chip.command, text_color))
+      .child(text)
       .child(icon(glyph, IconSize::Small, PaletteColor::TextMuted))
       .into()
   }

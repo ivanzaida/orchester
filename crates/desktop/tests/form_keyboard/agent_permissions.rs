@@ -166,7 +166,7 @@ pub(crate) fn seeded() -> Desktop {
   desktop
 }
 
-fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
+pub(crate) fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
   element.text_content().is_some_and(|content| content.contains(text))
     || element.children().into_iter().any(|child| contains_text(child, text))
 }
