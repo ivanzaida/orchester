@@ -342,7 +342,7 @@ window: there is one window.
 - Close: the × button, middle-click, Ctrl/Cmd+W. The next tab to the right becomes active (the
   left one if it was the last). Closing an inactive tab does not switch tabs. Closing asks only
   when the tab's page would ask on navigating away (unsaved edits, e.g. an agent profile before
-  *Save draft*); that question is not designed yet (open question).
+  *Save draft*); that question is not drawn yet (see "Implemented" below).
 - **Closing the last tab** opens All projects in a fresh tab; the window stays open (decided in
   this proposal). Closing the window quits the application and stops every runner and agent
   (there is no background mode, see [Application lifecycle](#application-lifecycle-and-runner-connection)),
@@ -435,9 +435,23 @@ it in the window. Added for tabs on 2026-09-28:
 **Not designed:** several windows, tearing a tab out, pinned tabs, reopening a closed tab
 (Ctrl+Shift+T), tab groups, and the unsaved-edits question on close.
 
-Proposed copy namespace: `tabs.*` (`tabs.newTab`, `tabs.close`, `tabs.list`,
-`tabs.needsYou.one` / `.other`, `tabs.openInNewTab`). Labels are built from project and page
-names (data) with one separator key, not by concatenating translated fragments.
+**Implemented** (2026-09-28, branch `claude/tabs`):
+
+- *Discard changes?* is implemented, not drawn yet: closing a tab whose page holds edits that are
+  not saved (an agent profile or a command tool before *Save draft*; a new one once anything was
+  written) asks in the confirmation dialog's frame (`P8IN7Z`): *Keep open* or *Discard and close*;
+  Escape keeps the tab. Pages whose drafts save themselves never ask.
+- The OS window title does not follow the active tab yet: lurq 0.29 has no way to change a
+  window's title after it opened.
+- macOS Cmd+click: lurq's mouse events carry Ctrl, Shift and Alt only, so the window follows the
+  Cmd key's presses to tell a Cmd+click.
+- The inactive tabs are mounted offstage: their pages keep their state (fields, scroll positions)
+  but are not rendered, laid out or painted until the tab is active again. Each project's tasks,
+  usage and runner status are read once for all its tabs.
+
+Copy namespace: `tabs.*` (`tabs.label`, `tabs.labelWithTitle`, `tabs.attention.*`,
+`tabs.openInNewTab.*`, `tabs.discard.*`). Labels are built from project and page names (data)
+with one separator key, not by concatenating translated fragments.
 
 ## Status bar
 
