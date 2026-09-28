@@ -35,16 +35,12 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 4. Pipeline *Orchester change*:
    Implement → command `powershell -File tools/check.ps1` → command with the task's filtered `cargo test` lines →
    Review → Ready for review.
-5. Environment: `CARGO_TARGET_DIR=<repo>/.orchester/target`, and allow agents to write to it once D2 is merged.
+5. Environment: `CARGO_TARGET_DIR=<repo>/.orchester/target`; then, in Agents › Permissions of each profile that
+   builds, add it to *Extra writable folders* (the tab offers it).
    Without it every run builds its own `target/` in its worktree (several GB, several minutes the first time).
 6. Limits: start at about 3M tokens and 45 minutes of active agent time per run.
 7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
    merge from Orchester while another agent is merging branches into `master` by hand.
-
-### D2 · Extra writable folders for agents (in progress, branch `claude/writable-roots`)
-
-Codex runs with `--sandbox workspace-write -C <worktree>`, so it cannot write to a shared `CARGO_TARGET_DIR` outside
-the worktree. The branch adds a visible *extra writable folders* setting and passes it to the CLIs.
 
 ### D3 · Find what a run can and cannot do on this repository (first real run)
 
@@ -194,3 +190,4 @@ workaround.
 Move finished tasks here: `ID · title · commit or branch`.
 
 T2 · Poll-free plan tests · branch `codex/poll-free-plan-tests`.
+D2 · Extra writable folders for agents · branch `claude/writable-roots`.
