@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use lurq::{
   app::{
     component::Component,
-    ctx::{Ctx, StreamEmitter},
+    ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::Row,
@@ -35,6 +35,7 @@ use self::{
 use crate::{
   activity::{Activity, ActivityLog, bar},
   runner::RunnerStatus,
+  tabs::feed::WindowFeed,
   tasks::usage::ProjectUsage,
   theme::{ExtraColor, STATUS_BAR_HEIGHT},
 };
@@ -136,19 +137,9 @@ impl Component for StatusBar {
 }
 
 impl StatusBar {
+  /// The session's activity, read reactively from the window's feed: a status bar in an inactive
+  /// tab only renders again once its tab is active.
   fn log(&self, ctx: &mut Ctx) -> ActivityLog {
-    let log = ctx.stream(
-      self.activity.clone(),
-      |activity, emitter: StreamEmitter<ActivityLog, ()>| async move {
-        let mut updates = activity.subscribe();
-        loop {
-          let log = updates.borrow_and_update().clone();
-          if !emitter.emit(log) || updates.changed().await.is_err() {
-            return;
-          }
-        }
-      },
-    );
-    log.state().get().data.unwrap_or_else(|| self.activity.snapshot())
+    WindowFeed::of(ctx).activity.get()
   }
 }

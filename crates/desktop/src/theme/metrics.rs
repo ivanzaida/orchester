@@ -4,12 +4,12 @@ use lurq::{
 };
 
 use super::tokens::{
-  FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_PILL, RADIUS_SELECT_MENU,
-  SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT, SPACE_COLUMNS, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD,
-  SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT,
-  SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL,
-  SPACE_REASON_INDENT, SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA,
-  SPACE_TIGHT, TAB_INDICATOR_STROKE,
+  FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_PILL, RADIUS_ROW_ACTION,
+  RADIUS_SELECT_MENU, RADIUS_TAB_CONTROL, SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT, SPACE_COLUMNS, SPACE_DIALOG_MARGIN,
+  SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM,
+  SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK,
+  SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_REASON_INDENT, SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM,
+  SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -192,10 +192,21 @@ pub enum ExtraRadius {
   SelectMenu,
   /// Fully rounded ends: the switch track and its knob (`K8ItM`, `Y0aZS`).
   Pill,
+  /// A title bar tab's avatar and close button (`b9QQb`, `OvWLh` in `nAKyb`).
+  TabControl,
+  /// The *Open in new tab* button of a project switcher row (`NcJQ0`).
+  RowAction,
 }
 
 impl ExtraRadius {
-  const ALL: [Self; 4] = [Self::Notice, Self::Mark, Self::SelectMenu, Self::Pill];
+  const ALL: [Self; 6] = [
+    Self::Notice,
+    Self::Mark,
+    Self::SelectMenu,
+    Self::Pill,
+    Self::TabControl,
+    Self::RowAction,
+  ];
 
   fn name(self) -> &'static str {
     match self {
@@ -203,6 +214,8 @@ impl ExtraRadius {
       Self::Mark => "mark",
       Self::SelectMenu => "select-menu",
       Self::Pill => "pill",
+      Self::TabControl => "tab-control",
+      Self::RowAction => "row-action",
     }
   }
 
@@ -212,6 +225,8 @@ impl ExtraRadius {
       Self::Mark => RADIUS_MARK,
       Self::SelectMenu => RADIUS_SELECT_MENU,
       Self::Pill => RADIUS_PILL,
+      Self::TabControl => RADIUS_TAB_CONTROL,
+      Self::RowAction => RADIUS_ROW_ACTION,
     }
   }
 

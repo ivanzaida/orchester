@@ -22,11 +22,12 @@ use crate::{
   display,
   messages::Message,
   runner::{Runners, state::RunnerState},
+  tabs::Tabs,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY},
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{pressable, surface},
+    pressable::{opens_place, pressable, surface},
     status_label::status_label,
   },
   workspace::{ProjectData, ProjectEntry},
@@ -65,6 +66,7 @@ impl<'a> Standing<'a> {
 pub(super) struct Rows<'a> {
   pub(super) runners: &'a Runners,
   pub(super) open: &'a OpenAction,
+  pub(super) tabs: &'a Tabs,
 }
 
 fn cell(text: &str, width: f32, color: PaletteColor) -> Text {
@@ -154,12 +156,11 @@ pub(super) fn project_row(
     ))
     .child(cell(&opened, OPENED_WIDTH, PaletteColor::TextSecondary));
   let content = if openable {
-    let (open, repo_root) = (rows.open.clone(), project.repo_root.clone());
-    pressable(
+    let (action, repo_root) = (rows.open.clone(), project.repo_root.clone());
+    opens_place(
       content.hovered_style(Style::new().background(PaletteColor::SurfaceRaised)),
-      move || {
-        open.run(repo_root.clone());
-      },
+      rows.tabs,
+      move |open| action.run((repo_root.clone(), open)),
     )
   } else {
     content.focusable(false)

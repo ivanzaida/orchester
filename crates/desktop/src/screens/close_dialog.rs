@@ -102,7 +102,7 @@ impl Component for CloseDialog {
       .child(header(ctx, props.stage))
       .child(body(ctx, props.stage, &props.work, &props.saves))
       .child(actions(ctx, props.stage, &props.saves, &props.actions));
-    backdrop(dialog)
+    backdrop(ctx, dialog)
   }
 }
 

@@ -112,7 +112,7 @@ impl Component for RecoveryDialog {
       .child(header(ctx, props.previous, props.runs.len()))
       .child(body(ctx, &props))
       .child(actions(ctx, &props));
-    backdrop(dialog)
+    backdrop(ctx, dialog)
   }
 }
 

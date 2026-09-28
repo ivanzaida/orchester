@@ -11,7 +11,7 @@ use lurq::{
     theme::{FormTextRole, PaletteColor, SpacingSize},
   },
   components::{Column, Markdown, MarkdownLink, MarkdownProps, Row, ScrollVertical, Spacer, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::run::{Plan, PlanDecision};
@@ -24,7 +24,12 @@ use crate::{
   ui::{button::ActionButton, field::field_error, icon::Icon, message_text, notice::Notice},
 };
 
-pub(super) fn content(ctx: &mut Ctx, props: &PlanReviewProps, shown: &Plan, decisions: &Decisions) -> Element {
+pub(super) fn content(
+  ctx: &mut Ctx,
+  props: &PlanReviewProps,
+  (shown, scroll): (&Plan, &ScrollState),
+  decisions: &Decisions,
+) -> Element {
   let review = &props.review;
   let version = shown.version.to_string();
   let title = ctx.t_args(
@@ -59,6 +64,7 @@ pub(super) fn content(ctx: &mut Ctx, props: &PlanReviewProps, shown: &Plan, deci
     .child(
       ScrollVertical::new(plan)
         .id("plan-review-plan")
+        .with_scroll_state(scroll.clone())
         .width(Dimension::Pct(100.0))
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),

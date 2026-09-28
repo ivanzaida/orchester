@@ -18,7 +18,10 @@ use lurq::{
   },
   components::Column,
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::id::ResourceId;
@@ -75,6 +78,9 @@ pub struct ToolsScreen {
   /// Bumped after a change, to read the tools again.
   revision: Signal<u64>,
   nav: ProjectNav,
+  /// Where the library is scrolled: kept by the screen, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
 }
 
 impl Component for ToolsScreen {
@@ -94,7 +100,11 @@ impl Component for ToolsScreen {
         reload.update(|revision| *revision += 1);
       }
     });
-    Self { revision, nav }
+    Self {
+      revision,
+      nav,
+      scroll: ScrollState::new(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -134,12 +144,12 @@ impl ToolsScreen {
     change: ChangeAction,
   ) -> Element {
     let editing = match selection {
-      ToolSelection::Library => return library::library(ctx, open, &loaded.tools, &self.nav),
+      ToolSelection::Library => return library::library(ctx, open, &loaded.tools, (&self.nav, &self.scroll)),
       ToolSelection::New => Editing::New,
       ToolSelection::Tool(id) => match loaded.tools.tool(id) {
         Some(entry) => Editing::Tool(Box::new(entry.clone())),
         // A tool that no longer exists: the library shows what there is.
-        None => return library::library(ctx, open, &loaded.tools, &self.nav),
+        None => return library::library(ctx, open, &loaded.tools, (&self.nav, &self.scroll)),
       },
     };
     let key = match &editing {

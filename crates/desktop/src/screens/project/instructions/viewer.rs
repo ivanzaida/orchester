@@ -46,7 +46,7 @@ const ROW_HEIGHT: f32 = 48.0;
 const COPY_HEIGHT: f32 = 32.0;
 
 impl InstructionEditor {
-  pub(super) fn viewer_modal(&self, ctx: &Ctx, live: &InstructionEntry, catalog: &LoadedCatalog) -> Element {
+  pub(super) fn viewer_modal(&self, ctx: &mut Ctx, live: &InstructionEntry, catalog: &LoadedCatalog) -> Element {
     let closed = || Modal::new(Column::new()).open_when(false).into();
     if !self.viewer_open.get() {
       return closed();
@@ -102,7 +102,7 @@ impl InstructionEditor {
           .child(self.selected_source(ctx, &composition, resolved.pipeline_name())),
       )
       .child(footer(ctx, live.state.has_draft()));
-    Modal::new(backdrop(dialog))
+    Modal::new(backdrop(ctx, dialog))
       .target(ModalTarget::Root)
       .open(self.viewer_open.clone())
       .into()

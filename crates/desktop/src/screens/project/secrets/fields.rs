@@ -50,7 +50,7 @@ const CLOSE_SIZE: f32 = 32.0;
 pub(super) type SaveState = (Submit, bool, Option<Message>);
 
 impl SecretDialog {
-  pub(super) fn frame(&self, ctx: &Ctx, frame: &ElementRef, check: &NameCheck, save: SaveState) -> Element {
+  pub(super) fn frame(&self, ctx: &mut Ctx, frame: &ElementRef, check: &NameCheck, save: SaveState) -> Element {
     let (submit, saving, error) = save;
     let dialog = Column::new()
       .id("secret-dialog")
@@ -69,7 +69,7 @@ impl SecretDialog {
           .flex(1.0),
       )
       .child(self.actions(ctx, submit.clone(), saving, error));
-    backdrop(form(submit, dialog))
+    backdrop(ctx, form(submit, dialog))
   }
 
   fn header(&self, ctx: &Ctx) -> Element {

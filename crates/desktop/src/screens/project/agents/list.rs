@@ -9,6 +9,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Button, Column, ScrollVertical, Text, TextOverflow},
+  layout::layout_kind::ScrollState,
   node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::id::ResourceId;
@@ -40,7 +41,12 @@ pub enum ListSelection {
   New,
 }
 
-pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selection: ListSelection, nav: &ProjectNav) -> Element {
+pub fn profile_list(
+  ctx: &Ctx,
+  agents: &ProjectAgents,
+  selection: ListSelection,
+  (nav, scroll): (&ProjectNav, &ScrollState),
+) -> Element {
   let new_agent = {
     let button = ActionButton::new(ctx.t("agents.new"))
       .icon(Icon::Plus)
@@ -86,6 +92,7 @@ pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selection: ListSelection,
           .spacing(ExtraSpacing::Stack.role())
           .with_children(items),
       )
+      .with_scroll_state(scroll.clone())
       .width(Dimension::Pct(100.0))
       .flex(1.0),
     )

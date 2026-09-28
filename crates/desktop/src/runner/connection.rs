@@ -29,8 +29,17 @@ use super::{
 const EXIT_TIMEOUT: Duration = Duration::from_secs(2);
 
 enum Control {
-  Stop { reply: oneshot::Sender<ShutdownOutcome> },
-  Request { command: Command, reply: ReplySender },
+  Stop {
+    reply: oneshot::Sender<ShutdownOutcome>,
+  },
+  /// Stop only if the runner has no work; the answer says whether it stopped.
+  StopIfIdle {
+    reply: oneshot::Sender<bool>,
+  },
+  Request {
+    command: Command,
+    reply: ReplySender,
+  },
 }
 
 /// Handle to the task that owns a runner. Dropping it ends the task, which drops the runner
@@ -78,6 +87,18 @@ impl Connection {
     {
       // The task has ended; nobody would answer.
       drop(reply.send(Err(RequestError::NotConnected)));
+    }
+    answer
+  }
+
+  /// Asks the runner to stop if it has no work; the answer is `true` once it stopped, `false`
+  /// while it has work or could not be asked.
+  pub(super) fn stop_if_idle(&self) -> oneshot::Receiver<bool> {
+    let (reply, answer) = oneshot::channel();
+    if let Err(mpsc::error::SendError(Control::StopIfIdle { reply })) = self.control.send(Control::StopIfIdle { reply })
+    {
+      // The task has ended, so there is no runner to stop; the asker may have stopped waiting.
+      let _ = reply.send(false);
     }
     answer
   }
@@ -201,6 +222,12 @@ impl Supervisor {
         let _ = reply.send(ShutdownOutcome::NoRunner);
         true
       }
+      // Not connected: a runner that is starting or reconnecting is not idle yet. The asker may
+      // have stopped waiting; the answer no longer matters then.
+      Some(Control::StopIfIdle { reply }) => {
+        let _ = reply.send(false);
+        false
+      }
       None => true,
     }
   }
@@ -235,6 +262,13 @@ enum Served {
   Dropped(RunnerFailure),
   Stopped,
   Abandoned,
+}
+
+/// How the runner answered [`Command::StopIfIdle`].
+enum IdleAnswer {
+  Stopping,
+  Busy,
+  Dropped,
 }
 
 /// A connected runner. Events are read on their own task because a frame read cannot be
@@ -320,6 +354,22 @@ impl Session {
             let _ = reply.send(outcome);
             return Served::Stopped;
           }
+          // The lingering task may have been cancelled meanwhile; the answer no longer matters then.
+          Some(Control::StopIfIdle { reply }) => match self.stop_if_idle(reporter).await {
+            IdleAnswer::Busy => {
+              let _ = reply.send(false);
+            }
+            IdleAnswer::Dropped => {
+              let _ = reply.send(false);
+              return Served::Dropped(RunnerFailure::Lost);
+            }
+            IdleAnswer::Stopping => {
+              reporter.report(RunnerEvent::StopRequested);
+              let stopped = self.stopped(reporter).await == ShutdownOutcome::Stopped;
+              let _ = reply.send(stopped);
+              return Served::Stopped;
+            }
+          },
           None => return Served::Abandoned,
         }
       }
@@ -346,8 +396,12 @@ impl Session {
         self.pending.answer(id, reply);
         true
       }
-      Some(Ok(Some(Event::RunChanged { .. } | Event::AgentActivity { .. }))) => {
-        reporter.runs_changed();
+      Some(Ok(Some(Event::RunChanged { .. }))) => {
+        reporter.run_changed();
+        true
+      }
+      Some(Ok(Some(Event::AgentActivity { .. }))) => {
+        reporter.transcript_grew();
         true
       }
       Some(Ok(Some(Event::WorkSummary(summary)))) => {
@@ -388,6 +442,31 @@ impl Session {
     }
   }
 
+  /// Asks the runner to stop if it has no work, handling its events until it answers.
+  async fn stop_if_idle(&mut self, reporter: &Reporter) -> IdleAnswer {
+    let (reply, mut answer) = oneshot::channel();
+    if !self.send(Command::StopIfIdle, Some(reply)).await {
+      return IdleAnswer::Dropped;
+    }
+    loop {
+      tokio::select! {
+        answered = &mut answer => return match answered {
+          Ok(Ok(Reply::Stopping)) => IdleAnswer::Stopping,
+          Ok(Ok(Reply::Rejected(_))) => IdleAnswer::Busy,
+          other => {
+            tracing::warn!(?other, "unexpected answer to StopIfIdle");
+            IdleAnswer::Dropped
+          }
+        },
+        item = self.events.recv() => {
+          if !self.handle(item, reporter) {
+            return IdleAnswer::Dropped;
+          }
+        }
+      }
+    }
+  }
+
   /// The graceful close from `orchester_ipc`'s client: `Shutdown`, wait for `Stopped`, close
   /// the connection, wait for the process to exit.
   async fn stop(mut self, reporter: &Reporter) -> ShutdownOutcome {
@@ -398,6 +477,12 @@ impl Session {
       reporter.report(RunnerEvent::Dropped(RunnerFailure::Lost));
       return ShutdownOutcome::Unanswered;
     }
+    self.stopped(reporter).await
+  }
+
+  /// After the runner was asked to stop: wait for `Stopped`, close the connection, wait for the
+  /// process to exit.
+  async fn stopped(mut self, reporter: &Reporter) -> ShutdownOutcome {
     loop {
       match self.events.recv().await {
         Some(Ok(Some(Event::Stopped { .. }))) => break,

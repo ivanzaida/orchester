@@ -1,20 +1,22 @@
 //! The runners of the open projects (`docs/architecture/storage.md`, "Processes"): one
-//! `orchester-runner` per project that was shown or has work, started when the project first
-//! opens, kept running in the background while another project is shown, reconnected when it
-//! drops and stopped when the application closes. The displayed project's runner status is
-//! published for the screens.
+//! `orchester-runner` per project a window tab shows or whose runner has work, started when the
+//! project opens in a tab, kept running in the background while another tab is active,
+//! reconnected when it drops, stopped once no tab shows the project and it has no work (see
+//! [`lifetime`]) and stopped when the application closes. The displayed project's runner status
+//! is published for the screens.
 //!
 //! Windows only for now: the IPC client (`orchester_ipc::RunnerClient`, a named pipe and a job
 //! object) exists only on Windows.
 
 mod connection;
+mod lifetime;
 mod report;
 mod requests;
 pub mod state;
 mod work;
 
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   io,
   num::NonZeroU32,
   path::{Path, PathBuf},
@@ -32,6 +34,7 @@ use tokio::{runtime::Handle, sync::watch};
 
 use self::{
   connection::Connection,
+  lifetime::Lingering,
   report::{Reporter, Shared},
   state::{RunnerEvent, RunnerState},
 };
@@ -94,6 +97,8 @@ struct Inner {
   previous_end: SessionEnd,
   shared: Arc<Shared>,
   projects: Mutex<HashMap<PathBuf, ProjectRunner>>,
+  /// The projects the window's tabs show; the other runners linger until they have no work.
+  tabbed: Mutex<HashSet<PathBuf>>,
   /// Set once the application closes; no runner starts after that.
   closing: AtomicBool,
 }
@@ -103,6 +108,10 @@ struct ProjectRunner {
   name: Arc<str>,
   status: watch::Sender<RunnerStatus>,
   connection: Option<Connection>,
+  /// Asks the runner to stop while no tab shows its project.
+  lingering: Option<Lingering>,
+  /// Requests under way that give the runner work; it is not asked to stop meanwhile.
+  pins: usize,
 }
 
 impl PartialEq for Runners {
@@ -123,11 +132,12 @@ impl Runners {
         shared: Arc::new(Shared {
           displayed: Mutex::new(None),
           published: watch::Sender::new(RunnerStatus::none()),
-          runs: watch::Sender::new(0),
           work: watch::Sender::new(0),
+          counters: Mutex::new(HashMap::new()),
           activity,
         }),
         projects: Mutex::new(HashMap::new()),
+        tabbed: Mutex::new(HashSet::new()),
         closing: AtomicBool::new(false),
       }),
     }
@@ -186,6 +196,8 @@ impl Runners {
         name,
         status,
         connection: Some(connection),
+        lingering: None,
+        pins: 0,
       },
     );
   }
@@ -295,9 +307,14 @@ impl Runners {
     self.inner.shared.published.borrow().clone()
   }
 
-  /// Changes whenever a runner reports that a run or its transcript changed.
-  pub fn run_changes(&self) -> watch::Receiver<u64> {
-    self.inner.shared.runs.subscribe()
+  /// Changes whenever project `root`'s runner reports that a run changed state.
+  pub fn states_of(&self, root: &Path) -> watch::Receiver<u64> {
+    self.inner.shared.counters(root).states.subscribe()
+  }
+
+  /// Changes whenever project `root`'s runner reports that a run or its transcript changed.
+  pub fn changes_of(&self, root: &Path) -> watch::Receiver<u64> {
+    self.inner.shared.counters(root).changes.subscribe()
   }
 
   /// Changes whenever a runner reports what it works on, or its state changes.
@@ -355,6 +372,9 @@ impl Runners {
   /// its runner (named `name`) if needed and waiting for it to attach.
   pub async fn continue_runs(&self, root: &Path, name: &str, runs: Vec<RunId>) -> Result<Continued, RunRequestError> {
     self.ensure(root, name);
+    // A project no tab shows keeps its runner for the runs it continues, then lets it stop.
+    let _pin = self.pin(root);
+    self.linger_untabbed();
     self.attached(root).await?;
     match self.ask(Some(root), Command::ContinueRuns { runs }).await? {
       Reply::Continued { continued, refused } => Ok(Continued { continued, refused }),

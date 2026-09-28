@@ -9,6 +9,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, ScrollVertical, Text},
+  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -107,7 +108,7 @@ impl ConnectionsScreen {
           launch: data.launch_of(connection.id()),
         };
         let actions = self.agent_actions(open, connection, work, busy.on.is_some());
-        inspector(ctx, connection, &state, &actions)
+        inspector(ctx, connection, (&state, &self.scrolls.inspector), &actions)
       }
       Listed::GitHub(connection) => {
         let actions = self.github_actions(ctx, open, connection, work, pick);
@@ -119,6 +120,7 @@ impl ConnectionsScreen {
           error: busy.error,
           copied: &self.copied,
           launch: data.launch_of(connection.id()),
+          scroll: &self.scrolls.inspector,
         }
         .render(ctx, &actions)
       }
@@ -128,13 +130,19 @@ impl ConnectionsScreen {
         secrets: &data.secrets,
         working: busy.on == Some(server.id()),
         error: busy.error,
+        scroll: &self.scrolls.inspector,
       }
       .render(ctx, &self.mcp_actions(open, server, work, busy.on.is_some())),
     };
     Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
-      .child(list_column(ctx, open, rows, view.tab != ConnectionTab::McpServers))
+      .child(list_column(
+        ctx,
+        open,
+        (rows, &self.scrolls.list),
+        view.tab != ConnectionTab::McpServers,
+      ))
       .child(details)
       .into()
   }
@@ -294,7 +302,12 @@ fn listed(data: &ProjectConnections, tab: ConnectionTab) -> Vec<Listed<'_>> {
 
 /// Search, rows, the provider notice (not on the MCP servers tab, where it does not apply) and who owns
 /// the connections (`Bc9cT`).
-fn list_column(ctx: &Ctx, open: &OpenProject, rows: Vec<Element>, provider_notice: bool) -> Element {
+fn list_column(
+  ctx: &Ctx,
+  open: &OpenProject,
+  (rows, scroll): (Vec<Element>, &ScrollState),
+  provider_notice: bool,
+) -> Element {
   let search = value_box_sized(
     ctx,
     "connection-search",
@@ -323,6 +336,7 @@ fn list_column(ctx: &Ctx, open: &OpenProject, rows: Vec<Element>, provider_notic
     .child(
       ScrollVertical::new(content)
         .id("connection-list")
+        .with_scroll_state(scroll.clone())
         .width(Dimension::Pct(100.0))
         .flex(1.0),
     )

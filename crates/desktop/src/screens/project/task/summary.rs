@@ -12,6 +12,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
+  layout::layout_kind::ScrollState,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -23,6 +24,7 @@ use orchester_core::{
 };
 
 use super::{
+  TaskScrolls,
   heading::agent_of,
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
   notice::{Lost, notice},
@@ -48,9 +50,8 @@ const PANEL_WIDTH: f32 = 336.0;
 pub(super) fn summary(
   ctx: &mut Ctx,
   detail: &TaskDetail,
-  limits: Option<ProjectLimits>,
-  lost: Option<Lost>,
-  repo_root: &Path,
+  (limits, lost): (Option<ProjectLimits>, Option<Lost>),
+  (repo_root, scrolls): (&Path, &TaskScrolls),
 ) -> Element {
   if let Some(run) = &detail.run
     && let RunStatus::Failed(RunFailure::RetriesExhausted(step)) = run.run.status()
@@ -72,8 +73,13 @@ pub(super) fn summary(
   Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(progress_column(content, latest, raising))
-    .with_children(detail.run.as_ref().map(|run| this_run(ctx, run, repo_root)))
+    .child(progress_column(content, latest, (raising, &scrolls.progress)))
+    .with_children(
+      detail
+        .run
+        .as_ref()
+        .map(|run| this_run(ctx, run, (repo_root, &scrolls.this_run))),
+    )
     .into()
 }
 
@@ -83,10 +89,11 @@ pub(super) fn summary(
 /// taller than a 960px window (02.L2), so Latest activity scrolls with it, below the fold;
 /// otherwise it stays below the viewport. lurq cannot make scrolled content at least as tall as
 /// its viewport, which both at once would need.
-fn progress_column(content: Column, latest: Option<Element>, raising: bool) -> Element {
+fn progress_column(content: Column, latest: Option<Element>, (raising, scroll): (bool, &ScrollState)) -> Element {
   let scrolled = |content: Column| {
     ScrollVertical::new(content)
       .id("task-progress-scroll")
+      .with_scroll_state(scroll.clone())
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .scrollbar(gutter_scrollbar())
@@ -162,7 +169,7 @@ fn latest(ctx: &Ctx, run: &RunView) -> Option<Element> {
 }
 
 /// The run's pinned configuration, its limits and usage (`F5Lsi`).
-fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
+fn this_run(ctx: &mut Ctx, run: &RunView, (repo_root, scroll): (&Path, &ScrollState)) -> Element {
   let version = run.version.to_string();
   let pipeline = ctx.t_args(
     "runs.summary.pipelineValue",
@@ -217,7 +224,7 @@ fn this_run(ctx: &mut Ctx, run: &RunView, repo_root: &Path) -> Element {
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
     .with_children(permissions);
-  this_run_panel(ctx, rows)
+  this_run_panel(ctx, rows, scroll)
 }
 
 /// The *Permissions* row of the current step's agent, with its *change ↗* (`C5Ai5o`), beside the
@@ -241,7 +248,7 @@ pub(super) fn permissions_row(ctx: &mut Ctx, run: &RunView, repo_root: &Path, in
 /// them taller than the window, their bar in a gutter of its own that takes the right padding's
 /// inner half, so the values still end 24 from the edge (design doc, "Scroll gutter"); the note
 /// stays at the bottom.
-fn this_run_panel(ctx: &Ctx, rows: Column) -> Element {
+fn this_run_panel(ctx: &Ctx, rows: Column, scroll: &ScrollState) -> Element {
   let note = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_right(ExtraSpacing::Stack.role())
@@ -258,6 +265,7 @@ fn this_run_panel(ctx: &Ctx, rows: Column) -> Element {
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(
       ScrollVertical::new(rows)
+        .with_scroll_state(scroll.clone())
         .width(Dimension::Pct(100.0))
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),

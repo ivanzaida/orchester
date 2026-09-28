@@ -11,6 +11,7 @@ use lurq::{
   },
   components::{Button, Column, ScrollVertical, Text, TextOverflow},
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, Style, border::Border, dimension::Dimension},
 };
 
@@ -55,6 +56,8 @@ pub struct Library<'a> {
   pub nav: &'a ProjectNav,
   /// Whether the New instruction dialog is open.
   pub creating: &'a Signal<bool>,
+  /// Where the list is scrolled.
+  pub scroll: &'a ScrollState,
 }
 
 pub fn library(ctx: &Ctx, library: &Library<'_>) -> Element {
@@ -65,6 +68,7 @@ pub fn library(ctx: &Ctx, library: &Library<'_>) -> Element {
     edited,
     nav,
     creating,
+    scroll,
   } = *library;
   let new = ActionButton::new(ctx.t("instructions.new"))
     .icon(Icon::Plus)
@@ -110,6 +114,7 @@ pub fn library(ctx: &Ctx, library: &Library<'_>) -> Element {
           .spacing(SpacingSize::Sm)
           .with_children(items),
       )
+      .with_scroll_state(scroll.clone())
       .width(Dimension::Pct(100.0))
       .flex(1.0),
     )

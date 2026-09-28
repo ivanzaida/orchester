@@ -16,6 +16,7 @@ use lurq::{
   },
   components::{Column, ScrollVertical, Text},
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::resource::CommandEnvironment;
@@ -73,6 +74,9 @@ pub struct EnvironmentTab {
   text: Signal<String>,
   /// The variables as stored and the suggestion for the repository; `None` until read.
   stored: Signal<Option<ProjectEnvironment>>,
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
 }
 
 impl Component for EnvironmentTab {
@@ -80,6 +84,7 @@ impl Component for EnvironmentTab {
 
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
+      scroll: ScrollState::new(),
       text: ctx.signal(String::new()),
       stored: ctx.signal(None),
     };
@@ -146,7 +151,10 @@ impl Component for EnvironmentTab {
       );
     form(
       None,
-      ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0),
+      ScrollVertical::new(content)
+        .with_scroll_state(self.scroll.clone())
+        .width(Dimension::Pct(100.0))
+        .flex(1.0),
     )
   }
 }

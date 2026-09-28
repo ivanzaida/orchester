@@ -2,6 +2,7 @@
 //! status of the displayed project is also published for the screens.
 
 use std::{
+  collections::HashMap,
   path::{Path, PathBuf},
   sync::Arc,
   time::{Instant, SystemTime},
@@ -40,8 +41,8 @@ pub struct RunnerStatus {
 }
 
 impl RunnerStatus {
-  /// No project is shown.
-  pub(super) fn none() -> Self {
+  /// No project is shown, or its runner has not started.
+  pub fn none() -> Self {
     Self {
       generation: 0,
       project: None,
@@ -142,15 +143,37 @@ impl lurq::app::component::DevtoolsInspectable for RunnerStatus {}
 pub(super) struct Shared {
   pub(super) displayed: Mutex<Option<PathBuf>>,
   pub(super) published: watch::Sender<RunnerStatus>,
-  /// Counts run change notifications of all runners.
-  pub(super) runs: watch::Sender<u64>,
-  /// Counts work summaries of all runners (the close confirmation follows them).
+  /// Counts work summaries and state changes of all runners (the close confirmation follows them).
   pub(super) work: watch::Sender<u64>,
+  /// Each project's run change notifications, kept across its runners.
+  pub(super) counters: Mutex<HashMap<PathBuf, RunCounters>>,
   /// Where runner events (a reconnect) are recorded for the status bar.
   pub(super) activity: Activity,
 }
 
+/// Counts of one project's run change notifications.
+#[derive(Clone)]
+pub(super) struct RunCounters {
+  /// A run changed state.
+  pub(super) states: watch::Sender<u64>,
+  /// A run changed state or its transcript grew.
+  pub(super) changes: watch::Sender<u64>,
+}
+
 impl Shared {
+  /// The counters of project `root`, created when first asked for.
+  pub(super) fn counters(&self, root: &Path) -> RunCounters {
+    self
+      .counters
+      .lock()
+      .entry(root.to_path_buf())
+      .or_insert_with(|| RunCounters {
+        states: watch::Sender::new(0),
+        changes: watch::Sender::new(0),
+      })
+      .clone()
+  }
+
   /// Publishes `status` if its project is the displayed one.
   pub(super) fn publish(&self, status: &RunnerStatus) {
     let displayed = self.displayed.lock();
@@ -185,9 +208,25 @@ impl Reporter {
     }
   }
 
-  /// The runner changed a run or its transcript: screens showing runs read them again.
-  pub(super) fn runs_changed(&self) {
-    self.shared.runs.send_modify(|revision| *revision += 1);
+  /// The runner changed a run: screens showing runs and the project's tasks read them again.
+  pub(super) fn run_changed(&self) {
+    if let Some(counters) = self.counters() {
+      counters.states.send_modify(|revision| *revision += 1);
+      counters.changes.send_modify(|revision| *revision += 1);
+    }
+  }
+
+  /// A run's transcript grew: screens showing the transcript read it again.
+  pub(super) fn transcript_grew(&self) {
+    if let Some(counters) = self.counters() {
+      counters.changes.send_modify(|revision| *revision += 1);
+    }
+  }
+
+  /// The counters of this runner's project.
+  fn counters(&self) -> Option<RunCounters> {
+    let root = self.status.borrow().project_root().map(Path::to_path_buf)?;
+    Some(self.shared.counters(&root))
   }
 
   /// The state after `event`, or `None` when this runner has been replaced.

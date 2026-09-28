@@ -26,7 +26,11 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
-  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+    text_style::TextAlign,
+  },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::TaskId, integration::Leftovers, run::StepStatus};
@@ -75,7 +79,11 @@ pub(super) struct ReadyProps {
 impl lurq::app::component::DevtoolsInspectable for ReadyProps {}
 
 /// The Summary tab of a run that succeeded, with its merge; mounted per run.
-pub(super) struct ReadyForReview;
+pub(super) struct ReadyForReview {
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
+}
 
 impl Component for ReadyForReview {
   type Props = ReadyProps;
@@ -92,7 +100,9 @@ impl Component for ReadyForReview {
         nav.tasks_changed();
       }
     });
-    Self
+    Self {
+      scroll: ScrollState::new(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -127,6 +137,7 @@ impl Component for ReadyForReview {
       .child(
         ScrollVertical::new(content)
           .id("task-ready-scroll")
+          .with_scroll_state(self.scroll.clone())
           .width(Dimension::Pct(100.0))
           .flex(1.0)
           .scrollbar(gutter_scrollbar()),

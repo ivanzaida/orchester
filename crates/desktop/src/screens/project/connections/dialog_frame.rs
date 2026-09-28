@@ -46,7 +46,7 @@ pub(super) struct SaveBar {
 /// when the dialog opens, so that Tab starts at its first control; the design shows no field
 /// focused, so no field takes the focus.
 pub(super) fn dialog(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   frame: &ElementRef,
   title: &str,
   context: &DialogContext,
@@ -67,7 +67,7 @@ pub(super) fn dialog(
     .child(header(ctx, title, context))
     .child(ScrollVertical::new(fields).width(Dimension::Pct(100.0)).flex(1.0))
     .child(actions(ctx, context, bar));
-  backdrop(form(submit, dialog))
+  backdrop(ctx, form(submit, dialog))
 }
 
 fn header(ctx: &Ctx, title: &str, context: &DialogContext) -> Element {

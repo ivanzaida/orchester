@@ -14,7 +14,11 @@ use parking_lot::Mutex;
 use crate::{
   messages::{self, Message},
   project_setup::NewProject,
+  tabs::model::SavedTabs,
 };
+
+/// Where the application database keeps the window's tabs (`ui_state`).
+const TABS_KEY: &str = "tabs";
 
 /// A project whose database is open and readable.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -182,6 +186,24 @@ impl Workspace {
       project: new.project,
       repo_root: new.repo_root,
     })
+  }
+
+  /// The tabs the last session saved; `None` when it saved none or they cannot be read, which
+  /// the log says.
+  pub fn saved_tabs(&self) -> Result<Option<SavedTabs>, StoreError> {
+    let Some(text) = self.db.lock().ui_state(TABS_KEY)? else {
+      return Ok(None);
+    };
+    let saved = SavedTabs::decode(&text);
+    if saved.is_none() {
+      tracing::warn!("the saved tabs cannot be read; the window opens without them");
+    }
+    Ok(saved)
+  }
+
+  /// Saves the window's tabs, as [`SavedTabs::encode`] wrote them.
+  pub fn save_tabs(&self, text: &str) -> Result<(), StoreError> {
+    self.db.lock().set_ui_state(TABS_KEY, text)
   }
 
   pub(crate) fn start_session(&self, now: Timestamp) -> Result<(SessionId, PreviousSession), StoreError> {
