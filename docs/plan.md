@@ -151,17 +151,8 @@ are covered only by data tests. Verify them in the app and fix what differs from
 
 ## L · After lurq 0.30.0
 
-The fixes from lurq branch `claude/tabs-gaps` and the text-input fixes are released in 0.30.0. The workspace uses
-0.30.0 since commit `71fd0b7`. The baseline `tools/check.ps1` and full `form_keyboard ::` passed on 2026-09-28
-(212 passed, 1 ignored). L3 can proceed.
-
-### L3 · Outside presses only close popups
-
-lurq's popups, overlays and selects now consume the press that closes them (`OutsidePress::Consume` default,
-`.outside_press(OutsidePress::PassThrough)` to opt out); tooltips with `dismiss_on_outside_click(false)` are unchanged.
-No app change is expected. **Done when** the tab list (`tabs/strip/list.rs`), the project switcher, the permissions
-popover and the selects are checked: a press outside closes them without activating what is underneath, and a
-headless test covers the tab list case.
+The tab and text-input fixes from lurq branch `claude/tabs-gaps` shipped in 0.30.0. The outside-press fix for the
+window chrome shipped in lurq 0.30.1, which this workspace now uses.
 
 ### L5 · Select menus wider than their trigger (lurq)
 
@@ -202,3 +193,4 @@ T5 · Continuing a run whose worktree was deleted by hand · branch `codex/missi
 L1 · The window title follows the active tab · branch `codex/window-title` (MCP and Pencil verified).
 L2 · Remove the held scroll states · branch `codex/scroll-state` (15 offstage-only states removed; purposeful navigation and programmatic scroll states kept; `form_keyboard ::` 213 passed, 1 ignored; MCP and Pencil verified on reachable screens).
 L4 · Verify text inputs after the text fixes · branch `codex/text-input-verification` (independent MCP/Pencil check of focused New Task brief, conversation composer, single- and multi-line selection, caret blink and stable line baseline: 0 blocking/major; 3 focused tests and `tools/check.ps1` passed. Minor: New Task form controls sit about 2–3 logical px above Pencil. Pencil has no explicit text-selection specimen; selection was checked against field geometry and the planned glyph-height behavior. Local evidence: `.tmp/verify/l4/report.md`).
+L3 · Outside presses only close popups · branch `codex/popup-dismiss` (lurq 0.30.1 with upstream chrome fix; tab list, project switcher, permissions popover and selects checked through headless tests and MCP on page/chrome. Two regression tests; `form_keyboard ::` 215 passed, 1 ignored; `tools/check.ps1` passed).

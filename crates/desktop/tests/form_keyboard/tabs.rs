@@ -467,3 +467,42 @@ fn tabs_a_click_right_after_the_pointer_arrives_activates_that_tab() {
   desktop.pass();
   assert_eq!(active_tab(&mut desktop), Some(3));
 }
+
+#[test]
+fn tabs_outside_press_closes_list_without_opening_a_new_tab() {
+  let mut desktop = kontur();
+  desktop.tree.resize(1100, 960);
+  desktop.pass();
+  for _ in 0..6 {
+    command(&mut desktop, "t", "KeyT", false);
+  }
+  desktop.wait_for("window-tab-list");
+  assert_eq!(tab_ids(&mut desktop).len(), 7);
+
+  desktop.press("window-tab-list");
+  desktop.wait_for("window-tab-list-menu");
+  desktop.press("window-new-tab");
+  assert!(!has(&mut desktop, "window-tab-list-menu"));
+  assert_eq!(tab_ids(&mut desktop).len(), 7, "the outside press is consumed");
+  assert_eq!(active_tab(&mut desktop), Some(7));
+
+  desktop.press("window-new-tab");
+  desktop.wait_for("window-tab-8");
+  assert_eq!(active_tab(&mut desktop), Some(8), "the button works after dismissal");
+}
+
+#[test]
+fn tabs_outside_press_closes_project_switcher_without_opening_a_new_tab() {
+  let mut desktop = kontur();
+  desktop.press("project-selector");
+  desktop.wait_for("project-switcher");
+
+  desktop.press("window-new-tab");
+  assert!(!has(&mut desktop, "project-switcher"));
+  assert_eq!(tab_ids(&mut desktop), [1], "the outside press is consumed");
+  assert_eq!(active_tab(&mut desktop), Some(1));
+
+  desktop.press("window-new-tab");
+  desktop.wait_for("window-tab-2");
+  assert_eq!(active_tab(&mut desktop), Some(2), "the button works after dismissal");
+}
