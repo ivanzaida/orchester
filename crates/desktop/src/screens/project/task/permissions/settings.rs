@@ -380,7 +380,7 @@ fn network(ctx: &Ctx, edit: &Edit, provider: Option<AgentProvider>, draft: &Agen
     (NetworkAccess::On, _) => ctx.t("agents.permissions.networkOn"),
   };
   let shown_on = network == NetworkAccess::On || off.is_some();
-  let switch = Switch::new("task-permissions-network", label, shown_on);
+  let switch = Switch::new("task-permissions-network", label, shown_on).emphasized();
   let mut content = Vec::new();
   if off.is_none() && on.is_none() {
     let edit = edit.clone();

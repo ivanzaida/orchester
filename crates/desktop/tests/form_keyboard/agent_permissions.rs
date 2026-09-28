@@ -212,7 +212,19 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
   assert!(shows(&mut desktop, "Ask before running commands · later"));
   let network_off_enforced = cfg!(not(windows));
   assert_eq!(
-    shows(&mut desktop, "Off is unavailable on this connection: Codex CLI"),
+    shows(
+      &mut desktop,
+      concat!(
+        "Off is unavailable on this connection: Codex CLI can’t block network use by commands, ",
+        "so network stays on. The run summary says so."
+      )
+    ),
+    !network_off_enforced
+  );
+  // The panel says what the switch shows: network on, and whether off could be enforced.
+  assert_eq!(shows(&mut desktop, "Network on · enforced"), network_off_enforced);
+  assert_eq!(
+    shows(&mut desktop, "Network stays on · off is not enforceable"),
     !network_off_enforced
   );
   // Only options that can be chosen are form controls; the tabs are pointer-only.
@@ -256,8 +268,15 @@ fn agent_permissions_locked_network_switch_shows_the_network_a_run_gets() {
   // Explorer chose network off; Claude cannot keep commands off the network, so runs have it on.
   assert!(shows(
     &mut desktop,
-    "Off is unavailable on this connection: Claude Code CLI"
+    concat!(
+      "Off is unavailable on this connection: Claude Code CLI can’t block network use by commands, ",
+      "so network stays on. The run summary says so."
+    )
   ));
+  // The panel agrees with the switch and says how the run gets network: without the web tools.
+  assert!(shows(&mut desktop, "Network stays on · off is not enforceable"));
+  assert!(shows(&mut desktop, "web tools removed · commands keep network"));
+  assert!(!shows(&mut desktop, "Network off"));
   assert!(switched_on(&mut desktop, "agent-network"));
   let label = desktop
     .tree
@@ -283,6 +302,10 @@ fn agent_permissions_choose_an_option_and_add_a_command() {
     &mut desktop,
     "Unavailable on this connection: Claude Code CLI can’t confine commands to the worktree."
   ));
+  // Network on was chosen, but off could not be enforced either: the panel does not call it enforced.
+  assert!(shows(&mut desktop, "Network stays on · off is not enforceable"));
+  assert!(shows(&mut desktop, "web tools allowed"));
+  assert!(!shows(&mut desktop, "Network on · enforced"));
   desktop.tab_to("agent-new-command", MAX_STOPS);
   desktop.type_text("rg");
   // Enter in the command field adds the command; it does not save the draft.

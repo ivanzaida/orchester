@@ -1374,7 +1374,7 @@
       "unavailable": {
         "cannotLimitCommands": "Unavailable on this connection: {{cli}} can’t limit commands to a list.",
         "cannotConfineCommands": "Unavailable on this connection: {{cli}} can’t confine commands to the worktree.",
-        "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t keep commands off the network here, so network stays on. The run summary says so."
+        "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so."
       },
       "enforcement": {
         "title": "Enforced by {{cli}}",
@@ -1384,7 +1384,7 @@
           "macos": "macOS"
         },
         "enforced": "{{setting}} · enforced",
-        "staysOn": "Network off · not enforceable, stays on",
+        "staysOn": "Network stays on · off is not enforceable",
         "notEnforceable": "{{setting}} · not enforceable",
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
         "noBypass": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
@@ -1403,7 +1403,8 @@
           "one": "allowed tools · 1 prefix rule",
           "other": "allowed tools · {{count}} prefix rules"
         },
-        "claudeWebTools": "web tools allowed"
+        "claudeWebTools": "web tools allowed",
+        "claudeWebToolsRemoved": "web tools removed · commands keep network"
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",

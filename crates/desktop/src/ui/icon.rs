@@ -147,10 +147,12 @@ icons! {
   X => '\u{e1b2}',
 }
 
-/// Icon sizes used by the design, from the 12px chevron to the 24px recovery panel icon.
+/// Icon sizes used by the design, from the 11px lock of an unavailable option's reason to the
+/// 24px recovery panel icon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IconSize {
   Small,
+  Reason,
   Marker,
   Dismiss,
   Button,
@@ -170,6 +172,7 @@ impl IconSize {
   fn role(self) -> ExtraTypography {
     match self {
       Self::Small => ExtraTypography::IconSmall,
+      Self::Reason => ExtraTypography::IconReason,
       Self::Marker => ExtraTypography::IconMarker,
       Self::Dismiss => ExtraTypography::IconDismiss,
       Self::Button => ExtraTypography::IconButton,

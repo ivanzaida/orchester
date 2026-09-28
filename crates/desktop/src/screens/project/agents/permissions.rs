@@ -290,11 +290,9 @@ impl ProfileEditor {
           NetworkAccess::On => NetworkAccess::Off,
         };
         column.child(
-          Row::new()
-            .spacing(ExtraSpacing::Stack.role())
-            .align_items(Alignment::Center)
-            .child(switch.render(move || permissions.update(|permissions| permissions.set_network(flipped))))
-            .child(Text::new(&ctx.t(detail)).variant(TypographyStyle::Caption)),
+          switch
+            .detail(ctx.t(detail))
+            .render(move || permissions.update(|permissions| permissions.set_network(flipped))),
         )
       }
       Some((provider, Support::Unavailable(reason))) => column
