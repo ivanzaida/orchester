@@ -10,13 +10,14 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Select, Text},
+  components::{Column, Row, Select, SelectOption, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 
 use super::{
+  super::secrets::labels::environment_key,
   DialogMode,
   form::{fixed, pair, select_field, type_field},
   mcp_dialog::{BearerChoice, InsertSecret, McpDialog},
@@ -49,9 +50,11 @@ impl McpDialog {
       TransportChoice::Stdio => ("connections.mcp.property.startedBy", "connections.mcp.startedByCli"),
       TransportChoice::Http => ("connections.mcp.property.reachedBy", "connections.mcp.reachedByCli"),
     };
+    // The secret button's focus ring reaches past the form's columns into its padding.
     let column = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Form.role())
+      .overflow_visible()
       .child(pair(
         self.name_field(ctx, errors.name.as_ref()),
         type_field(ctx, &self.kind, editing),
@@ -173,6 +176,7 @@ impl McpDialog {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
+      .overflow_visible()
       .child(
         Column::new()
           .flex(1.0)
@@ -182,9 +186,10 @@ impl McpDialog {
       .into()
   }
 
-  /// *Add a variable from a secret…* (`Pdcuk`): the project's secrets in the select menu; the
-  /// chosen one becomes a `NAME=${secret:NAME@environment}` line. Without secrets it cannot be
-  /// pressed and says so.
+  /// *Add a variable from a secret…* (`Pdcuk`): the project's secrets in the select menu, each by
+  /// its name with its environment under it (the menu is only as wide as the button); the chosen
+  /// one becomes a `NAME=${secret:NAME@environment}` line. Without secrets it cannot be pressed
+  /// and says so.
   fn insert_secret(&self, ctx: &Ctx) -> Element {
     if self.context.secrets.is_empty() {
       return ActionButton::new(ctx.t("connections.mcp.dialog.noSecrets"))
@@ -200,14 +205,8 @@ impl McpDialog {
       .secrets
       .iter()
       .map(|secret| {
-        let label = ctx.t_args(
-          "connections.mcp.secretName",
-          [
-            ("name", secret.name().as_str()),
-            ("environment", secret.environment().as_str()),
-          ],
-        );
-        (InsertSecret(Some(secret.id())), label)
+        SelectOption::new(InsertSecret(Some(secret.id())), secret.name().as_str())
+          .detail(ctx.t(environment_key(secret.environment())))
       })
       .collect();
     let face = (Icon::KeyRound, ctx.t("connections.mcp.dialog.addSecret"));
@@ -313,6 +312,7 @@ fn area_field(
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
+    .overflow_visible()
     .child(field(&ctx.t(label), area.into(), note))
     .child(hint)
     .into()

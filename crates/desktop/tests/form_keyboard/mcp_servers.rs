@@ -256,7 +256,7 @@ fn mcp_dialog_adds_a_variable_from_a_secret() {
   assert!(shows(&mut desktop, "mcp-add-secret", "Add a variable from a secret…"));
   desktop.tab_to("mcp-variables", PRESSES);
   desktop.type_text("DOCS_INDEX=docs");
-  choose(&mut desktop, "mcp-add-secret", "DOCS_TOKEN (staging)");
+  choose(&mut desktop, "mcp-add-secret", "DOCS_TOKEN");
   assert_eq!(
     desktop.value("mcp-variables"),
     "DOCS_INDEX=docs

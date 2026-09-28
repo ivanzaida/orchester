@@ -10,7 +10,7 @@ use lurq::{
     events::mouse_event::MouseEvent,
     theme::{BorderSize, FormButtonRole, SpacingSize, TypographyStyle},
   },
-  components::{Button, Row, Select, Text},
+  components::{Button, Row, Select, SelectOption, Text},
   core::{Signal, signal::SignalValue},
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, SelectPartStyle, Style, border::Border, dimension::Dimension},
@@ -247,12 +247,14 @@ fn with_interaction(button: Button, role: &FormButtonRole, in_form: bool) -> But
 
 /// A select drawn as a compact secondary button `height` high with `glyph` and `label`, e.g. *Add a
 /// variable from a secret…* (`Pdcuk` in 04.E `yRb2k`: an 11/500 label beside a 12px icon). Its face
-/// stays the same whatever is chosen; the options open in the select menu (`u0ByM`). A Tab stop,
-/// with the outer focus ring while focused, like a button in a form.
+/// stays the same whatever is chosen, so the menu (`u0ByM`) marks no option as chosen; lurq makes
+/// it as wide as the button, so an option that needs more says the rest in its detail line. A Tab
+/// stop, with the outer focus ring while focused, like a button in a form; its parents let the ring
+/// show past them.
 pub fn select_button<T>(
   ctx: &Ctx,
   value: Signal<T>,
-  options: Vec<(T, Arc<str>)>,
+  options: Vec<SelectOption<T>>,
   (glyph, label): (Icon, Arc<str>),
   height: f32,
 ) -> Select<T>
@@ -288,7 +290,8 @@ where
     )
     .trigger_hovered(state(role.background_hover, role.border_hover))
     .trigger_open(state(role.background_active, role.border_active))
-    .trigger_focused(SelectPartStyle::new().box_shadow(ExtraShadow::FocusRing.role()));
+    .trigger_focused(SelectPartStyle::new().box_shadow(ExtraShadow::FocusRing.role()))
+    .single_checkmark(false);
   Select::new(value)
     .options(options)
     .trigger(face)

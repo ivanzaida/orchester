@@ -83,6 +83,7 @@ fn padded(fields: Element) -> Element {
     .padding_vertical(ExtraSpacing::Rail.role())
     .padding_left(ExtraSpacing::Rail.role())
     .padding_right(SpacingSize::Md)
+    .overflow_visible()
     .child(fields)
     .into()
 }
