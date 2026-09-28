@@ -10,6 +10,7 @@ pub use console::hide_window;
 pub mod launch;
 #[cfg(unix)]
 pub mod process_group;
+pub mod search_path;
 
 use std::{
   io::{self, Read, Write},
@@ -66,8 +67,8 @@ fn spawn(command: &Command) -> Result<Child, CommandError> {
 /// The process that runs `command`, ready to start: launched through what [`launch::resolve`]
 /// finds, with its arguments, directory and environment, standard input piped when the command
 /// has input (otherwise empty), output piped, no console window and, on macOS, leading a process
-/// group of its own ([`process_group`]). For callers that stream a program's output instead of
-/// waiting for it, such as the runner with agent CLIs.
+/// group of its own ([`process_group`]) with the full search path ([`search_path`]). For callers that stream a
+/// program's output instead of waiting for it, such as the runner with agent CLIs.
 pub fn prepare(command: &Command) -> Result<Process, CommandError> {
   let launch = launch::resolve(command.program());
   launch.check_args(command.args())?;
@@ -95,6 +96,8 @@ pub fn prepare(command: &Command) -> Result<Process, CommandError> {
   console::hide_window(&mut process);
   #[cfg(unix)]
   process_group::lead_own_group(&mut process);
+  #[cfg(target_os = "macos")]
+  search_path::macos::apply(&mut process, command, launch.program());
   Ok(process)
 }
 

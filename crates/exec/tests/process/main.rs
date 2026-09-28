@@ -8,6 +8,8 @@ use orchester_exec::ProcessRunner;
 
 #[cfg(unix)]
 mod group;
+#[cfg(target_os = "macos")]
+mod search_path;
 #[cfg(windows)]
 mod shim;
 

@@ -127,9 +127,14 @@ mod platform {
   use super::{RunnerProcess, TERMINATE_GRACE};
 
   /// Dropping the handle ends the runner through SIGTERM (see [`RunnerProcess`]'s `Drop`),
-  /// not with tokio's immediate SIGKILL, which would leave its agents running.
+  /// not with tokio's immediate SIGKILL, which would leave its agents running. The runner gets
+  /// the full search path as its `PATH`, for the git it runs, the programs of command tools and
+  /// what its agents inherit (`orchester_exec::search_path`).
   pub(super) fn prepare(command: &mut Command) {
     command.kill_on_drop(false);
+    if let Some(path) = orchester_exec::search_path::search_path() {
+      command.env("PATH", path);
+    }
   }
 
   impl Drop for RunnerProcess {

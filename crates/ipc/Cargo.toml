@@ -18,8 +18,10 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
-# Signals the runner process on macOS, where it has no Job Object.
+# Signals the runner process on macOS, where it has no Job Object, and gives it the search path
+# of programs (`orchester_exec::search_path`).
 [target.'cfg(unix)'.dependencies]
+orchester-exec.workspace = true
 rustix.workspace = true
 
 [target.'cfg(windows)'.dependencies]
