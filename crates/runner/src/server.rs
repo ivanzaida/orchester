@@ -1,7 +1,15 @@
 //! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the
 //! scheduler's change notifications.
 
-use std::{future::Future, path::Path, time::Duration};
+use std::{
+  future::Future,
+  path::Path,
+  sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+  },
+  time::Duration,
+};
 
 use orchester_core::{
   id::RunId,
@@ -66,6 +74,7 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<
     outgoing,
     requests,
     finishing: None,
+    in_flight: InFlight::default(),
     shutdown,
   }
   .run()
@@ -83,7 +92,33 @@ struct Session<W> {
   requests: mpsc::UnboundedReceiver<Incoming>,
   /// "Wait for agents to save" runs while events keep flowing; it ends the connection when done.
   finishing: Option<tokio::task::JoinHandle<()>>,
+  in_flight: InFlight,
   shutdown: ShutdownSignal,
+}
+
+/// Requests about a run still being carried out after the request was read ([`later`]): work the
+/// runner has, since each may execute a run again.
+#[derive(Clone, Default)]
+struct InFlight(Arc<AtomicUsize>);
+
+impl InFlight {
+  fn start(&self) -> InFlightRequest {
+    self.0.fetch_add(1, Ordering::AcqRel);
+    InFlightRequest(self.clone())
+  }
+
+  fn any(&self) -> bool {
+    self.0.load(Ordering::Acquire) > 0
+  }
+}
+
+/// One request in flight until dropped.
+struct InFlightRequest(InFlight);
+
+impl Drop for InFlightRequest {
+  fn drop(&mut self) {
+    (self.0).0.fetch_sub(1, Ordering::AcqRel);
+  }
 }
 
 impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
@@ -125,9 +160,10 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
         return Ok(Some(Ok(())));
       }
     };
-    match answer(&self.scheduler, &self.replies, &request) {
+    match answer(&self.scheduler, (&self.replies, &self.in_flight), &request) {
       Answer::Reply(event) => self.writer.write(&event).await?,
       Answer::Later => {}
+      Answer::StopIfIdle(id) => return self.stop_if_idle(id).await,
       Answer::Shutdown(ShutdownMode::FinishAtCheckpoints) => {
         tracing::info!("shutdown requested: finishing at checkpoints");
         if self.finishing.is_none() {
@@ -142,6 +178,31 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
       }
     }
     Ok(None)
+  }
+
+  /// Stops when the runner has no work; otherwise answers that it is busy and goes on.
+  async fn stop_if_idle(&mut self, id: RequestId) -> Result<Option<Result<(), IpcError>>, IpcError> {
+    let busy = if self.finishing.is_some() {
+      Some(Rejection::ShuttingDown)
+    } else if !self.scheduler.is_idle() || self.in_flight.any() {
+      Some(Rejection::Busy)
+    } else {
+      None
+    };
+    if let Some(rejection) = busy {
+      let reply = Reply::Rejected(rejection);
+      self.writer.write(&Event::Reply { id, reply }).await?;
+      return Ok(None);
+    }
+    tracing::info!("stopping: no tab shows the project and it has no work");
+    self
+      .writer
+      .write(&Event::Reply {
+        id,
+        reply: Reply::Stopping,
+      })
+      .await?;
+    Ok(Some(self.stopped(ShutdownMode::FinishAtCheckpoints).await))
   }
 
   /// Writes `waiting` and every event queued behind it, coalesced.
@@ -170,9 +231,15 @@ enum Answer {
   /// The reply follows on the notification channel once the work is done.
   Later,
   Shutdown(ShutdownMode),
+  /// [`Command::StopIfIdle`], answered by the session, which knows the requests in flight.
+  StopIfIdle(RequestId),
 }
 
-fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request: &Request) -> Answer {
+fn answer(
+  scheduler: &Scheduler,
+  (replies, in_flight): (&mpsc::UnboundedSender<Event>, &InFlight),
+  request: &Request,
+) -> Answer {
   let id = request.id;
   // A request about a run is answered once it is carried out, with a scheduler handle of its own.
   let handle = scheduler.clone();
@@ -194,9 +261,9 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
       Ok(run) => Reply::RunStarted { run },
       Err(rejection) => Reply::Rejected(rejection),
     },
-    Command::PauseRun { run } => return later(replies, id, run, async move { handle.pause_run(run).await }),
-    Command::CancelRun { run } => return later(replies, id, run, async move { handle.cancel_run(run).await }),
-    Command::ResumeRun { run } => return later(replies, id, run, async move { handle.resume_run(run).await }),
+    Command::PauseRun { run } => return later((replies, in_flight), id, run, async move { handle.pause_run(run).await }),
+    Command::CancelRun { run } => return later((replies, in_flight), id, run, async move { handle.cancel_run(run).await }),
+    Command::ResumeRun { run } => return later((replies, in_flight), id, run, async move { handle.resume_run(run).await }),
     Command::RaiseLimit {
       run,
       budget,
@@ -206,11 +273,11 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
         budget,
         max_duration: Duration::from_millis(max_duration_ms),
       };
-      return later(replies, id, run, async move { handle.raise_limit(run, limits).await });
+      return later((replies, in_flight), id, run, async move { handle.raise_limit(run, limits).await });
     }
     Command::RaiseStepBudget { run, budget } => {
       return later(
-        replies,
+        (replies, in_flight),
         id,
         run,
         async move { handle.raise_step_budget(run, budget).await },
@@ -223,12 +290,12 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
       apply,
     } => {
       let permissions = permissions.clone();
-      return later(replies, id, run, async move {
+      return later((replies, in_flight), id, run, async move {
         handle.change_permissions(run, profile, permissions, apply).await
       });
     }
     Command::KeepPermissionsForNextInvocation { run, profile } => {
-      return later(replies, id, run, async move {
+      return later((replies, in_flight), id, run, async move {
         handle.keep_permissions_for_next_invocation(run, profile).await
       });
     }
@@ -239,14 +306,15 @@ fn answer(scheduler: &Scheduler, replies: &mpsc::UnboundedSender<Event>, request
       ref decision,
     } => {
       let decision = decision.clone();
-      return later(replies, id, run, async move {
+      return later((replies, in_flight), id, run, async move {
         handle.decide_plan(run, execution, version, decision).await
       });
     }
     Command::DeliverMessages { run } => {
-      return later(replies, id, run, async move { handle.deliver_messages(run).await });
+      return later((replies, in_flight), id, run, async move { handle.deliver_messages(run).await });
     }
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
+    Command::StopIfIdle => return Answer::StopIfIdle(id),
   };
   Answer::Reply(Event::Reply { id, reply })
 }
@@ -258,16 +326,19 @@ fn accepted(run: RunId, result: Result<(), Rejection>) -> Reply {
   }
 }
 
-/// Answers request `id` when `work` for `run` is done, without holding up other requests.
+/// Answers request `id` when `work` for `run` is done, without holding up other requests. It
+/// counts as in flight until then.
 fn later(
-  replies: &mpsc::UnboundedSender<Event>,
+  (replies, in_flight): (&mpsc::UnboundedSender<Event>, &InFlight),
   id: RequestId,
   run: RunId,
   work: impl Future<Output = Result<(), Rejection>> + Send + 'static,
 ) -> Answer {
   let replies = replies.clone();
+  let request = in_flight.start();
   tokio::spawn(async move {
     let reply = accepted(run, work.await);
+    drop(request);
     if replies.send(Event::Reply { id, reply }).is_err() {
       tracing::debug!(%id, "the desktop left before the reply");
     }
