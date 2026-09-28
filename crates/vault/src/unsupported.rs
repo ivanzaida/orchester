@@ -8,6 +8,10 @@ pub(crate) fn store(_key: &VaultKey, _value: &SecretValue) -> Result<(), VaultEr
   Err(VaultError::Unsupported)
 }
 
+pub(crate) fn read(_key: &VaultKey) -> Result<SecretValue, VaultError> {
+  Err(VaultError::Unsupported)
+}
+
 pub(crate) fn delete(_key: &VaultKey) -> Result<(), VaultError> {
   Err(VaultError::Unsupported)
 }

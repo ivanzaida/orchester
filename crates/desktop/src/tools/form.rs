@@ -71,7 +71,7 @@ impl CommandText {
   /// The tool these fields describe. `access` is kept as the stored tool had it; the editor does
   /// not change access rules.
   pub fn tool(&self, access: Option<AccessPolicy>) -> Result<Tool, Box<CommandErrors>> {
-    let program = CommandProgram::new(&self.program).map_err(|error| program_error(&error));
+    let program = CommandProgram::new(&self.program).map_err(|error| program_message(&error));
     let arguments = self.arguments();
     let timeout = self.timeout();
     let exit_codes = self.exit_codes();
@@ -101,9 +101,7 @@ impl CommandText {
   }
 
   fn arguments(&self) -> Result<Vec<CommandArg>, Message> {
-    lines(&self.arguments)
-      .map(|line| CommandArg::new(line).map_err(|error| token_error(&error)))
-      .collect()
+    parse_arguments(&self.arguments)
   }
 
   fn timeout(&self) -> Result<CommandTimeout, Message> {
@@ -145,6 +143,13 @@ impl CommandText {
   fn environment(&self) -> Result<CommandEnvironment, Message> {
     parse_environment(&self.environment)
   }
+}
+
+/// Arguments one per line, as a command tool and an MCP server take them; empty lines are left out.
+pub fn parse_arguments(text: &str) -> Result<Vec<CommandArg>, Message> {
+  lines(text)
+    .map(|line| CommandArg::new(line).map_err(|error| token_error(&error)))
+    .collect()
 }
 
 /// Variables as `NAME=value` lines, as a command tool and Project settings › Environment show them.
@@ -196,7 +201,8 @@ fn name_of(line: &str) -> String {
   line.split_once('=').map_or(line, |(name, _)| name).trim().to_owned()
 }
 
-fn program_error(error: &CommandError) -> Message {
+/// Why a command tool's or an MCP server's program cannot be used.
+pub fn program_message(error: &CommandError) -> Message {
   match error {
     CommandError::BlankProgram => Message::new("tools.errors.programRequired"),
     CommandError::OutsideWorktree(_) => Message::new("tools.errors.programOutsideWorktree"),

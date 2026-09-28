@@ -23,7 +23,7 @@
 //! session takes its id from `--session-id`.
 //!
 //! On standard error it reports its arguments, the names of its environment variables, the prompt (its first line, then
-//! each line) and its process id, like `orchester-fake-codex`.
+//! each line), its process id and its MCP configuration (`fake_mcp`), like `orchester-fake-codex`.
 
 #![allow(
   clippy::print_stdout,
@@ -39,6 +39,9 @@ use std::{
   thread,
   time::Duration,
 };
+
+#[path = "fake_mcp.rs"]
+mod fake_mcp;
 
 const NOT_SIGNED_IN: &str = include_str!("../../../core/tests/fixtures/claude/not-signed-in-clean-env.jsonl");
 /// Counted: 12 + 9,700 (cache writes) + 27 = 9,739; the 2,432 cache reads do not count.
@@ -73,8 +76,13 @@ fn main() -> ExitCode {
     return ExitCode::from(2);
   };
   let fake = Fake { session };
+  let servers = if fake_mcp::report_claude(&args) {
+    r#"[{"name":"broken","status":"failed"}]"#
+  } else {
+    "[]"
+  };
   println!(
-    r#"{{"type":"system","subtype":"init","cwd":"worktree","session_id":"{}","tools":[],"mcp_servers":[],"model":"claude-haiku-4-5","permissionMode":"acceptEdits","apiKeySource":"none","claude_code_version":"2.1.89"}}"#,
+    r#"{{"type":"system","subtype":"init","cwd":"worktree","session_id":"{}","tools":[],"mcp_servers":{servers},"model":"claude-haiku-4-5","permissionMode":"acceptEdits","apiKeySource":"none","claude_code_version":"2.1.89"}}"#,
     fake.session
   );
   let step = prompt

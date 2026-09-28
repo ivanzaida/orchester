@@ -1,6 +1,6 @@
 //! The OS keychain behind core's [`SecretVault`]: Windows Credential Manager and the macOS login
 //! keychain, through the keyring crates. A crate of its own because the keychain is a boundary
-//! both the desktop (which writes values) and the runner (which will read them at tool-call time)
+//! both the desktop (which writes values) and the runner (which reads them when an agent starts)
 //! reach, and it keeps the platform dependencies out of the other crates. Platforms without a
 //! keychain here yet answer every request with [`VaultError::Unsupported`].
 
@@ -28,6 +28,10 @@ pub struct KeychainVault;
 impl SecretVault for KeychainVault {
   fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError> {
     platform::store(key, value)
+  }
+
+  fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError> {
+    platform::read(key)
   }
 
   fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {

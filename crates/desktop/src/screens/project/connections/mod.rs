@@ -1,8 +1,9 @@
 //! Connections (04.01 `a4Lqb`): the project's connections with the selected one's details,
 //! adding and editing an agent provider (04.02 `h6CmJ`) or a GitHub connection (04.06
 //! `D4mDB`), GitHub's details and states (04.05 `CHa9s`, 04.C1–C5) with the account panel
-//! (01.D `hNPA1`), and checking a connection again when it needs attention (04.A `RZUKo`).
-//! MCP servers and the search are not available yet.
+//! (01.D `hNPA1`), checking a connection again when it needs attention (04.A `RZUKo`), and the
+//! project's MCP servers: their rows and details as 04.A draws an MCP connection, adding and editing
+//! one (`mcp_dialog`, not drawn yet), turning one on and off. The search is not available yet.
 
 mod actions;
 mod dialog;
@@ -15,6 +16,9 @@ mod inspector;
 mod launch;
 mod library;
 mod list;
+mod mcp_dialog;
+mod mcp_form;
+mod mcp_inspector;
 pub(crate) mod status;
 
 use std::{path::PathBuf, sync::Arc};
@@ -31,16 +35,21 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{AgentConnection, GitHubConnection},
+  connection::{
+    AgentConnection, GitHubConnection,
+    mcp::{McpServer, McpServerName},
+  },
   id::ConnectionId,
   name::Name,
   repository::RepositoryLink,
+  secret::Secret,
 };
 
 use self::{
   actions::{Work, WorkAction, work_action},
   dialog::{ConnectionDialog, PickedFile, pick_action},
   github_dialog::GitHubDialog,
+  mcp_dialog::McpDialog,
 };
 use super::{
   super::github::account_panel::{AccountPanel, AccountPanelProps},
@@ -104,6 +113,7 @@ impl lurq::app::component::DevtoolsInspectable for Selected {}
 pub enum KindChoice {
   Agent,
   GitHub,
+  Mcp,
 }
 
 impl lurq::app::component::DevtoolsInspectable for KindChoice {}
@@ -116,6 +126,8 @@ pub enum DialogMode {
   AddGitHub,
   EditAgent(AgentConnection),
   EditGitHub(GitHubConnection),
+  AddMcp,
+  EditMcp(McpServer),
   /// Change GitHub account or access, for this connection.
   Account(ConnectionId),
 }
@@ -129,6 +141,10 @@ pub struct DialogContext {
   pub mode: DialogMode,
   /// Names of the project's other connections.
   pub taken: Vec<Name>,
+  /// Names of the project's other MCP servers.
+  pub mcp_taken: Vec<McpServerName>,
+  /// The secrets an MCP server can take values from.
+  pub secrets: Arc<Vec<Secret>>,
   /// The project's repository link, if it has one.
   pub link: Option<Arc<RepositoryLink>>,
   pub close: Arc<dyn Fn() + Send + Sync>,
@@ -280,13 +296,14 @@ impl ConnectionsScreen {
       .on_click(move || {
         dialog.set(match tab {
           ConnectionTab::GitHub => DialogMode::AddGitHub,
+          ConnectionTab::McpServers => DialogMode::AddMcp,
           ConnectionTab::All | ConnectionTab::AgentProviders => DialogMode::AddAgent,
         });
       })
       .render(ctx)
   }
 
-  /// Section tabs (`rxo81`, `BCZsv`): MCP servers are not available yet.
+  /// Section tabs (`rxo81`, `BCZsv`).
   fn tabs(&self, ctx: &Ctx, view: View) -> Element {
     let height = Dimension::Pct(100.0);
     let available = |id, key, tab: ConnectionTab| {
@@ -311,7 +328,11 @@ impl ConnectionsScreen {
           "connections.tabs.github",
           ConnectionTab::GitHub,
         ),
-        Tab::new("connections-tab-mcp", ctx.t("connections.tabs.mcpServers"), height),
+        available(
+          "connections-tab-mcp",
+          "connections.tabs.mcpServers",
+          ConnectionTab::McpServers,
+        ),
       ],
     )
   }
@@ -338,6 +359,11 @@ impl ConnectionsScreen {
         self.provide_dialog_context(ctx, (open, data, view), mode.clone());
         ctx.mount_keyed::<GitHubDialog>(&key, ())
       }
+      DialogMode::AddMcp | DialogMode::EditMcp(_) => {
+        let key = dialog_key(&mode);
+        self.provide_dialog_context(ctx, (open, data, view), mode.clone());
+        ctx.mount_keyed::<McpDialog>(&key, ())
+      }
     };
     Modal::new(content)
       .target(ModalTarget::Root)
@@ -354,8 +380,15 @@ impl ConnectionsScreen {
     let editing = match &mode {
       DialogMode::EditAgent(connection) => Some(connection.id()),
       DialogMode::EditGitHub(connection) => Some(connection.id()),
+      DialogMode::EditMcp(server) => Some(server.id()),
       _ => None,
     };
+    let mcp_taken = data
+      .mcp
+      .iter()
+      .filter(|server| Some(server.id()) != editing)
+      .map(|server| server.name().clone())
+      .collect();
     let taken = data
       .connections
       .iter()
@@ -375,6 +408,8 @@ impl ConnectionsScreen {
       project: open.clone(),
       mode,
       taken,
+      mcp_taken,
+      secrets: data.secrets.clone(),
       link: data.link.clone(),
       close: Arc::new(move || close.set(DialogMode::Closed)),
       saved: Arc::new(move |id| {
@@ -387,6 +422,7 @@ impl ConnectionsScreen {
         retype.set(match kind {
           KindChoice::Agent => DialogMode::AddAgent,
           KindChoice::GitHub => DialogMode::AddGitHub,
+          KindChoice::Mcp => DialogMode::AddMcp,
         });
       }),
     });
@@ -424,6 +460,8 @@ fn dialog_key(mode: &DialogMode) -> String {
     DialogMode::EditAgent(connection) => format!("connection-dialog-{}", connection.id()),
     DialogMode::EditGitHub(connection) => format!("github-dialog-{}", connection.id()),
     DialogMode::AddGitHub => "github-dialog-add".to_owned(),
+    DialogMode::EditMcp(server) => format!("mcp-dialog-{}", server.id()),
+    DialogMode::AddMcp => "mcp-dialog-add".to_owned(),
     DialogMode::AddAgent | DialogMode::Closed | DialogMode::Account(_) => "connection-dialog-add".to_owned(),
   }
 }

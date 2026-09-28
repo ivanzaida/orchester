@@ -7,6 +7,7 @@ mod git;
 pub mod lock;
 pub mod log_file;
 pub mod notify;
+pub mod private_file;
 pub mod server;
 pub mod shutdown_signal;
 pub mod supervisor;

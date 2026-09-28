@@ -3,6 +3,8 @@
 //! permissions for the step's profile, before the step narrows them), what the profile itself
 //! allows, and whether a change made with Apply now is pending or applied (`LJmTH`).
 
+use std::sync::Arc;
+
 use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
   id::ResourceId,
@@ -10,7 +12,7 @@ use orchester_core::{
   resource::{AgentProfile, StepKey, Version, VersionNumber},
   revision::Revision,
   run::{Invocation, Run, RunEventKind},
-  store::{ResourceStore, RunStore},
+  store::{McpServerStore, ResourceStore, RunStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -52,6 +54,9 @@ pub struct RunPermissions {
   pub can_apply_now: bool,
   /// The version the profile's draft publishes as ("draft v3").
   pub draft: u32,
+  /// The MCP servers the pinned profile version gives its agents, by name (by id when the project
+  /// no longer has one). They are not changed for a run.
+  pub mcp_servers: Vec<Arc<str>>,
 }
 
 /// What the run's step `step`, on the pinned profile version `version` of `profile_id`, runs with.
@@ -87,7 +92,23 @@ pub fn run_permissions(
     state: change_state(db, (run, invocations), step, profile_id)?,
     can_apply_now: run.can_apply_permissions_now(profile_id),
     draft: latest.get().saturating_add(1),
+    mcp_servers: mcp_servers(db, version.body())?,
   }))
+}
+
+/// The names of the MCP servers `profile` chooses, in its order.
+fn mcp_servers(db: &ProjectDb, profile: &AgentProfile) -> Result<Vec<Arc<str>>, StoreError> {
+  profile
+    .mcp_servers()
+    .ids()
+    .iter()
+    .map(|id| {
+      Ok(
+        db.mcp_server(*id)?
+          .map_or_else(|| id.to_string().into(), |server| server.name().as_str().into()),
+      )
+    })
+    .collect()
 }
 
 /// Pending while an agent of the profile waits to restart or its new invocation has not started;

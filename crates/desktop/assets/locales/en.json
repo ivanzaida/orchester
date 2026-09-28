@@ -557,6 +557,12 @@
         "noAgentToRestart": "No agent of this profile is at work now, so none can restart. Apply from the next invocation instead.",
         "noPending": "The new permissions were already applied; there is no restart left to cancel.",
         "notSavedToProfile": "The run’s permissions changed, but they could not be saved to the profile draft. Try again, or change the profile in Agents."
+      },
+      "mcp": {
+        "label": "MCP servers",
+        "none": "None",
+        "servers": "{{servers}}",
+        "fromProfile": "From the profile version; they are not changed for a run."
       }
     },
     "summary": {
@@ -747,7 +753,23 @@
         "runTotal": "Run total",
         "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget."
       },
-      "stepOptionAttempt": "{{number}} · {{step}} · {{agent}} · attempt {{attempt}}"
+      "stepOptionAttempt": "{{number}} · {{step}} · {{agent}} · attempt {{attempt}}",
+      "mcp": {
+        "title": "Working without MCP server {{server}}",
+        "titleUnnamed": "Working without an MCP server",
+        "missing": "The profile chooses a server this project no longer has.",
+        "disabled": "The server is turned off in Connections.",
+        "programNotFound": "{{program}} was not found on the PATH or in the worktree.",
+        "workingDirectory": "Claude Code starts every MCP server in the worktree, and this one is set to start in another folder.",
+        "scriptArgument": "Argument {{position}} would be changed by cmd.exe on its way through the server’s command script.",
+        "notUnicode": "A path of the server is not valid Unicode.",
+        "secretMissing": "A variable takes its value from a secret this project no longer has.",
+        "secretArchived": "A variable takes its value from {{secret}}, which is archived.",
+        "secretUnreadable": "The system keychain did not give the value of {{secret}}. The runner log says why.",
+        "sharedVariable": "Another server of this agent takes {{variable}} from a different secret, and Codex hands its servers one value per name.",
+        "reservedVariable": "{{variable}} is a variable Codex itself needs, so a secret cannot be handed over in it.",
+        "failedToStart": "The agent’s CLI reported that the server did not start."
+      }
     },
     "changes": {
       "noRunTitle": "No changes yet",
@@ -1442,7 +1464,23 @@
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
         "noBypass": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
         "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
-        "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them."
+        "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
+        "mcp": {
+          "none": "No MCP servers",
+          "noneHow": "none chosen · user’s own ignored",
+          "onlyOne": "Only the chosen MCP server loads",
+          "only": "Only the {{count}} chosen MCP servers load",
+          "codexLoading": "-c mcp_servers.* · no user config",
+          "claudeLoading": "--strict-mcp-config --mcp-config",
+          "codexCalls": "Their tools run without approval",
+          "codexCallsHow": "-a never · unverified",
+          "claudeCalls": "Only their tools are allowed",
+          "claudeCallsHow": "--allowedTools mcp__* · unverified",
+          "outside": "Servers work outside these limits",
+          "outsideHow": "own processes · network on",
+          "noneLoad": "No MCP servers load",
+          "noneLoadHow": "none can start here · user’s own ignored"
+        }
       },
       "mechanism": {
         "codexReadOnly": "sandbox · read-only",
@@ -1468,7 +1506,15 @@
       "resetTitle": "Changed to what {{connection}} can enforce",
       "resetDetail": "Unavailable on this connection and replaced by the most restrictive option it enforces: {{options}}. Review before publishing.",
       "appliesTitle": "Applies to new runs after publishing",
-      "appliesDetail": "Runs keep the permissions they launched with. Changing them for a single run is not available yet."
+      "appliesDetail": "Runs keep the permissions they launched with. Changing them for a single run is not available yet.",
+      "mcp": {
+        "label": "MCP servers",
+        "none": "This project has no MCP servers yet.",
+        "add": "Add an MCP server",
+        "hint": "Agents of this profile get the servers that are on. Their tool calls are not limited by the settings above.",
+        "turnedOff": "Turned off in Connections: agents work without it until it is turned on.",
+        "noFolder": "Claude Code can’t start it in {{folder}}: agents on this connection work without it."
+      }
     }
   },
   "secrets": {
@@ -1592,7 +1638,9 @@
     "ownership": "Connections belong to {{project}}. CLI connections use the account the CLI is signed in to on this computer; {{project}} records which account it expects.",
     "type": {
       "provider": "Provider",
-      "agentProvider": "Agent provider"
+      "agentProvider": "Agent provider",
+      "mcp": "MCP",
+      "mcpServer": "MCP server"
     },
     "usage": {
       "one": "{{count}} agent",
@@ -1686,6 +1734,75 @@
       "nextStep": "After saving, select this connection in an agent profile and choose its model.",
       "save": "Save connection",
       "saving": "Saving…"
+    },
+    "mcp": {
+      "row": {
+        "stdio": "Program · {{program}}",
+        "http": "Remote MCP · {{host}}"
+      },
+      "status": {
+        "on": "On",
+        "off": "Turned off"
+      },
+      "emptyTitle": "No MCP servers yet",
+      "emptyDetail": "Agents run without your own CLI configuration, so the MCP servers they get are the ones this project adds here. An agent profile chooses which of them its agents get.",
+      "property": {
+        "type": "Type",
+        "program": "Program",
+        "arguments": "Arguments",
+        "folder": "Starts in",
+        "startedBy": "Started by",
+        "endpoint": "Endpoint"
+      },
+      "typeStdio": "Program on this computer",
+      "typeHttp": "Remote MCP",
+      "theWorktree": "The worktree",
+      "startedByCli": "The agent’s CLI, with each agent",
+      "reachedByCli": "The agent’s CLI, over HTTP",
+      "bearer": "Bearer token from {{secret}}",
+      "noAuthentication": "None",
+      "fromSecret": "From {{secret}}",
+      "secretName": "{{name}} ({{environment}})",
+      "secretGone": "a secret this project no longer has",
+      "variables": "Variables",
+      "tools": "Discovered tools",
+      "toolsNote": "Orchester does not connect to MCP servers itself, so it cannot list their tools yet. The agent’s CLI lists them when an agent starts.",
+      "refreshTools": "Refresh tools",
+      "usedByLink": "{{role}} ↗",
+      "notUsed": "No agent profile gives this server to its agents yet.",
+      "turnOff": "Turn off",
+      "turnOn": "Turn on",
+      "detail": "The agent’s CLI starts or reaches this server when an agent that gets it starts, and ends it with the agent. A server that does not start is listed in the run’s activity.",
+      "errors": {
+        "nameRequired": "Enter a name",
+        "nameTooLong": "A server name is at most {{max}} characters long",
+        "nameInvalid": "Use small letters, digits, - and _, starting with a letter",
+        "urlRequired": "Enter the server’s URL",
+        "urlScheme": "The URL starts with http:// or https:// and names a host",
+        "urlCredentials": "Keep user names and passwords out of the URL; use a bearer token from a secret",
+        "whitespace": "Remove the spaces and line breaks",
+        "tooLong": "This is too long",
+        "workingDirectory": "Use a folder inside the worktree, or an absolute path",
+        "variables": "A variable cannot be used as written",
+        "unknownSecret": "This project has no secret {{secret}}"
+      },
+      "dialog": {
+        "addTitle": "Add MCP server",
+        "editTitle": "Edit MCP server",
+        "namePlaceholder": "project-knowledge",
+        "nameHint": "Agents know the server and its tools by this name.",
+        "programPlaceholder": "npx",
+        "folderHint": "A folder in the worktree, or an absolute path. Claude Code starts every server in the worktree.",
+        "argumentsHint": "One argument per line, passed as written.",
+        "variablesHint": "One NAME=value per line. ${secret:NAME@environment} takes the value of a project secret.",
+        "fromSecret": "Variable from a secret",
+        "addSecret": "Add a variable from a secret…",
+        "noSecrets": "This project has no secrets",
+        "urlPlaceholder": "https://mcp.example.dev/mcp",
+        "secretsTitle": "Secret values stay out of arguments and logs",
+        "secretsDetail": "They are read from the system keychain when an agent starts and handed to its CLI only through its environment (Codex) or a file only it reads, removed when the agent ends (Claude Code).",
+        "nextStep": "Choose which agent profiles get this server on their Permissions tab."
+      }
     }
   },
   "github": {
@@ -3207,6 +3324,16 @@
           "one": "Could not import from {{project}}",
           "other": "Could not import from {{project}}"
         }
+      },
+      "mcpServerOn": {
+        "running": "Turning on MCP server {{name}}",
+        "done": "MCP server turned on · {{name}}",
+        "failed": "Could not turn on MCP server {{name}}"
+      },
+      "mcpServerOff": {
+        "running": "Turning off MCP server {{name}}",
+        "done": "MCP server turned off · {{name}}",
+        "failed": "Could not turn off MCP server {{name}}"
       }
     },
     "opens": {

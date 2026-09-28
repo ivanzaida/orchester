@@ -22,7 +22,10 @@ use tokio::{
 };
 
 use super::super::{Notifier, tool::CommandFinished};
-use crate::supervisor::{ProcessEvent, ProcessExit, Supervised};
+use crate::{
+  private_file::PrivateFile,
+  supervisor::{ProcessEvent, ProcessExit, Supervised},
+};
 
 /// Transcript entries are written at least this often while the CLI prints…
 const FLUSH_INTERVAL: Duration = Duration::from_millis(250);
@@ -96,6 +99,8 @@ pub(in super::super) struct Worker {
   pub(in super::super) notifier: Notifier,
   pub(in super::super) events: mpsc::UnboundedSender<WorkerEvent>,
   pub(in super::super) stops: mpsc::UnboundedReceiver<Stop>,
+  /// The MCP configuration the CLI read, removed once the CLI has ended.
+  pub(in super::super) mcp_file: Option<PrivateFile>,
 }
 
 struct Watch {
@@ -114,10 +119,13 @@ struct Watch {
 
 impl Worker {
   /// Follows the CLI until it exits, then tells the run how it ended.
-  pub(in super::super) async fn work(self) {
+  pub(in super::super) async fn work(mut self) {
     let execution = self.invocation.execution;
     let events = self.events.clone();
+    let mcp_file = self.mcp_file.take();
     let end = self.follow().await;
+    // The CLI has ended: the configuration it read, with its secret values, goes before the run hears of it.
+    drop(mcp_file);
     // The run's task outlives its agents; if it is gone, the runner is ending anyway.
     if events.send(WorkerEvent::Ended { execution, end }).is_err() {
       tracing::debug!(%execution, "the run no longer waits for its agent");

@@ -1,8 +1,9 @@
 //! Project connections (`docs/design/orchester-workspace.md`, "Agent profiles and connections").
-//! Two kinds exist: agent providers (the Codex and Claude Code CLIs) and GitHub through the
-//! GitHub CLI. Each runs on this computer and is signed in through the program's own login;
-//! Orchester stores no credentials and never asks the programs for them. A connection holds the
-//! executable and what the last check found out about it.
+//! Two kinds are programs on this computer: agent providers (the Codex and Claude Code CLIs) and
+//! GitHub through the GitHub CLI. MCP servers ([`mcp`]) are the third kind, configured for the agent
+//! CLIs to start or reach. A program connection is signed in through the program's own login; Orchester
+//! stores no credentials and never asks the programs for them. It holds the executable and what the last
+//! check found out about it.
 
 mod adapter;
 mod agent;
@@ -10,6 +11,7 @@ mod catalog;
 mod discovery;
 mod github;
 pub mod invocation;
+pub mod mcp;
 pub mod stream;
 
 use std::path::{Path, PathBuf};

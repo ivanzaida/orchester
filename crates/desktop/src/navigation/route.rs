@@ -38,6 +38,7 @@ const ENVIRONMENT: &str = "environment";
 const TAB_QUERY: &str = "tab";
 const AGENT_PROVIDERS: &str = "agent-providers";
 const GITHUB: &str = "github";
+const MCP_SERVERS: &str = "mcp-servers";
 const DRAFTS: &str = "drafts";
 const RUNNING: &str = "running";
 const NEEDS_YOU: &str = "needs-you";
@@ -153,6 +154,7 @@ pub enum ConnectionTab {
   All,
   AgentProviders,
   GitHub,
+  McpServers,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -528,6 +530,7 @@ impl ConnectionTab {
     match tab {
       Some(AGENT_PROVIDERS) => Self::AgentProviders,
       Some(GITHUB) => Self::GitHub,
+      Some(MCP_SERVERS) => Self::McpServers,
       _ => Self::All,
     }
   }
@@ -537,6 +540,7 @@ impl ConnectionTab {
       Self::All => None,
       Self::AgentProviders => Some(AGENT_PROVIDERS),
       Self::GitHub => Some(GITHUB),
+      Self::McpServers => Some(MCP_SERVERS),
     }
   }
 }

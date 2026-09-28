@@ -254,12 +254,13 @@ pub(super) fn type_field(ctx: &Ctx, kind: &Signal<KindChoice>, editing: bool) ->
   let key = |kind| match kind {
     KindChoice::Agent => "connections.type.agentProvider",
     KindChoice::GitHub => "github.type",
+    KindChoice::Mcp => "connections.type.mcpServer",
   };
   if editing {
     let control = value_box(ctx, "connection-type", &ctx.t(key(kind.get())), ValueTone::Value, None);
     return field(&label, control, FieldNote::None);
   }
-  let options = [KindChoice::Agent, KindChoice::GitHub].map(|choice| (choice, ctx.t(key(choice))));
+  let options = [KindChoice::Agent, KindChoice::GitHub, KindChoice::Mcp].map(|choice| (choice, ctx.t(key(choice))));
   select_field(ctx, "connection-type", &label, kind.clone(), options)
 }
 

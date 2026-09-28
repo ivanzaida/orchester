@@ -2,9 +2,58 @@
 //! output; running them is the job of a [`CommandRunner`] (`orchester-exec` for real processes,
 //! captured output in tests).
 
-use std::path::{Path, PathBuf};
+use std::{
+  fmt,
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use thiserror::Error;
+
+use crate::secret::SecretValue;
+
+/// An environment variable whose value is a secret: the program gets it, and nothing else shows it.
+/// `Debug` shows the name only, and the value is read only through [`SecretVariable::expose`], which
+/// the process start calls.
+#[derive(Clone)]
+pub struct SecretVariable {
+  name: String,
+  value: Arc<SecretValue>,
+}
+
+impl SecretVariable {
+  pub fn new(name: &str, value: Arc<SecretValue>) -> Self {
+    Self {
+      name: name.to_owned(),
+      value,
+    }
+  }
+
+  pub fn name(&self) -> &str {
+    &self.name
+  }
+
+  /// The value, for the one place that hands it to the starting process.
+  pub fn expose(&self) -> &str {
+    self.value.expose()
+  }
+}
+
+impl fmt::Debug for SecretVariable {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "SecretVariable({}=<redacted>)", self.name)
+  }
+}
+
+/// Two are the same when they set the same name to the same value in memory; values are never
+/// compared.
+impl PartialEq for SecretVariable {
+  fn eq(&self, other: &Self) -> bool {
+    self.name == other.name && Arc::ptr_eq(&self.value, &other.value)
+  }
+}
+
+impl Eq for SecretVariable {}
 
 /// A program to run to completion. Everything that differs from the calling process is spelled
 /// out here: arguments, working directory, environment changes and standard input.
@@ -15,6 +64,8 @@ pub struct Command {
   current_dir: Option<PathBuf>,
   env: Vec<(String, String)>,
   env_removed: Vec<String>,
+  /// Set after [`Self::env`]; a name set here is not in it.
+  secret_env: Vec<SecretVariable>,
   inherit_env: bool,
   stdin: Option<String>,
 }
@@ -33,6 +84,7 @@ impl Command {
       current_dir: None,
       env: Vec::new(),
       env_removed: Vec::new(),
+      secret_env: Vec::new(),
       inherit_env: true,
       stdin: None,
     }
@@ -67,6 +119,18 @@ impl Command {
     self
   }
 
+  /// Sets `variable` for the program only, replacing a variable of the same name. Its value stays
+  /// out of the arguments and out of this command's `Debug` output.
+  #[must_use]
+  pub fn with_secret_env(mut self, variable: SecretVariable) -> Self {
+    self.env.retain(|(name, _)| !name.eq_ignore_ascii_case(variable.name()));
+    self
+      .secret_env
+      .retain(|existing| !existing.name().eq_ignore_ascii_case(variable.name()));
+    self.secret_env.push(variable);
+    self
+  }
+
   /// Writes `input` to the program's standard input, then closes it.
   #[must_use]
   pub fn with_stdin(mut self, input: String) -> Self {
@@ -92,6 +156,11 @@ impl Command {
 
   pub fn env_removed(&self) -> &[String] {
     &self.env_removed
+  }
+
+  /// Variables whose values are secrets, set after [`Command::env`].
+  pub fn secret_env(&self) -> &[SecretVariable] {
+    &self.secret_env
   }
 
   /// Whether the program starts from the caller's environment; otherwise it sees only

@@ -408,6 +408,11 @@ impl SecretVault for MemoryVault {
     Ok(())
   }
 
+  fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError> {
+    let value = self.0.lock().get(key).cloned().ok_or(VaultError::NotFound)?;
+    SecretValue::new(value).map_err(|_| VaultError::Failed("blank".to_owned()))
+  }
+
   fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
     self.0.lock().remove(key);
     Ok(())

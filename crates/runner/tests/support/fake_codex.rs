@@ -28,7 +28,8 @@
 //!
 //! On standard error it reports what it was given: its arguments, the names of its environment
 //! variables and the first line of the prompt, so tests can check how it was started, and the
-//! process ids of itself and its helper, so tests can check that ending it ends both.
+//! process ids of itself and its helper, so tests can check that ending it ends both. It reports its MCP servers as
+//! `fake_mcp` describes.
 
 #![allow(
   clippy::print_stdout,
@@ -44,6 +45,9 @@ use std::{
   thread,
   time::Duration,
 };
+
+#[path = "fake_mcp.rs"]
+mod fake_mcp;
 
 const FAILED_TURN: &str = include_str!("../../../core/tests/fixtures/codex/c11-bad-model-via-cmd-shim.jsonl");
 const USAGE: &str = r#"{"type":"turn.completed","usage":{"input_tokens":12166,"cached_input_tokens":2432,"output_tokens":5,"reasoning_output_tokens":0}}"#;
@@ -140,6 +144,9 @@ fn read_prompt(args: &[String]) -> Option<String> {
     eprintln!("prompt| {line}");
   }
   eprintln!("pid: {}", std::process::id());
+  if fake_mcp::report_codex(args) {
+    println!(r#"{{"type":"error","message":"MCP client for `broken` failed to start: program not found"}}"#);
+  }
   Some(prompt)
 }
 

@@ -1,8 +1,8 @@
 //! The run permissions popover (02.J `NNRH8`): which agent, step, model and profile version the
 //! permissions come from, when a change takes effect (`aDPaV`), the three settings (`settings`),
 //! *Also save to the profile* (`u8JAYJ`) and the footer: Cancel, Apply now (`v2ssd`) and Apply from
-//! next invocation (`JOLcW`). It is a form: Tab moves through its controls and wraps, Enter applies
-//! from the next invocation, Escape or Cancel closes it without changes.
+//! next invocation (`JOLcW`); under the settings, the MCP servers the agent gets (read-only). It is a form: Tab moves
+//! through its controls and wraps, Enter applies from the next invocation, Escape or Cancel closes it without changes.
 
 use std::sync::Arc;
 
@@ -32,6 +32,33 @@ use crate::{
     pressable::{Ring, keyboard_stop, pressable, surface},
   },
 };
+
+/// The MCP servers the agent gets, read-only: they come from the profile version and are not changed for
+/// a run (not drawn yet; laid out like a setting of `G2l6MT`).
+fn mcp_servers(ctx: &Ctx, props: &RunPermissionsProps) -> Element {
+  let servers = &props.permissions.mcp_servers;
+  let text = if servers.is_empty() {
+    ctx.t("runs.permissions.mcp.none")
+  } else {
+    let names: Vec<&str> = servers.iter().map(|name| &**name).collect();
+    ctx.t_args(
+      "runs.permissions.mcp.servers",
+      [("servers", names.join(&ctx.t("common.listSeparator")).as_str())],
+    )
+  };
+  Column::new()
+    .id("task-permissions-mcp")
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(Text::new(&ctx.t("runs.permissions.mcp.label")).variant(TypographyStyle::Caption))
+    .child(
+      Text::new(&text)
+        .variant(ExtraTypography::MonoValue.role())
+        .color(PaletteColor::TextPrimary),
+    )
+    .child(Text::new(&ctx.t("runs.permissions.mcp.fromProfile")).variant(ExtraTypography::Hint.role()))
+    .into()
+}
 
 /// Popover width (`NNRH8`).
 const POPOVER_WIDTH: f32 = 460.0;
@@ -81,6 +108,7 @@ impl RunPermissionsRow {
       .child(self.header(ctx, props))
       .child(takes_effect(ctx, props))
       .with_children(settings(ctx, &self.edit, props, &draft))
+      .child(mcp_servers(ctx, props))
       .child(Rect::new(Dimension::Pct(100.0), Dimension::Px(DIVIDER_HEIGHT)).background(ExtraColor::Hairline.role()))
       .child(self.save_to_profile(ctx, props))
       .with_children(failure)

@@ -20,6 +20,7 @@ use orchester_ipc::{
   frame::{FrameReader, FrameWriter},
   handshake,
 };
+use orchester_vault::KeychainVault;
 use tokio::sync::mpsc;
 
 use crate::{
@@ -55,7 +56,7 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<
   let (notifications, outgoing) = mpsc::unbounded_channel();
   // Replies of requests answered later travel with the notifications.
   let replies = notifications.clone();
-  let scheduler = Scheduler::new(project_root, Notifier::new(notifications));
+  let scheduler = Scheduler::new(project_root, Notifier::new(notifications), Arc::new(KeychainVault));
   // A frame read cannot be interrupted without losing data, so requests are read on their own task.
   let (incoming, requests) = mpsc::unbounded_channel::<Incoming>();
   let reading = tokio::spawn(async move {

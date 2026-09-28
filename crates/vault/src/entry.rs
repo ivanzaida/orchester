@@ -1,14 +1,31 @@
-//! Storing and removing a value through a keyring entry, the same on every platform that has a
+//! Storing, reading and removing a value through a keyring entry, the same on every platform that has a
 //! store, and what keyring's errors mean for the vault.
 
 use keyring_core::{Entry, Error};
 use orchester_core::secret::{SecretValue, VaultError};
+use zeroize::Zeroize;
 
 /// Stores `value` in the credential `entry` names, creating or replacing it.
 pub(crate) fn store(entry: keyring_core::Result<Entry>, value: &SecretValue) -> Result<(), VaultError> {
   entry
     .and_then(|entry| entry.set_secret(value.expose().as_bytes()))
     .map_err(vault_error)
+}
+
+/// The value of the credential `entry` names, stored as UTF-8 by [`store`].
+pub(crate) fn read(entry: keyring_core::Result<Entry>) -> Result<SecretValue, VaultError> {
+  let bytes = match entry.and_then(|entry| entry.get_secret()) {
+    Ok(bytes) => bytes,
+    Err(Error::NoEntry) => return Err(VaultError::NotFound),
+    Err(error) => return Err(vault_error(error)),
+  };
+  let text = String::from_utf8(bytes).map_err(|error| {
+    // The bytes may be a value; they are wiped, and the error does not carry them.
+    let mut bytes = error.into_bytes();
+    bytes.zeroize();
+    VaultError::Failed("a stored value is malformed".to_owned())
+  })?;
+  SecretValue::new(text).map_err(|_| VaultError::Failed("a stored value is blank".to_owned()))
 }
 
 /// Removes the credential `entry` names; one that does not exist is already removed.

@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use super::{AgentEvent, CommandStatus, FileChange, FileChangeKind, OutputStream};
-use crate::run::TokenUsage;
+use crate::{connection::mcp::McpServerProblem, run::TokenUsage};
 
 /// The `error` of an assistant message whose CLI is not signed in.
 const AUTHENTICATION_FAILED: &str = "authentication_failed";
@@ -234,13 +234,34 @@ impl ClaudeStream {
   }
 }
 
+/// The session, and every MCP server the CLI could not start: `init` lists each with its status,
+/// `connected` for one that started (probe 2026-09-28: `failed` for a missing program, a server that
+/// exits and an unreachable URL).
 fn system(value: &Value) -> Option<Vec<AgentEvent>> {
   match value.get("subtype")?.as_str()? {
-    "init" => Some(vec![AgentEvent::SessionStarted {
-      session: text(value, "session_id")?,
-    }]),
+    "init" => {
+      let mut events = vec![AgentEvent::SessionStarted {
+        session: text(value, "session_id")?,
+      }];
+      let servers = value.get("mcp_servers").and_then(Value::as_array);
+      events.extend(servers.into_iter().flatten().filter_map(failed_server));
+      Some(events)
+    }
     _ => None,
   }
+}
+
+fn failed_server(server: &Value) -> Option<AgentEvent> {
+  let status = server.get("status")?.as_str()?;
+  if matches!(status, "connected" | "pending") {
+    return None;
+  }
+  Some(AgentEvent::McpServer {
+    server: Some(text(server, "name")?),
+    problem: McpServerProblem::FailedToStart {
+      detail: (status != "failed").then(|| status.to_owned()),
+    },
+  })
 }
 
 /// A tool call as one line: a shell command as it is, another tool with what it works on.

@@ -64,15 +64,21 @@ impl ResourceBody for AgentProfile {
   const KIND: ResourceKind = ResourceKind::AgentProfile;
   /// 2: permissions (2026-09-26). Profiles of schema 1 get
   /// [`AgentPermissions::before_permissions`].
-  const SCHEMA: u32 = 2;
+  /// 3: MCP servers (2026-09-28). Profiles of schemas 1 and 2 get none.
+  const SCHEMA: u32 = 3;
 
   fn upgrade(schema: u32, mut body: serde_json::Value) -> Option<serde_json::Value> {
-    if schema != 1 {
-      return None;
+    let fields = body.as_object_mut()?;
+    match schema {
+      1 => {
+        let permissions =
+          serde_json::to_value(AgentPermissions::before_permissions()).expect("permissions serialize to JSON");
+        fields.insert("permissions".to_owned(), permissions);
+      }
+      2 => {}
+      _ => return None,
     }
-    let permissions =
-      serde_json::to_value(AgentPermissions::before_permissions()).expect("permissions serialize to JSON");
-    body.as_object_mut()?.insert("permissions".to_owned(), permissions);
+    fields.insert("mcp_servers".to_owned(), serde_json::Value::Array(Vec::new()));
     Some(body)
   }
 }

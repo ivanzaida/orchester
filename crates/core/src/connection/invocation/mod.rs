@@ -4,6 +4,7 @@
 
 mod claude;
 mod codex;
+pub mod mcp;
 
 use std::{
   ffi::OsString,
@@ -13,8 +14,12 @@ use std::{
 pub use self::{
   claude::{ClaudeInvocation, ClaudeSession},
   codex::CodexInvocation,
+  mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
 };
-use crate::{command::Command, resource::CommandEnvironment};
+use crate::{
+  command::{Command, SecretVariable},
+  resource::CommandEnvironment,
+};
 
 /// The operating system an invocation is built for. Builders take it as a value so both
 /// variants can be built and tested on either platform.
@@ -94,8 +99,14 @@ pub fn agent_environment(environment: impl IntoIterator<Item = (OsString, OsStri
   environment
     .into_iter()
     .filter_map(|(name, value)| Some((name.into_string().ok()?, value.into_string().ok()?)))
-    .filter(|(name, _)| ALLOWED.iter().any(|allowed| allowed.eq_ignore_ascii_case(name)))
+    .filter(|(name, _)| is_agent_variable(name))
     .collect()
+}
+
+/// Whether an agent CLI starts with `name` from the environment Orchester runs in (compared
+/// without regard to case).
+pub fn is_agent_variable(name: &str) -> bool {
+  ALLOWED.iter().any(|allowed| allowed.eq_ignore_ascii_case(name))
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -105,14 +116,18 @@ pub enum InvocationError {
 }
 
 /// The command of an agent CLI: `args` after the program, in the worktree, with `prompt` on
-/// standard input, the allowed part of `environment` and the variables the project adds
-/// (`project`), which replace ones of the same name.
+/// standard input, the allowed part of `environment`, the variables the project adds (`project`)
+/// and `secrets`, each replacing ones of the same name.
 fn agent_command(
   executable: &Path,
   args: Vec<OsString>,
   worktree: &Path,
   prompt: String,
-  (environment, project): (impl IntoIterator<Item = (OsString, OsString)>, &CommandEnvironment),
+  (environment, project, secrets): (
+    impl IntoIterator<Item = (OsString, OsString)>,
+    &CommandEnvironment,
+    &[SecretVariable],
+  ),
 ) -> Result<Command, InvocationError> {
   let args = args
     .into_iter()
@@ -124,10 +139,9 @@ fn agent_command(
     .collect::<Result<Vec<_>, _>>()?;
   let mut variables = agent_environment(environment);
   project.add_to(&mut variables);
-  Ok(
-    Command::new(executable, args)
-      .with_current_dir(worktree)
-      .with_environment(variables)
-      .with_stdin(prompt),
-  )
+  let command = Command::new(executable, args)
+    .with_current_dir(worktree)
+    .with_environment(variables)
+    .with_stdin(prompt);
+  Ok(secrets.iter().cloned().fold(command, Command::with_secret_env))
 }

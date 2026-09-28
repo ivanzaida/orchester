@@ -1,7 +1,8 @@
 //! *Enforced by <CLI>* (`kXyN7` in 04.04 `T1rjv`): each setting with how the chosen connection's
 //! CLI enforces it, or that it cannot. The design has it come from a capability check of the CLI;
 //! what exists is core's capability table for this platform, so the panel says whose known limits
-//! it shows rather than a check time. Then the rules: no bypass mode, steps only narrow.
+//! it shows rather than a check time, then what it enforces for the chosen MCP servers (`mcp`). Then the rules: no
+//! bypass mode, steps only narrow.
 
 use lurq::{
   app::{
@@ -54,6 +55,7 @@ impl ProfileEditor {
           &self.permissions.get(),
           &result,
         ));
+        rows.extend(self.mcp_enforcement(ctx, connection.provider()));
         rows
       }
       _ => vec![line(Icon::Plug, &ctx.t("agents.permissions.enforcement.noConnection"))],
@@ -148,7 +150,7 @@ fn not_enforceable(ctx: &Ctx, problem: &PermissionProblem) -> Element {
 }
 
 /// A setting and how it is enforced (`S9nIp1`): the text over the mechanism in mono.
-fn row(glyph: Icon, title: &str, how: &str) -> Element {
+pub(super) fn row(glyph: Icon, title: &str, how: &str) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Inline.role())

@@ -21,6 +21,7 @@ mod import;
 mod instructions;
 mod integration;
 mod lifecycle;
+mod mcp_servers;
 mod modal_layer;
 mod new_task;
 mod pipeline_editor;

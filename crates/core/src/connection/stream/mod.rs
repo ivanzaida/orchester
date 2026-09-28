@@ -8,7 +8,10 @@ mod codex;
 use serde::{Deserialize, Serialize};
 
 pub use self::{claude::ClaudeStream, codex::parse_codex_line};
-use crate::{connection::AgentProvider, run::TokenUsage};
+use crate::{
+  connection::{AgentProvider, mcp::McpServerProblem},
+  run::TokenUsage,
+};
 
 /// Which output of the CLI a line came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -106,6 +109,12 @@ pub enum AgentEvent {
   RunnerProblem {
     problem: RunnerProblem,
   },
+  /// The agent works without MCP server `server`: the runner left it out before the CLI started, or the
+  /// CLI reported that it did not start. `None` when the CLI did not say which server.
+  McpServer {
+    server: Option<String>,
+    problem: McpServerProblem,
+  },
   /// A tool step started the program of command tool `tool`; `command` is its command line as
   /// [`crate::resource::CommandAction::command_line`] writes it.
   ToolCommandStarted {
@@ -176,6 +185,7 @@ impl AgentEvent {
       Self::NotSignedIn { .. } => "not_signed_in",
       Self::Raw { .. } => "raw",
       Self::RunnerProblem { .. } => "runner_problem",
+      Self::McpServer { .. } => "mcp_server",
       Self::ToolCommandStarted { .. } => "tool_command_started",
       Self::ToolCommandFinished { .. } => "tool_command_finished",
     }

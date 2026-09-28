@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  connection::{AgentConnection, ModelSupport, REASONING_EFFORT},
+  connection::{AgentConnection, ModelSupport, REASONING_EFFORT, mcp::McpServerSelection},
   name::{Name, NameError},
   permission::AgentPermissions,
   resource::{AgentProfile, ModelId, PromptError, PromptText, ProviderSettings},
@@ -72,6 +72,7 @@ pub struct ProfileForm<'a> {
   /// `None` keeps the CLI's default effort.
   pub effort: Option<&'a str>,
   pub permissions: &'a AgentPermissions,
+  pub mcp_servers: &'a McpServerSelection,
 }
 
 /// Why the profile cannot be saved yet, per field.
@@ -101,7 +102,8 @@ impl ProfileForm<'_> {
             model,
             settings,
           )
-          .with_permissions(self.permissions.clone()),
+          .with_permissions(self.permissions.clone())
+          .with_mcp_servers(self.mcp_servers.clone()),
         )
       }
       (role, instructions, connection, model) => Err(Box::new(ProfileErrors {

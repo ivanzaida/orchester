@@ -6,7 +6,7 @@ use std::{fs, num::NonZeroU32};
 use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog,
-    ModelSupport, REASONING_EFFORT, SignIn,
+    ModelSupport, REASONING_EFFORT, SignIn, mcp::McpServerSelection,
   },
   id::{ConnectionId, ProjectId},
   name::Name,
@@ -27,6 +27,7 @@ use orchester_store::{ProjectDb, StoreError};
 use tempfile::TempDir;
 
 static READ_ONLY: AgentPermissions = AgentPermissions::before_permissions();
+static NO_MCP_SERVERS: McpServerSelection = McpServerSelection::none();
 
 fn project_db() -> (TempDir, ProjectDb) {
   let repo = tempfile::tempdir().expect("temporary directory");
@@ -94,6 +95,7 @@ fn form<'a>(
     custom_model: "",
     effort,
     permissions: &READ_ONLY,
+    mcp_servers: &NO_MCP_SERVERS,
   }
 }
 
@@ -150,6 +152,7 @@ fn profile_form_reports_each_problem() {
     custom_model: "bad model",
     effort: None,
     permissions: &READ_ONLY,
+    mcp_servers: &NO_MCP_SERVERS,
   }
   .profile()
   .expect_err("invalid form");

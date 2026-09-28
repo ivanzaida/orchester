@@ -58,7 +58,7 @@ fn value(text: &str) -> SecretValue {
 }
 
 #[test]
-fn credential_manager_stores_replaces_and_removes_a_value() {
+fn credential_manager_stores_reads_replaces_and_removes_a_value() {
   let credential = Throwaway::new();
   let vault = KeychainVault;
 
@@ -66,6 +66,8 @@ fn credential_manager_stores_replaces_and_removes_a_value() {
     .store(&credential.key, &value("fake-value-1"))
     .expect("the value is stored");
   assert_eq!(credential.stored().expect("the credential exists"), b"fake-value-1");
+  let read = vault.read(&credential.key).expect("the value is read back");
+  assert_eq!(read.expose(), "fake-value-1");
 
   vault
     .store(&credential.key, &value("fake-value-2"))
@@ -74,6 +76,10 @@ fn credential_manager_stores_replaces_and_removes_a_value() {
 
   vault.delete(&credential.key).expect("the value is removed");
   assert!(matches!(credential.stored(), Err(Error::NoEntry)));
+  assert_eq!(
+    vault.read(&credential.key).map(|value| value.expose().to_owned()),
+    Err(VaultError::NotFound)
+  );
   vault
     .delete(&credential.key)
     .expect("removing a removed value succeeds");
