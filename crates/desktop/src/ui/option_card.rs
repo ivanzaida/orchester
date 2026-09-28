@@ -121,11 +121,11 @@ impl From<OptionCard> for Element {
 pub fn unavailable_reason(reason: &str) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
-    .padding_left(ExtraSpacing::Rail.role())
+    .padding_left(ExtraSpacing::ReasonIndent.role())
     .spacing(ExtraSpacing::Tight.role())
     .align_items(Alignment::Start)
     .describe("role", "unavailable-reason")
-    .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))
+    .child(icon(Icon::Lock, IconSize::Reason, PaletteColor::TextMuted))
     .child(
       Text::new(reason)
         .variant(ExtraTypography::Hint.role())

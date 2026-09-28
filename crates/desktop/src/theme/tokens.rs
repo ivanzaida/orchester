@@ -103,6 +103,9 @@ pub const SPACE_BESIDE_GUTTER: f32 = 20.0;
 /// A check row's detail under its title: the row's icon and the gap after it (`gzztk` in 02.Q
 /// `LMrbK`).
 pub const SPACE_CHECK_INDENT: f32 = 28.0;
+/// Why an option cannot be chosen, under it: indented past a compact radio and its gap (`J5RohL`,
+/// `L1B0m` in 04.B `W0Owo`).
+pub const SPACE_REASON_INDENT: f32 = 22.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;

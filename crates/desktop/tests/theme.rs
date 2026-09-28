@@ -138,6 +138,11 @@ fn getting_started_roles_follow_pencil() {
     theme.spacing_value(ExtraSpacing::CheckIndent.role()),
     Dimension::Px(28.0)
   );
+  // Why an option cannot be chosen, past a compact radio and its gap (`J5RohL`, `L1B0m`).
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::ReasonIndent.role()),
+    Dimension::Px(22.0)
+  );
   assert_eq!(
     theme.typography_style(ExtraTypography::DialogTitle.role()).font_size,
     20.0
@@ -481,6 +486,8 @@ fn activity_roles_follow_pencil() {
   assert_eq!(size(ExtraTypography::IconEntry), 13.0);
   assert_eq!(size(ExtraTypography::IconEvent), 14.0);
   assert_eq!(size(ExtraTypography::IconState), 20.0);
+  // The lock before an unavailable option's reason (`OoLYh`, `RuJto`): 11.
+  assert_eq!(size(ExtraTypography::IconReason), 11.0);
   // Switch `K8ItM`: radius 8.
   assert_eq!(theme.radius_value(ExtraRadius::Pill.role()), 8.0);
   // Unparsed lines `Ane9j`: 60 %.

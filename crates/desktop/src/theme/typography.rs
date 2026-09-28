@@ -58,6 +58,8 @@ pub enum ExtraTypography {
   Explanation,
   /// Chevrons and other 12px icons (`B1lur`, `Y9sVM2`).
   IconSmall,
+  /// The lock before why an option cannot be chosen (`OoLYh`, `RuJto` in 04.B `W0Owo`), 11px.
+  IconReason,
   /// Acceptance criterion marker (`JjM8I`), 13px.
   IconMarker,
   /// Button and secondary navigation icons (`xfnek`, `ssq5w`).
@@ -159,7 +161,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 71] = [
+  const ALL: [Self; 72] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -183,6 +185,7 @@ impl ExtraTypography {
     Self::DialogTitle,
     Self::Explanation,
     Self::IconSmall,
+    Self::IconReason,
     Self::IconMarker,
     Self::IconButton,
     Self::IconNav,
@@ -258,6 +261,7 @@ impl ExtraTypography {
       Self::DialogTitle => "dialog-title",
       Self::Explanation => "explanation",
       Self::IconSmall => "icon-small",
+      Self::IconReason => "icon-reason",
       Self::IconMarker => "icon-marker",
       Self::IconButton => "icon-button",
       Self::IconNav => "icon-nav",
@@ -352,6 +356,7 @@ impl ExtraTypography {
   const fn icon_size(self) -> Option<f32> {
     match self {
       Self::IconSmall => Some(12.0),
+      Self::IconReason => Some(11.0),
       Self::IconMarker => Some(13.0),
       Self::IconButton => Some(15.0),
       Self::IconNav => Some(17.0),

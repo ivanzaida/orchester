@@ -8,8 +8,8 @@ use super::tokens::{
   SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT, SPACE_COLUMNS, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD,
   SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT,
   SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL,
-  SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT,
-  TAB_INDICATOR_STROKE,
+  SPACE_REASON_INDENT, SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA,
+  SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -73,10 +73,13 @@ pub enum ExtraSpacing {
   /// What a check row says under its title starts where the title does: the row's icon and the
   /// gap after it (the uncommitted files, `gzztk` in 02.Q `LMrbK`).
   CheckIndent,
+  /// Why an option cannot be chosen starts past a compact radio and its gap (`J5RohL`, `L1B0m` in
+  /// 04.B `W0Owo`).
+  ReasonIndent,
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 26] = [
+  const ALL: [Self; 27] = [
     Self::Hair,
     Self::Mark,
     Self::Tight,
@@ -103,6 +106,7 @@ impl ExtraSpacing {
     Self::TextArea,
     Self::BesideGutter,
     Self::CheckIndent,
+    Self::ReasonIndent,
   ];
 
   fn name(self) -> &'static str {
@@ -133,6 +137,7 @@ impl ExtraSpacing {
       Self::TextArea => "text-area",
       Self::BesideGutter => "beside-gutter",
       Self::CheckIndent => "check-indent",
+      Self::ReasonIndent => "reason-indent",
     }
   }
 
@@ -164,6 +169,7 @@ impl ExtraSpacing {
       Self::TextArea => SPACE_TEXT_AREA,
       Self::BesideGutter => SPACE_BESIDE_GUTTER,
       Self::CheckIndent => SPACE_CHECK_INDENT,
+      Self::ReasonIndent => SPACE_REASON_INDENT,
     }
   }
 
