@@ -1,3 +1,4 @@
+pub mod all_projects;
 pub mod close_dialog;
 pub mod github;
 pub mod project;
@@ -5,5 +6,4 @@ pub mod recovery_dialog;
 pub mod setup;
 pub mod startup_recovery;
 pub mod status_bar;
-pub mod unavailable;
 pub mod welcome;

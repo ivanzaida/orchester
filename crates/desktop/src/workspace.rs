@@ -1,13 +1,20 @@
 //! The personal workspace: the application database and the projects it knows. Every method
 //! blocks on SQLite or the file system; the UI calls them off the UI thread.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  collections::HashMap,
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
-use orchester_core::{project::Project, time::Timestamp};
+use orchester_core::{id::ProjectId, project::Project, run::TaskPhase, time::Timestamp};
 use orchester_store::{AppDb, PreviousSession, ProjectDb, RegisteredProject, SessionEnd, SessionId, StoreError};
 use parking_lot::Mutex;
 
-use crate::project_setup::NewProject;
+use crate::{
+  messages::{self, Message},
+  project_setup::NewProject,
+};
 
 /// A project whose database is open and readable.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,6 +34,74 @@ pub enum Landing {
     project: RegisteredProject,
     error: StoreError,
   },
+}
+
+/// A project of the workspace as All projects lists it at once: from the application database
+/// and whether its folder is still there.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProjectEntry {
+  pub project: RegisteredProject,
+  pub folder_missing: bool,
+}
+
+impl lurq::app::component::DevtoolsInspectable for ProjectEntry {}
+
+/// What a listed project's own database says, read after the list is shown.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ProjectData {
+  /// Its project data cannot be read, and why; it cannot be opened.
+  Unreadable(Message),
+  /// It can be opened. The phase of each task, for its run counts; `None` when they cannot be
+  /// read before the project is opened (its data waits for this version's migration) or reading
+  /// them failed.
+  Readable(Option<Arc<[TaskPhase]>>),
+}
+
+impl lurq::app::component::DevtoolsInspectable for ProjectData {}
+
+impl ProjectData {
+  /// Reads the database of `project`, whose folder is there, without changing it.
+  fn read(project: &RegisteredProject) -> Self {
+    let db = match ProjectDb::open_read_only(&project.repo_root) {
+      Ok(db) => db,
+      // Opening the project migrates its data; until then its tasks cannot be read.
+      Err(StoreError::SchemaTooOld { .. }) => return Self::Readable(None),
+      Err(error) => {
+        tracing::warn!(%error, repo_root = %project.repo_root.display(), "cannot read a listed project");
+        return Self::Unreadable(messages::store_error(&error));
+      }
+    };
+    match db.task_phases() {
+      Ok(phases) => Self::Readable(Some(phases.into())),
+      // The project still opens; only its counts are unknown, and the log says why.
+      Err(error) => {
+        tracing::error!(%error, repo_root = %project.repo_root.display(), "cannot read a listed project's runs");
+        Self::Readable(None)
+      }
+    }
+  }
+}
+
+/// The data of the listed projects whose folder is there, by project.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ListedData(HashMap<ProjectId, ProjectData>);
+
+impl lurq::app::component::DevtoolsInspectable for ListedData {}
+
+impl ListedData {
+  pub fn read(entries: &[ProjectEntry]) -> Self {
+    Self(
+      entries
+        .iter()
+        .filter(|entry| !entry.folder_missing)
+        .map(|entry| (entry.project.id, ProjectData::read(&entry.project)))
+        .collect(),
+    )
+  }
+
+  pub fn of(&self, project: ProjectId) -> Option<&ProjectData> {
+    self.0.get(&project)
+  }
 }
 
 /// Shared handle to the application database.
@@ -54,7 +129,7 @@ impl Workspace {
     let Some(recent) = self.db.lock().projects()?.into_iter().next() else {
       return Ok(Landing::FirstLaunch);
     };
-    Ok(match self.open(&recent) {
+    Ok(match self.open(&recent.repo_root) {
       Ok(project) => Landing::Project(project),
       Err(error) => Landing::Unavailable { project: recent, error },
     })
@@ -65,17 +140,34 @@ impl Workspace {
     self.db.lock().projects()
   }
 
-  /// Opens a known project and records it as the most recently used one.
-  pub fn open(&self, registered: &RegisteredProject) -> Result<OpenProject, StoreError> {
-    let db = ProjectDb::open(&registered.repo_root)?;
+  /// Known projects, most recently opened first, with whether each one's folder is there.
+  pub fn entries(&self) -> Result<Vec<ProjectEntry>, StoreError> {
+    Ok(
+      self
+        .projects()?
+        .into_iter()
+        .map(|project| ProjectEntry {
+          folder_missing: project.folder_missing(),
+          project,
+        })
+        .collect(),
+    )
+  }
+
+  /// Forgets `project`: only the application database changes, never its folder or its data.
+  pub fn forget(&self, project: ProjectId) -> Result<(), StoreError> {
+    self.db.lock().forget_project(project)
+  }
+
+  /// Opens the project Orchester keeps in the folder `repo_root` and records it as the most
+  /// recently used one; a folder whose project was removed from the list is added again.
+  pub fn open(&self, repo_root: &Path) -> Result<OpenProject, StoreError> {
+    let db = ProjectDb::open(repo_root)?;
     let project = db.project().clone();
-    self
-      .db
-      .lock()
-      .register_project(&project, &registered.repo_root, Timestamp::now())?;
+    self.db.lock().register_project(&project, repo_root, Timestamp::now())?;
     Ok(OpenProject {
       project,
-      repo_root: registered.repo_root.clone(),
+      repo_root: repo_root.to_path_buf(),
     })
   }
 

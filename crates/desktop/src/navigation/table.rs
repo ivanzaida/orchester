@@ -19,7 +19,7 @@ use super::{
 use crate::{
   root::with_status_bar,
   runner::Runners,
-  screens::{project, setup::ProjectSetup, unavailable, welcome::Welcome},
+  screens::{all_projects::AllProjects, project, setup::ProjectSetup, welcome::Welcome},
 };
 
 /// The `:project` parameter of project paths.
@@ -37,7 +37,7 @@ pub fn routes(places: &Places) -> Routes {
       routes
         .route("/welcome", |ctx| ctx.mount_keyed::<Welcome>("welcome", ()))
         .route("/setup", |ctx| ctx.mount_keyed::<ProjectSetup>("setup", ()))
-        .route("/unavailable", unavailable_project)
+        .route("/projects", |ctx| ctx.mount_keyed::<AllProjects>("all-projects", ()))
         .fallback(|_ctx| Element::new())
     })
     .guard(move |matched| outside_guard(&other, matched))
@@ -79,7 +79,7 @@ fn selection(routes: Routes, selected: &str) -> Routes {
     .route(selected, |_ctx| Element::new())
 }
 
-/// Welcome, setup and the unavailable project, above the status bar without a project.
+/// Welcome, setup and All projects, above the status bar without a project.
 fn outside_project(ctx: &mut Ctx) -> Element {
   ctx
     .use_context::<Runners>()
@@ -100,17 +100,6 @@ fn outside_project(ctx: &mut Ctx) -> Element {
   }
   let screen = Outlet::mount(ctx);
   with_status_bar(ctx, screen)
-}
-
-fn unavailable_project(ctx: &mut Ctx) -> Element {
-  let navigation = ctx
-    .use_context::<Navigation>()
-    .expect("the root provides Navigation before mounting screens");
-  // The guard lets this path through only while the start screen reports a project.
-  let Some(project) = navigation.places().unavailable() else {
-    return Element::new();
-  };
-  unavailable::render(ctx, &navigation, &project)
 }
 
 fn project_guard(places: &Places, matched: &RouteMatch) -> GuardAction {

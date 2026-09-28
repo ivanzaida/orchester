@@ -18,7 +18,7 @@ use crate::tasks::{list::TaskTab, overview::OverviewTab};
 
 const WELCOME: &str = "welcome";
 const SETUP: &str = "setup";
-const UNAVAILABLE: &str = "unavailable";
+const ALL_PROJECTS: &str = "projects";
 const PROJECT: &str = "project";
 const TASKS: &str = "tasks";
 const NEW: &str = "new";
@@ -61,8 +61,8 @@ pub enum Route {
   Welcome,
   /// Project & repository setup (`W6uXiL`).
   Setup,
-  /// The most recently used project could not be opened.
-  Unavailable,
+  /// All projects (01.06 `Z7IZZ`): the projects of the workspace, to open, add or remove.
+  AllProjects,
   /// A screen of an open project.
   Project(ProjectId, Page),
 }
@@ -188,7 +188,7 @@ impl Route {
   pub fn current_page(ctx: &mut Ctx) -> Option<Page> {
     match Self::current(ctx)? {
       Self::Project(_, page) => Some(page),
-      Self::Start | Self::Welcome | Self::Setup | Self::Unavailable => None,
+      Self::Start | Self::Welcome | Self::Setup | Self::AllProjects => None,
     }
   }
 
@@ -199,7 +199,7 @@ impl Route {
       [] => Some(Self::Start),
       [WELCOME] => Some(Self::Welcome),
       [SETUP] => Some(Self::Setup),
-      [UNAVAILABLE] => Some(Self::Unavailable),
+      [ALL_PROJECTS] => Some(Self::AllProjects),
       [PROJECT, project, rest @ ..] => Some(Self::Project(project.parse().ok()?, Page::parse(rest, query)?)),
       _ => None,
     }
@@ -223,7 +223,7 @@ impl Route {
       Self::Start => "/".to_owned(),
       Self::Welcome => format!("/{WELCOME}"),
       Self::Setup => format!("/{SETUP}"),
-      Self::Unavailable => format!("/{UNAVAILABLE}"),
+      Self::AllProjects => format!("/{ALL_PROJECTS}"),
       Self::Project(project, page) => page.path(*project),
     }
   }

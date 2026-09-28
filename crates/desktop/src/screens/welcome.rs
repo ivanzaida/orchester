@@ -69,7 +69,8 @@ impl Component for Welcome {
   }
 }
 
-fn topbar(ctx: &Ctx) -> Element {
+/// Brand and the workspace (`DY5WC`), also above All projects (`N6ZX71` in `Z7IZZ`).
+pub(crate) fn topbar(ctx: &Ctx) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(TOPBAR_HEIGHT))

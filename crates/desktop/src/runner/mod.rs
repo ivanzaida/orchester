@@ -190,6 +190,33 @@ impl Runners {
     );
   }
 
+  /// The status of project `root`'s runner; `None` when it has not been started in this session.
+  pub fn status_of(&self, root: &Path) -> Option<RunnerStatus> {
+    self
+      .inner
+      .projects
+      .lock()
+      .get(root)
+      .map(|entry| entry.status.borrow().clone())
+  }
+
+  /// The project `root` was removed from the workspace: its runner, if it has one, stops at
+  /// checkpoints and is forgotten, so opening the project again starts a new one. All projects
+  /// removes only a project without agents at work.
+  pub fn forget(&self, root: &Path) {
+    let Some(entry) = self.inner.projects.lock().remove(root) else {
+      return;
+    };
+    let Some(connection) = entry.connection else {
+      return;
+    };
+    let project = root.to_path_buf();
+    self.inner.runtime.spawn(async move {
+      let outcome = connection.stop(Some(QUIET_STOP_TIMEOUT)).await;
+      tracing::info!(project = %project.display(), ?outcome, "stopped the runner of a removed project");
+    });
+  }
+
   /// Starts the displayed project's runner again after it failed; the reconnect attempts start
   /// over, and it attaches as a reconnect.
   pub fn restart(&self) {
