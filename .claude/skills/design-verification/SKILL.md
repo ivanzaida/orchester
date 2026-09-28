@@ -66,6 +66,11 @@ what is actually on screen.
   discovery file's `pid`). If it does not, stop and reconnect — never act on another instance.
 - Run your own copy of the binaries in your own folder when another agent or the user may be
   using the same `target/` directory, so each instance has its own `orchester.db` next to it.
+- On Windows a debug build is a console program: its console window belongs to the same pid as
+  the app window. Never take "the first window of the pid" as the app. Identify the app window
+  through the embedded MCP server (`lurq_windows`), or by winit's window class, and remember that
+  the app window exists only after the first frame has been presented; until then the pid may
+  have only its console window.
 
 - Do not edit implementation code; report. (Fixing is the implementer's job, so the next
   comparison is independent again.)
