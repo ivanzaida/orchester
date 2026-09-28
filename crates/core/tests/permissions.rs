@@ -229,6 +229,37 @@ fn permissions_codex_refuses_a_command_list_and_keeps_network_on_where_it_cannot
 }
 
 #[test]
+fn permissions_network_that_stays_on_names_how_it_runs() {
+  let offline = permissions(RepositoryAccess::ReadOnly, allowed(&["git"]), NetworkAccess::Off);
+  let online = permissions(RepositoryAccess::ReadOnly, allowed(&["git"]), NetworkAccess::On);
+  for platform in PLATFORMS {
+    // Claude Code still removes its web tools when off was chosen; only commands keep network.
+    let stays_on = offline
+      .enforced_on(AgentProvider::ClaudeCodeCli, platform)
+      .expect("enforceable");
+    assert_eq!(
+      stays_on.mechanism(PermissionSetting::Network),
+      Mechanism::ClaudeWebToolsRemoved
+    );
+    let on = online
+      .enforced_on(AgentProvider::ClaudeCodeCli, platform)
+      .expect("enforceable");
+    assert_eq!(on.mechanism(PermissionSetting::Network), Mechanism::ClaudeWebTools);
+  }
+  let codex = permissions(
+    RepositoryAccess::Write,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::Off,
+  )
+  .enforced_on(AgentProvider::CodexCli, Platform::Windows)
+  .expect("enforceable");
+  assert_eq!(
+    codex.mechanism(PermissionSetting::Network),
+    Mechanism::CodexSandboxNetworkOn
+  );
+}
+
+#[test]
 fn permissions_effective_network_is_on_where_off_cannot_be_enforced() {
   let offline = permissions(RepositoryAccess::ReadOnly, allowed(&["git"]), NetworkAccess::Off);
   let online = permissions(RepositoryAccess::ReadOnly, allowed(&["git"]), NetworkAccess::On);

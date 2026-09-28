@@ -74,6 +74,7 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::ClaudeEditToolsRemoved => "agents.permissions.mechanism.claudeEditToolsRemoved",
     Mechanism::ClaudeAcceptEdits => "agents.permissions.mechanism.claudeAcceptEdits",
     Mechanism::ClaudeWebTools => "agents.permissions.mechanism.claudeWebTools",
+    Mechanism::ClaudeWebToolsRemoved => "agents.permissions.mechanism.claudeWebToolsRemoved",
     Mechanism::ClaudeAllowedTools => {
       let count = match permissions.commands() {
         CommandPermission::Allowed(commands) => commands.entries().len(),

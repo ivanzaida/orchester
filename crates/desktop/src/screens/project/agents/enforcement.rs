@@ -13,10 +13,10 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{AgentConnection, invocation::Platform},
+  connection::{AgentConnection, AgentProvider, invocation::Platform},
   permission::{
     AgentPermissions, NetworkAccess,
-    capability::{EnforcedPermissions, PermissionOption, PermissionProblem, PermissionSetting},
+    capability::{EnforcedPermissions, PermissionOption, PermissionProblem, PermissionSetting, support},
   },
 };
 
@@ -48,7 +48,12 @@ impl ProfileEditor {
     let rows = match (self.selected_connection(), self.enforcement()) {
       (Some(connection), Some(result)) => {
         let mut rows = vec![heading(ctx, connection)];
-        rows.extend(setting_rows(ctx, &self.permissions.get(), &result));
+        rows.extend(setting_rows(
+          ctx,
+          connection.provider(),
+          &self.permissions.get(),
+          &result,
+        ));
         rows
       }
       _ => vec![line(Icon::Plug, &ctx.t("agents.permissions.enforcement.noConnection"))],
@@ -88,9 +93,11 @@ fn heading(ctx: &Ctx, connection: &AgentConnection) -> Element {
     .into()
 }
 
-/// One row per setting (`F5JRp`, `FSFlp`, `A9ogd`).
+/// One row per setting (`F5JRp`, `FSFlp`, `A9ogd`). Network reads *stays on* wherever the
+/// connection cannot enforce off, whatever was chosen, as the locked switch beside it shows.
 fn setting_rows(
   ctx: &Ctx,
+  provider: AgentProvider,
   permissions: &AgentPermissions,
   result: &Result<EnforcedPermissions, PermissionProblem>,
 ) -> Vec<Element> {
@@ -99,6 +106,7 @@ fn setting_rows(
     Err(problem) => return vec![not_enforceable(ctx, problem)],
   };
   let commands = PermissionOption::of_commands(permissions.commands());
+  let network_stays_on = !support(provider, Platform::current(), PermissionOption::NetworkOff).is_enforced();
   let rows = [
     (
       PermissionSetting::Repository,
@@ -117,8 +125,7 @@ fn setting_rows(
     .into_iter()
     .map(|(setting, name)| {
       let how = mechanism(ctx, enforced.mechanism(setting), enforced.permissions());
-      let stays_on = setting == PermissionSetting::Network && enforced.network_stays_on().is_some();
-      let (glyph, title) = if stays_on {
+      let (glyph, title) = if setting == PermissionSetting::Network && network_stays_on {
         (Icon::Lock, ctx.t("agents.permissions.enforcement.staysOn"))
       } else {
         (

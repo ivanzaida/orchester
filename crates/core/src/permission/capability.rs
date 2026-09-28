@@ -106,6 +106,9 @@ pub enum Mechanism {
   ClaudeAllowedTools,
   /// WebFetch and WebSearch stay available.
   ClaudeWebTools,
+  /// Network off was chosen but cannot be enforced: WebFetch and WebSearch are removed, commands
+  /// keep network access (`claude::permission_args`).
+  ClaudeWebToolsRemoved,
 }
 
 /// Why a CLI cannot enforce an option.
@@ -241,7 +244,11 @@ impl AgentPermissions {
       Support::Enforced(mechanism) => (mechanism, None),
       Support::Unavailable(reason) => {
         permissions.network = NetworkAccess::On;
-        (enforced(PermissionOption::NetworkOn)?, Some(reason))
+        let mechanism = match provider {
+          AgentProvider::ClaudeCodeCli => Mechanism::ClaudeWebToolsRemoved,
+          AgentProvider::CodexCli => enforced(PermissionOption::NetworkOn)?,
+        };
+        (mechanism, Some(reason))
       }
     };
     Ok(EnforcedPermissions {
