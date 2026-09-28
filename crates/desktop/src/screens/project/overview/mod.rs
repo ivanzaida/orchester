@@ -140,16 +140,25 @@ impl Component for OverviewScreen {
 
 fn project_bar(ctx: &Ctx, open: &OpenProject) -> Element {
   Row::new()
+    .id("overview-project-bar")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(PROJECT_BAR_HEIGHT))
     .padding_horizontal(SpacingSize::Section)
     .spacing(ExtraSpacing::Inline.role())
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(Text::new(open.project.name().as_str()).variant(TypographyStyle::Description))
-    .child(icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted))
+    .child(
+      Text::new(open.project.name().as_str())
+        .id("overview-breadcrumb-project")
+        .variant(TypographyStyle::Description)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex_shrink(1.0),
+    )
+    .child(icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted).id("overview-breadcrumb-separator"))
     .child(
       Text::new(&ctx.t("nav.overview"))
+        .id("overview-breadcrumb-current")
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextPrimary),
     )

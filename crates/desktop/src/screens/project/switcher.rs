@@ -223,7 +223,9 @@ impl ProjectSwitcher {
     action: &OpenAction,
   ) -> Element {
     let shown = project.id == current.project.id();
-    let check = icon(Icon::Check, IconSize::Dismiss, PaletteColor::TextPrimary).opacity(if shown { 1.0 } else { 0.0 });
+    let check = icon(Icon::Check, IconSize::Dismiss, PaletteColor::TextPrimary)
+      .id(format!("switcher-project-check-{index}"))
+      .opacity(if shown { 1.0 } else { 0.0 });
     let hovered = self.hovered.get() == Some(index);
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
     let mut row = option(surface().id(format!("switcher-project-{index}")))
@@ -238,9 +240,11 @@ impl ProjectSwitcher {
       .child(avatar(project.name.as_str()))
       .child(
         Text::new(project.name.as_str())
+          .id(format!("switcher-project-name-{index}"))
           .variant(TypographyStyle::FieldLabel)
           .color(PaletteColor::TextPrimary)
           .nowrap()
+          .text_overflow(TextOverflow::Elipsis)
           .flex(1.0),
       )
       .with_children(hovered.then(|| self.new_tab_button(ctx, index, action, &project.repo_root)))

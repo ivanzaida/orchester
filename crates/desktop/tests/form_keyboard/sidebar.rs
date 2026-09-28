@@ -44,6 +44,58 @@ fn long_project_name_stays_inside_selector_and_overview_heading() {
 }
 
 #[test]
+fn long_project_name_keeps_overview_crumb_and_switcher_actions_visible() {
+  let name = format!("U9 failure label {}", "LONGPROJECTNAME".repeat(10));
+  let mut desktop = Desktop::with_project_named(&name);
+  desktop.wait_for("overview-breadcrumb-current");
+  assert!(shows(&mut desktop, "overview-breadcrumb-project", &name));
+
+  for width in [1440, 900] {
+    desktop.tree.resize(width, 960);
+    desktop.pass();
+    let project = desktop.bounds("overview-breadcrumb-project");
+    let separator = desktop.bounds("overview-breadcrumb-separator");
+    let current = desktop.bounds("overview-breadcrumb-current");
+    let bar = desktop.bounds("overview-project-bar");
+    assert!(
+      project.x + project.width <= separator.x,
+      "project crumb must give way at {width}px"
+    );
+    assert!(
+      separator.x + separator.width <= current.x,
+      "the current crumb must follow at {width}px"
+    );
+    assert!(
+      current.x + current.width <= bar.x + bar.width,
+      "Overview must stay visible at {width}px"
+    );
+
+    desktop.press("project-selector");
+    desktop.wait_for("switcher-project-name-0");
+    assert!(shows(&mut desktop, "switcher-project-name-0", &name));
+    for hovered in [false, true] {
+      if hovered {
+        desktop.hover("switcher-project-0");
+      }
+      let label = desktop.bounds("switcher-project-name-0");
+      let check = desktop.bounds("switcher-project-check-0");
+      assert!(
+        label.x + label.width <= check.x,
+        "Recent label must leave its actions visible at {width}px"
+      );
+      if hovered {
+        let new_tab = desktop.bounds("switcher-new-tab-0");
+        assert!(
+          label.x + label.width <= new_tab.x,
+          "Recent label must leave the hovered new-tab action visible at {width}px"
+        );
+      }
+    }
+    desktop.press("project-selector");
+  }
+}
+
+#[test]
 fn sidebar_runner_card_says_the_runner_did_not_start() {
   // The harness has no runner program, so the runner cannot start.
   let mut desktop = Desktop::with_project();
