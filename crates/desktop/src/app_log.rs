@@ -1,10 +1,9 @@
 //! The desktop's own log: `logs/orchester-<YYYY-MM-DD>.log` (UTC date, like the runner logs)
-//! beside the application database ([`app_paths::log_dir`]). A session that runs past midnight
+//! in the application log folder ([`app_paths::log_dir`]). A session that runs past midnight
 //! continues in the next day's file. The files of the last [`KEPT_DAYS`] days are kept; older
 //! ones are deleted when the app starts and when a new day's file begins.
 //!
-//! Next to the executable is not writable inside a macOS `.app` (`AGENTS.md`, requirement 0);
-//! without a log file the log goes to the console only.
+//! Without a log file (the folder cannot be created or written) the log goes to the console only.
 
 use std::{
   fs::{self, File, OpenOptions},

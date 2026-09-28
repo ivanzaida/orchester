@@ -2,9 +2,7 @@
 //! `orchester-fake-codex`: an agent's question shows in the conversation, in Needs you and in the
 //! status bar, and a reply written in the composer (Enter adds a line, Ctrl+Enter sends) resumes its
 //! session; Ask agent on a run ready for review puts the focus in the composer, and the message
-//! sent follows the run up until it is ready for review again. Windows only, like the runner's
-//! named pipe.
-#![cfg(windows)]
+//! sent follows the run up until it is ready for review again.
 
 use orchester_core::{
   run::{AttemptReason, RunStatus},

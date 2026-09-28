@@ -2564,6 +2564,7 @@ name = "orchester-exec"
 version = "0.1.0"
 dependencies = [
  "orchester-core",
+ "rustix 1.1.5",
  "tempfile",
  "tracing",
 ]
@@ -2573,6 +2574,8 @@ name = "orchester-ipc"
 version = "0.1.0"
 dependencies = [
  "orchester-core",
+ "orchester-exec",
+ "rustix 1.1.5",
  "serde",
  "serde_json",
  "tempfile",

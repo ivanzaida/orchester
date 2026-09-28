@@ -1,6 +1,5 @@
-//! End-to-end tests against the real `orchester-runner` binary. The desktop connection is a
-//! named pipe, which exists on Windows only.
-#![cfg(windows)]
+//! End-to-end tests against the real `orchester-runner` binary, over the named pipe on Windows
+//! and the Unix domain socket on macOS.
 
 use std::{fs, num::NonZeroU32, path::Path, time::Duration};
 
@@ -127,10 +126,10 @@ async fn runner_refuses_an_uninitialized_project() {
   }
 }
 
-/// Dropping the process handle closes the desktop's job, as a desktop crash would. The runner
-/// must die even though the connection is still open.
+/// Dropping the process handle ends the runner even though the connection is still open: on
+/// Windows it closes the desktop's job, as a desktop crash would; on macOS it sends SIGTERM.
 #[tokio::test]
-async fn closing_the_desktop_job_kills_the_runner() {
+async fn dropping_the_runner_process_ends_the_runner() {
   let project = project();
   let client = launch(project.path()).await;
 
@@ -149,6 +148,7 @@ async fn closing_the_desktop_job_kills_the_runner() {
   .expect("runner lock released");
 }
 
+#[cfg(windows)]
 #[tokio::test]
 async fn the_desktop_refuses_a_pipe_served_by_another_process() {
   let project = project();
@@ -171,6 +171,38 @@ async fn the_desktop_refuses_a_pipe_served_by_another_process() {
     result.err()
   );
   drop(accepting);
+}
+
+/// A process that accepts on the runner's socket first is not the runner the desktop started:
+/// the desktop refuses it by the socket's peer process, and the runner refuses to share it.
+#[cfg(unix)]
+#[tokio::test]
+async fn the_desktop_refuses_a_socket_served_by_another_process() {
+  use std::os::unix::fs::DirBuilderExt;
+
+  let project = project();
+  let endpoint = orchester_ipc::Endpoint::for_project(project.path()).expect("endpoint");
+  std::fs::DirBuilder::new()
+    .recursive(true)
+    .mode(0o700)
+    .create(endpoint.path().parent().expect("socket folder"))
+    .expect("create the socket folder");
+  let squatter = tokio::net::UnixListener::bind(endpoint.path()).expect("squat on the socket");
+  let accepting = tokio::spawn(async move {
+    let _connected = squatter.accept().await;
+    squatter
+  });
+
+  let result = timeout(PATIENCE, RunnerClient::launch(Path::new(RUNNER), project.path()))
+    .await
+    .expect("launch returns in time");
+  assert!(
+    matches!(result, Err(LaunchError::ForeignPipeServer { found }) if found == std::process::id()),
+    "{:?}",
+    result.err()
+  );
+  drop(accepting);
+  fs::remove_file(endpoint.path()).expect("remove the squatter's socket");
 }
 
 #[tokio::test]

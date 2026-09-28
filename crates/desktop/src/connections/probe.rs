@@ -45,7 +45,7 @@ pub fn recheck(connection: &Connection) -> LastCheck {
   }
 }
 
-/// Installed copies of the agent CLI of `provider` on the `PATH`, newest version first; copies
+/// Installed copies of the agent CLI of `provider` on the search path, newest version first; copies
 /// whose version cannot be read come last. Each copy is asked for its version only.
 pub fn detect_agent(provider: AgentProvider) -> Vec<PathBuf> {
   connection::rank_installed(provider, detect(provider.program_name()), &RUNNER)
@@ -54,10 +54,11 @@ pub fn detect_agent(provider: AgentProvider) -> Vec<PathBuf> {
     .collect()
 }
 
-/// Installed copies of `program` (see `ConnectionKind::program_name`) found on the `PATH`, in
-/// search order.
+/// Installed copies of `program` (see `ConnectionKind::program_name`) found on the search path
+/// (the `PATH`, and on macOS the usual install folders: `orchester_exec::search_path`), in search
+/// order.
 pub fn detect(program: &str) -> Vec<PathBuf> {
-  let path = std::env::var_os("PATH");
+  let path = orchester_exec::search_path::search_path();
   let mut found: Vec<PathBuf> = Vec::new();
   for candidate in connection::executable_candidates(program, path.as_deref()) {
     if candidate.is_file() && !found.contains(&candidate) {

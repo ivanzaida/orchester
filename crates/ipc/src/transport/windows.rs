@@ -1,17 +1,19 @@
-//! Windows named-pipe transport. The pipe name is derived from the canonical project root, so
-//! the desktop and the runner of one project agree on it without passing it around, and
-//! different projects never share one.
+//! Windows named-pipe transport. The pipe name is derived from the canonical project root.
 
 use std::{io, path::Path};
 
 use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient, NamedPipeServer, ServerOptions};
 
+use super::fnv1a;
 use crate::IpcError;
 
 /// The runner's end of a connection.
 pub type ServerStream = NamedPipeServer;
 /// The desktop's end of a connection.
 pub type ClientStream = NamedPipeClient;
+
+/// All instances of the pipe are busy: another desktop is connected to this runner.
+const ERROR_PIPE_BUSY: i32 = 231;
 
 /// Where a project's runner listens.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,9 +58,15 @@ impl Endpoint {
     Ok(server)
   }
 
-  /// One connection attempt. `NotFound` means the runner has not created the pipe yet.
-  pub fn connect(&self) -> io::Result<ClientStream> {
+  /// One connection attempt; see [`Endpoint::not_ready`] for the failures worth retrying.
+  pub async fn connect(&self) -> io::Result<ClientStream> {
     ClientOptions::new().open(&self.name)
+  }
+
+  /// Whether a failed [`Endpoint::connect`] is worth retrying: the runner has not created the
+  /// pipe yet (`NotFound`), or its only instance is still busy.
+  pub fn not_ready(error: &io::Error) -> bool {
+    error.kind() == io::ErrorKind::NotFound || error.raw_os_error() == Some(ERROR_PIPE_BUSY)
   }
 
   fn error(&self, source: io::Error) -> IpcError {
@@ -67,14 +75,4 @@ impl Endpoint {
       source,
     }
   }
-}
-
-/// 64-bit FNV-1a. Stable across builds, unlike `std`'s `DefaultHasher`, which matters because
-/// both processes must compute the same name.
-fn fnv1a(bytes: &[u8]) -> u64 {
-  const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-  const PRIME: u64 = 0x0000_0100_0000_01b3;
-  bytes
-    .iter()
-    .fold(OFFSET, |hash, byte| (hash ^ u64::from(*byte)).wrapping_mul(PRIME))
 }
