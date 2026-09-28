@@ -107,6 +107,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | switch track radius 8, knob round (`K8ItM`) | `ExtraRadius::Pill.role()` |
 | unparsed transcript lines at 60 % (`Ane9j`) | `theme::UNPARSED_OPACITY` |
 | permission option that cannot be chosen at 50 % (`BNliD` in `T1rjv`) | `theme::UNAVAILABLE_OPTION_OPACITY` |
+| switch whose value is fixed: track and label faded together at 45 % (`lW7Sp` in 04.B `W0Owo`) | `theme::LOCKED_SWITCH_OPACITY`, applied by `ui::switch::Switch::locked` |
+| switch on: `accent` track and stroke, `inverse-text` knob at the right (`E1Y9KK`) | `Accent` / `TextInverse`, in `ui::switch` |
 | button that cannot be pressed, primary or secondary: its own colors at 40 % (`kLJJb`, `HN7cO`) | `theme::DISABLED_OPACITY`, applied by `ui::button::ActionButton` |
 | select menu overlay scrollbar: 4px `border` thumb, radius 2, inset 1 (`g3poI`) | `theme::select_menu_scrollbar()` |
 | scroll gutter: a reserved 12px gutter, 4px `border` thumb, radius 2, 4 from each side and from the viewport's top and bottom (`nf9DG` in `JuVaA`) | `theme::gutter_scrollbar()` |

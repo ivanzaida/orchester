@@ -152,3 +152,6 @@ pub const UNAVAILABLE_OPTION_OPACITY: f32 = 0.5;
 /// A button that cannot be pressed keeps its variant's look at 40 %, primary and secondary alike
 /// (`kLJJb` Button / Disabled state, `HN7cO`, `W4y2y` and `WuZqY` in `angoF`).
 pub const DISABLED_OPACITY: f32 = 0.4;
+/// A switch whose value is fixed fades as one row, its label with it, to 45 % (`lW7Sp` in 04.B
+/// `W0Owo`).
+pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;

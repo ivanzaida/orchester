@@ -262,9 +262,14 @@ impl ProfileEditor {
     }))
   }
 
-  /// The network switch (`k1QWD`), locked on with the reason when off cannot be enforced.
+  /// The network switch (`k1QWD`), locked on with the reason when off cannot be enforced
+  /// (`lW7Sp`). It shows the network access a run gets, which is on wherever off cannot be
+  /// enforced, whatever was chosen.
   fn network_setting(&self, ctx: &Ctx, provider: Option<AgentProvider>) -> Element {
-    let network = self.permissions.get().network();
+    let chosen = self.permissions.get();
+    let network = provider.map_or(chosen.network(), |provider| {
+      chosen.effective_network(provider, Platform::current())
+    });
     let off = provider.map(|provider| {
       (
         provider,
@@ -275,7 +280,7 @@ impl ProfileEditor {
       NetworkAccess::Off => ("agents.permissions.networkOff", "agents.permissions.networkOffDetail"),
       NetworkAccess::On => ("agents.permissions.networkOn", "agents.permissions.networkOnDetail"),
     };
-    let switch = Switch::new("agent-network", ctx.t(label), network == NetworkAccess::On);
+    let switch = Switch::new("agent-network", ctx.t(label), network == NetworkAccess::On).emphasized();
     let mut column = Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Sm);
     column = match off {
       Some((_, Support::Enforced(_))) => {

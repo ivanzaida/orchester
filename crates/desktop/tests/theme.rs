@@ -270,6 +270,8 @@ fn agents_and_connections_roles_follow_pencil() {
   assert_eq!(theme.spacing_value(ExtraSpacing::Form.role()), Dimension::Px(22.0));
   // Permission options a connection cannot enforce (`BNliD` in 04.04 `T1rjv`).
   assert_eq!(theme::UNAVAILABLE_OPTION_OPACITY, 0.5);
+  // A locked switch fades with its label as one row (`lW7Sp` in 04.B `W0Owo`).
+  assert_eq!(theme::LOCKED_SWITCH_OPACITY, 0.45);
 }
 
 #[test]
