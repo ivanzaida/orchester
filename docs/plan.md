@@ -68,22 +68,24 @@ skill. Depends on D3's findings.
 
 ## T · Tests and runner
 
-### T1 · Drop waits the store retry made unnecessary (non-UI, good first Orchester run)
-
-The desktop `form_keyboard` lifecycle tests wait for a killed runner to fully end before reading its database. Since the
-store retries a read while a crashed runner's shared memory is still mapped (`crates/store/src/migrate.rs`,
-`connect_with`), that wait may no longer be needed.
-**Done when** each such wait is either removed with the test still passing 5 times in a row under
-`--test-threads=16`, or kept with a comment saying why. Tests: `cargo test -p orchester-desktop --test form_keyboard
-lifecycle`, then the full `form_keyboard ::`.
-
 ### T3 · Serialize the remaining run request fallbacks (non-UI)
 
-`continue_runs` and reconnect continuation are synchronous and do not take the continue lock; the pause, cancel and
+`continue_runs`, reconnect continuation and the attach follow-up of queued messages (`follow_up_queued`,
+`crates/runner/src/execution/conversation.rs`) are synchronous and do not take the continue lock; the pause, cancel and
 permission fallbacks are not serialized with a concurrent request that starts a task for the same run
 (`crates/runner/src/execution/`). A clash now comes back as an explicit `Failed`, not silently. **Done when** every
 request that can start or stop a run's task takes the same lock, with a test per path. Tests: runner `control`,
-`settling`, `plan_settling`, `lifecycle`.
+`settling`, `plan_settling`, `lifecycle`, `conversation`.
+
+### T5 · Continuing a run whose worktree was deleted by hand (non-UI)
+
+Continuing a paused or interrupted run whose worktree folder was deleted by hand stores the state change before
+`Prepared::continuing` fails, so the run can stay recorded as running with no agent. A follow-up (Ask agent) already
+refuses early with `Rejection::WorktreeRemoved` (`prepare::existing_worktree`); a check in `continue_idle` alone changed
+the rejection order ("run not found" became "worktree removed"). **Done when** each idle transition that starts a task
+checks the worktree before its events are stored, keeps the existing rejection order, and a runner test deletes the
+folder of a paused and of an interrupted run and gets `WorktreeRemoved` with the run unchanged. Tests: runner
+`control`, `conversation`, `worktree`.
 
 ### T4 · A listing survives a row whose id cannot be parsed (non-UI)
 
@@ -148,6 +150,9 @@ whether it is disabled and why, and whether that is right.
   of top-aligned.
 - Tabs: the *+* button sits about 2px left of the design.
 - All projects: headings sit about 2px high.
+- After Remove worktree: the Summary card and the Conversation notice do not say the worktree was removed; the
+  explanation wraps to two lines; the permissions row still shows *view ↗*. The state is not drawn yet
+  (`docs/design/orchester-workspace.md`, "After Remove worktree").
 
 ### U6 · Conversation states not seen in the app (UI)
 
@@ -156,22 +161,36 @@ are covered only by data tests. Verify them in the app and fix what differs from
 
 ## L · Depends on a lurq release
 
-In progress on lurq branch `claude/tabs-gaps` (the user releases lurq). After the release that contains them:
+Done on lurq branch `claude/tabs-gaps` (commits `cfb43d3`, `8c89453`, `7c0016e` on top of 0.29.0). The user releases it
+(expected 0.30.0: the popup default is a behaviour change). First task after the release: bump `lurq` in the workspace
+`Cargo.toml`, `cargo update -p lurq`, run `tools/check.ps1` and the full `form_keyboard ::`, then L1–L3.
 
 ### L1 · The window title follows the active tab
 
-Use lurq's new runtime window title API so the OS title names the active tab's project and page.
+lurq adds `WindowHandle::set_title(impl Into<String>)` (`ctx.window().set_title(..)`; repeating the same title is free)
+and `title()`. Set the OS title from the active tab's label through an i18n key, e.g. *Kontur · Tasks — Orchester*.
+`ctx.window()` subscribes the caller to window resize and move, so call it from a component that already reads the
+window (the title bar in `crates/desktop/src/tabs/window.rs`) or from a `ctx.watch` on the active tab label with a kept
+`WindowHandle`. `.with_title(..)` in `main.rs` stays as the initial title. **Done when** switching and renaming tabs
+updates the title (headless test on `WindowHandle::title()` or the MCP `lurq_windows` title).
 
 ### L2 · Remove the held scroll states
 
-Offstage tabs did not keep scroll positions, so about 29 page components hold their own `ScrollState`
-(`crates/desktop/src/screens/`). Once lurq keeps runtime state across offstage, remove them and keep the tab tests
-green (`form_keyboard tabs`).
+Offstage tabs lost scroll offsets, so page components under `crates/desktop/src/screens/` hold their own `ScrollState`
+(`.with_scroll_state(..)`, about 144 matches). lurq now carries runtime state across offstage. Remove the states that
+exist only to survive tab switches and let `ScrollVertical::new` own them. Keep held states used on purpose:
+programmatic scrolling (`scroll_to_bottom_pending`, `set_scroll_pending`, e.g. the conversation panel), reading offsets,
+or sharing one state between components. Note: a state held above a tab's router also restored scroll after Back/Forward
+inside a tab; lurq's own state starts at the top when a route is remounted — decide per screen whether that matters.
+**Done when** `form_keyboard tabs` (inactive tab keeps its scroll) and the full `form_keyboard ::` pass.
 
-### L3 · Outside clicks only close popups
+### L3 · Outside presses only close popups
 
-After lurq stops passing the outside click through, check the tab list, selects and popovers, and remove any app-side
-workaround.
+lurq's popups, overlays and selects now consume the press that closes them (`OutsidePress::Consume` default,
+`.outside_press(OutsidePress::PassThrough)` to opt out); tooltips with `dismiss_on_outside_click(false)` are unchanged.
+No app change is expected. **Done when** the tab list (`tabs/strip/list.rs`), the project switcher, the permissions
+popover and the selects are checked: a press outside closes them without activating what is underneath, and a
+headless test covers the tab list case.
 
 ## P · Product decisions waiting for the user
 
@@ -191,6 +210,5 @@ workaround.
 
 ## Done
 
-Move finished tasks here: `ID · title · commit or branch`.
-
+T1 · Drop waits the store retry made unnecessary · branch `master` (uncommitted).
 T2 · Poll-free plan tests · branch `codex/poll-free-plan-tests`.
