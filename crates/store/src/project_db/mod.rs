@@ -5,6 +5,7 @@ mod environment;
 mod import;
 mod invocation_prompts;
 mod limits;
+mod mcp_servers;
 mod merges;
 mod messages;
 mod plans;

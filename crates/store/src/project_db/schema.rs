@@ -3,6 +3,7 @@
 
 mod conversation;
 mod import;
+mod mcp;
 
 pub(super) const MIGRATIONS: &[&str] = &[
   r"
@@ -556,4 +557,5 @@ CREATE TABLE run_merges (
 ",
   conversation::MIGRATION,
   import::MIGRATION,
+  mcp::MIGRATION,
 ];
