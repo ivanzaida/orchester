@@ -9,7 +9,9 @@
 //! Reviewing the pull request (`o5Txa1`) needs a pull request, which no pipeline step opens yet, so
 //! it is drawn unavailable and says why. Asking the agent (`QzsSV`) and Open conversation open the
 //! task conversation; Ask agent also puts the focus in its composer. Once the run is merged its
-//! conversation takes no messages, so Ask agent is not offered (02.P3 `bMJUA`, `OP7dt`). Evidence
+//! conversation takes no messages, so Ask agent is not offered (02.P3 `bMJUA`, `OP7dt`); once its
+//! worktree was removed its agent cannot continue, so Ask agent is unavailable and says why, as
+//! Merge does (not drawn). Evidence
 //! records (acceptance criteria, tests, browser checks) and artifacts do not exist yet, so their
 //! rows and the artifact buttons are left out. *Merge into <branch>* ([`merge`], 02.P `GIiCb`)
 //! sits between Ask agent and Review PR.
@@ -26,7 +28,11 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
-  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+    text_style::TextAlign,
+  },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::TaskId, integration::Leftovers, run::StepStatus};
@@ -46,6 +52,7 @@ use crate::{
   ui::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
+    link::Link,
   },
   workspace::OpenProject,
 };
@@ -75,7 +82,11 @@ pub(super) struct ReadyProps {
 impl lurq::app::component::DevtoolsInspectable for ReadyProps {}
 
 /// The Summary tab of a run that succeeded, with its merge; mounted per run.
-pub(super) struct ReadyForReview;
+pub(super) struct ReadyForReview {
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
+}
 
 impl Component for ReadyForReview {
   type Props = ReadyProps;
@@ -92,7 +103,9 @@ impl Component for ReadyForReview {
         nav.tasks_changed();
       }
     });
-    Self
+    Self {
+      scroll: ScrollState::new(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -109,6 +122,8 @@ impl Component for ReadyForReview {
     };
     let leftovers = props.leftovers.as_ref().and_then(|leftovers| leftovers.as_ref().ok());
     let (ask, open) = conversation(ctx, detail.task.id());
+    // Its agent continues in the run's worktree: once that was removed, it cannot be asked.
+    let ask = leftovers.is_none_or(Leftovers::keeps_run_worktree).then_some(ask);
     let content = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
@@ -127,6 +142,7 @@ impl Component for ReadyForReview {
       .child(
         ScrollVertical::new(content)
           .id("task-ready-scroll")
+          .with_scroll_state(self.scroll.clone())
           .width(Dimension::Pct(100.0))
           .flex(1.0)
           .scrollbar(gutter_scrollbar()),
@@ -137,18 +153,13 @@ impl Component for ReadyForReview {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(summary)
-      .child(details::run_details(
-        ctx,
-        run,
-        props.open.project.name().as_str(),
-        &open,
-      ))
+      .child(details::run_details(ctx, run, props.open.project.name().as_str(), open))
   }
 }
 
 /// Ask agent and Open conversation: the task's Conversation tab; Ask agent also puts the focus in
-/// its composer.
-fn conversation(ctx: &mut Ctx, task: TaskId) -> (Handler, Handler) {
+/// its composer, and Open conversation is a link.
+fn conversation(ctx: &mut Ctx, task: TaskId) -> (Handler, Link) {
   let nav = ctx
     .use_context::<ProjectNav>()
     .expect("the project shell provides ProjectNav");
@@ -156,13 +167,13 @@ fn conversation(ctx: &mut Ctx, task: TaskId) -> (Handler, Handler) {
     .use_context::<ComposerFocus>()
     .expect("the task page provides ComposerFocus");
   let page = Page::Task(task, TaskPageTab::Conversation);
-  let open = nav.clone();
+  let open = nav.link(page);
   (
     Arc::new(move || {
       focus.set(true);
       nav.show(page);
     }),
-    Arc::new(move || open.show(page)),
+    open,
   )
 }
 
@@ -287,12 +298,13 @@ fn verification(ctx: &Ctx, run: &RunView) -> Element {
 }
 
 /// The size of the change, then Ask agent, Merge and Review PR, and why the unavailable ones are
-/// (`ksjis`); a merged run offers neither Ask agent nor Merge.
+/// (`ksjis`); a merged run offers neither Ask agent nor Merge. Ask agent is unavailable without
+/// `ask`, once the run's worktree was removed.
 fn actions(
   ctx: &Ctx,
   (detail, merge): (&TaskDetail, &MergeAction),
   checkpointed: Option<&Checkpointed>,
-  ask: Handler,
+  ask: Option<Handler>,
 ) -> Element {
   let scope = match checkpointed {
     Some(Checkpointed::Read { changes, .. }) => {
@@ -328,12 +340,16 @@ fn actions(
     Some(Checkpointed::NoCheckpoint) => ctx.t("runs.ready.scopeNone"),
     None => ctx.t("runs.ready.scopeReading"),
   };
+  let ask_unavailable = (detail.merge.is_none() && ask.is_none()).then(|| ctx.t("runs.ready.askUnavailable"));
   let ask = detail.merge.is_none().then(|| {
-    ActionButton::new(ctx.t("runs.ready.askAgent"))
+    let button = ActionButton::new(ctx.t("runs.ready.askAgent"))
       .icon(Icon::MessageSquare)
-      .id("task-ask-agent")
-      .on_click(move || ask())
-      .render(ctx)
+      .id("task-ask-agent");
+    match ask {
+      Some(ask) => button.on_click(move || ask()),
+      None => button,
+    }
+    .render(ctx)
   });
   let review = ActionButton::new(ctx.t("runs.ready.reviewPullRequest"))
     .icon(Icon::GitCompareArrows)
@@ -362,6 +378,7 @@ fn actions(
         .child(review),
     )
     .child(hint("task-ready-unavailable", &ctx.t("runs.ready.unavailable")))
+    .with_children(ask_unavailable.map(|text| hint("task-ask-unavailable", &text)))
     .with_children(merge_unavailable(ctx, detail).map(|text| hint("task-merge-unavailable", &text)))
     .into()
 }

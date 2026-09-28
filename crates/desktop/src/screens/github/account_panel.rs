@@ -109,7 +109,7 @@ impl Component for AccountPanel {
       ))
       .child(Rect::new(Dimension::Pct(100.0), Dimension::Px(DIVIDER)).background(ExtraColor::Hairline.role()))
       .child(actions(ctx, &props));
-    backdrop(form(props.check.clone(), panel))
+    backdrop(ctx, form(props.check.clone(), panel))
   }
 }
 

@@ -32,7 +32,9 @@ orchester.exe (desktop, UI)
 ```
 
 - The desktop owns the window and all user-authored changes. It starts one runner
-  per project that has work, and talks to it over a local IPC channel (a named pipe on Windows,
+  per project a window tab shows, keeps it while the project has work (a run in progress or
+  waiting for an agent slot, a checkpoint being saved) after its last tab closed, and then stops it
+  with `StopIfIdle`, which the runner refuses while it has work. It talks to it over a local IPC channel (a named pipe on Windows,
   a Unix domain socket in the user's private `$TMPDIR/orchester/` folder on macOS; the desktop
   checks that the process serving it is the runner it started): commands down (start, pause, resume, cancel, deliver message, approval decision), events up
   (state changes, progress, output). It reads state directly from the project database.
@@ -153,7 +155,11 @@ at work takes one.
   run succeeded with the result it had; its attempt stays recorded as failed and decides nothing. A
   run that succeeds while messages are still queued for its agents (e.g. written while a tool step
   ran) is followed up at once. A run whose work was merged into its base branch takes no messages. A
-  question answered while no runner was attached resumes its step once a runner attaches.
+  question answered while no runner was attached resumes its step once a runner attaches, and a run
+  that succeeded, was not merged and was written to meanwhile is followed up then, once; messages to
+  a merged, failed or cancelled run stay queued. A follow-up needs the run's worktree: once a person
+  removed it, the run is not followed up (the runner refuses with *worktree removed* before changing
+  it) and messages to it stay queued.
 - **Tool steps (M10a).** A tool step runs a published command tool: its program with fixed
   arguments, no shell, found on the `PATH` or in the worktree and started like every program
   (command scripts, the cleaned environment plus the tool's variables, no console window, its
@@ -264,7 +270,7 @@ when a Windows installer exists.
 | `projects` | id, name, repository path, added / last opened |
 | `settings` | application settings (locale, runner limits, agent slots) as key → JSON |
 | `sessions` | id, pid, started / ended, `end_kind`: clean, runs_paused, quit_now; still open means crash |
-| `ui_state` | last project, window placement, drafts not tied to a project |
+| `ui_state` | key → text: the window's tabs (`tabs`: their locations in order and the active one, without history); later window placement and drafts not tied to a project |
 
 A session row is written at start with `ended_at = NULL`. A clean exit fills it; a row still
 open at the next start means the previous session crashed.

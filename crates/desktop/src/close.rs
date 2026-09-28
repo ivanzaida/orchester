@@ -106,6 +106,11 @@ impl Lifecycle {
     &self.inner.runners
   }
 
+  /// The runtime background work of the window runs on.
+  pub fn runtime(&self) -> &Handle {
+    &self.inner.runtime
+  }
+
   pub fn phase(&self) -> Signal<ClosePhase> {
     self.inner.phase.clone()
   }

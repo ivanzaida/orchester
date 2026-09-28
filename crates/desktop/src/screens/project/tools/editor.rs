@@ -14,7 +14,7 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -31,6 +31,7 @@ use crate::{
   agents::data::VersionState,
   messages::Message,
   screens::project::page::{self, TOPBAR_BUTTON_HEIGHT},
+  tabs::dirty::EditMark,
   theme::{ExtraSpacing, ExtraTypography},
   tools::{
     data::ToolChange,
@@ -61,6 +62,11 @@ pub struct ToolEditor {
   pub(super) exit_codes: Signal<String>,
   pub(super) output_limit: Signal<String>,
   pub(super) environment: Signal<String>,
+  /// Whether the fields hold edits not saved yet, for closing their tab.
+  unsaved: Option<EditMark>,
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
 }
 
 /// The fields checked against the stored tool.
@@ -110,12 +116,17 @@ impl Component for ToolEditor {
       exit_codes: ctx.signal(text.exit_codes),
       output_limit: ctx.signal(text.output_limit),
       environment: ctx.signal(text.environment),
+      unsaved: EditMark::of(ctx),
+      scroll: ScrollState::new(),
       context,
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let state = self.state();
+    if let Some(unsaved) = &self.unsaved {
+      unsaved.set(self.holds_edits(&state));
+    }
     let kind = self.kind();
     let content: Element = if kind == ToolKind::Command {
       ScrollVertical::new(
@@ -127,6 +138,7 @@ impl Component for ToolEditor {
           .with_children(self.fields(ctx, &state)),
       )
       .id("tool-editor")
+      .with_scroll_state(self.scroll.clone())
       .flex(1.0)
       .height(Dimension::Pct(100.0))
       .into()
@@ -160,6 +172,17 @@ impl Component for ToolEditor {
 }
 
 impl ToolEditor {
+  /// Whether closing the tab would lose edits: a stored tool's changes before *Save draft*, a
+  /// new tool's once it has a name or a program.
+  fn holds_edits(&self, state: &EditorState) -> bool {
+    match &self.context.editing {
+      Editing::Tool(_) => state.dirty,
+      Editing::New => [&self.name, &self.program]
+        .into_iter()
+        .any(|text| !text.get_untracked().trim().is_empty()),
+    }
+  }
+
   pub(super) fn kind(&self) -> ToolKind {
     match &self.context.editing {
       Editing::New => ToolKind::Command,

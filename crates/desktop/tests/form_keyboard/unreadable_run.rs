@@ -26,16 +26,16 @@ use crate::{
   harness::Desktop,
 };
 
-fn name(value: &str) -> Name {
+pub(crate) fn name(value: &str) -> Name {
   Name::new(value).expect("valid name")
 }
 
-fn at(millis: i64) -> Timestamp {
+pub(crate) fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
 }
 
 /// The published one-step pipeline "Delivery" of `db`, as a run pins it.
-fn delivery(db: &mut ProjectDb) -> RunSnapshot {
+pub(crate) fn delivery(db: &mut ProjectDb) -> RunSnapshot {
   let profile = AgentProfile::new(
     name("Builder"),
     String::new(),
@@ -86,7 +86,7 @@ fn delivery(db: &mut ProjectDb) -> RunSnapshot {
 }
 
 /// Run `number` of `task`, started at `now`.
-fn started(db: &mut ProjectDb, (task, snapshot): (TaskId, &RunSnapshot), number: u32, now: i64) -> Run {
+pub(crate) fn started(db: &mut ProjectDb, (task, snapshot): (TaskId, &RunSnapshot), number: u32, now: i64) -> Run {
   let new = NewRun {
     task,
     snapshot: snapshot.clone(),

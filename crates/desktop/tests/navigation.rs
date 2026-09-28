@@ -26,11 +26,13 @@ use orchester_desktop::{
   },
   project_setup::ProjectDraft,
   session::AppSession,
+  tabs::{OpenIn, Tabs, model::TabSet},
   tasks::{list::TaskTab, overview::OverviewTab},
   workspace::OpenProject,
 };
 use parking_lot::Mutex;
 use tempfile::TempDir;
+use tokio::runtime::Runtime;
 
 /// Creates the router over the app's routes, as the root does, and hands it out.
 #[derive(Clone)]
@@ -68,6 +70,7 @@ struct Window {
   router: RouterHandle,
   session: AppSession,
   _tree: Tree,
+  _runtime: Runtime,
   dir: TempDir,
 }
 
@@ -84,12 +87,21 @@ impl Window {
     let mut tree = Tree::new();
     tree.mount_root::<ProbeRoot>(&mut app, probe.clone());
     let router = probe.router.lock().clone().expect("the probe created the router");
-    let navigation = Navigation::new(session.workspace().clone(), router.clone(), places);
+    let runtime = Runtime::new().expect("tokio runtime");
+    let home = Route::AllProjects.path();
+    let tabs = Tabs::new(
+      TabSet::new(&home, &Route::Start.path()),
+      places.clone(),
+      session.workspace().clone(),
+      runtime.handle().clone(),
+    );
+    let navigation = Navigation::new(session.workspace().clone(), router.clone(), places, tabs);
     Self {
       navigation,
       router,
       session,
       _tree: tree,
+      _runtime: runtime,
       dir,
     }
   }
@@ -113,12 +125,18 @@ impl Window {
     let window = Self::new();
     let open = window.project("kontur");
     let id = open.project.id();
-    window.navigation.arrive(Start::Project(open));
+    window.arrive(Start::Project(open));
     (window, id)
   }
 
   fn path(&self) -> String {
     self.router.path().get_untracked()
+  }
+
+  /// The start screen is known: the tab opens it, as a restored or new window does.
+  fn arrive(&self, start: Start) {
+    let route = self.navigation.places().set_start(start);
+    self.router.replace(route.path());
   }
 }
 
@@ -322,12 +340,12 @@ fn entries(router: &RouterHandle) -> Vec<String> {
 #[test]
 fn route_created_project_takes_the_place_of_setup() {
   let window = Window::new();
-  window.navigation.arrive(Start::Welcome);
-  window.navigation.show_setup();
+  window.arrive(Start::Welcome);
+  window.navigation.open(Route::Setup, OpenIn::Current);
   assert_eq!(window.path(), Route::Setup.path());
   let created = window.project("kontur");
   let overview = Route::Project(created.project.id(), Page::OVERVIEW).path();
-  window.navigation.open_project(created);
+  window.navigation.open_created(created);
   assert_eq!(window.path(), overview);
   // The first-launch screen no longer applies, and setup was submitted: the project is the only
   // entry, and going forward does not reopen setup.
@@ -343,10 +361,10 @@ fn route_created_project_takes_the_place_of_setup() {
 #[test]
 fn route_project_created_from_a_project_follows_it() {
   let (window, first) = Window::on_project();
-  window.navigation.show_setup();
+  window.navigation.open(Route::Setup, OpenIn::Current);
   let created = window.project("second");
   let second = Route::Project(created.project.id(), Page::OVERVIEW).path();
-  window.navigation.open_project(created);
+  window.navigation.open_created(created);
   assert_eq!(window.path(), second);
   let first = Route::Project(first, Page::OVERVIEW).path();
   assert_eq!(entries(&window.router), [first, second]);
@@ -407,7 +425,7 @@ fn route_import_opens_over_the_page_and_closes_to_it() {
 #[test]
 fn route_all_projects_is_the_start_when_the_last_project_cannot_open() {
   let window = Window::new();
-  window.navigation.arrive(Start::AllProjects);
+  window.arrive(Start::AllProjects);
   assert_eq!(window.path(), Route::AllProjects.path());
   window.router.push("/nowhere");
   assert_eq!(
@@ -453,7 +471,7 @@ fn route_a_removed_project_leaves_history_for_all_projects() {
 fn route_leaving_setup_returns_to_where_it_was_opened() {
   let (window, _) = Window::on_project();
   window.navigation.show_all_projects();
-  window.navigation.show_setup();
+  window.navigation.open(Route::Setup, OpenIn::Current);
   window.navigation.leave_setup();
   assert_eq!(window.path(), Route::AllProjects.path());
 }

@@ -18,7 +18,10 @@ use lurq::{
   },
   components::{Column, Modal, ModalTarget, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::id::ConnectionId;
@@ -104,6 +107,9 @@ pub struct SettingsScreen {
   /// Stands for a connection detection used that the project does not have yet.
   panel_connection: ConnectionId,
   nav: ProjectNav,
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  pub(super) scroll: ScrollState,
 }
 
 impl Component for SettingsScreen {
@@ -111,6 +117,7 @@ impl Component for SettingsScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     let screen = Self {
+      scroll: ScrollState::new(),
       limits_status: ctx.signal(SettingsSave::Saved),
       environment_status: ctx.signal(SettingsSave::Saved),
       revision: ctx.signal(0_u64),
@@ -282,10 +289,9 @@ impl SettingsScreen {
   fn tabs(&self, ctx: &Ctx, selected: SettingsTab) -> Element {
     let height = Dimension::Pct(100.0);
     let tab = |id, key, tab: SettingsTab| {
-      let nav = self.nav.clone();
       Tab::new(id, ctx.t(key), height)
         .selected(selected == tab)
-        .on_click(move || nav.show(Page::Settings(tab)))
+        .link(self.nav.link(Page::Settings(tab)))
     };
     tab_row(
       Dimension::Px(TAB_ROW_HEIGHT),

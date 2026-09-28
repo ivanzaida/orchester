@@ -1,6 +1,7 @@
 //! All projects (01.06 `Z7IZZ`, empty 01.06 C `A4FJG`): the projects the application database
 //! knows, with where each one's runner stands, its active runs and the runs that need the user,
-//! read without starting a runner. A row opens its project; *Add project* opens setup; *Open
+//! read without starting a runner. A row opens its project in the current tab (Ctrl/Cmd+click or a
+//! middle click in a new tab, see `ui::link`); *Add project* opens setup; *Open
 //! project folder…* adds the project a folder already keeps (one removed from the list); the ×
 //! removes a project from the list after a confirmation (01.06 A `EtMXj`, see [`remove`]), which
 //! never touches its folder or its data. A project whose folder is gone, or whose data cannot be
@@ -17,12 +18,15 @@ use std::{
 use lurq::{
   app::{
     component::Component,
-    ctx::{Ctx, FutureAction, StreamEmitter},
+    ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_store::StoreError;
@@ -35,9 +39,10 @@ use crate::{
   activity::{Activity, operations},
   background,
   messages::{self, Message},
-  navigation::Navigation,
+  navigation::{Navigation, route::Route},
   runner::Runners,
   screens::welcome,
+  tabs::{OpenIn, OpenedProject, feed::WindowFeed},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -53,8 +58,8 @@ use crate::{
 const EMPTY_WIDTH: f32 = 640.0;
 const EMPTY_ICON_SIZE: f32 = 48.0;
 
-/// Opens a project's folder, with what to say when it cannot be opened.
-type OpenAction = FutureAction<PathBuf, OpenProject, Message>;
+/// Opens a project's folder where the click asked, with what to say when it cannot be opened.
+type OpenAction = FutureAction<(PathBuf, OpenIn), OpenedProject, Message>;
 /// Asks for a folder in the native dialog and opens its project; `None` when no folder was chosen.
 type PickAction = FutureAction<Arc<str>, Option<OpenProject>, Message>;
 
@@ -64,6 +69,9 @@ pub struct AllProjects {
   /// The project chosen for removal, and whether its confirmation is open.
   removing: Signal<Option<ProjectEntry>>,
   confirming: Signal<bool>,
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
 }
 
 impl Component for AllProjects {
@@ -74,8 +82,8 @@ impl Component for AllProjects {
     let (open, pick) = (open_action(ctx), pick_action(ctx));
     let shown = navigation.clone();
     ctx.watch(&open.state(), move |state| {
-      if let Some(project) = state.data.clone().filter(|_| !state.is_pending()) {
-        shown.show_project(project);
+      if let Some(OpenedProject { project, open }) = state.data.clone().filter(|_| !state.is_pending()) {
+        shown.open_project(project, open);
       }
     });
     ctx.watch(&pick.state(), move |state| {
@@ -87,6 +95,7 @@ impl Component for AllProjects {
       revision: ctx.signal(0),
       removing: ctx.signal(None),
       confirming: ctx.signal(false),
+      scroll: ScrollState::new(),
     }
   }
 
@@ -97,7 +106,8 @@ impl Component for AllProjects {
     let runners = ctx
       .use_context::<Runners>()
       .expect("the root provides Runners before mounting screens");
-    let work = work_changes(ctx, &runners);
+    // The runner states and counts follow the runners' reports.
+    let work = WindowFeed::of(ctx).work.get();
     let workspace = navigation.workspace().clone();
     let load = ctx.future((workspace, self.revision.get()), |(workspace, _)| async move {
       background::run(move || workspace.entries()).await?.map_err(|error| {
@@ -126,6 +136,7 @@ impl Component for AllProjects {
         &Rows {
           runners: &runners,
           open: &open,
+          tabs: navigation.tabs(),
         },
       ),
       (None, None) => Column::new().into(),
@@ -169,7 +180,11 @@ impl AllProjects {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .spacing(SpacingSize::Lg)
-      .child(ScrollVertical::new(list).width(Dimension::Pct(100.0)))
+      .child(
+        ScrollVertical::new(list)
+          .with_scroll_state(self.scroll.clone())
+          .width(Dimension::Pct(100.0)),
+      )
       .child(ownership_note(&ctx.t("projects.removal.note")))
       .into()
   }
@@ -210,12 +225,11 @@ fn navigation(ctx: &mut Ctx) -> Navigation {
 
 /// "All projects", what it lists, and the actions (`QLGxO`).
 fn heading(ctx: &Ctx, navigation: &Navigation, pick: &PickAction) -> Element {
-  let setup = navigation.clone();
   let add = ActionButton::new(ctx.t("projects.add"))
     .primary()
     .icon(Icon::Plus)
     .id("all-projects-add")
-    .on_click(move || setup.show_setup())
+    .link(navigation.link(Route::Setup))
     .render(ctx);
   let (run, title) = (pick.clone(), ctx.t("projects.openFolderTitle"));
   let open_folder = ActionButton::new(ctx.t("projects.openFolder"))
@@ -274,12 +288,13 @@ fn empty(ctx: &Ctx) -> Element {
 /// but its folder may have gone since.
 fn open_action(ctx: &mut Ctx) -> OpenAction {
   let workspace = navigation(ctx).workspace().clone();
-  ctx.future_action(move |repo_root: PathBuf| {
+  ctx.future_action(move |(repo_root, open): (PathBuf, OpenIn)| {
     let workspace = workspace.clone();
     async move {
       let folder = repo_root.clone();
       background::run(move || workspace.open(&repo_root))
         .await?
+        .map(|project| OpenedProject { project, open })
         .map_err(|error| {
           tracing::error!(%error, "cannot open a listed project");
           open_failure(&folder, &error)
@@ -339,18 +354,4 @@ fn open_error(ctx: &Ctx, failure: &Message) -> Element {
         .flex(1.0),
     )
     .into()
-}
-
-/// Counts the runners' reports, so the runner states and counts follow them.
-fn work_changes(ctx: &mut Ctx, runners: &Runners) -> u64 {
-  let changes = ctx.stream(runners.clone(), |runners, emitter: StreamEmitter<u64, ()>| async move {
-    let mut updates = runners.work_changes();
-    loop {
-      let revision = *updates.borrow_and_update();
-      if !emitter.emit(revision) || updates.changed().await.is_err() {
-        return;
-      }
-    }
-  });
-  changes.state().get().data.unwrap_or(0)
 }

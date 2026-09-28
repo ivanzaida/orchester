@@ -143,7 +143,7 @@ impl PullRequestsScreen {
       let (action, repo_root) = (action.clone(), open.repo_root.clone());
       Arc::new(move || action.run(repo_root.clone()))
     };
-    let (nav, browse, show) = (self.nav.clone(), actions.open.clone(), self.nav.clone());
+    let (browse, show) = (actions.open.clone(), self.nav.clone());
     ListProps {
       project: open.clone(),
       inbox: inbox.clone(),
@@ -151,9 +151,9 @@ impl PullRequestsScreen {
       running: actions.running(),
       check_again: run(&actions.sync),
       use_account: run(&actions.account),
-      open_connections: Arc::new(move || nav.show(Page::CONNECTIONS)),
+      open_connections: self.nav.link(Page::CONNECTIONS),
       open: Arc::new(move |number, url| browse.run((number, url))),
-      show: Arc::new(move |number| show.show(Page::PullRequest(number))),
+      show: Arc::new(move |number| show.link(Page::PullRequest(number))),
     }
   }
 
@@ -173,11 +173,10 @@ impl PullRequestsScreen {
 
   /// No linked repository (08.D `dmib5`).
   fn unavailable(&self, ctx: &Ctx, open: &OpenProject) -> Element {
-    let nav = self.nav.clone();
     let action = ActionButton::new(ctx.t("pullRequests.unavailable.openConnections"))
       .icon(Icon::Plug)
       .id("pull-requests-open-connections")
-      .on_click(move || nav.show(Page::CONNECTIONS))
+      .link(self.nav.link(Page::CONNECTIONS))
       .render(ctx);
     let panel = Column::new().id("pull-requests-unavailable").child(
       RecoveryPanel::new(

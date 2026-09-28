@@ -18,7 +18,10 @@ use lurq::{
   app::{component::Component, ctx::Ctx},
   components::{Column, Modal, ModalTarget},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::id::ResourceId;
@@ -51,6 +54,8 @@ pub struct EditorContext {
   pub revision: Signal<u64>,
   /// Whether the New instruction dialog is open.
   pub creating: Signal<bool>,
+  /// Where the rule list is scrolled, shared with the screen around the editor.
+  pub list_scroll: ScrollState,
 }
 
 /// The instructions, and the revision they were read at.
@@ -68,6 +73,8 @@ pub struct InstructionsScreen {
   /// Counts dialog openings, so every opening starts with an empty form.
   opened: Signal<u64>,
   nav: ProjectNav,
+  /// Where the list is scrolled: kept by the screen, so a tab that goes inactive and back keeps it.
+  list_scroll: ScrollState,
 }
 
 impl Component for InstructionsScreen {
@@ -89,6 +96,7 @@ impl Component for InstructionsScreen {
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
+      list_scroll: ScrollState::new(),
     }
   }
 
@@ -152,6 +160,7 @@ impl InstructionsScreen {
       nav: self.nav.clone(),
       revision: self.revision.clone(),
       creating: self.creating.clone(),
+      list_scroll: self.list_scroll.clone(),
     });
     ctx.mount_keyed::<InstructionEditor>(&key, ())
   }
@@ -176,6 +185,7 @@ impl InstructionsScreen {
           edited: None,
           nav: &self.nav,
           creating: &self.creating,
+          scroll: &self.list_scroll,
         },
       )
     });
@@ -216,7 +226,8 @@ impl InstructionsScreen {
       revision: self.revision.clone(),
     };
     let key = format!("new-instruction-{}", self.opened.get());
-    Modal::new(backdrop(ctx.mount_keyed::<NewInstructionDialog>(&key, props)))
+    let dialog = ctx.mount_keyed::<NewInstructionDialog>(&key, props);
+    Modal::new(backdrop(ctx, dialog))
       .target(ModalTarget::Root)
       .open(self.creating.clone())
       .into()

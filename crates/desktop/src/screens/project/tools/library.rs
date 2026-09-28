@@ -9,7 +9,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, border::Border, dimension::Dimension},
 };
 
@@ -28,7 +28,7 @@ use crate::{
     icon::Icon,
     notice::ownership_note,
     panel::RecoveryPanel,
-    pressable::{pressable, surface},
+    pressable::surface,
   },
   workspace::OpenProject,
 };
@@ -41,12 +41,17 @@ const FILTER_HEIGHT: f32 = 34.0;
 const SIDE_PANEL_WIDTH: f32 = 268.0;
 const CHOICE_HEIGHT: f32 = 40.0;
 
-pub(super) fn library(ctx: &Ctx, open: &OpenProject, tools: &ProjectTools, nav: &ProjectNav) -> Element {
+pub(super) fn library(
+  ctx: &Ctx,
+  open: &OpenProject,
+  tools: &ProjectTools,
+  (nav, scroll): (&ProjectNav, &ScrollState),
+) -> Element {
   let project = open.project.name().as_str();
   let content = if tools.tools.is_empty() {
     empty(ctx, nav)
   } else {
-    inventory(ctx, project, tools, nav)
+    inventory(ctx, project, tools, (nav, scroll))
   };
   let body = Row::new()
     .width(Dimension::Pct(100.0))
@@ -69,7 +74,7 @@ pub(super) fn library(ctx: &Ctx, open: &OpenProject, tools: &ProjectTools, nav: 
 /// Breadcrumb, Import from project and Add tool (`GIQmD`). Add tool writes a command tool, the
 /// only kind that can be created.
 fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
-  let (nav, importing) = (nav.clone(), nav.clone());
+  let importing = nav.clone();
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(TOPBAR_HEIGHT))
@@ -91,7 +96,7 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
         .primary()
         .icon(Icon::Plus)
         .id("tools-add")
-        .on_click(move || nav.show(Page::Tools(ToolSelection::New)))
+        .link(nav.link(Page::Tools(ToolSelection::New)))
         .render(ctx),
     )
     .into()
@@ -113,7 +118,7 @@ fn heading(ctx: &Ctx, project: &str) -> Element {
 }
 
 /// Filter and counts, the rows, who owns the tools and where pipelines call them (`lWH6n`).
-fn inventory(ctx: &Ctx, project: &str, tools: &ProjectTools, nav: &ProjectNav) -> Element {
+fn inventory(ctx: &Ctx, project: &str, tools: &ProjectTools, (nav, scroll): (&ProjectNav, &ScrollState)) -> Element {
   let key = if tools.tools.len() == 1 {
     "tools.counts.one"
   } else {
@@ -138,10 +143,10 @@ fn inventory(ctx: &Ctx, project: &str, tools: &ProjectTools, nav: &ProjectNav) -
         .variant(TypographyStyle::Caption)
         .id("tools-counts"),
     );
-  let rows = tools.tools.iter().map(|entry| {
-    let (nav, id) = (nav.clone(), entry.id);
-    tool_row(ctx, entry, move || nav.show(Page::Tools(ToolSelection::Tool(id))))
-  });
+  let rows = tools
+    .tools
+    .iter()
+    .map(|entry| tool_row(ctx, entry, nav.link(Page::Tools(ToolSelection::Tool(entry.id)))));
   let list = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
@@ -158,7 +163,12 @@ fn inventory(ctx: &Ctx, project: &str, tools: &ProjectTools, nav: &ProjectNav) -
     .flex(1.0)
     .spacing(SpacingSize::Md)
     .child(filters)
-    .child(ScrollVertical::new(list).width(Dimension::Pct(100.0)).flex(1.0))
+    .child(
+      ScrollVertical::new(list)
+        .with_scroll_state(scroll.clone())
+        .width(Dimension::Pct(100.0))
+        .flex(1.0),
+    )
     .into()
 }
 
@@ -185,26 +195,22 @@ fn usage(ctx: &Ctx, tools: &ProjectTools, nav: &ProjectNav) -> Element {
     let count = pipeline.tools.to_string();
     let version = pipeline.version.get().to_string();
     let result = ctx.t_args(key, [("count", count.as_str()), ("version", version.as_str())]);
-    let (nav, id) = (nav.clone(), pipeline.pipeline);
     let row = surface()
       .width(Dimension::Pct(100.0))
       .describe("pipeline", pipeline.name.to_string())
       .child(check_row(Icon::Workflow, &pipeline.name, &result));
-    column = column.child(pressable(row, move || {
-      nav.show(Page::Pipeline(id, PipelineView::Draft))
-    }));
+    column = column.child(nav.link(Page::Pipeline(pipeline.pipeline, PipelineView::Draft)).on(row));
   }
   column.into()
 }
 
 /// No tools yet: what a command tool is, and writing one.
 fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
-  let nav = nav.clone();
   let action = ActionButton::new(ctx.t("tools.empty.add"))
     .primary()
     .icon(Icon::Terminal)
     .id("tools-empty-add")
-    .on_click(move || nav.show(Page::Tools(ToolSelection::New)))
+    .link(nav.link(Page::Tools(ToolSelection::New)))
     .render(ctx);
   Column::new()
     .width(Dimension::Pct(100.0))
@@ -223,7 +229,6 @@ fn create_panel(ctx: &Ctx, nav: &ProjectNav) -> Element {
       .fill_width()
       .height(Dimension::Px(CHOICE_HEIGHT))
   };
-  let nav = nav.clone();
   Column::new()
     .id("tools-create")
     .width(Dimension::Px(SIDE_PANEL_WIDTH))
@@ -236,7 +241,7 @@ fn create_panel(ctx: &Ctx, nav: &ProjectNav) -> Element {
     .child(choice("tools.create.http", Icon::Globe, "tools-create-http").render(ctx))
     .child(
       choice("tools.create.command", Icon::Terminal, "tools-create-command")
-        .on_click(move || nav.show(Page::Tools(ToolSelection::New)))
+        .link(nav.link(Page::Tools(ToolSelection::New)))
         .render(ctx),
     )
     .child(choice("tools.create.mcp", Icon::Plug, "tools-create-mcp").render(ctx))

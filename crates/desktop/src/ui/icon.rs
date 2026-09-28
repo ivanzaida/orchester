@@ -1,10 +1,6 @@
 //! Lucide icons, drawn as glyphs of the bundled icon font. Names follow the Pencil icon nodes.
 
-use lurq::{
-  app::theme::PaletteColor,
-  components::{Text, WindowControlContent},
-  node::SelectIcon,
-};
+use lurq::{app::theme::PaletteColor, components::Text, node::SelectIcon};
 
 use crate::theme::ExtraTypography;
 
@@ -131,6 +127,7 @@ icons! {
   Sparkles => '\u{e412}',
   Square => '\u{e167}',
   SquareCheck => '\u{e559}',
+  SquarePlus => '\u{e173}',
   Terminal => '\u{e181}',
   Timer => '\u{e1e0}',
   Trash => '\u{e18e}',
@@ -197,10 +194,11 @@ pub fn icon(icon: Icon, size: IconSize, color: PaletteColor) -> Text {
     .nowrap()
 }
 
-/// A title-bar window control drawn with a lucide glyph in the color lurq passes for the
+/// A Windows title-bar window control drawn with a lucide glyph in the color lurq passes for the
 /// control's state.
-pub fn window_control(icon: Icon) -> WindowControlContent {
-  WindowControlContent::element(move |color| {
+#[cfg(not(target_os = "macos"))]
+pub fn window_control(icon: Icon) -> lurq::components::WindowControlContent {
+  lurq::components::WindowControlContent::element(move |color| {
     Text::new(icon.glyph().encode_utf8(&mut [0; 4]))
       .variant(ExtraTypography::IconWindowControl.role())
       .color(color)

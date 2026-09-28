@@ -146,6 +146,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::RunNotRunning
       | Rejection::RunNotPaused
       | Rejection::RunEnded
+      | Rejection::WorktreeRemoved
       | Rejection::LimitNotRaised { .. }
       | Rejection::LimitNotAboveUsed { .. }
       | Rejection::BudgetAboveMaximum { .. }
@@ -153,7 +154,8 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::PermissionsNotEnforceable { .. }
       | Rejection::NoAgentToRestart
       | Rejection::NoPendingPermissions
-      | Rejection::PlanNotAwaited,
+      | Rejection::PlanNotAwaited
+      | Rejection::Busy,
     ) => vec![Message::new("runs.start.failed")],
   }
 }
@@ -167,6 +169,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::RunNotRunning) => Message::new("runs.control.notRunning"),
     RunRequestError::Rejected(Rejection::RunNotPaused) => Message::new("runs.control.notPaused"),
     RunRequestError::Rejected(Rejection::RunEnded) => Message::new("runs.control.ended"),
+    RunRequestError::Rejected(Rejection::WorktreeRemoved) => Message::new("runs.control.worktreeRemoved"),
     RunRequestError::Rejected(Rejection::RunNotInterrupted) => Message::new("runs.control.notInterrupted"),
     RunRequestError::Rejected(Rejection::RunUnreadable { .. }) => Message::new("runs.unreadable.rejected"),
     RunRequestError::Rejected(
@@ -200,7 +203,8 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::TaskNotFound
       | Rejection::TaskNotQueued
       | Rejection::Preflight { .. }
-      | Rejection::Failed { .. },
+      | Rejection::Failed { .. }
+      | Rejection::Busy,
     ) => Message::new("runs.control.failed"),
   }
 }

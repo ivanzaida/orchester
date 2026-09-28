@@ -15,7 +15,7 @@ pub(crate) use fixture;
 
 pub fn ok(stdout: &str) -> CommandOutput {
   CommandOutput {
-    success: true,
+    code: Some(0),
     stdout: stdout.to_owned(),
     stderr: String::new(),
   }
@@ -23,7 +23,7 @@ pub fn ok(stdout: &str) -> CommandOutput {
 
 pub fn failed(stderr: &str) -> CommandOutput {
   CommandOutput {
-    success: false,
+    code: Some(1),
     stdout: String::new(),
     stderr: stderr.to_owned(),
   }

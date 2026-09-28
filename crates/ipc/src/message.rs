@@ -113,12 +113,20 @@ pub enum Command {
   /// the run's next invocation boundary. A step waiting for an answer to its agent's question
   /// resumes now; a run that succeeded works again on a follow-up of its last agent step (Ask
   /// agent); an agent at work reads them once its turn is over; a paused or stopped run keeps them
-  /// queued until it continues. Answered with [`Reply::Accepted`] once that is arranged, or
-  /// [`Rejection::RunEnded`] for a run that failed or was cancelled.
+  /// queued until it continues. Answered with [`Reply::Accepted`] once that is arranged,
+  /// [`Rejection::RunEnded`] for a run that failed, was cancelled or was merged, or
+  /// [`Rejection::WorktreeRemoved`] when the run's worktree is gone; the messages then stay queued.
   DeliverMessages { run: RunId },
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes
   /// the connection.
   Shutdown { mode: ShutdownMode },
+  /// No window tab shows the project any more: stop, but only while the runner has no work, so
+  /// nothing it does is interrupted. Work is a run it executes (an agent at work, a step waiting
+  /// for an agent slot, a checkpoint being saved) or a request that may execute one again being
+  /// carried out. Idle, it answers [`Reply::Stopping`], then stops as
+  /// [`ShutdownMode::FinishAtCheckpoints`] does with nothing to finish, ending with
+  /// [`Event::Stopped`]; with work it answers [`Rejection::Busy`] and goes on.
+  StopIfIdle,
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -247,6 +255,9 @@ pub enum Reply {
     continued: Vec<RunId>,
     refused: Vec<RefusedRun>,
   },
+  /// The answer to [`Command::StopIfIdle`] when the runner had no work: [`Event::Stopped`]
+  /// follows.
+  Stopping,
   Rejected(Rejection),
 }
 
@@ -283,6 +294,9 @@ pub enum Rejection {
   RunNotInterrupted,
   /// The run has ended: there is nothing to cancel, and no agent reads messages to it.
   RunEnded,
+  /// The run's worktree was removed, so its agent cannot continue there: a follow-up (Ask agent)
+  /// is refused before the run changes, and its messages stay queued.
+  WorktreeRemoved,
   /// The run stopped at `limit`; it continues only with a raised limit.
   LimitNotRaised {
     limit: RunLimit,
@@ -320,6 +334,8 @@ pub enum Rejection {
   PlanNotAwaited,
   /// The runner is stopping and starts no work.
   ShuttingDown,
+  /// [`Command::StopIfIdle`] while the runner has work.
+  Busy,
   /// Starting failed in the runner (database, git worktree); its log has the details.
   Failed {
     detail: String,

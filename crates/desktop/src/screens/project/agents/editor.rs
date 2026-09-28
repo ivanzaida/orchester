@@ -17,6 +17,7 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -38,6 +39,7 @@ use crate::{
   },
   messages::Message,
   screens::project::page::{self, TOPBAR_BUTTON_HEIGHT},
+  tabs::dirty::EditMark,
   theme::ExtraSpacing,
   ui::{
     button::ActionButton,
@@ -111,6 +113,11 @@ pub struct ProfileEditor {
   /// The folder being added to the extra writable folders, as typed.
   pub(super) new_folder: Signal<String>,
   pub(super) folder_error: Signal<Option<Message>>,
+  /// Whether the form holds edits not saved yet, for closing its tab.
+  pub(super) unsaved: Option<EditMark>,
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  pub(super) scroll: ScrollState,
 }
 
 /// The form's current values checked against the stored profile.
@@ -152,11 +159,17 @@ impl Component for ProfileEditor {
     });
     let effort = editor.effort.clone();
     ctx.watch(&editor.model, move |_| effort.set(EffortChoice(None)));
-    editor
+    Self {
+      unsaved: EditMark::of(ctx),
+      ..editor
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let state = self.state();
+    if let Some(unsaved) = &self.unsaved {
+      unsaved.set(self.holds_edits(&state));
+    }
     let entry = match &self.context.editing {
       Editing::Profile(entry) => Some(&**entry),
       Editing::New => None,
@@ -206,11 +219,12 @@ impl Component for ProfileEditor {
             ctx,
             &self.context.agents,
             entry.map_or(ListSelection::New, |entry| ListSelection::Profile(entry.id)),
-            &self.context.nav,
+            (&self.context.nav, &self.context.list_scroll),
           ))
           .child(
             ScrollVertical::new(body)
               .id("agent-editor")
+              .with_scroll_state(self.scroll.clone())
               .flex(1.0)
               .height(Dimension::Pct(100.0)),
           ),
@@ -238,7 +252,20 @@ impl ProfileEditor {
       command_error: ctx.signal(None),
       new_folder: ctx.signal(String::new()),
       folder_error: ctx.signal(None),
+      unsaved: None,
+      scroll: ScrollState::new(),
       context: context.clone(),
+    }
+  }
+
+  /// Whether closing the tab would lose edits: a stored profile's changes before *Save draft*, a
+  /// new profile's once anything was written.
+  fn holds_edits(&self, state: &EditorState) -> bool {
+    match &self.context.editing {
+      Editing::Profile(_) => state.dirty,
+      Editing::New => [&self.role, &self.responsibilities, &self.instructions]
+        .into_iter()
+        .any(|text| !text.get_untracked().trim().is_empty()),
     }
   }
 
@@ -270,6 +297,8 @@ impl ProfileEditor {
       command_error: ctx.signal(None),
       new_folder: ctx.signal(String::new()),
       folder_error: ctx.signal(None),
+      unsaved: None,
+      scroll: ScrollState::new(),
       context: context.clone(),
     }
   }

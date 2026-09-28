@@ -369,6 +369,14 @@ pub fn scheduler_with(root: &Path, vault: Arc<MemoryVault>) -> (Scheduler, mpsc:
   (Scheduler::new(root, Notifier::new(sender), vault), events)
 }
 
+/// Waits for the tasks currently executing runs to close their control receivers.
+pub async fn wait_for_idle(scheduler: &Scheduler) {
+  tokio::time::timeout(PATIENCE, scheduler.wait_for_current_tasks())
+    .await
+    .expect("the run tasks end in time");
+  assert!(scheduler.active_runs().is_empty(), "the runner has no active runs");
+}
+
 /// The run once a notification shows it satisfying `done`.
 pub async fn wait_for(
   root: &Path,

@@ -68,7 +68,7 @@ pub fn parse_gh_pr_view(
   number: u64,
   output: &CommandOutput,
 ) -> Result<PullRequestHead, RepositoryError> {
-  if !output.success {
+  if !output.success() {
     let not_found = output
       .stderr
       .to_ascii_lowercase()
@@ -94,7 +94,7 @@ pub fn parse_gh_pr_view(
 
 /// Reads the diff a compare answered. GitHub answers 404 when either revision is gone.
 pub fn parse_gh_compare_diff(repo: &GitHubRepo, output: &CommandOutput) -> Result<String, RepositoryError> {
-  if output.success {
+  if output.success() {
     return Ok(output.stdout.clone());
   }
   if output.stderr.contains("(HTTP 404)") {

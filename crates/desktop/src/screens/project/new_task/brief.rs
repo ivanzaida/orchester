@@ -88,6 +88,7 @@ pub fn brief_form(
     ));
   ScrollVertical::new(fields)
     .id("new-task-brief")
+    .with_scroll_state(form.scroll.clone())
     .flex(1.0)
     .height(Dimension::Pct(100.0))
     .into()

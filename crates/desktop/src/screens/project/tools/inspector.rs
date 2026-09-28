@@ -123,14 +123,13 @@ fn used_by(ctx: &Ctx, context: &EditorContext, uses: &[crate::tools::data::ToolU
       "tools.inspector.use",
       [("pipeline", &*used.pipeline_name), ("step", &*used.step)],
     );
-    let (nav, pipeline) = (context.nav.clone(), used.pipeline);
     column = column.child(
       ActionButton::new(label)
         .icon(Icon::Workflow)
         .compact()
         .start()
         .fill_width()
-        .on_click(move || nav.show(Page::Pipeline(pipeline, PipelineView::Draft)))
+        .link(context.nav.link(Page::Pipeline(used.pipeline, PipelineView::Draft)))
         .render(ctx),
     );
   }

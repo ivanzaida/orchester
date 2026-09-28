@@ -4,9 +4,10 @@ use lurq::{
 };
 
 use super::tokens::{
-  ACCENT, BORDER, CANVAS, CODE_BG, CODE_COMMENT, CODE_CONSTANT, CODE_FUNCTION, CODE_KEYWORD, CODE_STRING, CODE_TEXT,
-  CODE_VARIABLE, DANGER, DIFF_ADD_BG, DIFF_ADD_TEXT, DIFF_REMOVE_BG, DIFF_REMOVE_TEXT, FOCUS_GAP, FOCUS_RING, HAIRLINE,
-  HOVER, INVERSE_TEXT, MUTED, RAISED, SCRIM, SIDEBAR, SUBTLE, SURFACE, TEXT,
+  ACCENT, BORDER, CANVAS, CANVAS_CLEAR, CODE_BG, CODE_COMMENT, CODE_CONSTANT, CODE_FUNCTION, CODE_KEYWORD, CODE_STRING,
+  CODE_TEXT, CODE_VARIABLE, DANGER, DIFF_ADD_BG, DIFF_ADD_TEXT, DIFF_REMOVE_BG, DIFF_REMOVE_TEXT, FOCUS_GAP,
+  FOCUS_RING, HAIRLINE, HOVER, INVERSE_TEXT, MUTED, RAISED, SCRIM, SIDEBAR, SUBTLE, SURFACE, TEXT, TRAFFIC_CLOSE,
+  TRAFFIC_MINIMIZE, TRAFFIC_ZOOM,
 };
 
 /// Pencil colors without a built-in lurq role, registered as `PaletteColor::Extra`.
@@ -47,10 +48,16 @@ pub enum ExtraColor {
   DiffRemovedBackground,
   /// The `−` of a removed line (Pencil `diff-remove-text`).
   DiffRemovedMark,
+  /// Transparent `canvas`, where the tab strip's edge fade ends (`xpSC0`).
+  CanvasClear,
+  /// The macOS close, minimize and zoom buttons (`R3RtGs` in `V70DN`).
+  TrafficClose,
+  TrafficMinimize,
+  TrafficZoom,
 }
 
 impl ExtraColor {
-  const ALL: [Self; 17] = [
+  const ALL: [Self; 21] = [
     Self::Surface,
     Self::Hairline,
     Self::Scrim,
@@ -68,6 +75,10 @@ impl ExtraColor {
     Self::DiffAddedMark,
     Self::DiffRemovedBackground,
     Self::DiffRemovedMark,
+    Self::CanvasClear,
+    Self::TrafficClose,
+    Self::TrafficMinimize,
+    Self::TrafficZoom,
   ];
 
   fn name(self) -> &'static str {
@@ -89,6 +100,10 @@ impl ExtraColor {
       Self::DiffAddedMark => "diff-add-text",
       Self::DiffRemovedBackground => "diff-remove-bg",
       Self::DiffRemovedMark => "diff-remove-text",
+      Self::CanvasClear => "canvas-clear",
+      Self::TrafficClose => "traffic-close",
+      Self::TrafficMinimize => "traffic-minimize",
+      Self::TrafficZoom => "traffic-zoom",
     }
   }
 
@@ -111,6 +126,10 @@ impl ExtraColor {
       Self::DiffAddedMark => DIFF_ADD_TEXT,
       Self::DiffRemovedBackground => DIFF_REMOVE_BG,
       Self::DiffRemovedMark => DIFF_REMOVE_TEXT,
+      Self::CanvasClear => CANVAS_CLEAR,
+      Self::TrafficClose => TRAFFIC_CLOSE,
+      Self::TrafficMinimize => TRAFFIC_MINIMIZE,
+      Self::TrafficZoom => TRAFFIC_ZOOM,
     })
   }
 

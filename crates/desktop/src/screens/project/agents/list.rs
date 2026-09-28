@@ -9,6 +9,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Button, Column, ScrollVertical, Text, TextOverflow},
+  layout::layout_kind::ScrollState,
   node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::id::ResourceId;
@@ -21,11 +22,7 @@ use crate::{
     route::{AgentSelection, Page},
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{
-    button::ActionButton,
-    icon::Icon,
-    pressable::{pressable, surface},
-  },
+  ui::{button::ActionButton, icon::Icon, pressable::surface},
 };
 
 /// List and item sizes (`ORWrW`, `mmKpE`).
@@ -40,19 +37,23 @@ pub enum ListSelection {
   New,
 }
 
-pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selection: ListSelection, nav: &ProjectNav) -> Element {
+pub fn profile_list(
+  ctx: &Ctx,
+  agents: &ProjectAgents,
+  selection: ListSelection,
+  (nav, scroll): (&ProjectNav, &ScrollState),
+) -> Element {
   let new_agent = {
     let button = ActionButton::new(ctx.t("agents.new"))
       .icon(Icon::Plus)
       .id("new-agent")
       .fill_width()
       .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT));
-    let nav = nav.clone();
     if agents.connections.is_empty() {
       // A profile needs a connection; the empty state says so and links to Connections.
       button.on_click(|| {}).enabled(false)
     } else {
-      button.on_click(move || nav.show(Page::Agents(AgentSelection::New)))
+      button.link(nav.link(Page::Agents(AgentSelection::New)))
     }
   };
   let selected = match selection {
@@ -86,6 +87,7 @@ pub fn profile_list(ctx: &Ctx, agents: &ProjectAgents, selection: ListSelection,
           .spacing(ExtraSpacing::Stack.role())
           .with_children(items),
       )
+      .with_scroll_state(scroll.clone())
       .width(Dimension::Pct(100.0))
       .flex(1.0),
     )
@@ -123,8 +125,9 @@ fn item(ctx: &Ctx, agents: &ProjectAgents, entry: &ProfileEntry, selected: bool,
   if selected {
     return item.describe("state", "selected").into();
   }
-  let (nav, id) = (nav.clone(), entry.id);
-  pressable(item, move || nav.show(Page::Agents(AgentSelection::Profile(id))))
+  nav
+    .link(Page::Agents(AgentSelection::Profile(entry.id)))
+    .on(item)
     .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
     .into()
 }

@@ -11,6 +11,7 @@ use lurq::{
   },
   components::{Button, Column, ScrollVertical, Text, TextOverflow},
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, Style, border::Border, dimension::Dimension},
 };
 
@@ -19,11 +20,7 @@ use crate::{
   instructions::data::{InstructionEntry, ProjectInstructions},
   navigation::route::{InstructionsTab, Page},
   theme::{ExtraColor, ExtraTypography},
-  ui::{
-    button::ActionButton,
-    icon::Icon,
-    pressable::{pressable, surface},
-  },
+  ui::{button::ActionButton, icon::Icon, pressable::surface},
 };
 
 /// Library width, New instruction height and rule item height (`aYBe1`, `La1cB`, `jNTVN`).
@@ -55,6 +52,8 @@ pub struct Library<'a> {
   pub nav: &'a ProjectNav,
   /// Whether the New instruction dialog is open.
   pub creating: &'a Signal<bool>,
+  /// Where the list is scrolled.
+  pub scroll: &'a ScrollState,
 }
 
 pub fn library(ctx: &Ctx, library: &Library<'_>) -> Element {
@@ -65,6 +64,7 @@ pub fn library(ctx: &Ctx, library: &Library<'_>) -> Element {
     edited,
     nav,
     creating,
+    scroll,
   } = *library;
   let new = ActionButton::new(ctx.t("instructions.new"))
     .icon(Icon::Plus)
@@ -110,6 +110,7 @@ pub fn library(ctx: &Ctx, library: &Library<'_>) -> Element {
           .spacing(SpacingSize::Sm)
           .with_children(items),
       )
+      .with_scroll_state(scroll.clone())
       .width(Dimension::Pct(100.0))
       .flex(1.0),
     )
@@ -166,8 +167,9 @@ fn item(
   if selected {
     return frame.describe("state", "selected").into();
   }
-  let (nav, id) = (nav.clone(), entry.id);
-  pressable(frame, move || nav.show(Page::Instructions(tab, Some(id))))
+  nav
+    .link(Page::Instructions(tab, Some(entry.id)))
+    .on(frame)
     .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
     .into()
 }

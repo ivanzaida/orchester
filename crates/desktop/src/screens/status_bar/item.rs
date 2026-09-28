@@ -13,7 +13,8 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
-    pressable::{pressable, surface},
+    link::Press,
+    pressable::surface,
   },
 };
 
@@ -34,9 +35,17 @@ pub fn item(id: &'static str) -> Button {
     .rounded(RadiusSize::Sm)
 }
 
-/// An item that opens something: pointer and the `$hover` fill.
-pub fn clickable(item: Button, open: impl Fn() + Send + Sync + 'static) -> Button {
-  pressable(item, open).hovered_style(Style::new().background(PaletteColor::AccentMuted))
+/// An item that runs `run`: pointer and the `$hover` fill.
+pub fn clickable(item: Button, run: impl Fn() + Send + Sync + 'static) -> Button {
+  pressed(item, Press::action(run))
+}
+
+/// An item that opens a place where the press asks, or runs an action (see `ui::link`): pointer
+/// and the `$hover` fill.
+pub fn pressed(item: Button, press: Press) -> Button {
+  press
+    .on(item)
+    .hovered_style(Style::new().background(PaletteColor::AccentMuted))
 }
 
 pub fn glyph(glyph: Icon, color: PaletteColor) -> Element {
@@ -73,10 +82,10 @@ pub fn value(text: &str, color: PaletteColor) -> Element {
 }
 
 /// Medium 11 action label, e.g. "Restart runner" (`LPDZP`, `l02Wx`).
-pub fn action(id: &'static str, text: &str, run: impl Fn() + Send + Sync + 'static) -> Element {
-  clickable(
+pub fn action(id: &'static str, text: &str, press: Press) -> Element {
+  pressed(
     item(id).child(Text::new(text).variant(TypographyStyle::Link).nowrap()),
-    run,
+    press,
   )
   .into()
 }

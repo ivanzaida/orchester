@@ -223,15 +223,13 @@ fn entry_row(
 
 /// `line`, pressed to open the changed file at `path` in the Changes tab (↗).
 fn opens_file(nav: &ProjectNav, row: &TranscriptRow, path: &Arc<str>, line: Element) -> Element {
-  let (nav, task, file) = (
-    nav.clone(),
-    row.task,
-    ChangedFile {
-      path: path.to_string(),
-      worktree: false,
-    },
-  );
-  pressable(surface(), move || nav.show_changes(task, &file))
+  let file = ChangedFile {
+    path: path.to_string(),
+    worktree: false,
+  };
+  nav
+    .changes_link(row.task, &file)
+    .on(surface())
     .id(format!("activity-open-file:{path}"))
     .width(Dimension::Pct(100.0))
     .child(line)

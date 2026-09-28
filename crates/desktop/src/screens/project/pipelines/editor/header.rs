@@ -35,7 +35,7 @@ use crate::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{pressable, surface},
+    pressable::surface,
     status_label::topbar_status_label,
   },
 };
@@ -62,11 +62,13 @@ pub fn topbar(
   saving: &Saving,
   publish: impl Fn() + Send + Sync + 'static,
 ) -> Element {
-  let back = nav.clone();
-  let breadcrumb = pressable(surface().id("pipeline-breadcrumb-library"), move || back.library()).child(
-    Text::new(&ctx.t_args("pipelines.library.breadcrumb", [("project", project)]))
-      .variant(TypographyStyle::Description),
-  );
+  let breadcrumb = nav
+    .library_link()
+    .on(surface().id("pipeline-breadcrumb-library"))
+    .child(
+      Text::new(&ctx.t_args("pipelines.library.breadcrumb", [("project", project)]))
+        .variant(TypographyStyle::Description),
+    );
   let draft = state.draft_number().to_string();
   let label = match state.latest() {
     Some(latest) if !state.has_changes() => topbar_status_label(
@@ -161,8 +163,7 @@ fn history_button(ctx: &Ctx, state: &EditorState, nav: &PipelinesNav) -> ActionB
   let Some(latest) = state.latest() else {
     return button;
   };
-  let (nav, id, latest) = (nav.clone(), state.id(), latest.number);
-  button.on_click(move || nav.show(id, PipelineView::Version(latest)))
+  button.link(nav.link(state.id(), PipelineView::Version(latest.number)))
 }
 
 fn toolbar_row() -> Row {
@@ -215,14 +216,14 @@ pub fn toolbar(ctx: &Ctx, state: &EditorState, handle: &EditorHandle, nav: &Pipe
 
 /// While a published version is shown: back to the draft, and that the version is read-only.
 pub fn version_toolbar(ctx: &Ctx, state: &EditorState, nav: &PipelinesNav, version: VersionNumber) -> Element {
-  let (nav, id) = (nav.clone(), state.id());
+  let id = state.id();
   toolbar_row()
     .child(small_button(
       ctx,
       ActionButton::new(ctx.t("pipelines.history.backToEditor"))
         .icon(Icon::ArrowLeft)
         .id("pipeline-history-back")
-        .on_click(move || nav.show(id, PipelineView::Draft)),
+        .link(nav.link(id, PipelineView::Draft)),
     ))
     .child(Spacer::new().flex(1.0))
     .child(icon(Icon::Lock, IconSize::Dismiss, PaletteColor::TextSecondary))

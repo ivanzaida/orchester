@@ -55,7 +55,7 @@ pub fn gh_auth_status_command(executable: &Path, host: &GitHubHost) -> Command {
 /// The version number in `gh --version` output (`gh version 2.97.0 (2026-07-31)`), if the
 /// output is the GitHub CLI's.
 pub fn parse_gh_version(output: &CommandOutput) -> Option<String> {
-  if !output.success {
+  if !output.success() {
     return None;
   }
   let rest = output.stdout.trim_start().strip_prefix("gh version ")?;
@@ -91,7 +91,7 @@ pub fn parse_gh_auth_status(host: &GitHubHost, output: &CommandOutput) -> Option
     #[serde(default)]
     scopes: Option<String>,
   }
-  if !output.success {
+  if !output.success() {
     return None;
   }
   let status: Status = serde_json::from_str(output.stdout.trim()).ok()?;

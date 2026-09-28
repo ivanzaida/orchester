@@ -162,7 +162,7 @@ fn untracked_diff(
   args.extend(DIFF_OPTIONS);
   args.extend(["--", NULL_FILE, path]);
   let output = runner.run(&git_command(git, worktree, args))?;
-  if !output.success && !output.stdout.starts_with("diff --git ") {
+  if !output.success() && !output.stdout.starts_with("diff --git ") {
     return Err(GitDiffError::Failed(redact_userinfo(output.stderr.trim())));
   }
   let added = Diff::parse(&output.stdout)
@@ -176,7 +176,7 @@ fn untracked_diff(
 
 /// `git <args>` in `directory`, with git's messages in English. Git takes no optional locks: a read
 /// beside an agent at work must not refresh the worktree's index while the runner commits in it.
-pub(crate) fn git_command<'a>(git: &Path, directory: &Path, args: impl IntoIterator<Item = &'a str>) -> Command {
+pub fn git_command<'a>(git: &Path, directory: &Path, args: impl IntoIterator<Item = &'a str>) -> Command {
   Command::new(git, args)
     .with_current_dir(directory)
     .with_env("LC_ALL", "C")
@@ -236,7 +236,7 @@ pub fn parse_numstat(stdout: &str) -> Result<Changes, GitDiffError> {
 /// Standard output of a git command that must succeed.
 fn run(runner: &impl CommandRunner, command: &Command) -> Result<String, GitDiffError> {
   let output = runner.run(command)?;
-  if output.success {
+  if output.success() {
     Ok(output.stdout)
   } else {
     Err(GitDiffError::Failed(redact_userinfo(output.stderr.trim())))

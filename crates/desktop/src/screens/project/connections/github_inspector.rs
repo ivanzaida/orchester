@@ -13,6 +13,7 @@ use lurq::{
   },
   components::{Column, ScrollVertical, Text},
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -67,6 +68,8 @@ pub struct GitHubInspector<'a> {
   pub copied: &'a Signal<Copied>,
   /// What starts when `gh` runs.
   pub launch: Option<&'a Launch>,
+  /// Where the details are scrolled.
+  pub scroll: &'a ScrollState,
 }
 
 impl GitHubInspector<'_> {
@@ -118,6 +121,7 @@ impl GitHubInspector<'_> {
       .child(
         ScrollVertical::new(details)
           .id("github-inspector-details")
+          .with_scroll_state(self.scroll.clone())
           .width(Dimension::Pct(100.0))
           .flex(1.0)
           .scrollbar(gutter_scrollbar()),

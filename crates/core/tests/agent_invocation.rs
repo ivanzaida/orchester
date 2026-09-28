@@ -254,7 +254,7 @@ impl CommandRunner for Versions {
       .find(|(path, _)| Path::new(path) == command.program())
       .expect("a known program");
     answer.clone().map(|stdout| CommandOutput {
-      success: true,
+      code: Some(0),
       stdout: stdout.into(),
       stderr: String::new(),
     })

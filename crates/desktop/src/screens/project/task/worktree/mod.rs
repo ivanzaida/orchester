@@ -102,7 +102,7 @@ impl Component for RemoveWorktree {
 }
 
 impl RemoveWorktree {
-  fn modal(&self, ctx: &Ctx, props: &RemoveWorktreeProps, action: &RemoveAction) -> Element {
+  fn modal(&self, ctx: &mut Ctx, props: &RemoveWorktreeProps, action: &RemoveAction) -> Element {
     if !self.open.get() {
       return Modal::new(Column::new()).open_when(false).into();
     }

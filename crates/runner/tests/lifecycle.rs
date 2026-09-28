@@ -20,7 +20,9 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, killed_mid_run, project, reported, scheduler, wait_for, wait_for_turns};
+use self::support::{
+  PATIENCE, Setup, killed_mid_run, project, reported, scheduler, wait_for, wait_for_idle, wait_for_turns,
+};
 
 fn slots(count: u32) -> NonZeroU32 {
   NonZeroU32::new(count).expect("above zero")
@@ -320,4 +322,21 @@ async fn lifecycle_two_runs_of_one_project_both_settle_at_their_checkpoints() {
     assert_eq!(run.status(), &RunStatus::Paused(PauseReason::Requested));
     assert!(run.last_checkpoint().is_some(), "each run's work is committed");
   }
+}
+
+/// The runner has work while a run executes and none once it settled: only then may a runner no
+/// tab shows stop.
+#[tokio::test(flavor = "multi_thread")]
+async fn lifecycle_scheduler_is_idle_only_while_no_run_executes() {
+  let project = project(&Setup::new("Work slowly."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  scheduler.attach(fresh(SessionEnd::Clean), slots(1)).expect("attached");
+  assert!(scheduler.is_idle(), "nothing runs yet");
+
+  let run = start(&scheduler, project.task);
+  assert!(!scheduler.is_idle(), "a run executes");
+  wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
+  wait_for_idle(&scheduler).await;
+  assert!(scheduler.is_idle(), "the settled run leaves the runner idle");
 }

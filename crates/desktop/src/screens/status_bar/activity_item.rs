@@ -11,7 +11,7 @@ use lurq::{
 
 use super::{
   hint::{HintAnchor, Hints},
-  item::{action, clickable, dismiss, glyph, item, separator, truncated_label, value},
+  item::{action, clickable, dismiss, glyph, item, pressed, separator, truncated_label, value},
   open::Opener,
   timed::{Elapsed, ElapsedProps},
 };
@@ -21,7 +21,7 @@ use crate::{
     bar::{ActivitySlot, RunnerBadge},
   },
   display,
-  ui::{icon::Icon, message_text},
+  ui::{icon::Icon, link::Press, message_text},
 };
 
 /// The slot's elements; `after_runner` puts a separator after the runner item. `interrupted`
@@ -87,13 +87,13 @@ fn runner_actions(ctx: &Ctx, opener: &Opener) -> Vec<Element> {
     action(
       "status-restart-runner",
       &ctx.t("runner.connection.restart"),
-      move || {
-        restart.restart();
-      },
+      Press::action(move || restart.restart()),
     ),
-    action("status-open-log", &ctx.t("runner.connection.openLog"), move || {
-      log.open_log();
-    }),
+    action(
+      "status-open-log",
+      &ctx.t("runner.connection.openLog"),
+      Press::action(move || log.open_log()),
+    ),
   ]
 }
 
@@ -109,11 +109,10 @@ fn failure(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Vec<Elem
   let row = hints.attach(row, HintAnchor::Activity, text);
   let mut items = vec![open_event(row, event, opener)];
   if opener.can_open(event.target()) {
-    let (target, id, open) = (event.target().clone(), event.id(), opener.clone());
     items.push(action(
       "status-activity-open",
-      &ctx.t(super::popover::open_key(&target)),
-      move || open.open(&target, Some(id)),
+      &ctx.t(super::popover::open_key(event.target())),
+      opener.press(event.target(), Some(event.id())),
     ));
   }
   let (id, dismissing) = (event.id(), opener.clone());
@@ -151,7 +150,7 @@ fn running(
       },
     ));
   let row = hints.attach(row, HintAnchor::Activity, text);
-  open_or_popover(row, newest.target().clone(), None, opener)
+  open_or_popover(row, newest.target(), None, opener)
 }
 
 /// D: the count and the newest operation, opening the popover.
@@ -186,14 +185,13 @@ fn latest(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Element {
 
 fn open_event(row: Button, event: &Event, opener: &Opener) -> Element {
   let failure = event.is_unresolved().then(|| event.id());
-  open_or_popover(row, event.target().clone(), failure, opener)
+  open_or_popover(row, event.target(), failure, opener)
 }
 
 /// Opens the object the item names; with nothing to open, the popover with the history.
-fn open_or_popover(row: Button, target: Target, failure: Option<OperationId>, opener: &Opener) -> Element {
-  if opener.can_open(&target) {
-    let opener = opener.clone();
-    clickable(row, move || opener.open(&target, failure)).into()
+fn open_or_popover(row: Button, target: &Target, failure: Option<OperationId>, opener: &Opener) -> Element {
+  if opener.can_open(target) {
+    pressed(row, opener.press(target, failure)).into()
   } else {
     popover_toggle(row, opener)
   }
