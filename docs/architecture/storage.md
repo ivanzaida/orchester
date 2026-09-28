@@ -32,13 +32,17 @@ orchester.exe (desktop, UI)
 ```
 
 - The desktop owns the window and all user-authored changes. It starts one runner
-  per project that has work, and talks to it over a local IPC channel (named pipe on Windows):
-  commands down (start, pause, resume, cancel, deliver message, approval decision), events up
+  per project that has work, and talks to it over a local IPC channel (a named pipe on Windows,
+  a Unix domain socket in the user's private `$TMPDIR/orchester/` folder on macOS; the desktop
+  checks that the process serving it is the runner it started): commands down (start, pause, resume, cancel, deliver message, approval decision), events up
   (state changes, progress, output). It reads state directly from the project database.
 - The runner owns execution: scheduling, agent processes, checkpoints, tool calls, evidence. It
   resolves secrets from the keychain at tool-call time; neither the desktop nor agents see values.
 - Runner and agents run inside a Windows Job Object created by the desktop with
   kill-on-close, so they can never outlive the desktop process, whether it quits or crashes.
+- macOS has no Job Objects. The desktop sends the runner SIGTERM when it lets go of it (SIGKILL
+  if it is still running 10 s later), and the runner ends its work when the desktop's end of the
+  connection closes, which is also what a desktop crash does; either way it ends its agents first.
 
 ### Lifecycle
 

@@ -2,8 +2,6 @@
 //! (`docs/architecture/storage.md`, "Lifecycle"): the work a close would interrupt, the status
 //! bar while the runner drops and reconnects, the start-up recovery after a crash and the changes
 //! it links to, continuing an interrupted run from its task page, and the daily project budget.
-//! The runner talks to the desktop over a named pipe, which exists on Windows only.
-#![cfg(windows)]
 
 use std::{
   fs,
