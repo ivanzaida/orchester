@@ -38,13 +38,13 @@ impl<'a, R: CommandRunner> Git<'a, R> {
 
   /// Whether the command exits with 0, for queries whose every failure means "no".
   pub(super) fn succeeds(&self, args: &[&str]) -> Result<bool, GitError> {
-    Ok(self.output(args)?.success)
+    Ok(self.output(args)?.success())
   }
 
   /// Trimmed standard output of a command that must succeed.
   pub(super) fn stdout(&self, args: &[&str]) -> Result<String, GitError> {
     let output = self.output(args)?;
-    if output.success {
+    if output.success() {
       Ok(output.stdout.trim().to_owned())
     } else {
       Err(GitError::Failed(message(&output)))
@@ -54,7 +54,7 @@ impl<'a, R: CommandRunner> Git<'a, R> {
   /// The branch checked out here; `None` on a detached HEAD.
   pub(super) fn checked_out_branch(&self) -> Result<Option<BranchName>, GitError> {
     let output = self.output(&["symbolic-ref", "--quiet", "--short", "HEAD"])?;
-    if !output.success {
+    if !output.success() {
       // `--quiet` fails silently on a detached HEAD only; anything else (no repository) says why.
       return if self.succeeds(&["rev-parse", "--verify", "--quiet", "HEAD"])? {
         Ok(None)
@@ -74,7 +74,7 @@ impl<'a, R: CommandRunner> Git<'a, R> {
   pub(super) fn uncommitted(&self) -> Result<Vec<String>, GitError> {
     // Not trimmed: the first entry's status can start with a space.
     let output = self.output(&["status", "--porcelain=v1", "-z", "--untracked-files=all"])?;
-    if !output.success {
+    if !output.success() {
       return Err(GitError::Failed(message(&output)));
     }
     Ok(parse_status(&output.stdout))
@@ -89,7 +89,7 @@ impl<'a, R: CommandRunner> Git<'a, R> {
   pub(super) fn commit(&self, name: &str) -> Result<Option<String>, GitError> {
     let target = format!("{name}^{{commit}}");
     let output = self.output(&["rev-parse", "--verify", "--quiet", "--end-of-options", &target])?;
-    Ok(output.success.then(|| output.stdout.trim().to_owned()))
+    Ok(output.success().then(|| output.stdout.trim().to_owned()))
   }
 }
 

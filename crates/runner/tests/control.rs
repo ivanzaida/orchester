@@ -37,6 +37,7 @@ fn raised(budget: u64, max_duration: Duration) -> RaisedLimits {
 async fn start(scheduler: &Scheduler, task: orchester_core::id::TaskId) -> RunId {
   scheduler
     .start_run(IdempotencyKey::generate(), task)
+    .await
     .expect("the run starts")
 }
 
@@ -243,7 +244,12 @@ async fn control_cancel_ends_a_pending_run_that_never_started() {
   // The run's branch exists already, so its worktree cannot be created and the run never starts.
   git(root, &["branch", "orchester/orc-1-run-1"]);
   let (scheduler, mut events) = scheduler(root);
-  assert!(scheduler.start_run(IdempotencyKey::generate(), project.task).is_err());
+  assert!(
+    scheduler
+      .start_run(IdempotencyKey::generate(), project.task)
+      .await
+      .is_err()
+  );
   let db = ProjectDb::open(root).expect("open");
   let [pending] = db
     .runs_of_task(project.task)

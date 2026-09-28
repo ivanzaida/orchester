@@ -15,15 +15,14 @@ use lurq::{
 
 use super::{
   icon::{Icon, IconSize, icon},
-  pressable::{Ring, keyboard_stop, pressable, surface},
+  link::{Link, Press},
+  pressable::{Ring, keyboard_stop, surface},
 };
 use crate::theme::{ExtraColor, ExtraSpacing};
 
-type Handler = Arc<dyn Fn() + Send + Sync>;
-
 enum State {
   Selected,
-  Available(Handler),
+  Available(Press),
   Unavailable,
 }
 
@@ -77,9 +76,18 @@ impl Tab {
   }
 
   /// Selects the tab. A selected tab selects nothing.
-  pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
+  pub fn on_click(self, handler: impl Fn() + Send + Sync + 'static) -> Self {
+    self.press(Press::action(handler))
+  }
+
+  /// Opens the tab's page where the press asks (see `ui::link`). A selected tab opens nothing.
+  pub fn link(self, link: Link) -> Self {
+    self.press(Press::Link(link))
+  }
+
+  fn press(mut self, press: Press) -> Self {
     if !matches!(self.state, State::Selected) {
-      self.state = State::Available(Arc::new(handler));
+      self.state = State::Available(press);
     }
     self
   }
@@ -122,15 +130,15 @@ impl From<Tab> for Element {
         .describe("state", "selected")
         .into(),
       // A button around the row, so a press on it keeps the focus where it is.
-      State::Available(handler) => pressable(
-        surface()
-          .id(tab.id)
-          .height(tab.height)
-          .child(row.hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Lg, PaletteColor::Border)))),
-        move || handler(),
-      )
-      .describe("state", "enabled")
-      .into(),
+      State::Available(press) => press
+        .on(
+          surface()
+            .id(tab.id)
+            .height(tab.height)
+            .child(row.hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Lg, PaletteColor::Border)))),
+        )
+        .describe("state", "enabled")
+        .into(),
       State::Unavailable => row
         .id(tab.id)
         .height(tab.height)
@@ -157,7 +165,7 @@ fn form_tab(id: &'static str, height: Dimension, row: Row, state: State) -> Elem
   };
   let button = keyboard_stop(surface().id(id).height(height).child(row), Ring::Outer).describe("state", described);
   match state {
-    State::Available(handler) => button.cursor(CursorIcon::Pointer).on_click(move |_| handler()).into(),
+    State::Available(press) => press.attach(button).into(),
     State::Selected | State::Unavailable => button.into(),
   }
 }

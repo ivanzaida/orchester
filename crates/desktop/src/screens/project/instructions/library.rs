@@ -20,11 +20,7 @@ use crate::{
   instructions::data::{InstructionEntry, ProjectInstructions},
   navigation::route::{InstructionsTab, Page},
   theme::{ExtraColor, ExtraTypography},
-  ui::{
-    button::ActionButton,
-    icon::Icon,
-    pressable::{pressable, surface},
-  },
+  ui::{button::ActionButton, icon::Icon, pressable::surface},
 };
 
 /// Library width, New instruction height and rule item height (`aYBe1`, `La1cB`, `jNTVN`).
@@ -171,8 +167,9 @@ fn item(
   if selected {
     return frame.describe("state", "selected").into();
   }
-  let (nav, id) = (nav.clone(), entry.id);
-  pressable(frame, move || nav.show(Page::Instructions(tab, Some(id))))
+  nav
+    .link(Page::Instructions(tab, Some(entry.id)))
+    .on(frame)
     .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
     .into()
 }

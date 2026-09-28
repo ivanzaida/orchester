@@ -73,6 +73,10 @@ name = "plan_settling"
 required-features = ["test-agent"]
 
 [[test]]
+name = "request_serialization"
+required-features = ["test-agent"]
+
+[[test]]
 name = "instructions"
 required-features = ["test-agent"]
 
@@ -94,6 +98,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "mcp"
+required-features = ["test-agent"]
+
+[[test]]
+name = "writable_folders"
 required-features = ["test-agent"]
 
 [features]

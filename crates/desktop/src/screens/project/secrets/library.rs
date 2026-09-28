@@ -65,14 +65,14 @@ impl SecretsScreen {
     let rows: Vec<Element> = listed
       .iter()
       .map(|secret| {
-        let (nav, id) = (self.nav.clone(), secret.id());
+        let id = secret.id();
         let row = SecretRow {
           secret,
           project,
           uses: data.used_by(id).count(),
           selected: shown.is_some_and(|shown| shown.id() == id),
         };
-        secret_row(ctx, &row, move || nav.show(Page::Secrets(Some(id))))
+        secret_row(ctx, &row, self.nav.link(Page::Secrets(Some(id))))
       })
       .collect();
     let list = self.list_column(ctx, filter, rows, listed.len());

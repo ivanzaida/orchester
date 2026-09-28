@@ -75,6 +75,8 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::ClaudeAcceptEdits => "agents.permissions.mechanism.claudeAcceptEdits",
     Mechanism::ClaudeWebTools => "agents.permissions.mechanism.claudeWebTools",
     Mechanism::ClaudeWebToolsRemoved => "agents.permissions.mechanism.claudeWebToolsRemoved",
+    Mechanism::CodexWritableRoots => "agents.permissions.mechanism.codexWritableRoots",
+    Mechanism::ClaudeAddDir => "agents.permissions.mechanism.claudeAddDir",
     Mechanism::ClaudeAllowedTools => {
       let count = match permissions.commands() {
         CommandPermission::Allowed(commands) => commands.entries().len(),
@@ -118,6 +120,8 @@ pub fn summary(ctx: &Ctx, permissions: &AgentPermissions, network_stays_on: bool
 struct Words {
   read_only: &'static str,
   edit: &'static str,
+  edit_folders_one: &'static str,
+  edit_folders_other: &'static str,
   commands_ask: &'static str,
   commands_any: &'static str,
   commands_none: &'static str,
@@ -131,6 +135,8 @@ struct Words {
 const LONG: Words = Words {
   read_only: "agents.permissions.long.readOnly",
   edit: "agents.permissions.long.edit",
+  edit_folders_one: "agents.permissions.long.editFoldersOne",
+  edit_folders_other: "agents.permissions.long.editFoldersOther",
   commands_ask: "agents.permissions.long.commandsAsk",
   commands_any: "agents.permissions.long.commandsAny",
   commands_none: "agents.permissions.long.commandsNone",
@@ -144,6 +150,8 @@ const LONG: Words = Words {
 const COMPACT: Words = Words {
   read_only: "agents.permissions.compact.readOnly",
   edit: "agents.permissions.compact.edit",
+  edit_folders_one: "agents.permissions.compact.editFoldersOne",
+  edit_folders_other: "agents.permissions.compact.editFoldersOther",
   commands_ask: "agents.permissions.compact.commandsAsk",
   commands_any: "agents.permissions.compact.commandsAny",
   commands_none: "agents.permissions.compact.commandsNone",
@@ -165,10 +173,16 @@ pub fn parts(
     Length::Long => &LONG,
     Length::Compact => &COMPACT,
   };
-  let repository = ctx.t(match permissions.repository() {
-    RepositoryAccess::ReadOnly => words.read_only,
-    RepositoryAccess::Write => words.edit,
-  });
+  // Extra writable folders widen what an agent that edits files may write, so the summary says so.
+  let folders = permissions
+    .granted_folders()
+    .map_or(0, |folders| folders.entries().len());
+  let repository = match (permissions.repository(), folders) {
+    (RepositoryAccess::ReadOnly, _) => ctx.t(words.read_only),
+    (RepositoryAccess::Write, 0) => ctx.t(words.edit),
+    (RepositoryAccess::Write, 1) => ctx.t(words.edit_folders_one),
+    (RepositoryAccess::Write, count) => ctx.t_args(words.edit_folders_other, [("count", count.to_string().as_str())]),
+  };
   let commands = match permissions.commands() {
     CommandPermission::AskBefore => ctx.t(words.commands_ask),
     CommandPermission::AnyInWorktree => ctx.t(words.commands_any),

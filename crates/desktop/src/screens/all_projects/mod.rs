@@ -1,7 +1,7 @@
 //! All projects (01.06 `Z7IZZ`, empty 01.06 C `A4FJG`): the projects the application database
 //! knows, with where each one's runner stands, its active runs and the runs that need the user,
 //! read without starting a runner. A row opens its project in the current tab (Ctrl/Cmd+click or a
-//! middle click in a new tab, see `ui::pressable::opens_place`); *Add project* opens setup; *Open
+//! middle click in a new tab, see `ui::link`); *Add project* opens setup; *Open
 //! project folder…* adds the project a folder already keeps (one removed from the list); the ×
 //! removes a project from the list after a confirmation (01.06 A `EtMXj`, see [`remove`]), which
 //! never touches its folder or its data. A project whose folder is gone, or whose data cannot be
@@ -39,7 +39,7 @@ use crate::{
   activity::{Activity, operations},
   background,
   messages::{self, Message},
-  navigation::Navigation,
+  navigation::{Navigation, route::Route},
   runner::Runners,
   screens::welcome,
   tabs::{OpenIn, OpenedProject, feed::WindowFeed},
@@ -225,12 +225,11 @@ fn navigation(ctx: &mut Ctx) -> Navigation {
 
 /// "All projects", what it lists, and the actions (`QLGxO`).
 fn heading(ctx: &Ctx, navigation: &Navigation, pick: &PickAction) -> Element {
-  let setup = navigation.clone();
   let add = ActionButton::new(ctx.t("projects.add"))
     .primary()
     .icon(Icon::Plus)
     .id("all-projects-add")
-    .on_click(move || setup.show_setup())
+    .link(navigation.link(Route::Setup))
     .render(ctx);
   let (run, title) = (pick.clone(), ctx.t("projects.openFolderTitle"));
   let open_folder = ActionButton::new(ctx.t("projects.openFolder"))

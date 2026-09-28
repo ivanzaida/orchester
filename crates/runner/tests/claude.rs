@@ -48,6 +48,7 @@ async fn claude_runs_a_step_and_commits_its_changes() {
   let (scheduler, mut events_in) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
@@ -110,6 +111,7 @@ async fn claude_permission_denial_is_recorded_and_the_step_goes_on() {
   let (scheduler, mut events_in) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
@@ -127,6 +129,7 @@ async fn claude_that_is_not_signed_in_fails_the_step_with_a_typed_outcome() {
   let (scheduler, mut events_in) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
   assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
@@ -157,6 +160,7 @@ async fn claude_stopped_at_a_limit_resumes_its_session_once_raised() {
   let (scheduler, mut events_in) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let stopped = wait_for(root, &mut events_in, id, |run| {
     matches!(run.status(), RunStatus::Paused(_))
@@ -202,6 +206,7 @@ async fn claude_cancel_ends_the_agent() {
   let (scheduler, mut events_in) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   wait_for_turns(root, &mut events_in, id, 1).await;
   let db = ProjectDb::open(root).expect("open");

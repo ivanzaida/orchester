@@ -23,7 +23,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{pressable, surface},
+    pressable::surface,
     tab::{Tab, tab_row},
   },
 };
@@ -51,11 +51,10 @@ pub(super) fn task_list(ctx: &Ctx, tasks: &ProjectTasks, selected: OverviewTab, 
     SpacingSize::Sm,
     None,
     OverviewTab::ALL.into_iter().map(|each| {
-      let nav = nav.clone();
       Tab::new(tab_id(each), ctx.t(each.label_key()), Dimension::Px(TAB_HEIGHT))
         .count(Some(each.count(&tasks.tasks, &tasks.phases)))
         .selected(each == selected)
-        .on_click(move || nav.show(Page::Overview(each)))
+        .link(nav.link(Page::Overview(each)))
     }),
   );
   let list: Vec<Element> = if rows.is_empty() {
@@ -99,7 +98,6 @@ const fn tab_id(tab: OverviewTab) -> &'static str {
 
 /// Active and completed tasks, and the way to the full task list (`WV44u`).
 fn list_footer(ctx: &Ctx, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
-  let nav = nav.clone();
   Row::new()
     .id("overview-footer")
     .width(Dimension::Pct(100.0))
@@ -108,7 +106,9 @@ fn list_footer(ctx: &Ctx, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
     .align_items(Alignment::Center)
     .child(Text::new(&message_text(ctx, &footer(&tasks.tasks, &tasks.phases))).variant(TypographyStyle::Caption))
     .child(
-      pressable(surface().id("view-all-tasks"), move || nav.show(Page::TASKS))
+      nav
+        .link(Page::TASKS)
+        .on(surface().id("view-all-tasks"))
         .hovered_style(Style::new().background(PaletteColor::AccentMuted))
         .child(
           Text::new(&ctx.t("overview.viewAllTasks"))

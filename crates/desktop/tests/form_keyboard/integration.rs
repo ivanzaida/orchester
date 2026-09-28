@@ -2,7 +2,8 @@
 //! headlessly, on the real runner, `orchester-fake-codex` and git: the merge moves `main` and
 //! clears the run's worktree and branch, a checkout with uncommitted changes is refused and left
 //! alone, and *Remove worktree* names the uncommitted files and removes them only once discarding
-//! is agreed to — and not when changes appeared after the dialog listed them.
+//! is agreed to — and not when changes appeared after the dialog listed them; after that, the run's
+//! agent can no longer be asked.
 
 use std::{fs, path::Path, process::Command};
 
@@ -222,4 +223,33 @@ fn remove_worktree_names_uncommitted_changes_and_removes_them_only_when_agreed()
     holds(desktop, "changes-notice", "The run’s worktree was removed")
   });
   assert!(has(&mut desktop, "diff-file:README.md"));
+  agent_cannot_be_asked_without_its_worktree(&mut desktop);
+}
+
+/// Once the run's worktree was removed its agent cannot continue: *Ask agent* is unavailable and
+/// says why, and the conversation takes no messages while the run stays ready for review.
+fn agent_cannot_be_asked_without_its_worktree(desktop: &mut Desktop) {
+  desktop.click("task-tab-summary");
+  desktop.wait_until("why Ask agent is unavailable", |desktop| {
+    has(desktop, "task-ask-unavailable")
+  });
+  assert!(shows(
+    desktop,
+    "task-ask-unavailable",
+    "the run’s worktree was removed, so its agent cannot continue"
+  ));
+  assert!(shows(desktop, "task-ask-agent", "Ask agent"));
+  assert!(has(desktop, "task-merge"), "the run can still be merged");
+  desktop.press("task-ask-agent");
+  assert!(!has(desktop, "task-conversation-panel"), "pressing it does nothing");
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("task-conversation-panel");
+  assert!(shows(desktop, "conversation-status", "Ready for review"));
+  assert!(has(desktop, "conversation-input-closed"));
+  assert!(!has(desktop, "task-conversation-policy"));
+  assert!(shows(
+    desktop,
+    "conversation-explanation",
+    "The run’s worktree was removed, so its agent cannot continue."
+  ));
 }

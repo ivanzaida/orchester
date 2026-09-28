@@ -62,6 +62,15 @@ impl Leftovers {
   pub fn uncommitted(&self) -> usize {
     self.worktrees.iter().map(|worktree| worktree.uncommitted.len()).sum()
   }
+
+  /// Whether the run's own worktree is still there. Its agent works in it when it is asked again,
+  /// so once it was removed (or its folder deleted) no agent of the run can continue.
+  pub fn keeps_run_worktree(&self) -> bool {
+    self
+      .worktrees
+      .iter()
+      .any(|worktree| worktree.owner == WorktreeOwner::Run && !worktree.missing)
+  }
 }
 
 /// Why something was not cleared.
@@ -154,7 +163,7 @@ pub fn clean_up(
       (true, true) => Some(KeepReason::InKeptWorktree),
       (true, false) => {
         let output = git.output(&["branch", "--quiet", "-D", branch.name.as_str()])?;
-        (!output.success).then(|| KeepReason::Failed(super::git::message(&output)))
+        (!output.success()).then(|| KeepReason::Failed(super::git::message(&output)))
       }
     };
     match reason {
@@ -193,7 +202,7 @@ fn remove<R: CommandRunner>(
   }
   args.push(&worktree.path);
   let output = git.output(&args)?;
-  if output.success {
+  if output.success() {
     cleanup.removed.push(worktree);
   } else {
     let reason = KeepReason::Failed(super::git::message(&output));

@@ -330,10 +330,9 @@ impl ConnectionsScreen {
   fn tabs(&self, ctx: &Ctx, view: View) -> Element {
     let height = Dimension::Pct(100.0);
     let available = |id, key, tab: ConnectionTab| {
-      let nav = self.nav.clone();
       Tab::new(id, ctx.t(key), height)
         .selected(view.tab == tab)
-        .on_click(move || nav.show(Page::Connections(tab, view.selected)))
+        .link(self.nav.link(Page::Connections(tab, view.selected)))
     };
     tab_row(
       Dimension::Px(TAB_ROW_HEIGHT),

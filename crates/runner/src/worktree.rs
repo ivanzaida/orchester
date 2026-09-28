@@ -5,12 +5,14 @@
 //! `<repo>/.orchester/worktrees/<step-execution-id>/`, on a branch off the run's branch.
 
 use std::{
-  ffi::OsStr,
   io,
   path::{Path, PathBuf},
 };
 
-use orchester_core::id::{RunId, StepExecutionId};
+use orchester_core::{
+  command::CommandError,
+  id::{RunId, StepExecutionId},
+};
 use thiserror::Error;
 
 use crate::git::Git;
@@ -22,7 +24,7 @@ pub enum WorktreeError {
   #[error("cannot resolve repository path {path}: {source}")]
   RepositoryPath { path: PathBuf, source: io::Error },
   #[error("cannot run git: {0}")]
-  GitUnavailable(io::Error),
+  GitUnavailable(CommandError),
   #[error("`git {command}` failed ({code:?}): {stderr}")]
   Git {
     command: String,
@@ -93,37 +95,49 @@ impl Worktrees {
   }
 
   pub fn path(&self, run: RunId) -> PathBuf {
-    self.repo_root.join(WORKTREES_DIR).join(run.to_string())
+    self.at(&run.to_string())
   }
 
   /// The worktree of step execution `execution`, when it runs beside other steps.
   pub fn step_path(&self, execution: StepExecutionId) -> PathBuf {
-    self.repo_root.join(WORKTREES_DIR).join(execution.to_string())
+    self.at(&execution.to_string())
   }
 
   /// Creates the run's worktree on a new `branch` starting at `base` (any commit-ish).
   pub fn create(&self, run: RunId, branch: &str, base: &str) -> Result<Worktree, WorktreeError> {
-    self.create_at(self.path(run), branch, base)
+    self.create_at(&run.to_string(), branch, base)
   }
 
   /// Creates the worktree of step execution `execution` on a new `branch` starting at `base`.
   pub fn create_step(&self, execution: StepExecutionId, branch: &str, base: &str) -> Result<Worktree, WorktreeError> {
-    self.create_at(self.step_path(execution), branch, base)
+    self.create_at(&execution.to_string(), branch, base)
   }
 
-  fn create_at(&self, path: PathBuf, branch: &str, base: &str) -> Result<Worktree, WorktreeError> {
+  /// The worktree folder `name`.
+  fn at(&self, name: &str) -> PathBuf {
+    self.repo_root.join(WORKTREES_DIR).join(name)
+  }
+
+  /// The worktree folder `name` as git reads it in the repository's folder: relative, so a
+  /// repository path that is not valid text still works.
+  fn relative(name: &str) -> String {
+    format!("{WORKTREES_DIR}/{name}")
+  }
+
+  fn create_at(&self, name: &str, branch: &str, base: &str) -> Result<Worktree, WorktreeError> {
+    let path = self.at(name);
     if path.exists() {
       return Err(WorktreeError::AlreadyExists(path));
     }
     let git = Git::new(&self.repo_root);
-    if !git.succeeds(["check-ref-format", "--branch", branch])? {
+    if !git.succeeds(&["check-ref-format", "--branch", branch])? {
       return Err(WorktreeError::InvalidBranch(branch.to_owned()));
     }
-    if git.answer(["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])? {
+    if git.answer(&["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])? {
       return Err(WorktreeError::BranchExists(branch.to_owned()));
     }
     let base_revision = git
-      .stdout([
+      .stdout(&[
         "rev-parse",
         "--verify",
         "--quiet",
@@ -134,17 +148,10 @@ impl Worktrees {
         WorktreeError::Git { .. } => WorktreeError::UnknownBase(base.to_owned()),
         other => other,
       })?;
-    if !git.answer(["check-ignore", "--quiet", WORKTREES_DIR])? {
+    if !git.answer(&["check-ignore", "--quiet", WORKTREES_DIR])? {
       return Err(WorktreeError::NotExcluded(self.repo_root.clone()));
     }
-    git.stdout([
-      OsStr::new("worktree"),
-      OsStr::new("add"),
-      OsStr::new("-b"),
-      OsStr::new(branch),
-      path.as_os_str(),
-      OsStr::new(&base_revision),
-    ])?;
+    git.stdout(&["worktree", "add", "-b", branch, &Self::relative(name), &base_revision])?;
     Ok(Worktree {
       path,
       branch: branch.to_owned(),
@@ -154,36 +161,38 @@ impl Worktrees {
 
   /// Removes the run's worktree directory. The branch and its commits are kept.
   pub fn remove(&self, run: RunId, mode: RemoveMode) -> Result<(), WorktreeError> {
-    self.remove_at(self.path(run), mode)
+    self.remove_at(&run.to_string(), mode)
   }
 
   /// Removes the clean worktree of a step execution whose branch was merged into the run's
   /// branch, and that branch: its commits are part of the run's branch now.
   pub fn remove_merged_step(&self, execution: StepExecutionId, branch: &str) -> Result<(), WorktreeError> {
-    self.remove_at(self.step_path(execution), RemoveMode::RefuseIfDirty)?;
+    self.remove_at(&execution.to_string(), RemoveMode::RefuseIfDirty)?;
     // `-d` would compare with the user's checked-out branch, not the run's branch it was merged
     // into; the caller merged it, so nothing is lost.
-    Git::new(&self.repo_root).stdout(["branch", "--quiet", "-D", branch])?;
+    Git::new(&self.repo_root).stdout(&["branch", "--quiet", "-D", branch])?;
     Ok(())
   }
 
-  fn remove_at(&self, path: PathBuf, mode: RemoveMode) -> Result<(), WorktreeError> {
+  fn remove_at(&self, name: &str, mode: RemoveMode) -> Result<(), WorktreeError> {
+    let path = self.at(name);
     if !path.is_dir() {
       return Err(WorktreeError::NotFound(path));
     }
-    let mut command = vec![OsStr::new("worktree"), OsStr::new("remove")];
+    let relative = Self::relative(name);
+    let mut command = vec!["worktree", "remove"];
     match mode {
       RemoveMode::RefuseIfDirty => {
-        let status = Git::new(&path).stdout(["status", "--porcelain", "--untracked-files=all"])?;
+        let status = Git::new(&path).stdout(&["status", "--porcelain", "--untracked-files=all"])?;
         let changes = status.lines().count();
         if changes > 0 {
           return Err(WorktreeError::Dirty { path, changes });
         }
       }
-      RemoveMode::DiscardChanges => command.push(OsStr::new("--force")),
+      RemoveMode::DiscardChanges => command.push("--force"),
     }
-    command.push(path.as_os_str());
-    Git::new(&self.repo_root).stdout(command)?;
+    command.push(&relative);
+    Git::new(&self.repo_root).stdout(&command)?;
     Ok(())
   }
 }

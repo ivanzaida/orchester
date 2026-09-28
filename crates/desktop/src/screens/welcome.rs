@@ -12,7 +12,7 @@ use lurq::{
 };
 
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, route::Route},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     brand::brand,
@@ -61,7 +61,7 @@ impl Component for Welcome {
               .flex(1.0)
               .spacing(ExtraSpacing::Columns.role())
               .align_items(Alignment::Center)
-              .child(introduction(ctx, navigation))
+              .child(introduction(ctx, &navigation))
               .child(steps(ctx)),
           )
           .child(footer(ctx)),
@@ -83,13 +83,13 @@ pub(crate) fn topbar(ctx: &Ctx) -> Element {
     .into()
 }
 
-fn introduction(ctx: &Ctx, navigation: Navigation) -> Element {
+fn introduction(ctx: &Ctx, navigation: &Navigation) -> Element {
   let create = ActionButton::new(ctx.t("setup.welcome.createFirstProject"))
     .primary()
     .icon(Icon::Plus)
     .id("create-first-project")
     .size(Dimension::Px(CREATE_WIDTH), Dimension::Px(CREATE_HEIGHT))
-    .on_click(move || navigation.show_setup())
+    .link(navigation.link(Route::Setup))
     .render(ctx);
   Column::new()
     .width(Dimension::Px(INTRO_WIDTH))

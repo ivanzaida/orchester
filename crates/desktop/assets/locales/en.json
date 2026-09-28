@@ -888,6 +888,7 @@
       "scopeNone": "No committed changes",
       "scopeReading": "Reading the changes…",
       "askAgent": "Ask agent",
+      "askUnavailable": "Ask agent is unavailable: the run’s worktree was removed, so its agent cannot continue.",
       "reviewPullRequest": "Review PR",
       "unavailable": "Review PR needs a pull request, which no pipeline step opens yet.",
       "details": "Run details",
@@ -1066,6 +1067,7 @@
       "notRunning": "The run is not running anymore.",
       "notPaused": "The run is not paused.",
       "ended": "The run has already ended.",
+      "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue.",
       "notInterrupted": "The run is not interrupted.",
       "failed": "The runner could not do this; its log has the details."
     }
@@ -1105,6 +1107,7 @@
       "queuedRunStart": "Queued · waiting for the run to start",
       "queuedRunContinue": "Queued · waiting for the run to continue",
       "notDelivered": "Not delivered · the run has ended",
+      "notDeliveredWorktree": "Not delivered · the run’s worktree was removed",
       "delivered": "Delivered to {{agent}}",
       "acknowledged": "Acknowledged by {{agent}}",
       "reply": "Reply · {{step}}",
@@ -1128,6 +1131,7 @@
       "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
       "readyNoAgent": "No agent step of this run can be asked again.",
       "merged": "This run's work was merged. Messages no longer reach its agents.",
+      "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.",
       "ended": "This run has ended. Messages no longer reach its agents."
     },
     "errors": {
@@ -1408,6 +1412,7 @@
       "repository": "Repository access",
       "commands": "Commands",
       "network": "Network",
+      "folders": "Extra writable folders",
       "option": {
         "readOnly": {
           "title": "Read-only",
@@ -1415,7 +1420,7 @@
         },
         "editWorktree": {
           "title": "Edit files in the task worktree",
-          "detail": "Create and change files only inside this task’s worktree."
+          "detail": "Create and change files only in this task’s worktree and the extra writable folders."
         },
         "askBefore": {
           "title": "Ask before running commands · later",
@@ -1427,7 +1432,7 @@
         },
         "any": {
           "title": "Any command in the worktree",
-          "detail": "Commands run inside the sandbox and cannot change files outside the worktree."
+          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders."
         }
       },
       "addCommand": "Add command",
@@ -1441,6 +1446,32 @@
         "duplicate": "{{command}} is already allowed.",
         "tooMany": "At most {{max}} commands can be allowed."
       },
+      "addFolder": "Add folder",
+      "folderPlaceholder": "e.g. .orchester/target",
+      "noFolders": "Agents write only inside their task worktree. Add a folder outside it, such as a shared build folder: absolute, or relative to the repository root.",
+      "foldersMeaning": "Agents that edit files may also write here, commands included. Absolute, or relative to the repository root; never the repository itself or your home folder.",
+      "foldersReadOnly": "Used only when agents edit files in the task worktree. With Read-only they write nowhere.",
+      "folderInvalid": {
+        "repository": "The repository cannot be read, so the folder cannot be checked.",
+        "blank": "Type a folder first.",
+        "tooLong": "A folder is at most {{max}} characters long.",
+        "character": "A folder cannot contain control characters.",
+        "repositoryRoot": "The repository itself cannot be writable: it is your checkout.",
+        "containsRepository": "{{folder}} contains the repository, so your checkout would be writable.",
+        "inCheckout": "{{folder}} is part of your checkout. Inside the repository only folders under .orchester/ can be writable.",
+        "orchester": "{{folder}} holds Orchester’s own files, such as the runs’ worktrees and logs.",
+        "home": "Your home folder cannot be writable.",
+        "containsHome": "{{folder}} contains your home folder.",
+        "root": "A drive or file system root cannot be writable.",
+        "notAFolder": "{{folder}} is a file, not a folder.",
+        "missing": "{{folder}} does not exist. Create it first, or choose a folder under .orchester/, which is created when an agent starts.",
+        "unreadable": "{{folder}} cannot be read.",
+        "duplicate": "{{folder}} is already listed.",
+        "tooMany": "At most {{max}} folders can be listed."
+      },
+      "targetTitle": "Allow agents to write to {{variable}}",
+      "targetDetail": "Environment sets {{variable}} to {{folder}}. Agents that edit files write only inside their worktree, so their builds cannot write there until you add it.",
+      "addTargetFolder": "Add folder",
       "networkOff": "Off",
       "networkOn": "On",
       "networkOffDetail": "Package installs and web requests fail while network access is off.",
@@ -1449,6 +1480,8 @@
       "long": {
         "readOnly": "Read-only",
         "edit": "Edits files in the task worktree",
+        "editFoldersOne": "Edits files in the task worktree and 1 more folder",
+        "editFoldersOther": "Edits files in the task worktree and {{count}} more folders",
         "commandsAsk": "Asks before commands",
         "commandsAny": "Any command in the worktree",
         "commandsNone": "No commands",
@@ -1461,6 +1494,8 @@
       "compact": {
         "readOnly": "Read-only",
         "edit": "Edit files",
+        "editFoldersOne": "Edit files + 1 folder",
+        "editFoldersOther": "Edit files + {{count}} folders",
         "commandsAsk": "Asks before commands",
         "commandsAny": "Any command",
         "commandsNone": "No commands",
@@ -1512,6 +1547,7 @@
         "codexCommands": "sandbox · commands stay in the worktree",
         "codexNetworkOff": "sandbox · network access off",
         "codexNetworkOn": "sandbox · network access on",
+        "codexWritableRoots": "sandbox · writable roots",
         "claudeEditToolsRemoved": "edit tools removed · listed commands still run",
         "claudeAcceptEdits": "permission mode · accept edits",
         "claudeAllowedTools": {
@@ -1519,7 +1555,8 @@
           "other": "allowed tools · {{count}} prefix rules"
         },
         "claudeWebTools": "web tools allowed",
-        "claudeWebToolsRemoved": "web tools removed · commands keep network"
+        "claudeWebToolsRemoved": "web tools removed · commands keep network",
+        "claudeAddDir": "--add-dir for edit tools · commands not confined"
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",
@@ -2043,6 +2080,8 @@
       "targetTitle": "Share one build folder between run worktrees",
       "targetDetail": "Each run works in its own worktree, and Cargo builds each one into a target folder of its own, often 10–20 GB. With CARGO_TARGET_DIR every run builds into .orchester/target beside the worktrees instead.",
       "addTarget": "Add CARGO_TARGET_DIR",
+      "agentsTitle": "Agents need permission to write to {{variable}}",
+      "agentsDetail": "Agents that edit files write only inside their worktree. Add {{folder}} to Extra writable folders under Agents › Permissions for each profile that builds.",
       "changesTitle": "Changes apply to the next agent or command that starts",
       "changesDetail": "An agent or command already running keeps the environment it started with."
     },

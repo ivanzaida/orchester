@@ -27,6 +27,7 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
     reasoning_effort: Some("low"),
     access,
     network: NetworkAccess::Off,
+    writable_roots: &[],
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     platform,
     resume: None,
@@ -253,7 +254,7 @@ impl CommandRunner for Versions {
       .find(|(path, _)| Path::new(path) == command.program())
       .expect("a known program");
     answer.clone().map(|stdout| CommandOutput {
-      success: true,
+      code: Some(0),
       stdout: stdout.into(),
       stderr: String::new(),
     })

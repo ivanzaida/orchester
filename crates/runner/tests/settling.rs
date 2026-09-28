@@ -31,6 +31,7 @@ async fn settling_a_raise_waits_for_the_task_that_stopped_the_run() {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   tokio::time::timeout(PATIENCE, hold.held)
     .await

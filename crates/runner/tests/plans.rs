@@ -7,7 +7,7 @@
 
 mod support;
 
-use std::{num::NonZeroU32, path::Path, time::Duration};
+use std::{num::NonZeroU32, path::Path};
 
 use orchester_core::{
   connection::AgentProvider,
@@ -21,7 +21,7 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, StepSpec, project, queue_another_task, reported, scheduler, wait_for};
+use self::support::{Setup, StepSpec, project, queue_another_task, reported, scheduler, wait_for, wait_for_idle};
 
 fn key(value: &str) -> StepKey {
   StepKey::new(value).expect("key")
@@ -53,18 +53,6 @@ fn waiting(run: &Run) -> bool {
   run.waits_for_a_person()
 }
 
-/// Waits until no task executes a run of `scheduler`: a waiting run's task has ended.
-async fn idle(scheduler: &Scheduler) {
-  let settled = async {
-    while !scheduler.active_runs().is_empty() {
-      tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-  };
-  tokio::time::timeout(PATIENCE, settled)
-    .await
-    .expect("the run's task ends while it waits");
-}
-
 /// The plan proposals the scheduler announced.
 fn proposals(events: &mut mpsc::UnboundedReceiver<Event>) -> Vec<(String, PlanVersion)> {
   let mut found = Vec::new();
@@ -82,6 +70,7 @@ async fn proposed(root: &Path, scheduler: &Scheduler, events: &mut mpsc::Unbound
   let task = orchester_core::store::TaskStore::tasks(&task).expect("tasks")[0].id();
   let id = scheduler
     .start_run(IdempotencyKey::generate(), task)
+    .await
     .expect("the run starts");
   wait_for(root, events, id, waiting).await;
   let plan = plans(root, id).pop().expect("a plan");
@@ -97,7 +86,7 @@ async fn plans_a_gate_waits_without_a_slot_and_approval_continues_the_graph() {
   let fresh = AttachSession::Fresh {
     previous_end: SessionEnd::Clean,
   };
-  scheduler.attach(fresh, one).expect("attached");
+  scheduler.attach(fresh, one).await.expect("attached");
   let (id, plan) = proposed(root, &scheduler, &mut events).await;
   assert_eq!(plan.version, PlanVersion::FIRST);
   assert_eq!(plan.step, key("plan"));
@@ -113,12 +102,13 @@ async fn plans_a_gate_waits_without_a_slot_and_approval_continues_the_graph() {
   assert_eq!(status, Some(StepStatus::Waiting(WaitReason::Plan)));
   assert_eq!(proposals(&mut events), [("ORC-1".to_owned(), PlanVersion::FIRST)]);
   // The waiting run's task ends and its agent slot is free: another run starts in it.
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
   let other = scheduler
     .start_run(IdempotencyKey::generate(), queue_another_task(root))
+    .await
     .expect("the only slot is free");
   wait_for(root, &mut events, other, waiting).await;
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
 
   scheduler
     .decide_plan(id, plan.execution, plan.version, PlanDecision::Approved)
@@ -145,7 +135,7 @@ async fn requested_changes_resume_the_session(provider: AgentProvider) {
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let (id, first) = proposed(root, &scheduler, &mut events).await;
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
   scheduler
     .decide_plan(id, first.execution, first.version, changes("Keep email sign-in."))
     .await
@@ -178,7 +168,7 @@ async fn requested_changes_resume_the_session(provider: AgentProvider) {
       .await,
     Err(Rejection::PlanNotAwaited)
   );
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
   scheduler
     .decide_plan(id, second.execution, second.version, PlanDecision::Approved)
     .await
@@ -203,7 +193,7 @@ async fn plans_a_waiting_run_cancels_and_takes_no_decision_after() {
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let (id, plan) = proposed(root, &scheduler, &mut events).await;
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
   scheduler.cancel_run(id).await.expect("cancelled");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Cancelled);
@@ -223,13 +213,13 @@ async fn plans_a_waiting_run_pauses_and_keeps_waiting_across_a_new_runner() {
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let (id, plan) = proposed(root, &scheduler, &mut events).await;
-  idle(&scheduler).await;
+  wait_for_idle(&scheduler).await;
   // The next session's runner finds it running with no agent at work: it still waits.
   let (next, mut next_events) = support::scheduler(root);
   let crashed = AttachSession::Fresh {
     previous_end: SessionEnd::Crashed,
   };
-  let attached = next.attach(crashed, NonZeroU32::MIN).expect("attached");
+  let attached = next.attach(crashed, NonZeroU32::MIN).await.expect("attached");
   assert!(attached.interrupted.is_empty());
   let run = ProjectDb::open(root)
     .expect("open")
@@ -255,7 +245,7 @@ async fn plans_a_waiting_run_pauses_and_keeps_waiting_across_a_new_runner() {
   );
   next.resume_run(id).await.expect("resumed");
   wait_for(root, &mut next_events, id, waiting).await;
-  idle(&next).await;
+  wait_for_idle(&next).await;
   next
     .decide_plan(id, plan.execution, plan.version, PlanDecision::Approved)
     .await

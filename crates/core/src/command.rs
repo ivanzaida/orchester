@@ -177,10 +177,18 @@ impl Command {
 /// Output of a finished command.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommandOutput {
-  /// The command exited with status 0.
-  pub success: bool,
+  /// The exit code; `None` for a program ended by a signal (macOS). Some programs answer a
+  /// question with it (git's `--quiet` queries: 1 is "no", anything else a failure).
+  pub code: Option<i32>,
   pub stdout: String,
   pub stderr: String,
+}
+
+impl CommandOutput {
+  /// The command exited with status 0.
+  pub const fn success(&self) -> bool {
+    matches!(self.code, Some(0))
+  }
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]

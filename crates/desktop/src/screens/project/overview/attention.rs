@@ -28,7 +28,7 @@ use crate::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{pressable, surface},
+    pressable::surface,
   },
   workspace::OpenProject,
 };
@@ -83,7 +83,7 @@ fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
   if let Some(plan) = &row.plan {
     return plan_decision(ctx, row, plan, nav);
   }
-  let (nav, task) = (nav.clone(), row.id);
+  let task = row.id;
   let (overline, title, context, action, page) = match &row.question {
     Some(question) => (
       ctx.t("overview.attention.clarification"),
@@ -106,28 +106,28 @@ fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
       Page::task(task),
     ),
   };
-  pressable(surface().id(format!("overview-decision-{}", row.key)), move || {
-    nav.show(page);
-  })
-  .width(Dimension::Pct(100.0))
-  .child(
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Inline.role())
-      .padding_top(ExtraSpacing::Step.role())
-      .padding_bottom(SpacingSize::Lg)
-      .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .child(Text::new(&overline).variant(ExtraTypography::Overline.role()))
-      .child(
-        Text::new(&title)
-          .variant(ExtraTypography::NoticeHeading.role())
-          .width(Dimension::Pct(100.0)),
-      )
-      .child(Text::new(&context).variant(TypographyStyle::Caption))
-      .child(Text::new(&action).variant(TypographyStyle::Link)),
-  )
-  .into()
+  nav
+    .link(page)
+    .on(surface().id(format!("overview-decision-{}", row.key)))
+    .width(Dimension::Pct(100.0))
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Inline.role())
+        .padding_top(ExtraSpacing::Step.role())
+        .padding_bottom(SpacingSize::Lg)
+        .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+        .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+        .child(Text::new(&overline).variant(ExtraTypography::Overline.role()))
+        .child(
+          Text::new(&title)
+            .variant(ExtraTypography::NoticeHeading.role())
+            .width(Dimension::Pct(100.0)),
+        )
+        .child(Text::new(&context).variant(TypographyStyle::Caption))
+        .child(Text::new(&action).variant(TypographyStyle::Link)),
+    )
+    .into()
 }
 
 /// A plan waiting for the user's decision (`dpeD7`): "REVIEW PLAN", the task, what waits, and
@@ -138,11 +138,10 @@ fn plan_decision(ctx: &Ctx, row: &TaskRow, plan: &AwaitedPlan, nav: &ProjectNav)
     "overview.attention.planSummary",
     [("version", version.as_str()), ("agent", &*plan.agent)],
   );
-  let (nav, task) = (nav.clone(), row.id);
   let review = ActionButton::new(ctx.t("overview.attention.reviewPlanAction"))
     .icon(Icon::ListChecks)
     .fill_width()
-    .on_click(move || nav.show(Page::task(task)))
+    .link(nav.link(Page::task(row.id)))
     .render(ctx)
     .id(format!("overview-review-plan-{}", row.key));
   Column::new()
@@ -201,28 +200,27 @@ fn event(ctx: &Ctx, project: &str, run: &RecentRun, now: Timestamp, nav: &Projec
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .child(icon(glyph, IconSize::Event, PaletteColor::TextSecondary));
-  let (nav, task) = (nav.clone(), run.task);
-  pressable(surface().id(format!("overview-event-{}", run.key)), move || {
-    nav.show(Page::task(task));
-  })
-  .width(Dimension::Pct(100.0))
-  .child(
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(EVENT_HEIGHT))
-      .spacing(ExtraSpacing::Stack.role())
-      .child(tile)
-      .child(
-        Column::new()
-          .flex(1.0)
-          .spacing(ExtraSpacing::Tight.role())
-          .child(
-            Text::new(&message_text(ctx, &run.title()))
-              .variant(TypographyStyle::Caption)
-              .color(PaletteColor::TextPrimary),
-          )
-          .child(Text::new(&detail).variant(ExtraTypography::Footnote.role())),
-      ),
-  )
-  .into()
+  nav
+    .link(Page::task(run.task))
+    .on(surface().id(format!("overview-event-{}", run.key)))
+    .width(Dimension::Pct(100.0))
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(EVENT_HEIGHT))
+        .spacing(ExtraSpacing::Stack.role())
+        .child(tile)
+        .child(
+          Column::new()
+            .flex(1.0)
+            .spacing(ExtraSpacing::Tight.role())
+            .child(
+              Text::new(&message_text(ctx, &run.title()))
+                .variant(TypographyStyle::Caption)
+                .color(PaletteColor::TextPrimary),
+            )
+            .child(Text::new(&detail).variant(ExtraTypography::Footnote.role())),
+        ),
+    )
+    .into()
 }

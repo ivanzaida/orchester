@@ -10,19 +10,13 @@
 //! selects keep their focused stroke (`o8Oug`) instead. A control whose selected state is the
 //! selection stroke hides the ring while selected (see [`stroke_selection_ring`]).
 
-use std::sync::Arc;
-
 use lurq::{
-  app::events::{MouseButton, MouseEvent},
   components::Button,
   layout::Alignment,
   node::{CursorIcon, Style},
 };
 
-use crate::{
-  tabs::{OpenIn, Tabs},
-  theme::ExtraShadow,
-};
+use crate::theme::ExtraShadow;
 
 /// lurq's tab index for a control that Tab reaches in the order the window shows it.
 pub const TAB_STOP: i32 = 0;
@@ -77,17 +71,4 @@ pub fn pressable(button: Button, on_click: impl Fn() + Send + Sync + 'static) ->
 /// handler.
 pub fn keyboard_stop(button: Button, ring: Ring) -> Button {
   button.focusable(true).tab_index(TAB_STOP).focused_style(ring.focused())
-}
-
-/// Makes `button` open a place the way the click asks (see [`OpenIn::of_click`]): in the current
-/// tab, or in a new tab for Ctrl/Cmd+click, Ctrl/Cmd+Shift+click and a middle click. Pointer-only,
-/// as [`pressable`].
-pub fn opens_place(button: Button, tabs: &Tabs, open: impl Fn(OpenIn) + Send + Sync + 'static) -> Button {
-  let open = Arc::new(open);
-  let (click, middle, tabs) = (open.clone(), open, tabs.clone());
-  button
-    .focusable(false)
-    .cursor(CursorIcon::Pointer)
-    .on_click(move |event: MouseEvent| click(OpenIn::of_click(&event, tabs.command_held())))
-    .on_mouse_click(MouseButton::Middle, move |_: MouseEvent| middle(OpenIn::Background))
 }

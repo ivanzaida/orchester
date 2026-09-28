@@ -142,7 +142,7 @@ fn process_shim_gets_the_graphql_query_on_standard_input() {
   let head = Revision::new(&"8f3a2c1d".repeat(5)).expect("a revision");
   let command = gh_check_rollups_command(&gh, &repo, &[head]);
   let output = RUNNER.run(&command).expect("the arguments pass through cmd.exe");
-  assert!(output.success, "{}", output.stderr);
+  assert!(output.success(), "{}", output.stderr);
   let mut lines = output.stdout.lines();
   assert_eq!(
     lines.next().map(str::trim_end),

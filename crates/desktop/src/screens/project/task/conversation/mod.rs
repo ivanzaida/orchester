@@ -38,7 +38,7 @@ use crate::{
   },
   theme::{ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
-    pressable::{pressable, surface},
+    pressable::surface,
     property::{ValueStyle, property, styled_property},
   },
 };
@@ -66,7 +66,7 @@ pub(super) struct TabContext<'a> {
 }
 
 pub(super) fn conversation_tab(ctx: &mut Ctx, detail: &Arc<TaskDetail>, tab: &TabContext<'_>) -> Element {
-  let conversation = Conversation::of(detail, tab.lost.is_some());
+  let conversation = Conversation::of(detail, tab.lost.is_some(), tab.leftovers);
   let open = conversation.state.takes_messages();
   let props = ConversationProps {
     repo_root: tab.repo_root.to_path_buf(),
@@ -189,15 +189,15 @@ fn changed_files(ctx: &Ctx, run: &RunView, tab: &TabContext<'_>) -> Element {
     Some(count) => ctx.t_args("conversation.work.files.other", [("count", count.to_string().as_str())]),
     None => ctx.t("conversation.work.filesUnknown"),
   };
-  let (nav, task) = (tab.nav.clone(), run.run.task());
-  pressable(surface().id("task-conversation-changes"), move || {
-    nav.show(Page::Task(task, TaskPageTab::Changes));
-  })
-  .width(Dimension::Pct(100.0))
-  .child(
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .child(property(&ctx.t("conversation.work.changedFiles"), &value)),
-  )
-  .into()
+  tab
+    .nav
+    .link(Page::Task(run.run.task(), TaskPageTab::Changes))
+    .on(surface().id("task-conversation-changes"))
+    .width(Dimension::Pct(100.0))
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .child(property(&ctx.t("conversation.work.changedFiles"), &value)),
+    )
+    .into()
 }

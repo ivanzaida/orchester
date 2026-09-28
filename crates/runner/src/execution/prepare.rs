@@ -10,7 +10,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{IdempotencyKey, ResourceId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, TaskId},
   integration::checked_out_branch,
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Tool, Version},
   revision::Revision,
@@ -129,13 +129,7 @@ impl Prepared {
       .task(run.task())
       .map_err(|error| failed("cannot read the run's task", &error))?
       .ok_or(Rejection::TaskNotFound)?;
-    let worktree = Worktrees::new(root)
-      .map_err(|error| failed("cannot find the worktrees", &error))?
-      .path(run.id());
-    if !worktree.is_dir() {
-      let missing = std::io::Error::new(std::io::ErrorKind::NotFound, worktree.display().to_string());
-      return Err(failed("the run's worktree is missing", &missing));
-    }
+    let worktree = existing_worktree(root, run.id())?;
     Ok(Self {
       run,
       task,
@@ -143,6 +137,19 @@ impl Prepared {
       execute: true,
     })
   }
+}
+
+/// The worktree of `run`, which continues in it; refused when it was removed, as a person can once
+/// the run ended, or its folder was deleted.
+pub(super) fn existing_worktree(root: &Path, run: RunId) -> Result<PathBuf, Rejection> {
+  let worktree = Worktrees::new(root)
+    .map_err(|error| failed("cannot find the worktrees", &error))?
+    .path(run);
+  if !worktree.is_dir() {
+    tracing::warn!(%run, worktree = %worktree.display(), "the run's worktree was removed; its agent cannot continue");
+    return Err(Rejection::WorktreeRemoved);
+  }
+  Ok(worktree)
 }
 
 fn preflight_failed(problem: PreflightProblem) -> Rejection {
@@ -154,10 +161,10 @@ fn preflight_failed(problem: PreflightProblem) -> Rejection {
 /// `HEAD` of the user's checkout: the run starts from what the user has checked out.
 fn base_revision(root: &Path) -> Result<Revision, Rejection> {
   let git = Git::new(root);
-  match git.stdout(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]) {
+  match git.stdout(&["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]) {
     Ok(head) => Revision::new(&head).map_err(|error| failed("git reported an unexpected revision", &error)),
     // No commit to start from: find out whether there is a repository at all.
-    Err(_) => match git.succeeds(["rev-parse", "--git-dir"]) {
+    Err(_) => match git.succeeds(&["rev-parse", "--git-dir"]) {
       Ok(true) => Err(preflight_failed(PreflightProblem::NoCommits)),
       Ok(false) => Err(preflight_failed(PreflightProblem::NotAGitRepository)),
       Err(error) => Err(failed("cannot run git", &error)),

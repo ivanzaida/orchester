@@ -4,7 +4,8 @@
 //! command tool's (06.02 `YEWFo`). They save when the field is left, once every line is valid; the
 //! topbar says whether all changes are saved. A Rust repository without `CARGO_TARGET_DIR` gets a
 //! suggestion to share one build folder between the runs' worktrees (`CMSyB`); nothing is set until
-//! the person adds it.
+//! the person adds it. Once it is set, a notice says that agents which edit files need the folder
+//! among their extra writable folders (Agents › Permissions; implemented, not drawn yet).
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -141,6 +142,7 @@ impl Component for EnvironmentTab {
       )
       .child(self.variables(ctx, error.as_ref(), &commit))
       .with_children(self.suggestion(ctx, &commit))
+      .with_children(self.agents_note(ctx))
       .child(
         Notice::new(
           Icon::History,
@@ -231,6 +233,22 @@ impl EnvironmentTab {
       )
       .action(add)
       .id("settings-environment-target")
+      .into(),
+    )
+  }
+
+  /// Once `CARGO_TARGET_DIR` is saved: agents that edit files may write there only when their
+  /// profile lists the folder.
+  fn agents_note(&self, ctx: &Ctx) -> Option<Element> {
+    let stored = self.stored.get()?;
+    let folder = stored.variables.get(CARGO_TARGET_DIR)?;
+    Some(
+      Notice::new(
+        Icon::FolderLock,
+        ctx.t_args("settings.environment.agentsTitle", [("variable", CARGO_TARGET_DIR)]),
+        ctx.t_args("settings.environment.agentsDetail", [("folder", folder)]),
+      )
+      .id("settings-environment-agents")
       .into(),
     )
   }

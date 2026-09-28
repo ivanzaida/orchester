@@ -119,7 +119,7 @@ impl CommandRunner for FakeGh {
 
 pub(crate) fn ok(stdout: &str) -> CommandOutput {
   CommandOutput {
-    success: true,
+    code: Some(0),
     stdout: stdout.to_owned(),
     stderr: String::new(),
   }
@@ -127,7 +127,7 @@ pub(crate) fn ok(stdout: &str) -> CommandOutput {
 
 pub(crate) fn failed(stderr: &str) -> CommandOutput {
   CommandOutput {
-    success: false,
+    code: Some(1),
     stdout: String::new(),
     stderr: stderr.to_owned(),
   }

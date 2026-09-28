@@ -213,7 +213,6 @@ fn row(parts: RowParts, target: &Target, failure: Option<OperationId>, opener: &
   let content = [parts.icon, parts.title, parts.time, chevron.into()];
   let mut row = Row::new().width(Dimension::Pct(100.0)).rounded(RadiusSize::Md);
   row = if opens {
-    let (target, open) = (target.clone(), opener.clone());
     let button = surface()
       .flex(1.0)
       .padding(SpacingSize::Sm)
@@ -222,7 +221,7 @@ fn row(parts: RowParts, target: &Target, failure: Option<OperationId>, opener: &
       .with_children(content);
     row
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-      .child(pressable(button, move || open.open(&target, failure)))
+      .child(opener.press(target, failure).on(button))
   } else {
     row
       .padding(SpacingSize::Sm)

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    events::mouse_event::MouseEvent,
+    events::mouse_event::{MouseButton, MouseEvent},
     theme::{BorderSize, FormButtonRole, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, Select, SelectOption, Text},
@@ -19,11 +19,10 @@ use lurq::{
 use super::{
   field::select_style,
   icon::{Icon, IconSize, icon},
+  link::{Link, Press},
   pressable::{Ring, TAB_STOP},
 };
 use crate::theme::{DISABLED_OPACITY, ExtraShadow};
-
-type Handler = Arc<dyn Fn() + Send + Sync>;
 
 /// lurq's tab index for a control that Tab passes over.
 pub const SKIPPED_BY_TAB: i32 = -1;
@@ -35,7 +34,7 @@ enum Kind {
 }
 
 enum State {
-  Enabled(Handler),
+  Enabled(Press),
   /// Temporarily off, e.g. while the input is incomplete or work is running.
   Disabled,
   /// The feature does not exist yet; marked with a lock like other unavailable controls.
@@ -86,7 +85,13 @@ impl ActionButton {
   }
 
   pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    self.state = State::Enabled(Arc::new(handler));
+    self.state = State::Enabled(Press::action(handler));
+    self
+  }
+
+  /// Opens a place where the press asks (see `ui::link`).
+  pub fn link(mut self, link: Link) -> Self {
+    self.state = State::Enabled(Press::Link(link));
     self
   }
 
@@ -207,12 +212,12 @@ impl ActionButton {
     };
     match self.state {
       // A press is the button's own: it does not also press a clickable row around it.
-      State::Enabled(handler) => with_interaction(focus(button, TAB_STOP), &role, in_form)
-        .describe("state", "enabled")
-        .on_click(move |event: MouseEvent| {
-          event.stop_propagation();
-          handler();
-        }),
+      State::Enabled(press) => press.attach(
+        with_interaction(focus(button, TAB_STOP), &role, in_form)
+          .describe("state", "enabled")
+          .on_click(|event: MouseEvent| event.stop_propagation())
+          .on_mouse_click(MouseButton::Middle, |event: MouseEvent| event.stop_propagation()),
+      ),
       // Tab skips a button that cannot be pressed.
       State::Disabled => not_pressable(focus(button, SKIPPED_BY_TAB)).describe("state", "disabled"),
       State::Unavailable => not_pressable(focus(button, SKIPPED_BY_TAB)).describe("state", "unavailable"),

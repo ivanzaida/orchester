@@ -34,6 +34,7 @@ use crate::{
     field::{ValueTone, styled_input, value_box_sized},
     github_mark::repository_mark,
     icon::{Icon, IconSize, icon},
+    link::Link,
     message_text,
     notice::Notice,
     panel::RecoveryPanel,
@@ -58,11 +59,11 @@ pub struct ListProps {
   pub running: bool,
   pub check_again: Handler,
   pub use_account: Handler,
-  pub open_connections: Handler,
+  pub open_connections: Link,
   /// Opens a pull request (number, address) in the browser.
   pub open: Arc<dyn Fn(u64, Arc<str>) + Send + Sync>,
-  /// Opens a pull request, by number, in Orchester.
-  pub show: Arc<dyn Fn(u64) + Send + Sync>,
+  /// A link to a pull request, by number, in Orchester.
+  pub show: Arc<dyn Fn(u64) -> Link + Send + Sync>,
 }
 
 impl PartialEq for ListProps {
@@ -258,18 +259,17 @@ impl PullRequestList {
 fn row_props(
   pull_request: &PullRequest,
   open: &Arc<dyn Fn(u64, Arc<str>) + Send + Sync>,
-  show: &Arc<dyn Fn(u64) + Send + Sync>,
+  show: &Arc<dyn Fn(u64) -> Link + Send + Sync>,
 ) -> RowProps {
-  let (open, show, number, url) = (
+  let (open, number, url) = (
     open.clone(),
-    show.clone(),
     pull_request.number(),
     Arc::<str>::from(pull_request.url()),
   );
   RowProps {
     pull_request: pull_request.clone(),
     open: Arc::new(move || open(number, url.clone())),
-    show: Arc::new(move || show(number)),
+    show: show(number),
   }
 }
 

@@ -36,7 +36,7 @@ const CODEX_CATALOG: &str = r#"{
 
 fn ok(stdout: &str) -> CommandOutput {
   CommandOutput {
-    success: true,
+    code: Some(0),
     stdout: stdout.to_owned(),
     stderr: String::new(),
   }
@@ -44,7 +44,7 @@ fn ok(stdout: &str) -> CommandOutput {
 
 fn failed(stdout: &str, stderr: &str) -> CommandOutput {
   CommandOutput {
-    success: false,
+    code: Some(1),
     stdout: stdout.to_owned(),
     stderr: stderr.to_owned(),
   }
@@ -114,7 +114,7 @@ fn codex_login_status_parsing() {
     SignIn::SignedIn
   );
   let on_stderr = CommandOutput {
-    success: true,
+    code: Some(0),
     stdout: String::new(),
     stderr: "Logged in using an API key - sk-***\n".into(),
   };

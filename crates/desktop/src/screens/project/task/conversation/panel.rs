@@ -1,8 +1,8 @@
 //! The task conversation panel (`kjsmd`): its heading with where the conversation stands, whom the
 //! next message goes to (Orchestrator, which routes it to the agent that works next, or one agent),
 //! who takes part, the messages (`J5MIT`) and the composer (`C3nu0z`) with what sending does now.
-//! Once no agent reads messages (a merged or ended run), the recipient select is disabled with the
-//! composer (02.S2 `m3gLZ`).
+//! Once no agent reads messages (a merged or ended run, or one whose worktree was removed), the
+//! recipient select is disabled with the composer (02.S2 `m3gLZ`).
 //!
 //! Sending stores the message once per draft (a retry after an unclear failure stores nothing new),
 //! then tells the runner, which delivers it at the run's next invocation boundary. A draft stays
@@ -366,7 +366,8 @@ fn heading(ctx: &Ctx, state: PanelState) -> Element {
     PanelState::Paused => (Icon::Pause, "conversation.status.paused"),
     PanelState::Stopped => (Icon::OctagonPause, "conversation.status.stopped"),
     PanelState::Interrupted => (Icon::CirclePause, "conversation.status.interrupted"),
-    PanelState::Ready => (Icon::GitPullRequest, "conversation.status.ready"),
+    // The run is still ready for review; only its agent cannot be asked.
+    PanelState::Ready | PanelState::WorktreeRemoved => (Icon::GitPullRequest, "conversation.status.ready"),
     PanelState::Merged => (Icon::GitMerge, "conversation.status.merged"),
     PanelState::Ended => (Icon::Square, "conversation.status.ended"),
   };
@@ -424,6 +425,7 @@ fn explanation(ctx: &Ctx, conversation: &Conversation) -> Arc<str> {
     (PanelState::Paused | PanelState::Stopped | PanelState::Interrupted, _) => ctx.t("conversation.explanation.queued"),
     (PanelState::Ready, Some(agent)) => ctx.t_args("conversation.explanation.ready", [("agent", agent)]),
     (PanelState::Ready, None) => ctx.t("conversation.explanation.readyNoAgent"),
+    (PanelState::WorktreeRemoved, _) => ctx.t("conversation.explanation.worktreeRemoved"),
     (PanelState::Merged, _) => ctx.t("conversation.explanation.merged"),
     (PanelState::Ended, _) => ctx.t("conversation.explanation.ended"),
   }
