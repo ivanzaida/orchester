@@ -8,6 +8,7 @@ mod limits;
 mod mcp_servers;
 mod merges;
 mod messages;
+mod phases;
 mod plans;
 mod pull_request_diffs;
 mod pull_requests;

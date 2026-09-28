@@ -17,6 +17,59 @@
   "workspace": {
     "personal": "Personal workspace"
   },
+  "projects": {
+    "title": "All projects",
+    "description": "The projects Orchester knows on this computer. Each one keeps its tasks, pipelines and settings in its own .orchester folder.",
+    "openFolder": "Open project folder…",
+    "openFolderTitle": "Choose a folder with an Orchester project",
+    "add": "Add project",
+    "loadFailed": "The projects could not be read",
+    "columns": {
+      "project": "Project",
+      "status": "Status",
+      "activeRuns": "Active runs",
+      "needsYou": "Needs you",
+      "lastOpened": "Last opened"
+    },
+    "status": {
+      "notStarted": "Runner not started",
+      "starting": "Runner starting",
+      "online": "Runner online",
+      "reconnecting": "Reconnecting",
+      "stopping": "Runner stopping",
+      "stopped": "Runner stopped",
+      "offline": "Runner offline",
+      "folderMissing": "Folder missing",
+      "unreadable": "Can’t be opened"
+    },
+    "unknownCount": "—",
+    "folderMissingHint": "The folder is not there any more. Move it back to open the project, or remove it from the list.",
+    "removal": {
+      "note": "Removing a project from this list only makes Orchester forget it. Its folder and the project’s .orchester data stay on disk; open the folder again to bring it back."
+    },
+    "remove": {
+      "title": "Remove {{name}} from the list?",
+      "explanation": "Orchester forgets the project. Nothing is deleted: the folder and the project’s .orchester data, with its tasks, runs, pipelines and settings, stay on disk. Open the folder again to bring the project back.",
+      "staysOnDisk": "stays on disk",
+      "data": ".orchester",
+      "dataStays": "stays on disk · tasks, runs and settings",
+      "confirm": "Remove from list",
+      "removing": "Removing…",
+      "agentsWorking": "Agents are at work in {{name}}. Remove it once its runs are paused or finished."
+    },
+    "empty": {
+      "title": "No projects in the list",
+      "summary": "Add a project to set one up in a folder, or open a folder that already has an Orchester project, such as one removed from this list."
+    },
+    "errors": {
+      "noProject": "Couldn’t open {{path}} — it has no .orchester project data. Use Add project to set it up as a new project.",
+      "newerData": "Couldn’t open {{path}} — its project data was written by a newer version of Orchester.",
+      "notRead": "Couldn’t open {{path}} — its project data could not be read. The log has the details."
+    },
+    "switcher": {
+      "recent": "RECENT"
+    }
+  },
   "setup": {
     "welcome": {
       "eyebrow": "WELCOME TO ORCHESTER",
@@ -2022,10 +2075,6 @@
   "recovery": {
     "startupFailed": {
       "title": "Orchester cannot open its database"
-    },
-    "projectUnavailable": {
-      "title": "{{name}} cannot be opened",
-      "setUpNew": "Set up a new project"
     }
   },
   "errors": {

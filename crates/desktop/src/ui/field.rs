@@ -114,7 +114,7 @@ pub fn styled_input(ctx: &Ctx, value: Signal<String>, typography: TypographyStyl
 }
 
 /// Height of an option in an open select menu (`L20XvS`).
-const SELECT_OPTION_HEIGHT: f32 = 32.0;
+pub(crate) const SELECT_OPTION_HEIGHT: f32 = 32.0;
 /// Most an open select menu grows to, eight options and the border, before it scrolls (`g3poI`).
 const SELECT_MENU_MAX_HEIGHT: f32 = 266.0;
 /// Space between a select and its open menu (`g3poI`).

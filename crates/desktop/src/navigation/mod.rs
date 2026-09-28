@@ -8,7 +8,7 @@ pub mod import;
 pub mod route;
 mod table;
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use lurq::router::RouterHandle;
 use orchester_core::id::ProjectId;
@@ -19,27 +19,15 @@ pub use self::{
   history::{forward, with_history_input},
   table::{PROJECT_PARAM, routes},
 };
-use crate::{
-  messages::{self, Message},
-  workspace::{Landing, OpenProject, Workspace},
-};
-
-/// The most recently used project, which could not be opened.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnavailableProject {
-  pub name: Arc<str>,
-  pub repo_root: PathBuf,
-  pub reason: Message,
-}
-
-impl lurq::app::component::DevtoolsInspectable for UnavailableProject {}
+use crate::workspace::{Landing, OpenProject, Workspace};
 
 /// The screen the application starts on.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Start {
   Welcome,
   Project(OpenProject),
-  Unavailable(UnavailableProject),
+  /// The most recently used project could not be opened; All projects says why.
+  AllProjects,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Start {}
@@ -51,11 +39,7 @@ impl From<Landing> for Start {
       Landing::Project(project) => Self::Project(project),
       Landing::Unavailable { project, error } => {
         tracing::error!(%error, repo_root = %project.repo_root.display(), "cannot open the most recent project");
-        Self::Unavailable(UnavailableProject {
-          name: project.name.as_str().into(),
-          repo_root: project.repo_root,
-          reason: messages::store_error(&error),
-        })
+        Self::AllProjects
       }
     }
   }
@@ -70,7 +54,6 @@ pub struct Places(Arc<Mutex<Known>>);
 struct Known {
   projects: HashMap<ProjectId, OpenProject>,
   start: Option<Route>,
-  unavailable: Option<UnavailableProject>,
 }
 
 impl Places {
@@ -87,11 +70,6 @@ impl Places {
     self.0.lock().start
   }
 
-  /// The project the start screen reports as unavailable, if it does.
-  pub fn unavailable(&self) -> Option<UnavailableProject> {
-    self.0.lock().unavailable.clone()
-  }
-
   /// Records `start` and returns its route.
   fn set_start(&self, start: Start) -> Route {
     let route = match start {
@@ -101,33 +79,38 @@ impl Places {
         self.add_project(project);
         route
       }
-      Start::Unavailable(project) => {
-        self.0.lock().unavailable = Some(project);
-        Route::Unavailable
-      }
+      Start::AllProjects => Route::AllProjects,
     };
     self.0.lock().start = Some(route);
     route
   }
 
-  /// A project was created: it is where the application now starts, and the first-launch and
-  /// unavailable screens no longer apply.
+  /// A project was created: it is where the application now starts, and the first-launch screen
+  /// no longer applies.
   fn created(&self, project: OpenProject) -> Route {
     let route = Route::Project(project.project.id(), Page::OVERVIEW);
     let mut known = self.0.lock();
     known.projects.insert(project.project.id(), project);
     known.start = Some(route);
-    known.unavailable = None;
     route
   }
 
+  /// A project was removed from the workspace: its screens no longer exist, and when the
+  /// application started on it, All projects takes its place as the start.
+  fn forget(&self, project: ProjectId) {
+    let mut known = self.0.lock();
+    known.projects.remove(&project);
+    if matches!(known.start, Some(Route::Project(started, _)) if started == project) {
+      known.start = Some(Route::AllProjects);
+    }
+  }
+
   /// Whether `route`, a screen outside any project, still applies: the welcome screen only
-  /// while no project was opened, the unavailable project only while the start reports it.
+  /// while no project was opened.
   pub fn applies(&self, route: Route) -> bool {
     match route {
-      Route::Setup => true,
+      Route::Setup | Route::AllProjects => true,
       Route::Welcome => self.start() == Some(Route::Welcome),
-      Route::Unavailable => self.unavailable().is_some(),
       Route::Start | Route::Project(..) => false,
     }
   }
@@ -184,14 +167,43 @@ impl Navigation {
     entry::push(&self.router.navigator(), Route::Start.path());
   }
 
+  /// Leaves setup without creating a project: back to the screen it was opened from (All
+  /// projects, a project's switcher, the welcome screen), or the start screen when that is not
+  /// known.
+  pub fn leave_setup(&self) {
+    let navigator = self.router.navigator();
+    if entry::from(&navigator).is_some() {
+      navigator.back();
+    } else {
+      self.back_to_start();
+    }
+  }
+
+  pub fn show_all_projects(&self) {
+    entry::push(&self.router.navigator(), Route::AllProjects.path());
+  }
+
+  /// Shows `project`, just opened from All projects or the switcher, as a new history entry.
+  /// The project shown before keeps its runner in the background (see `Runners::show`).
+  pub fn show_project(&self, project: OpenProject) {
+    let route = Route::Project(project.project.id(), Page::OVERVIEW);
+    self.places.add_project(project);
+    entry::push(&self.router.navigator(), route.path());
+  }
+
+  /// `project` was removed from the workspace: history entries of its screens lead to the start.
+  pub fn forget_project(&self, project: ProjectId) {
+    self.places.forget(project);
+  }
+
   /// Opens a project that was just created: its overview takes the place of the setup form,
-  /// so going back does not return to a form that was already submitted. The welcome or
-  /// unavailable screen setup was opened from no longer applies and shows the project too, so
-  /// history returns to that entry instead of holding the project twice.
+  /// so going back does not return to a form that was already submitted. The welcome screen
+  /// setup was opened from no longer applies and shows the project too, so history returns to
+  /// that entry instead of holding the project twice.
   pub fn open_project(&self, project: OpenProject) {
     let route = self.places.created(project);
     let navigator = self.router.navigator();
-    if matches!(entry::from(&navigator), Some(Route::Welcome | Route::Unavailable)) {
+    if entry::from(&navigator) == Some(Route::Welcome) {
       entry::finish_back(&navigator);
     }
     entry::replace(&navigator, route.path());

@@ -1,40 +1,33 @@
-//! Shell sidebar (`zo9Py`). Overview, Tasks, Pull requests, Pipelines, Instructions, Agents, Tools, Secrets,
-//! Connections and Project settings open their screens and Import resources opens over the screen shown; every
-//! other entry is shown but unavailable. The runner card
+//! Shell sidebar (`zo9Py`). The project selector opens the project switcher (see `switcher`).
+//! Overview, Tasks, Pull requests, Pipelines, Instructions, Agents, Tools, Secrets, Connections and
+//! Project settings open their screens, All projects opens the projects of the workspace and
+//! Import resources opens over the screen shown; every other entry is shown but unavailable. The runner card
 //! (`O2Jjjf`) above Project settings shows the project's runner.
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Spacer, Text},
-  layout::{Alignment, layout_kind::Justify},
+  components::{Column, Spacer},
   node::{Element, border::Border, dimension::Dimension},
 };
 
-use super::{ProjectNav, TasksState, runner_card::runner_card};
+use super::{ProjectNav, TasksState, runner_card::runner_card, switcher::ProjectSwitcher};
 use crate::{
   navigation::{
+    Navigation,
     import::ImportTab,
     route::{AgentSelection, InstructionsTab, Page, SettingsTab, ToolSelection},
   },
   runner::RunnerStatus,
   theme::{ExtraColor, ExtraSpacing},
-  ui::{
-    brand::brand,
-    icon::{Icon, IconSize, icon},
-    nav_item::NavItem,
-  },
+  ui::{brand::brand, icon::Icon, nav_item::NavItem},
   workspace::OpenProject,
 };
 
-/// Sidebar width, current project block, project selector and avatar sizes (`zo9Py`, `RaOff`,
-/// `ZcJDx`, `I01Ke`).
+/// Sidebar width (`zo9Py`).
 const SIDEBAR_WIDTH: f32 = 216.0;
-const CURRENT_PROJECT_HEIGHT: f32 = 70.0;
-const SELECTOR_HEIGHT: f32 = 42.0;
-const AVATAR_SIZE: f32 = 24.0;
 
 /// What the sidebar shows besides the navigation: the page shown (`None` while the path names no
 /// page), the project's tasks and its runner.
@@ -44,14 +37,18 @@ pub struct SidebarState<'a> {
   pub runner: &'a RunnerStatus,
 }
 
-pub fn sidebar(ctx: &Ctx, open: &OpenProject, state: &SidebarState<'_>, nav: &ProjectNav) -> Element {
+pub fn sidebar(ctx: &mut Ctx, open: &OpenProject, state: &SidebarState<'_>, nav: &ProjectNav) -> Element {
+  let navigation = ctx
+    .use_context::<Navigation>()
+    .expect("the root provides Navigation before mounting screens");
+  let switcher = ctx.mount_keyed::<ProjectSwitcher>("project-switcher", open.clone());
   Column::new()
     .width(Dimension::Px(SIDEBAR_WIDTH))
     .height(Dimension::Pct(100.0))
     .background(PaletteColor::SurfacePanel)
     .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Column::new().padding_horizontal(SpacingSize::Lg).child(brand(ctx)))
-    .child(project_selector(open))
+    .child(switcher)
     .child(primary_navigation(ctx, state.shown, state.tasks, nav))
     .child(
       Column::new()
@@ -59,7 +56,11 @@ pub fn sidebar(ctx: &Ctx, open: &OpenProject, state: &SidebarState<'_>, nav: &Pr
         .padding_top(SpacingSize::Lg)
         .padding_horizontal(ExtraSpacing::Stack.role())
         .spacing(SpacingSize::Xs)
-        .child(NavItem::new("nav-all-projects", Icon::Folders, ctx.t("nav.allProjects")).secondary())
+        .child(
+          NavItem::new("nav-all-projects", Icon::Folders, ctx.t("nav.allProjects"))
+            .secondary()
+            .on_click(move || navigation.show_all_projects()),
+        )
         .child(import_item(ctx, nav)),
     )
     .child(Spacer::new().flex(1.0))
@@ -73,41 +74,6 @@ fn import_item(ctx: &Ctx, nav: &ProjectNav) -> NavItem {
   NavItem::new("nav-import", Icon::Download, ctx.t("nav.importResources"))
     .secondary()
     .on_click(move || nav.show_import(ImportTab::All))
-}
-
-/// The current project, with the switch mark as drawn. Switching needs All projects, which does
-/// not exist yet, so the selector is not interactive, as All projects is unavailable.
-fn project_selector(open: &OpenProject) -> Element {
-  let name = open.project.name().as_str();
-  let initial: String = name.chars().next().into_iter().flat_map(char::to_uppercase).collect();
-  let avatar = Row::new()
-    .size(Dimension::Px(AVATAR_SIZE), Dimension::Px(AVATAR_SIZE))
-    .background(PaletteColor::AccentMuted)
-    .rounded(RadiusSize::Sm)
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .child(Text::new(&initial).variant(TypographyStyle::Button));
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(CURRENT_PROJECT_HEIGHT))
-    .padding_top(SpacingSize::Sm)
-    .padding_horizontal(SpacingSize::Md)
-    .child(
-      Row::new()
-        .id("project-selector")
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Px(SELECTOR_HEIGHT))
-        .padding(ExtraSpacing::Field.role())
-        .spacing(ExtraSpacing::Field.role())
-        .align_items(Alignment::Center)
-        .background(PaletteColor::SurfaceRaised)
-        .border(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-        .rounded(RadiusSize::Md)
-        .child(avatar)
-        .child(Text::new(name).variant(TypographyStyle::Label).nowrap().flex(1.0))
-        .child(icon(Icon::ChevronsUpDown, IconSize::Small, PaletteColor::TextSecondary).id("project-selector-switch")),
-    )
-    .into()
 }
 
 /// Tasks stays selected while a new task is written (`l2YA4`). An item opens its section at its
