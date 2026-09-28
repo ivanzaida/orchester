@@ -5,8 +5,9 @@ use std::{io, path::PathBuf, process::ExitCode, sync::Arc};
 use orchester_ipc::{EXIT_PROJECT_LOCKED, IpcError};
 use orchester_runner::{
   lock::{LockError, RunnerLock},
-  log_file,
+  log_file, private_file,
 };
+use orchester_store::ProjectDb;
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -77,6 +78,7 @@ impl RunnerError {
 fn run(project_root: Result<PathBuf, RunnerError>) -> Result<(), RunnerError> {
   let project_root = project_root?;
   let _lock = RunnerLock::acquire(&project_root)?;
+  remove_leftover_files(&project_root);
   let runtime = tokio::runtime::Builder::new_multi_thread()
     .worker_threads(WORKER_THREADS)
     .enable_all()
@@ -93,6 +95,17 @@ fn serve(runtime: &tokio::runtime::Runtime, project_root: &std::path::Path) -> R
 #[cfg(not(windows))]
 fn serve(_runtime: &tokio::runtime::Runtime, _project_root: &std::path::Path) -> Result<(), RunnerError> {
   Err(RunnerError::TransportUnsupported)
+}
+
+/// Files with secret values an earlier runner of the project left behind when it ended abnormally. The lock
+/// is held, so no other runner of the project uses them.
+fn remove_leftover_files(project_root: &std::path::Path) {
+  let removed = ProjectDb::open(project_root)
+    .map_err(|error| error.to_string())
+    .and_then(|db| private_file::remove_leftovers(db.project().id()).map_err(|error| error.to_string()));
+  if let Err(error) = removed {
+    tracing::warn!("cannot remove files an earlier runner left behind: {error}");
+  }
 }
 
 fn project_root_argument() -> Result<PathBuf, RunnerError> {

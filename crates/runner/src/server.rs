@@ -1,7 +1,7 @@
 //! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the
 //! scheduler's change notifications.
 
-use std::{future::Future, path::Path, time::Duration};
+use std::{future::Future, path::Path, sync::Arc, time::Duration};
 
 use orchester_core::{
   id::RunId,
@@ -12,6 +12,7 @@ use orchester_ipc::{
   frame::{FrameReader, FrameWriter},
   handshake,
 };
+use orchester_vault::KeychainVault;
 use tokio::sync::mpsc;
 
 use crate::{
@@ -40,7 +41,7 @@ pub async fn serve(project_root: &Path) -> Result<(), IpcError> {
   let (notifications, outgoing) = mpsc::unbounded_channel();
   // Replies of requests answered later travel with the notifications.
   let replies = notifications.clone();
-  let scheduler = Scheduler::new(project_root, Notifier::new(notifications));
+  let scheduler = Scheduler::new(project_root, Notifier::new(notifications), Arc::new(KeychainVault));
   // A frame read cannot be interrupted without losing data, so requests are read on their own task.
   let (incoming, requests) = mpsc::unbounded_channel::<Incoming>();
   let reading = tokio::spawn(async move {

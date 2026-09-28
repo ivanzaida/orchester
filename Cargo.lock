@@ -2591,8 +2591,10 @@ dependencies = [
  "orchester-exec",
  "orchester-ipc",
  "orchester-store",
+ "orchester-vault",
  "parking_lot",
  "rusqlite",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -2623,6 +2625,7 @@ dependencies = [
  "keyring-core",
  "orchester-core",
  "windows-native-keyring-store",
+ "zeroize",
 ]
 
 [[package]]

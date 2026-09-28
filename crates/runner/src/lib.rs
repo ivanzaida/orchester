@@ -10,6 +10,7 @@ mod git;
 pub mod lock;
 pub mod log_file;
 pub mod notify;
+pub mod private_file;
 #[cfg(windows)]
 pub mod server;
 pub mod supervisor;
