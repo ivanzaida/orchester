@@ -13,6 +13,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, ScrollVertical, Text},
+  layout::layout_kind::ScrollState,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -56,6 +57,8 @@ pub struct McpInspector<'a> {
   pub working: bool,
   /// Why the last change could not be stored.
   pub error: Option<Message>,
+  /// Where the details are scrolled.
+  pub scroll: &'a ScrollState,
 }
 
 impl McpInspector<'_> {
@@ -124,6 +127,7 @@ impl McpInspector<'_> {
       .child(
         ScrollVertical::new(details)
           .id("connection-inspector-details")
+          .with_scroll_state(self.scroll.clone())
           .width(Dimension::Pct(100.0))
           .flex(1.0)
           .scrollbar(gutter_scrollbar()),

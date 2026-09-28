@@ -90,7 +90,7 @@ impl SecretsScreen {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(list)
-      .child(inspector(ctx, shown, project, &uses, &actions))
+      .child(inspector(ctx, (shown, &self.details_scroll), project, &uses, &actions))
       .into()
   }
 
@@ -140,6 +140,7 @@ impl SecretsScreen {
       .child(
         ScrollVertical::new(content)
           .id("secret-list-scroll")
+          .with_scroll_state(self.list_scroll.clone())
           .width(Dimension::Pct(100.0))
           .flex(1.0),
       )

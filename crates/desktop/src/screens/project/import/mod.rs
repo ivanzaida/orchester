@@ -96,7 +96,8 @@ impl Component for ImportLayer {
       project: ctx.props::<OpenProject>().clone(),
       tab,
     };
-    Modal::new(backdrop(ctx.mount_keyed::<ImportDialog>("import-resources", props)))
+    let dialog = ctx.mount_keyed::<ImportDialog>("import-resources", props);
+    Modal::new(backdrop(ctx, dialog))
       .target(ModalTarget::Root)
       .open(self.open.clone())
   }

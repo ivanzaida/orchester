@@ -34,7 +34,10 @@ use lurq::{
   },
   components::{Column, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -126,6 +129,20 @@ pub struct TaskScreen {
   focus_composer: Signal<bool>,
   nav: ProjectNav,
   runners: Runners,
+  scrolls: TaskScrolls,
+}
+
+/// Where the task page's scrolled panes are: kept by the page, so a tab that goes inactive and
+/// back keeps them.
+pub(super) struct TaskScrolls {
+  /// The Summary's notice and progress (`ZVdRa`).
+  pub(super) progress: ScrollState,
+  /// This run's configuration (`F5Lsi`).
+  pub(super) this_run: ScrollState,
+  /// The Summary of a run that cannot be read (02.R).
+  pub(super) unreadable: ScrollState,
+  /// The Conversation tab's active work.
+  pub(super) work: ScrollState,
 }
 
 impl Component for TaskScreen {
@@ -146,6 +163,12 @@ impl Component for TaskScreen {
       runners: ctx
         .use_context::<Runners>()
         .expect("the root provides Runners before mounting screens"),
+      scrolls: TaskScrolls {
+        progress: ScrollState::new(),
+        this_run: ScrollState::new(),
+        unreadable: ScrollState::new(),
+        work: ScrollState::new(),
+      },
     }
   }
 
@@ -234,7 +257,7 @@ impl TaskScreen {
   ) -> Element {
     if let Some(run) = &detail.latest_unreadable {
       return match props.tab {
-        TaskPageTab::Summary => unreadable::summary(ctx, run, &detail.earlier),
+        TaskPageTab::Summary => unreadable::summary(ctx, (run, &self.scrolls.unreadable), &detail.earlier),
         TaskPageTab::Conversation => tab_state::unreadable(ctx, "conversation-unreadable", run),
         TaskPageTab::Changes => tab_state::unreadable(ctx, "changes-unreadable", run),
         TaskPageTab::Activity => tab_state::unreadable(ctx, "activity-unreadable", run),
@@ -269,9 +292,15 @@ impl TaskScreen {
           nav: &self.nav,
           focus: &self.focus_composer,
           reload: &self.reload,
+          scroll: &self.scrolls.work,
         },
       ),
-      (TaskPageTab::Summary, _) => summary::summary(ctx, detail, props.limits, lost, &props.project.repo_root),
+      (TaskPageTab::Summary, _) => summary::summary(
+        ctx,
+        detail,
+        (props.limits, lost),
+        (&props.project.repo_root, &self.scrolls),
+      ),
       (TaskPageTab::Activity, _) => ctx.mount_keyed::<ActivityTab>(
         "task-activity",
         ActivityProps {

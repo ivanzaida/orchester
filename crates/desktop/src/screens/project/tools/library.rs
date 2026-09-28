@@ -9,7 +9,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, border::Border, dimension::Dimension},
 };
 
@@ -41,12 +41,17 @@ const FILTER_HEIGHT: f32 = 34.0;
 const SIDE_PANEL_WIDTH: f32 = 268.0;
 const CHOICE_HEIGHT: f32 = 40.0;
 
-pub(super) fn library(ctx: &Ctx, open: &OpenProject, tools: &ProjectTools, nav: &ProjectNav) -> Element {
+pub(super) fn library(
+  ctx: &Ctx,
+  open: &OpenProject,
+  tools: &ProjectTools,
+  (nav, scroll): (&ProjectNav, &ScrollState),
+) -> Element {
   let project = open.project.name().as_str();
   let content = if tools.tools.is_empty() {
     empty(ctx, nav)
   } else {
-    inventory(ctx, project, tools, nav)
+    inventory(ctx, project, tools, (nav, scroll))
   };
   let body = Row::new()
     .width(Dimension::Pct(100.0))
@@ -113,7 +118,7 @@ fn heading(ctx: &Ctx, project: &str) -> Element {
 }
 
 /// Filter and counts, the rows, who owns the tools and where pipelines call them (`lWH6n`).
-fn inventory(ctx: &Ctx, project: &str, tools: &ProjectTools, nav: &ProjectNav) -> Element {
+fn inventory(ctx: &Ctx, project: &str, tools: &ProjectTools, (nav, scroll): (&ProjectNav, &ScrollState)) -> Element {
   let key = if tools.tools.len() == 1 {
     "tools.counts.one"
   } else {
@@ -158,7 +163,12 @@ fn inventory(ctx: &Ctx, project: &str, tools: &ProjectTools, nav: &ProjectNav) -
     .flex(1.0)
     .spacing(SpacingSize::Md)
     .child(filters)
-    .child(ScrollVertical::new(list).width(Dimension::Pct(100.0)).flex(1.0))
+    .child(
+      ScrollVertical::new(list)
+        .with_scroll_state(scroll.clone())
+        .width(Dimension::Pct(100.0))
+        .flex(1.0),
+    )
     .into()
 }
 

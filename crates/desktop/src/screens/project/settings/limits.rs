@@ -13,6 +13,7 @@ use lurq::{
   },
   components::{Column, ScrollVertical, Select, Text},
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -81,6 +82,9 @@ pub struct LimitsTab {
   /// The limits as stored; `None` until read.
   stored: Signal<Option<Stored>>,
   nav: ProjectNav,
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
 }
 
 impl Component for LimitsTab {
@@ -91,6 +95,7 @@ impl Component for LimitsTab {
       .use_context::<ProjectNav>()
       .expect("the project shell provides ProjectNav");
     let tab = Self {
+      scroll: ScrollState::new(),
       max: ctx.signal(String::new()),
       default: ctx.signal(String::new()),
       daily: ctx.signal(String::new()),
@@ -174,7 +179,10 @@ impl Component for LimitsTab {
       );
     form(
       Some(commit),
-      ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0),
+      ScrollVertical::new(content)
+        .with_scroll_state(self.scroll.clone())
+        .width(Dimension::Pct(100.0))
+        .flex(1.0),
     )
   }
 }

@@ -134,6 +134,30 @@
     "importResources": "Import resources",
     "projectSettings": "Project settings"
   },
+  "tabs": {
+    "label": "{{project}} · {{page}}",
+    "labelWithTitle": "{{project}} · {{page}} · {{title}}",
+    "unknownProject": "Project",
+    "welcome": "Welcome",
+    "pullRequest": "#{{number}}",
+    "attention": {
+      "needsYou": {
+        "one": "{{location}} · 1 needs you",
+        "other": "{{location}} · {{count}} need you"
+      },
+      "failure": "{{location}} · {{failure}}"
+    },
+    "openInNewTab": {
+      "ctrl": "Open in new tab · Ctrl+click",
+      "cmd": "Open in new tab · Cmd+click"
+    },
+    "discard": {
+      "title": "Discard changes?",
+      "explanation": "This tab has changes that are not saved yet. Closing it discards them.",
+      "keep": "Keep open",
+      "confirm": "Discard and close"
+    }
+  },
   "runner": {
     "connection": {
       "notStartedTitle": "Could not start the runner",

@@ -71,7 +71,7 @@ fn a_database_from_a_newer_build_is_refused() {
     AppDb::open(&path),
     Err(orchester_store::StoreError::SchemaTooNew {
       found: 99,
-      supported: 1
+      supported: 2
     })
   ));
 }
@@ -127,4 +127,40 @@ fn projects_whose_folder_is_gone_are_listed_as_missing() {
     [("Kontur".to_owned(), false), ("Ledger".to_owned(), true)],
     "a project whose folder is gone is still listed"
   );
+}
+
+#[test]
+fn ui_state_keeps_the_latest_value_per_key_across_opens() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("open");
+  assert_eq!(db.ui_state("tabs").expect("read"), None);
+  db.set_ui_state("tabs", "first").expect("store");
+  db.set_ui_state("tabs", "second").expect("replace");
+  db.set_ui_state("other", "kept apart").expect("store another key");
+  drop(db);
+
+  let db = AppDb::open(&path).expect("reopen");
+  assert_eq!(db.ui_state("tabs").expect("read").as_deref(), Some("second"));
+  assert_eq!(db.ui_state("other").expect("read").as_deref(), Some("kept apart"));
+}
+
+#[test]
+fn ui_state_is_added_to_a_database_of_the_previous_version() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("create");
+  let kontur = project("Kontur");
+  db.register_project(&kontur, Path::new("H:/projects/kontur"), at(1))
+    .expect("register");
+  drop(db);
+  // As the previous version left it: no ui_state table, schema version 1.
+  let raw = rusqlite::Connection::open(&path).expect("raw connection");
+  raw.execute_batch("DROP TABLE ui_state").expect("drop the table");
+  raw.pragma_update(None, "user_version", 1).expect("set the version");
+  drop(raw);
+
+  let mut db = AppDb::open(&path).expect("migrate");
+  db.set_ui_state("tabs", "saved").expect("store");
+  assert_eq!(db.projects().expect("list").len(), 1, "the projects are kept");
 }

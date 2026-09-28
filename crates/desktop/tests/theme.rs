@@ -537,3 +537,32 @@ fn plan_review_roles_follow_pencil() {
   assert_eq!(markdown.list_marker.text.color, Some(Color::from_hex("#A3A3A3")));
   assert_eq!(markdown.code_block.text.font_family.as_deref(), Some("Geist Mono"));
 }
+
+/// Title bar tabs (`nAKyb`, states `UZF1Q`): the avatar's initial is Inter 9 semibold in `text`,
+/// avatar and close button have radius 4, the edge fade of a scrolled strip ends in transparent
+/// `canvas` (`xpSC0`), the switcher's *Open in new tab* has radius 5 (`NcJQ0`), and the macOS
+/// traffic lights keep the platform's colors (`R3RtGs`).
+#[test]
+fn tab_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  let initial = theme.typography_style(ExtraTypography::TabInitial.role());
+  assert_eq!(
+    (&*initial.font_family, initial.font_size, initial.weight),
+    ("Inter", 9.0, FontWeight::SemiBold)
+  );
+  assert_eq!(initial.color, Color::from_hex("#EEEEEE"));
+  assert_eq!(theme.radius_value(ExtraRadius::TabControl.role()), 4.0);
+  assert_eq!(theme.radius_value(ExtraRadius::RowAction.role()), 5.0);
+  assert_eq!(
+    theme.palette_color(ExtraColor::CanvasClear.role()),
+    Color::from_hex("#10101000")
+  );
+  for (light, hex) in [
+    (ExtraColor::TrafficClose, "#FF5F57"),
+    (ExtraColor::TrafficMinimize, "#FEBC2E"),
+    (ExtraColor::TrafficZoom, "#28C840"),
+  ] {
+    assert_eq!(theme.palette_color(light.role()), Color::from_hex(hex));
+  }
+}

@@ -1,5 +1,5 @@
-//! Which screen the window shows: the app's routes on lurq's router, with back and forward
-//! history. The root owns the router and provides [`Navigation`] to every screen; the project
+//! Which screen a tab shows: the app's routes on lurq's router, with back and forward history.
+//! Each tab's host owns a router and provides [`Navigation`] to the screens in it; the project
 //! shell adds its own navigation for the pages inside it.
 
 pub(crate) mod entry;
@@ -16,10 +16,13 @@ use parking_lot::Mutex;
 
 use self::route::{Page, Route};
 pub use self::{
-  history::{forward, with_history_input},
+  history::forward,
   table::{PROJECT_PARAM, routes},
 };
-use crate::workspace::{Landing, OpenProject, Workspace};
+use crate::{
+  tabs::{OpenIn, Tabs},
+  workspace::{Landing, OpenProject, Workspace},
+};
 
 /// The screen the application starts on.
 #[derive(Clone, Debug, PartialEq)]
@@ -56,12 +59,18 @@ struct Known {
   start: Option<Route>,
 }
 
+impl PartialEq for Places {
+  fn eq(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.0, &other.0)
+  }
+}
+
 impl Places {
   pub fn project(&self, id: ProjectId) -> Option<OpenProject> {
     self.0.lock().projects.get(&id).cloned()
   }
 
-  fn add_project(&self, project: OpenProject) {
+  pub(crate) fn add_project(&self, project: OpenProject) {
     self.0.lock().projects.insert(project.project.id(), project);
   }
 
@@ -70,8 +79,8 @@ impl Places {
     self.0.lock().start
   }
 
-  /// Records `start` and returns its route.
-  fn set_start(&self, start: Start) -> Route {
+  /// Records `start` as the start screen and returns its route.
+  pub fn set_start(&self, start: Start) -> Route {
     let route = match start {
       Start::Welcome => Route::Welcome,
       Start::Project(project) => {
@@ -116,20 +125,23 @@ impl Places {
   }
 }
 
-/// Provided by the root: the workspace, and going between the screens outside a project.
+/// Provided by each tab's host: the workspace, and going between the screens of that tab and to
+/// new tabs.
 #[derive(Clone)]
 pub struct Navigation {
   workspace: Workspace,
   router: RouterHandle,
   places: Places,
+  tabs: Tabs,
 }
 
 impl Navigation {
-  pub fn new(workspace: Workspace, router: RouterHandle, places: Places) -> Self {
+  pub fn new(workspace: Workspace, router: RouterHandle, places: Places, tabs: Tabs) -> Self {
     Self {
       workspace,
       router,
       places,
+      tabs,
     }
   }
 
@@ -145,17 +157,9 @@ impl Navigation {
     &self.places
   }
 
-  /// The start screen became known: the window leaves the empty start route for it, in place,
-  /// so going back never returns to the empty window. Later calls change nothing.
-  pub fn arrive(&self, start: Start) {
-    if self.places.start().is_some() {
-      return;
-    }
-    let route = self.places.set_start(start);
-    let path = self.router.path().get_untracked();
-    if path.is_empty() || Route::parse(&path) == Some(Route::Start) {
-      self.router.replace(route.path());
-    }
+  /// The window's tabs.
+  pub fn tabs(&self) -> &Tabs {
+    &self.tabs
   }
 
   pub fn show_setup(&self) {
@@ -183,12 +187,21 @@ impl Navigation {
     entry::push(&self.router.navigator(), Route::AllProjects.path());
   }
 
-  /// Shows `project`, just opened from All projects or the switcher, as a new history entry.
-  /// The project shown before keeps its runner in the background (see `Runners::show`).
+  /// Shows `project`, just opened from All projects or the switcher, as a new history entry of
+  /// this tab. The project shown before keeps its runner while another tab shows it or it has
+  /// work (see `Runners::keep_open`).
   pub fn show_project(&self, project: OpenProject) {
+    self.open_project(project, OpenIn::Current);
+  }
+
+  /// Opens `project`'s overview where `open` says: this tab, or a new tab.
+  pub fn open_project(&self, project: OpenProject, open: OpenIn) {
     let route = Route::Project(project.project.id(), Page::OVERVIEW);
     self.places.add_project(project);
-    entry::push(&self.router.navigator(), route.path());
+    match open {
+      OpenIn::Current => entry::push(&self.router.navigator(), route.path()),
+      OpenIn::Background | OpenIn::NewTab => self.tabs.open(route, open),
+    }
   }
 
   /// `project` was removed from the workspace: history entries of its screens lead to the start.
@@ -200,7 +213,7 @@ impl Navigation {
   /// so going back does not return to a form that was already submitted. The welcome screen
   /// setup was opened from no longer applies and shows the project too, so history returns to
   /// that entry instead of holding the project twice.
-  pub fn open_project(&self, project: OpenProject) {
+  pub fn open_created(&self, project: OpenProject) {
     let route = self.places.created(project);
     let navigator = self.router.navigator();
     if entry::from(&navigator) == Some(Route::Welcome) {

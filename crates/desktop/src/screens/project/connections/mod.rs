@@ -31,7 +31,10 @@ use lurq::{
   },
   components::{Column, Modal, ModalTarget},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -182,6 +185,25 @@ pub struct ConnectionsScreen {
   /// Bumped after a change, to read the connections again.
   revision: Signal<u64>,
   nav: ProjectNav,
+  /// Where the list and the inspector are scrolled: kept by the screen, so a tab that goes
+  /// inactive and back keeps them.
+  scrolls: Scrolls,
+}
+
+/// The scroll positions of the list and the inspector.
+#[derive(Clone)]
+pub(super) struct Scrolls {
+  pub(super) list: ScrollState,
+  pub(super) inspector: ScrollState,
+}
+
+impl Scrolls {
+  fn new() -> Self {
+    Self {
+      list: ScrollState::new(),
+      inspector: ScrollState::new(),
+    }
+  }
 }
 
 impl Component for ConnectionsScreen {
@@ -212,6 +234,7 @@ impl Component for ConnectionsScreen {
       copied: ctx.signal(Copied::default()),
       revision,
       nav,
+      scrolls: Scrolls::new(),
     };
     screen.run_picked_program(ctx, &work, &pick);
     screen

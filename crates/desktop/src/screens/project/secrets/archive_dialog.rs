@@ -48,7 +48,7 @@ pub struct ArchiveDialog<'a> {
   pub cancel: Arc<dyn Fn() + Send + Sync>,
 }
 
-pub fn archive_dialog(ctx: &Ctx, dialog: &ArchiveDialog) -> Element {
+pub fn archive_dialog(ctx: &mut Ctx, dialog: &ArchiveDialog) -> Element {
   let name = dialog.secret.name().as_str();
   let header = Column::new()
     .width(Dimension::Pct(100.0))
@@ -83,7 +83,7 @@ pub fn archive_dialog(ctx: &Ctx, dialog: &ArchiveDialog) -> Element {
     .child(header)
     .child(body)
     .child(actions(ctx, dialog));
-  backdrop(form(dialog.confirm.clone(), content))
+  backdrop(ctx, form(dialog.confirm.clone(), content))
 }
 
 fn actions(ctx: &Ctx, dialog: &ArchiveDialog) -> Element {

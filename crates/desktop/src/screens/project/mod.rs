@@ -3,8 +3,9 @@
 //! pull requests (`wGtxT`) and one pull request
 //! (`Rrmhf`), instructions (`yRKeF`), agent profiles (`WPmtS`), tools (`ZFwWl`, `YEWFo`), secrets (`R99lt`),
 //! connections (`a4Lqb`) or Project settings (`QV1af`), above the status bar (`pmOpt`). The router
-//! renders the screen the path names into the shell's outlet. The shell reads the project's
-//! tasks once and hands them to the sidebar, the screen and the status bar.
+//! renders the screen the path names into the shell's outlet. The shell hands the project's tasks,
+//! usage and runner, read once per project for every tab of it (`tabs::feed`), to the sidebar, the
+//! screen and the status bar.
 
 mod agents;
 pub(crate) mod connections;
@@ -28,19 +29,13 @@ mod tasks;
 mod tools;
 
 use lurq::{
-  app::{
-    component::Component,
-    ctx::{Ctx, StreamEmitter},
-  },
+  app::{component::Component, ctx::Ctx},
   components::{Column, Outlet, Row},
   core::Signal,
   node::{Element, dimension::Dimension},
   router::Navigator,
 };
-use orchester_core::{
-  id::{ProjectId, TaskId},
-  time::Timestamp,
-};
+use orchester_core::id::{ProjectId, TaskId};
 
 pub(crate) use self::pages::page;
 use self::{
@@ -49,15 +44,15 @@ use self::{
 };
 use super::status_bar::{ProjectBar, StatusBar, StatusBarProps};
 use crate::{
-  background,
-  messages::{self, Message},
+  messages::Message,
   navigation::{
     Navigation, PROJECT_PARAM, entry,
     import::{self as import_query, ImportTab},
     route::{self, ChangedFile, Page, Route},
   },
   runner::{RunnerStatus, Runners, state::RunnerState},
-  tasks::{data::ProjectTasks, list, overview::OverviewTab, usage::ProjectUsage},
+  tabs::feed::{ProjectFeed, ProjectFeeds},
+  tasks::{data::ProjectTasks, list, overview::OverviewTab},
   workspace::OpenProject,
 };
 
@@ -66,9 +61,8 @@ use crate::{
 pub struct ProjectNav {
   navigator: Navigator,
   project: ProjectId,
-  revision: Signal<u64>,
-  /// Counts imports: the screens that list resources are mounted again after one.
-  resources: Signal<u64>,
+  /// The project's data, shared with every other tab of it.
+  feed: ProjectFeed,
   /// Connections opens Add GitHub connection when it next mounts.
   add_github: Signal<bool>,
 }
@@ -164,15 +158,15 @@ impl ProjectNav {
     requested
   }
 
-  /// Tasks were saved; the shell reads them again.
+  /// Tasks were saved; every tab of the project reads them again.
   pub fn tasks_changed(&self) {
-    self.revision.update(|revision| *revision += 1);
+    self.feed.revision.update(|revision| *revision += 1);
   }
 
   /// Resources were imported: the screens that list pipelines, profiles, instructions or tools
-  /// start over and read them again.
+  /// start over and read them again, in every tab of the project.
   pub fn resources_changed(&self) {
-    self.resources.update(|revision| *revision += 1);
+    self.feed.resources.update(|revision| *revision += 1);
   }
 }
 
@@ -240,12 +234,15 @@ impl Component for ProjectShell {
   type Props = OpenProject;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let project = ctx.props::<OpenProject>().project.id();
+    let feeds = ctx
+      .use_context::<ProjectFeeds>()
+      .expect("the window provides the project feeds before mounting screens");
     Self {
       nav: ProjectNav {
         navigator: ctx.navigator().expect("the router mounts the project shell"),
-        project: ctx.props::<OpenProject>().project.id(),
-        revision: ctx.signal(0),
-        resources: ctx.signal(0),
+        project,
+        feed: feeds.of(project),
         add_github: ctx.signal(false),
       },
     }
@@ -256,23 +253,18 @@ impl Component for ProjectShell {
     // with the root's, which does not contain it.
     ctx.provide(self.nav.clone());
     let open = ctx.props::<OpenProject>().clone();
-    let runners = ctx
-      .use_context::<Runners>()
-      .expect("the root provides Runners before mounting screens");
-    let status = runner_status(ctx, &runners);
+    let feed = &self.nav.feed;
+    let status = feed.status.get().unwrap_or_else(RunnerStatus::none);
     let runner = status.state_for(&open.repo_root);
-    let runs = run_changes(ctx, &runners);
-    let tasks = self
-      .tasks(ctx, &open, runs)
-      .without_runner(runner == RunnerState::Online);
-    let usage = self.usage(ctx, &open, runs);
+    let tasks = feed.tasks.get().without_runner(runner == RunnerState::Online);
+    let usage = feed.usage.get();
     let page = Route::current_page(ctx);
     ctx.provide(Shown {
       open: open.clone(),
       status: status.clone(),
       runner,
-      revision: (self.nav.revision.get(), runs),
-      resources: self.nav.resources.get(),
+      revision: (feed.revision.get(), feed.changes.get()),
+      resources: feed.resources.get(),
       tasks: tasks.clone(),
       usage,
     });
@@ -313,74 +305,4 @@ impl Component for ProjectShell {
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
       .child(import::dialog(ctx, &open))
   }
-}
-
-impl ProjectShell {
-  /// The project's tasks, read again whenever tasks were saved or the runner changed a run.
-  fn tasks(&self, ctx: &mut Ctx, open: &OpenProject, runs: u64) -> TasksState {
-    let deps = (open.repo_root.clone(), self.nav.revision.get(), runs);
-    let load = ctx.future(deps, |(repo_root, ..)| async move {
-      background::run(move || ProjectTasks::load(&repo_root))
-        .await?
-        .map_err(|error| {
-          tracing::error!(%error, "cannot read the project's tasks");
-          messages::store_error(&error)
-        })
-    });
-    let state = load.state().get();
-    // A failed reload must not leave the previous tasks on screen as if they were current.
-    match (state.data, state.error) {
-      (_, Some(error)) => TasksState::Failed(error),
-      (Some(tasks), None) => TasksState::Ready(tasks),
-      (None, None) => TasksState::Loading,
-    }
-  }
-}
-
-impl ProjectShell {
-  /// The project's limits and today's usage, read again whenever settings or runs changed. `None`
-  /// until read; a failed read is logged and leaves it unknown.
-  fn usage(&self, ctx: &mut Ctx, open: &OpenProject, runs: u64) -> Option<ProjectUsage> {
-    let day_start = Timestamp::now().local_day_start();
-    let deps = (open.repo_root.clone(), self.nav.revision.get(), runs, day_start);
-    let load = ctx.future(deps, |(repo_root, _, _, day_start)| async move {
-      background::run(move || ProjectUsage::load(&repo_root, day_start))
-        .await?
-        .map_err(|error| {
-          tracing::error!(%error, "cannot read the project's limits and usage");
-          messages::store_error(&error)
-        })
-    });
-    load.state().get().data
-  }
-}
-
-/// Counts the runner's run change notifications, so screens showing runs read them again.
-fn run_changes(ctx: &mut Ctx, runners: &Runners) -> u64 {
-  let changes = ctx.stream(runners.clone(), |runners, emitter: StreamEmitter<u64, ()>| async move {
-    let mut updates = runners.run_changes();
-    loop {
-      let revision = *updates.borrow_and_update();
-      if !emitter.emit(revision) || updates.changed().await.is_err() {
-        return;
-      }
-    }
-  });
-  changes.state().get().data.unwrap_or(0)
-}
-
-fn runner_status(ctx: &mut Ctx, runners: &Runners) -> RunnerStatus {
-  let status = ctx.stream(
-    runners.clone(),
-    |runners, emitter: StreamEmitter<RunnerStatus, ()>| async move {
-      let mut updates = runners.subscribe();
-      loop {
-        let status = updates.borrow_and_update().clone();
-        if !emitter.emit(status) || updates.changed().await.is_err() {
-          return;
-        }
-      }
-    },
-  );
-  status.state().get().data.unwrap_or_else(|| runners.status())
 }

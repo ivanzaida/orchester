@@ -18,6 +18,13 @@ pub const INVERSE_TEXT: &str = "#181818";
 pub const DANGER: &str = "#F87171";
 /// Backdrop behind the close dialog (`a8U756`).
 pub const SCRIM: &str = "#000000A6";
+/// `canvas` fully transparent: where the fade over a clipped edge of the tab strip ends (`xpSC0`).
+pub const CANVAS_CLEAR: &str = "#10101000";
+/// The macOS traffic lights in the platform's standard colors (`lenEp`, `nsw7u`, `Vw8Pc` in
+/// `V70DN`), the only non-grayscale colors of the chrome.
+pub const TRAFFIC_CLOSE: &str = "#FF5F57";
+pub const TRAFFIC_MINIMIZE: &str = "#FEBC2E";
+pub const TRAFFIC_ZOOM: &str = "#28C840";
 
 /// Code and diff colors (Pencil `code-*` and `diff-*`, used by the diff line `vEZ42`): a
 /// restrained GitHub Dark palette for code only; the application chrome stays grayscale.
@@ -65,6 +72,10 @@ pub const ICON_FONT: &str = "lucide";
 pub const RADIUS_NOTICE: f32 = 8.0;
 /// Corner radius of the bars in the Orchester mark (`DIMZ6`).
 pub const RADIUS_MARK: f32 = 2.0;
+/// Corner radius of a title bar tab's avatar and close button (`b9QQb`, `OvWLh` in `nAKyb`).
+pub const RADIUS_TAB_CONTROL: f32 = 4.0;
+/// Corner radius of the *Open in new tab* button on a project switcher row (`NcJQ0`).
+pub const RADIUS_ROW_ACTION: f32 = 5.0;
 /// Corner radius of an open select menu: option radius 7 plus its padding 4 (`u0ByM`).
 pub const RADIUS_SELECT_MENU: f32 = 11.0;
 /// Switch track (`K8ItM`, radius 8 on a 16px track). lurq clamps a radius to half the box, so

@@ -26,13 +26,11 @@ use super::recovery_dialog::{RecoveryActions, RecoveryDialog, RecoveryDialogProp
 use crate::{
   background,
   messages::{self, Message},
-  navigation::{
-    Navigation, entry,
-    route::{Page, Route, TaskPageTab},
-  },
+  navigation::route::{Page, Route, TaskPageTab},
   programs::Programs,
   recovery::{self, InterruptedRun},
   runner::{RunRequestError, Runners},
+  tabs::{OpenIn, Tabs},
   tasks::run::control_message,
   ui::message_text,
   workspace::Workspace,
@@ -123,18 +121,16 @@ impl Component for StartupRecovery {
 
 impl StartupRecovery {
   /// Answers the dialog as *Don't continue* would, and opens the run's task page on its Changes
-  /// tab as a new history entry.
+  /// tab as a new history entry of the active tab.
   fn view_changes(&self, ctx: &mut Ctx) -> Arc<dyn Fn(&InterruptedRun) + Send + Sync> {
-    let navigator = ctx
-      .use_context::<Navigation>()
-      .expect("the root provides Navigation before mounting the recovery")
-      .router()
-      .navigator();
+    let tabs = ctx
+      .use_context::<Tabs>()
+      .expect("the window provides Tabs before mounting the recovery");
     let answered = self.answered.clone();
     Arc::new(move |run: &InterruptedRun| {
       answered.set(true);
       let page = Page::Task(run.task, TaskPageTab::Changes);
-      entry::push(&navigator, Route::Project(run.project_id, page).path());
+      tabs.open(Route::Project(run.project_id, page), OpenIn::Current);
     })
   }
 

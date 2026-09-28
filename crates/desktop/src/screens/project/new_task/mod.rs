@@ -22,7 +22,7 @@ use lurq::{
   },
   components::{Column, Row, Spacer, Text},
   core::Signal,
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -140,6 +140,9 @@ pub struct NewTaskForm {
   /// Generated once per form: every Create & run attempt of this form starts this run.
   run: IdempotencyKey,
   nav: ProjectNav,
+  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
+  /// keeps it.
+  scroll: ScrollState,
 }
 
 impl Component for NewTaskForm {
@@ -170,6 +173,7 @@ impl Component for NewTaskForm {
       }
     });
     Self {
+      scroll: ScrollState::new(),
       title: ctx.signal(String::new()),
       brief: ctx.signal(String::new()),
       criteria: ctx.signal(vec![Criterion::new(0)]),

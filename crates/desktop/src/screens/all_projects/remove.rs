@@ -121,7 +121,7 @@ impl Component for RemoveProject {
       .child(header(ctx, &props))
       .child(kept(ctx, &props))
       .child(actions(ctx, &props, confirm.clone(), problem.as_ref(), pending));
-    Modal::new(backdrop(form(confirm, content)))
+    Modal::new(backdrop(ctx, form(confirm, content)))
       .target(ModalTarget::Root)
       .open(props.open.clone())
   }

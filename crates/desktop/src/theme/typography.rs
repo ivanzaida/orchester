@@ -158,10 +158,12 @@ pub enum ExtraTypography {
   MonoArea,
   /// A change a version makes, in the version history (`o6to5` in `DOroV`).
   ChangeLine,
+  /// A project's initial in a title bar tab's avatar (`T0R2Hv` in `nAKyb`): 9/600.
+  TabInitial,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 72] = [
+  const ALL: [Self; 73] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -234,6 +236,7 @@ impl ExtraTypography {
     Self::ColumnHeading,
     Self::MonoArea,
     Self::ChangeLine,
+    Self::TabInitial,
   ];
 
   fn name(self) -> &'static str {
@@ -310,6 +313,7 @@ impl ExtraTypography {
       Self::ColumnHeading => "column-heading",
       Self::MonoArea => "mono-area",
       Self::ChangeLine => "change-line",
+      Self::TabInitial => "tab-initial",
     }
   }
 
@@ -462,6 +466,7 @@ impl ExtraTypography {
       Self::AgentText => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),
       Self::ColumnHeading => style(9.0, FontWeight::Normal, MUTED),
       Self::ChangeLine => leading(1.4, style(12.0, FontWeight::Normal, TEXT)),
+      Self::TabInitial => style(9.0, FontWeight::SemiBold, TEXT),
       icon_role => icon(
         icon_role
           .icon_size()

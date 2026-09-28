@@ -78,7 +78,7 @@ impl Default for CatalogView {
 }
 
 impl InstructionEditor {
-  pub(super) fn variables_modal(&self, ctx: &Ctx, catalog: &LoadedCatalog) -> Element {
+  pub(super) fn variables_modal(&self, ctx: &mut Ctx, catalog: &LoadedCatalog) -> Element {
     let closed = || Modal::new(Column::new()).open_when(false).into();
     if !self.variables_open.get() {
       return closed();
@@ -113,7 +113,7 @@ impl InstructionEditor {
       .child(self.catalog_header(ctx, resolved.as_ref()))
       .child(body)
       .child(footer(ctx, available));
-    Modal::new(backdrop(dialog))
+    Modal::new(backdrop(ctx, dialog))
       .target(ModalTarget::Root)
       .open(self.variables_open.clone())
       .into()

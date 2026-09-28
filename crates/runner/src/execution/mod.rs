@@ -134,6 +134,12 @@ impl Scheduler {
       .collect()
   }
 
+  /// Whether the runner has no work: no run executes (an agent at work, a step waiting for an
+  /// agent slot, a checkpoint being saved) and no request that may execute one again is under way.
+  pub fn is_idle(&self) -> bool {
+    self.active_runs().is_empty() && self.inner.continuing.try_lock().is_ok()
+  }
+
   /// Creates and starts the run of queued task `task`, or finds the one an earlier request with
   /// `key` created. Must be called within a Tokio runtime; returns once the run is recorded as
   /// started and its first step is scheduled.

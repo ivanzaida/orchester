@@ -11,7 +11,10 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
 use orchester_core::secret::Secret;
@@ -42,7 +45,13 @@ pub struct InspectorActions {
   pub archive: Handler,
 }
 
-pub fn inspector(ctx: &Ctx, secret: &Secret, project: &str, uses: &[&ToolUse], actions: &InspectorActions) -> Element {
+pub fn inspector(
+  ctx: &Ctx,
+  (secret, scroll): (&Secret, &ScrollState),
+  project: &str,
+  uses: &[&ToolUse],
+  actions: &InspectorActions,
+) -> Element {
   let details = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Step.role())
@@ -94,6 +103,7 @@ pub fn inspector(ctx: &Ctx, secret: &Secret, project: &str, uses: &[&ToolUse], a
     .child(
       ScrollVertical::new(details)
         .id("secret-inspector-details")
+        .with_scroll_state(scroll.clone())
         .width(Dimension::Pct(100.0))
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),

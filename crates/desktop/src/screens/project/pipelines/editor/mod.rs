@@ -360,7 +360,13 @@ impl PipelineEditor {
     form(None, column)
   }
 
-  fn publish_modal(&self, ctx: &Ctx, state: &EditorState, publish: &PublishAction, project: &OpenProject) -> Element {
+  fn publish_modal(
+    &self,
+    ctx: &mut Ctx,
+    state: &EditorState,
+    publish: &PublishAction,
+    project: &OpenProject,
+  ) -> Element {
     if !self.confirm_publish.get() {
       self.publish_focused.set(false);
       return Column::new().into();
@@ -391,7 +397,7 @@ impl PipelineEditor {
       action.is_pending(),
       action.error.clone().filter(|_| !action.is_pending()),
     );
-    Modal::new(backdrop(dialog))
+    Modal::new(backdrop(ctx, dialog))
       .target(ModalTarget::Root)
       .open(self.confirm_publish.clone())
       .into()

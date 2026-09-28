@@ -23,7 +23,10 @@ use lurq::{
   },
   components::{Column, Modal, ModalTarget, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -100,6 +103,10 @@ pub struct SecretsScreen {
   revision: Signal<u64>,
   nav: ProjectNav,
   vault: Vault,
+  /// Where the list and the details are scrolled: kept by the screen, so a tab that goes
+  /// inactive and back keeps them.
+  list_scroll: ScrollState,
+  details_scroll: ScrollState,
 }
 
 impl Component for SecretsScreen {
@@ -118,6 +125,8 @@ impl Component for SecretsScreen {
       revision: ctx.signal(0_u64),
       nav,
       vault,
+      list_scroll: ScrollState::new(),
+      details_scroll: ScrollState::new(),
     };
     let archive = archive_action(ctx);
     let (dialog, revision, nav) = (screen.dialog.clone(), screen.revision.clone(), screen.nav.clone());
@@ -250,7 +259,7 @@ impl SecretsScreen {
 
   fn archive_dialog(
     &self,
-    ctx: &Ctx,
+    ctx: &mut Ctx,
     open: &OpenProject,
     archive: &ArchiveAction,
     secret: &Secret,

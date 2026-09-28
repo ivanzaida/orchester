@@ -297,3 +297,35 @@ async fn runner_answers_attach_and_start_run_requests() {
     );
   }
 }
+
+/// No tab shows the project and the runner has no work: it says it stops, then stops and exits.
+#[tokio::test]
+async fn runner_without_work_stops_when_asked_to_stop_if_idle() {
+  let project = project();
+  let mut client = launch(project.path()).await;
+
+  client
+    .send(&request(1, Command::StopIfIdle))
+    .await
+    .expect("stop if idle");
+  assert_eq!(
+    next_event(&mut client).await,
+    Some(Event::Reply {
+      id: RequestId::new(1),
+      reply: Reply::Stopping
+    })
+  );
+  assert_eq!(
+    next_event(&mut client).await,
+    Some(Event::Stopped {
+      mode: ShutdownMode::FinishAtCheckpoints
+    })
+  );
+  let (commands, events, mut process) = client.into_parts();
+  drop((commands, events));
+  let status = timeout(PATIENCE, process.wait())
+    .await
+    .expect("runner exits in time")
+    .expect("wait");
+  assert!(status.success(), "runner exit status {status}");
+}
