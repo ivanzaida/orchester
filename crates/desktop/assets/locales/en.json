@@ -1414,16 +1414,17 @@
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
         "mcp": {
           "none": "No MCP servers",
-          "noneHow": "none configured, the user’s own ignored",
+          "noneHow": "none chosen · user’s own ignored",
+          "onlyOne": "Only the chosen MCP server loads",
           "only": "Only the {{count}} chosen MCP servers load",
-          "codexLoading": "--ignore-user-config · -c mcp_servers.<name>…",
-          "claudeLoading": "--strict-mcp-config --mcp-config <file>",
+          "codexLoading": "-c mcp_servers.* · no user config",
+          "claudeLoading": "--strict-mcp-config --mcp-config",
           "codexCalls": "Their tools run without approval",
-          "codexCallsHow": "-a never · not observed with a model turn",
+          "codexCallsHow": "-a never · unverified",
           "claudeCalls": "Only their tools are allowed",
-          "claudeCallsHow": "--allowedTools mcp__<name> · not observed with a model turn",
-          "outside": "The servers work outside these permissions",
-          "outsideHow": "their own programs: no worktree limits, network on"
+          "claudeCallsHow": "--allowedTools mcp__* · unverified",
+          "outside": "Servers work outside these limits",
+          "outsideHow": "own processes · network on"
         }
       },
       "mechanism": {
@@ -3272,6 +3273,16 @@
           "one": "Could not import from {{project}}",
           "other": "Could not import from {{project}}"
         }
+      },
+      "mcpServerOn": {
+        "running": "Turning on MCP server {{name}}",
+        "done": "MCP server turned on · {{name}}",
+        "failed": "Could not turn on MCP server {{name}}"
+      },
+      "mcpServerOff": {
+        "running": "Turning off MCP server {{name}}",
+        "done": "MCP server turned off · {{name}}",
+        "failed": "Could not turn off MCP server {{name}}"
       }
     },
     "opens": {

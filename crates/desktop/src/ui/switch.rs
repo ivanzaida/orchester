@@ -108,9 +108,11 @@ impl Switch {
       .child(switch)
       .child(label);
     match self.detail {
+      // The button's outer focus ring reaches past the row.
       Some(text) => Row::new()
         .spacing(gap)
         .align_items(Alignment::Center)
+        .overflow_visible()
         .child(button)
         .child(detail(&text))
         .into(),

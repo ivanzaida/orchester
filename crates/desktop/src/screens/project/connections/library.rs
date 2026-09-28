@@ -134,7 +134,7 @@ impl ConnectionsScreen {
     Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
-      .child(list_column(ctx, open, rows))
+      .child(list_column(ctx, open, rows, view.tab != ConnectionTab::McpServers))
       .child(details)
       .into()
   }
@@ -229,7 +229,7 @@ impl ConnectionsScreen {
 
   fn mcp_actions(&self, open: &OpenProject, server: &McpServer, work: &WorkAction, busy: bool) -> McpActions {
     let toggle = (!busy).then(|| {
-      let spec = operations::connection_save(open, server.name().as_str());
+      let spec = operations::mcp_server_switch(open, server.name().as_str(), !server.enabled());
       let work_kind = Work::SetEnabled(!server.enabled());
       actions::start(work, &self.working, &open.repo_root, server.id(), work_kind, spec)
     });
@@ -292,8 +292,9 @@ fn listed(data: &ProjectConnections, tab: ConnectionTab) -> Vec<Listed<'_>> {
   }
 }
 
-/// Search, rows, the provider notice and who owns the connections (`Bc9cT`).
-fn list_column(ctx: &Ctx, open: &OpenProject, rows: Vec<Element>) -> Element {
+/// Search, rows, the provider notice (not on the MCP servers tab, where it does not apply) and who owns
+/// the connections (`Bc9cT`).
+fn list_column(ctx: &Ctx, open: &OpenProject, rows: Vec<Element>, provider_notice: bool) -> Element {
   let search = value_box_sized(
     ctx,
     "connection-search",
@@ -306,11 +307,13 @@ fn list_column(ctx: &Ctx, open: &OpenProject, rows: Vec<Element>) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .with_children(rows)
-    .child(Notice::new(
-      Icon::Workflow,
-      ctx.t("connections.mixTitle"),
-      ctx.t("connections.mixDetail"),
-    ));
+    .with_children(provider_notice.then(|| {
+      Notice::new(
+        Icon::Workflow,
+        ctx.t("connections.mixTitle"),
+        ctx.t("connections.mixDetail"),
+      )
+    }));
   Column::new()
     .flex(1.0)
     .height(Dimension::Pct(100.0))

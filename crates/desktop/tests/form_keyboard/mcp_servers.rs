@@ -278,22 +278,27 @@ fn agent_profile_chooses_its_mcp_servers_on_the_permissions_tab() {
   assert!(shows(
     &mut desktop,
     "agent-enforcement",
-    "Only the 1 chosen MCP servers load"
+    "Only the chosen MCP server loads"
   ));
-  assert!(shows(&mut desktop, "agent-enforcement", "--allowedTools mcp__<name>"));
+  assert!(shows(&mut desktop, "agent-enforcement", "--allowedTools mcp__*"));
   assert!(shows(
     &mut desktop,
     "agent-enforcement",
-    "The servers work outside these permissions"
+    "Servers work outside these limits"
   ));
-  // The switches are form controls.
+  // The switches are form controls. Claude Code cannot start `local` in its folder and `knowledge`
+  // is turned off, so choosing them loads nothing more.
   desktop.tab_to("agent-mcp-local", PRESSES);
   desktop.enter();
-  desktop.settle("local is chosen", |tree| {
-    tree
-      .get_element_by_id("agent-enforcement")
-      .is_some_and(|panel| contains_text(panel, "Only the 2 chosen MCP servers load"))
-  });
+  desktop.tab_to("agent-mcp-knowledge", PRESSES);
+  desktop.enter();
+  assert!(shows(
+    &mut desktop,
+    "agent-enforcement",
+    "Only the chosen MCP server loads"
+  ));
+  assert!(!shows(&mut desktop, "agent-enforcement", "Only the 3 chosen"));
+  desktop.press("agent-mcp-knowledge");
   desktop.press("agent-mcp-docs");
   desktop.press("agent-save-draft");
   desktop.wait_until("the draft is saved", |desktop| {

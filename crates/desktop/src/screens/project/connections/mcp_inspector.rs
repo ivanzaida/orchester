@@ -138,9 +138,15 @@ impl McpInspector<'_> {
     match self.server.transport() {
       McpTransport::Stdio(stdio) => {
         let args: Vec<&str> = stdio.args().iter().map(|arg| arg.as_str()).collect();
-        let folder = stdio
-          .working_directory()
-          .map_or_else(|| ctx.t("connections.mcp.theWorktree"), |folder| folder.as_str().into());
+        // A path in mono, as the program; the default in words.
+        let folder = match stdio.working_directory() {
+          Some(folder) => styled_property(
+            &ctx.t("connections.mcp.property.folder"),
+            folder.as_str(),
+            ValueStyle::Path,
+          ),
+          None => row("connections.mcp.property.folder", &ctx.t("connections.mcp.theWorktree")),
+        };
         vec![
           row("connections.mcp.property.type", &ctx.t("connections.mcp.typeStdio")),
           styled_property(
@@ -153,7 +159,7 @@ impl McpInspector<'_> {
             &args.join(" "),
             ValueStyle::Path,
           ),
-          styled_property(&ctx.t("connections.mcp.property.folder"), &folder, ValueStyle::Path),
+          folder,
           row(
             "connections.mcp.property.startedBy",
             &ctx.t("connections.mcp.startedByCli"),
@@ -167,11 +173,7 @@ impl McpInspector<'_> {
         };
         vec![
           row("connections.mcp.property.type", &ctx.t("connections.mcp.typeHttp")),
-          styled_property(
-            &ctx.t("connections.mcp.property.endpoint"),
-            http.url().as_str(),
-            ValueStyle::Path,
-          ),
+          row("connections.mcp.property.endpoint", http.url().host()),
           row("connections.property.authentication", &authentication),
         ]
       }
@@ -235,9 +237,10 @@ impl McpInspector<'_> {
           .render(ctx)
       })
       .collect();
+    // Heading and links 20 apart, as the inspector's other parts (`c3NuQu`, `p4Dya`, `rBsPW`).
     let column = Column::new()
       .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Stack.role())
+      .spacing(ExtraSpacing::Step.role())
       .child(heading(ctx, "connections.usedBy"));
     if links.is_empty() {
       return column.child(note(ctx, "connections.mcp.notUsed")).into();

@@ -90,7 +90,7 @@ impl ProfileEditor {
     let unusable = self.unusable(ctx, server, provider);
     Column::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Xs)
+      .spacing(SpacingSize::Sm)
       .overflow_visible()
       .child(switch)
       .with_children(unusable.map(|reason| unavailable_reason(&reason)))
@@ -102,37 +102,42 @@ impl ProfileEditor {
     if !server.enabled() {
       return Some(ctx.t("agents.permissions.mcp.turnedOff"));
     }
-    let folder = match server.transport() {
-      McpTransport::Stdio(stdio) => stdio.working_directory()?,
-      McpTransport::Http(_) => return None,
+    if usable(server, provider?) {
+      return None;
+    }
+    let McpTransport::Stdio(stdio) = server.transport() else {
+      return None;
     };
-    (!mcp_support(provider?).working_directory)
-      .then(|| ctx.t_args("agents.permissions.mcp.noFolder", [("folder", folder.as_str())]))
+    let folder = stdio.working_directory()?;
+    Some(ctx.t_args("agents.permissions.mcp.noFolder", [("folder", folder.as_str())]))
   }
 
   /// What the connection's CLI enforces for the chosen servers (`kXyN7`): only they load, how
   /// their tools are allowed, and that the servers work outside these permissions.
   pub(super) fn mcp_enforcement(&self, ctx: &Ctx, provider: AgentProvider) -> Vec<Element> {
-    let count = self.mcp.get().0.ids().len();
+    let chosen = self.mcp.get();
+    // The chosen servers an agent gets: those the project has, that are on and that the CLI can start.
+    let count = self
+      .context
+      .agents
+      .mcp
+      .iter()
+      .filter(|server| chosen.0.contains(server.id()) && usable(server, provider))
+      .count();
     let support = mcp_support(provider);
-    let (loaded, loading) = match (count, support.loading) {
-      (0, _) => (ctx.t("agents.permissions.enforcement.mcp.none"), None),
-      (_, McpLoading::CodexConfigOverrides) => (
-        ctx.t_args(
-          "agents.permissions.enforcement.mcp.only",
-          [("count", count.to_string().as_str())],
-        ),
-        Some(ctx.t("agents.permissions.enforcement.mcp.codexLoading")),
-      ),
-      (_, McpLoading::ClaudeStrictConfig) => (
-        ctx.t_args(
-          "agents.permissions.enforcement.mcp.only",
-          [("count", count.to_string().as_str())],
-        ),
-        Some(ctx.t("agents.permissions.enforcement.mcp.claudeLoading")),
+    let loaded = match count {
+      0 => ctx.t("agents.permissions.enforcement.mcp.none"),
+      1 => ctx.t("agents.permissions.enforcement.mcp.onlyOne"),
+      _ => ctx.t_args(
+        "agents.permissions.enforcement.mcp.only",
+        [("count", count.to_string().as_str())],
       ),
     };
-    let loading = loading.unwrap_or_else(|| ctx.t("agents.permissions.enforcement.mcp.noneHow"));
+    let loading = match (count, support.loading) {
+      (0, _) => ctx.t("agents.permissions.enforcement.mcp.noneHow"),
+      (_, McpLoading::CodexConfigOverrides) => ctx.t("agents.permissions.enforcement.mcp.codexLoading"),
+      (_, McpLoading::ClaudeStrictConfig) => ctx.t("agents.permissions.enforcement.mcp.claudeLoading"),
+    };
     let mut rows = vec![row(Icon::CircleCheck, &loaded, &loading)];
     if count == 0 {
       return rows;
@@ -156,6 +161,16 @@ impl ProfileEditor {
     ));
     rows
   }
+}
+
+/// Whether a `provider` agent gets `server` when its profile chooses it: the server is on, and the CLI
+/// can start it where it is set to start.
+fn usable(server: &McpServer, provider: AgentProvider) -> bool {
+  let folder = match server.transport() {
+    McpTransport::Stdio(stdio) => stdio.working_directory().is_some(),
+    McpTransport::Http(_) => false,
+  };
+  server.enabled() && (!folder || mcp_support(provider).working_directory)
 }
 
 fn hint(ctx: &Ctx, key: &str) -> Element {

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Select, Text},
   core::Signal,
@@ -24,7 +24,7 @@ use crate::{
   messages::Message,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
-    field::{FieldNote, field, select_style, styled_input, text_input},
+    field::{FieldNote, ValueTone, field, select_style, styled_input, text_input, value_box},
     icon::Icon,
     message_text,
     notice::Notice,
@@ -75,7 +75,7 @@ impl McpDialog {
       "mcp-name",
       self.name.clone(),
       error.is_some() && !self.name.get().is_empty(),
-      ExtraTypography::MonoField.role(),
+      TypographyStyle::FieldLabel,
     )
     .height(Dimension::Px(FIELD_HEIGHT))
     .placeholder(&ctx.t("connections.mcp.dialog.namePlaceholder"));
@@ -170,6 +170,12 @@ impl McpDialog {
   /// *Add a variable from a secret*: a select of the project's secrets; the chosen one becomes a
   /// `NAME=${secret:NAME@environment}` line.
   fn insert_secret(&self, ctx: &Ctx) -> Element {
+    let label = ctx.t("connections.mcp.dialog.fromSecret");
+    if self.context.secrets.is_empty() {
+      let none = ctx.t("connections.mcp.dialog.noSecrets");
+      let control = value_box(ctx, "mcp-add-secret", &none, ValueTone::Unavailable, None);
+      return field(&label, control, FieldNote::None);
+    }
     let options = self.context.secrets.iter().map(|secret| {
       let label = ctx.t_args(
         "connections.mcp.secretName",
@@ -182,11 +188,7 @@ impl McpDialog {
     });
     let select = Select::new(self.insert.clone())
       .options(options.collect::<Vec<_>>())
-      .placeholder(ctx.t(if self.context.secrets.is_empty() {
-        "connections.mcp.dialog.noSecrets"
-      } else {
-        "connections.mcp.dialog.addSecret"
-      }))
+      .placeholder(ctx.t("connections.mcp.dialog.addSecret"))
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(FIELD_HEIGHT))
       .style(select_style(ctx, FIELD_HEIGHT));
