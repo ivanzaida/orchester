@@ -120,11 +120,6 @@ runs; the *Merge* button gets narrower while merging; the Working branch row sti
 
 The Claude repository mechanism line wraps onto two lines in the 300 wide panel. Check the design's wording and width.
 
-### U4 · Publish button on a published profile (UI, check first)
-
-On the Reader profile the header showed *Published v1* next to a *Publish v2* button that looked unavailable. Find out
-whether it is disabled and why, and whether that is right.
-
 ### U5 · Smaller mismatches left by earlier verifications (UI)
 
 - Pipeline editor: *Back to editing* label is larger than 11/500; the canvas has no dot grid; the *Changed in draft*
@@ -149,6 +144,12 @@ are covered only by data tests. Verify them in the app and fix what differs from
 An intentionally long project name used for U1 verification spills from the sidebar selector and Overview heading.
 See `.tmp/verify/u1/report.md` and `failure-project-full.png`. Check the intended truncation in Pencil and keep both
 areas inside their bounds; this is separate from the verified status bar.
+
+### U8 · Agent profile header states need a design check (UI/design)
+
+The published profile with no draft has no Pencil frame. In the saved-draft frame `WPmtS`, the app also shows a
+disabled *Save draft* button that the drawing omits (major visual mismatch). Draw the missing state, decide whether
+the disabled button should be shown, then align the app and verify both states. Evidence: `.tmp/verify/u3-u4/report.md`.
 
 ## L · After lurq 0.30.0
 
@@ -180,6 +181,10 @@ catch the user's typing.
 
 ## Done
 
+U4 · Publish button on a published profile · branch `codex/publish-button` (no code change: a published version has no
+draft, so `Publish v2` is correctly disabled until edits are saved as draft v2. Real app lifecycle and MCP state
+confirmed; focused lifecycle test 1/1 and `tools/check.ps1` passed. Pencil has no no-draft frame; the adjacent
+saved-draft header mismatch is tracked as U8. Evidence `.tmp/verify/u3-u4/report.md`).
 U1 · Truncate long status-bar failures · branch `codex/status-bar-truncation` (headless regression 3/3,
 `tools/check.ps1` passed; independent MCP/Pencil verification at 1440, 1100 and 900 logical px found
 0 blocking/major/minor, a painted ellipsis, full wrapped hint and no overlap with project counts;
