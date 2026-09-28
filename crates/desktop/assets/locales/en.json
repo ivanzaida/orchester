@@ -137,6 +137,7 @@
   "tabs": {
     "label": "{{project}} · {{page}}",
     "labelWithTitle": "{{project}} · {{page}} · {{title}}",
+    "windowTitle": "{{tab}} — Orchester",
     "unknownProject": "Project",
     "welcome": "Welcome",
     "pullRequest": "#{{number}}",

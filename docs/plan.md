@@ -149,21 +149,11 @@ whether it is disabled and why, and whether that is right.
 The Paused, Stopped, Interrupted and Not started states of the conversation panel, and direct messages to one agent,
 are covered only by data tests. Verify them in the app and fix what differs from `jgqPe` / `kjsmd`.
 
-## L · Depends on a lurq release
+## L · After lurq 0.30.0
 
-Done on lurq branch `claude/tabs-gaps` (commits `cfb43d3`, `8c89453`, `7c0016e`, plus the text-input fixes `78a6e4a`
-and `2b9f173`, on top of 0.29.0). The user releases it
-(expected 0.30.0: the popup default is a behaviour change). First task after the release: bump `lurq` in the workspace
-`Cargo.toml`, `cargo update -p lurq`, run `tools/check.ps1` and the full `form_keyboard ::`, then L1–L3.
-
-### L1 · The window title follows the active tab
-
-lurq adds `WindowHandle::set_title(impl Into<String>)` (`ctx.window().set_title(..)`; repeating the same title is free)
-and `title()`. Set the OS title from the active tab's label through an i18n key, e.g. *Kontur · Tasks — Orchester*.
-`ctx.window()` subscribes the caller to window resize and move, so call it from a component that already reads the
-window (the title bar in `crates/desktop/src/tabs/window.rs`) or from a `ctx.watch` on the active tab label with a kept
-`WindowHandle`. `.with_title(..)` in `main.rs` stays as the initial title. **Done when** switching and renaming tabs
-updates the title (headless test on `WindowHandle::title()` or the MCP `lurq_windows` title).
+The fixes from lurq branch `claude/tabs-gaps` and the text-input fixes are released in 0.30.0. The workspace uses
+0.30.0 since commit `71fd0b7`. The baseline `tools/check.ps1` and full `form_keyboard ::` passed on 2026-09-28
+(212 passed, 1 ignored). L2–L3 can proceed.
 
 ### L2 · Remove the held scroll states
 
@@ -228,3 +218,4 @@ T2 · Poll-free plan tests · commit `8739a65`.
 D2 · Extra writable folders for agents · branch `claude/writable-roots`.
 T3 · Serialize the remaining run request fallbacks · commit `389ee3b`.
 T5 · Continuing a run whose worktree was deleted by hand · branch `codex/missing-run-worktree`.
+L1 · The window title follows the active tab · branch `codex/window-title` (MCP and Pencil verified).

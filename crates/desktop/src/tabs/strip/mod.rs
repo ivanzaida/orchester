@@ -114,9 +114,15 @@ impl Component for TabStrip {
     if inert && self.list_open.get_untracked() {
       self.list_open.set(false);
     }
-    let window_width = ctx.window().logical_width();
+    let window = ctx.window();
+    let window_width = window.logical_width();
     let layout = StripLayout::new(set.len(), set.active_index(), strip_room(window_width), LIST_SLOT_WIDTH);
     let labels = labels(ctx, &tabs, &set);
+    let title = ctx.t_args(
+      "tabs.windowTitle",
+      [("tab", labels[set.active_index()].label.text.as_ref())],
+    );
+    window.set_title(title.as_ref());
     let scroll = self.scroll_for(&layout, set.active(), set.active_index());
     let strip = self.strip(&tabs, &set, (&layout, scroll), &labels, inert);
     let mut row = Row::new()
