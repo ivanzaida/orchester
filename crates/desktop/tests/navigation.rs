@@ -165,7 +165,7 @@ fn pages() -> Vec<Page> {
 fn route_every_page_resolves_and_reads_back() {
   let project = ProjectId::generate();
   let table = routes(&Places::default());
-  let outside = [Route::Start, Route::Welcome, Route::Setup, Route::Unavailable];
+  let outside = [Route::Start, Route::Welcome, Route::Setup, Route::AllProjects];
   let inside = pages().into_iter().map(|page| Route::Project(project, page));
   for route in outside.into_iter().chain(inside) {
     let path = route.path();
@@ -300,8 +300,12 @@ fn route_unknown_places_lead_to_the_start_screen() {
   assert_eq!(window.path(), overview, "a project not opened in this session");
   window.router.push("/nowhere");
   assert_eq!(window.path(), overview);
-  window.router.push(Route::Unavailable.path());
-  assert_eq!(window.path(), overview, "no project was reported unavailable");
+  window.router.push(Route::Welcome.path());
+  assert_eq!(
+    window.path(),
+    overview,
+    "the first launch is over once a project is open"
+  );
 }
 
 /// The entries of the history from the first, as going back and then forward visits them.
@@ -397,4 +401,58 @@ fn route_import_opens_over_the_page_and_closes_to_it() {
     let matched = routes(&Places::default()).resolve(&over);
     assert_ne!(matched.last().map(|leaf| leaf.pattern_raw()), Some("**"), "{over}");
   }
+}
+
+#[test]
+fn route_all_projects_is_the_start_when_the_last_project_cannot_open() {
+  let window = Window::new();
+  window.navigation.arrive(Start::AllProjects);
+  assert_eq!(window.path(), Route::AllProjects.path());
+  window.router.push("/nowhere");
+  assert_eq!(
+    window.path(),
+    Route::AllProjects.path(),
+    "unknown places lead to All projects"
+  );
+}
+
+#[test]
+fn route_switching_projects_adds_entries_that_back_and_forward_revisit() {
+  let (window, kontur) = Window::on_project();
+  let website = window.project("personal-website");
+  let website_id = website.project.id();
+  window.navigation.show_all_projects();
+  window.navigation.show_project(website);
+  let paths = entries(&window.router);
+  assert_eq!(
+    paths,
+    [
+      Route::Project(kontur, Page::OVERVIEW).path(),
+      Route::AllProjects.path(),
+      Route::Project(website_id, Page::OVERVIEW).path(),
+    ]
+  );
+}
+
+#[test]
+fn route_a_removed_project_leaves_history_for_all_projects() {
+  let (window, kontur) = Window::on_project();
+  let overview = Route::Project(kontur, Page::OVERVIEW).path();
+  window.navigation.show_all_projects();
+  window.navigation.forget_project(kontur);
+  window.router.push(overview);
+  assert_eq!(
+    window.path(),
+    Route::AllProjects.path(),
+    "the removed project's screens lead to the start, All projects"
+  );
+}
+
+#[test]
+fn route_leaving_setup_returns_to_where_it_was_opened() {
+  let (window, _) = Window::on_project();
+  window.navigation.show_all_projects();
+  window.navigation.show_setup();
+  window.navigation.leave_setup();
+  assert_eq!(window.path(), Route::AllProjects.path());
 }

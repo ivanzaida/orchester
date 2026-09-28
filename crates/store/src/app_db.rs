@@ -61,6 +61,15 @@ pub struct RegisteredProject {
   pub last_opened_at: Timestamp,
 }
 
+impl RegisteredProject {
+  /// Whether the project's folder is gone from where it was registered (moved, renamed or
+  /// deleted). A folder that cannot be checked, e.g. for lack of permission, is not reported
+  /// missing: opening the project reports why it cannot be read.
+  pub fn folder_missing(&self) -> bool {
+    matches!(self.repo_root.try_exists(), Ok(false))
+  }
+}
+
 pub struct AppDb {
   connection: Connection,
 }
@@ -85,6 +94,16 @@ impl AppDb {
         now.unix_millis(),
       ],
     )?;
+    Ok(())
+  }
+
+  /// Forgets the project: it is no longer listed. Only this database changes; the project's
+  /// folder and its `.orchester` data stay as they are, so opening the folder again brings the
+  /// project back. Forgetting a project that is not known changes nothing.
+  pub fn forget_project(&mut self, project: ProjectId) -> Result<(), StoreError> {
+    self
+      .connection
+      .execute("DELETE FROM projects WHERE id = ?1", [project.to_string()])?;
     Ok(())
   }
 

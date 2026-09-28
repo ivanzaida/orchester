@@ -21,6 +21,7 @@ mod runner_card;
 mod secrets;
 mod settings;
 mod sidebar;
+mod switcher;
 mod task;
 mod task_rows;
 mod tasks;
@@ -214,7 +215,11 @@ pub(crate) fn shell(ctx: &mut Ctx) -> Element {
     .route_params()
     .get_parsed::<ProjectId>(PROJECT_PARAM)
     .and_then(|project| navigation.places().project(project));
+  // Going back and forward passes no guard: an entry of a project removed from the workspace
+  // gives way to the start screen.
   let Some(open) = open else {
+    let start = navigation.places().start().unwrap_or(Route::Start);
+    navigation.router().replace(start.path());
     return Element::new();
   };
   // A project's runner starts as soon as the project is shown, at startup or after setup, and

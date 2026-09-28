@@ -53,7 +53,7 @@ fn rail(ctx: &Ctx, navigation: Navigation) -> Element {
     .icon(Icon::ArrowLeft)
     .id("setup-back")
     .fill_width()
-    .on_click(move || navigation.back_to_start())
+    .on_click(move || navigation.leave_setup())
     .render(ctx);
   Column::new()
     .width(Dimension::Px(RAIL_WIDTH))
