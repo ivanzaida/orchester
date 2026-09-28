@@ -100,6 +100,19 @@ them. Map MCP servers in the import like connections (reuse or leave unresolved)
 
 A secret used by an MCP server variable or bearer token is not listed under its *Used by*.
 
+### M5 · Remote server details name who reaches it (UI)
+
+The MCP server inspector (`crates/desktop/src/screens/project/connections/mcp_inspector.rs`) shows only Type, Endpoint
+and Authentication for a remote (HTTP) server; 04.D `QdLRd` suggests a *Reached by* row as the dialog has
+(`connections.mcp.property.reachedBy`). Confirm with the drawing, then add it. Also from that verification: the
+Arguments and Variables text in the MCP dialog sit about 4px higher than drawn, and the 04.D details rows 2–4px lower.
+
+### M6 · Environment names in secret references (needs decision)
+
+Environments display in lower case (`@staging`, *(staging)*) where the design writes *Staging*, and typing `@Staging`
+is refused (`Environment::as_str` in core). Decide whether names are case-insensitive with a display form; ties in with
+the Secrets decision under P.
+
 ### M4 · Not built yet (needs decision)
 
 Tool discovery and OAuth sign-in for MCP servers, narrowing servers per pipeline step, changing a running run's servers,
@@ -187,6 +200,19 @@ first glyph at a line start, and the caret blinks (every 530 ms) in an idle wind
 lower than before, at its correct baseline. No Orchester code change is expected. **Done when** an independent design
 verification of a focused multi-line field (the New task brief, a conversation composer) and of a selection in a single-
 and a multi-line input reports no blocking or major mismatches, and anything it finds is fixed or listed here.
+
+### L5 · Select menus wider than their trigger (lurq)
+
+lurq makes a select menu exactly as wide as its trigger, so the MCP dialog's *Add a variable from a secret…* menu shows
+each secret's environment on a detail line instead of *NAME (environment)* on one line (documented deviation). A lurq
+option for a menu wider than its trigger would allow the drawn form. lurq change; the user releases lurq.
+
+### L6 · Verifier app windows take focus (lurq or test tooling)
+
+A verifier's own app instance received real keyboard input while the user worked (extra tabs opened, text typed into
+a field), probably because the window took focus when it opened. Find a way to start agent-driven app instances without
+activating them (a lurq window option such as "start without focus", or a flag the MCP build honours), so they never
+catch the user's typing.
 
 ## P · Product decisions waiting for the user
 
