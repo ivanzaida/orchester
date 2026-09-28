@@ -155,6 +155,7 @@ fn pages() -> Vec<Page> {
     Page::CONNECTIONS,
     Page::Connections(ConnectionTab::GitHub, None),
     Page::Connections(ConnectionTab::AgentProviders, Some(ConnectionId::generate())),
+    Page::Connections(ConnectionTab::McpServers, Some(ConnectionId::generate())),
     Page::Settings(SettingsTab::General),
     Page::Settings(SettingsTab::Limits),
     Page::Settings(SettingsTab::Environment),

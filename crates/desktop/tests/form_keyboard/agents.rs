@@ -1,5 +1,8 @@
 use orchester_core::{
-  connection::{AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
+  connection::{
+    AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
+    mcp::McpServerSelection,
+  },
   name::Name,
   permission::AgentPermissions,
   resource::ModelId,
@@ -120,6 +123,7 @@ fn stored_profile(desktop: &Desktop, role: &str) -> String {
     custom_model: "",
     effort: None,
     permissions: &AgentPermissions::before_permissions(),
+    mcp_servers: &McpServerSelection::none(),
   }
   .profile()
   .expect("a valid profile");

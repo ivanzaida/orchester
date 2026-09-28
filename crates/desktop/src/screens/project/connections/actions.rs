@@ -1,6 +1,7 @@
 //! Work the connections screen starts on a stored connection, each reported to the status bar
 //! activity: checking it again, pointing it at another program (gh not found, `ve4G9`) and
-//! making the project expect the account `gh` uses now (*Use this account*, `P89Dl`).
+//! making the project expect the account `gh` uses now (*Use this account*, `P89Dl`), and turning an MCP
+//! server on or off.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -14,6 +15,7 @@ use crate::{
   connections::{
     data::recheck_in,
     github::{choose_program_in, expect_active_account_in},
+    mcp::set_enabled_in,
   },
   messages::{self, Message},
 };
@@ -31,6 +33,8 @@ pub(super) enum Work {
   /// Point the connection at this program, then check it.
   Program(PathBuf),
   UseActiveAccount,
+  /// Turn the MCP server on (`true`) or off for every profile that chooses it.
+  SetEnabled(bool),
 }
 
 impl lurq::app::component::DevtoolsInspectable for Work {}
@@ -68,6 +72,10 @@ fn run(repo_root: &std::path::Path, id: ConnectionId, work: Work) -> Result<(), 
     Work::UseActiveAccount => expect_active_account_in(repo_root, id).map_err(|error| {
       tracing::error!(%error, "cannot record the account gh uses as the expected one");
       error.message()
+    }),
+    Work::SetEnabled(enabled) => set_enabled_in(repo_root, id, enabled).map_err(|error| {
+      tracing::error!(%error, "cannot turn the MCP server on or off");
+      messages::store_error(&error)
     }),
   }
 }

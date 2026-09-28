@@ -115,6 +115,9 @@ fn run_permissions_popover_closes_without_changes_and_keeps_a_change_for_the_nex
   let mut desktop = desktop_running("Wait for release.");
   desktop.click("task-permissions-view");
   desktop.wait_for("task-permissions-popover");
+  // The MCP servers the agent gets are shown, read-only: this profile chooses none.
+  let mcp = desktop.tree.get_element_by_id("task-permissions-mcp");
+  assert!(mcp.is_some_and(|mcp| crate::mcp_servers::contains_text(mcp, "None")));
   // The popover is a form: Tab reaches its controls.
   desktop.tab_to("task-permissions-save-to-profile", 12);
   // Nothing changed yet: neither way to apply does anything.

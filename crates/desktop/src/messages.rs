@@ -95,7 +95,7 @@ fn vault_error(error: &VaultError) -> Message {
     VaultError::Unsupported => Message::new("errors.keychainUnsupported"),
     VaultError::AccessDenied(_) => Message::new("errors.keychainDenied"),
     VaultError::TooLong { max } => Message::new("errors.secretTooLong").with("max", max.to_string()),
-    VaultError::Failed(_) => Message::new("errors.keychainFailed"),
+    VaultError::Failed(_) | VaultError::NotFound => Message::new("errors.keychainFailed"),
   }
 }
 

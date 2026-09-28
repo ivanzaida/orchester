@@ -5,6 +5,7 @@
 
 mod entry;
 mod footer;
+mod mcp;
 mod panel;
 mod rows;
 

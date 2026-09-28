@@ -19,7 +19,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{AgentConnection, invocation::Platform},
+  connection::{AgentConnection, invocation::Platform, mcp::McpServerSelection},
   id::ConnectionId,
   permission::{AgentPermissions, capability::PermissionOption},
   resource::{AgentProfile, VersionNumber},
@@ -79,6 +79,12 @@ impl DerefMut for PermissionsChoice {
   }
 }
 
+/// The MCP servers the profile gives its agents, as edited.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct McpChoice(pub McpServerSelection);
+
+impl lurq::app::component::DevtoolsInspectable for McpChoice {}
+
 /// Options the last connection change replaced because the new connection cannot enforce them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Resets(pub Vec<PermissionOption>);
@@ -97,6 +103,7 @@ pub struct ProfileEditor {
   pub(super) tab: Signal<EditorTab>,
   pub(super) permissions: Signal<PermissionsChoice>,
   pub(super) resets: Signal<Resets>,
+  pub(super) mcp: Signal<McpChoice>,
   /// The command being added to the allowed commands, as typed.
   pub(super) new_command: Signal<String>,
   pub(super) command_error: Signal<Option<Message>>,
@@ -222,6 +229,7 @@ impl ProfileEditor {
       tab: ctx.signal(EditorTab::Profile),
       permissions: ctx.signal(PermissionsChoice(profile.permissions().clone())),
       resets: ctx.signal(Resets::default()),
+      mcp: ctx.signal(McpChoice(profile.mcp_servers().clone())),
       new_command: ctx.signal(String::new()),
       command_error: ctx.signal(None),
       context: context.clone(),
@@ -251,6 +259,7 @@ impl ProfileEditor {
         }),
       )),
       resets: ctx.signal(Resets::default()),
+      mcp: ctx.signal(McpChoice::default()),
       new_command: ctx.signal(String::new()),
       command_error: ctx.signal(None),
       context: context.clone(),
@@ -275,6 +284,7 @@ impl ProfileEditor {
       self.custom_model.get(),
     );
     let (model, effort, permissions) = (self.model.get(), self.effort.get(), self.permissions.get());
+    let mcp = self.mcp.get();
     let profile = ProfileForm {
       role: &role,
       responsibilities: &responsibilities,
@@ -284,6 +294,7 @@ impl ProfileEditor {
       custom_model: &custom_model,
       effort: effort.0.as_deref(),
       permissions: &permissions,
+      mcp_servers: &mcp.0,
     }
     .profile();
     let dirty = match (&self.context.editing, &profile) {

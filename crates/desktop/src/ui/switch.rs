@@ -19,7 +19,7 @@ const TRACK_HEIGHT: f32 = 16.0;
 const KNOB_SIZE: f32 = 10.0;
 
 pub struct Switch {
-  id: &'static str,
+  id: Arc<str>,
   label: Arc<str>,
   on: bool,
   emphasized: bool,
@@ -27,9 +27,9 @@ pub struct Switch {
 }
 
 impl Switch {
-  pub fn new(id: &'static str, label: Arc<str>, on: bool) -> Self {
+  pub fn new(id: impl Into<Arc<str>>, label: Arc<str>, on: bool) -> Self {
     Self {
-      id,
+      id: id.into(),
       label,
       on,
       emphasized: false,
@@ -80,7 +80,7 @@ impl Switch {
   pub fn locked(self) -> Element {
     let (label, gap) = self.label();
     Row::new()
-      .id(self.id)
+      .id(self.id.clone())
       .spacing(gap)
       .align_items(Alignment::Center)
       .opacity(LOCKED_SWITCH_OPACITY)
@@ -98,7 +98,7 @@ impl Switch {
     let switch = self.track();
     let (label, gap) = self.label();
     let button = keyboard_stop(Button::empty().button(), Ring::Outer)
-      .id(self.id)
+      .id(self.id.clone())
       .spacing(gap)
       .align_items(Alignment::Center)
       .rounded(RadiusSize::Sm)
