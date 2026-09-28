@@ -2,8 +2,10 @@
 //! still recorded as running were cut off, since a new runner executes nothing yet. They are
 //! recorded as interrupted, with a cause that depends on the session: the previous runner's loss
 //! (they continue on their own), or the end of the previous session (they wait for a person). A run
-//! that only waits for a person's decision had no agent at work: it still waits, untouched. A run
-//! whose record cannot be read back is left as it is: it is logged and nothing continues it.
+//! that only waits for a person's decision had no agent at work: it still waits, untouched, unless
+//! people's messages written meanwhile answer its agent's question. A run that succeeded while
+//! messages to its agents were written is followed up. A run whose record cannot be read back is left
+//! as it is: it is logged and nothing continues it.
 
 use std::num::NonZeroU32;
 
@@ -30,8 +32,9 @@ pub struct Attached {
 
 impl Scheduler {
   /// The desktop attached for `session` with `slots` agent slots: records the runs left running
-  /// as interrupted and, after the previous runner dropped, continues the runs its loss
-  /// interrupted, as far as slots and the daily budget allow.
+  /// as interrupted, delivers the messages people wrote while no runner was attached (answers and
+  /// follow-ups) and, after the previous runner dropped, continues the runs its loss interrupted, as
+  /// far as slots and the daily budget allow.
   pub fn attach(&self, session: AttachSession, slots: NonZeroU32) -> Result<Attached, Rejection> {
     self.inner.board.set_slots(slots);
     let mut db = self.open()?;
@@ -50,6 +53,7 @@ impl Scheduler {
       attached.interrupted.push(run.id());
     }
     self.wake_answered(&db, waiting)?;
+    self.follow_up_queued(&mut db)?;
     if session == AttachSession::Reconnect {
       attached.continued = self.continue_after_reconnect(&db)?;
     }

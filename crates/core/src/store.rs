@@ -318,6 +318,10 @@ pub trait ConversationStore {
 
   /// The conversation of `task`, oldest first.
   fn messages(&self, task: TaskId) -> Result<Vec<Message>, Self::Error>;
+
+  /// The runs people's queued messages were written for, each once, by their oldest queued
+  /// message. A message written before its task had a run names none and is not counted.
+  fn runs_with_queued_messages(&self) -> Result<Vec<RunId>, Self::Error>;
 }
 
 /// Agent CLI and command tool invocations and their transcripts, written by the runner. Transcript

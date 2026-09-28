@@ -4,7 +4,7 @@
 
 use orchester_core::{
   conversation::{AgentMessage, Delivery, Message, MessageBody, Recipient, Sender},
-  id::{IdempotencyKey, TaskId},
+  id::{IdempotencyKey, RunId, TaskId},
   store::ConversationStore,
   time::Timestamp,
 };
@@ -88,6 +88,17 @@ impl ConversationStore for ProjectDb {
       .query_map([task.to_string()], StoredRow::read)?
       .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter().map(StoredRow::into_message).collect()
+  }
+
+  fn runs_with_queued_messages(&self) -> Result<Vec<RunId>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT run_id FROM messages WHERE author = ?1 AND delivered_at IS NULL AND run_id IS NOT NULL \
+       GROUP BY run_id ORDER BY MIN(created_at), MIN(rowid)",
+    )?;
+    let runs = statement
+      .query_map([PERSON], |row| row.get::<_, String>(0))?
+      .collect::<Result<Vec<_>, _>>()?;
+    runs.iter().map(|run| parse("run id", run)).collect()
   }
 }
 

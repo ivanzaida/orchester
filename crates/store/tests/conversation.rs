@@ -1,5 +1,6 @@
 //! Task conversations: a person's messages stored once per key, their delivery moving forward only,
-//! agents' replies and questions, and follow-up attempts of a succeeded run.
+//! agents' replies and questions, the runs queued messages wait for, and follow-up attempts of a
+//! succeeded run.
 
 mod support;
 
@@ -94,6 +95,33 @@ fn conversation_delivery_is_stored_and_moves_forward_only() {
       "{statement} must be refused"
     );
   }
+}
+
+#[test]
+fn conversation_runs_with_queued_messages_are_the_runs_they_were_written_for() {
+  let (_repo, mut db, run, execution, invocation) = working();
+  let early = Message::from_person(run.task(), None, Recipient::Orchestrator, body("Early."), at(10));
+  db.send_message(IdempotencyKey::generate(), &early).expect("stored");
+  assert!(db.runs_with_queued_messages().expect("runs").is_empty(), "no run named");
+  let mut queued = Vec::new();
+  for (text, millis) in [("Later.", 11), ("Again.", 12)] {
+    let message = Message::from_person(
+      run.task(),
+      Some(run.id()),
+      Recipient::Orchestrator,
+      body(text),
+      at(millis),
+    );
+    queued.push(db.send_message(IdempotencyKey::generate(), &message).expect("stored"));
+  }
+  assert_eq!(db.runs_with_queued_messages().expect("runs"), [run.id()], "listed once");
+  for message in &mut queued {
+    message
+      .deliver(run.id(), (execution, invocation), at(13))
+      .expect("delivered");
+  }
+  db.save_deliveries(&queued).expect("saved");
+  assert!(db.runs_with_queued_messages().expect("runs").is_empty());
 }
 
 #[test]
