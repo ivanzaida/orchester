@@ -383,7 +383,7 @@ fn resources_agent_profiles_keep_their_permissions() {
   let stored: String = raw(repo.path())
     .query_row("SELECT body FROM resource_versions", [], |row| row.get(0))
     .unwrap();
-  assert!(stored.contains(r#""schema":3"#), "{stored}");
+  assert!(stored.contains(r#""schema":4"#), "{stored}");
 }
 
 /// Profiles stored before permissions existed (schema 1) read as read-only, commands confined to

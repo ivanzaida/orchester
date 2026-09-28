@@ -2,7 +2,7 @@
 //!
 //! `claude -p --output-format stream-json --verbose --model <model> [--effort <e>]
 //!  --strict-mcp-config --setting-sources "" --disable-slash-commands [--mcp-config <file>] <permissions>
-//!  (--session-id <new uuid> | --resume <session>)`
+//!  [--add-dir <folder>]... (--session-id <new uuid> | --resume <session>)`
 //!
 //! in the worktree as the process's working directory, with the prompt on standard input.
 //!
@@ -15,17 +15,25 @@
 //!   ([`super::ClaudeMcpConfig`]); their tools are allowed with `--allowedTools mcp__<server>` rules.
 //! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
 //!   offered, permission mode, denied tools, allowed command prefixes). Bypass modes are never used.
+//! - Extra writable folders ([`crate::permission::writable`]), for an agent that edits files: one `--add-dir` each, so
+//!   its edit tools may write there as in the working directory. Its commands need nothing: Claude Code does not
+//!   confine them to any folder. Checked 2026-09-28 with Claude Code 2.1.89 without a model turn: the debug log shows
+//!   each existing folder added as a permission directory (`cliArg`) and a missing one left out; the folder's own
+//!   `.claude/settings.json` is looked up but, with `--setting-sources ""`, its rules were not applied.
 //! - Sessions: a new session gets an id Orchester chose (`--session-id`); a continue after a pause or a limit resumes
 //!   the session the CLI reported (`--resume`), with the permissions given again. Sessions are kept on disk (no
 //!   `--no-session-persistence`) so that they can be resumed.
 //! - No `--json-schema`: its result shape could not be verified (the probe's CLI was not signed in). The prompt asks
 //!   for the step result as the final message, and the CLI's `is_error` decides when it is not one.
 
-use std::{ffi::OsString, path::Path};
+use std::{
+  ffi::OsString,
+  path::{Path, PathBuf},
+};
 
 use uuid::Uuid;
 
-use super::{InvocationError, agent_command};
+use super::{InvocationError, agent_command, unicode_folders};
 use crate::{
   command::Command,
   connection::mcp::McpServerName,
@@ -58,6 +66,9 @@ pub struct ClaudeInvocation<'a> {
   pub effort: Option<&'a str>,
   /// The step's effective permissions, as Claude Code enforces them.
   pub permissions: &'a EnforcedPermissions,
+  /// The extra writable folders the permissions grant, resolved
+  /// ([`crate::permission::WritableFolders::resolve`]).
+  pub writable_roots: &'a [PathBuf],
   pub worktree: &'a Path,
   pub session: ClaudeSession<'a>,
   /// The MCP servers the invocation gives the agent: the file that configures them and their names.
@@ -95,6 +106,11 @@ impl ClaudeInvocation<'_> {
     }
     let servers = self.mcp.map_or(&[][..], |(_, servers)| servers);
     args.extend(permission_args(self.permissions, servers));
+    if self.permissions.writable_folders().is_some() {
+      for root in self.writable_roots {
+        args.extend(["--add-dir".to_owned(), root.to_string_lossy().into_owned()]);
+      }
+    }
     match self.session {
       ClaudeSession::New(id) => args.extend(["--session-id".to_owned(), id.to_string()]),
       ClaudeSession::Resume(session) => args.extend(["--resume".to_owned(), session.to_owned()]),
@@ -110,6 +126,7 @@ impl ClaudeInvocation<'_> {
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
+    unicode_folders(self.writable_roots)?;
     agent_command(
       self.executable,
       self.args(),

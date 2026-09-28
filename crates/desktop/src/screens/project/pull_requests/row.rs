@@ -27,8 +27,9 @@ use crate::{
   ui::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
+    link::Link,
     message_text,
-    pressable::{pressable, surface},
+    pressable::surface,
     status_label::status_label,
   },
 };
@@ -73,7 +74,8 @@ pub fn column_headings(ctx: &Ctx) -> Element {
 pub struct RowProps {
   pub pull_request: PullRequest,
   pub open: Handler,
-  pub show: Handler,
+  /// Opens the pull request in Orchester.
+  pub show: Link,
 }
 
 impl PartialEq for RowProps {
@@ -129,7 +131,7 @@ impl Component for PullRequestRow {
         IconSize::Dismiss,
         PaletteColor::TextSecondary,
       )));
-    pressable(row, move || show())
+    show.on(row)
   }
 }
 

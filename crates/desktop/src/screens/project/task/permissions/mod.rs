@@ -226,7 +226,6 @@ impl RunPermissionsRow {
   /// "Also saved to the Builder profile draft v3 · open ↗".
   fn saved_line(&self, ctx: &Ctx, props: &RunPermissionsProps) -> Option<Element> {
     let draft = self.saved.get()?;
-    let nav = self.nav.clone();
     let profile = props.permissions.profile_id;
     let text = ctx.t_args(
       "runs.permissions.savedToProfile",
@@ -235,11 +234,12 @@ impl RunPermissionsRow {
         ("version", draft.to_string().as_str()),
       ],
     );
-    let link = pressable(surface().id("task-permissions-open-profile"), move || {
-      nav.show(Page::Agents(AgentSelection::Profile(profile)));
-    })
-    .rounded(RadiusSize::Sm)
-    .child(Text::new(&ctx.t("runs.permissions.openProfile")).variant(TypographyStyle::Link));
+    let link = self
+      .nav
+      .link(Page::Agents(AgentSelection::Profile(profile)))
+      .on(surface().id("task-permissions-open-profile"))
+      .rounded(RadiusSize::Sm)
+      .child(Text::new(&ctx.t("runs.permissions.openProfile")).variant(TypographyStyle::Link));
     Some(
       Row::new()
         .id("task-permissions-saved")

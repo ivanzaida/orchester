@@ -105,11 +105,10 @@ impl TasksScreen {
       if !tab.is_available() {
         return item;
       }
-      let nav = self.nav.clone();
       item
         .count(tasks.and_then(|tasks| tab.count(&tasks.tasks)))
         .selected(tab == selected)
-        .on_click(move || nav.show(Page::Tasks(tab)))
+        .link(self.nav.link(Page::Tasks(tab)))
     });
     tab_row(
       Dimension::Px(TAB_ROW_HEIGHT),
@@ -142,7 +141,6 @@ const fn tab_id(tab: TaskTab) -> &'static str {
 }
 
 fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
-  let nav = nav.clone();
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(TOPBAR_HEIGHT))
@@ -168,7 +166,7 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
         .icon(Icon::Plus)
         .id("tasks-new-task")
         .size(Dimension::Px(NEW_TASK_WIDTH), Dimension::Px(TOPBAR_BUTTON_HEIGHT))
-        .on_click(move || nav.show(Page::NewTask))
+        .link(nav.link(Page::NewTask))
         .render(ctx),
     )
     .into()
@@ -193,12 +191,11 @@ fn centered(content: Element) -> Element {
 
 /// No tasks in the project yet.
 fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
-  let nav = nav.clone();
   let action = ActionButton::new(ctx.t("overview.newTask"))
     .primary()
     .icon(Icon::Plus)
     .id("empty-new-task")
-    .on_click(move || nav.show(Page::NewTask))
+    .link(nav.link(Page::NewTask))
     .render(ctx);
   centered(
     RecoveryPanel::new(

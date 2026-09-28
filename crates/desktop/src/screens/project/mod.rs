@@ -51,8 +51,12 @@ use crate::{
     route::{self, ChangedFile, Page, Route},
   },
   runner::{RunnerStatus, Runners, state::RunnerState},
-  tabs::feed::{ProjectFeed, ProjectFeeds},
+  tabs::{
+    OpenIn, Tabs,
+    feed::{ProjectFeed, ProjectFeeds},
+  },
   tasks::{data::ProjectTasks, list, overview::OverviewTab},
+  ui::link::Link,
   workspace::OpenProject,
 };
 
@@ -65,6 +69,7 @@ pub struct ProjectNav {
   feed: ProjectFeed,
   /// Connections opens Add GitHub connection when it next mounts.
   add_github: Signal<bool>,
+  tabs: Tabs,
 }
 
 impl ProjectNav {
@@ -73,9 +78,31 @@ impl ProjectNav {
     entry::push(&self.navigator, page.path(self.project));
   }
 
-  /// Opens `task`'s Changes tab on `file`, as a new history entry.
-  pub fn show_changes(&self, task: TaskId, file: &ChangedFile) {
-    entry::push(&self.navigator, route::changes_path(self.project, task, file));
+  /// Opens `page` where `open` says: in this tab as a new history entry, or in a new tab.
+  pub fn open(&self, page: Page, open: OpenIn) {
+    match open {
+      OpenIn::Current => self.show(page),
+      OpenIn::Background | OpenIn::NewTab => self.tabs.open(Route::Project(self.project, page), open),
+    }
+  }
+
+  pub fn tabs(&self) -> &Tabs {
+    &self.tabs
+  }
+
+  /// A link to `page` (see `ui::link`).
+  pub fn link(&self, page: Page) -> Link {
+    let nav = self.clone();
+    Link::new(&self.tabs, move |open| nav.open(page, open))
+  }
+
+  /// A link to `task`'s Changes tab on `file`; in this tab it is a new history entry.
+  pub fn changes_link(&self, task: TaskId, file: &ChangedFile) -> Link {
+    let (nav, path) = (self.clone(), route::changes_path(self.project, task, file));
+    Link::new(&self.tabs, move |open| match open {
+      OpenIn::Current => entry::push(&nav.navigator, path.clone()),
+      OpenIn::Background | OpenIn::NewTab => nav.tabs.open_path(path.clone(), open),
+    })
   }
 
   /// Shows `file` on `task`'s Changes tab in place of the current entry: choosing another file
@@ -244,6 +271,9 @@ impl Component for ProjectShell {
         project,
         feed: feeds.of(project),
         add_github: ctx.signal(false),
+        tabs: ctx
+          .use_context::<Tabs>()
+          .expect("the window provides Tabs before mounting screens"),
       },
     }
   }

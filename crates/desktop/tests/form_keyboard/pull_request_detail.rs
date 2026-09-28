@@ -34,7 +34,7 @@ fn view(changed_files: u32) -> String {
   entry.to_string()
 }
 
-fn signed_in_with_detail() -> Arc<FakeGh> {
+pub(crate) fn signed_in_with_detail() -> Arc<FakeGh> {
   let gh = FakeGh::signed_in(SIGNED_IN, Ok(ok(OPEN_PULL_REQUESTS)));
   gh.answer(VIEW, Ok(ok(&view(6))));
   gh.answer(COMPARE, Ok(ok(DIFF)));

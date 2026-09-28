@@ -18,7 +18,7 @@ use crate::{
   navigation::{
     Navigation,
     import::ImportTab,
-    route::{AgentSelection, InstructionsTab, Page, SettingsTab, ToolSelection},
+    route::{AgentSelection, InstructionsTab, Page, Route, SettingsTab, ToolSelection},
   },
   runner::RunnerStatus,
   theme::{ExtraColor, ExtraSpacing},
@@ -59,7 +59,7 @@ pub fn sidebar(ctx: &mut Ctx, open: &OpenProject, state: &SidebarState<'_>, nav:
         .child(
           NavItem::new("nav-all-projects", Icon::Folders, ctx.t("nav.allProjects"))
             .secondary()
-            .on_click(move || navigation.show_all_projects()),
+            .link(navigation.link(Route::AllProjects)),
         )
         .child(import_item(ctx, nav)),
     )
@@ -154,6 +154,5 @@ fn section_item(item: NavItem, shown: Option<Page>, target: Page, nav: &ProjectN
   if shown == Some(target) {
     return item;
   }
-  let nav = nav.clone();
-  item.on_click(move || nav.show(target))
+  item.link(nav.link(target))
 }

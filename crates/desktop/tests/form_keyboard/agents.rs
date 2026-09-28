@@ -26,7 +26,7 @@ const STATUS: &str = "agent-save-status";
 const MAX_STOPS: usize = 30;
 
 /// A project with a checked Codex connection, whose model has efforts.
-fn with_connection() -> Desktop {
+pub(crate) fn with_connection() -> Desktop {
   let desktop = Desktop::with_project();
   let catalog = ModelCatalog::new(
     CatalogSource::Provider,

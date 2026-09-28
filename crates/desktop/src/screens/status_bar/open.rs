@@ -11,6 +11,8 @@ use crate::{
   navigation::route::{AgentSelection, InstructionsTab, Page, PipelineView, SettingsTab, TaskPageTab, ToolSelection},
   runner::Runners,
   screens::project::ProjectNav,
+  tabs::OpenIn,
+  ui::link::{Link, Press},
 };
 
 #[derive(Clone)]
@@ -43,8 +45,21 @@ impl Opener {
     }
   }
 
-  /// Opens `target`; a failure (`failure`) counts as opened and leaves the slot.
-  pub fn open(&self, target: &Target, failure: Option<OperationId>) {
+  /// What pressing an item or a row that opens `target` does: a place of the project is a link,
+  /// which opens where the press asks (see `ui::link`); the runner log opens on any press.
+  pub fn press(&self, target: &Target, failure: Option<OperationId>) -> Press {
+    let (opener, target) = (self.clone(), target.clone());
+    match (&self.nav, &target) {
+      (Some(nav), Target::Project { .. }) => {
+        Press::Link(Link::new(nav.tabs(), move |open| opener.open(&target, failure, open)))
+      }
+      _ => Press::action(move || opener.open(&target, failure, OpenIn::Current)),
+    }
+  }
+
+  /// Opens `target`, a place of the project where `open` says; a failure (`failure`) counts as
+  /// opened and leaves the slot.
+  fn open(&self, target: &Target, failure: Option<OperationId>, open: OpenIn) {
     if !self.can_open(target) {
       return;
     }
@@ -55,15 +70,15 @@ impl Opener {
     match target {
       Target::Nothing => {}
       Target::RunnerLog => self.open_log(),
-      Target::Project { place, .. } => self.show(*place),
+      Target::Project { place, .. } => self.show(*place, open),
     }
   }
 
-  fn show(&self, place: Place) {
+  fn show(&self, place: Place, open: OpenIn) {
     let Some(nav) = &self.nav else {
       return;
     };
-    nav.show(match place {
+    let page = match place {
       Place::Overview => Page::OVERVIEW,
       Place::Tasks => Page::TASKS,
       Place::PullRequests => Page::PullRequests,
@@ -77,14 +92,14 @@ impl Opener {
       Place::Secrets => Page::SECRETS,
       Place::Connections => Page::CONNECTIONS,
       Place::Settings => Page::Settings(SettingsTab::General),
-    });
+    };
+    nav.open(page, open);
   }
 
-  /// Opens `page` of the project: the task list for Agents and Queued, Overview › Needs you for
-  /// Needs you.
-  pub fn page(&self, page: Page) -> Option<impl Fn() + Send + Sync + 'static> {
-    let nav = self.nav.clone()?;
-    Some(move || nav.show(page))
+  /// A link to `page` of the project: the task list for Agents and Queued, Overview › Needs you
+  /// for Needs you.
+  pub fn page(&self, page: Page) -> Option<Link> {
+    self.nav.as_ref().map(|nav| nav.link(page))
   }
 
   pub fn open_log(&self) {

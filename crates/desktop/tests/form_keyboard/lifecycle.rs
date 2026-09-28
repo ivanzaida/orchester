@@ -25,9 +25,6 @@ use crate::{
   task_run::{create_and_run, fill_new_task, has, init_repository, latest_run, programs, run_finished, seed},
 };
 
-/// How long a runner that was killed may take to end.
-const ENDED_WITHIN: Duration = Duration::from_secs(120);
-
 /// A desktop whose project runs Implement on the fake CLI, with the runner program `runner`.
 fn desktop(runner: PathBuf, fake: &Path) -> Desktop {
   Desktop::with_runner(runner, init_repository, |repo| seed(repo, fake, false))
@@ -57,32 +54,12 @@ fn own_runners(repo: &Path) -> Vec<String> {
     .collect()
 }
 
-/// Kills the runner of project `repo`, as a crash of the runner would end it, and waits until
-/// it has ended (see [`wait_until_ended`]).
+/// Kills the runner of project `repo`, as a crash of the runner would end it.
 fn kill_runner_of(repo: &Path) {
   let runners = own_runners(repo);
   assert_eq!(runners.len(), 1, "one runner of this test's project runs: {runners:?}");
-  // The runner is taken hold of before the kill, so the wait still sees it once it is gone.
-  let script = format!(
-    "$runner = Get-Process -Id {0} -ErrorAction Stop; $null = $runner.Handle; Stop-Process -Id {0} -Force;      if (-not $runner.WaitForExit({1})) {{ exit 1 }}; exit 0",
-    runners[0],
-    ENDED_WITHIN.as_millis()
-  );
+  let script = format!("Stop-Process -Id {} -Force -ErrorAction Stop", runners[0]);
   powershell(&script, &format!("kill the runner {}", runners[0]));
-}
-
-/// Waits until the processes `pids` have ended. A killed process lets go of its files only once it
-/// has ended: Windows releases its locks on the shared memory file of the project database before
-/// its map of that file, and in between SQLite cannot open the database (the first to open it
-/// resets that file, which Windows refuses while it is mapped).
-fn wait_until_ended(pids: &[String]) {
-  for pid in pids {
-    let script = format!(
-      "$process = Get-Process -Id {pid} -ErrorAction SilentlyContinue;        if ($process -and -not $process.WaitForExit({})) {{ exit 1 }}; exit 0",
-      ENDED_WITHIN.as_millis()
-    );
-    powershell(&script, &format!("wait for the process {pid} to end"));
-  }
 }
 
 fn powershell(script: &str, what: &str) {
@@ -98,11 +75,9 @@ fn powershell(script: &str, what: &str) {
   );
 }
 
-/// Ends the application as a crash would, which ends its runner too, and starts it again once
-/// the runner has ended.
+/// Ends the application as a crash would, then starts it again on the same database.
 fn crash_and_restart(desktop: Desktop) -> Desktop {
-  let runners = own_runners(desktop.repo());
-  desktop.crash_and_restart(|| wait_until_ended(&runners))
+  desktop.crash_and_restart(|| {})
 }
 
 /// Whether the agent of the latest run reported its CLI session, which continuing resumes.

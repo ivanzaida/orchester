@@ -452,6 +452,7 @@ fn codex_args(permissions: &AgentPermissions, platform: Platform) -> Vec<String>
     reasoning_effort: None,
     access: enforced.permissions().repository(),
     network: enforced.permissions().network(),
+    writable_roots: &[],
     worktree: Path::new("/w"),
     platform,
     resume: None,

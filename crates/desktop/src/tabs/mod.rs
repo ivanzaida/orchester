@@ -23,7 +23,11 @@ pub mod window;
 
 use std::{collections::HashMap, sync::Arc};
 
-use lurq::{app::events::MouseEvent, core::Signal, router::RouterHandle};
+use lurq::{
+  app::events::{MouseButton, MouseEvent},
+  core::Signal,
+  router::RouterHandle,
+};
 use parking_lot::Mutex;
 
 use self::{
@@ -46,10 +50,10 @@ pub enum OpenIn {
 }
 
 impl OpenIn {
-  /// How a click opens a place: Ctrl/Cmd+click and a middle click in a background tab,
+  /// How a pointer click opens a place: Ctrl/Cmd+click and a middle click in a background tab,
   /// Ctrl/Cmd+Shift+click in a new active tab, any other click in the current tab.
   pub fn of_click(event: &MouseEvent, command: bool) -> Self {
-    if event.button == lurq::app::events::MouseButton::Middle {
+    if event.button == MouseButton::Middle {
       return Self::Background;
     }
     match (event.ctrl || command, event.shift) {
@@ -58,6 +62,19 @@ impl OpenIn {
       (false, _) => Self::Current,
     }
   }
+}
+
+/// What the window last saw of the keys and the pointer, to tell how a click on a link asks to
+/// open its place.
+#[derive(Clone, Copy, Default)]
+struct PointerInput {
+  /// Whether Cmd is held (macOS): lurq's mouse events carry Ctrl, Shift and Alt only, so the
+  /// window follows the key's presses and releases to tell a Cmd+click.
+  command: bool,
+  /// Whether the pointer pressed a link since Enter or Space last went down. lurq presses a
+  /// focused control for Enter and Space with a click of its own, after the key press and without
+  /// a pointer press.
+  pointer: bool,
 }
 
 /// A project opened from a list, and where it opens.
@@ -86,9 +103,7 @@ struct Inner {
   discarding: Signal<Option<TabId>>,
   dialogs: DialogLayer,
   saver: Saver,
-  /// Whether Cmd is held (macOS): lurq's mouse events carry Ctrl, Shift and Alt only, so the
-  /// window follows the key's presses and releases to tell a Cmd+click.
-  command: Mutex<bool>,
+  input: Mutex<PointerInput>,
 }
 
 impl PartialEq for Tabs {
@@ -114,7 +129,7 @@ impl Tabs {
         discarding: Signal::new(None),
         dialogs: DialogLayer::default(),
         saver,
-        command: Mutex::new(false),
+        input: Mutex::new(PointerInput::default()),
       }),
     }
   }
@@ -165,14 +180,20 @@ impl Tabs {
 
   /// Opens `route` as `open` says; in the current tab it is a new history entry.
   pub fn open(&self, route: Route, open: OpenIn) {
+    self.open_path(route.path(), open);
+  }
+
+  /// Opens the place `path` names as `open` says, for a path that carries more than its route
+  /// (a task's Changes tab on a file).
+  pub fn open_path(&self, path: String, open: OpenIn) {
     match open {
       OpenIn::Current => {
         if let Some(router) = self.active_router() {
-          entry::push(&router.navigator(), route.path());
+          entry::push(&router.navigator(), path);
         }
       }
-      OpenIn::Background => self.open_tab(&route.path(), Focus::Background),
-      OpenIn::NewTab => self.open_tab(&route.path(), Focus::Switch),
+      OpenIn::Background => self.open_tab(&path, Focus::Background),
+      OpenIn::NewTab => self.open_tab(&path, Focus::Switch),
     }
   }
 
@@ -268,13 +289,34 @@ impl Tabs {
     self.change(|set| set.set_path(id, path));
   }
 
-  /// Whether Cmd is held, as the window last saw it; never on other platforms, where Ctrl makes
-  /// a click open a new tab.
-  pub fn command_held(&self) -> bool {
-    cfg!(target_os = "macos") && *self.inner.command.lock()
+  /// How `event`, a click on a link, asks to open its place (see [`OpenIn::of_click`]). Cmd
+  /// counts as the window last saw it, and only on macOS, where it stands for Ctrl. A click that
+  /// Enter or Space made on a focused control opens in the current tab, whatever keys are held.
+  pub fn open_in(&self, event: &MouseEvent) -> OpenIn {
+    let input = *self.inner.input.lock();
+    if event.button == MouseButton::Left && !input.pointer {
+      return OpenIn::Current;
+    }
+    OpenIn::of_click(event, cfg!(target_os = "macos") && input.command)
   }
 
-  fn set_command(&self, held: bool) {
-    *self.inner.command.lock() = held;
+  /// The pointer pressed a link.
+  pub fn pointer_pressed(&self) {
+    self.inner.input.lock().pointer = true;
+  }
+
+  /// A key went down with Cmd held or not. After Enter or Space (`activates`), a click without a
+  /// pointer press is the keyboard's; other keys, the modifiers repeating while held among them,
+  /// leave a pointer press as it is.
+  fn key_pressed(&self, command: bool, activates: bool) {
+    let mut input = self.inner.input.lock();
+    input.command = command;
+    if activates {
+      input.pointer = false;
+    }
+  }
+
+  fn key_released(&self, command: bool) {
+    self.inner.input.lock().command = command;
   }
 }

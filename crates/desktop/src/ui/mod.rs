@@ -11,6 +11,7 @@ pub mod field;
 pub mod form;
 pub mod github_mark;
 pub mod icon;
+pub mod link;
 pub mod nav_item;
 pub mod notice;
 pub mod option_card;

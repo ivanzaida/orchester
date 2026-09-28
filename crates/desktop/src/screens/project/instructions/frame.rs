@@ -84,10 +84,9 @@ pub fn frame(ctx: &Ctx, frame: Frame<'_>) -> Element {
 /// Project rules, Agent roles, Pipeline overrides, Step overrides (`GfEHL`).
 fn scope_tabs(ctx: &Ctx, shown: InstructionsTab, nav: &ProjectNav) -> Element {
   let tab = |id: &'static str, key: &str, target: InstructionsTab| {
-    let nav = nav.clone();
     Tab::new(id, ctx.t(key), Dimension::Pct(100.0))
       .selected(shown == target)
-      .on_click(move || nav.show(Page::Instructions(target, None)))
+      .link(nav.link(Page::Instructions(target, None)))
   };
   tab_row(
     Dimension::Px(TABS_HEIGHT),

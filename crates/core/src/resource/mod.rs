@@ -65,9 +65,14 @@ impl ResourceBody for AgentProfile {
   /// 2: permissions (2026-09-26). Profiles of schema 1 get
   /// [`AgentPermissions::before_permissions`].
   /// 3: MCP servers (2026-09-28). Profiles of schemas 1 and 2 get none.
-  const SCHEMA: u32 = 3;
+  /// 4: extra writable folders in the permissions (2026-09-28), left out while there are none, so
+  /// profiles of schema 3 have the same shape.
+  const SCHEMA: u32 = 4;
 
   fn upgrade(schema: u32, mut body: serde_json::Value) -> Option<serde_json::Value> {
+    if schema == 3 {
+      return Some(body);
+    }
     let fields = body.as_object_mut()?;
     match schema {
       1 => {

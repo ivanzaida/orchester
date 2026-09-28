@@ -236,8 +236,10 @@ impl HistoryPanel {
     if selected {
       return row.background(PaletteColor::AccentMuted).into();
     }
-    let (nav, pipeline, number) = (self.nav.clone(), props.pipeline, version.number);
-    pressable(row, move || nav.show(pipeline, PipelineView::Version(number)))
+    self
+      .nav
+      .link(props.pipeline, PipelineView::Version(version.number))
+      .on(row)
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
       .into()
   }
@@ -298,19 +300,16 @@ impl HistoryPanel {
     };
     // Comparing the steps the editor holds with themselves shows nothing.
     let same = props.current.body.as_deref() == Some(&*version.body);
-    let nav = self.nav.clone();
+    let view = if comparing {
+      PipelineView::Version(number)
+    } else {
+      PipelineView::Compare(number)
+    };
     let compare = ActionButton::new(compare_label)
       .icon(Icon::GitCompareArrows)
       .id("pipeline-history-compare")
       .fill_width()
-      .on_click(move || {
-        let view = if comparing {
-          PipelineView::Version(number)
-        } else {
-          PipelineView::Compare(number)
-        };
-        nav.show(pipeline, view);
-      })
+      .link(self.nav.link(pipeline, view))
       .enabled(comparing || !same);
     Column::new()
       .width(Dimension::Pct(100.0))

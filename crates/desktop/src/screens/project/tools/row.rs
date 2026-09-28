@@ -20,7 +20,8 @@ use crate::{
   tools::data::ToolEntry,
   ui::{
     icon::{Icon, IconSize, icon},
-    pressable::{pressable, surface},
+    link::Link,
+    pressable::surface,
     status_label::compact_status_label,
   },
 };
@@ -63,7 +64,7 @@ pub(super) fn status(ctx: &Ctx, entry: &ToolEntry) -> (Icon, Arc<str>) {
   }
 }
 
-pub(super) fn tool_row(ctx: &Ctx, entry: &ToolEntry, open: impl Fn() + Send + Sync + 'static) -> Element {
+pub(super) fn tool_row(ctx: &Ctx, entry: &ToolEntry, open: Link) -> Element {
   let kind = entry.tool.kind();
   let description: Arc<str> = match (entry.tool.description(), entry.tool.action()) {
     ("", ToolAction::Command(command)) => command.command_line().into(),
@@ -107,7 +108,8 @@ pub(super) fn tool_row(ctx: &Ctx, entry: &ToolEntry, open: impl Fn() + Send + Sy
     )
     .child(icon(Icon::ChevronRight, IconSize::Dismiss, PaletteColor::TextSecondary));
   // Rows are outside a form, so they are pointer-only: no Tab stop and no focus ring.
-  pressable(row, open)
+  open
+    .on(row)
     .hovered_style(Style::new().background(PaletteColor::SurfaceRaised))
     .into()
 }

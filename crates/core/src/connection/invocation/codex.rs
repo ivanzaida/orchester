@@ -2,13 +2,15 @@
 //!
 //! `codex -a never exec --json --ignore-user-config --ignore-rules -m <model>
 //!  [-c model_reasoning_effort=<e>] --sandbox <mode> [-c windows.sandbox=elevated]
-//!  [-c sandbox_workspace_write.network_access=true] [<MCP servers>] [--output-schema <file>] -C <worktree> -`
+//!  [-c sandbox_workspace_write.network_access=true] [-c sandbox_workspace_write.writable_roots=[<folders>]]
+//!  [<MCP servers>] [--output-schema <file>] -C <worktree> -`
 //!
 //! and continues a session after a pause or a limit with
 //!
 //! `codex -a never exec resume --json --ignore-user-config --ignore-rules -m <model>
 //!  [-c model_reasoning_effort=<e>] -c sandbox_mode=<mode> [-c windows.sandbox=elevated]
-//!  [-c sandbox_workspace_write.network_access=true] [<MCP servers>] <session> -`
+//!  [-c sandbox_workspace_write.network_access=true] [-c sandbox_workspace_write.writable_roots=[<folders>]]
+//!  [<MCP servers>] <session> -`
 //!
 //! in the worktree as the process's working directory.
 //!
@@ -21,6 +23,13 @@
 //!   ([`crate::permission::AgentPermissions::enforced_on`]); commands are always those the sandbox allows, since Codex
 //!   cannot enforce a command list. Network access is a setting of the `workspace-write` sandbox only; the `read-only`
 //!   sandbox has none.
+//! - Extra writable folders ([`crate::permission::writable`]) are added to the `workspace-write` sandbox as a TOML
+//!   array of basic strings. Checked 2026-09-28 with Codex CLI 0.139.0 on Windows 11 without a model turn: `codex exec`
+//!   and `codex exec resume` both report them among the sandbox's writable roots (`exec resume` has no `--add-dir`, the
+//!   equivalent of `exec`), the model is told them, and `codex sandbox` with `windows.sandbox=unelevated` lets a
+//!   command write there and not beside them. A folder that does not exist is accepted and ignored, so the runner
+//!   creates them first. The elevated sandbox was not run (it needs its one-time setup in the CLI's home); its log
+//!   shows it grants write access per writable root.
 //! - `--ignore-user-config` and `--ignore-rules` keep the user's own configuration (MCP servers, default model,
 //!   execution rules) out of the run. The MCP servers the profile chooses are passed as configuration overrides
 //!   ([`CodexMcp`]), their secrets through the process environment only.
@@ -31,9 +40,12 @@
 //!   ([`crate::run::STEP_RESULT_SCHEMA`]). The probe verified it for new sessions only, so a continued session is
 //!   started without it and its result is read from its exit.
 
-use std::{ffi::OsString, path::Path};
+use std::{
+  ffi::OsString,
+  path::{Path, PathBuf},
+};
 
-use super::{CodexMcp, InvocationError, Platform, agent_command};
+use super::{CodexMcp, InvocationError, Platform, agent_command, mcp::toml_array, unicode_folders};
 use crate::{
   command::Command,
   permission::NetworkAccess,
@@ -50,6 +62,9 @@ pub struct CodexInvocation<'a> {
   pub access: RepositoryAccess,
   /// Network access of a `workspace-write` sandbox.
   pub network: NetworkAccess,
+  /// Folders outside the worktree a `workspace-write` sandbox also lets the agent write to, resolved
+  /// ([`crate::permission::WritableFolders::resolve`]).
+  pub writable_roots: &'a [PathBuf],
   pub worktree: &'a Path,
   pub platform: Platform,
   /// The session to continue (`codex exec resume`), for an invocation that repeats the
@@ -98,6 +113,11 @@ impl CodexInvocation<'_> {
       args.push("-c".into());
       args.push("sandbox_workspace_write.network_access=true".into());
     }
+    if self.access == RepositoryAccess::Write && !self.writable_roots.is_empty() {
+      let roots: Vec<_> = self.writable_roots.iter().map(|root| root.to_string_lossy()).collect();
+      args.push("-c".into());
+      args.push(format!("sandbox_workspace_write.writable_roots={}", toml_array(&roots)).into());
+    }
     if let Some(mcp) = self.mcp {
       args.extend(mcp.args().iter().map(OsString::from));
     }
@@ -124,6 +144,7 @@ impl CodexInvocation<'_> {
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
+    unicode_folders(self.writable_roots)?;
     agent_command(
       self.executable,
       self.args(),

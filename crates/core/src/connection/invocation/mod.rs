@@ -111,8 +111,16 @@ pub fn is_agent_variable(name: &str) -> bool {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum InvocationError {
-  #[error("the worktree path {0} is not valid Unicode")]
+  #[error("the path {0} is not valid Unicode")]
   NotUnicode(PathBuf),
+}
+
+/// Refuses a folder the CLI would get mangled, before its arguments are built.
+fn unicode_folders(folders: &[PathBuf]) -> Result<(), InvocationError> {
+  match folders.iter().find(|folder| folder.to_str().is_none()) {
+    Some(folder) => Err(InvocationError::NotUnicode(folder.clone())),
+    None => Ok(()),
+  }
 }
 
 /// The command of an agent CLI: `args` after the program, in the worktree, with `prompt` on

@@ -1,4 +1,5 @@
-//! The Permissions tab (04.04 `T1rjv`): repository access, commands, network and MCP servers (`mcp`), each option
+//! The Permissions tab (04.04 `T1rjv`): repository access, extra writable folders (`folders`), commands, network and
+//! MCP servers (`mcp`), each option
 //! disabled with the reason when the chosen connection cannot enforce it (04.B `W0Owo`), beside
 //! the panel that says how the connection enforces them (`enforcement`).
 
@@ -58,6 +59,7 @@ impl ProfileEditor {
       .overflow_visible()
       .child(Text::new(&ctx.t_args("agents.permissions.intro", [("role", &*role)])).variant(TypographyStyle::FieldLabel))
       .child(self.repository_setting(ctx, provider))
+      .child(self.folders_setting(ctx))
       .child(self.commands_setting(ctx, provider))
       .child(self.network_setting(ctx, provider))
       .child(self.mcp_setting(ctx, provider));

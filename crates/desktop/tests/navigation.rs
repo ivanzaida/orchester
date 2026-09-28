@@ -26,7 +26,7 @@ use orchester_desktop::{
   },
   project_setup::ProjectDraft,
   session::AppSession,
-  tabs::{Tabs, model::TabSet},
+  tabs::{OpenIn, Tabs, model::TabSet},
   tasks::{list::TaskTab, overview::OverviewTab},
   workspace::OpenProject,
 };
@@ -341,7 +341,7 @@ fn entries(router: &RouterHandle) -> Vec<String> {
 fn route_created_project_takes_the_place_of_setup() {
   let window = Window::new();
   window.arrive(Start::Welcome);
-  window.navigation.show_setup();
+  window.navigation.open(Route::Setup, OpenIn::Current);
   assert_eq!(window.path(), Route::Setup.path());
   let created = window.project("kontur");
   let overview = Route::Project(created.project.id(), Page::OVERVIEW).path();
@@ -361,7 +361,7 @@ fn route_created_project_takes_the_place_of_setup() {
 #[test]
 fn route_project_created_from_a_project_follows_it() {
   let (window, first) = Window::on_project();
-  window.navigation.show_setup();
+  window.navigation.open(Route::Setup, OpenIn::Current);
   let created = window.project("second");
   let second = Route::Project(created.project.id(), Page::OVERVIEW).path();
   window.navigation.open_created(created);
@@ -471,7 +471,7 @@ fn route_a_removed_project_leaves_history_for_all_projects() {
 fn route_leaving_setup_returns_to_where_it_was_opened() {
   let (window, _) = Window::on_project();
   window.navigation.show_all_projects();
-  window.navigation.show_setup();
+  window.navigation.open(Route::Setup, OpenIn::Current);
   window.navigation.leave_setup();
   assert_eq!(window.path(), Route::AllProjects.path());
 }

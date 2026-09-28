@@ -19,7 +19,8 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
-    pressable::{pressable, surface},
+    link::Link,
+    pressable::surface,
     status_label::status_label,
   },
 };
@@ -35,7 +36,7 @@ pub struct SecretRow<'a> {
   pub selected: bool,
 }
 
-pub fn secret_row(ctx: &Ctx, row: &SecretRow, on_click: impl Fn() + Send + Sync + 'static) -> Element {
+pub fn secret_row(ctx: &Ctx, row: &SecretRow, link: Link) -> Element {
   let secret = row.secret;
   let scope = ctx.t_args(
     "secrets.row.scope",
@@ -91,7 +92,8 @@ pub fn secret_row(ctx: &Ctx, row: &SecretRow, on_click: impl Fn() + Send + Sync 
       .rounded(ExtraRadius::Notice.role());
     return element.describe("state", "selected").into();
   }
-  pressable(element.background(ExtraColor::Surface.role()), on_click)
+  link
+    .on(element.background(ExtraColor::Surface.role()))
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .into()
 }
