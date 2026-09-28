@@ -2,6 +2,7 @@
 
 mod agent;
 mod conversation;
+mod counts;
 mod fixture;
 mod lifecycle;
 mod limits;

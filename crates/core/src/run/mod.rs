@@ -7,6 +7,7 @@
 mod apply;
 mod attempt;
 mod branch;
+mod counts;
 mod error;
 mod event;
 mod follow_up;
@@ -31,6 +32,7 @@ mod usage;
 pub use self::{
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
+  counts::RunCounts,
   error::RunError,
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
   invocation::{ActivityEntry, Invocation, InvocationKind, active_time, execution_tokens},
