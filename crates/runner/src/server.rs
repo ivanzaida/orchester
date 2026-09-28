@@ -161,7 +161,7 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
         return Ok(Some(Ok(())));
       }
     };
-    match answer(&self.scheduler, (&self.replies, &self.in_flight), &request) {
+    match answer(&self.scheduler, (&self.replies, &self.in_flight), &request).await {
       Answer::Reply(event) => self.writer.write(&event).await?,
       Answer::Later => {}
       Answer::StopIfIdle(id) => return self.stop_if_idle(id).await,
@@ -236,7 +236,7 @@ enum Answer {
   StopIfIdle(RequestId),
 }
 
-fn answer(
+async fn answer(
   scheduler: &Scheduler,
   (replies, in_flight): (&mpsc::UnboundedSender<Event>, &InFlight),
   request: &Request,
@@ -246,7 +246,7 @@ fn answer(
   let handle = scheduler.clone();
   let later = Later { replies, in_flight, id };
   let reply = match request.command {
-    Command::Attach { session, agent_slots } => match scheduler.attach(session, agent_slots) {
+    Command::Attach { session, agent_slots } => match scheduler.attach(session, agent_slots).await {
       Ok(attached) => Reply::Attached {
         active_runs: scheduler.active_runs(),
         interrupted: attached.interrupted,
@@ -255,11 +255,11 @@ fn answer(
       Err(rejection) => Reply::Rejected(rejection),
     },
     Command::ContinueRuns { ref runs } => {
-      let (continued, refused) = scheduler.continue_runs(runs);
+      let (continued, refused) = scheduler.continue_runs(runs).await;
       Reply::Continued { continued, refused }
     }
     Command::Ping { nonce } => Reply::Pong { nonce },
-    Command::StartRun { key, task } => match scheduler.start_run(key, task) {
+    Command::StartRun { key, task } => match scheduler.start_run(key, task).await {
       Ok(run) => Reply::RunStarted { run },
       Err(rejection) => Reply::Rejected(rejection),
     },

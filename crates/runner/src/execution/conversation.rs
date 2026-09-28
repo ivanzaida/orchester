@@ -37,16 +37,24 @@ impl Scheduler {
   /// and one that succeeded is followed up. Returns once that is arranged; a paused or stopped run
   /// keeps them queued until it continues.
   pub async fn deliver_messages(&self, run: RunId) -> Result<(), Rejection> {
-    let _one_at_a_time = self.inner.continuing.lock().await;
-    if let Some(answer) = self.ask(run, Control::DeliverMessages)
-      && let Ok(result) = answer.await
-    {
-      return result;
+    loop {
+      let one_at_a_time = self.inner.continuing.lock().await;
+      if self.inner.board.is_stopping() {
+        return Err(Rejection::ShuttingDown);
+      }
+      if let Some(answer) = self.ask(run, Control::DeliverMessages) {
+        drop(one_at_a_time);
+        if let Ok(result) = answer.await {
+          return result;
+        }
+        continue;
+      }
+      return self.deliver_idle(run);
     }
+  }
+
+  fn deliver_idle(&self, run: RunId) -> Result<(), Rejection> {
     // No task executes the run, or its task ended without reading the request.
-    if self.inner.board.is_stopping() {
-      return Err(Rejection::ShuttingDown);
-    }
     let mut db = self.open()?;
     let Some(prepared) = deliver_idle(&mut db, &self.inner.project_root, run)? else {
       return Ok(());

@@ -73,6 +73,10 @@ name = "plan_settling"
 required-features = ["test-agent"]
 
 [[test]]
+name = "request_serialization"
+required-features = ["test-agent"]
+
+[[test]]
 name = "instructions"
 required-features = ["test-agent"]
 

@@ -32,9 +32,10 @@ fn fresh(previous_end: SessionEnd) -> AttachSession {
   AttachSession::Fresh { previous_end }
 }
 
-fn start(scheduler: &Scheduler, task: TaskId) -> RunId {
+async fn start(scheduler: &Scheduler, task: TaskId) -> RunId {
   scheduler
     .start_run(IdempotencyKey::generate(), task)
+    .await
     .expect("the run starts")
 }
 
@@ -76,7 +77,10 @@ async fn lifecycle_reconnect_after_a_killed_runner_continues_from_the_checkpoint
   assert_eq!(db.run(run).expect("read").expect("run").status(), &RunStatus::Running);
 
   let (scheduler, mut events) = scheduler(root);
-  let attached = scheduler.attach(AttachSession::Reconnect, slots(2)).expect("attached");
+  let attached = scheduler
+    .attach(AttachSession::Reconnect, slots(2))
+    .await
+    .expect("attached");
   assert_eq!(attached.interrupted, vec![run]);
   assert_eq!(attached.continued, vec![run]);
   let done = wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
@@ -114,6 +118,7 @@ async fn lifecycle_after_quit_now_runs_wait_for_continue_runs() {
   let (scheduler, mut events) = scheduler(root);
   let attached = scheduler
     .attach(fresh(SessionEnd::QuitNow), slots(2))
+    .await
     .expect("attached");
   assert_eq!(attached.interrupted, vec![run]);
   assert!(attached.continued.is_empty());
@@ -123,7 +128,7 @@ async fn lifecycle_after_quit_now_runs_wait_for_continue_runs() {
   assert!(scheduler.active_runs().is_empty());
   assert_eq!(db.interrupted_runs().expect("interrupted").len(), 1);
 
-  let (continued, refused) = scheduler.continue_runs(&[run, RunId::generate()]);
+  let (continued, refused) = scheduler.continue_runs(&[run, RunId::generate()]).await;
   assert_eq!(continued, vec![run]);
   assert_eq!(refused.len(), 1);
   assert_eq!(refused[0].rejection, Rejection::RunNotFound);
@@ -136,7 +141,7 @@ async fn lifecycle_after_quit_now_runs_wait_for_continue_runs() {
     }
   )));
   // A run that is not interrupted is not continued.
-  let (continued, refused) = scheduler.continue_runs(&[run]);
+  let (continued, refused) = scheduler.continue_runs(&[run]).await;
   assert!(continued.is_empty());
   assert_eq!(refused[0].rejection, Rejection::RunNotInterrupted);
 }
@@ -149,6 +154,7 @@ async fn lifecycle_a_crash_interrupts_as_crashed() {
   let (scheduler, _events) = scheduler(root);
   scheduler
     .attach(fresh(SessionEnd::Crashed), slots(2))
+    .await
     .expect("attached");
   let db = ProjectDb::open(root).expect("open");
   assert_eq!(
@@ -162,12 +168,15 @@ async fn lifecycle_work_summary_lists_the_working_run() {
   let project = project(&Setup::new("Keep working."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
-  scheduler.attach(fresh(SessionEnd::Clean), slots(3)).expect("attached");
+  scheduler
+    .attach(fresh(SessionEnd::Clean), slots(3))
+    .await
+    .expect("attached");
   let empty = summary_where(&mut events, |_| true).await;
   assert_eq!(empty.agent_slots, slots(3));
   assert!(empty.runs.is_empty());
 
-  let run = start(&scheduler, project.task);
+  let run = start(&scheduler, project.task).await;
   let working = summary_where(&mut events, |summary| !summary.runs.is_empty()).await;
   assert_eq!(working.agents_working(), 1);
   let work = &working.runs[0];
@@ -193,11 +202,14 @@ async fn lifecycle_agent_slots_hold_back_new_work() {
   let project = project(&Setup::new("Keep working."));
   let root = project.repo.path();
   let (scheduler, _events) = scheduler(root);
-  scheduler.attach(fresh(SessionEnd::Clean), slots(1)).expect("attached");
+  scheduler
+    .attach(fresh(SessionEnd::Clean), slots(1))
+    .await
+    .expect("attached");
   let other = support::queue_another_task(root);
-  let run = start(&scheduler, project.task);
+  let run = start(&scheduler, project.task).await;
   assert_eq!(
-    scheduler.start_run(IdempotencyKey::generate(), other),
+    scheduler.start_run(IdempotencyKey::generate(), other).await,
     Err(Rejection::NoAgentSlot { slots: slots(1) })
   );
   scheduler.stop_all(InterruptCause::QuitNow).await;
@@ -216,8 +228,11 @@ async fn lifecycle_finish_at_checkpoints_settles_every_run() {
   });
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
-  scheduler.attach(fresh(SessionEnd::Clean), slots(2)).expect("attached");
-  let run = start(&scheduler, project.task);
+  scheduler
+    .attach(fresh(SessionEnd::Clean), slots(2))
+    .await
+    .expect("attached");
+  let run = start(&scheduler, project.task).await;
   wait_for_turns(root, &mut events, run, 1).await;
 
   let finishing = tokio::spawn({
@@ -254,6 +269,50 @@ async fn lifecycle_finish_at_checkpoints_settles_every_run() {
   assert_eq!(saved.agents_working(), 0);
   // Stopping starts no new work.
   assert_eq!(scheduler.resume_run(run).await, Err(Rejection::ShuttingDown));
+  scheduler.stop_all(InterruptCause::QuitNow).await;
+  let empty = summary_where(&mut events, |summary| summary.runs.is_empty()).await;
+  assert!(empty.runs.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lifecycle_immediate_shutdown_interrupts_a_run_saving_at_a_checkpoint() {
+  let project = project(&Setup::new("Wait for release."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  scheduler
+    .attach(fresh(SessionEnd::Clean), slots(1))
+    .await
+    .expect("attached");
+  let run = start(&scheduler, project.task).await;
+  wait_for_turns(root, &mut events, run, 1).await;
+
+  let finishing = tokio::spawn({
+    let scheduler = scheduler.clone();
+    async move { scheduler.finish_at_checkpoints().await }
+  });
+  wait_for(root, &mut events, run, |run| run.pause_requested()).await;
+  assert!(!finishing.is_finished(), "the agent is still saving its checkpoint");
+
+  tokio::time::timeout(PATIENCE, scheduler.stop_all(InterruptCause::QuitNow))
+    .await
+    .expect("immediate shutdown ends the agent in time");
+  tokio::time::timeout(PATIENCE, finishing)
+    .await
+    .expect("checkpoint shutdown ends in time")
+    .expect("checkpoint shutdown task finishes");
+  let interrupted = ProjectDb::open(root)
+    .expect("open")
+    .run(run)
+    .expect("read")
+    .expect("run");
+  assert_eq!(interrupted.status(), &RunStatus::Interrupted(InterruptCause::QuitNow));
+  let mut latest_summary = None;
+  while let Ok(event) = events.try_recv() {
+    if let Event::WorkSummary(summary) = event {
+      latest_summary = Some(summary);
+    }
+  }
+  assert!(latest_summary.expect("work summary after shutdown").runs.is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -270,7 +329,7 @@ async fn lifecycle_daily_budget_stops_the_run_and_refuses_new_work() {
   .expect("limits");
   db.save_project_limits(&tight).expect("save limits");
   let (scheduler, mut events) = scheduler(root);
-  let run = start(&scheduler, project.task);
+  let run = start(&scheduler, project.task).await;
 
   // The first turn used 9,739 counted tokens, above today's 5,000: the next turn stops it.
   let stopped = wait_for(root, &mut events, run, |run| {
@@ -290,7 +349,7 @@ async fn lifecycle_daily_budget_stops_the_run_and_refuses_new_work() {
   };
   assert_eq!(scheduler.resume_run(run).await, Err(daily.clone()));
   let other = support::queue_another_task(root);
-  assert_eq!(scheduler.start_run(IdempotencyKey::generate(), other), Err(daily));
+  assert_eq!(scheduler.start_run(IdempotencyKey::generate(), other).await, Err(daily));
 
   // A raised daily budget makes room: the run resumes as it is.
   db.save_project_limits(&ProjectLimits::DEFAULT).expect("save limits");
@@ -308,8 +367,11 @@ async fn lifecycle_two_runs_of_one_project_both_settle_at_their_checkpoints() {
   let root = project.repo.path();
   let other = support::queue_another_task(root);
   let (scheduler, mut events) = scheduler(root);
-  scheduler.attach(fresh(SessionEnd::Clean), slots(2)).expect("attached");
-  let runs = [start(&scheduler, project.task), start(&scheduler, other)];
+  scheduler
+    .attach(fresh(SessionEnd::Clean), slots(2))
+    .await
+    .expect("attached");
+  let runs = [start(&scheduler, project.task).await, start(&scheduler, other).await];
   for run in runs {
     wait_for_turns(root, &mut events, run, 1).await;
   }
@@ -331,10 +393,13 @@ async fn lifecycle_scheduler_is_idle_only_while_no_run_executes() {
   let project = project(&Setup::new("Work slowly."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
-  scheduler.attach(fresh(SessionEnd::Clean), slots(1)).expect("attached");
+  scheduler
+    .attach(fresh(SessionEnd::Clean), slots(1))
+    .await
+    .expect("attached");
   assert!(scheduler.is_idle(), "nothing runs yet");
 
-  let run = start(&scheduler, project.task);
+  let run = start(&scheduler, project.task).await;
   assert!(!scheduler.is_idle(), "a run executes");
   wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
   wait_for_idle(&scheduler).await;

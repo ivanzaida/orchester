@@ -99,6 +99,7 @@ async fn conversation_a_message_reaches_the_working_agent_after_its_turn() {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   wait_for_turns(root, &mut events, id, 1).await;
   let message = send(root, project.task, Some(id), "Also cover the cancelled dialog.");
@@ -143,6 +144,7 @@ async fn a_question_waits_and_the_answer_resumes_the_session(provider: AgentProv
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let waiting = wait_for(root, &mut events, id, Run::waits_for_a_person).await;
   let implement = StepKey::new("implement").expect("key");
@@ -204,6 +206,7 @@ async fn ask_agent_follows_up_a_run_ready_for_review(provider: AgentProvider) {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let ready = wait_for(root, &mut events, id, ended).await;
   assert_eq!(ready.status(), &RunStatus::Succeeded);
@@ -269,6 +272,7 @@ async fn conversation_a_run_waiting_for_an_answer_cancels_and_takes_no_message_a
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   wait_for(root, &mut events, id, Run::waits_for_a_person).await;
   wait_for_idle(&scheduler).await;
@@ -298,6 +302,7 @@ async fn conversation_an_answer_written_without_a_runner_resumes_the_step_when_o
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   wait_for(root, &mut events, id, Run::waits_for_a_person).await;
   wait_for_idle(&scheduler).await;
@@ -307,6 +312,7 @@ async fn conversation_an_answer_written_without_a_runner_resumes_the_step_when_o
   let (next, mut next_events) = support::scheduler(root);
   next
     .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .await
     .expect("attached");
   let run = wait_for(root, &mut next_events, id, ended).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
@@ -331,6 +337,7 @@ async fn ended_run(brief: &'static str) -> (TestProject, Scheduler, mpsc::Unboun
   let (scheduler, mut events) = scheduler(&root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(&root, &mut events, id, ended).await;
   wait_for_idle(&scheduler).await;
@@ -348,16 +355,19 @@ async fn conversation_a_message_written_without_a_runner_follows_up_the_ready_ru
   let (next, mut events) = support::scheduler(root);
   next
     .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .await
     .expect("attached");
   // Attaching again while the follow-up works starts no second one.
   next
     .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .await
     .expect("attached again");
   let run = wait_for(root, &mut events, id, |run| ended(run) && followed_up(run)).await;
   assert_eq!(run.status(), &RunStatus::Succeeded, "ready for review again");
   wait_for_idle(&next).await;
   next
     .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .await
     .expect("attached once more");
   wait_for_idle(&next).await;
   let db = ProjectDb::open(root).expect("open");
@@ -389,6 +399,7 @@ async fn conversation_messages_to_a_merged_failed_or_cancelled_run_stay_queued_w
     let (scheduler, mut events) = scheduler(project.repo.path());
     let id = scheduler
       .start_run(IdempotencyKey::generate(), project.task)
+      .await
       .expect("the run starts");
     wait_for(project.repo.path(), &mut events, id, Run::waits_for_a_person).await;
     wait_for_idle(&scheduler).await;
@@ -413,6 +424,7 @@ async fn conversation_messages_to_a_merged_failed_or_cancelled_run_stay_queued_w
     let (next, _events) = support::scheduler(root);
     next
       .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+      .await
       .expect("attached");
     assert!(next.active_runs().is_empty(), "nothing executes {:?}", before.status());
     let after = ProjectDb::open(root)
@@ -443,6 +455,7 @@ async fn conversation_ask_agent_is_refused_once_the_run_s_worktree_was_removed()
   let (next, _events) = support::scheduler(root);
   next
     .attach(AttachSession::Reconnect, std::num::NonZeroU32::MIN)
+    .await
     .expect("attached");
   assert!(next.active_runs().is_empty());
   let db = ProjectDb::open(root).expect("open");
@@ -469,6 +482,7 @@ async fn conversation_a_message_no_agent_read_before_the_run_succeeded_follows_i
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let checks = StepKey::new("checks").expect("key");
   wait_for(root, &mut events, id, |run| {
@@ -500,6 +514,7 @@ async fn conversation_a_run_that_succeeds_is_announced_ready_for_review() {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let ready = async {
     loop {
@@ -524,6 +539,7 @@ async fn conversation_a_message_written_before_the_run_reaches_its_first_step() 
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events, id, ended).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);

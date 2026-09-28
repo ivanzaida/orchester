@@ -77,14 +77,6 @@ store retries a read while a crashed runner's shared memory is still mapped (`cr
 `--test-threads=16`, or kept with a comment saying why. Tests: `cargo test -p orchester-desktop --test form_keyboard
 lifecycle`, then the full `form_keyboard ::`.
 
-### T3 · Serialize the remaining run request fallbacks (non-UI)
-
-`continue_runs` and reconnect continuation are synchronous and do not take the continue lock; the pause, cancel and
-permission fallbacks are not serialized with a concurrent request that starts a task for the same run
-(`crates/runner/src/execution/`). A clash now comes back as an explicit `Failed`, not silently. **Done when** every
-request that can start or stop a run's task takes the same lock, with a test per path. Tests: runner `control`,
-`settling`, `plan_settling`, `lifecycle`.
-
 ### T4 · A listing survives a row whose id cannot be parsed (non-UI)
 
 A run row whose id or task id cannot be parsed still fails the whole listing
@@ -194,3 +186,4 @@ workaround.
 Move finished tasks here: `ID · title · commit or branch`.
 
 T2 · Poll-free plan tests · branch `codex/poll-free-plan-tests`.
+T3 · Serialize the remaining run request fallbacks · branch `codex/serialize-run-requests`.

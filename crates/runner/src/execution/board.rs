@@ -34,9 +34,16 @@ pub(super) struct Board {
 struct State {
   /// Unknown until the desktop attaches; no summary is sent and slots are not bounded before that.
   slots: Option<NonZeroU32>,
-  /// The runner stops at checkpoints: runs that settle stay listed as saved.
-  stopping: bool,
+  stop: StopMode,
   agents: Vec<Agent>,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum StopMode {
+  #[default]
+  Working,
+  Checkpoints,
+  Immediate,
 }
 
 /// One slot in use. `work` is `None` for an agent whose profile or connection is gone: it still
@@ -70,16 +77,27 @@ impl Board {
   }
 
   pub(super) fn is_stopping(&self) -> bool {
-    self.state.lock().stopping
+    self.state.lock().stop != StopMode::Working
   }
 
   /// The runner stops at checkpoints: every listed agent is saving from now on.
   pub(super) fn stop_at_checkpoints(&self) {
     self.change(|state| {
-      state.stopping = true;
+      if state.stop != StopMode::Working {
+        return;
+      }
+      state.stop = StopMode::Checkpoints;
       for work in state.agents.iter_mut().filter_map(|agent| agent.work.as_mut()) {
         work.state = WorkState::Saving;
       }
+    });
+  }
+
+  /// Refuses new work while the runner ends its agents immediately.
+  pub(super) fn stop_immediately(&self) {
+    self.change(|state| {
+      state.stop = StopMode::Immediate;
+      state.agents.retain(|agent| agent.execution.is_some());
     });
   }
 
@@ -91,7 +109,7 @@ impl Board {
         return;
       }
       if let Some(work) = &mut work
-        && state.stopping
+        && state.stop == StopMode::Checkpoints
       {
         work.state = WorkState::Saving;
       }
@@ -123,7 +141,7 @@ impl Board {
   pub(super) fn release(&self, execution: StepExecutionId) {
     self.commands.lock().retain(|command| *command != execution);
     self.change(|state| {
-      if state.stopping {
+      if state.stop == StopMode::Checkpoints {
         for agent in state
           .agents
           .iter_mut()
@@ -144,7 +162,7 @@ impl Board {
   pub(super) fn settled(&self, run: &Run) {
     self.change(|state| {
       let listed: Vec<Agent> = state.agents.extract_if(.., |agent| agent.run == run.id()).collect();
-      if !state.stopping || run.status() == &RunStatus::Running {
+      if state.stop != StopMode::Checkpoints || run.status() == &RunStatus::Running {
         return;
       }
       let checkpoint = run

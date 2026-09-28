@@ -63,7 +63,7 @@ async fn assert_requests_rejected(scheduler: &Scheduler, run: RunId) {
   tokio::time::timeout(PATIENCE, answered)
     .await
     .expect("answered in time");
-  let (continued, refused) = scheduler.continue_runs(&[run]);
+  let (continued, refused) = scheduler.continue_runs(&[run]).await;
   assert!(continued.is_empty());
   assert!(matches!(refused[0].rejection, Rejection::RunUnreadable { .. }));
 }
@@ -81,6 +81,7 @@ async fn unreadable_running_run_is_left_as_it_is_when_the_runner_attaches() {
   let (scheduler, mut events) = scheduler(root);
   let attached = scheduler
     .attach(AttachSession::Reconnect, slots(2))
+    .await
     .expect("one unreadable run does not fail the attach");
   assert_eq!(attached.interrupted, vec![good]);
   assert_eq!(attached.continued, vec![good]);
@@ -115,6 +116,7 @@ async fn unreadable_interrupted_run_is_not_continued_after_a_reconnect() {
   let (scheduler, mut events) = scheduler(root);
   let attached = scheduler
     .attach(AttachSession::Reconnect, slots(2))
+    .await
     .expect("one unreadable run does not fail the recovery");
   assert!(attached.interrupted.is_empty());
   assert_eq!(attached.continued, vec![good]);
