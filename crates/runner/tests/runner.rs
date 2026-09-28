@@ -13,7 +13,6 @@ use orchester_ipc::{
   AttachSession, Command, Event, LaunchError, Rejection, Reply, Request, RequestId, RunnerClient, SessionEnd,
   ShutdownMode, WorkSummary,
 };
-use orchester_runner::lock::RunnerLock;
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
 use tokio::time::timeout;
@@ -139,13 +138,22 @@ async fn dropping_the_runner_process_ends_the_runner() {
   let end = timeout(PATIENCE, events.next()).await.expect("connection ends in time");
   assert!(matches!(end, Ok(None) | Err(_)), "unexpected event {end:?}");
   // The runner's lock is released only when its process is gone.
-  timeout(PATIENCE, async {
-    while RunnerLock::acquire(project.path()).is_err() {
-      tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-  })
-  .await
-  .expect("runner lock released");
+  let lock_path = project.path().join(".orchester").join("runner.lock");
+  let (released, release) = tokio::sync::oneshot::channel();
+  let waiter = std::thread::spawn(move || {
+    let result = fs::OpenOptions::new()
+      .write(true)
+      .open(lock_path)
+      .and_then(|lock| lock.lock());
+    // A missing receiver means the bounded test assertion already timed out.
+    let _ = released.send(result);
+  });
+  timeout(PATIENCE, release)
+    .await
+    .expect("runner lock released in time")
+    .expect("lock waiter reported")
+    .expect("wait for the runner to release its lock");
+  waiter.join().expect("lock waiter finished");
 }
 
 #[cfg(windows)]

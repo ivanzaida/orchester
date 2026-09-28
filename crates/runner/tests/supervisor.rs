@@ -81,7 +81,14 @@ async fn supervisor_runs_the_child_in_the_working_directory_with_its_input() {
 async fn supervisor_terminates_the_process_tree() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let mut process = Supervised::start(&cmd(dir.path(), ["/C", "ping", "-n", "60", "127.0.0.1"])).expect("start");
-  tokio::time::sleep(Duration::from_millis(500)).await;
+  let started = timeout(PATIENCE, process.next())
+    .await
+    .expect("ping produces output in time")
+    .expect("ping produces output before exiting");
+  assert!(
+    matches!(started, ProcessEvent::Output { .. }),
+    "unexpected event {started:?}"
+  );
   process.terminate();
 
   let events = collect(&mut process).await;
