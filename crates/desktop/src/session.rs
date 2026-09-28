@@ -51,7 +51,8 @@ pub struct AppSession {
 }
 
 impl AppSession {
-  /// Opens the application database next to the executable and records a new session.
+  /// Opens the application database of this build ([`app_paths::app_database_path`]) and records
+  /// a new session.
   pub fn start() -> Result<Self, StartupError> {
     let path = app_paths::app_database_path().map_err(StartupError::ExecutableLocation)?;
     Self::start_at(&path)
