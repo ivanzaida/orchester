@@ -26,13 +26,14 @@ use orchester_store::RegisteredProject;
 use crate::{
   background,
   messages::{self, Message},
-  navigation::Navigation,
+  navigation::{Navigation, route::Route},
   tabs::{OpenIn, OpenedProject},
   theme::{ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography},
   ui::{
     field::SELECT_OPTION_HEIGHT,
     icon::{Icon, IconSize, icon},
-    pressable::{opens_place, pressable, surface},
+    link::Link,
+    pressable::{pressable, surface},
   },
   workspace::OpenProject,
 };
@@ -167,6 +168,7 @@ impl ProjectSwitcher {
       .enumerate()
       .map(|(index, project)| self.recent_row(ctx, (index, &project.project), (current, &navigation), action))
       .collect();
+    let tabs = navigation.tabs().clone();
     let (all, add, close_all, close_add) = (navigation.clone(), navigation, self.open.clone(), self.open.clone());
     Column::new()
       .id("project-switcher")
@@ -191,19 +193,19 @@ impl ProjectSwitcher {
         "switcher-all-projects",
         Icon::Folders,
         &ctx.t("nav.allProjects"),
-        move || {
+        Link::new(&tabs, move |open| {
           close_all.set(false);
-          all.show_all_projects();
-        },
+          all.open(Route::AllProjects, open);
+        }),
       ))
       .child(menu_item(
         "switcher-add-project",
         Icon::Plus,
         &ctx.t("projects.add"),
-        move || {
+        Link::new(&tabs, move |open| {
           close_add.set(false);
-          add.show_setup();
-        },
+          add.open(Route::Setup, open);
+        }),
       ))
       .with_children(self.button_tooltip(ctx))
       .into()
@@ -245,13 +247,14 @@ impl ProjectSwitcher {
       row = row.ref_element(self.row_anchor.clone());
     }
     let (action, repo_root, close) = (action.clone(), project.repo_root.clone(), self.open.clone());
-    opens_place(row, navigation.tabs(), move |open| {
+    Link::new(navigation.tabs(), move |open| {
       if shown && open == OpenIn::Current {
         close.set(false);
       } else {
         action.run((repo_root.clone(), open));
       }
     })
+    .on(row)
     .into()
   }
 
@@ -331,7 +334,7 @@ fn option(button: Button) -> Button {
 }
 
 /// All projects or Add project (`FpP02`, `juYE0`): its icon in the avatar's slot.
-fn menu_item(id: &'static str, glyph: Icon, label: &str, on_click: impl Fn() + Send + Sync + 'static) -> Element {
+fn menu_item(id: &'static str, glyph: Icon, label: &str, link: Link) -> Element {
   let slot = Row::new()
     .size(Dimension::Px(AVATAR_SIZE), Dimension::Px(AVATAR_SIZE))
     .align_items(Alignment::Center)
@@ -343,7 +346,7 @@ fn menu_item(id: &'static str, glyph: Icon, label: &str, on_click: impl Fn() + S
       .color(PaletteColor::TextPrimary)
       .flex(1.0),
   );
-  pressable(row, on_click).into()
+  link.on(row).into()
 }
 
 /// The project's initial on its tile (`I01Ke`).

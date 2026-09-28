@@ -75,7 +75,7 @@ use crate::{
     icon::Icon,
     message_text,
     panel::RecoveryPanel,
-    pressable::{pressable, surface},
+    pressable::surface,
     tab::{Tab, tab_row},
   },
   workspace::OpenProject,
@@ -440,9 +440,8 @@ impl TaskScreen {
     (detail, removal): (Option<&TaskDetail>, Option<Element>),
     control: &ControlAction,
   ) -> Element {
-    let nav = self.nav.clone();
     let key = detail.map_or_else(String::new, |detail| detail.task.key().to_string());
-    let breadcrumb = pressable(surface().id("task-breadcrumb"), move || nav.show(Page::TASKS)).child(
+    let breadcrumb = self.nav.link(Page::TASKS).on(surface().id("task-breadcrumb")).child(
       Text::new(&ctx.t_args(
         "runs.page.breadcrumb",
         [
@@ -474,10 +473,9 @@ impl TaskScreen {
       let Some(value) = value else {
         return item;
       };
-      let (nav, task) = (self.nav.clone(), props.task);
       item
         .selected(value == props.tab)
-        .on_click(move || nav.show(Page::Task(task, value)))
+        .link(self.nav.link(Page::Task(props.task, value)))
     };
     tab_row(
       Dimension::Px(TAB_ROW_HEIGHT),

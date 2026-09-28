@@ -30,7 +30,8 @@ use crate::{
   ui::{
     github_mark::github_mark,
     icon::{Icon, IconSize, icon},
-    pressable::{pressable, surface},
+    link::Link,
+    pressable::surface,
     status_label::compact_status_label as label,
   },
 };
@@ -58,12 +59,7 @@ struct RowContent {
   status: (Icon, Arc<str>),
 }
 
-pub fn connection_row(
-  ctx: &Ctx,
-  connection: &AgentConnection,
-  state: &RowState,
-  on_click: impl Fn() + Send + Sync + 'static,
-) -> Element {
+pub fn connection_row(ctx: &Ctx, connection: &AgentConnection, state: &RowState, link: Link) -> Element {
   let provider = connection.provider();
   let (vendor, program) = (ctx.t(vendor_key(provider)), ctx.t(program_key(provider)));
   let description = match connection.version() {
@@ -95,7 +91,7 @@ pub fn connection_row(
     usage: ctx.t_args(usage_key, [("count", state.uses.to_string().as_str())]),
     status: (status_icon, ctx.t(status_key)),
   };
-  row(content, state, on_click)
+  row(content, state, link)
 }
 
 /// A GitHub connection (`iYGKy`): the host, `gh` and the account it is signed in to, and the
@@ -105,7 +101,7 @@ pub fn github_row(
   connection: &GitHubConnection,
   github: &GitHubState,
   state: &RowState,
-  on_click: impl Fn() + Send + Sync + 'static,
+  link: Link,
 ) -> Element {
   let host = connection.host().as_str();
   let description = match github {
@@ -136,17 +132,12 @@ pub fn github_row(
     usage: ctx.t_args(usage_key, [("count", state.uses.to_string().as_str())]),
     status: (status_icon, ctx.t_args(status_key, [("scope", REQUIRED_SCOPE)])),
   };
-  row(content, state, on_click)
+  row(content, state, link)
 }
 
 /// An MCP server (`enoFW` in 04.A `RZUKo`): how the agent's CLI reaches it, the profiles that give it
 /// to their agents, and whether it is on.
-pub fn mcp_row(
-  ctx: &Ctx,
-  server: &McpServer,
-  state: &RowState,
-  on_click: impl Fn() + Send + Sync + 'static,
-) -> Element {
+pub fn mcp_row(ctx: &Ctx, server: &McpServer, state: &RowState, link: Link) -> Element {
   let usage_key = if state.uses == 1 {
     "connections.usage.one"
   } else {
@@ -162,7 +153,7 @@ pub fn mcp_row(
     usage: ctx.t_args(usage_key, [("count", state.uses.to_string().as_str())]),
     status: (status_icon, ctx.t(status_key)),
   };
-  row(content, state, on_click)
+  row(content, state, link)
 }
 
 /// How the agent's CLI reaches `server`, in one line: "Program · npx" or "Remote MCP · mcp.example.dev".
@@ -182,7 +173,7 @@ pub const fn mcp_status(server: &McpServer) -> (Icon, &'static str) {
   }
 }
 
-fn row(content: RowContent, state: &RowState, on_click: impl Fn() + Send + Sync + 'static) -> Element {
+fn row(content: RowContent, state: &RowState, link: Link) -> Element {
   let identity = Column::new()
     .flex(1.0)
     .spacing(SpacingSize::Sm)
@@ -216,7 +207,8 @@ fn row(content: RowContent, state: &RowState, on_click: impl Fn() + Send + Sync 
   if state.selected {
     return row.describe("state", "selected").into();
   }
-  pressable(row, on_click)
+  link
+    .on(row)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .into()
 }

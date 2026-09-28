@@ -15,7 +15,8 @@ use lurq::{
 
 use super::{
   icon::{Icon, IconSize, icon},
-  pressable::{pressable, surface},
+  link::{Link, Press},
+  pressable::surface,
 };
 use crate::theme::{ExtraSpacing, ExtraTypography};
 
@@ -37,13 +38,11 @@ enum Density {
   Category,
 }
 
-type Handler = Arc<dyn Fn() + Send + Sync>;
-
 enum State {
-  /// The item of the screen shown. With a handler it leads somewhere else in that screen's
+  /// The item of the screen shown. With a press it leads somewhere else in that screen's
   /// section, e.g. from a task back to the task list.
-  Selected(Option<Handler>),
-  Available(Handler),
+  Selected(Option<Press>),
+  Available(Press),
   Unavailable,
 }
 
@@ -69,12 +68,21 @@ impl NavItem {
     }
   }
 
-  /// Opens the item's screen; a selected item stays selected.
-  pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    let handler: Handler = Arc::new(handler);
+  /// Runs `handler` when pressed; a selected item stays selected.
+  pub fn on_click(self, handler: impl Fn() + Send + Sync + 'static) -> Self {
+    self.press(Press::action(handler))
+  }
+
+  /// Opens the item's screen where the press asks (see `ui::link`); a selected item stays
+  /// selected.
+  pub fn link(self, link: Link) -> Self {
+    self.press(Press::Link(link))
+  }
+
+  fn press(mut self, press: Press) -> Self {
     self.state = match self.state {
-      State::Selected(_) => State::Selected(Some(handler)),
-      State::Available(_) | State::Unavailable => State::Available(handler),
+      State::Selected(_) => State::Selected(Some(press)),
+      State::Available(_) | State::Unavailable => State::Available(press),
     };
     self
   }
@@ -185,14 +193,13 @@ impl From<NavItem> for Element {
 }
 
 /// A button around the row, so a press on it keeps the focus where it is.
-fn pressable_item(id: &'static str, height: f32, row: Row, handler: Handler) -> Button {
-  pressable(
+fn pressable_item(id: &'static str, height: f32, row: Row, press: Press) -> Button {
+  press.on(
     surface()
       .id(id)
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(height))
       .rounded(RadiusSize::Sm)
       .child(row),
-    move || handler(),
   )
 }

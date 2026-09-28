@@ -50,6 +50,7 @@ use crate::{
   ui::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
+    link::Link,
   },
   workspace::OpenProject,
 };
@@ -148,18 +149,13 @@ impl Component for ReadyForReview {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(summary)
-      .child(details::run_details(
-        ctx,
-        run,
-        props.open.project.name().as_str(),
-        &open,
-      ))
+      .child(details::run_details(ctx, run, props.open.project.name().as_str(), open))
   }
 }
 
 /// Ask agent and Open conversation: the task's Conversation tab; Ask agent also puts the focus in
-/// its composer.
-fn conversation(ctx: &mut Ctx, task: TaskId) -> (Handler, Handler) {
+/// its composer, and Open conversation is a link.
+fn conversation(ctx: &mut Ctx, task: TaskId) -> (Handler, Link) {
   let nav = ctx
     .use_context::<ProjectNav>()
     .expect("the project shell provides ProjectNav");
@@ -167,13 +163,13 @@ fn conversation(ctx: &mut Ctx, task: TaskId) -> (Handler, Handler) {
     .use_context::<ComposerFocus>()
     .expect("the task page provides ComposerFocus");
   let page = Page::Task(task, TaskPageTab::Conversation);
-  let open = nav.clone();
+  let open = nav.link(page);
   (
     Arc::new(move || {
       focus.set(true);
       nav.show(page);
     }),
-    Arc::new(move || open.show(page)),
+    open,
   )
 }
 

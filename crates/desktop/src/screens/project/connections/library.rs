@@ -156,8 +156,7 @@ impl ConnectionsScreen {
     working: Option<ConnectionId>,
   ) -> Element {
     let id = listed.id();
-    let nav = self.nav.clone();
-    let select = move || nav.show(view.page(Some(id)));
+    let select = self.nav.link(view.page(Some(id)));
     match listed {
       Listed::Agent(connection) => {
         let state = RowState {
@@ -231,7 +230,7 @@ impl ConnectionsScreen {
     InspectorActions {
       check,
       edit: Arc::new(move || dialog.set(DialogMode::EditAgent(editing.clone()))),
-      show_profile: Arc::new(move |profile| nav.show(Page::Agents(AgentSelection::Profile(profile)))),
+      profile: Arc::new(move |profile| nav.link(Page::Agents(AgentSelection::Profile(profile)))),
     }
   }
 
@@ -245,7 +244,7 @@ impl ConnectionsScreen {
     McpActions {
       toggle,
       edit: Arc::new(move || dialog.set(DialogMode::EditMcp(editing.clone()))),
-      show_profile: Arc::new(move |profile| nav.show(Page::Agents(AgentSelection::Profile(profile)))),
+      profile: Arc::new(move |profile| nav.link(Page::Agents(AgentSelection::Profile(profile)))),
     }
   }
 

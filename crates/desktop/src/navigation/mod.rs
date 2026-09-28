@@ -21,6 +21,7 @@ pub use self::{
 };
 use crate::{
   tabs::{OpenIn, Tabs},
+  ui::link::Link,
   workspace::{Landing, OpenProject, Workspace},
 };
 
@@ -162,10 +163,6 @@ impl Navigation {
     &self.tabs
   }
 
-  pub fn show_setup(&self) {
-    entry::push(&self.router.navigator(), Route::Setup.path());
-  }
-
   /// Back to the screen chosen at startup.
   pub fn back_to_start(&self) {
     entry::push(&self.router.navigator(), Route::Start.path());
@@ -185,6 +182,21 @@ impl Navigation {
 
   pub fn show_all_projects(&self) {
     entry::push(&self.router.navigator(), Route::AllProjects.path());
+  }
+
+  /// Opens `route`, a screen outside any project, where `open` says: in this tab as a new
+  /// history entry, or in a new tab.
+  pub fn open(&self, route: Route, open: OpenIn) {
+    match open {
+      OpenIn::Current => entry::push(&self.router.navigator(), route.path()),
+      OpenIn::Background | OpenIn::NewTab => self.tabs.open(route, open),
+    }
+  }
+
+  /// A link to `route`, a screen outside any project (see `ui::link`).
+  pub fn link(&self, route: Route) -> Link {
+    let navigation = self.clone();
+    Link::new(&self.tabs, move |open| navigation.open(route, open))
   }
 
   /// Shows `project`, just opened from All projects or the switcher, as a new history entry of

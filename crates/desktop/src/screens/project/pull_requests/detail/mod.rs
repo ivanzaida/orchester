@@ -51,7 +51,7 @@ use crate::{
     message_text,
     notice::Notice,
     panel::RecoveryPanel,
-    pressable::{pressable, surface},
+    pressable::surface,
     tab::{Tab, tab_row},
   },
   workspace::OpenProject,
@@ -148,21 +148,21 @@ impl PullRequestScreen {
   /// while a refresh runs and until a rate limit resets.
   fn topbar(&self, ctx: &Ctx, props: &PullRequestProps, detail: Option<&Detail>, actions: &Actions) -> Element {
     let number = props.number.to_string();
-    let nav = self.nav.clone();
-    let breadcrumb = pressable(surface().id("pull-request-breadcrumb"), move || {
-      nav.show(Page::PullRequests);
-    })
-    .child(
-      Text::new(&ctx.t_args(
-        "pullRequests.detail.breadcrumb",
-        [
-          ("project", props.project.project.name().as_str()),
-          ("number", number.as_str()),
-        ],
-      ))
-      .variant(TypographyStyle::Description)
-      .nowrap(),
-    );
+    let breadcrumb = self
+      .nav
+      .link(Page::PullRequests)
+      .on(surface().id("pull-request-breadcrumb"))
+      .child(
+        Text::new(&ctx.t_args(
+          "pullRequests.detail.breadcrumb",
+          [
+            ("project", props.project.project.name().as_str()),
+            ("number", number.as_str()),
+          ],
+        ))
+        .variant(TypographyStyle::Description)
+        .nowrap(),
+      );
     let linked = match detail {
       Some(Detail::Linked(linked)) => Some(linked),
       Some(Detail::Unlinked) | None => None,
@@ -190,11 +190,10 @@ impl PullRequestScreen {
 
   /// The project is not linked to a GitHub repository any more (as 08.D).
   fn unlinked(&self, ctx: &Ctx, props: &PullRequestProps) -> Element {
-    let nav = self.nav.clone();
     let action = ActionButton::new(ctx.t("pullRequests.unavailable.openConnections"))
       .icon(Icon::Plug)
       .id("pull-request-open-connections")
-      .on_click(move || nav.show(Page::CONNECTIONS))
+      .link(self.nav.link(Page::CONNECTIONS))
       .render(ctx);
     centered(
       RecoveryPanel::new(

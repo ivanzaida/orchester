@@ -30,6 +30,7 @@ use crate::{
     button::ActionButton,
     command_row::{CommandPlace, Copied, command_row},
     icon::Icon,
+    link::Link,
     notice::Notice,
   },
 };
@@ -40,7 +41,7 @@ type Handler = Arc<dyn Fn() + Send + Sync>;
 pub struct NoticeActions {
   pub check_again: Option<Handler>,
   pub use_account: Option<Handler>,
-  pub open_connections: Handler,
+  pub open_connections: Link,
   pub copied: Signal<Copied>,
 }
 
@@ -290,13 +291,12 @@ fn button_row(ctx: &Ctx, buttons: Buttons, failure: &SyncFailure, actions: &Noti
       row = row.child(button.render(ctx));
     }
     (Buttons::CheckAgainAndConnections, _) => {
-      let open = actions.open_connections.clone();
       row = row.child(
         ActionButton::new(ctx.t("pullRequests.unavailable.openConnections"))
           .icon(Icon::Plug)
           .id("pull-requests-open-connections")
           .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
-          .on_click(move || open())
+          .link(actions.open_connections.clone())
           .render(ctx),
       );
     }

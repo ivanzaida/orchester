@@ -63,7 +63,7 @@ pub fn window_input(tabs: &Tabs, content: Element) -> Element {
     .child(
       Column::new()
         .on_key_down(move |event: KeyboardEvent| {
-          keys.set_command(event.meta);
+          keys.key_pressed(event.meta, activates(&event));
           if event.default_prevented() {
             return;
           }
@@ -76,7 +76,7 @@ pub fn window_input(tabs: &Tabs, content: Element) -> Element {
           event.prevent_default();
           run(&keys, shortcut);
         })
-        .on_key_up(move |event: KeyboardEvent| released.set_command(event.meta)),
+        .on_key_up(move |event: KeyboardEvent| released.key_released(event.meta)),
     )
     .into()
 }
@@ -105,6 +105,11 @@ pub fn shortcut(event: &KeyboardEvent) -> Option<Shortcut> {
     });
   }
   platform::shortcut(event)
+}
+
+/// Whether the key presses a focused control, as lurq does for Enter and Space.
+fn activates(event: &KeyboardEvent) -> bool {
+  is(event, "Enter", "Enter") || is(event, " ", "Space") || event.code == "NumpadEnter"
 }
 
 /// Whether the event is the key `key` (as typed) or `code` (its place on the keyboard).
