@@ -1,7 +1,10 @@
 //! What each agent CLI enforces for the MCP servers a profile chooses
 //! (`docs/design/orchester-workspace.md`, "MCP servers"). Checked against Codex CLI 0.139 and Claude
-//! Code 2.1.89 on Windows on 2026-09-28, without a model turn (neither CLI was signed in for the
-//! check), so what happens when an agent calls a server's tool is not verified.
+//! Code 2.1.89 on Windows. A signed-in Codex 0.139 model turn on 2026-09-29 called the chosen
+//! tool with `-a never`; the test variable reached its server, while an agent shell command could
+//! not see it. Two repeated calls to an unannotated tool also worked after one earlier call was
+//! cancelled; that cancellation's cause is unknown. Claude Code was not signed in, so its
+//! `mcp__<server>` allow rule has not been verified by a model turn.
 //!
 //! - Both CLIs load only the servers the invocation names: Codex leaves the user's own configuration out
 //!   (`--ignore-user-config`), Claude Code every other configuration (`--strict-mcp-config`).

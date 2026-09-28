@@ -143,9 +143,9 @@ fn readable(message: &str) -> String {
 }
 
 /// Codex's report that an MCP server did not start, which is not an error of the turn. Codex 0.139
-/// logged `MCP startup failed: <reason>` on standard error without the server's name (probe
-/// 2026-09-28, not signed in); its source reports "MCP client for `<server>` failed to start:
-/// <reason>" as an error event, which was not observed.
+/// logged `MCP startup failed: <reason>` on standard error without the server's name in a
+/// signed-in model turn (2026-09-29). Its source also has a named error event, not observed in
+/// that turn.
 fn mcp_failure(message: &str) -> Option<AgentEvent> {
   const NAMED: &str = "MCP client for `";
   const NAMED_END: &str = "` failed to start";

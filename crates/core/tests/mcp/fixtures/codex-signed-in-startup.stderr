@@ -1,0 +1,1 @@
+2026-09-28T23:32:58.936663Z  WARN codex_mcp::rmcp_client: failed to initialize MCP client during shutdown: MCP startup failed: The system cannot find the file specified. (os error 2)

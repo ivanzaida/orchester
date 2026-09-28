@@ -1,7 +1,7 @@
 use orchester_core::connection::{
   AgentProvider,
   mcp::McpServerProblem,
-  stream::{AgentEvent, AgentStream, InvocationTracker, OutputStream, parse_codex_line},
+  stream::{AgentEvent, AgentStream, CommandStatus, InvocationTracker, OutputStream, parse_codex_line},
 };
 
 fn failed(server: Option<&str>, detail: Option<&str>) -> AgentEvent {
@@ -57,4 +57,43 @@ fn mcp_codex_reports_a_server_that_did_not_start_without_failing_the_turn() {
     parse_codex_line(OutputStream::Stdout, other),
     AgentEvent::Error { .. }
   ));
+}
+
+#[test]
+fn mcp_codex_signed_in_startup_fixture_is_an_unnamed_server_problem() {
+  let warning = include_str!("fixtures/codex-signed-in-startup.stderr").trim();
+  assert_eq!(
+    parse_codex_line(OutputStream::Stderr, warning),
+    failed(None, Some("The system cannot find the file specified. (os error 2)"))
+  );
+  let completed = include_str!("fixtures/codex-signed-in-startup.jsonl").trim();
+  assert!(matches!(
+    parse_codex_line(OutputStream::Stdout, completed),
+    AgentEvent::TurnCompleted { .. }
+  ));
+}
+
+#[test]
+fn mcp_codex_signed_in_tool_fixture_preserves_the_call_and_excluded_shell_result() {
+  let fixture = include_str!("fixtures/codex-signed-in-mcp.jsonl");
+  let mut lines = fixture.lines();
+  let call = lines.next().expect("MCP tool call line");
+  assert!(matches!(
+    parse_codex_line(OutputStream::Stdout, call),
+    AgentEvent::Raw {
+      stream: OutputStream::Stdout,
+      ..
+    }
+  ));
+  let shell = lines.next().expect("shell result line");
+  assert!(matches!(
+    parse_codex_line(OutputStream::Stdout, shell),
+    AgentEvent::CommandFinished {
+      output,
+      exit_code: Some(0),
+      status: CommandStatus::Completed,
+      ..
+    } if output.trim() == "False"
+  ));
+  assert!(lines.next().is_none());
 }

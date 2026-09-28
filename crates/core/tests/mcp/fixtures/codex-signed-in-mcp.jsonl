@@ -1,0 +1,2 @@
+{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"m1probe","tool":"ping","arguments":{},"result":{"content":[{"type":"text","text":"M1_TOOL_OK; server_secret_present=true"}],"structured_content":null},"error":null,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_4","type":"command_execution","command":"\"C:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe\" -Command \"Test-Path Env:\\\\M1_PROBE_SECRET\"","aggregated_output":"False\r\n","exit_code":0,"status":"completed"}}

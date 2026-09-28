@@ -6,9 +6,9 @@
 //!   HTTP server. A value from a secret never goes into an argument: the variable is set on the Codex process and
 //!   listed in `mcp_servers.<name>.env_vars`, which hands it to the server (Codex starts a server with a few system
 //!   variables, its `env` and its `env_vars` only), and a bearer token goes the same way through
-//!   `bearer_token_env_var`. `shell_environment_policy.exclude` keeps those variables out of the commands the agent
-//!   runs. Because variables pass by name, two servers cannot take one name from different secrets, and a secret
-//!   variable cannot be one the CLI itself needs.
+//!   `bearer_token_env_var`. `shell_environment_policy.exclude` kept a test variable out of an agent shell command in a
+//!   signed-in Codex 0.139 turn (2026-09-29). Because variables pass by name, two servers cannot take one name from
+//!   different secrets, and a secret variable cannot be one the CLI itself needs.
 //! - **Claude Code**: `--strict-mcp-config --mcp-config <file>`, a JSON file the runner writes for the invocation only
 //!   and removes when the CLI has ended ([`ClaudeMcpConfig`]); secret values are written into it, nowhere else. Claude
 //!   Code ignores a server's `cwd` and starts every server in the worktree, so a server set to start in another folder

@@ -75,11 +75,17 @@ decision**.
 
 ### M1 · Confirm MCP behaviour in a real run (non-UI)
 
-Unverified without a model turn: whether Codex under `-a never` lets the agent call an MCP tool, whether
+Confirm with model turns whether Codex under `-a never` lets the agent call an MCP tool, whether
 `shell_environment_policy.exclude` keeps secret variables out of the agent's own commands, how Codex reports a server
 that failed to start in a signed-in run, and whether Claude's `mcp__<name>` allow rule is enough. **Done when** each is
 confirmed or fixed, with the observed CLI output saved as a fixture and parser tests updated
 (`crates/core/src/connection/mcp/`).
+
+**Status 2026-09-29:** signed-in Codex 0.139 model turns confirmed MCP calls under `-a never`, a test variable present
+in the server but absent from an agent shell command, and an unnamed stderr warning for a failed server while the turn
+completes. One initial unannotated call was cancelled; two later unannotated calls succeeded, so the cause is unknown.
+Claude 2.1.89 listed `mcp__m1probe__ping` with the allow rule but stopped at `authentication_failed` before a model turn.
+Keep M1 open until that rule is checked in a signed-in Claude run. Evidence: `docs/evidence/mcp-real-run-2026-09-29.md`.
 
 ### M3 · Secrets "Used by" lists MCP servers (UI)
 
