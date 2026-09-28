@@ -160,7 +160,7 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 
 ## Components and tokens
 
-51 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens, and the Rename copy mapping row within its board (06.C). The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
+52 reusable components are defined. Most are in Foundations; the composed secret inspector, effective instruction preview and inline notice have canonical definitions within their owning screens, and the Rename copy mapping row within its board (06.C). The shared brand is canonical inside the sidebar. The conversation composer is canonical inside the task panel and reused by project chat and PR feedback. Screens use linked instances; content, icon, state and supported size are intended overrides.
 
 | Family | Node |
 | --- | --- |
@@ -207,6 +207,7 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 | Diff line | `vEZ42` |
 | Window title bar (Windows) | `QQmsI` |
 | Window title bar (macOS) | `V70DN` |
+| Window tab (title bar tab, see [Tabs](#tabs)) | `nAKyb` |
 | Window status bar | `pmOpt` |
 | Window status bar operations popover | `E1msJS` |
 | Focus ring overlay (design-only, see [Focus](#focus)) | `X9gPDr` |
@@ -227,22 +228,216 @@ Colors: canvas `#101010`, sidebar `#141414`, surface `#1A1A1A`, raised `#222222`
 The application draws its own window chrome; the operating system's title bar and window border
 are not shown. A 32px title bar in `$canvas` sits above every 1440 × 960 screen frame and a 28px
 status bar (`pmOpt`, see [Status bar](#status-bar)) sits below it, so the window is
-1440 × 1020 (32 + 960 + 28). The empty part of the title bar is the drag area (double-click
-maximizes).
+1440 × 1020 (32 + 960 + 28). The title bar holds the window's tabs (see [Tabs](#tabs)); its
+empty parts are the drag area (double-click maximizes).
 
-- Windows (`QQmsI`): minimize, maximize/restore and close on the right, 46 × 32 each, lucide
-  icons at 14px in `$muted`; hover fills the control with `$hover`.
-- macOS (`V70DN`): the three window buttons on the left, 12px, 8px apart, 12px from the edge,
-  in the platform's standard colors — the only non-grayscale colors in the application.
+- Windows (`QQmsI`): the 216px drag area over the sidebar (`D6SIx6`), the tab strip (`tfnSm`,
+  slot for `Window / Tab`), the new-tab button (`K3W9DL`), the drag area (`Q5v1g`), then
+  minimize, maximize/restore and close on the right, 46 × 32 each, lucide icons at 14px in
+  `$muted`; hover fills the control with `$hover`.
+- macOS (`V70DN`): the three window buttons on the left inside the 216px area over the sidebar
+  (`R3RtGs`), 12px, 8px apart, 12px from the edge, in the platform's standard colors — the only
+  non-grayscale colors in the application; then the tab strip (`N4qch`), the new-tab button
+  (`ivN8x`) and the drag area up to the right edge.
 
 A dialog's backdrop covers the screen frame only, so both bars stay undimmed. While a dialog is
 open only the dialog and the title bar (drag, minimize, maximize, close) take input: the status
-bar shows no hover and its items open nothing until the dialog closes.
+bar shows no hover and its items open nothing until the dialog closes, and the tabs, + and tab
+list do not react (a dialog belongs to its tab's page, so switching away would hide it).
 
 Screens include neither bar; design verification captures the app window at 1440 × 1020 and
 compares the title bar (top 32px) with the platform component, the screen area (next 960px) with
 the screen frame, and the status bar (bottom 28px) with the matching `pmOpt` state. A worked
-example is the window composition `cpoal` in Foundations.
+example is the window composition `cpoal` in Foundations; with several tabs, `xjpkC` in
+[Tabs](#tabs).
+
+## Tabs
+
+Proposed 2026-09-28 in answer to the user's request for several browser-like tabs in the title
+bar. Canvas group `rOh31` ("Window · Tabs") in Foundations, between the status bar group and the
+focus group: the states board `UZF1Q` and two window compositions. The component
+`Window / Tab` (`nAKyb`) is in the Components group next to the title bars. The title bar
+components `QQmsI` and `V70DN` now contain the tab strip; `cpoal` shows one tab.
+
+**Model.** A tab is an independent location: a project and a route (Overview, Tasks, a task, a
+pipeline, Settings…), or All projects, which has no project. Each tab has its own Back/Forward
+history (mouse back/forward buttons and Alt+Left/Right act on the active tab). Two tabs may show
+the same project or different ones; nothing is shared between them except the project data. The
+sidebar, the page and the status bar always belong to the active tab's project. A new tab opens
+All projects.
+
+**Title bar layout** (the bar stays 32 high; the tabs are 28 high, bottom-aligned, so 4px of
+title bar shows above them):
+
+| Part | Windows (`QQmsI`) | macOS (`V70DN`) |
+| --- | --- | --- |
+| 0–216 (sidebar width) | drag area | traffic lights, then drag area |
+| from 216 | tab strip | tab strip |
+| after the last tab | + (24 × 24, radius 6, lucide `plus` 14 `$muted`, hover `$hover`) | + |
+| rest | drag area, at least 48px, then minimize / maximize / close | drag area to the right edge |
+
+The tabs start at x 216 on both platforms and on every page, over the content column, so they
+never move when the platform, the project or the page changes, and the drag area over the sidebar
+is always available however many tabs are open. Why 32 is kept: a 28px tab holds a 16px avatar,
+a 12px label and a 16px close button with 6px to spare, the drag area never depends on space above
+the tabs, and keeping 32 leaves the window at 1440 × 1020, every composition and the design
+verification crop unchanged.
+
+**Tab** (`nAKyb`): 224 wide at most, 28 high, padding 0 6 0 10, gap 8, top corners
+`$radius-control` (7), clipped. Children: project avatar 16 × 16 radius 4 `$hover` with the
+initial (Inter 9 semibold `$text`) — for All projects the lucide `folders` 14 `$muted`
+instead —, the label (Inter 12, one line, ending with an ellipsis), the close button (16 × 16,
+radius 4, lucide `x` 12 `$muted`). Label: `<project> · <page>`, where page is the section name or
+the object's key or name (*Kontur · ORC-12*, *Kontur · Feature delivery*); the tooltip adds the
+object title (*Kontur · ORC-12 · Add retry to webhook sender*). The OS window title is the active
+tab's label followed by ` — Orchester`.
+
+| State | Look |
+| --- | --- |
+| Active | `$surface` fill, joins the screen below (no border); label `$text`; close visible |
+| Inactive | no fill; label `$muted`; the close slot is kept but invisible, so the label does not move on hover |
+| Hover (inactive) | `$sidebar` fill; label `$text`; close visible |
+| Close hovered | close `$hover` fill, icon `$text` |
+| Divider | 1 × 14 `$border`, only between two inactive, unhovered tabs |
+| Attention | 8px `$text` dot on the avatar's top-right corner (x 10, y −2) with a 2px ring in the tab's background |
+| Dragged | `$raised` fill, `$radius-control` on all corners, label `$text`, shadow `0 8 24 #00000066` |
+| Only tab, All projects | no close button |
+
+**Attention dot.** Every tab of a project that has runs waiting for the user (the status bar's
+*Needs you* count) or an unresolved failure (status bar state H) shows the dot, the active tab
+included. The tooltip names the reason: *Personal website · 1 needs you* or *Personal website ·
+Could not create worktree for PW-14*. It clears when the count is 0 and the failure is opened or
+dismissed. All projects tabs never show it.
+
+**Overflow.** Tabs shrink together from 224 to 120; the active tab keeps at least 160. Below 140
+an inactive tab drops its close button (middle-click still closes it). When 120-wide tabs do not
+fit, the strip stops shrinking and scrolls horizontally (wheel or trackpad over the strip, and
+switching tabs scrolls the active one into view), with a 24px fade to `$canvas` on each clipped
+edge. A tab list button appears after the strip: the tab count (Geist Mono 11) and
+`chevron-down` 12, 24 high, radius 6, `$hover` fill and `chevron-up` while open. The list uses
+the select menu's style (`u0ByM`: `$raised`, `$border`, radius 11, padding 4, elevation shadow),
+320 wide, right-aligned under the button, 4px below the title bar, rows 32 high with the avatar,
+the full location and the check on the active tab; at most 8 rows, then it scrolls with the
+overlay thumb. A click switches, middle-click closes, Escape or a click outside closes the list.
+The + and 48px of drag area always stay visible.
+
+**Order.** Press on a tab and move 4px to drag it along the strip (horizontal only; it does not
+activate the tab). The other tabs slide aside to show where it will land; release drops it there,
+Escape or releasing away from the title bar puts it back. A tab cannot be torn out into a new
+window: there is one window.
+
+**Opening and closing.**
+
+- New tab (+, Ctrl/Cmd+T): All projects, inserted right of the active tab, and activated.
+- The sidebar project selector (`ZcJDx`, menu 01.06 B `n9vdhp`) changes the **current** tab: it
+  opens the chosen project's Overview in it, as a new history entry (Back returns). Ctrl/Cmd+click
+  or middle-click on a project opens it in a new tab right of the current one without switching
+  (Ctrl/Cmd+Shift+click switches). The hovered menu row shows an *Open in new tab* button
+  (`NcJQ0`, lucide `square-plus`, tooltip *Open in new tab · Ctrl+click*).
+- All projects (01.06): a click on a row opens that project's Overview in the current tab (the
+  All projects tab becomes the project's tab); Ctrl/Cmd+click or middle-click opens it in a new
+  tab. The sidebar's *All projects* item and the menu's *All projects* open it in the current tab.
+- Link-like navigation inside a page (a task row, a pipeline, a pull request) stays in the tab;
+  middle-click or Ctrl/Cmd+click on those opens a new tab only where the target is a whole page.
+- Close: the × button, middle-click, Ctrl/Cmd+W. The next tab to the right becomes active (the
+  left one if it was the last). Closing an inactive tab does not switch tabs. Closing asks only
+  when the tab's page would ask on navigating away (unsaved edits, e.g. an agent profile before
+  *Save draft*); that question is not designed yet (open question).
+- **Closing the last tab** opens All projects in a fresh tab; the window stays open (decided in
+  this proposal). Closing the window quits the application and stops every runner and agent
+  (there is no background mode, see [Application lifecycle](#application-lifecycle-and-runner-connection)),
+  so a repeated Ctrl/Cmd+W must not do that. The window is closed only with the window controls,
+  Alt+F4 or Cmd+Q, which keep the close-with-active-work dialog (02.C). When the only tab is
+  already All projects, it has no close button and Ctrl/Cmd+W does nothing.
+
+**Keyboard** (application shortcuts; tabs themselves are pointer-only — never focused, no ring,
+no Tab stop, following [Focus](#focus)):
+
+| Keys | Action |
+| --- | --- |
+| Ctrl+T / Cmd+T | New tab (All projects) |
+| Ctrl+W / Cmd+W | Close the active tab |
+| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab, wrapping (Ctrl on macOS too) |
+| Ctrl+PageDown / Ctrl+PageUp, Cmd+Shift+] / Cmd+Shift+[ | Next / previous tab |
+| Ctrl+1…8 / Cmd+1…8 | Tab 1…8 |
+| Ctrl+9 / Cmd+9 | Last tab |
+| Alt+Left / Alt+Right, Cmd+[ / Cmd+] | Back / Forward in the active tab |
+
+Shortcuts work while a dialog is closed; while a dialog is open only the dialog takes input
+(as for the status bar). Ctrl+W inside a text field still closes the tab.
+
+**Restore.** The tabs (order, location, active tab) are saved in the application database
+(`ui_state`) whenever they change and restored on the next start; the Back/Forward history is not
+restored. A tab whose project can no longer be opened (folder missing, newer data) is restored as
+that project's row state in All projects, never as an error page. If the previous session ended
+abnormally, the recovery dialog (02.E) opens over the restored tabs.
+
+**Runners.** One runner per open project, as today. A project is open while at least one tab shows
+it **or** its runner has work: a run in progress or queued, or a checkpoint being saved. When the
+last tab of a project closes:
+
+- with no work, its runner stops at once (runs waiting for the user — plan approval, a question, a
+  review — need no runner: an answer given later starts it again and the run resumes, as in
+  [storage.md](../architecture/storage.md));
+- with work, the runner keeps running in the background until the project is idle, then stops. Its
+  runs keep their normal status everywhere: the project's row in All projects shows *Runner online*
+  and its Active runs, the status bar's operations popover lists its operations with the project
+  name, and its *Needs you* count reaches every tab of it through the attention dot.
+
+Closing the window stops everything, exactly as before: the close-with-active-work dialog lists
+active runs of every project, with or without a tab. Opening a project in a tab starts its runner
+if it is not running.
+
+**States** (`UZF1Q`; each shows the title bar over the top 20px of the screen, sidebar and
+content):
+
+| State | Node |
+| --- | --- |
+| A · One tab | `Mwbxc` |
+| B · New tab · All projects (only tab, no close) | `GS4ZC` |
+| C · Several tabs, one active | `v12rJe` |
+| D · Hover · close button hovered, tooltip | `hWPxE` |
+| E · A project needs you (dot, tooltip) | `V1IUt5` |
+| F · Overflow · tab list open (menu `R4rtN1`) | `FtUhB` |
+| G · Dragging to reorder (dragged tab `mNVeh`) | `Ymhc7` |
+| H · macOS | `DF2hE` |
+
+**Window compositions** (1440 × 1020): `xjpkC` — three tabs over 02.03 Tasks (*Kontur · Tasks*
+active, *Kontur · ORC-12*, *Personal website · Overview* with the dot) with the idle status bar;
+`OOkFf` — a new tab on All projects (01.06) next to three project tabs. On All projects the status
+bar keeps only the activity slot, labelled with the project (*Kontur · Run #128 ready for
+review*), and the version: Runner, Agents, Queued, Needs you and Tokens belong to a project and
+are hidden.
+
+**All projects in a tab.** All projects (group `wa6B7` in 01 / Getting started: 01.06 list
+`Z7IZZ`, 01.06 A remove from list `EtMXj`, 01.06 B project switcher `n9vdhp`, 01.06 C empty
+`A4FJG`) is the new-tab page. Screens stay 960 high without chrome, as everywhere; `OOkFf` shows
+it in the window. Added for tabs on 2026-09-28:
+
+- 01.06 B `n9vdhp`: the hovered row (*Personal website*, `qUmfQ`) shows the *Open in new tab*
+  button `NcJQ0` (20 × 20, radius 5, lucide `square-plus` 14 `$muted`) before the check slot,
+  with the tooltip `yRd7u`. Only the hovered row shows it; the current project may be opened in
+  a second tab too.
+- 01.06 D `ucI7v` (x 1568 / y 1148): *Open project folder…* failed. An error line `tmE5H`
+  between the heading and the list — lucide `circle-alert` 14 and Inter 12, both `$text`, 8
+  apart: *Couldn’t open D:\work\notes — it has no .orchester project data. Use Add project to set
+  it up as a new project.* It stays until the next *Open project folder…* or *Add project*. Other
+  reasons use the same line: the folder's data was written by a newer version; the folder could
+  not be read (with the system's reason).
+- 01.06 E `t8TEOZ` (x 3088 / y 1148, compact): rows before their counts are read. The list, paths,
+  folder checks and runner states are known at once; Active runs and Needs you come from each
+  project's database and show a dash (“not known yet”, never 0) until read. No page-level loading
+  state or spinner.
+- The runner states in the list follow the runner rule above: *Runner online* for a project with a
+  running runner, with or without a tab; *Runner not started* for a project whose runner is not
+  running.
+
+**Not designed:** several windows, tearing a tab out, pinned tabs, reopening a closed tab
+(Ctrl+Shift+T), tab groups, and the unsaved-edits question on close.
+
+Proposed copy namespace: `tabs.*` (`tabs.newTab`, `tabs.close`, `tabs.list`,
+`tabs.needsYou.one` / `.other`, `tabs.openInNewTab`). Labels are built from project and page
+names (data) with one separator key, not by concatenating translated fragments.
 
 ## Status bar
 
@@ -300,7 +495,7 @@ finished event with its time. Elapsed time only — never a fake percentage.
 - I · Permission request waiting (later milestone, `OwnMs`): hand *Builder needs permission · ORC-128 · pnpm add …* `9:42 left` on a `$raised` fill · *Open request*; *Needs you* `3`. The countdown runs until the 10-minute timeout; then the slot shows *Request denied · no answer* as the latest event.
 - J · Not done (`XlbDa`, added 2026-09-27): circle-alert *Pull requests not synced* `14:52`, icon and label in `$muted`, time in `$subtle`, **no** raised fill, no dismiss, no action. For work that ended without doing what it set out to where the screen it belongs to already says why — a pull request sync GitHub refused (rate limit, wrong account, missing scope, unreachable) and a pull request GitHub did not return (*Pull request #42 not read*). It is the latest event, not a failure: it is never pinned (the Pull requests sync repeats every minute and would pin one each time), the next event replaces it, and a click opens the object (Pull requests). In the popover it is a finished row with the alert icon. A failure (H) is work that could not run at all (storage, the program did not start). *Needs you* shows `0` in `$subtle` here.
 
-`keJ9Z` is now 1123 high; its group `Tg1WX` is 1300 high, so the Focus group `xURvJ` moved to y 3656 and Foundations `cuxUu` is 7576 high.
+`keJ9Z` is now 1123 high; its group `Tg1WX` is 1300 high, so the Focus group `xURvJ` moved to y 3656 and Foundations `cuxUu` is 7576 high. Since the Tabs group `rOh31` (y 3656, 1700 high, 2026-09-28) the Focus group is at y 5452, the app icon group `f6IhTB` at y 9352 and Foundations is 9932 high.
 
 **Operations popover** (`E1msJS`, anchored example `imT2E`). Opens upward from the activity
 item, left-aligned with it, 6px above the bar; 420px wide, `$raised`, `$border`, 12px radius,
@@ -401,6 +596,7 @@ so they cannot remove the ring.
 | Pipeline step card (`ajikA`) | none: not focusable | 1.5 inside `$text` stroke |
 | Option card (new pipeline "Start from") | outer, radius 11; none while selected | 1.5 inside `$text` stroke + radio dot |
 | Tab (`SOW6S`) | none: not focusable | 2px `$text` bottom underline |
+| Window tab (`nAKyb`), new-tab and tab list buttons | none: not focusable | `$surface` fill (active tab) |
 | List row (e.g. `SGjO0`, `clVjO`, `QHBNZ`, `hn8qO`, `sFtAz`, agent list `jNTVN`) | none: not focusable | — |
 | Popover row (`E1msJS`), its dismiss control and Open runner log | none: not focusable | — |
 | Status bar item (`pmOpt`) | none: not focusable | `$hover` fill while its popover is open |
