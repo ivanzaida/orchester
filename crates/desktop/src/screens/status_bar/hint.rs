@@ -11,7 +11,7 @@ use lurq::{
   },
   components::{Button, Column, Popup, Text},
   core::{ElementRef, Signal},
-  node::{Element, HitTestBehavior, border::Border},
+  node::{Element, HitTestBehavior, border::Border, dimension::Dimension},
 };
 
 use super::POPOVER_GAP;
@@ -88,6 +88,7 @@ impl Hints {
     let hint = self.shown.get()?;
     let panel = Column::new()
       .id("status-bar-hint")
+      .max_width(Dimension::Px(super::popover::WIDTH))
       .padding_horizontal(SpacingSize::Sm)
       .padding_vertical(SpacingSize::Xs)
       .background(PaletteColor::SurfaceRaised)
@@ -95,9 +96,9 @@ impl Hints {
       .rounded(RadiusSize::Md)
       .child(
         Text::new(&hint.text)
+          .id("status-bar-hint-text")
           .variant(TypographyStyle::Caption)
-          .color(PaletteColor::TextPrimary)
-          .nowrap(),
+          .color(PaletteColor::TextPrimary),
       );
     Some(
       Popup::new(self.anchors.get(hint.anchor).clone(), panel)

@@ -102,6 +102,7 @@ fn failure(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Vec<Elem
   let text = event_text(ctx, event);
   let row = item("status-activity")
     .describe("state", "failure")
+    .flex_shrink(1.0)
     .background(PaletteColor::SurfaceRaised)
     .child(glyph(Icon::AlertCircle, PaletteColor::TextPrimary))
     .child(truncated_label(&text, PaletteColor::TextPrimary))

@@ -36,7 +36,7 @@ use crate::{
 
 /// Popover width (`E1msJS`). The recent list scrolls beyond this height; the design shows
 /// three events and does not say how a long session looks.
-const WIDTH: f32 = 420.0;
+pub(super) const WIDTH: f32 = 420.0;
 const LIST_MAX_HEIGHT: f32 = 360.0;
 const DIVIDER_HEIGHT: f32 = 1.0;
 /// Width of the chevron column (the 12px icon), kept empty on rows that open nothing so every

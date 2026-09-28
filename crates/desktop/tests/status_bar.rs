@@ -1,16 +1,19 @@
-//! The status bar's counts (`doeZn` in `pmOpt`) rendered headlessly: *Needs you* shows the
-//! Overview's count as a plain number, `0` included, a dash only while the tasks are read, and
-//! has no "not available" hint.
+//! The status bar (`pmOpt`) rendered headlessly: counts match the Overview, and a long
+//! failure stays before the right group while its full text remains in the hint.
 
-use std::path::PathBuf;
+use std::{
+  path::PathBuf,
+  time::{Instant, SystemTime},
+};
 
 use lurq::{
   app::{App, Tree, component::Component, ctx::Ctx},
   node::{Element, element::ElementRef},
 };
 use orchester_desktop::{
-  activity::Activity,
+  activity::{Activity, ActivityLog, OperationSpec},
   i18n,
+  messages::Message,
   runner::Runners,
   status_bar::{ProjectBar, StatusBar, StatusBarProps},
   tabs::feed::WindowFeed,
@@ -22,8 +25,16 @@ use tokio::runtime::Runtime;
 /// Provides the session's activity and the window's feed of it, as the root does, above the bar.
 struct Shell;
 
+#[derive(Clone, PartialEq)]
+struct ShellProps {
+  bar: StatusBarProps,
+  log: ActivityLog,
+}
+
+impl lurq::app::component::DevtoolsInspectable for ShellProps {}
+
 impl Component for Shell {
-  type Props = StatusBarProps;
+  type Props = ShellProps;
 
   fn create(ctx: &mut Ctx) -> Self {
     let activity = Activity::new();
@@ -33,8 +44,9 @@ impl Component for Shell {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<StatusBarProps>().clone();
-    ctx.mount_keyed::<StatusBar>("status-bar", props)
+    let props = ctx.props::<ShellProps>().clone();
+    WindowFeed::of(ctx).activity.set(props.log);
+    ctx.mount_keyed::<StatusBar>("status-bar", props.bar)
   }
 }
 
@@ -60,14 +72,62 @@ fn project(needs_you: Option<usize>) -> StatusBarProps {
 }
 
 fn laid_out(props: StatusBarProps) -> (App, Tree) {
+  laid_out_with_log(props, ActivityLog::default())
+}
+
+fn laid_out_with_log(props: StatusBarProps, log: ActivityLog) -> (App, Tree) {
   let mut app = App::new();
   theme::install(&mut app);
   i18n::install(&app).expect("bundled locales load");
   let mut tree = Tree::new();
   tree.resize(1440, 28);
-  tree.mount_root::<Shell>(&mut app, props);
+  tree.mount_root::<Shell>(&mut app, ShellProps { bar: props, log });
   tree.pass_headless(&mut app);
   (app, tree)
+}
+
+fn bounds(tree: &mut Tree, id: &str) -> lurq::core::ElementRect {
+  tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .expect("item is laid out")
+}
+
+#[test]
+fn status_bar_long_failure_stays_before_counts_and_has_full_hint() {
+  let mut log = ActivityLog::default();
+  let long_reason = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(32);
+  let spec = OperationSpec::new(
+    Message::new("statusBar.operations.projectCreate.running"),
+    Message::new("statusBar.operations.projectCreate.done"),
+    Message::new("statusBar.operations.projectCreate.failed").with("name", long_reason.clone()),
+  );
+  let id = log.start(spec, Instant::now());
+  log.fail(id, Message::new("errors.unsupportedPath"), SystemTime::now());
+  let (mut app, mut tree) = laid_out_with_log(StatusBarProps { project: None }, log);
+  let activity = bounds(&mut tree, "status-activity");
+  let version = bounds(&mut tree, "status-version");
+  assert!(
+    activity.x + activity.width <= version.x,
+    "failure item overlaps the right-hand group"
+  );
+  hover(&mut app, &mut tree, "status-activity");
+  let hint = bounds(&mut tree, "status-bar-hint");
+  let hint_text = bounds(&mut tree, "status-bar-hint-text");
+  assert!(
+    hint.width <= 420.0,
+    "the hint wraps instead of growing beyond the window"
+  );
+  assert!(hint_text.height > 30.0, "the complete failure wraps onto several lines");
+  assert!(
+    hint_text.x + hint_text.width <= hint.x + hint.width,
+    "hint text stays inside its panel"
+  );
+  assert!(
+    item_texts(&mut tree, "status-bar-hint")
+      .join(" ")
+      .contains(&long_reason)
+  );
 }
 
 fn texts(element: ElementRef<'_>, into: &mut Vec<String>) {

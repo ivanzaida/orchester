@@ -111,11 +111,6 @@ and MCP tools in the Tools library.
 
 ## U · Screens
 
-### U1 · Status bar labels never run under the right-hand group (UI)
-
-A long failure label is not truncated and runs under the right-hand group of the status bar. Truncate with an ellipsis
-and the full text in its hint.
-
 ### U2 · Merge and worktree controls while work runs (UI)
 
 From the merge verification: *Remove worktree* can be pressed while a merge runs; *Cancel* stays enabled while a removal
@@ -149,6 +144,12 @@ whether it is disabled and why, and whether that is right.
 The Paused, Stopped, Interrupted and Not started states of the conversation panel, and direct messages to one agent,
 are covered only by data tests. Verify them in the app and fix what differs from `jgqPe` / `kjsmd`.
 
+### U7 · Very long project names overflow other screens (UI)
+
+An intentionally long project name used for U1 verification spills from the sidebar selector and Overview heading.
+See `.tmp/verify/u1/report.md` and `failure-project-full.png`. Check the intended truncation in Pencil and keep both
+areas inside their bounds; this is separate from the verified status bar.
+
 ## L · After lurq 0.30.0
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, and the
@@ -179,6 +180,10 @@ catch the user's typing.
 
 ## Done
 
+U1 · Truncate long status-bar failures · branch `codex/status-bar-truncation` (headless regression 3/3,
+`tools/check.ps1` passed; independent MCP/Pencil verification at 1440, 1100 and 900 logical px found
+0 blocking/major/minor, a painted ellipsis, full wrapped hint and no overlap with project counts;
+evidence `.tmp/verify/u1/report.md`).
 T1 · Drop waits the store retry made unnecessary · commit `c13ece9`.
 T2 · Poll-free plan tests · commit `8739a65`.
 D2 · Extra writable folders for agents · branch `claude/writable-roots`.
