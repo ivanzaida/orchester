@@ -23,6 +23,7 @@ pub struct Switch {
   label: Arc<str>,
   on: bool,
   emphasized: bool,
+  detail: Option<Arc<str>>,
 }
 
 impl Switch {
@@ -32,6 +33,7 @@ impl Switch {
       label,
       on,
       emphasized: false,
+      detail: None,
     }
   }
 
@@ -43,15 +45,27 @@ impl Switch {
     self
   }
 
+  /// What the state means, after the label in the same row, which spaces the track, the label and
+  /// the detail evenly (`k1QWD`).
+  pub fn detail(mut self, detail: Arc<str>) -> Self {
+    self.detail = Some(detail);
+    self
+  }
+
   /// The label and its distance from the track.
   fn label(&self) -> (Text, SpacingSize) {
     if self.emphasized {
+      let gap = if self.detail.is_some() {
+        ExtraSpacing::Stack.role()
+      } else {
+        ExtraSpacing::Inline.role()
+      };
       (
         Text::new(&self.label)
           .variant(TypographyStyle::FieldLabel)
           .color(PaletteColor::TextPrimary)
           .nowrap(),
-        ExtraSpacing::Inline.role(),
+        gap,
       )
     } else {
       (
@@ -75,14 +89,15 @@ impl Switch {
       .describe("state", "locked")
       .child(self.track())
       .child(label)
+      .with_children(self.detail.as_deref().map(detail))
       .into()
   }
 
-  /// The switch and its label; a press anywhere on them flips it.
+  /// The switch and its label, then the detail if any; a press on the switch or its label flips it.
   pub fn render(self, flip: impl Fn() + Send + Sync + 'static) -> Element {
     let switch = self.track();
     let (label, gap) = self.label();
-    keyboard_stop(Button::empty().button(), Ring::Outer)
+    let button = keyboard_stop(Button::empty().button(), Ring::Outer)
       .id(self.id)
       .spacing(gap)
       .align_items(Alignment::Center)
@@ -91,8 +106,16 @@ impl Switch {
       .describe("checked", if self.on { "true" } else { "false" })
       .on_click(move |_| flip())
       .child(switch)
-      .child(label)
-      .into()
+      .child(label);
+    match self.detail {
+      Some(text) => Row::new()
+        .spacing(gap)
+        .align_items(Alignment::Center)
+        .child(button)
+        .child(detail(&text))
+        .into(),
+      None => button.into(),
+    }
   }
 
   /// The track with its knob: off in the raised surface with a muted knob at the left (`K8ItM`),
@@ -129,4 +152,9 @@ impl Switch {
           .rounded(ExtraRadius::Pill.role()),
       )
   }
+}
+
+/// The detail after a switch's label (`E42by` in `k1QWD`).
+fn detail(text: &str) -> Text {
+  Text::new(text).variant(TypographyStyle::Caption)
 }
