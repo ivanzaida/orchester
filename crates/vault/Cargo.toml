@@ -14,6 +14,8 @@ orchester-core.workspace = true
 
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 keyring-core.workspace = true
+# Wipes bytes read from the keychain that are not a valid value before they are dropped.
+zeroize.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-native-keyring-store.workspace = true

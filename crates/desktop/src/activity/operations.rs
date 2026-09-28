@@ -452,6 +452,27 @@ pub fn connection_save(open: &OpenProject, name: &str) -> OperationSpec {
   .target(in_project(open, Place::Connections))
 }
 
+/// Turning MCP server `name` on (`enabled`) or off.
+pub fn mcp_server_switch(open: &OpenProject, name: &str, enabled: bool) -> OperationSpec {
+  let wording = if enabled {
+    Wording {
+      running: "statusBar.operations.mcpServerOn.running",
+      done: "statusBar.operations.mcpServerOn.done",
+      failed: "statusBar.operations.mcpServerOn.failed",
+    }
+  } else {
+    Wording {
+      running: "statusBar.operations.mcpServerOff.running",
+      done: "statusBar.operations.mcpServerOff.done",
+      failed: "statusBar.operations.mcpServerOff.failed",
+    }
+  };
+  wording
+    .named(name)
+    .project(open.project.name().as_str())
+    .target(in_project(open, Place::Connections))
+}
+
 /// Checking a provider's CLI in the connection dialog; named by the product, e.g. "Codex CLI".
 pub fn cli_check(open: &OpenProject, provider: AgentProvider) -> OperationSpec {
   let wording = match provider {

@@ -456,6 +456,7 @@ fn codex_args(permissions: &AgentPermissions, platform: Platform) -> Vec<String>
     platform,
     resume: None,
     output_schema: None,
+    mcp: None,
   }
   .args()
   .into_iter()
@@ -525,7 +526,7 @@ fn permissions_map_to_claude_arguments_without_bypass_modes() {
   let claude = |permissions: &AgentPermissions, platform| {
     permissions
       .enforced_on(AgentProvider::ClaudeCodeCli, platform)
-      .map(|enforced| claude::permission_args(&enforced))
+      .map(|enforced| claude::permission_args(&enforced, &[]))
   };
   let read_only = permissions(
     RepositoryAccess::ReadOnly,

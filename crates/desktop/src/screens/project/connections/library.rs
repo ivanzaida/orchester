@@ -1,5 +1,5 @@
 //! The connections of the selected tab (`Bc9cT`, `gQDwZ`) beside the selected one's details
-//! (`JuVaA`, `C0jjP`), or what to add when the tab has none.
+//! (`JuVaA`, `C0jjP`, an MCP server's as `pQ0DW`), or what to add when the tab has none.
 
 use std::sync::Arc;
 
@@ -12,7 +12,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{AgentConnection, GitHubConnection},
+  connection::{AgentConnection, GitHubConnection, mcp::McpServer},
   id::ConnectionId,
 };
 
@@ -22,7 +22,8 @@ use super::{
   centered,
   github_inspector::{GitHubActions, GitHubInspector},
   inspector::{InspectorActions, InspectorState, inspector},
-  list::{RowState, connection_row, github_row},
+  list::{RowState, connection_row, github_row, mcp_row},
+  mcp_inspector::{McpActions, McpInspector},
 };
 use crate::{
   activity::operations,
@@ -49,6 +50,7 @@ type Handler = Arc<dyn Fn() + Send + Sync>;
 enum Listed<'a> {
   Agent(&'a AgentConnection),
   GitHub(&'a GitHubConnection),
+  Mcp(&'a McpServer),
 }
 
 impl Listed<'_> {
@@ -56,6 +58,7 @@ impl Listed<'_> {
     match self {
       Self::Agent(connection) => connection.id(),
       Self::GitHub(connection) => connection.id(),
+      Self::Mcp(server) => server.id(),
     }
   }
 }
@@ -119,11 +122,19 @@ impl ConnectionsScreen {
         }
         .render(ctx, &actions)
       }
+      Listed::Mcp(server) => McpInspector {
+        server,
+        uses: data.used_by(server.id()).collect(),
+        secrets: &data.secrets,
+        working: busy.on == Some(server.id()),
+        error: busy.error,
+      }
+      .render(ctx, &self.mcp_actions(open, server, work, busy.on.is_some())),
     };
     Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
-      .child(list_column(ctx, open, rows))
+      .child(list_column(ctx, open, rows, view.tab != ConnectionTab::McpServers))
       .child(details)
       .into()
   }
@@ -158,6 +169,14 @@ impl ConnectionsScreen {
         let github = connection.state(link.map(|link| link.expected_login()));
         github_row(ctx, connection, &github, &state, select)
       }
+      Listed::Mcp(server) => {
+        let state = RowState {
+          uses: data.used_by(id).count(),
+          selected: id == selected,
+          checking: false,
+        };
+        mcp_row(ctx, server, &state, select)
+      }
     }
   }
 
@@ -167,6 +186,7 @@ impl ConnectionsScreen {
       ConnectionTab::All => ("connections.emptyTitle", "connections.emptyDetail"),
       ConnectionTab::AgentProviders => ("connections.emptyProvidersTitle", "connections.emptyDetail"),
       ConnectionTab::GitHub => ("github.emptyTitle", "github.emptyDetail"),
+      ConnectionTab::McpServers => ("connections.mcp.emptyTitle", "connections.mcp.emptyDetail"),
     };
     let glyph = if tab == ConnectionTab::GitHub {
       Icon::GitPullRequest
@@ -203,6 +223,20 @@ impl ConnectionsScreen {
     InspectorActions {
       check,
       edit: Arc::new(move || dialog.set(DialogMode::EditAgent(editing.clone()))),
+      show_profile: Arc::new(move |profile| nav.show(Page::Agents(AgentSelection::Profile(profile)))),
+    }
+  }
+
+  fn mcp_actions(&self, open: &OpenProject, server: &McpServer, work: &WorkAction, busy: bool) -> McpActions {
+    let toggle = (!busy).then(|| {
+      let spec = operations::mcp_server_switch(open, server.name().as_str(), !server.enabled());
+      let work_kind = Work::SetEnabled(!server.enabled());
+      actions::start(work, &self.working, &open.repo_root, server.id(), work_kind, spec)
+    });
+    let (dialog, editing, nav) = (self.dialog.clone(), server.clone(), self.nav.clone());
+    McpActions {
+      toggle,
+      edit: Arc::new(move || dialog.set(DialogMode::EditMcp(editing.clone()))),
       show_profile: Arc::new(move |profile| nav.show(Page::Agents(AgentSelection::Profile(profile)))),
     }
   }
@@ -244,19 +278,23 @@ impl ConnectionsScreen {
   }
 }
 
-/// The connections the tab lists: GitHub first, as the design orders them, then agent providers.
+/// The connections the tab lists: GitHub first, as the design orders them, then agent providers, then MCP
+/// servers.
 fn listed(data: &ProjectConnections, tab: ConnectionTab) -> Vec<Listed<'_>> {
   let github = data.github.iter().map(Listed::GitHub);
   let agents = data.connections.iter().map(Listed::Agent);
+  let mcp = data.mcp.iter().map(Listed::Mcp);
   match tab {
-    ConnectionTab::All => github.chain(agents).collect(),
+    ConnectionTab::All => github.chain(agents).chain(mcp).collect(),
     ConnectionTab::AgentProviders => agents.collect(),
     ConnectionTab::GitHub => github.collect(),
+    ConnectionTab::McpServers => mcp.collect(),
   }
 }
 
-/// Search, rows, the provider notice and who owns the connections (`Bc9cT`).
-fn list_column(ctx: &Ctx, open: &OpenProject, rows: Vec<Element>) -> Element {
+/// Search, rows, the provider notice (not on the MCP servers tab, where it does not apply) and who owns
+/// the connections (`Bc9cT`).
+fn list_column(ctx: &Ctx, open: &OpenProject, rows: Vec<Element>, provider_notice: bool) -> Element {
   let search = value_box_sized(
     ctx,
     "connection-search",
@@ -269,11 +307,13 @@ fn list_column(ctx: &Ctx, open: &OpenProject, rows: Vec<Element>) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .with_children(rows)
-    .child(Notice::new(
-      Icon::Workflow,
-      ctx.t("connections.mixTitle"),
-      ctx.t("connections.mixDetail"),
-    ));
+    .with_children(provider_notice.then(|| {
+      Notice::new(
+        Icon::Workflow,
+        ctx.t("connections.mixTitle"),
+        ctx.t("connections.mixDetail"),
+      )
+    }));
   Column::new()
     .flex(1.0)
     .height(Dimension::Pct(100.0))

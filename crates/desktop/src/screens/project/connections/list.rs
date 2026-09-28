@@ -1,4 +1,4 @@
-//! A connection in the project list (`sFtAz` as in `d9bo3`, `iYGKy`): icon, name and what it
+//! A connection in the project list (`sFtAz` as in `d9bo3`, `iYGKy`, `enoFW`): icon, name and what it
 //! runs, its type, how many agents or repositories use it, its status and a chevron. The selected
 //! row is raised.
 
@@ -14,7 +14,10 @@ use lurq::{
   node::{Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{AgentConnection, GitHubConnection, GitHubState, REQUIRED_SCOPE},
+  connection::{
+    AgentConnection, GitHubConnection, GitHubState, REQUIRED_SCOPE,
+    mcp::{McpServer, McpTransport},
+  },
   id::ConnectionId,
 };
 
@@ -134,6 +137,49 @@ pub fn github_row(
     status: (status_icon, ctx.t_args(status_key, [("scope", REQUIRED_SCOPE)])),
   };
   row(content, state, on_click)
+}
+
+/// An MCP server (`enoFW` in 04.A `RZUKo`): how the agent's CLI reaches it, the profiles that give it
+/// to their agents, and whether it is on.
+pub fn mcp_row(
+  ctx: &Ctx,
+  server: &McpServer,
+  state: &RowState,
+  on_click: impl Fn() + Send + Sync + 'static,
+) -> Element {
+  let usage_key = if state.uses == 1 {
+    "connections.usage.one"
+  } else {
+    "connections.usage.other"
+  };
+  let (status_icon, status_key) = mcp_status(server);
+  let content = RowContent {
+    id: server.id(),
+    icon: icon(Icon::Plug, IconSize::Notice, PaletteColor::TextPrimary).into(),
+    name: server.name().as_str().into(),
+    description: mcp_description(ctx, server),
+    kind: ctx.t("connections.type.mcp"),
+    usage: ctx.t_args(usage_key, [("count", state.uses.to_string().as_str())]),
+    status: (status_icon, ctx.t(status_key)),
+  };
+  row(content, state, on_click)
+}
+
+/// How the agent's CLI reaches `server`, in one line: "Program · npx" or "Remote MCP · mcp.example.dev".
+pub fn mcp_description(ctx: &Ctx, server: &McpServer) -> Arc<str> {
+  match server.transport() {
+    McpTransport::Stdio(stdio) => ctx.t_args("connections.mcp.row.stdio", [("program", stdio.program().as_str())]),
+    McpTransport::Http(http) => ctx.t_args("connections.mcp.row.http", [("host", http.url().host())]),
+  }
+}
+
+/// On, or turned off for every profile.
+pub const fn mcp_status(server: &McpServer) -> (Icon, &'static str) {
+  if server.enabled() {
+    (Icon::CircleCheck, "connections.mcp.status.on")
+  } else {
+    (Icon::CircleMinus, "connections.mcp.status.off")
+  }
 }
 
 fn row(content: RowContent, state: &RowState, on_click: impl Fn() + Send + Sync + 'static) -> Element {

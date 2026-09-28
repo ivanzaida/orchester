@@ -136,6 +136,10 @@ impl SecretVault for DiscardingVault {
     Ok(())
   }
 
+  fn read(&self, _key: &VaultKey) -> Result<SecretValue, VaultError> {
+    Err(VaultError::NotFound)
+  }
+
   fn delete(&self, _key: &VaultKey) -> Result<(), VaultError> {
     Ok(())
   }

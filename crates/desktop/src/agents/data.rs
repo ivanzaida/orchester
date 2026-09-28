@@ -5,13 +5,13 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::{AgentConnection, invocation::Platform},
+  connection::{AgentConnection, invocation::Platform, mcp::McpServer},
   id::ResourceId,
   permission::AgentPermissions,
   resource::{
     AgentProfile, Draft, ModelId, Pipeline, PublishError, ResourceKind, Slug, StepKind, Version, VersionNumber,
   },
-  store::{ConnectionStore, ResourceStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -100,6 +100,8 @@ pub struct ProjectAgents {
   /// Agent provider connections: the only kind a profile can run on.
   pub connections: Arc<Vec<AgentConnection>>,
   pub steps: Arc<Vec<StepUse>>,
+  /// The project's MCP servers, which a profile can give its agents.
+  pub mcp: Arc<Vec<McpServer>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProjectAgents {}
@@ -107,12 +109,13 @@ impl lurq::app::component::DevtoolsInspectable for ProjectAgents {}
 impl ProjectAgents {
   pub fn load<S>(store: &S) -> Result<Self, StoreError>
   where
-    S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError>,
+    S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError> + McpServerStore<Error = StoreError>,
   {
     Ok(Self {
       profiles: Arc::new(profiles(store)?),
       connections: Arc::new(agent_connections(store.connections()?)),
       steps: Arc::new(step_uses(store)?),
+      mcp: Arc::new(store.mcp_servers()?),
     })
   }
 

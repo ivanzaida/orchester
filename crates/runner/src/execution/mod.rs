@@ -43,6 +43,7 @@ use std::{
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   run::{InterruptCause, RaisedLimits},
+  secret::SecretVault,
   tokens::TokenBudget,
 };
 use orchester_ipc::{Event, Rejection};
@@ -97,6 +98,8 @@ pub struct Scheduler {
 struct Inner {
   project_root: PathBuf,
   notifier: Notifier,
+  /// Where the values of the secrets MCP servers use are read from when an agent starts.
+  vault: Arc<dyn SecretVault>,
   board: Arc<Board>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
   /// Held by a request that may execute a run again (continuing it or deciding its plan), so two
@@ -106,10 +109,11 @@ struct Inner {
 }
 
 impl Scheduler {
-  pub fn new(project_root: &Path, notifier: Notifier) -> Self {
+  pub fn new(project_root: &Path, notifier: Notifier, vault: Arc<dyn SecretVault>) -> Self {
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
+        vault,
         board: Arc::new(Board::new(notifier.clone())),
         notifier,
         active: Mutex::new(HashMap::new()),
@@ -349,6 +353,7 @@ impl Scheduler {
     let context = TaskContext {
       root: self.inner.project_root.clone(),
       notifier: self.inner.notifier.clone(),
+      vault: self.inner.vault.clone(),
       board: self.inner.board.clone(),
       controls,
       settled: settled.clone(),

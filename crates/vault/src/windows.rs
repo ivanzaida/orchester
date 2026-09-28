@@ -14,6 +14,10 @@ pub(crate) fn store(key: &VaultKey, value: &SecretValue) -> Result<(), VaultErro
   entry::store(credential(key), value)
 }
 
+pub(crate) fn read(key: &VaultKey) -> Result<SecretValue, VaultError> {
+  entry::read(credential(key))
+}
+
 pub(crate) fn delete(key: &VaultKey) -> Result<(), VaultError> {
   entry::delete(credential(key))
 }

@@ -22,6 +22,7 @@ use orchester_core::{
 use super::{
   super::{super::ProjectNav, heading::step_state},
   engine,
+  mcp::mcp_server_text,
   rows::{Header, RowKind, TranscriptRow},
 };
 use crate::{
@@ -379,6 +380,13 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     EntryKind::Problem(problem) => {
       let (title, body) = problem_text(ctx, problem);
       plain(Icon::AlertCircle, title, "".into(), body)
+    }
+    EntryKind::McpServer(server, problem) => {
+      let (title, body, said) = mcp_server_text(ctx, server.as_deref(), problem);
+      Shown {
+        output: said.map(|said| vec![said]),
+        ..plain(Icon::Plug, title, "".into(), Some(body))
+      }
     }
     EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),
     EntryKind::ToolCommand(entry) => tool_command(ctx, entry),

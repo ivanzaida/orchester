@@ -7,19 +7,23 @@
 
 pub mod hold;
 pub mod tools;
+pub mod vault;
 
 use std::{
   collections::{BTreeMap, BTreeSet},
   fs,
   path::{Path, PathBuf},
   process::Command,
+  sync::Arc,
   time::Duration,
 };
 
 use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, REASONING_EFFORT,
-    SignIn, stream::AgentEvent,
+    SignIn,
+    mcp::{McpServer, McpServerSelection},
+    stream::AgentEvent,
   },
   id::{ConnectionId, IdempotencyKey, ProjectId, RunId, TaskId},
   name::Name,
@@ -30,7 +34,8 @@ use orchester_core::{
     StepKind,
   },
   run::Run,
-  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
+  secret::Secret,
+  store::{ActivityStore, ConnectionStore, McpServerStore, ResourceStore, RunStore, SecretStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
   tokens::TokenBudget,
@@ -40,6 +45,8 @@ use orchester_runner::execution::{Notifier, Scheduler};
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
+
+use self::vault::MemoryVault;
 
 pub const FAKE_CODEX: &str = env!("CARGO_BIN_EXE_orchester-fake-codex");
 pub const FAKE_CLAUDE: &str = env!("CARGO_BIN_EXE_orchester-fake-claude");
@@ -133,6 +140,10 @@ pub struct Setup {
   pub steps: Vec<StepSpec>,
   /// The CLI the Builder profile runs on.
   pub provider: AgentProvider,
+  /// MCP servers of the project, all chosen by the Builder profile.
+  pub mcp: Vec<McpServer>,
+  /// Secrets of the project with their values in the keychain.
+  pub secrets: Vec<(Secret, &'static str)>,
 }
 
 impl Setup {
@@ -142,6 +153,8 @@ impl Setup {
       review: false,
       steps: Vec::new(),
       provider: AgentProvider::CodexCli,
+      mcp: Vec::new(),
+      secrets: Vec::new(),
       budget: 1_400_000,
       max_duration: Duration::from_secs(30 * 60),
     }
@@ -151,6 +164,9 @@ impl Setup {
 pub struct TestProject {
   pub repo: TempDir,
   pub task: TaskId,
+  pub project: ProjectId,
+  /// The keychain with the values of the setup's secrets.
+  pub vault: Arc<MemoryVault>,
 }
 
 pub fn project(setup: &Setup) -> TestProject {
@@ -169,11 +185,25 @@ pub fn project(setup: &Setup) -> TestProject {
     ProjectKey::new("ORC").expect("key"),
     name("Kontur"),
   );
+  let id = project.id();
   let mut db = ProjectDb::create(root, project).expect("create project");
   let connection = agent_connection(setup.provider);
   db.create_connection(&connection).expect("connection");
+  let mut values = Vec::new();
+  for (secret, value) in &setup.secrets {
+    db.create_secret(secret).expect("secret");
+    values.push((secret.vault_key(id), *value));
+  }
+  for server in &setup.mcp {
+    db.create_mcp_server(server).expect("MCP server");
+  }
   let task = queued_task(&mut db, connection.id(), setup);
-  TestProject { repo, task }
+  TestProject {
+    repo,
+    task,
+    project: id,
+    vault: MemoryVault::with(values),
+  }
 }
 
 fn agent_connection(provider: AgentProvider) -> orchester_core::connection::Connection {
@@ -265,7 +295,8 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     RepositoryAccess::Write,
     commands(setup.provider),
     NetworkAccess::Off,
-  ));
+  ))
+  .with_mcp_servers(McpServerSelection::new(setup.mcp.iter().map(McpServer::id).collect()).expect("servers"));
   let builder = db
     .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, now)
     .expect("profile")
@@ -329,8 +360,13 @@ pub fn queue_another_task(root: &Path) -> TaskId {
 }
 
 pub fn scheduler(root: &Path) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
+  scheduler_with(root, Arc::new(MemoryVault::default()))
+}
+
+/// A scheduler that reads secret values from `vault`.
+pub fn scheduler_with(root: &Path, vault: Arc<MemoryVault>) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
   let (sender, events) = mpsc::unbounded_channel();
-  (Scheduler::new(root, Notifier::new(sender)), events)
+  (Scheduler::new(root, Notifier::new(sender), vault), events)
 }
 
 /// The run once a notification shows it satisfying `done`.

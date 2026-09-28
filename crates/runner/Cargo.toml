@@ -92,6 +92,10 @@ required-features = ["test-agent"]
 name = "unreadable"
 required-features = ["test-agent"]
 
+[[test]]
+name = "mcp"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
@@ -100,6 +104,8 @@ orchester-core.workspace = true
 orchester-exec.workspace = true
 orchester-ipc.workspace = true
 orchester-store.workspace = true
+# Reads the values of the secrets MCP servers use from the OS keychain when an agent starts.
+orchester-vault.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -107,6 +113,10 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+# The in-memory keychain of the tests is shared with the scheduler.
+parking_lot.workspace = true
+# Reads the MCP configuration file the fake Claude Code CLI reports.
+serde_json.workspace = true
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
 rusqlite.workspace = true
 tempfile.workspace = true

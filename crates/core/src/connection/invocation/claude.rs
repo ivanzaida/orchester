@@ -1,16 +1,18 @@
 //! How an agent step starts the Claude Code CLI (`.tmp/cli-probe/REPORT.md`, "Recommended argv"):
 //!
 //! `claude -p --output-format stream-json --verbose --model <model> [--effort <e>]
-//!  --strict-mcp-config --setting-sources "" --disable-slash-commands <permissions>
+//!  --strict-mcp-config --setting-sources "" --disable-slash-commands [--mcp-config <file>] <permissions>
 //!  (--session-id <new uuid> | --resume <session>)`
 //!
 //! in the worktree as the process's working directory, with the prompt on standard input.
 //!
 //! - `stream-json` needs `--verbose` in print mode; without it the CLI exits with an error.
-//! - Isolation from the user's own setup: `--strict-mcp-config` loads no MCP server, `--disable-slash-commands` no
-//!   skills, and `--setting-sources ""` no settings file at all. The user's settings carry allow rules that would widen
-//!   the permissions; a repository's `.claude/settings.json` could do the same, or run hooks, and in a writing step the
-//!   agent could edit that file for the invocations after it.
+//! - Isolation from the user's own setup: `--strict-mcp-config` loads no MCP server but the invocation's own,
+//!   `--disable-slash-commands` no skills, and `--setting-sources ""` no settings file at all. The user's settings
+//!   carry allow rules that would widen the permissions; a repository's `.claude/settings.json` could do the same, or
+//!   run hooks, and in a writing step the agent could edit that file for the invocations after it.
+//! - MCP servers: only those the profile chooses, from a file the runner writes for the invocation
+//!   ([`super::ClaudeMcpConfig`]); their tools are allowed with `--allowedTools mcp__<server>` rules.
 //! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
 //!   offered, permission mode, denied tools, allowed command prefixes). Bypass modes are never used.
 //! - Sessions: a new session gets an id Orchester chose (`--session-id`); a continue after a pause or a limit resumes
@@ -26,6 +28,7 @@ use uuid::Uuid;
 use super::{InvocationError, agent_command};
 use crate::{
   command::Command,
+  connection::mcp::McpServerName,
   permission::{capability::EnforcedPermissions, claude::permission_args},
   resource::CommandEnvironment,
 };
@@ -57,6 +60,8 @@ pub struct ClaudeInvocation<'a> {
   pub permissions: &'a EnforcedPermissions,
   pub worktree: &'a Path,
   pub session: ClaudeSession<'a>,
+  /// The MCP servers the invocation gives the agent: the file that configures them and their names.
+  pub mcp: Option<(&'a Path, &'a [McpServerName])>,
 }
 
 impl ClaudeInvocation<'_> {
@@ -85,7 +90,11 @@ impl ClaudeInvocation<'_> {
       ]
       .map(str::to_owned),
     );
-    args.extend(permission_args(self.permissions));
+    if let Some((config, _)) = self.mcp {
+      args.extend(["--mcp-config".to_owned(), config.to_string_lossy().into_owned()]);
+    }
+    let servers = self.mcp.map_or(&[][..], |(_, servers)| servers);
+    args.extend(permission_args(self.permissions, servers));
     match self.session {
       ClaudeSession::New(id) => args.extend(["--session-id".to_owned(), id.to_string()]),
       ClaudeSession::Resume(session) => args.extend(["--resume".to_owned(), session.to_owned()]),
@@ -106,7 +115,7 @@ impl ClaudeInvocation<'_> {
       self.args(),
       self.worktree,
       prompt,
-      (environment, project),
+      (environment, project, &[]),
     )
   }
 }

@@ -1,4 +1,4 @@
-//! The Permissions tab (04.04 `T1rjv`): repository access, commands and network, each option
+//! The Permissions tab (04.04 `T1rjv`): repository access, commands, network and MCP servers (`mcp`), each option
 //! disabled with the reason when the chosen connection cannot enforce it (04.B `W0Owo`), beside
 //! the panel that says how the connection enforces them (`enforcement`).
 
@@ -59,7 +59,8 @@ impl ProfileEditor {
       .child(Text::new(&ctx.t_args("agents.permissions.intro", [("role", &*role)])).variant(TypographyStyle::FieldLabel))
       .child(self.repository_setting(ctx, provider))
       .child(self.commands_setting(ctx, provider))
-      .child(self.network_setting(ctx, provider));
+      .child(self.network_setting(ctx, provider))
+      .child(self.mcp_setting(ctx, provider));
     let body = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Section)

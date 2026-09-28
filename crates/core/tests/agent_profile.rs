@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
+  connection::mcp::{McpSelectionError, McpServerSelection},
   id::ConnectionId,
   name::Name,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
@@ -86,11 +87,44 @@ fn agent_profile_keeps_its_permissions() {
 fn agent_profile_schema_1_bodies_get_the_permissions_before_permissions() {
   let original = builder();
   let mut body = serde_json::to_value(&original).unwrap();
-  body.as_object_mut().unwrap().remove("permissions");
+  let fields = body.as_object_mut().unwrap();
+  fields.remove("permissions");
+  fields.remove("mcp_servers");
   assert!(serde_json::from_value::<AgentProfile>(body.clone()).is_err());
   let upgraded = AgentProfile::upgrade(1, body.clone()).expect("schema 1 upgrades");
   let profile: AgentProfile = serde_json::from_value(upgraded).unwrap();
   assert_eq!(profile, original);
-  assert_eq!(AgentProfile::SCHEMA, 2);
+  assert_eq!(AgentProfile::SCHEMA, 3);
   assert!(AgentProfile::upgrade(0, body).is_none());
+}
+
+#[test]
+fn agent_profile_schema_2_bodies_get_no_mcp_servers() {
+  let original = builder();
+  let mut body = serde_json::to_value(&original).unwrap();
+  body.as_object_mut().unwrap().remove("mcp_servers");
+  assert!(serde_json::from_value::<AgentProfile>(body.clone()).is_err());
+  let upgraded = AgentProfile::upgrade(2, body).expect("schema 2 upgrades");
+  let profile: AgentProfile = serde_json::from_value(upgraded).unwrap();
+  assert_eq!(profile, original);
+  assert!(profile.mcp_servers().is_empty());
+}
+
+#[test]
+fn agent_profile_keeps_its_mcp_servers() {
+  let (first, second) = (ConnectionId::generate(), ConnectionId::generate());
+  let servers = McpServerSelection::new(vec![first, second]).expect("two servers");
+  let profile = builder().with_mcp_servers(servers.clone());
+  let json = serde_json::to_string(&profile).unwrap();
+  let read: AgentProfile = serde_json::from_str(&json).unwrap();
+  assert_eq!(read.mcp_servers(), &servers);
+  assert_eq!(
+    McpServerSelection::new(vec![first, first]),
+    Err(McpSelectionError::Duplicate(first))
+  );
+  let toggled = servers.toggled(first).expect("fewer servers");
+  assert_eq!(toggled.ids(), &[second]);
+  assert_eq!(toggled.toggled(first).expect("one more").ids(), &[second, first]);
+  let tampered = json.replace(&second.to_string(), &first.to_string());
+  assert!(serde_json::from_str::<AgentProfile>(&tampered).is_err());
 }

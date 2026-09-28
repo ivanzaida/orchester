@@ -9,7 +9,10 @@
 use std::sync::Arc;
 
 use orchester_core::{
-  connection::stream::{AgentEvent, CommandStatus, FileChange, OutputStream, RunnerProblem, ToolCommandResult},
+  connection::{
+    mcp::McpServerProblem,
+    stream::{AgentEvent, CommandStatus, FileChange, OutputStream, RunnerProblem, ToolCommandResult},
+  },
   id::{InvocationId, StepExecutionId},
   run::{ActivityEntry, TokenUsage},
   time::Timestamp,
@@ -27,6 +30,8 @@ pub enum EntryKind {
   /// The agent CLI is not signed in; what it said.
   NotSignedIn(Arc<str>),
   Problem(RunnerProblem),
+  /// The agent works without an MCP server: its name when known, and why.
+  McpServer(Option<Arc<str>>, McpServerProblem),
   /// Unparsed lines, in order.
   Raw(Arc<Vec<(OutputStream, Arc<str>)>>),
   /// A tool step's command tool, from its start to its end.
@@ -81,7 +86,7 @@ impl Entry {
         command.result,
         Some(ToolCommandResult::Failed | ToolCommandResult::TimedOut)
       ),
-      EntryKind::Error(_) | EntryKind::NotSignedIn(_) | EntryKind::Problem(_) => true,
+      EntryKind::Error(_) | EntryKind::NotSignedIn(_) | EntryKind::Problem(_) | EntryKind::McpServer(..) => true,
       _ => false,
     }
   }
@@ -129,6 +134,10 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       AgentEvent::PermissionDenied { command, .. } => deny_command(&mut entries, stored, command),
       AgentEvent::NotSignedIn { message } => entries.push(entry(EntryKind::NotSignedIn(message.as_str().into()))),
       AgentEvent::RunnerProblem { problem } => entries.push(entry(EntryKind::Problem(problem.clone()))),
+      AgentEvent::McpServer { server, problem } => entries.push(entry(EntryKind::McpServer(
+        server.as_deref().map(Arc::from),
+        problem.clone(),
+      ))),
       AgentEvent::Raw { stream, line } => push_raw(&mut entries, stored, *stream, line),
       AgentEvent::ToolCommandStarted { command, .. } => entries.push(entry(EntryKind::ToolCommand(ToolCommandEntry {
         command: command.as_str().into(),

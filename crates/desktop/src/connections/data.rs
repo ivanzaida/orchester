@@ -7,11 +7,14 @@ use std::{
 };
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, Connection, ConnectionCheck, ConnectionError, GitHubConnection},
+  connection::{
+    AgentConnection, AgentProvider, Connection, ConnectionCheck, ConnectionError, GitHubConnection, mcp::McpServer,
+  },
   id::{ConnectionId, ResourceId},
   name::Name,
   repository::RepositoryLink,
-  store::{ConnectionStore, RepositoryStore, ResourceStore},
+  secret::Secret,
+  store::{ConnectionStore, McpServerStore, RepositoryStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_exec::launch::{self, Launch};
@@ -24,7 +27,8 @@ use crate::{
   messages::{self, Message},
 };
 
-/// A profile that runs on a connection, for the read-only "Used by" links.
+/// A profile that runs on a connection, or gives its agents an MCP server, for the read-only "Used by"
+/// links.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProfileUse {
   pub connection: ConnectionId,
@@ -34,12 +38,15 @@ pub struct ProfileUse {
 }
 
 /// The project's connections of each kind, what starts when each one's program runs, the
-/// profiles that use the agent providers and the repository link that uses a GitHub connection,
-/// read together.
+/// profiles that use the agent providers and the MCP servers, the repository link that uses a GitHub
+/// connection and the secrets MCP servers can take values from, read together.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectConnections {
   pub connections: Arc<Vec<AgentConnection>>,
   pub github: Arc<Vec<GitHubConnection>>,
+  pub mcp: Arc<Vec<McpServer>>,
+  /// The project's secrets that are not archived.
+  pub secrets: Arc<Vec<Secret>>,
   pub uses: Arc<Vec<ProfileUse>>,
   pub link: Option<Arc<RepositoryLink>>,
   pub launches: Arc<Vec<(ConnectionId, Launch)>>,
@@ -50,16 +57,26 @@ impl lurq::app::component::DevtoolsInspectable for ProjectConnections {}
 impl ProjectConnections {
   pub fn load<S>(store: &S) -> Result<Self, StoreError>
   where
-    S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError> + RepositoryStore<Error = StoreError>,
+    S: ResourceStore<Error = StoreError>
+      + ConnectionStore<Error = StoreError>
+      + RepositoryStore<Error = StoreError>
+      + McpServerStore<Error = StoreError>
+      + SecretStore<Error = StoreError>,
   {
-    // A profile uses the connection its current content names: its draft if it has one.
+    // A profile uses the connection and the MCP servers its current content names: its draft if it
+    // has one.
     let uses = profiles(store)?
       .into_iter()
-      .map(|entry| ProfileUse {
-        connection: entry.profile.connection(),
-        profile: entry.id,
-        role: entry.profile.role().as_str().into(),
-        model: entry.profile.model().as_str().into(),
+      .flat_map(|entry| {
+        let servers = entry.profile.mcp_servers().ids().to_vec();
+        std::iter::once(entry.profile.connection())
+          .chain(servers)
+          .map(move |connection| ProfileUse {
+            connection,
+            profile: entry.id,
+            role: entry.profile.role().as_str().into(),
+            model: entry.profile.model().as_str().into(),
+          })
       })
       .collect();
     let connections = store.connections()?;
@@ -70,6 +87,8 @@ impl ProjectConnections {
     Ok(Self {
       github: Arc::new(github_connections(connections.clone())),
       connections: Arc::new(agent_connections(connections)),
+      mcp: Arc::new(store.mcp_servers()?),
+      secrets: Arc::new(store.secrets()?),
       uses: Arc::new(uses),
       link: store.repository_link()?.map(Arc::new),
       launches: Arc::new(launches),
@@ -88,6 +107,10 @@ impl ProjectConnections {
     self.github.iter().find(|connection| connection.id() == id)
   }
 
+  pub fn mcp_server(&self, id: ConnectionId) -> Option<&McpServer> {
+    self.mcp.iter().find(|server| server.id() == id)
+  }
+
   /// What starts when the program of connection `id` runs.
   pub fn launch_of(&self, id: ConnectionId) -> Option<&Launch> {
     self
@@ -102,7 +125,7 @@ impl ProjectConnections {
     self.link.as_deref().filter(|link| link.connection() == id)
   }
 
-  /// Profiles that run on `id`, in profile order.
+  /// Profiles that run on `id`, or give their agents MCP server `id`, in profile order.
   pub fn used_by(&self, id: ConnectionId) -> impl Iterator<Item = &ProfileUse> {
     self.uses.iter().filter(move |used| used.connection == id)
   }

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::prompt::PromptText;
-use crate::{id::ConnectionId, name::Name, permission::AgentPermissions};
+use crate::{connection::mcp::McpServerSelection, id::ConnectionId, name::Name, permission::AgentPermissions};
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ModelIdError {
@@ -98,8 +98,8 @@ impl From<ProviderSettings> for BTreeMap<String, String> {
 }
 
 /// A project agent role: what it is responsible for, how it is instructed, which connection and
-/// model run it and what it may do. Pipeline steps select a profile, inherit its model and can
-/// only narrow its permissions.
+/// model run it, what it may do and which MCP servers its agents get. Pipeline steps select a profile,
+/// inherit its model and its MCP servers and can only narrow its permissions.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentProfile {
   role: Name,
@@ -109,11 +109,12 @@ pub struct AgentProfile {
   model: ModelId,
   settings: ProviderSettings,
   permissions: AgentPermissions,
+  mcp_servers: McpServerSelection,
 }
 
 impl AgentProfile {
-  /// A profile with the most restrictive permissions ([`AgentPermissions::before_permissions`]);
-  /// see [`Self::with_permissions`].
+  /// A profile with the most restrictive permissions ([`AgentPermissions::before_permissions`]) and no MCP
+  /// servers; see [`Self::with_permissions`] and [`Self::with_mcp_servers`].
   pub const fn new(
     role: Name,
     responsibilities: String,
@@ -130,12 +131,19 @@ impl AgentProfile {
       model,
       settings,
       permissions: AgentPermissions::before_permissions(),
+      mcp_servers: McpServerSelection::none(),
     }
   }
 
   #[must_use]
   pub fn with_permissions(mut self, permissions: AgentPermissions) -> Self {
     self.permissions = permissions;
+    self
+  }
+
+  #[must_use]
+  pub fn with_mcp_servers(mut self, servers: McpServerSelection) -> Self {
+    self.mcp_servers = servers;
     self
   }
 
@@ -166,5 +174,10 @@ impl AgentProfile {
 
   pub const fn permissions(&self) -> &AgentPermissions {
     &self.permissions
+  }
+
+  /// The MCP servers the profile's agents get; none by default.
+  pub const fn mcp_servers(&self) -> &McpServerSelection {
+    &self.mcp_servers
   }
 }

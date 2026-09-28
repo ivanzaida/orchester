@@ -5,10 +5,11 @@
 
 mod command;
 mod end;
+mod mcp;
 pub(super) mod worker;
 
 use orchester_core::{
-  connection::stream::{AgentStream, InvocationOutcome, RunnerProblem},
+  connection::stream::{AgentEvent, AgentStream, InvocationOutcome, RunnerProblem},
   conversation::{Message, latest_question},
   id::StepExecutionId,
   resource::ModelId,
@@ -17,6 +18,7 @@ use orchester_core::{
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
+use orchester_ipc::Event;
 use tokio::sync::mpsc;
 
 use self::worker::{Stop, Worker};
@@ -25,7 +27,7 @@ use super::{
   run::{ExecutionError, RunTask},
   workspace::{Start, Workspace},
 };
-use crate::supervisor::Supervised;
+use crate::{private_file::PrivateFile, supervisor::Supervised};
 
 /// How an execution's next invocation continues it: the CLI session it resumes, if its last
 /// invocation reported one, when that invocation started, and the people's messages it delivers.
@@ -201,15 +203,16 @@ impl RunTask {
         return Ok(true);
       }
     };
-    let (command, provider, prompt) = match self.command(execution, &continuation, workspace.path()) {
-      Ok(started) => started,
+    let start = match self.command(execution, &continuation, (invocation.id, workspace.path())) {
+      Ok(start) => start,
       Err(problem) => {
         self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted)?;
         return Ok(true);
       }
     };
-    self.db.save_invocation_prompt(invocation.id, &prompt)?;
-    let process = match Supervised::start(&command) {
+    self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
+    self.record_left_out(&invocation, start.mcp_left_out)?;
+    let process = match Supervised::start(&start.command) {
       Ok(process) => process,
       Err(error) => {
         let problem = RunnerProblem::CouldNotStart {
@@ -221,16 +224,31 @@ impl RunTask {
     };
     // Messages that never reached a started agent stay queued.
     self.deliver(execution, &invocation, std::mem::take(&mut continuation.messages))?;
-    self.spawn(execution, invocation, AgentStream::new(provider), process, workspace)?;
+    let output = AgentStream::new(start.provider);
+    self.spawn(execution, invocation, (output, process, start.mcp_file), workspace)?;
     Ok(true)
+  }
+
+  /// Records that the agent of `invocation` works without the MCP servers of `left_out`.
+  fn record_left_out(&mut self, invocation: &Invocation, left_out: Vec<AgentEvent>) -> Result<(), ExecutionError> {
+    if left_out.is_empty() {
+      return Ok(());
+    }
+    let now = Timestamp::now();
+    let events: Vec<(Timestamp, AgentEvent)> = left_out.into_iter().map(|event| (now, event)).collect();
+    let sequence = self.db.append_activity(invocation, &events)?;
+    self.notifier.send(Event::AgentActivity {
+      run: self.run.id(),
+      sequence,
+    });
+    Ok(())
   }
 
   fn spawn(
     &mut self,
     execution: StepExecutionId,
     invocation: Invocation,
-    output: AgentStream,
-    process: Supervised,
+    (output, process, mcp_file): (AgentStream, Supervised, Option<PrivateFile>),
     workspace: Workspace,
   ) -> Result<(), ExecutionError> {
     let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);
@@ -243,6 +261,7 @@ impl RunTask {
       notifier: self.notifier.clone(),
       events: self.worker_events.clone(),
       stops: stopped,
+      mcp_file,
     };
     tokio::spawn(worker.work());
     // The budget in force: one raised for the run after it stopped at the step's limit, else the

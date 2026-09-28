@@ -20,6 +20,7 @@ use orchester_core::{
   id::StepExecutionId,
   project::Project,
   run::{InterruptCause, Invocation, Run, RunError, RunEvent, RunLimit, RunStatus, active_time},
+  secret::SecretVault,
   store::ActivityStore,
   task::Task,
   time::Timestamp,
@@ -68,6 +69,7 @@ pub(super) enum ExecutionError {
 pub(super) struct TaskContext {
   pub(super) root: PathBuf,
   pub(super) notifier: Notifier,
+  pub(super) vault: Arc<dyn SecretVault>,
   pub(super) board: Arc<Board>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   pub(super) settled: Arc<AtomicBool>,
@@ -91,6 +93,7 @@ pub(super) struct RunTask {
   /// The run's worktree, on the run's branch.
   pub(super) worktree: PathBuf,
   pub(super) notifier: Notifier,
+  pub(super) vault: Arc<dyn SecretVault>,
   pub(super) board: Arc<Board>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   listening: bool,
@@ -116,6 +119,7 @@ impl RunTask {
       project,
       worktree: prepared.worktree,
       notifier: context.notifier,
+      vault: context.vault,
       board: context.board,
       controls: context.controls,
       listening: true,

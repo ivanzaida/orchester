@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-  connection::{Connection, stream::AgentEvent},
+  connection::{Connection, mcp::McpServer, stream::AgentEvent},
   conversation::Message,
   diff::RevisionDiff,
   id::{ConnectionId, IdempotencyKey, InvocationId, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
@@ -145,6 +145,22 @@ pub trait ConnectionStore {
 
   /// All connections of the project, ordered by name.
   fn connections(&self) -> Result<Vec<Connection>, Self::Error>;
+}
+
+/// The project's MCP servers. Written by the desktop; the runner reads them when an agent starts.
+pub trait McpServerStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Stores a new server. Names are unique among the project's MCP servers.
+  fn create_mcp_server(&mut self, server: &McpServer) -> Result<(), Self::Error>;
+
+  /// Stores the current name, transport, variables and enabled flag of an existing server.
+  fn save_mcp_server(&mut self, server: &McpServer) -> Result<(), Self::Error>;
+
+  fn mcp_server(&self, id: ConnectionId) -> Result<Option<McpServer>, Self::Error>;
+
+  /// All MCP servers of the project, ordered by name.
+  fn mcp_servers(&self) -> Result<Vec<McpServer>, Self::Error>;
 }
 
 /// Project secrets' metadata. Values are never stored here: they are in the OS keychain

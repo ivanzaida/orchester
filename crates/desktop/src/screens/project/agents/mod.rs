@@ -6,6 +6,7 @@ mod editor;
 mod enforcement;
 mod fields;
 mod list;
+mod mcp;
 mod permissions;
 mod tabs;
 

@@ -1,10 +1,11 @@
 //! The agent CLI command of an agent step, for the provider of its profile's connection (Codex or
 //! Claude Code): the connection and settings, the worktree it works in, the variables the project
-//! adds to its environment (read at each start), and the prompt assembled for
-//! its injection event: for a new session the whole prompt with the instructions injected at start,
-//! the outputs of the steps it runs after (and, for Codex, the result schema); for a session that
-//! resumes the continue prompt with the instructions injected at resume. A gated step a reviewer
-//! sent back is told what should change instead (the plan revision).
+//! adds to its environment (read at each start), the MCP servers the profile chooses (`mcp`), and
+//! the prompt assembled for its injection event: for a new session the whole prompt with the
+//! instructions injected at start, the outputs of the steps it runs after (and, for Codex, the
+//! result schema); for a session that resumes the continue prompt with the instructions injected at
+//! resume. A gated step a reviewer sent back is told what should change instead (the plan
+//! revision).
 
 use std::path::Path;
 
@@ -13,10 +14,11 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, REASONING_EFFORT,
     invocation::{ClaudeInvocation, ClaudeSession, CodexInvocation, InvocationError, Platform},
-    stream::RunnerProblem,
+    stream::{AgentEvent, RunnerProblem},
   },
-  id::StepExecutionId,
-  resource::{AgentProfile, InjectionEvent, Instruction, Step, StepKind},
+  id::{InvocationId, StepExecutionId},
+  permission::capability::EnforcedPermissions,
+  resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKind},
   run::{
     AssembledPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
     PinnedVersion, PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, Run, RunContext,
@@ -25,22 +27,49 @@ use orchester_core::{
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, SettingsStore},
 };
 
-use super::{super::run::RunTask, Continuation};
+use super::{
+  super::run::RunTask,
+  Continuation,
+  mcp::{McpServers, McpSetup},
+};
+use crate::private_file::PrivateFile;
 
 fn problem(detail: String) -> RunnerProblem {
   RunnerProblem::CouldNotStart { detail }
 }
 
+/// How an agent invocation starts.
+pub(super) struct AgentStart {
+  pub(super) command: Command,
+  pub(super) provider: AgentProvider,
+  pub(super) prompt: InvocationPrompt,
+  /// Claude Code's MCP configuration file, removed when this is dropped: once the CLI has ended.
+  pub(super) mcp_file: Option<PrivateFile>,
+  /// An event for each MCP server the agent works without.
+  pub(super) mcp_left_out: Vec<AgentEvent>,
+}
+
+/// What decides the CLI's arguments besides its prompt and MCP servers.
+struct Cli<'a> {
+  connection: &'a AgentConnection,
+  model: &'a ModelId,
+  effort: Option<&'a str>,
+  enforced: &'a EnforcedPermissions,
+  worktree: &'a Path,
+  resume: Option<&'a str>,
+  environment: &'a CommandEnvironment,
+}
+
 impl RunTask {
-  /// The command that runs `execution`'s agent, the CLI it starts and what its prompt is made of,
-  /// continuing as `continuation` says, or why it cannot start.
+  /// How invocation `invocation` of `execution`'s agent starts: its command, the CLI it starts,
+  /// what its prompt is made of and its MCP servers, continuing as `continuation` says, or why it
+  /// cannot start.
   pub(super) fn command(
     &self,
     execution: StepExecutionId,
     continuation: &Continuation,
-    worktree: &Path,
-  ) -> Result<(Command, AgentProvider, InvocationPrompt), RunnerProblem> {
-    let resume = continuation.session.as_deref();
+    (invocation, worktree): (InvocationId, &Path),
+  ) -> Result<AgentStart, RunnerProblem> {
     let key = self
       .run
       .execution(execution)
@@ -57,6 +86,52 @@ impl RunTask {
     else {
       return Err(problem(format!("step `{key}` is not an agent step")));
     };
+    let (body, connection) = self.profile_and_connection(profile)?;
+    let info = ProfileInfo {
+      id: profile.resource,
+      version: profile.number,
+      body: &body,
+    };
+    let AssembledPrompt { text: prompt, sources } = self.prompt(execution, step, info, continuation)?;
+    // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
+    // because an agent never starts with permissions that are not enforced. The run's permissions
+    // for the profile, if they were changed for it, else the profile's, narrowed by the step.
+    let enforced = self
+      .run
+      .step_permissions(key, body.permissions())
+      .expect("an agent step of the run has permissions")
+      .enforced_on(connection.provider(), Platform::current())
+      .map_err(|error| problem(error.to_string()))?;
+    let environment = self
+      .db
+      .project_environment()
+      .map_err(|error| problem(error.to_string()))?;
+    let provider = connection.provider();
+    let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
+    let cli = Cli {
+      connection: &connection,
+      model,
+      effort: body
+        .settings()
+        .iter()
+        .find_map(|(name, value)| (name == REASONING_EFFORT).then_some(value)),
+      enforced: &enforced,
+      worktree,
+      resume: continuation.session.as_deref(),
+      environment: &environment,
+    };
+    let (command, mcp_file) = self.cli_command(&cli, setup, prompt)?;
+    Ok(AgentStart {
+      command,
+      provider,
+      prompt: sources,
+      mcp_file,
+      mcp_left_out: left_out,
+    })
+  }
+
+  /// The pinned profile version and the agent connection it runs on.
+  fn profile_and_connection(&self, profile: &PinnedVersion) -> Result<(AgentProfile, AgentConnection), RunnerProblem> {
     let body: AgentProfile = self
       .db
       .version::<AgentProfile>(profile.resource, profile.number)
@@ -71,56 +146,48 @@ impl RunTask {
       .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?;
     let connection =
       AgentConnection::try_from(connection).map_err(|_| problem("the connection is not an agent CLI".to_owned()))?;
-    let profile = ProfileInfo {
-      id: profile.resource,
-      version: profile.number,
-      body: &body,
-    };
-    let AssembledPrompt { text: prompt, sources } = self.prompt(execution, step, profile, continuation)?;
-    // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
-    // because an agent never starts with permissions that are not enforced. The run's permissions
-    // for the profile, if they were changed for it, else the profile's, narrowed by the step.
-    let enforced = self
-      .run
-      .step_permissions(key, body.permissions())
-      .expect("an agent step of the run has permissions")
-      .enforced_on(connection.provider(), Platform::current())
-      .map_err(|error| problem(error.to_string()))?;
-    let effort = body
-      .settings()
-      .iter()
-      .find_map(|(name, value)| (name == REASONING_EFFORT).then_some(value));
-    let provider = connection.provider();
-    let environment = self
-      .db
-      .project_environment()
-      .map_err(|error| problem(error.to_string()))?;
-    let command = match provider {
-      AgentProvider::CodexCli => CodexInvocation {
-        executable: connection.executable(),
-        model: model.as_str(),
-        reasoning_effort: effort,
-        access: enforced.permissions().repository(),
-        network: enforced.permissions().network(),
-        worktree,
+    Ok((body, connection))
+  }
+
+  /// The CLI's command with `prompt` on its standard input and the MCP servers of `setup`, and the
+  /// configuration file it reads them from, if any.
+  fn cli_command(
+    &self,
+    cli: &Cli<'_>,
+    setup: McpSetup,
+    prompt: String,
+  ) -> Result<(Command, Option<PrivateFile>), RunnerProblem> {
+    let command = match &setup {
+      McpSetup::Codex(mcp) => CodexInvocation {
+        executable: cli.connection.executable(),
+        model: cli.model.as_str(),
+        reasoning_effort: cli.effort,
+        access: cli.enforced.permissions().repository(),
+        network: cli.enforced.permissions().network(),
+        worktree: cli.worktree,
         platform: Platform::current(),
-        resume,
+        resume: cli.resume,
         output_schema: Some(&self.schema_path()),
+        mcp: Some(mcp),
       }
-      .command(prompt, std::env::vars_os(), &environment),
-      AgentProvider::ClaudeCodeCli => ClaudeInvocation {
-        executable: connection.executable(),
-        model: model.as_str(),
-        effort,
-        permissions: &enforced,
-        worktree,
-        session: ClaudeSession::continuing(resume),
+      .command(prompt, std::env::vars_os(), cli.environment),
+      McpSetup::Claude(file) => ClaudeInvocation {
+        executable: cli.connection.executable(),
+        model: cli.model.as_str(),
+        effort: cli.effort,
+        permissions: cli.enforced,
+        worktree: cli.worktree,
+        session: ClaudeSession::continuing(cli.resume),
+        mcp: file.as_ref().map(|(file, servers)| (file.path(), servers.as_slice())),
       }
-      .command(prompt, std::env::vars_os(), &environment),
+      .command(prompt, std::env::vars_os(), cli.environment),
     };
-    command
-      .map(|command| (command, provider, sources))
-      .map_err(|error: InvocationError| problem(error.to_string()))
+    let command = command.map_err(|error: InvocationError| problem(error.to_string()))?;
+    let file = match setup {
+      McpSetup::Claude(file) => file.map(|(file, _)| file),
+      McpSetup::Codex(_) => None,
+    };
+    Ok((command, file))
   }
 
   /// The prompt of `execution`'s next invocation: role, instructions, step and task with the run's

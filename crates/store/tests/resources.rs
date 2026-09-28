@@ -383,7 +383,7 @@ fn resources_agent_profiles_keep_their_permissions() {
   let stored: String = raw(repo.path())
     .query_row("SELECT body FROM resource_versions", [], |row| row.get(0))
     .unwrap();
-  assert!(stored.contains(r#""schema":2"#), "{stored}");
+  assert!(stored.contains(r#""schema":3"#), "{stored}");
 }
 
 /// Profiles stored before permissions existed (schema 1) read as read-only, commands confined to
@@ -401,7 +401,9 @@ fn resources_agent_profiles_before_permissions_read_with_the_safest_permissions(
     .unwrap();
   let mut document: serde_json::Value = serde_json::from_str(&stored).unwrap();
   document["schema"] = 1.into();
-  document["body"].as_object_mut().unwrap().remove("permissions");
+  let fields = document["body"].as_object_mut().unwrap();
+  fields.remove("permissions");
+  fields.remove("mcp_servers");
   let schema_1 = document.to_string();
   let raw = raw(repo.path());
   raw
@@ -429,7 +431,7 @@ fn resources_agent_profiles_before_permissions_read_with_the_safest_permissions(
     .query_row("SELECT body FROM resource_versions", [], |row| row.get(0))
     .unwrap();
   assert_eq!(unchanged, schema_1);
-  document["schema"] = 3.into();
+  document["schema"] = 4.into();
   raw
     .execute("UPDATE resource_drafts SET body = ?1", [document.to_string()])
     .unwrap();
