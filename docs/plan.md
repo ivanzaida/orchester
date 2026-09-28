@@ -163,15 +163,6 @@ No app change is expected. **Done when** the tab list (`tabs/strip/list.rs`), th
 popover and the selects are checked: a press outside closes them without activating what is underneath, and a
 headless test covers the tab list case.
 
-### L4 · Verify text inputs after the text fixes (UI)
-
-The same lurq release fixes old text-input bugs: multi-line inputs no longer shift when a taller glyph is typed (new
-`VerticalAlign::LineBox`), a selection is the text's height instead of the whole line box, the caret sits before the
-first glyph at a line start, and the caret blinks (every 530 ms) in an idle window. Multi-line text now sits about 3px
-lower than before, at its correct baseline. No Orchester code change is expected. **Done when** an independent design
-verification of a focused multi-line field (the New task brief, a conversation composer) and of a selection in a single-
-and a multi-line input reports no blocking or major mismatches, and anything it finds is fixed or listed here.
-
 ### L5 · Select menus wider than their trigger (lurq)
 
 lurq makes a select menu exactly as wide as its trigger, so the MCP dialog's *Add a variable from a secret…* menu shows
@@ -210,3 +201,4 @@ T3 · Serialize the remaining run request fallbacks · commit `389ee3b`.
 T5 · Continuing a run whose worktree was deleted by hand · branch `codex/missing-run-worktree`.
 L1 · The window title follows the active tab · branch `codex/window-title` (MCP and Pencil verified).
 L2 · Remove the held scroll states · branch `codex/scroll-state` (15 offstage-only states removed; purposeful navigation and programmatic scroll states kept; `form_keyboard ::` 213 passed, 1 ignored; MCP and Pencil verified on reachable screens).
+L4 · Verify text inputs after the text fixes · branch `codex/text-input-verification` (independent MCP/Pencil check of focused New Task brief, conversation composer, single- and multi-line selection, caret blink and stable line baseline: 0 blocking/major; 3 focused tests and `tools/check.ps1` passed. Minor: New Task form controls sit about 2–3 logical px above Pencil. Pencil has no explicit text-selection specimen; selection was checked against field geometry and the planned glyph-height behavior. Local evidence: `.tmp/verify/l4/report.md`).
