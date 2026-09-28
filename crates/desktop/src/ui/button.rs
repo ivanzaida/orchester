@@ -252,16 +252,16 @@ fn with_interaction(button: Button, role: &FormButtonRole, in_form: bool) -> But
 
 /// A select drawn as a compact secondary button `height` high with `glyph` and `label`, e.g. *Add a
 /// variable from a secret…* (`Pdcuk` in 04.E `yRb2k`: an 11/500 label beside a 12px icon). Its face
-/// stays the same whatever is chosen, so the menu (`u0ByM`) marks no option as chosen; lurq makes
-/// it as wide as the button, so an option that needs more says the rest in its detail line. A Tab
-/// stop, with the outer focus ring while focused, like a button in a form; its parents let the ring
-/// show past them.
+/// stays the same whatever is chosen, so the menu (`u0ByM`) marks no option as chosen. A Tab stop,
+/// with the outer focus ring while focused, like a button in a form; its parents let the ring show
+/// past them.
 pub fn select_button<T>(
   ctx: &Ctx,
   value: Signal<T>,
   options: Vec<SelectOption<T>>,
   (glyph, label): (Icon, Arc<str>),
   height: f32,
+  min_menu_width: f32,
 ) -> Select<T>
 where
   T: Clone + PartialEq + Send + Sync + 'static + SignalValue,
@@ -296,6 +296,7 @@ where
     .trigger_hovered(state(role.background_hover, role.border_hover))
     .trigger_open(state(role.background_active, role.border_active))
     .trigger_focused(SelectPartStyle::new().box_shadow(ExtraShadow::FocusRing.role()))
+    .min_menu_width(min_menu_width)
     .single_checkmark(false);
   Select::new(value)
     .options(options)

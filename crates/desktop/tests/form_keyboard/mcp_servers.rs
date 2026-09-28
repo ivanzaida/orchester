@@ -254,6 +254,20 @@ fn mcp_dialog_adds_a_variable_from_a_secret() {
   desktop.click("add-connection");
   desktop.wait_for("mcp-add-secret");
   assert!(shows(&mut desktop, "mcp-add-secret", "Add a variable from a secret…"));
+  let labels = desktop
+    .tree
+    .get_element_by_id_mut("mcp-add-secret")
+    .and_then(|element| element.as_select())
+    .expect("secret select")
+    .labels();
+  assert_eq!(labels[0].as_ref(), "DOCS_TOKEN (Staging)");
+  desktop.press("mcp-add-secret");
+  let menu = desktop
+    .tree
+    .find_element(|element| element.tag_name() == "SelectMenu")
+    .expect("secret menu open")
+    .bounds();
+  assert_eq!(menu.width, 260.0);
   desktop.tab_to("mcp-variables", PRESSES);
   desktop.type_text("DOCS_INDEX=docs");
   choose(&mut desktop, "mcp-add-secret", "DOCS_TOKEN");

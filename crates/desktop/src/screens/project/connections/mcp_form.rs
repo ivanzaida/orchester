@@ -40,6 +40,8 @@ use crate::{
 const FIELD_HEIGHT: f32 = 40.0;
 const AREA_ROWS: (usize, usize) = (3, 8);
 const ADD_SECRET_HEIGHT: f32 = 30.0;
+/// Reusable select menu `u0ByM`, wider than the secret button `Pdcuk`.
+const ADD_SECRET_MENU_WIDTH: f32 = 260.0;
 
 impl McpDialog {
   pub(super) fn form(&self, ctx: &Ctx, errors: &McpServerErrors) -> Element {
@@ -186,10 +188,8 @@ impl McpDialog {
       .into()
   }
 
-  /// *Add a variable from a secret…* (`Pdcuk`): the project's secrets in the select menu, each by
-  /// its name with its environment under it (the menu is only as wide as the button); the chosen
-  /// one becomes a `NAME=${secret:NAME@environment}` line. Without secrets it cannot be pressed
-  /// and says so.
+  /// *Add a variable from a secret…* (`Pdcuk`): each option shows `NAME (environment)` on one
+  /// line in the wider menu (`u0ByM`). The chosen secret becomes a variable reference.
   fn insert_secret(&self, ctx: &Ctx) -> Element {
     if self.context.secrets.is_empty() {
       return ActionButton::new(ctx.t("connections.mcp.dialog.noSecrets"))
@@ -205,8 +205,12 @@ impl McpDialog {
       .secrets
       .iter()
       .map(|secret| {
-        SelectOption::new(InsertSecret(Some(secret.id())), secret.name().as_str())
-          .detail(ctx.t(environment_key(secret.environment())))
+        let environment = ctx.t(environment_key(secret.environment()));
+        let label = ctx.t_args(
+          "connections.mcp.secretName",
+          [("name", secret.name().as_str()), ("environment", environment.as_ref())],
+        );
+        SelectOption::new(InsertSecret(Some(secret.id())), label)
       })
       .collect();
     let face = (Icon::KeyRound, ctx.t("connections.mcp.dialog.addSecret"));
@@ -216,6 +220,7 @@ impl McpDialog {
       options,
       face,
       ADD_SECRET_HEIGHT,
+      ADD_SECRET_MENU_WIDTH,
     ))
     .id("mcp-add-secret")
   }
