@@ -9,7 +9,7 @@ Date: 2026-09-23. Status: agreed direction for the local (single-user) version; 
 | Topic | Decision |
 | --- | --- |
 | Project data | `<repo>/.orchester/`, local only, never committed |
-| Application data | `orchester.db` next to the executable |
+| Application data | `orchester.db` next to the executable; a macOS app bundle keeps it in `~/Library/Application Support/Orchester/` (see [Storage layout](#storage-layout)) |
 | Structured data | SQLite (WAL) |
 | Large content | content-addressed blob files |
 | Secrets | OS keychain only; databases store references |
@@ -32,13 +32,20 @@ orchester.exe (desktop, UI)
 ```
 
 - The desktop owns the window and all user-authored changes. It starts one runner
-  per project that has work, and talks to it over a local IPC channel (named pipe on Windows):
-  commands down (start, pause, resume, cancel, deliver message, approval decision), events up
+  per project that has work, and talks to it over a local IPC channel (a named pipe on Windows,
+  a Unix domain socket in the user's private `$TMPDIR/orchester/` folder on macOS; the desktop
+  checks that the process serving it is the runner it started): commands down (start, pause, resume, cancel, deliver message, approval decision), events up
   (state changes, progress, output). It reads state directly from the project database.
 - The runner owns execution: scheduling, agent processes, checkpoints, tool calls, evidence. It
   resolves secrets from the keychain at tool-call time; neither the desktop nor agents see values.
 - Runner and agents run inside a Windows Job Object created by the desktop with
   kill-on-close, so they can never outlive the desktop process, whether it quits or crashes.
+- macOS has no Job Objects. The desktop sends the runner SIGTERM when it lets go of it (SIGKILL
+  if it is still running 30 s later), and the runner ends its work when the desktop's end of the
+  connection closes, which is also what a desktop crash does; either way it ends its agents first.
+  Each agent CLI and command runs as the leader of its own process group; the runner ends it with
+  the group (SIGTERM, SIGKILL after 3 s), and ends the same way whatever it left running when it
+  exited. Unlike a Job Object, a process that leaves its group on purpose (`setsid`) survives.
 
 ### Lifecycle
 
@@ -210,9 +217,22 @@ locks (`orchester_core::integration`).
   runner.lock                  one runner per project
 ```
 
+A macOS app bundle cannot write beside its executable (`Orchester.app/Contents/MacOS/` is part of
+the signed bundle, which an update replaces), so a bundled build keeps its data in the user's
+Library; the runner stays beside the desktop in `Contents/MacOS/`:
+
+```
+~/Library/Application Support/Orchester/orchester.db   application database
+~/Library/Logs/Orchester/orchester-<YYYY-MM-DD>.log     desktop log (Console.app, Log Reports)
+```
+
+A macOS build outside a bundle (a development build in `target/`) keeps both beside its executable,
+as on Windows, so it never opens the installed app's database. The decision is made in one place,
+`crates/desktop/src/app_paths/`.
+
 *Open:* a directory next to the executable is not writable under `Program Files` and may be
 replaced by an installer. The path is resolved in one place so a per-user fallback can be added
-when an installer exists.
+when a Windows installer exists.
 
 ## Conventions
 

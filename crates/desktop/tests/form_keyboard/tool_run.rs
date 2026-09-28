@@ -1,8 +1,7 @@
 //! A run with a tool step end to end, headlessly, on the real runner: Implement on
 //! `orchester-fake-codex`, then Checks running a command tool (`orchester-test-command`). The task
 //! page lists the tool step with its tool and no tokens, and the Activity tab shows the command
-//! and its exit code. Windows only, like the runner's named pipe.
-#![cfg(windows)]
+//! and its exit code.
 
 use std::{env, path::Path};
 

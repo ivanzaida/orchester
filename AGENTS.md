@@ -27,11 +27,14 @@ Workspace layout:
 - `crates/desktop` (`orchester-desktop`, binary `orchester`): lurq UI. Screens call into core; business rules do not
   live in components. Theme tokens live in `crates/desktop/src/theme.rs`.
 - `crates/runner` (`orchester-runner`): one process per open project, started by the desktop from the desktop's
-  own directory. Run the app with `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g.
-  `--features mcp`); plain `cargo run -p orchester-desktop` does not build the runner, and the app then shows the
-  runner as unable to start. The desktop's runner integration is Windows-only for now (see requirement 0).
+  own directory (inside `Orchester.app` both are in `Contents/MacOS`). Run the app with
+  `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g. `--features mcp`); plain
+  `cargo run -p orchester-desktop` does not build the runner, and the app then shows the runner as unable to start.
+  On macOS: `cargo build -p orchester-runner && cargo run -p orchester-desktop`; `tools/package-macos.sh` builds
+  `Orchester.app` and `tools/install-macos.sh` installs it (`docs/stable-build.md`).
 - `crates/exec` (`orchester-exec`): runs external programs (git, gh, agent CLIs) for the desktop and the runner,
-  implementing core's `CommandRunner`. Platform details (hidden console window, process kill) stay behind `cfg` here.
+  implementing core's `CommandRunner`. Platform details (hidden console window, process groups and kill, the macOS
+  program search path) stay behind `cfg` here.
 - Add a crate only when a real boundary exists (for example the server or a runner). No empty placeholder crates.
 
 Hard requirements:
@@ -39,9 +42,12 @@ Hard requirements:
 0. Orchester ships on Windows AND macOS. New code must build and behave on both: platform-specific code lives
    behind `cfg(target_os = …)` in small, named modules with an equivalent implementation for the other platform (or
    an explicit, visible "not supported on this platform yet" state — never a silent gap). Do not add Windows-only
-   dependencies without their macOS counterpart. Known gaps today: the runner IPC transport, process-tree kill,
-   pipe-owner check, CLI discovery (`.exe`/`.cmd`) and the application database location (next to the executable is
-   not writable inside a macOS `.app`).
+   dependencies without their macOS counterpart. The macOS side (Unix socket transport and peer check, process groups,
+   program search path, Library data location, `.app` bundle) is checked with `cargo check`/`clippy --target
+   aarch64-apple-darwin` on Windows until it has been run on a Mac. Known gaps today: a macOS process group does not
+   hold what leaves it on purpose (`setsid`), and agents outlive a runner that is killed with SIGKILL or aborts (no
+   kill-on-close Job Object); CLIs and tools outside the usual install folders are not found when the app is started
+   from Finder (the user's shell `PATH` is not read); the `.app` is signed ad hoc and not notarized.
 1. Before writing or reviewing Rust code, read `.claude/skills/rust-code-quality/SKILL.md` and follow it.
 2. Before touching the visual layer (screen, panel, row, field, dialog, control, interaction, user-facing text,
    layout/text/scroll defect), read `.claude/skills/lurq-ui/SKILL.md` with its `references/`, and

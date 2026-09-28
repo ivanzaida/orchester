@@ -2,8 +2,7 @@
 //! `orchester-fake-codex`: the popover changes the permissions for the run, Apply now shows the
 //! change pending until the agent restarts and then applied, Also save to the profile adds the
 //! change to the profile's draft, Keep for next invocation instead cancels the restart, and
-//! Escape or Cancel close the popover without changes. Windows only, like `task_run`.
-#![cfg(windows)]
+//! Escape or Cancel close the popover without changes.
 
 use std::{fs, path::Path};
 

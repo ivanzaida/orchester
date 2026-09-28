@@ -8,7 +8,7 @@ use std::{io, os::windows::io::AsRawHandle};
 
 use windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId;
 
-pub(crate) fn server_process_id(pipe: &impl AsRawHandle) -> io::Result<u32> {
+pub fn server_process_id(pipe: &impl AsRawHandle) -> io::Result<u32> {
   let mut process_id: u32 = 0;
   // SAFETY: `pipe` is an open client handle of a named pipe, borrowed for the whole call, and
   // `process_id` is a live, writable `u32` the function only writes to.

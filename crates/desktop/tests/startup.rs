@@ -1,7 +1,10 @@
 use std::{fs, path::Path};
 
 use orchester_desktop::{
-  app_paths::app_database_beside, project_setup::ProjectDraft, session::AppSession, workspace::Landing,
+  app_paths::{AppDataLocation, app_database_beside},
+  project_setup::ProjectDraft,
+  session::AppSession,
+  workspace::Landing,
 };
 use orchester_store::SessionEnd;
 use tempfile::TempDir;
@@ -19,6 +22,64 @@ fn app_database_lives_next_to_the_executable() {
     app_database_beside(executable),
     Path::new("C:/Program Files/Orchester/orchester.db")
   );
+}
+
+#[test]
+fn app_data_lives_next_to_the_executable_with_its_logs() {
+  let executable = Path::new("C:/Program Files/Orchester/orchester.exe");
+  let location = AppDataLocation::beside(executable);
+  assert_eq!(location.database, Path::new("C:/Program Files/Orchester/orchester.db"));
+  assert_eq!(location.log_dir, Path::new("C:/Program Files/Orchester/logs"));
+}
+
+#[cfg(target_os = "macos")]
+mod macos {
+  use std::path::Path;
+
+  use orchester_desktop::app_paths::{AppDataLocation, macos};
+
+  #[test]
+  fn app_bundle_keeps_its_data_in_the_users_library() {
+    let executable = Path::new("/Applications/Orchester.app/Contents/MacOS/orchester");
+    let location = macos::location_of(executable, Some(Path::new("/Users/ada"))).expect("location");
+    assert_eq!(
+      location.database,
+      Path::new("/Users/ada/Library/Application Support/Orchester/orchester.db")
+    );
+    assert_eq!(location.log_dir, Path::new("/Users/ada/Library/Logs/Orchester"));
+  }
+
+  #[test]
+  fn development_build_keeps_its_data_beside_the_executable() {
+    let executable = Path::new("/Users/ada/orchester/target/debug/orchester");
+    let location = macos::location_of(executable, Some(Path::new("/Users/ada"))).expect("location");
+    assert_eq!(location, AppDataLocation::beside(executable));
+    assert_eq!(
+      location.database,
+      Path::new("/Users/ada/orchester/target/debug/orchester.db")
+    );
+  }
+
+  #[test]
+  fn only_the_program_folder_of_an_app_bundle_counts_as_bundled() {
+    assert!(macos::in_app_bundle(Path::new(
+      "/Users/ada/Applications/Orchester.app/Contents/MacOS/orchester"
+    )));
+    assert!(!macos::in_app_bundle(Path::new(
+      "/Applications/Orchester.app/Contents/Resources/orchester"
+    )));
+    assert!(!macos::in_app_bundle(Path::new(
+      "/Applications/Orchester/Contents/MacOS/orchester"
+    )));
+    assert!(!macos::in_app_bundle(Path::new("/orchester")));
+  }
+
+  #[test]
+  fn app_bundle_without_a_home_folder_is_an_error() {
+    let executable = Path::new("/Applications/Orchester.app/Contents/MacOS/orchester");
+    assert!(macos::location_of(executable, None).is_err());
+    assert!(macos::location_of(executable, Some(Path::new("relative"))).is_err());
+  }
 }
 
 #[test]

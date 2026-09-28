@@ -2,9 +2,7 @@
 //! headlessly, on the real runner, `orchester-fake-codex` and git: the merge moves `main` and
 //! clears the run's worktree and branch, a checkout with uncommitted changes is refused and left
 //! alone, and *Remove worktree* names the uncommitted files and removes them only once discarding
-//! is agreed to — and not when changes appeared after the dialog listed them. Windows only, like
-//! the runner's named pipe.
-#![cfg(windows)]
+//! is agreed to — and not when changes appeared after the dialog listed them.
 
 use std::{fs, path::Path, process::Command};
 

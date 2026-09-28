@@ -6,28 +6,23 @@
 //! [`Event`]s (replies and change notifications), each as one length-prefixed JSON frame (see
 //! [`frame`]).
 //!
-//! Only the Windows named-pipe transport exists today. It lives in `transport`; the rest of
-//! the crate is written against `AsyncRead`/`AsyncWrite`, so another transport only has to
-//! provide an [`Endpoint`] with the same shape.
+//! The transport is a Windows named pipe or a macOS Unix domain socket (see `transport`); the
+//! rest of the crate is written against `AsyncRead`/`AsyncWrite`, so both carry the same frames.
 
+mod client;
 mod error;
 mod exit_code;
 pub mod frame;
 mod handshake;
-mod log_path;
-mod message;
-mod work;
-
-#[cfg(windows)]
-mod client;
 #[cfg(windows)]
 mod job;
+mod log_path;
+mod message;
 #[cfg(windows)]
 mod pipe_owner;
-#[cfg(windows)]
 mod transport;
+mod work;
 
-#[cfg(windows)]
 pub use client::{CommandSender, EventReceiver, LaunchError, RunnerClient, RunnerProcess};
 pub use error::{FrameError, IpcError};
 pub use exit_code::EXIT_PROJECT_LOCKED;
@@ -38,6 +33,5 @@ pub use log_path::{runner_log_dir, runner_log_path, utc_date};
 pub use message::{
   AttachSession, Command, Event, RefusedRun, Rejection, Reply, Request, RequestId, SessionEnd, ShutdownMode,
 };
-#[cfg(windows)]
-pub use transport::{ClientStream, Endpoint, ServerStream};
+pub use transport::{ClientStream, Endpoint, ServerStream, server_process_id};
 pub use work::{RunWork, WorkState, WorkSummary};

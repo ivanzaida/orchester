@@ -37,8 +37,9 @@ all of it.
   (`ICON_BIG`), which the taskbar button and Alt+Tab prefer; without it Windows falls back to the
   small icon or the executable's icon, both of which are this icon.
 - **macOS**: a window icon has no effect there; the Dock and Finder take the icon of the `.app`
-  bundle, which does not exist yet (see `docs/stable-build.md`, *macOS*). The build script does
-  nothing on macOS. When the bundle is added, copy `orchester.icns` to
-  `Orchester.app/Contents/Resources/orchester.icns` and set `CFBundleIconFile` to `orchester` in
-  `Contents/Info.plist`. On a Mac, `iconutil -c icns orchester.iconset` builds an equivalent
-  `.icns` from the same PNGs.
+  bundle. `tools/package-macos.sh` copies `orchester.icns` to
+  `Orchester.app/Contents/Resources/orchester.icns` and sets `CFBundleIconFile` to `orchester` in
+  `Contents/Info.plist` (see `docs/stable-build.md`, *Install and update (macOS)*). The build
+  script does nothing on macOS, and a development build outside a bundle shows a generic program
+  icon in the Dock. On a Mac, `iconutil -c icns orchester.iconset` builds an equivalent `.icns`
+  from the same PNGs.
