@@ -41,7 +41,7 @@ orchester.exe (desktop, UI)
 - Runner and agents run inside a Windows Job Object created by the desktop with
   kill-on-close, so they can never outlive the desktop process, whether it quits or crashes.
 - macOS has no Job Objects. The desktop sends the runner SIGTERM when it lets go of it (SIGKILL
-  if it is still running 10 s later), and the runner ends its work when the desktop's end of the
+  if it is still running 30 s later), and the runner ends its work when the desktop's end of the
   connection closes, which is also what a desktop crash does; either way it ends its agents first.
   Each agent CLI and command runs as the leader of its own process group; the runner ends it with
   the group (SIGTERM, SIGKILL after 3 s), and ends the same way whatever it left running when it

@@ -4,8 +4,8 @@
 //!   runner and every agent it started at once; so does a desktop crash.
 //! - macOS: there are no Job Objects. Dropping the handle sends the runner SIGTERM; the runner then ends its agents'
 //!   process groups and exits (`orchester-runner`, `shutdown_signal`). A runner still running after [`TERMINATE_GRACE`]
-//!   gets SIGKILL. When the desktop crashes, its end of the connection closes, and the runner ends its agents and exits
-//!   the same way.
+//!   gets SIGKILL, if the desktop is still there to send it. When the desktop crashes, its end of the connection
+//!   closes, and the runner ends its agents and exits the same way.
 
 use std::{
   io,
@@ -18,10 +18,11 @@ use tokio::{process::Child, task::JoinHandle};
 use super::{LaunchError, drain_stderr};
 use crate::EXIT_PROJECT_LOCKED;
 
-/// How long the runner may take to end its agents and exit after SIGTERM. Longer than the
-/// grace each agent's process group gets (`orchester_exec::process_group`).
+/// How long the runner may take to end its agents and exit after SIGTERM: it ends one run after
+/// another, each agent's process group with a grace period of its own
+/// (`orchester_exec::process_group`).
 #[cfg(unix)]
-const TERMINATE_GRACE: std::time::Duration = std::time::Duration::from_secs(10);
+const TERMINATE_GRACE: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// The runner process; see the module documentation for what dropping it does.
 pub struct RunnerProcess {
@@ -152,12 +153,10 @@ mod platform {
         Ok(runtime) => {
           runtime.spawn(kill_after_grace(child));
         }
-        // No runtime left to wait on (the desktop is exiting): end the runner now.
-        Err(_) => {
-          if let Err(error) = child.start_kill() {
-            tracing::warn!("cannot kill the runner: {error}");
-          }
-        }
+        // No runtime left to wait on: the desktop is exiting, which also closes its connection.
+        // Killing the runner now would leave its agents running, so it is left to end them and
+        // exit on its own.
+        Err(_) => tracing::info!("the runner ends its agents and exits on its own"),
       }
     }
   }
