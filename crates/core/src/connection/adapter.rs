@@ -78,7 +78,7 @@ pub fn parse_version(provider: AgentProvider, output: &CommandOutput) -> Option<
     AgentProvider::ClaudeCodeCli => "(Claude Code)",
   };
   let text = output.stdout.trim();
-  if !output.success || !text.contains(marker) {
+  if !output.success() || !text.contains(marker) {
     return None;
   }
   text
@@ -121,7 +121,7 @@ pub fn parse_codex_login_status(output: &CommandOutput) -> SignIn {
   let text = format!("{}\n{}", output.stdout, output.stderr);
   if text.contains("Not logged in") {
     SignIn::SignedOut
-  } else if output.success && text.lines().any(|line| line.trim_start().starts_with("Logged in")) {
+  } else if output.success() && text.lines().any(|line| line.trim_start().starts_with("Logged in")) {
     SignIn::SignedIn
   } else {
     SignIn::Unknown
@@ -151,7 +151,7 @@ fn catalog(provider: AgentProvider, cli: &Cli<'_, impl CommandRunner>) -> ModelC
       let models = cli
         .run(CODEX_CATALOG_ARGS)
         .ok()
-        .filter(|output| output.success)
+        .filter(|output| output.success())
         .and_then(|output| parse_codex_catalog(&output.stdout))
         .unwrap_or_default();
       ModelCatalog::new(CatalogSource::Provider, models)

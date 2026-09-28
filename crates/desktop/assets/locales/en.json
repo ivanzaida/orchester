@@ -888,6 +888,7 @@
       "scopeNone": "No committed changes",
       "scopeReading": "Reading the changes…",
       "askAgent": "Ask agent",
+      "askUnavailable": "Ask agent is unavailable: the run’s worktree was removed, so its agent cannot continue.",
       "reviewPullRequest": "Review PR",
       "unavailable": "Review PR needs a pull request, which no pipeline step opens yet.",
       "details": "Run details",
@@ -1066,6 +1067,7 @@
       "notRunning": "The run is not running anymore.",
       "notPaused": "The run is not paused.",
       "ended": "The run has already ended.",
+      "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue.",
       "notInterrupted": "The run is not interrupted.",
       "failed": "The runner could not do this; its log has the details."
     }
@@ -1105,6 +1107,7 @@
       "queuedRunStart": "Queued · waiting for the run to start",
       "queuedRunContinue": "Queued · waiting for the run to continue",
       "notDelivered": "Not delivered · the run has ended",
+      "notDeliveredWorktree": "Not delivered · the run’s worktree was removed",
       "delivered": "Delivered to {{agent}}",
       "acknowledged": "Acknowledged by {{agent}}",
       "reply": "Reply · {{step}}",
@@ -1128,6 +1131,7 @@
       "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
       "readyNoAgent": "No agent step of this run can be asked again.",
       "merged": "This run's work was merged. Messages no longer reach its agents.",
+      "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.",
       "ended": "This run has ended. Messages no longer reach its agents."
     },
     "errors": {

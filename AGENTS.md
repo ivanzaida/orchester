@@ -7,6 +7,7 @@ be added later, so domain logic must not depend on the desktop app.
 - Product and interaction design: `docs/design/orchester-workspace.md`. Open design issues:
   `docs/evidence/design-consistency-audit-2026-09-23.md`. All project data in the designs is illustrative fixture data;
   never ship it as real data or defaults.
+- Work plan and backlog: `docs/plan.md`. Take tasks from it and move them to its *Done* list when finished.
 - Design source: `data/orchester.pen`. It is encrypted — read it only through the `pencil` MCP, never Read/Grep.
 
 Cross-agent skill layout:

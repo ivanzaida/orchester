@@ -62,7 +62,7 @@ pub fn read_remotes(runner: &impl CommandRunner, git: &Path, repo_root: &Path) -
   let output = runner
     .run(&git_remotes_command(git, repo_root))
     .map_err(|source| RepositoryError::Run { program: GIT, source })?;
-  if output.success {
+  if output.success() {
     return Ok(parse_git_remotes(&output.stdout));
   }
   Err(git_failure(&output))

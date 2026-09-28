@@ -181,7 +181,7 @@ fn worktree_state(programs: &Programs, worktree: &Path) -> WorktreeState {
   let status =
     Command::new(Path::new(GIT), ["status", "--porcelain", "--untracked-files=all"]).with_current_dir(worktree);
   match programs.runner().run(&status) {
-    Ok(output) if output.success => match output.stdout.lines().filter(|line| !line.trim().is_empty()).count() {
+    Ok(output) if output.success() => match output.stdout.lines().filter(|line| !line.trim().is_empty()).count() {
       0 => WorktreeState::Clean,
       files => WorktreeState::Uncommitted(files),
     },

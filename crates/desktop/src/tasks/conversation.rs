@@ -10,6 +10,7 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   conversation::{AgentMessage, Delivery, Message, MessageBody, MessageError, Recipient, Sender},
   id::{IdempotencyKey, MessageId, ResourceId, RunId, StepExecutionId, TaskId},
+  integration::Leftovers,
   resource::StepKey,
   run::{PauseReason, RunStatus, StepExecutor, StepStatus, TaskPhase, WaitReason},
   store::ConversationStore,
@@ -35,6 +36,9 @@ pub enum PanelState {
   Interrupted,
   /// Ready for review: a message asks the agent again.
   Ready,
+  /// Ready for review, but its worktree was removed: its agent cannot continue, so no agent reads
+  /// messages any more.
+  WorktreeRemoved,
   /// Its work was merged into its base branch: no agent reads messages any more.
   Merged,
   /// Failed or cancelled: no agent reads messages any more.
@@ -58,7 +62,7 @@ impl PanelState {
 
   /// Whether a message written now can reach an agent of the task.
   pub const fn takes_messages(self) -> bool {
-    !matches!(self, Self::Merged | Self::Ended)
+    !matches!(self, Self::Merged | Self::WorktreeRemoved | Self::Ended)
   }
 }
 
@@ -104,6 +108,8 @@ pub enum Queue {
   RunContinues,
   /// Never: the run it was written for has ended.
   RunEnded,
+  /// Never: the run's worktree was removed, so its agent cannot continue.
+  WorktreeRemoved,
 }
 
 /// One message of the conversation as the panel shows it.
@@ -147,10 +153,16 @@ pub struct Conversation {
 impl lurq::app::component::DevtoolsInspectable for Conversation {}
 
 impl Conversation {
-  /// The conversation of `detail`'s task; `lost`: the run is recorded as running without a runner.
-  pub fn of(detail: &TaskDetail, lost: bool) -> Self {
+  /// The conversation of `detail`'s task; `lost`: the run is recorded as running without a runner;
+  /// `leftovers`: what the run left once it ended, once read.
+  pub fn of(detail: &TaskDetail, lost: bool, leftovers: Option<&Leftovers>) -> Self {
     let phase = detail.phase();
-    let state = PanelState::of(if lost { phase.without_runner() } else { phase });
+    let state = match PanelState::of(if lost { phase.without_runner() } else { phase }) {
+      PanelState::Ready if leftovers.is_some_and(|leftovers| !leftovers.keeps_run_worktree()) => {
+        PanelState::WorktreeRemoved
+      }
+      state => state,
+    };
     let run = detail.run.as_ref();
     let entries = detail
       .messages
@@ -329,6 +341,7 @@ fn queue(message: &Message, run: Option<&RunView>, state: PanelState) -> Queue {
     RunStatus::Failed(_) | RunStatus::Cancelled => Queue::RunEnded,
     // A run recorded as running without a runner is interrupted until one is back.
     RunStatus::Running if state == PanelState::Interrupted => Queue::RunContinues,
+    RunStatus::Succeeded if state == PanelState::WorktreeRemoved => Queue::WorktreeRemoved,
     RunStatus::Running | RunStatus::Succeeded => Queue::NextCheckpoint,
   }
 }

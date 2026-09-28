@@ -52,7 +52,7 @@ pub fn parse_gh_repo_view(requested: &GitHubRepo, output: &CommandOutput) -> Res
   struct BranchRef {
     name: String,
   }
-  if !output.success {
+  if !output.success() {
     return Err(classify_failure(requested, &output.stderr));
   }
   let view: View = serde_json::from_str(output.stdout.trim()).map_err(|error| unrecognized(&error.to_string()))?;

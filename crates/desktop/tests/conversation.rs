@@ -1,12 +1,14 @@
 //! The task conversation as data: each message with who wrote it and where it stands, whom a new
-//! message can go to, who takes part, what the run's state means for a message written now, and the
-//! question a run waits on in Needs you. Sending stores a message once per key.
+//! message can go to, who takes part, what the run's state means for a message written now (none
+//! once a ready run's worktree was removed), and the question a run waits on in Needs you. Sending
+//! stores a message once per key.
 
 mod support;
 
 use orchester_core::{
   conversation::{AgentMessage, Message, MessageBody, Recipient},
   id::{IdempotencyKey, InvocationId, TaskId},
+  integration::{LeftWorktree, Leftovers, WorktreeOwner},
   resource::ModelId,
   run::{Run, WaitReason},
   store::{ActivityStore, ConversationStore},
@@ -28,7 +30,7 @@ fn body(text: &str) -> MessageBody {
 
 fn read(fixture: &Fixture, task: TaskId) -> Conversation {
   let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("the task is read");
-  Conversation::of(&detail, false)
+  Conversation::of(&detail, false, None)
 }
 
 fn send(fixture: &mut Fixture, task: TaskId, run: Option<&Run>, text: &str, now: Timestamp) -> Message {
@@ -186,6 +188,41 @@ fn conversation_what_a_message_written_now_does_follows_the_run() {
   assert_eq!(ended.state, PanelState::Ended);
   assert!(!ended.state.takes_messages());
   assert_eq!(ended.entries[0].state, EntryState::Queued(Queue::RunEnded));
+}
+
+#[test]
+fn conversation_a_ready_run_whose_worktree_was_removed_takes_no_messages() {
+  let mut fixture = Fixture::new();
+  let task = fixture.task("Add login", at(10));
+  let mut run = fixture.started_run(task, at(20));
+  fixture.succeed(&mut run, at(30));
+  send(&mut fixture, task, Some(&run), "Add a second line.", at(31));
+  let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("the task is read");
+  let run_worktree = |missing| LeftWorktree {
+    path: "/repo/.orchester/worktrees/run".to_owned(),
+    owner: WorktreeOwner::Run,
+    branch: None,
+    uncommitted: Vec::new(),
+    missing,
+  };
+  let kept = Leftovers {
+    worktrees: vec![run_worktree(false)],
+    branches: Vec::new(),
+  };
+  let ready = Conversation::of(&detail, false, Some(&kept));
+  assert_eq!(ready.state, PanelState::Ready);
+  assert_eq!(ready.entries[0].state, EntryState::Queued(Queue::NextCheckpoint));
+
+  let deleted_by_hand = Leftovers {
+    worktrees: vec![run_worktree(true)],
+    branches: Vec::new(),
+  };
+  for leftovers in [Leftovers::default(), deleted_by_hand] {
+    let removed = Conversation::of(&detail, false, Some(&leftovers));
+    assert_eq!(removed.state, PanelState::WorktreeRemoved);
+    assert!(!removed.state.takes_messages());
+    assert_eq!(removed.entries[0].state, EntryState::Queued(Queue::WorktreeRemoved));
+  }
 }
 
 #[test]

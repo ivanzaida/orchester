@@ -61,7 +61,7 @@ impl CommandRunner for ReplayGh {
 
 fn ok(stdout: &str) -> CommandOutput {
   CommandOutput {
-    success: true,
+    code: Some(0),
     stdout: stdout.to_owned(),
     stderr: String::new(),
   }

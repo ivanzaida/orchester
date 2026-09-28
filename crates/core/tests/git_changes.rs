@@ -47,7 +47,7 @@ impl CommandRunner for Processes {
       _ => CommandError::Failed(error.to_string()),
     })?;
     Ok(CommandOutput {
-      success: output.status.success(),
+      code: output.status.code(),
       stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
       stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
     })

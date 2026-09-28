@@ -54,7 +54,7 @@ fn gh_auth_status_signed_in() {
 #[test]
 fn gh_auth_status_not_signed_in() {
   let output = orchester_core::command::CommandOutput {
-    success: true,
+    code: Some(0),
     stdout: fixture!("gh_auth_status_not_signed_in.stdout").to_owned(),
     stderr: fixture!("gh_auth_status_not_signed_in.stderr").to_owned(),
   };
