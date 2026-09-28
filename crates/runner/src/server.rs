@@ -97,7 +97,7 @@ struct Session<W> {
   shutdown: ShutdownSignal,
 }
 
-/// Requests about a run still being carried out after the request was read ([`later`]): work the
+/// Requests about a run still being carried out after the request was read ([`Later`]): work the
 /// runner has, since each may execute a run again.
 #[derive(Clone, Default)]
 struct InFlight(Arc<AtomicUsize>);
@@ -244,6 +244,7 @@ fn answer(
   let id = request.id;
   // A request about a run is answered once it is carried out, with a scheduler handle of its own.
   let handle = scheduler.clone();
+  let later = Later { replies, in_flight, id };
   let reply = match request.command {
     Command::Attach { session, agent_slots } => match scheduler.attach(session, agent_slots) {
       Ok(attached) => Reply::Attached {
@@ -262,9 +263,9 @@ fn answer(
       Ok(run) => Reply::RunStarted { run },
       Err(rejection) => Reply::Rejected(rejection),
     },
-    Command::PauseRun { run } => return later((replies, in_flight), id, run, async move { handle.pause_run(run).await }),
-    Command::CancelRun { run } => return later((replies, in_flight), id, run, async move { handle.cancel_run(run).await }),
-    Command::ResumeRun { run } => return later((replies, in_flight), id, run, async move { handle.resume_run(run).await }),
+    Command::PauseRun { run } => return later.answer(run, async move { handle.pause_run(run).await }),
+    Command::CancelRun { run } => return later.answer(run, async move { handle.cancel_run(run).await }),
+    Command::ResumeRun { run } => return later.answer(run, async move { handle.resume_run(run).await }),
     Command::RaiseLimit {
       run,
       budget,
@@ -274,15 +275,10 @@ fn answer(
         budget,
         max_duration: Duration::from_millis(max_duration_ms),
       };
-      return later((replies, in_flight), id, run, async move { handle.raise_limit(run, limits).await });
+      return later.answer(run, async move { handle.raise_limit(run, limits).await });
     }
     Command::RaiseStepBudget { run, budget } => {
-      return later(
-        (replies, in_flight),
-        id,
-        run,
-        async move { handle.raise_step_budget(run, budget).await },
-      );
+      return later.answer(run, async move { handle.raise_step_budget(run, budget).await });
     }
     Command::ChangeRunPermissions {
       run,
@@ -291,12 +287,12 @@ fn answer(
       apply,
     } => {
       let permissions = permissions.clone();
-      return later((replies, in_flight), id, run, async move {
+      return later.answer(run, async move {
         handle.change_permissions(run, profile, permissions, apply).await
       });
     }
     Command::KeepPermissionsForNextInvocation { run, profile } => {
-      return later((replies, in_flight), id, run, async move {
+      return later.answer(run, async move {
         handle.keep_permissions_for_next_invocation(run, profile).await
       });
     }
@@ -307,13 +303,11 @@ fn answer(
       ref decision,
     } => {
       let decision = decision.clone();
-      return later((replies, in_flight), id, run, async move {
+      return later.answer(run, async move {
         handle.decide_plan(run, execution, version, decision).await
       });
     }
-    Command::DeliverMessages { run } => {
-      return later((replies, in_flight), id, run, async move { handle.deliver_messages(run).await });
-    }
+    Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
   };
@@ -327,24 +321,27 @@ fn accepted(run: RunId, result: Result<(), Rejection>) -> Reply {
   }
 }
 
-/// Answers request `id` when `work` for `run` is done, without holding up other requests. It
-/// counts as in flight until then.
-fn later(
-  (replies, in_flight): (&mpsc::UnboundedSender<Event>, &InFlight),
+/// Answers request `id` once the work it asked for is done, without holding up other requests.
+/// The request counts as in flight until then.
+struct Later<'a> {
+  replies: &'a mpsc::UnboundedSender<Event>,
+  in_flight: &'a InFlight,
   id: RequestId,
-  run: RunId,
-  work: impl Future<Output = Result<(), Rejection>> + Send + 'static,
-) -> Answer {
-  let replies = replies.clone();
-  let request = in_flight.start();
-  tokio::spawn(async move {
-    let reply = accepted(run, work.await);
-    drop(request);
-    if replies.send(Event::Reply { id, reply }).is_err() {
-      tracing::debug!(%id, "the desktop left before the reply");
-    }
-  });
-  Answer::Later
+}
+
+impl Later<'_> {
+  fn answer(&self, run: RunId, work: impl Future<Output = Result<(), Rejection>> + Send + 'static) -> Answer {
+    let (replies, id) = (self.replies.clone(), self.id);
+    let request = self.in_flight.start();
+    tokio::spawn(async move {
+      let reply = accepted(run, work.await);
+      drop(request);
+      if replies.send(Event::Reply { id, reply }).is_err() {
+        tracing::debug!(%id, "the desktop left before the reply");
+      }
+    });
+    Answer::Later
+  }
 }
 
 async fn wait_for_disconnect(requests: &mut mpsc::UnboundedReceiver<Incoming>) {

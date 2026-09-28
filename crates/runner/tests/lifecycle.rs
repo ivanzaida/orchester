@@ -329,9 +329,7 @@ async fn lifecycle_scheduler_is_idle_only_while_no_run_executes() {
   let project = project(&Setup::new("Work slowly."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
-  scheduler
-    .attach(fresh(SessionEnd::Clean), slots(1))
-    .expect("attached");
+  scheduler.attach(fresh(SessionEnd::Clean), slots(1)).expect("attached");
   assert!(scheduler.is_idle(), "nothing runs yet");
 
   let run = start(&scheduler, project.task);
