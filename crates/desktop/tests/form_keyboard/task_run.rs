@@ -1,8 +1,6 @@
 //! Create & run end to end, headlessly: the new task form queues the task and the real runner
 //! runs its one step on `orchester-fake-codex`, a stand-in for the Codex CLI that replays
-//! recorded output; then the task page shows the run and its transcript. The runner talks to the
-//! desktop over a named pipe, which exists on Windows only.
-#![cfg(windows)]
+//! recorded output; then the task page shows the run and its transcript.
 
 use std::{
   collections::BTreeMap,

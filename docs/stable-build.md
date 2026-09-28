@@ -34,16 +34,75 @@ Options:
 | `-ImportDevData` | Copy the dev app database (see below). |
 | `-StartMenuShortcut` | Add *Orchester* to your Start menu. |
 
+## Install and update (macOS)
+
+On a Mac with the Rust toolchain (`rustup`, which picks up `rust-toolchain.toml`) and the Xcode
+command line tools (`xcode-select --install`, for the C compiler, `lipo` and `codesign`):
+
+```sh
+tools/install-macos.sh
+```
+
+- Builds `orchester-desktop` and `orchester-runner` in release into
+  `~/Library/Application Support/Orchester/build` (not the repository's `target/`), packages them
+  with `tools/package-macos.sh` into `Orchester.app` and moves it to `~/Applications/Orchester.app`.
+  Start it from Finder, Launchpad or Spotlight, or with `open ~/Applications/Orchester.app`.
+- The bundle is `Contents/MacOS/orchester` (the desktop), `Contents/MacOS/orchester-runner` (the
+  desktop starts it from its own folder), `Contents/Resources/orchester.icns` and
+  `Contents/Info.plist` (identifier `dev.orchester.desktop`, version from `Cargo.toml`, high
+  resolution capable, macOS 11 or later).
+- As on Windows, it installs what the checkout holds, prints the commit, and refuses while the
+  installed app or one of its runners is running; it never stops Orchester itself. The new bundle
+  replaces the old one as a whole (macOS can kill a program whose file was changed in place,
+  because it caches the code signature).
+
+Options:
+
+| Option | Effect |
+| --- | --- |
+| `--install-dir <dir>` | Install somewhere else. |
+| `--build-dir <dir>` | Build somewhere else. |
+| `--universal` | One app for Apple silicon and Intel (`rustup target add aarch64-apple-darwin x86_64-apple-darwin` first). |
+| `--with-mcp` | Include the embedded MCP server, so agents can drive the installed app. |
+| `--import-dev-data` | Copy the dev app database (see [Data](#data)). |
+
+`tools/package-macos.sh` alone builds `Orchester.app` into `target/macos/` (`--help` lists its
+options). A development build runs without a bundle: `cargo build -p orchester-runner && cargo
+run -p orchester-desktop` (what `tools/run.ps1` does on Windows).
+
+**Signing.** The bundle is signed ad hoc (`codesign -s -`): no Apple Developer identity, and it
+is **not notarized**. A build made on the Mac it runs on has no quarantine flag, so Gatekeeper
+lets it start. A copy downloaded or sent from another Mac is quarantined and refused; build it on
+that Mac instead (or remove the flag with `xattr -dr com.apple.quarantine Orchester.app` if you
+trust the copy). Every build has a new ad hoc signature, so after an update macOS may ask once
+more before Orchester reads the project secrets it keeps in the login keychain; choose *Always
+Allow*.
+
+**Programs from Finder.** An app started from Finder gets a minimal `PATH`
+(`/usr/bin:/bin:/usr/sbin:/sbin`). Orchester therefore looks for the agent CLIs and `gh`, and
+starts every program, the runner included, with the usual install folders appended to it:
+`/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin`, `~/.local/bin`, `~/.claude/local`,
+`~/.npm-global/bin`, `~/.volta/bin`, `~/.bun/bin`, `~/Library/pnpm`, `~/.cargo/bin`, the `bin` of
+npm's `prefix` in `~/.npmrc` and nvm's Node.js versions (newest first), each only if it exists; a
+program's own folder is appended for it too, so an npm-installed CLI finds the Node.js beside it.
+Your shell's start-up files are not read. A CLI installed elsewhere can be chosen as a file in
+*Connections*; a tool an agent needs from elsewhere is not found when the app was started from
+Finder (`open` starts it the same way). Starting the program itself from a terminal,
+`~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on.
+
 ## Data
 
 The application database (`orchester.db`, the list of known projects and the session log) lives
-next to the executable. The installed app therefore starts with its own, empty project list,
-separate from the dev build's `target\debug\orchester.db`.
+next to the executable on Windows. The installed app therefore starts with its own, empty
+project list, separate from the dev build's `target\debug\orchester.db`. On macOS the installed
+`Orchester.app` keeps it in `~/Library/Application Support/Orchester/` (nothing inside an app
+bundle is writable); a dev build outside a bundle keeps it next to its executable, as on Windows.
 
-`-ImportDevData` copies the dev database (with its `-wal` file, if any) from `target\debug` of
-the checkout the script runs from into the install directory. It is refused when the install
-directory already has a database, which it never overwrites, and while the dev build is running.
-Once the installed app has started it has a database, so import before the first start.
+`-ImportDevData` (`--import-dev-data` on macOS) copies the dev database (with its `-wal` file, if
+any) from `target/debug` of the checkout the script runs from into the installed app's place. It
+is refused when the installed app already has a database, which it never overwrites, and while
+the dev build is running. Once the installed app has started it has a database, so import before
+the first start.
 
 Project data is not copied: each project keeps its database in its repository's `.orchester/`,
 and both builds open the same one.
@@ -63,26 +122,13 @@ and both builds open the same one.
 
 ## Logs
 
-- **The app's log** is `logs\orchester-<YYYY-MM-DD>.log` next to the executable (UTC date), so
-  the installed app and the dev build (`target\debug\logs\`) keep separate logs. A session
-  that runs past midnight continues in the next day's file; files older than 14 days are deleted
+- **The app's log** is `logs\orchester-<YYYY-MM-DD>.log` next to the executable (UTC date); the
+  installed macOS app writes it to `~/Library/Logs/Orchester/` (Console.app lists it under *Log
+  Reports*). So the installed app and the dev build (`target\debug\logs\`) keep separate logs.
+  A session that runs past midnight continues in the next day's file; files older than 14 days are deleted
   when the app starts and when a new day's file begins. Nothing else in `logs\` is touched. A
   panic is logged there as well. `RUST_LOG` sets the level as usual (default `info`).
 - **A project's runner log** is `.orchester\logs\runner-<YYYY-MM-DD>.log` in the project's
   repository, shared by both builds; *Open runner log* opens it. The app's log also has the
   runner's lines, as the app received them.
 
-## macOS
-
-There is no install script for macOS yet. The desktop's runner integration is Windows-only (see
-`AGENTS.md`, requirement 0), and the application database and the app's `logs` folder next to the
-executable are not writable inside a `.app` bundle (without a log file the app logs to the console
-only). Once the desktop builds and runs on macOS, the same approach applies
-without a bundle: build with `--target-dir "$HOME/Library/Application Support/Orchester/build"`
-and copy `orchester` and `orchester-runner` into `~/Library/Application Support/Orchester/app`.
-Copy each program to a new file and move it into place rather than overwriting it: macOS can
-kill a program whose file was changed in place, because it caches the code signature.
-
-Without a bundle, the Dock shows a generic program icon. The application icon for a future
-`.app` bundle is `crates/desktop/assets/icon/orchester.icns`; [app-icon.md](app-icon.md) says
-how the bundle uses it (`CFBundleIconFile`).

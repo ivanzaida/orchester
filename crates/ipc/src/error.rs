@@ -32,4 +32,8 @@ pub enum IpcError {
   EndpointInUse { name: String },
   #[error("IPC endpoint {name}: {source}")]
   Endpoint { name: String, source: io::Error },
+  /// The per-user folder of the runner sockets cannot be created, or belongs to another user.
+  #[cfg(unix)]
+  #[error("IPC endpoint folder {path}: {source}")]
+  EndpointFolder { path: PathBuf, source: io::Error },
 }

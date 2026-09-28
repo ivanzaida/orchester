@@ -1,9 +1,7 @@
 //! Plan review (02.11 `x3lVC`) end to end, headlessly, on the real runner and
 //! `orchester-fake-codex`: a gated Plan step waits with plan v1, the task page reviews it, the
 //! Overview's Needs you panel and the status bar count it and the status bar's latest event names
-//! it; approving continues the run, requesting changes with a note brings plan v2. Windows only,
-//! like the runner's named pipe.
-#![cfg(windows)]
+//! it; approving continues the run, requesting changes with a note brings plan v2.
 
 use orchester_core::{resource::Step, run::RunStatus};
 

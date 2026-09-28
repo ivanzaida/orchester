@@ -8,6 +8,9 @@ mod console;
 
 pub use console::hide_window;
 pub mod launch;
+#[cfg(unix)]
+pub mod process_group;
+pub mod search_path;
 
 use std::{
   io::{self, Read, Write},
@@ -63,8 +66,9 @@ fn spawn(command: &Command) -> Result<Child, CommandError> {
 
 /// The process that runs `command`, ready to start: launched through what [`launch::resolve`]
 /// finds, with its arguments, directory and environment, standard input piped when the command
-/// has input (otherwise empty), output piped and no console window. Secret variables are set last;
-/// the returned process holds their values, so it is not logged. For callers that stream a
+/// has input (otherwise empty), output piped, no console window and, on macOS, leading a process
+/// group of its own ([`process_group`]) with the full search path ([`search_path`]). Secret variables are
+/// set last; the returned process holds their values, so it is not logged. For callers that stream a
 /// program's output instead of waiting for it, such as the runner with agent CLIs.
 pub fn prepare(command: &Command) -> Result<Process, CommandError> {
   let launch = launch::resolve(command.program());
@@ -97,6 +101,10 @@ pub fn prepare(command: &Command) -> Result<Process, CommandError> {
     process.current_dir(directory);
   }
   console::hide_window(&mut process);
+  #[cfg(unix)]
+  process_group::lead_own_group(&mut process);
+  #[cfg(target_os = "macos")]
+  search_path::macos::apply(&mut process, command, launch.program());
   Ok(process)
 }
 
@@ -106,7 +114,7 @@ fn wait(child: &mut Child, command: &Command, timeout: Duration) -> Result<ExitS
     match child.try_wait() {
       Ok(Some(status)) => return Ok(status),
       Ok(None) if Instant::now() >= deadline => {
-        if let Err(error) = child.kill() {
+        if let Err(error) = stop(child) {
           tracing::warn!(%error, program = %command.program().display(), "cannot stop a program that did not finish");
         }
         return Err(CommandError::TimedOut);
@@ -115,6 +123,21 @@ fn wait(child: &mut Child, command: &Command, timeout: Duration) -> Result<ExitS
       Err(error) => return Err(CommandError::Failed(error.to_string())),
     }
   }
+}
+
+/// Ends a program that ran too long.
+#[cfg(windows)]
+fn stop(child: &mut Child) -> io::Result<()> {
+  child.kill()
+}
+
+/// Ends a program that ran too long with everything it started, and reaps it.
+#[cfg(unix)]
+fn stop(child: &mut Child) -> io::Result<()> {
+  let group = process_group::ProcessGroup::led_by(child.id())
+    .ok_or_else(|| io::Error::other(format!("invalid process id {}", child.id())))?;
+  group.kill()?;
+  child.wait().map(drop)
 }
 
 fn write_all(pipe: Option<ChildStdin>, input: String) -> thread::JoinHandle<io::Result<()>> {

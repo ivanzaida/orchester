@@ -162,7 +162,8 @@ fn launched(
 }
 
 /// The program that starts and its arguments: the file the server's program is on the `PATH`
-/// the CLI starts with (the project's, else the runner's) or in the worktree, started as
+/// the CLI starts with (the project's, else Orchester's search path, which on macOS adds the usual install
+/// folders) or in the worktree, started as
 /// `orchester-exec` would start it.
 fn started(
   stdio: &StdioServer,
@@ -172,7 +173,7 @@ fn started(
   let path = environment
     .get("PATH")
     .map(Into::into)
-    .or_else(|| std::env::var_os("PATH"));
+    .or_else(orchester_exec::search_path::search_path);
   let found = stdio
     .program()
     .candidates(worktree, path.as_deref(), Platform::current())

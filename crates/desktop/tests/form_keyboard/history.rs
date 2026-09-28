@@ -302,7 +302,6 @@ fn history_a_tab_is_an_entry() {
   desktop.wait_for("settings-save-status");
 }
 
-#[cfg(windows)]
 #[test]
 fn history_create_and_run_leaves_one_entry_per_screen() {
   use crate::task_run::{create_and_run, init_repository, programs, seed};

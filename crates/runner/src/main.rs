@@ -5,7 +5,8 @@ use std::{io, path::PathBuf, process::ExitCode, sync::Arc};
 use orchester_ipc::{EXIT_PROJECT_LOCKED, IpcError};
 use orchester_runner::{
   lock::{LockError, RunnerLock},
-  log_file, private_file,
+  log_file, private_file, server,
+  shutdown_signal::ShutdownSignal,
 };
 use orchester_store::ProjectDb;
 use thiserror::Error;
@@ -22,12 +23,10 @@ enum RunnerError {
   Lock(#[from] LockError),
   #[error("cannot start the async runtime: {0}")]
   Runtime(io::Error),
+  #[error("cannot listen for shutdown signals: {0}")]
+  Signal(io::Error),
   #[error(transparent)]
   Ipc(#[from] IpcError),
-  /// The desktop connection is a named pipe, which exists on Windows only (`AGENTS.md`, known gaps).
-  #[cfg(not(windows))]
-  #[error("the runner cannot talk to the desktop on this platform yet")]
-  TransportUnsupported,
 }
 
 fn main() -> ExitCode {
@@ -84,17 +83,10 @@ fn run(project_root: Result<PathBuf, RunnerError>) -> Result<(), RunnerError> {
     .enable_all()
     .build()
     .map_err(RunnerError::Runtime)?;
-  serve(&runtime, &project_root)
-}
-
-#[cfg(windows)]
-fn serve(runtime: &tokio::runtime::Runtime, project_root: &std::path::Path) -> Result<(), RunnerError> {
-  Ok(runtime.block_on(orchester_runner::server::serve(project_root))?)
-}
-
-#[cfg(not(windows))]
-fn serve(_runtime: &tokio::runtime::Runtime, _project_root: &std::path::Path) -> Result<(), RunnerError> {
-  Err(RunnerError::TransportUnsupported)
+  runtime.block_on(async {
+    let shutdown = ShutdownSignal::install().map_err(RunnerError::Signal)?;
+    Ok(server::serve(&project_root, shutdown).await?)
+  })
 }
 
 /// Files with secret values an earlier runner of the project left behind when it ended abnormally. The lock

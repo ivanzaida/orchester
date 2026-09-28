@@ -13,5 +13,9 @@ workspace = true
 orchester-core.workspace = true
 tracing.workspace = true
 
+# Signals the process group of each program on macOS (see `process_group`).
+[target.'cfg(unix)'.dependencies]
+rustix.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true

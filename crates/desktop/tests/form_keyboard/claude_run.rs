@@ -1,7 +1,6 @@
 //! A run on the Claude Code CLI, headlessly: the real runner runs the step on
 //! `orchester-fake-claude`, a stand-in that prints stream-json, and the Activity tab names the
-//! provider with the model and shows the transcript. Windows only, like `task_run`.
-#![cfg(windows)]
+//! provider with the model and shows the transcript.
 
 use orchester_core::connection::AgentProvider;
 

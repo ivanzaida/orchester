@@ -2,8 +2,7 @@
 //! real runner and `orchester-fake-codex`: the files of the run's diff to its latest checkpoint and
 //! of its worktree beyond it, a new checkpoint shown while the tab is open, the empty tab before
 //! the first checkpoint, an Activity file change opening its file, and the state of a run whose
-//! every step passed. Windows only, like the runner's named pipe.
-#![cfg(windows)]
+//! every step passed.
 
 use std::fs;
 

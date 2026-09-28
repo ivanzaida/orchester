@@ -1,8 +1,7 @@
 //! A pipeline graph run end to end, headlessly, on the real runner and `orchester-fake-codex`: the
 //! task page lists the progress of parallel steps (02.12 `FjbKY`), and a step that keeps failing
 //! after its retries shows the retry limit state (02.B `J3JZaT`) with the actions this version
-//! cannot carry out yet unavailable. Windows only, like the runner's named pipe.
-#![cfg(windows)]
+//! cannot carry out yet unavailable.
 
 use orchester_core::{
   resource::{FailureRoute, StepKey},

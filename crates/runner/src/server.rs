@@ -18,21 +18,28 @@ use tokio::sync::mpsc;
 use crate::{
   execution::{Notifier, Scheduler},
   notify::coalesce,
+  shutdown_signal::ShutdownSignal,
 };
 
-/// After [`Event::Stopped`] the runner waits this long for the desktop to close the pipe, so
-/// the event is read before the pipe goes away.
+/// After [`Event::Stopped`] the runner waits this long for the desktop to close the connection,
+/// so the event is read before the connection goes away.
 const DISCONNECT_GRACE: Duration = Duration::from_secs(5);
 
 type Incoming = Result<Option<Request>, IpcError>;
 
-/// Accepts the desktop's connection and serves it until the desktop disconnects or asks the
-/// runner to stop. Runs still executing then are interrupted: their agents are ended and the
-/// runs keep their last checkpoint.
-pub async fn serve(project_root: &Path) -> Result<(), IpcError> {
+/// Accepts the desktop's connection and serves it until the desktop disconnects, asks the
+/// runner to stop, or `shutdown` is signalled. Runs still executing then are interrupted: their
+/// agents are ended and the runs keep their last checkpoint.
+pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<(), IpcError> {
   let endpoint = Endpoint::for_project(project_root)?;
   tracing::info!("listening on {}", endpoint.name());
-  let stream = endpoint.accept().await?;
+  let stream = tokio::select! {
+    stream = endpoint.accept() => stream?,
+    () = shutdown.received() => {
+      tracing::info!("stopping before the desktop connected");
+      return Ok(());
+    }
+  };
   let (read, write) = tokio::io::split(stream);
   let mut reader = FrameReader::new(read);
   let mut writer = FrameWriter::new(write);
@@ -60,6 +67,7 @@ pub async fn serve(project_root: &Path) -> Result<(), IpcError> {
     outgoing,
     requests,
     finishing: None,
+    shutdown,
   }
   .run()
   .await;
@@ -76,6 +84,7 @@ struct Session<W> {
   requests: mpsc::UnboundedReceiver<Incoming>,
   /// "Wait for agents to save" runs while events keep flowing; it ends the connection when done.
   finishing: Option<tokio::task::JoinHandle<()>>,
+  shutdown: ShutdownSignal,
 }
 
 impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
@@ -93,6 +102,10 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
             tracing::error!(%error, "finishing at checkpoints failed");
           }
           return self.stopped(ShutdownMode::FinishAtCheckpoints).await;
+        }
+        () = self.shutdown.received() => {
+          self.scheduler.stop_all(InterruptCause::QuitNow).await;
+          return Ok(());
         }
       }
     }
