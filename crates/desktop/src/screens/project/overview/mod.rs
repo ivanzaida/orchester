@@ -16,7 +16,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -160,11 +160,19 @@ fn heading(ctx: &Ctx, open: &OpenProject, nav: &ProjectNav) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .justify(Justify::SpaceBetween)
+    .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .child(
       Column::new()
+        .flex(1.0)
         .spacing(SpacingSize::Sm)
-        .child(Text::new(open.project.name().as_str()).variant(TypographyStyle::Heading))
+        .child(
+          Text::new(open.project.name().as_str())
+            .id("overview-project-name")
+            .variant(TypographyStyle::Heading)
+            .nowrap()
+            .text_overflow(TextOverflow::Elipsis),
+        )
         .child(
           Text::new(&ctx.t("overview.description"))
             .variant(TypographyStyle::Body)

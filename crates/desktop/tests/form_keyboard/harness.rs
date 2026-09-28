@@ -70,17 +70,22 @@ pub struct Desktop {
 impl Desktop {
   /// First launch: no project yet.
   pub fn first_launch() -> Self {
-    Self::start(false, no_programs())
+    Self::start(false, no_programs(), "Kontur")
   }
 
   /// A project in a git repository, opened at startup.
   pub fn with_project() -> Self {
-    Self::start(true, no_programs())
+    Self::start(true, no_programs(), "Kontur")
+  }
+
+  /// A project with an exact name, for layout checks on user data.
+  pub fn with_project_named(name: &str) -> Self {
+    Self::start(true, no_programs(), name)
   }
 
   /// A project whose `gh` runs are answered by `runner`.
   pub fn with_project_and_programs(runner: Arc<dyn CommandRunner + Send + Sync>) -> Self {
-    Self::start(true, Programs::with_runner(runner))
+    Self::start(true, Programs::with_runner(runner), "Kontur")
   }
 
   /// A project in the repository `init` sets up, whose runner is the program `runner`, with
@@ -93,6 +98,7 @@ impl Desktop {
       runner,
       Some(Box::new(seed)),
       None,
+      "Kontur",
     )
   }
 
@@ -106,6 +112,7 @@ impl Desktop {
       PathBuf::from("no-runner.exe"),
       Some(Box::new(seed)),
       Some(Box::new(seed_other)),
+      "Kontur",
     )
   }
 
@@ -119,10 +126,11 @@ impl Desktop {
       PathBuf::from("no-runner.exe"),
       Some(Box::new(seed)),
       None,
+      "Kontur",
     )
   }
 
-  fn start(with_project: bool, programs: Programs) -> Self {
+  fn start(with_project: bool, programs: Programs, project_name: &str) -> Self {
     let init: Option<RepoStep<'static>> = if with_project {
       Some(Box::new(|repo: &Path| {
         fs::create_dir_all(repo.join(".git")).expect("create .git")
@@ -131,7 +139,7 @@ impl Desktop {
       None
     };
     // No runner program exists here; the project shows its runner as unable to start.
-    Self::start_with(init, programs, PathBuf::from("no-runner.exe"), None, None)
+    Self::start_with(init, programs, PathBuf::from("no-runner.exe"), None, None, project_name)
   }
 
   fn start_with<'a>(
@@ -140,6 +148,7 @@ impl Desktop {
     runner: PathBuf,
     seed: Option<RepoStep<'a>>,
     seed_other: Option<RepoStep<'a>>,
+    project_name: &str,
   ) -> Self {
     let with_project = init.is_some();
     let dir = TempDir::new().expect("temporary directory");
@@ -165,7 +174,7 @@ impl Desktop {
     }
     if with_project {
       let new = ProjectDraft {
-        name: "Kontur",
+        name: project_name,
         repository: Some(&repo),
       }
       .validate()

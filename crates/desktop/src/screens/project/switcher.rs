@@ -16,7 +16,7 @@ use lurq::{
     events::MouseEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Popup, Rect, Row, Text},
+  components::{Button, Column, Popup, Rect, Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, HitTestBehavior, Style, border::Border, dimension::Dimension},
@@ -131,8 +131,10 @@ impl Component for ProjectSwitcher {
     .child(avatar(current.project.name().as_str()))
     .child(
       Text::new(current.project.name().as_str())
+        .id("project-selector-name")
         .variant(TypographyStyle::Label)
         .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
         .flex(1.0),
     )
     .child(icon(Icon::ChevronsUpDown, IconSize::Small, PaletteColor::TextSecondary).id("project-selector-switch"));

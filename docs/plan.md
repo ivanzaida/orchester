@@ -141,6 +141,10 @@ are covered only by data tests. Verify them in the app and fix what differs from
 
 ### U7 · Very long project names overflow other screens (UI)
 
+**In progress** in `codex/long-project-name`: the selector label and Overview heading now paint ellipses within their
+bounds at 1440 and 900 logical px. Independent MCP/Pencil verification found 0 blocking/major/minor in those two
+regions, but two adjacent long-name surfaces still show major clipping; resolve U9 before closing the full screen.
+
 An intentionally long project name used for U1 verification spills from the sidebar selector and Overview heading.
 See `.tmp/verify/u1/report.md` and `failure-project-full.png`. Check the intended truncation in Pencil and keep both
 areas inside their bounds; this is separate from the verified status bar.
@@ -150,6 +154,13 @@ areas inside their bounds; this is separate from the verified status bar.
 The published profile with no draft has no Pencil frame. In the saved-draft frame `WPmtS`, the app also shows a
 disabled *Save draft* button that the drawing omits (major visual mismatch). Draw the missing state, decide whether
 the disabled button should be shown, then align the app and verify both states. Evidence: `.tmp/verify/u3-u4/report.md`.
+
+### U9 · Long project names in breadcrumb and project menu (UI)
+
+With a 167-character real project name, the Overview project-bar breadcrumb hard-clips and hides the final
+*Overview* crumb, and the open project switcher's Recent row clips the name without an ellipsis. Constrain these two
+labels while retaining their full values and compare against Pencil `Twtqc` and menu `IHBfD` / option `AfHJi`.
+Evidence: `.tmp/verify/u7/report.md`. This is separate from the U7 selector trigger and Overview title.
 
 ## L · After lurq 0.30.0
 
