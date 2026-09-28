@@ -14,7 +14,7 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::ScrollState},
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -87,9 +87,6 @@ pub struct ProjectForm {
   /// The chosen project folder.
   folder: Signal<Option<ChosenPath>>,
   github: SetupGitHub,
-  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
-  /// keeps it.
-  scroll: ScrollState,
 }
 
 impl Component for ProjectForm {
@@ -107,7 +104,6 @@ impl Component for ProjectForm {
       name: ctx.signal(String::new()),
       folder: ctx.signal(None),
       github: SetupGitHub::new(ctx),
-      scroll: ScrollState::new(),
     };
     // A newly chosen folder is detected at once.
     let (folder, github, detect) = (form.folder.clone(), form.github.clone(), actions.detect.clone());
@@ -203,12 +199,7 @@ impl Component for ProjectForm {
       .height(Dimension::Pct(100.0))
       .child(topbar(ctx, shown_name))
       .child(heading(ctx))
-      .child(
-        ScrollVertical::new(fields)
-          .with_scroll_state(self.scroll.clone())
-          .width(Dimension::Pct(100.0))
-          .flex(1.0),
-      )
+      .child(ScrollVertical::new(fields).width(Dimension::Pct(100.0)).flex(1.0))
       .child(footer)
       .child(self.github.panel(ctx, &actions.detect, folder.clone(), &project));
     form(submit, page)

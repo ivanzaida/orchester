@@ -14,7 +14,7 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::ScrollState},
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -64,9 +64,6 @@ pub struct ToolEditor {
   pub(super) environment: Signal<String>,
   /// Whether the fields hold edits not saved yet, for closing their tab.
   unsaved: Option<EditMark>,
-  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
-  /// keeps it.
-  scroll: ScrollState,
 }
 
 /// The fields checked against the stored tool.
@@ -117,7 +114,6 @@ impl Component for ToolEditor {
       output_limit: ctx.signal(text.output_limit),
       environment: ctx.signal(text.environment),
       unsaved: EditMark::of(ctx),
-      scroll: ScrollState::new(),
       context,
     }
   }
@@ -138,7 +134,6 @@ impl Component for ToolEditor {
           .with_children(self.fields(ctx, &state)),
       )
       .id("tool-editor")
-      .with_scroll_state(self.scroll.clone())
       .flex(1.0)
       .height(Dimension::Pct(100.0))
       .into()

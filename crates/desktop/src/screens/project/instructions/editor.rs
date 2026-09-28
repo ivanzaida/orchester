@@ -13,7 +13,6 @@ use lurq::{
   },
   components::{Column, Row, Text},
   core::Signal,
-  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -94,9 +93,6 @@ pub struct InstructionEditor {
   pub(super) catalog_view: Signal<CatalogView>,
   pub(super) catalog_search: Signal<String>,
   queue: DraftQueue<Instruction>,
-  /// Where the prompt is scrolled: kept by the editor, so a tab that goes inactive and back keeps
-  /// it.
-  pub(super) prompt_scroll: ScrollState,
 }
 
 impl Component for InstructionEditor {
@@ -144,7 +140,6 @@ impl Component for InstructionEditor {
       catalog_view: ctx.signal(CatalogView::default()),
       catalog_search: ctx.signal(String::new()),
       queue: DraftQueue::default(),
-      prompt_scroll: ScrollState::new(),
       context,
     }
   }

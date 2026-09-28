@@ -10,7 +10,6 @@ use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
   components::{Column, ScrollVertical},
   core::Signal,
-  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::{RepositoryAccess, Step, StepKey, StepKind};
@@ -95,9 +94,6 @@ pub struct StepInspector {
   fields: Fields,
   handle: EditorHandle,
   nav: ProjectNav,
-  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
-  /// keeps it.
-  scroll: ScrollState,
 }
 
 impl Component for StepInspector {
@@ -125,12 +121,7 @@ impl Component for StepInspector {
     };
     watch_fields(ctx, &fields, &handle);
     watch_budget(ctx, &fields, &handle);
-    Self {
-      fields,
-      handle,
-      nav,
-      scroll: ScrollState::new(),
-    }
+    Self { fields, handle, nav }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -180,12 +171,7 @@ impl Component for StepInspector {
       .padding_vertical(SpacingSize::Lg)
       .padding_horizontal(Dimension::Px(inset))
       .spacing(SpacingSize::Md)
-      .child(
-        ScrollVertical::new(content)
-          .with_scroll_state(self.scroll.clone())
-          .width(Dimension::Pct(100.0))
-          .flex(1.0),
-      )
+      .child(ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0))
       .child(
         Column::new()
           .width(Dimension::Pct(100.0))

@@ -12,7 +12,6 @@ use lurq::{
   },
   components::{Column, ScrollVertical, Select, Text},
   core::Signal,
-  layout::layout_kind::ScrollState,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::run::Plan;
@@ -37,7 +36,7 @@ pub(super) fn aside(
   ctx: &Ctx,
   props: &PlanReviewProps,
   (note, note_focused): (&Signal<String>, &Signal<bool>),
-  (shown, scroll): (&Signal<Shown>, &ScrollState),
+  shown: &Signal<Shown>,
 ) -> Element {
   let review = &props.review;
   let criteria: Vec<Element> = if props.criteria.is_empty() {
@@ -87,7 +86,6 @@ pub(super) fn aside(
     .child(
       ScrollVertical::new(details)
         .id("plan-review-details")
-        .with_scroll_state(scroll.clone())
         .width(Dimension::Pct(100.0))
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),

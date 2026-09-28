@@ -350,6 +350,40 @@ fn tabs_inactive_tab_keeps_its_draft_and_scroll() {
 }
 
 #[test]
+fn tabs_inactive_new_task_keeps_its_scroll() {
+  let mut desktop = kontur();
+  desktop.press("nav-tasks");
+  desktop.wait_for("tasks-new-task");
+  desktop.click("tasks-new-task");
+  desktop.wait_for("new-task-brief");
+  desktop.tree.resize(1440, 560);
+  desktop.pass();
+
+  let before = desktop.bounds("task-title").y;
+  let area = desktop.bounds("new-task-brief");
+  let (x, y) = (area.x + area.width / 2.0, area.y + area.height / 2.0);
+  desktop.tree.scroll(x, y, 0.0, 0.0, ScrollPhase::Start);
+  desktop.tree.scroll(x, y, 0.0, -400.0, ScrollPhase::Scroll);
+  desktop.tree.scroll(x, y, 0.0, 0.0, ScrollPhase::End);
+  desktop.pass();
+  let scrolled = desktop.bounds("task-title").y;
+  assert!(
+    scrolled < before,
+    "the New Task form scrolled: {scrolled} from {before}"
+  );
+
+  command(&mut desktop, "t", "KeyT", false);
+  desktop.wait_for("all-projects");
+  command(&mut desktop, "1", "Digit1", false);
+  desktop.wait_for("new-task-brief");
+  let back = desktop.bounds("task-title").y;
+  assert!(
+    (back - scrolled).abs() < 0.5,
+    "the New Task scroll is kept: {back} instead of {scrolled}"
+  );
+}
+
+#[test]
 fn tabs_closing_a_tab_with_unsaved_edits_asks_first() {
   let mut desktop = kontur();
   desktop.click("nav-tools");

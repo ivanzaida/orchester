@@ -17,7 +17,6 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
-  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -115,9 +114,6 @@ pub struct ProfileEditor {
   pub(super) folder_error: Signal<Option<Message>>,
   /// Whether the form holds edits not saved yet, for closing its tab.
   pub(super) unsaved: Option<EditMark>,
-  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
-  /// keeps it.
-  pub(super) scroll: ScrollState,
 }
 
 /// The form's current values checked against the stored profile.
@@ -224,7 +220,6 @@ impl Component for ProfileEditor {
           .child(
             ScrollVertical::new(body)
               .id("agent-editor")
-              .with_scroll_state(self.scroll.clone())
               .flex(1.0)
               .height(Dimension::Pct(100.0)),
           ),
@@ -253,7 +248,6 @@ impl ProfileEditor {
       new_folder: ctx.signal(String::new()),
       folder_error: ctx.signal(None),
       unsaved: None,
-      scroll: ScrollState::new(),
       context: context.clone(),
     }
   }
@@ -298,7 +292,6 @@ impl ProfileEditor {
       new_folder: ctx.signal(String::new()),
       folder_error: ctx.signal(None),
       unsaved: None,
-      scroll: ScrollState::new(),
       context: context.clone(),
     }
   }

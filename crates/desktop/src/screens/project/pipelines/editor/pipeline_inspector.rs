@@ -11,7 +11,7 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::ScrollState},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 
@@ -64,9 +64,6 @@ pub struct PipelineInspector {
   /// The description as typed; applied to the pipeline once seeded from it.
   description: Signal<String>,
   seeded: Signal<bool>,
-  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
-  /// keeps it.
-  scroll: ScrollState,
 }
 
 impl Component for PipelineInspector {
@@ -83,11 +80,7 @@ impl Component for PipelineInspector {
         handle.edit(|edit| edit.set_description(text));
       }
     });
-    Self {
-      description,
-      seeded,
-      scroll: ScrollState::new(),
-    }
+    Self { description, seeded }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -154,12 +147,7 @@ impl Component for PipelineInspector {
       .height(Dimension::Pct(100.0))
       .padding(SpacingSize::Lg)
       .spacing(SpacingSize::Md)
-      .child(
-        ScrollVertical::new(content)
-          .with_scroll_state(self.scroll.clone())
-          .width(Dimension::Pct(100.0))
-          .flex(1.0),
-      );
+      .child(ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0));
     if props.published.is_none() {
       panel = panel.child(Notice::new(
         Icon::Info,

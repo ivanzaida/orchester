@@ -23,10 +23,7 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
-  layout::{
-    Alignment,
-    layout_kind::{Justify, ScrollState},
-  },
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_store::StoreError;
@@ -69,9 +66,6 @@ pub struct AllProjects {
   /// The project chosen for removal, and whether its confirmation is open.
   removing: Signal<Option<ProjectEntry>>,
   confirming: Signal<bool>,
-  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
-  /// keeps it.
-  scroll: ScrollState,
 }
 
 impl Component for AllProjects {
@@ -95,7 +89,6 @@ impl Component for AllProjects {
       revision: ctx.signal(0),
       removing: ctx.signal(None),
       confirming: ctx.signal(false),
-      scroll: ScrollState::new(),
     }
   }
 
@@ -180,11 +173,7 @@ impl AllProjects {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .spacing(SpacingSize::Lg)
-      .child(
-        ScrollVertical::new(list)
-          .with_scroll_state(self.scroll.clone())
-          .width(Dimension::Pct(100.0)),
-      )
+      .child(ScrollVertical::new(list).width(Dimension::Pct(100.0)))
       .child(ownership_note(&ctx.t("projects.removal.note")))
       .into()
   }

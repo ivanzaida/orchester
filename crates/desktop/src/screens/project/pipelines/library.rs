@@ -13,10 +13,7 @@ use lurq::{
   },
   components::{Column, Modal, ModalTarget, Row, ScrollVertical, Spacer, Text},
   core::Signal,
-  layout::{
-    Alignment,
-    layout_kind::{Justify, ScrollState},
-  },
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{name::Name, resource::StarterStep};
@@ -76,9 +73,6 @@ pub struct Library {
   /// Mount key of the dialog, so each opening starts with empty fields.
   dialog_opened: Signal<u64>,
   nav: PipelinesNav,
-  /// Where the page is scrolled: kept by the component, so a tab that goes inactive and back
-  /// keeps it.
-  scroll: ScrollState,
 }
 
 impl Component for Library {
@@ -100,7 +94,6 @@ impl Component for Library {
       dialog_start: ctx.signal(StartFrom::Starter),
       dialog_opened: ctx.signal(0),
       nav,
-      scroll: ScrollState::new(),
     }
   }
 
@@ -234,11 +227,7 @@ impl Library {
       .flex(1.0)
       .spacing(SpacingSize::Md)
       .child(filters)
-      .child(
-        ScrollVertical::new(rows)
-          .with_scroll_state(self.scroll.clone())
-          .width(Dimension::Pct(100.0)),
-      )
+      .child(ScrollVertical::new(rows).width(Dimension::Pct(100.0)))
       .child(ownership_note(
         &ctx.t_args("pipelines.library.ownership", [("project", project)]),
       ))

@@ -153,17 +153,7 @@ are covered only by data tests. Verify them in the app and fix what differs from
 
 The fixes from lurq branch `claude/tabs-gaps` and the text-input fixes are released in 0.30.0. The workspace uses
 0.30.0 since commit `71fd0b7`. The baseline `tools/check.ps1` and full `form_keyboard ::` passed on 2026-09-28
-(212 passed, 1 ignored). L2–L3 can proceed.
-
-### L2 · Remove the held scroll states
-
-Offstage tabs lost scroll offsets, so page components under `crates/desktop/src/screens/` hold their own `ScrollState`
-(`.with_scroll_state(..)`, about 144 matches). lurq now carries runtime state across offstage. Remove the states that
-exist only to survive tab switches and let `ScrollVertical::new` own them. Keep held states used on purpose:
-programmatic scrolling (`scroll_to_bottom_pending`, `set_scroll_pending`, e.g. the conversation panel), reading offsets,
-or sharing one state between components. Note: a state held above a tab's router also restored scroll after Back/Forward
-inside a tab; lurq's own state starts at the top when a route is remounted — decide per screen whether that matters.
-**Done when** `form_keyboard tabs` (inactive tab keeps its scroll) and the full `form_keyboard ::` pass.
+(212 passed, 1 ignored). L3 can proceed.
 
 ### L3 · Outside presses only close popups
 
@@ -219,3 +209,4 @@ D2 · Extra writable folders for agents · branch `claude/writable-roots`.
 T3 · Serialize the remaining run request fallbacks · commit `389ee3b`.
 T5 · Continuing a run whose worktree was deleted by hand · branch `codex/missing-run-worktree`.
 L1 · The window title follows the active tab · branch `codex/window-title` (MCP and Pencil verified).
+L2 · Remove the held scroll states · branch `codex/scroll-state` (15 offstage-only states removed; purposeful navigation and programmatic scroll states kept; `form_keyboard ::` 213 passed, 1 ignored; MCP and Pencil verified on reachable screens).
