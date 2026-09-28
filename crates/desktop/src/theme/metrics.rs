@@ -29,7 +29,8 @@ pub enum ExtraSpacing {
   Inline,
   /// Title to description, notice content, nav item padding (`b0m9CN`, `q5LzI`, `TSJpn`).
   Stack,
-  /// Loosely grouped items: primary action and caption, footer items (`s9JMb`, `tNThR`).
+  /// Loosely grouped items: primary action and caption, footer items (`s9JMb`, `tNThR`); the
+  /// vertical padding of an All projects row (`tBszO`).
   Group,
   /// Getting started steps (`ZZqwk`, `XVkaB` instances).
   Step,
@@ -42,7 +43,8 @@ pub enum ExtraSpacing {
   /// Gap between the groups of a configuration form (`xT2ex`, `dCLMl`).
   Form,
   /// Left indent of the getting started steps after their divider; horizontal padding and
-  /// column gap of the new task form (`ZZqwk`, `hkWbp`, `uZeUx`).
+  /// column gap of the new task form; top and bottom padding of All projects (`ZZqwk`, `hkWbp`,
+  /// `uZeUx`, `Z0HwM`).
   Indent,
   /// Horizontal page padding of the welcome topbar and the setup form (`DY5WC`, `Allwo`).
   Page,

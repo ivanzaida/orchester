@@ -139,7 +139,7 @@ impl Component for AllProjects {
         Column::new()
           .width(Dimension::Pct(100.0))
           .flex(1.0)
-          .padding_vertical(ExtraSpacing::Rail.role())
+          .padding_vertical(ExtraSpacing::Indent.role())
           .padding_horizontal(ExtraSpacing::Page.role())
           .spacing(SpacingSize::Lg)
           .child(heading(ctx, &navigation, &pick))

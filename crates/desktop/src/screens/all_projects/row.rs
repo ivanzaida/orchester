@@ -131,7 +131,7 @@ pub(super) fn project_row(
     .id(format!("project-row-{index}"))
     .describe("project", project.name.to_string())
     .flex(1.0)
-    .padding_vertical(ExtraSpacing::Stack.role())
+    .padding_vertical(ExtraSpacing::Group.role())
     .padding_left(ExtraSpacing::Stack.role())
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
