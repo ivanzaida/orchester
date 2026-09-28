@@ -224,9 +224,9 @@ impl Desktop {
     }
   }
 
-  /// The application ends without recording its end, as when its process is killed: its
-  /// runners and their agents are terminated with it. Once `ended` has waited for them to be
-  /// gone, it starts again on the same database, which reports the crash.
+  /// The application ends without recording its end, as when its process is killed. Runtime
+  /// shutdown drops the runner connections. After `ended` performs any test-specific cleanup,
+  /// it starts again on the same database, which reports the crash.
   pub fn crash_and_restart(self, ended: impl FnOnce()) -> Self {
     let Self {
       tree,
