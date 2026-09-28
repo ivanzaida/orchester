@@ -1424,7 +1424,9 @@
           "claudeCalls": "Only their tools are allowed",
           "claudeCallsHow": "--allowedTools mcp__* · unverified",
           "outside": "Servers work outside these limits",
-          "outsideHow": "own processes · network on"
+          "outsideHow": "own processes · network on",
+          "noneLoad": "No MCP servers load",
+          "noneLoadHow": "none can start here · user’s own ignored"
         }
       },
       "mechanism": {

@@ -28,12 +28,10 @@ use super::{
 };
 use crate::{
   navigation::route::{ConnectionTab, Page},
+  screens::project::page::TOPBAR_BUTTON_HEIGHT,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{button::ActionButton, icon::Icon, option_card::unavailable_reason, switch::Switch},
 };
-
-/// Height of *Add an MCP server* (`IgW07`).
-const ADD_HEIGHT: f32 = 32.0;
 
 impl ProfileEditor {
   /// The project's MCP servers, each with a switch; or, without any, where to add one.
@@ -51,7 +49,7 @@ impl ProfileEditor {
         .icon(Icon::Plus)
         .id("agent-mcp-add")
         .in_form()
-        .height(Dimension::Px(ADD_HEIGHT))
+        .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
         .on_click(move || nav.show(Page::Connections(ConnectionTab::McpServers, None)))
         .render(ctx);
       return column
@@ -126,6 +124,7 @@ impl ProfileEditor {
       .count();
     let support = mcp_support(provider);
     let loaded = match count {
+      0 if !chosen.0.is_empty() => ctx.t("agents.permissions.enforcement.mcp.noneLoad"),
       0 => ctx.t("agents.permissions.enforcement.mcp.none"),
       1 => ctx.t("agents.permissions.enforcement.mcp.onlyOne"),
       _ => ctx.t_args(
@@ -134,6 +133,7 @@ impl ProfileEditor {
       ),
     };
     let loading = match (count, support.loading) {
+      (0, _) if !chosen.0.is_empty() => ctx.t("agents.permissions.enforcement.mcp.noneLoadHow"),
       (0, _) => ctx.t("agents.permissions.enforcement.mcp.noneHow"),
       (_, McpLoading::CodexConfigOverrides) => ctx.t("agents.permissions.enforcement.mcp.codexLoading"),
       (_, McpLoading::ClaudeStrictConfig) => ctx.t("agents.permissions.enforcement.mcp.claudeLoading"),
