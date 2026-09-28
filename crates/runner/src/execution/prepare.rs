@@ -161,10 +161,10 @@ fn preflight_failed(problem: PreflightProblem) -> Rejection {
 /// `HEAD` of the user's checkout: the run starts from what the user has checked out.
 fn base_revision(root: &Path) -> Result<Revision, Rejection> {
   let git = Git::new(root);
-  match git.stdout(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]) {
+  match git.stdout(&["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]) {
     Ok(head) => Revision::new(&head).map_err(|error| failed("git reported an unexpected revision", &error)),
     // No commit to start from: find out whether there is a repository at all.
-    Err(_) => match git.succeeds(["rev-parse", "--git-dir"]) {
+    Err(_) => match git.succeeds(&["rev-parse", "--git-dir"]) {
       Ok(true) => Err(preflight_failed(PreflightProblem::NoCommits)),
       Ok(false) => Err(preflight_failed(PreflightProblem::NotAGitRepository)),
       Err(error) => Err(failed("cannot run git", &error)),

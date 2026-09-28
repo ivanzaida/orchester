@@ -62,7 +62,7 @@ impl CommandRunner for Replay {
 
 fn ok(stdout: &str) -> Result<CommandOutput, CommandError> {
   Ok(CommandOutput {
-    success: true,
+    code: Some(0),
     stdout: stdout.to_owned(),
     stderr: String::new(),
   })

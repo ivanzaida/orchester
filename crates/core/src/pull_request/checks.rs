@@ -83,7 +83,7 @@ pub fn parse_gh_check_rollups(
   heads: &[Revision],
   output: &CommandOutput,
 ) -> Result<Vec<CheckRollup>, RepositoryError> {
-  if !output.success {
+  if !output.success() {
     return Err(classify_failure(repo, &output.stderr));
   }
   let mut answer: Answer =

@@ -12,19 +12,19 @@ use crate::{git::Git, worktree::WorktreeError};
 pub(super) fn commit(worktree: &Path, message: &str) -> Result<Option<Revision>, WorktreeError> {
   let git = Git::new(worktree);
   if git
-    .stdout(["status", "--porcelain", "--untracked-files=all"])?
+    .stdout(&["status", "--porcelain", "--untracked-files=all"])?
     .is_empty()
   {
     return Ok(None);
   }
-  git.stdout(["add", "--all"])?;
-  git.stdout(["commit", "--quiet", "-m", message])?;
+  git.stdout(&["add", "--all"])?;
+  git.stdout(&["commit", "--quiet", "-m", message])?;
   head(worktree).map(Some)
 }
 
 /// The commit checked out in `worktree`.
 pub(super) fn head(worktree: &Path) -> Result<Revision, WorktreeError> {
-  let head = Git::new(worktree).stdout(["rev-parse", "HEAD"])?;
+  let head = Git::new(worktree).stdout(&["rev-parse", "HEAD"])?;
   Revision::new(&head).map_err(|_| WorktreeError::UnexpectedRevision(head))
 }
 
@@ -41,18 +41,18 @@ pub(super) enum Merge {
 /// takes a merge commit.
 pub(super) fn merge(worktree: &Path, branch: &str, message: &str) -> Result<Merge, WorktreeError> {
   let git = Git::new(worktree);
-  if let Err(refusal) = git.attempt(["merge", "--no-edit", "-m", message, branch])? {
+  if let Err(refusal) = git.attempt(&["merge", "--no-edit", "-m", message, branch])? {
     // A conflict leaves a merge in progress; a refusal before merging (such as local changes in
     // the way) does not, and is a failure of git rather than of the step.
-    if !git.answer(["rev-parse", "--quiet", "--verify", "MERGE_HEAD"])? {
+    if !git.answer(&["rev-parse", "--quiet", "--verify", "MERGE_HEAD"])? {
       return Err(WorktreeError::Git {
         command: format!("merge {branch}"),
         code: None,
         stderr: refusal,
       });
     }
-    let files = git.stdout(["diff", "--name-only", "--diff-filter=U"])?;
-    git.stdout(["merge", "--abort"])?;
+    let files = git.stdout(&["diff", "--name-only", "--diff-filter=U"])?;
+    git.stdout(&["merge", "--abort"])?;
     return Ok(Merge::Conflict(files.lines().map(str::to_owned).collect()));
   }
   head(worktree).map(Merge::Merged)

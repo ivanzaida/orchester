@@ -22,10 +22,10 @@ fn git<const N: usize>(args: [&str; N]) -> Command {
 #[test]
 fn process_output_and_exit_status_are_captured() {
   let output = RUNNER.run(&git(["--version"])).expect("git runs");
-  assert!(output.success);
+  assert!(output.success());
   assert!(output.stdout.starts_with("git version"), "{}", output.stdout);
   let output = RUNNER.run(&git(["no-such-command"])).expect("git runs");
-  assert!(!output.success);
+  assert!(!output.success());
   assert!(!output.stderr.is_empty());
 }
 
@@ -53,7 +53,7 @@ fn process_environment_is_added_and_removed() {
   let output = RUNNER
     .run(&configured.without_env("GIT_CONFIG_COUNT"))
     .expect("git runs");
-  assert!(!output.success, "the setting was hidden: {}", output.stdout);
+  assert!(!output.success(), "the setting was hidden: {}", output.stdout);
 }
 
 #[test]
@@ -62,12 +62,12 @@ fn process_runs_in_the_given_directory() {
   let outside = RUNNER
     .run(&git(["rev-parse", "--is-inside-work-tree"]).with_current_dir(folder.path()))
     .expect("git runs");
-  assert!(!outside.success);
+  assert!(!outside.success());
   assert!(outside.stderr.contains("not a git repository"), "{}", outside.stderr);
   let init = RUNNER
     .run(&git(["init", "--quiet"]).with_current_dir(folder.path()))
     .expect("git runs");
-  assert!(init.success, "{}", init.stderr);
+  assert!(init.success(), "{}", init.stderr);
   let inside = RUNNER
     .run(&git(["rev-parse", "--is-inside-work-tree"]).with_current_dir(folder.path()))
     .expect("git runs");
