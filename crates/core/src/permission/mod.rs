@@ -1,5 +1,6 @@
 //! What an agent may do while it works on a task (`docs/design/orchester-workspace.md`, "Agent
-//! permissions"): repository access, which commands it may run and whether it has network access.
+//! permissions"): repository access, the folders outside the worktree it may also write to
+//! ([`writable`]), which commands it may run and whether it has network access.
 //! Permissions belong to an agent profile version; a pipeline step can only narrow them
 //! ([`StepPermissions`]). Which options a connection's CLI can enforce is decided by
 //! [`capability`]; an option it cannot enforce is never offered, and Orchester never starts an agent
@@ -9,13 +10,19 @@ pub mod capability;
 pub mod claude;
 pub mod mcp;
 mod narrow;
+pub mod writable;
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::narrow::{StepCommands, StepNetwork, StepPermissions};
+pub use self::{
+  narrow::{StepCommands, StepNetwork, StepPermissions},
+  writable::{
+    FolderBounds, ResolvedFolder, WritableFolder, WritableFolderError, WritableFolders, WritableFoldersError,
+  },
+};
 pub use crate::resource::RepositoryAccess;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -170,6 +177,10 @@ pub enum NetworkAccess {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AgentPermissions {
   repository: RepositoryAccess,
+  /// Apply only with [`RepositoryAccess::Write`]; kept while the access is read-only so that
+  /// switching back restores them. Left out of the stored form while empty, as before they existed.
+  #[serde(default, skip_serializing_if = "WritableFolders::is_empty")]
+  writable_folders: WritableFolders,
   commands: CommandPermission,
   network: NetworkAccess,
 }
@@ -178,9 +189,17 @@ impl AgentPermissions {
   pub const fn new(repository: RepositoryAccess, commands: CommandPermission, network: NetworkAccess) -> Self {
     Self {
       repository,
+      writable_folders: WritableFolders::none(),
       commands,
       network,
     }
+  }
+
+  /// These permissions with the extra writable folders `folders`.
+  #[must_use]
+  pub fn with_writable_folders(mut self, folders: WritableFolders) -> Self {
+    self.writable_folders = folders;
+    self
   }
 
   /// What profiles saved before permissions existed get: read-only, commands confined to the
@@ -199,6 +218,19 @@ impl AgentPermissions {
     self.repository
   }
 
+  /// The extra writable folders as chosen, whatever the repository access.
+  pub const fn writable_folders(&self) -> &WritableFolders {
+    &self.writable_folders
+  }
+
+  /// The extra writable folders an agent gets: `None` unless it edits files.
+  pub const fn granted_folders(&self) -> Option<&WritableFolders> {
+    match self.repository {
+      RepositoryAccess::Write => Some(&self.writable_folders),
+      RepositoryAccess::ReadOnly => None,
+    }
+  }
+
   pub const fn commands(&self) -> &CommandPermission {
     &self.commands
   }
@@ -209,6 +241,10 @@ impl AgentPermissions {
 
   pub const fn set_repository(&mut self, repository: RepositoryAccess) {
     self.repository = repository;
+  }
+
+  pub fn set_writable_folders(&mut self, folders: WritableFolders) {
+    self.writable_folders = folders;
   }
 
   pub fn set_commands(&mut self, commands: CommandPermission) {

@@ -346,7 +346,7 @@ impl<'a> ClaudeServer<'a> {
 }
 
 /// `value` as a TOML basic string.
-fn toml_string(value: &str) -> String {
+pub(super) fn toml_string(value: &str) -> String {
   let mut quoted = String::with_capacity(value.len() + 2);
   quoted.push('"');
   for c in value.chars() {
@@ -361,7 +361,7 @@ fn toml_string(value: &str) -> String {
   quoted
 }
 
-fn toml_array(values: &[impl AsRef<str>]) -> String {
+pub(super) fn toml_array(values: &[impl AsRef<str>]) -> String {
   let items: Vec<String> = values.iter().map(|value| toml_string(value.as_ref())).collect();
   format!("[{}]", items.join(","))
 }

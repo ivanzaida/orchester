@@ -27,6 +27,7 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
     reasoning_effort: Some("low"),
     access,
     network: NetworkAccess::Off,
+    writable_roots: &[],
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     platform,
     resume: None,

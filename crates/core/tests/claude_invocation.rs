@@ -49,6 +49,7 @@ fn invocation(permissions: &EnforcedPermissions) -> ClaudeInvocation<'_> {
     model: "haiku",
     effort: Some("low"),
     permissions,
+    writable_roots: &[],
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     session: ClaudeSession::New(SESSION),
     mcp: None,

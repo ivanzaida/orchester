@@ -270,6 +270,13 @@ fn project_settings_environment_saves_valid_variables_and_suggests_a_shared_buil
   desktop.settle("the suggestion to go", |tree| {
     tree.get_element_by_id("settings-environment-target").is_none()
   });
+  // Once it is set, agents that edit files are said to need the folder among their writable folders.
+  desktop.wait_for("settings-environment-agents");
+  assert!(shows(
+    &mut desktop,
+    "settings-environment-agents",
+    "Agents need permission to write to CARGO_TARGET_DIR"
+  ));
   desktop.settle("the saved status", |tree| {
     tree
       .get_element_by_id("settings-save-status")

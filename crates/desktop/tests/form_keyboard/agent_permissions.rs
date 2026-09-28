@@ -25,7 +25,7 @@ use orchester_store::ProjectDb;
 use crate::harness::Desktop;
 
 /// More than the editor has stops.
-const MAX_STOPS: usize = 40;
+pub(crate) const MAX_STOPS: usize = 40;
 
 fn name(value: &str) -> Name {
   Name::new(value).expect("valid name")
@@ -98,7 +98,7 @@ fn profile(
 /// Claude allowing three commands, a Scout draft on Claude with commands it cannot confine, an
 /// Explorer draft on Claude with network off, which Claude cannot keep, and a pipeline whose review
 /// step keeps two of the Reviewer's commands.
-fn seeded() -> Desktop {
+pub(crate) fn seeded() -> Desktop {
   let desktop = Desktop::with_project();
   let mut db = ProjectDb::open(desktop.repo()).expect("project database");
   let codex = connection(&mut db, "Codex", AgentProvider::CodexCli, desktop.repo());
@@ -171,12 +171,12 @@ fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
     || element.children().into_iter().any(|child| contains_text(child, text))
 }
 
-fn shows(desktop: &mut Desktop, text: &str) -> bool {
+pub(crate) fn shows(desktop: &mut Desktop, text: &str) -> bool {
   desktop.tree.root().is_some_and(|root| contains_text(root, text))
 }
 
 /// The agents screen with `role` in the editor and its Permissions tab open.
-fn permissions_of(desktop: &mut Desktop, role: &str) {
+pub(crate) fn permissions_of(desktop: &mut Desktop, role: &str) {
   desktop.wait_for("nav-agents");
   desktop.click("nav-agents");
   desktop.wait_for("agent-role");
