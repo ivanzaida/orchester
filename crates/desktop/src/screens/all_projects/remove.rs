@@ -191,7 +191,9 @@ fn actions(
   let cancel = props.open.clone();
   Row::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ACTIONS_HEIGHT))
+    // 76 high as drawn; a reason longer than two lines makes it taller rather than being cut off.
+    .min_height(Dimension::Px(ACTIONS_HEIGHT))
+    .padding_vertical(ExtraSpacing::Step.role())
     .padding_horizontal(ExtraSpacing::Rail.role())
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)

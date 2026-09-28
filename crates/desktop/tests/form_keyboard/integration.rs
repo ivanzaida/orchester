@@ -176,12 +176,18 @@ fn remove_worktree_names_uncommitted_changes_and_removes_them_only_when_agreed()
   desktop.click("remove-worktree-confirm");
   desktop.wait_until("the refusal", |desktop| has(desktop, "remove-worktree-error"));
   assert!(shows(&mut desktop, "remove-worktree-error", "changes appeared in it"));
-  // The reason wraps left of the buttons rather than running under them (02.Q states `XIEn8`).
-  let (error, cancel) = (
+  // The reason wraps left of the buttons rather than running under them (02.Q states `XIEn8`), and
+  // the dialog grows with it rather than cutting it off.
+  let (error, cancel, dialog) = (
     desktop.bounds("remove-worktree-error"),
     desktop.bounds("remove-worktree-cancel"),
+    desktop.bounds("remove-worktree-dialog"),
   );
   assert!(error.x + error.width <= cancel.x, "{error:?} runs under {cancel:?}");
+  assert!(
+    error.y + error.height <= dialog.y + dialog.height,
+    "{error:?} is cut off by {dialog:?}"
+  );
   assert!(worktree.join("draft.txt").is_file());
   desktop.click("remove-worktree-cancel");
   // Read again, the dialog names the file and removes it only once discarding is agreed to.
