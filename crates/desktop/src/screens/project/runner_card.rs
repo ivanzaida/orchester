@@ -76,8 +76,8 @@ pub fn runner_card(ctx: &Ctx, open: &OpenProject, status: &RunnerStatus) -> Elem
     .into()
 }
 
-/// The mark, the title key and the line under it of `state`. Stopping and stopped are not drawn;
-/// they read like the other states and have no second line.
+/// The mark, the title key and the line under it of `state`. Stopping and stopped have no second
+/// line (`hGfPh`, `ToZBQ` in `O5NoB1`).
 fn look(ctx: &Ctx, state: &RunnerState, status: &RunnerStatus) -> (Mark, &'static str, Option<Arc<str>>) {
   match state {
     RunnerState::Starting => (

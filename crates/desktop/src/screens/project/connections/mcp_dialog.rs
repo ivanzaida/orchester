@@ -1,5 +1,5 @@
-//! Add MCP server, also used to edit one (not drawn yet: built from the connection dialog frame
-//! `IAN4P` and its fields). A server needs a name the agent CLIs know it by and a transport: a
+//! Add MCP server, also used to edit one (04.E `yRb2k`, 04.E2 `Qvhc6`, 04.E3 `Hpycl`, in the
+//! connection dialog frame `IAN4P`). A server needs a name the agent CLIs know it by and a transport: a
 //! program the agent's CLI starts, with its arguments, folder and variables, or a URL with an
 //! optional bearer token from a project secret. Nothing is started or reached while it is set up;
 //! the agent's CLI starts or reaches it when an agent that gets it starts. The fields are in

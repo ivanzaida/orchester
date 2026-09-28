@@ -1,5 +1,5 @@
 //! The connections of the selected tab (`Bc9cT`, `gQDwZ`) beside the selected one's details
-//! (`JuVaA`, `C0jjP`, an MCP server's as `pQ0DW`), or what to add when the tab has none.
+//! (`JuVaA`, `C0jjP`, an MCP server's as `OXa0o` in 04.D `QdLRd`), or what to add when the tab has none.
 
 use std::sync::Arc;
 
