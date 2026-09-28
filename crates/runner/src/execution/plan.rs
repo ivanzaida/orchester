@@ -49,16 +49,24 @@ impl Scheduler {
       version,
       decision,
     };
-    let _one_at_a_time = self.inner.continuing.lock().await;
-    if let Some(answer) = self.ask(run, |ack| Control::DecidePlan(request.clone(), ack))
-      && let Ok(result) = answer.await
-    {
-      return result;
+    loop {
+      let one_at_a_time = self.inner.continuing.lock().await;
+      if self.inner.board.is_stopping() {
+        return Err(Rejection::ShuttingDown);
+      }
+      if let Some(answer) = self.ask(run, |ack| Control::DecidePlan(request.clone(), ack)) {
+        drop(one_at_a_time);
+        if let Ok(result) = answer.await {
+          return result;
+        }
+        continue;
+      }
+      return self.decide_idle(run, request);
     }
+  }
+
+  fn decide_idle(&self, run: RunId, request: PlanRequest) -> Result<(), Rejection> {
     // No task executes the run (it waits for the decision), or its task ended without reading it.
-    if self.inner.board.is_stopping() {
-      return Err(Rejection::ShuttingDown);
-    }
     let mut db = self.open()?;
     // A run that cannot continue refuses the decision before it is recorded.
     let mut prepared = Prepared::continuing(&db, &self.inner.project_root, idle::load(&db, run)?)?;

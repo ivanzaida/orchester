@@ -102,9 +102,8 @@ struct Inner {
   vault: Arc<dyn SecretVault>,
   board: Arc<Board>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
-  /// Held by a request that may execute a run again (continuing it or deciding its plan), so two
-  /// cannot both start a task for it while one waits for the run's last task to end, and a
-  /// decision reaches a task another request started instead of starting a second one.
+  /// Serializes requests that start a task or change a run while its task may end. A fallback
+  /// must not change a stored run after another request has started its next task.
   continuing: tokio::sync::Mutex<()>,
 }
 
@@ -150,8 +149,9 @@ impl Scheduler {
     }
   }
 
-  /// Whether the runner has no work: no run executes (an agent at work, a step waiting for an
-  /// agent slot, a checkpoint being saved) and no request that may execute one again is under way.
+  /// Whether no run executes (including a step waiting for a slot or saving a checkpoint) and no
+  /// request is changing a run under the scheduler lock. The server separately tracks requests
+  /// awaiting a task's answer.
   pub fn is_idle(&self) -> bool {
     self.active_runs().is_empty() && self.inner.continuing.try_lock().is_ok()
   }
@@ -159,7 +159,8 @@ impl Scheduler {
   /// Creates and starts the run of queued task `task`, or finds the one an earlier request with
   /// `key` created. Must be called within a Tokio runtime; returns once the run is recorded as
   /// started and its first step is scheduled.
-  pub fn start_run(&self, key: IdempotencyKey, task: TaskId) -> Result<RunId, Rejection> {
+  pub async fn start_run(&self, key: IdempotencyKey, task: TaskId) -> Result<RunId, Rejection> {
+    let _one_at_a_time = self.inner.continuing.lock().await;
     let root = &self.inner.project_root;
     let mut db = self.open()?;
     self.admit(&db)?;
@@ -178,37 +179,51 @@ impl Scheduler {
   /// Pauses `run` at its next checkpoint. Returns once the request is recorded; the run is
   /// paused when its active agent invocation has ended and its work is committed.
   pub async fn pause_run(&self, run: RunId) -> Result<(), Rejection> {
-    if let Some(answer) = self.ask(run, Control::Pause)
-      && let Ok(result) = answer.await
-    {
-      return result;
+    loop {
+      let one_at_a_time = self.inner.continuing.lock().await;
+      if self.inner.board.is_stopping() {
+        return Err(Rejection::ShuttingDown);
+      }
+      if let Some(answer) = self.ask(run, Control::Pause) {
+        drop(one_at_a_time);
+        if let Ok(result) = answer.await {
+          return result;
+        }
+        continue;
+      }
+      if let Some(paused) = idle::pause(&mut self.open()?, run)? {
+        self.inner.notifier.send(Event::RunChanged {
+          run,
+          task: paused.task(),
+        });
+      }
+      return Ok(());
     }
-    if let Some(paused) = idle::pause(&mut self.open()?, run)? {
-      self.inner.notifier.send(Event::RunChanged {
-        run,
-        task: paused.task(),
-      });
-    }
-    Ok(())
   }
 
   /// Cancels `run`: ends its agent, keeps its worktree and branch. Returns once the run is
   /// recorded as cancelled.
   pub async fn cancel_run(&self, run: RunId) -> Result<(), Rejection> {
-    let asked = match self.ask(run, Control::Cancel) {
-      Some(answer) => answer.await.ok(),
-      None => None,
-    };
-    // Without an answer the run's task ended before it read the request: the run is idle now.
-    if let Some(result) = asked {
-      return result;
+    loop {
+      let one_at_a_time = self.inner.continuing.lock().await;
+      if self.inner.board.is_stopping() {
+        return Err(Rejection::ShuttingDown);
+      }
+      if let Some(answer) = self.ask(run, Control::Cancel) {
+        drop(one_at_a_time);
+        if let Ok(result) = answer.await {
+          return result;
+        }
+        continue;
+      }
+      // Without an answer the run's task ended before it read the request: the run is idle now.
+      let cancelled = idle::cancel(&mut self.open()?, run)?;
+      self.inner.notifier.send(Event::RunChanged {
+        run,
+        task: cancelled.task(),
+      });
+      return Ok(());
     }
-    let cancelled = idle::cancel(&mut self.open()?, run)?;
-    self.inner.notifier.send(Event::RunChanged {
-      run,
-      task: cancelled.task(),
-    });
-    Ok(())
   }
 
   /// Continues paused run `run`; a step it stopped in continues the agent's CLI session.
@@ -235,15 +250,18 @@ impl Scheduler {
   /// checkpoint and returns once each has settled. The work summary shows each run saving, then
   /// saved.
   pub async fn finish_at_checkpoints(&self) {
-    self.inner.board.stop_at_checkpoints();
-    let active: Vec<RunId> = self.active_runs();
-    let mut settling = Vec::new();
-    for run in active {
-      match self.ask(run, Control::Pause) {
-        Some(answer) => settling.push((run, answer)),
-        None => tracing::debug!(%run, "the run settled before it was asked to pause"),
+    let settling = {
+      let _one_at_a_time = self.inner.continuing.lock().await;
+      self.inner.board.stop_at_checkpoints();
+      let mut settling = Vec::new();
+      for run in self.active_runs() {
+        match self.ask(run, Control::Pause) {
+          Some(answer) => settling.push((run, answer)),
+          None => tracing::debug!(%run, "the run settled before it was asked to pause"),
+        }
       }
-    }
+      settling
+    };
     for (run, answer) in settling {
       match answer.await {
         Ok(Ok(())) => {}
@@ -251,7 +269,12 @@ impl Scheduler {
         Err(_) => tracing::debug!(%run, "the run settled before it read the pause"),
       }
     }
-    let tasks: Vec<(RunId, ActiveRun)> = self.inner.active.lock().drain().collect();
+    // Keep the tasks visible to an immediate shutdown while their agents finish the checkpoint.
+    self.wait_for_current_tasks().await;
+    let tasks: Vec<(RunId, ActiveRun)> = {
+      let _one_at_a_time = self.inner.continuing.lock().await;
+      self.inner.active.lock().drain().collect()
+    };
     for (run, active) in tasks {
       if let Err(error) = active.task.await {
         tracing::warn!(%run, %error, "the run's task ended abnormally");
@@ -262,6 +285,8 @@ impl Scheduler {
   /// Ends the agents of every active run and records the runs as interrupted by `cause`,
   /// waiting at most [`STOP_TIMEOUT`] for each.
   pub async fn stop_all(&self, cause: InterruptCause) {
+    let _one_at_a_time = self.inner.continuing.lock().await;
+    self.inner.board.stop_immediately();
     let active: Vec<(RunId, ActiveRun)> = self.inner.active.lock().drain().collect();
     for (run, active) in active {
       // A run that already ended has dropped its receiver; there is nothing to stop.
@@ -335,8 +360,8 @@ impl Scheduler {
     run: RunId,
     transition: impl FnOnce(&mut ProjectDb, &Path) -> Result<Prepared, Rejection>,
   ) -> Result<(), Rejection> {
-    let _one_at_a_time = self.inner.continuing.lock().await;
     self.settled(run).await?;
+    let _one_at_a_time = self.inner.continuing.lock().await;
     self.continue_idle(run, transition)
   }
 

@@ -130,6 +130,7 @@ async fn run_to_the_end(project: &TestProject) -> Run {
   let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   wait_for(root, &mut events, id, |run| run.status().is_terminal()).await
 }

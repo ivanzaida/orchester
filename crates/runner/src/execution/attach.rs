@@ -35,7 +35,11 @@ impl Scheduler {
   /// as interrupted, delivers the messages people wrote while no runner was attached (answers and
   /// follow-ups) and, after the previous runner dropped, continues the runs its loss interrupted, as
   /// far as slots and the daily budget allow.
-  pub fn attach(&self, session: AttachSession, slots: NonZeroU32) -> Result<Attached, Rejection> {
+  pub async fn attach(&self, session: AttachSession, slots: NonZeroU32) -> Result<Attached, Rejection> {
+    let _one_at_a_time = self.inner.continuing.lock().await;
+    if self.inner.board.is_stopping() {
+      return Err(Rejection::ShuttingDown);
+    }
     self.inner.board.set_slots(slots);
     let mut db = self.open()?;
     let cause = session.interrupt_cause();
@@ -62,7 +66,8 @@ impl Scheduler {
   }
 
   /// Continues interrupted runs `runs` from their last checkpoints because a person asked to.
-  pub fn continue_runs(&self, runs: &[RunId]) -> (Vec<RunId>, Vec<RefusedRun>) {
+  pub async fn continue_runs(&self, runs: &[RunId]) -> (Vec<RunId>, Vec<RefusedRun>) {
+    let _one_at_a_time = self.inner.continuing.lock().await;
     let mut continued = Vec::new();
     let mut refused = Vec::new();
     for &run in runs {

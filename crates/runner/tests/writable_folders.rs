@@ -52,6 +52,7 @@ async fn run(root: &Path, task: orchester_core::id::TaskId) -> (RunId, Run) {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   (id, run)

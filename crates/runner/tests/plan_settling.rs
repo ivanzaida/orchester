@@ -36,9 +36,10 @@ async fn plan_settling_a_decision_the_ending_task_drops_still_continues_the_run(
   let fresh = AttachSession::Fresh {
     previous_end: SessionEnd::Clean,
   };
-  scheduler.attach(fresh, NonZeroU32::MIN).expect("attached");
+  scheduler.attach(fresh, NonZeroU32::MIN).await.expect("attached");
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   tokio::time::timeout(PATIENCE, hold.held)
     .await
@@ -50,6 +51,7 @@ async fn plan_settling_a_decision_the_ending_task_drops_still_continues_the_run(
   assert!(scheduler.active_runs().is_empty());
   scheduler
     .start_run(IdempotencyKey::generate(), queue_another_task(root))
+    .await
     .expect("the only agent slot is free");
 
   let decide = scheduler.decide_plan(id, plan.execution, plan.version, PlanDecision::Approved);

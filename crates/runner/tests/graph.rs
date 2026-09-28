@@ -50,6 +50,7 @@ async fn run_to_the_end(setup: &Setup) -> (support::TestProject, Run) {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   (project, run)
@@ -206,9 +207,11 @@ async fn graph_agent_slots_bound_the_steps_that_run_at_once() {
       },
       one,
     )
+    .await
     .expect("attached");
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);

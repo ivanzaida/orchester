@@ -23,6 +23,7 @@ async fn run_to_the_end(project: &TestProject) -> orchester_core::run::Run {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   wait_for(root, &mut events, id, |run| run.status().is_terminal()).await
 }

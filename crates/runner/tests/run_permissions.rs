@@ -92,6 +92,7 @@ async fn start(setup: &Setup) -> (support::TestProject, Scheduler, mpsc::Unbound
   let (scheduler, events) = scheduler(project.repo.path());
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   (project, scheduler, events, id)
 }

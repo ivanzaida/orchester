@@ -54,6 +54,7 @@ async fn step_budget_stops_the_run_at_its_limit_and_a_raise_continues_the_sessio
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events, id, stopped).await;
   let limit = step_limit(&run, "implement");
@@ -146,6 +147,7 @@ async fn step_budget_lets_a_parallel_step_finish_and_takes_no_retry() {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events, id, stopped).await;
   let limit = step_limit(&run, "review");

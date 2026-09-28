@@ -69,6 +69,7 @@ async fn run_to_the_end(setup: &Setup) -> (support::TestProject, Run) {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   (project, run)
@@ -225,6 +226,7 @@ async fn tools_cancel_ends_the_running_program() {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let db = ProjectDb::open(root).expect("open");
   let started = async {
@@ -264,6 +266,7 @@ async fn tools_the_run_time_limit_ends_the_program_and_stops_the_run() {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events, id, |run| {
     matches!(run.status(), RunStatus::Paused(_))

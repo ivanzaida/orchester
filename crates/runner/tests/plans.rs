@@ -70,6 +70,7 @@ async fn proposed(root: &Path, scheduler: &Scheduler, events: &mut mpsc::Unbound
   let task = orchester_core::store::TaskStore::tasks(&task).expect("tasks")[0].id();
   let id = scheduler
     .start_run(IdempotencyKey::generate(), task)
+    .await
     .expect("the run starts");
   wait_for(root, events, id, waiting).await;
   let plan = plans(root, id).pop().expect("a plan");
@@ -85,7 +86,7 @@ async fn plans_a_gate_waits_without_a_slot_and_approval_continues_the_graph() {
   let fresh = AttachSession::Fresh {
     previous_end: SessionEnd::Clean,
   };
-  scheduler.attach(fresh, one).expect("attached");
+  scheduler.attach(fresh, one).await.expect("attached");
   let (id, plan) = proposed(root, &scheduler, &mut events).await;
   assert_eq!(plan.version, PlanVersion::FIRST);
   assert_eq!(plan.step, key("plan"));
@@ -104,6 +105,7 @@ async fn plans_a_gate_waits_without_a_slot_and_approval_continues_the_graph() {
   wait_for_idle(&scheduler).await;
   let other = scheduler
     .start_run(IdempotencyKey::generate(), queue_another_task(root))
+    .await
     .expect("the only slot is free");
   wait_for(root, &mut events, other, waiting).await;
   wait_for_idle(&scheduler).await;
@@ -217,7 +219,7 @@ async fn plans_a_waiting_run_pauses_and_keeps_waiting_across_a_new_runner() {
   let crashed = AttachSession::Fresh {
     previous_end: SessionEnd::Crashed,
   };
-  let attached = next.attach(crashed, NonZeroU32::MIN).expect("attached");
+  let attached = next.attach(crashed, NonZeroU32::MIN).await.expect("attached");
   assert!(attached.interrupted.is_empty());
   let run = ProjectDb::open(root)
     .expect("open")

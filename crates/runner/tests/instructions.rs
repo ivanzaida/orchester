@@ -84,6 +84,7 @@ async fn instructions_for_the_agent_at_start_are_in_the_prompt_it_reads() {
   let (scheduler, mut events) = scheduler(root);
   let run = scheduler
     .start_run(orchester_core::id::IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
 
@@ -141,6 +142,7 @@ async fn instructions_for_resuming_reach_a_continued_session_in_their_pinned_ver
   let (scheduler, mut events) = scheduler(root);
   scheduler
     .attach(AttachSession::Reconnect, NonZeroU32::new(2).expect("above zero"))
+    .await
     .expect("attached");
   wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
 
@@ -188,6 +190,7 @@ async fn instructions_run_revision_names_the_checkpoint_a_step_starts_after() {
   let (scheduler, mut events) = scheduler(root);
   let run = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let finished = wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
 
@@ -219,6 +222,7 @@ async fn instructions_run_revision_before_the_first_checkpoint_fails_the_step_an
   let (scheduler, mut events) = scheduler(root);
   let run = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let finished = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
 

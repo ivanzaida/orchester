@@ -28,7 +28,7 @@ async fn execution_runs_a_step_on_the_cli_and_commits_its_changes() {
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let key = IdempotencyKey::generate();
-  let id = scheduler.start_run(key, project.task).expect("the run starts");
+  let id = scheduler.start_run(key, project.task).await.expect("the run starts");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(run.branch().as_str(), "orchester/orc-1-run-1");
@@ -41,7 +41,7 @@ async fn execution_runs_a_step_on_the_cli_and_commits_its_changes() {
   assert_eq!(fs::read_to_string(root.join("README.md")).expect("readme"), "hi\n");
 
   // Repeating the request with the same key returns the same run and starts nothing.
-  assert_eq!(scheduler.start_run(key, project.task), Ok(id));
+  assert_eq!(scheduler.start_run(key, project.task).await, Ok(id));
   let db = ProjectDb::open(root).expect("open");
   assert_eq!(db.runs_of_task(project.task).expect("runs").len(), 1);
 
@@ -133,6 +133,7 @@ async fn execution_fails_the_run_when_the_turn_fails() {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert!(matches!(run.status(), RunStatus::Failed(_)));
@@ -151,6 +152,7 @@ async fn execution_stops_the_agent_and_interrupts_the_run() {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
+    .await
     .expect("the run starts");
   let db = ProjectDb::open(root).expect("open");
   wait_for_turns(root, &mut events, id, 1).await;
@@ -184,7 +186,7 @@ async fn execution_rejects_what_the_preflight_finds_and_tasks_that_are_not_queue
   db.save_connection(&connection.into_connection()).expect("save");
   let (scheduler, _events) = scheduler(root);
   assert_eq!(
-    scheduler.start_run(IdempotencyKey::generate(), project.task),
+    scheduler.start_run(IdempotencyKey::generate(), project.task).await,
     Err(Rejection::Preflight {
       problems: vec![PreflightProblem::ConnectionNotUsable {
         step: StepKey::new("implement").expect("key"),
@@ -193,7 +195,9 @@ async fn execution_rejects_what_the_preflight_finds_and_tasks_that_are_not_queue
     })
   );
   assert_eq!(
-    scheduler.start_run(IdempotencyKey::generate(), TaskId::generate()),
+    scheduler
+      .start_run(IdempotencyKey::generate(), TaskId::generate())
+      .await,
     Err(Rejection::TaskNotFound)
   );
 }
@@ -216,6 +220,7 @@ async fn run_to_the_end(root: &std::path::Path, task: TaskId) -> orchester_core:
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), task)
+    .await
     .expect("the run starts");
   wait_for(root, &mut events, id, |run| run.status().is_terminal()).await
 }

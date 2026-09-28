@@ -64,15 +64,6 @@ skill. Depends on D3's findings.
 
 ## T · Tests and runner
 
-### T3 · Serialize the remaining run request fallbacks (non-UI)
-
-`continue_runs`, reconnect continuation and the attach follow-up of queued messages (`follow_up_queued`,
-`crates/runner/src/execution/conversation.rs`) are synchronous and do not take the continue lock; the pause, cancel and
-permission fallbacks are not serialized with a concurrent request that starts a task for the same run
-(`crates/runner/src/execution/`). A clash now comes back as an explicit `Failed`, not silently. **Done when** every
-request that can start or stop a run's task takes the same lock, with a test per path. Tests: runner `control`,
-`settling`, `plan_settling`, `lifecycle`, `conversation`.
-
 ### T5 · Continuing a run whose worktree was deleted by hand (non-UI)
 
 Continuing a paused or interrupted run whose worktree folder was deleted by hand stores the state change before
@@ -82,7 +73,6 @@ the rejection order ("run not found" became "worktree removed"). **Done when** e
 checks the worktree before its events are stored, keeps the existing rejection order, and a runner test deletes the
 folder of a paused and of an interrupted run and gets `WorktreeRemoved` with the run unchanged. Tests: runner
 `control`, `conversation`, `worktree`.
-
 ### T4 · A listing survives a row whose id cannot be parsed (non-UI)
 
 A run row whose id or task id cannot be parsed still fails the whole listing
@@ -206,6 +196,7 @@ headless test covers the tab list case.
 
 ## Done
 
-T1 · Drop waits the store retry made unnecessary · branch `master` (uncommitted).
-T2 · Poll-free plan tests · branch `codex/poll-free-plan-tests`.
+T1 · Drop waits the store retry made unnecessary · commit `c13ece9`.
+T2 · Poll-free plan tests · commit `8739a65`.
 D2 · Extra writable folders for agents · branch `claude/writable-roots`.
+T3 · Serialize the remaining run request fallbacks · commit `389ee3b`.
