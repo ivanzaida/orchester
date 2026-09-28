@@ -53,8 +53,7 @@ pub(super) fn resume(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Prep
     _ => return Err(Rejection::RunNotPaused),
   }
   let events = run.resume(Timestamp::now()).map_err(rejection)?;
-  store(db, &run, &events)?;
-  Prepared::continuing(db, root, run)
+  store_continuation(db, root, run, &events)
 }
 
 /// Raises the limits of a run stopped at a limit, within the project's maximum run budget, and
@@ -75,8 +74,7 @@ pub(super) fn raise(db: &mut ProjectDb, root: &Path, run: RunId, limits: RaisedL
   let events = run
     .continue_with_limits(limits, active_time(&invocations, now), max, now)
     .map_err(rejection)?;
-  store(db, &run, &events)?;
-  Prepared::continuing(db, root, run)
+  store_continuation(db, root, run, &events)
 }
 
 /// Raises the budget of the step a run stopped at, within the project's maximum run budget and
@@ -102,8 +100,7 @@ pub(super) fn raise_step_budget(
   let events = run
     .raise_step_budget(budget, used, max, Timestamp::now())
     .map_err(rejection)?;
-  store(db, &run, &events)?;
-  Prepared::continuing(db, root, run)
+  store_continuation(db, root, run, &events)
 }
 
 /// Continues an interrupted run from its last checkpoint because a person asked to.
@@ -113,8 +110,7 @@ pub(super) fn continue_interrupted(db: &mut ProjectDb, root: &Path, run: RunId) 
     return Err(Rejection::RunNotInterrupted);
   }
   let events = run.continue_run(Timestamp::now()).map_err(rejection)?;
-  store(db, &run, &events)?;
-  Prepared::continuing(db, root, run)
+  store_continuation(db, root, run, &events)
 }
 
 /// Continues a run the previous runner's loss interrupted, from its last checkpoint.
@@ -124,8 +120,14 @@ pub(super) fn continue_after_reconnect(db: &mut ProjectDb, root: &Path, run: Run
   if events.is_empty() {
     return Err(Rejection::RunNotInterrupted);
   }
-  store(db, &run, &events)?;
-  Prepared::continuing(db, root, run)
+  store_continuation(db, root, run, &events)
+}
+
+/// A continuation must have a task and worktree before its state change is recorded.
+fn store_continuation(db: &mut ProjectDb, root: &Path, run: Run, events: &[RunEvent]) -> Result<Prepared, Rejection> {
+  let prepared = Prepared::continuing(db, root, run)?;
+  store(db, &prepared.run, events)?;
+  Ok(prepared)
 }
 
 /// Refuses new or continued work while the project's runs have used today's token budget.

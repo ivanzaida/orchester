@@ -104,6 +104,10 @@ required-features = ["test-agent"]
 name = "writable_folders"
 required-features = ["test-agent"]
 
+[[test]]
+name = "missing_worktree"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

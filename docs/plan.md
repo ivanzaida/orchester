@@ -64,15 +64,6 @@ skill. Depends on D3's findings.
 
 ## T · Tests and runner
 
-### T5 · Continuing a run whose worktree was deleted by hand (non-UI)
-
-Continuing a paused or interrupted run whose worktree folder was deleted by hand stores the state change before
-`Prepared::continuing` fails, so the run can stay recorded as running with no agent. A follow-up (Ask agent) already
-refuses early with `Rejection::WorktreeRemoved` (`prepare::existing_worktree`); a check in `continue_idle` alone changed
-the rejection order ("run not found" became "worktree removed"). **Done when** each idle transition that starts a task
-checks the worktree before its events are stored, keeps the existing rejection order, and a runner test deletes the
-folder of a paused and of an interrupted run and gets `WorktreeRemoved` with the run unchanged. Tests: runner
-`control`, `conversation`, `worktree`.
 ### T4 · A listing survives a row whose id cannot be parsed (non-UI)
 
 A run row whose id or task id cannot be parsed still fails the whole listing
@@ -236,3 +227,4 @@ T1 · Drop waits the store retry made unnecessary · commit `c13ece9`.
 T2 · Poll-free plan tests · commit `8739a65`.
 D2 · Extra writable folders for agents · branch `claude/writable-roots`.
 T3 · Serialize the remaining run request fallbacks · commit `389ee3b`.
+T5 · Continuing a run whose worktree was deleted by hand · branch `codex/missing-run-worktree`.
