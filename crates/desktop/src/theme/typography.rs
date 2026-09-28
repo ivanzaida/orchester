@@ -139,6 +139,9 @@ pub enum ExtraTypography {
   ContextNote,
   /// A table cell's label that wraps beside its icon, e.g. a worktree state (`VHSnL` in `Py65X`).
   CellLabel,
+  /// A field error that wraps beside its icon, e.g. why a dialog's action is unavailable at the
+  /// left of its buttons (`foNvP` in 01.06 F `glurU`, `eeksu` in 02.Q states `XIEn8`).
+  WrappingError,
   /// A note under an inspector's details or actions: where the models come from, what the
   /// connection's status means (`xK9v9`, `Thdx2` in `JuVaA`).
   InspectorNote,
@@ -163,7 +166,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 73] = [
+  const ALL: [Self; 74] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -227,6 +230,7 @@ impl ExtraTypography {
     Self::VariableName,
     Self::ContextNote,
     Self::CellLabel,
+    Self::WrappingError,
     Self::InspectorNote,
     Self::PlanTitle,
     Self::ReviewNote,
@@ -304,6 +308,7 @@ impl ExtraTypography {
       Self::VariableName => "variable-name",
       Self::ContextNote => "context-note",
       Self::CellLabel => "cell-label",
+      Self::WrappingError => "wrapping-error",
       Self::InspectorNote => "inspector-note",
       Self::PlanTitle => "plan-title",
       Self::ReviewNote => "review-note",
@@ -460,6 +465,7 @@ impl ExtraTypography {
       Self::RuleTitle => style(20.0, FontWeight::Medium, TEXT),
       Self::ContextNote => style(9.0, FontWeight::Normal, MUTED),
       Self::CellLabel => leading(1.5, style(11.0, FontWeight::Normal, MUTED)),
+      Self::WrappingError => leading(1.5, style(11.0, FontWeight::Normal, TEXT)),
       Self::InspectorNote => leading(1.6, style(10.0, FontWeight::Normal, MUTED)),
       Self::PlanTitle => style(19.0, FontWeight::Medium, TEXT),
       Self::ReviewNote => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),
