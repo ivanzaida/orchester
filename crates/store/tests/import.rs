@@ -9,7 +9,10 @@ use std::{
 };
 
 use orchester_core::{
-  connection::{AgentProvider, Connection, ConnectionKind},
+  connection::{
+    AgentProvider, Connection, ConnectionKind,
+    mcp::{HttpServer, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, McpUrl},
+  },
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId},
   import::{Catalog, Choice, Choices, Entity, ImportBatch, Pick, Plan},
   name::Name,
@@ -20,7 +23,7 @@ use orchester_core::{
     ProviderSettings, RepositoryAccess, ResourceKind, Slug, Step, StepKey, StepKind, VersionNumber,
   },
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
-  store::{ConnectionStore, ImportStore, ResourceStore, SecretStore},
+  store::{ConnectionStore, ImportStore, McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -54,6 +57,97 @@ fn codex(db: &mut ProjectDb) -> ConnectionId {
   .expect("absolute executable");
   db.create_connection(&connection).expect("stored");
   connection.id()
+}
+
+fn mcp(db: &mut ProjectDb, label: &str) -> ConnectionId {
+  let server = McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new(label).expect("valid server name"),
+    McpTransport::Http(HttpServer::new(
+      McpUrl::new("https://mcp.example.test/v1").expect("valid URL"),
+      None,
+    )),
+    McpEnvironment::default(),
+    at(1),
+  )
+  .expect("valid server");
+  db.create_mcp_server(&server).expect("stored");
+  server.id()
+}
+
+#[test]
+fn import_profile_uses_the_target_mcp_server() {
+  let (source_repo, mut source_db) = repository("Personal website", "PW");
+  let source_connection = codex(&mut source_db);
+  let source_server = mcp(&mut source_db, "source-docs");
+  let profile = AgentProfile::new(
+    name("Builder"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    source_connection,
+    ModelId::new("gpt-5.5").expect("model"),
+    ProviderSettings::default(),
+  )
+  .with_mcp_servers(McpServerSelection::new(vec![source_server]).expect("one server"));
+  let profile_id = source_db
+    .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, at(2))
+    .expect("profile")
+    .id();
+  drop(source_db);
+  let source = catalog_of(source_repo.path());
+  let (_target_repo, mut target_db) = repository("Kontur", "KON");
+  let target_server = mcp(&mut target_db, "target-docs");
+  let target = Catalog::read(target_db.project().clone(), &target_db).expect("target catalog");
+  let mut choices = Choices::default();
+  choices.choose(
+    Entity::McpServer(source_server),
+    Choice::Use(Entity::McpServer(target_server)),
+  );
+  let plan = Plan::new(&source, &target, &[(profile_id, Pick::Draft)], &choices);
+  let batch = plan.batch(&source, IdempotencyKey::generate(), at(3)).expect("ready");
+
+  let created = target_db.import(&batch).expect("imported");
+  let draft = target_db
+    .draft::<AgentProfile>(created[0].id())
+    .expect("read")
+    .expect("imported draft");
+  assert_eq!(draft.body().mcp_servers().ids(), [target_server]);
+  assert_ne!(draft.body().mcp_servers().ids(), [source_server]);
+  assert_eq!(target_db.mcp_servers().expect("local servers").len(), 1);
+
+  let gone = McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new("gone-docs").expect("name"),
+    McpTransport::Http(HttpServer::new(
+      McpUrl::new("https://mcp.example.test/v1").expect("URL"),
+      None,
+    )),
+    McpEnvironment::default(),
+    at(1),
+  )
+  .expect("server");
+  let stale_target = Catalog::new(
+    target_db.project().clone(),
+    Vec::new(),
+    Vec::new(),
+    vec![gone.clone()],
+    Vec::new(),
+  );
+  choices.choose(
+    Entity::McpServer(source_server),
+    Choice::Use(Entity::McpServer(gone.id())),
+  );
+  let stale_plan = Plan::new(&source, &stale_target, &[(profile_id, Pick::Draft)], &choices);
+  let stale_batch = stale_plan
+    .batch(&source, IdempotencyKey::generate(), at(4))
+    .expect("ready");
+  let refused = target_db.import(&stale_batch);
+  assert!(matches!(refused, Err(StoreError::ConnectionNotFound(id)) if id == gone.id()));
+  assert_eq!(
+    count(&target_db, ResourceKind::AgentProfile),
+    1,
+    "stale mapping writes nothing"
+  );
 }
 
 /// Personal website: the Preview release pipeline (published v1) runs Builder (a draft), whose
@@ -280,6 +374,7 @@ fn import_writes_nothing_when_a_mapped_connection_is_gone() {
       )
       .expect("connection"),
     ],
+    Vec::new(),
     Vec::new(),
   );
   let mut choices = Choices::default();

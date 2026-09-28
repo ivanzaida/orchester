@@ -81,12 +81,6 @@ that failed to start in a signed-in run, and whether Claude's `mcp__<name>` allo
 confirmed or fixed, with the observed CLI output saved as a fixture and parser tests updated
 (`crates/core/src/connection/mcp/`).
 
-### M2 · Import keeps a profile's MCP servers (non-UI + UI)
-
-Importing an agent profile from another project keeps the source project's MCP server ids, so its agents work without
-them. Map MCP servers in the import like connections (reuse or leave unresolved), following the import mapping rows
-(`HfNoA`, `ixzlL`).
-
 ### M3 · Secrets "Used by" lists MCP servers (UI)
 
 A secret used by an MCP server variable or bearer token is not listed under its *Used by*.
@@ -178,6 +172,11 @@ catch the user's typing.
 
 ## Done
 
+M2 · Map imported profiles' MCP servers · branch `codex/import-mcp` (source server IDs are resolved to target servers
+or left explicit as unresolved; independent core import 20/20, store 1/1, desktop 1/1, i18n 2/2 and
+`tools/check.ps1` passed. No-focus MCP/Pencil verification found 0 blocking/major/minor in the generic mapping row;
+the imported draft uses the target server ID and the source database was unchanged. Pencil has no MCP-specific frame;
+evidence `.tmp/verify/m2/report.md`).
 U7 · Truncate long project names in sidebar selector and Overview heading · branch `codex/long-project-name`
 (headless geometry test 1/1, `tools/check.ps1` passed; independent MCP/Pencil verification at 1440 and 900 logical px
 found painted ellipses, preserved actions, and 0 blocking/major/minor in these regions. Evidence `.tmp/verify/u7/report.md`).

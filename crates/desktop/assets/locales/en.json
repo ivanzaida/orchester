@@ -2714,6 +2714,7 @@
       "commandTool": "Command tool",
       "databaseTool": "Database tool",
       "connection": "Connection",
+      "mcpServer": "MCP server",
       "secret": "Secret"
     },
     "github": "GitHub CLI",
@@ -2815,7 +2816,7 @@
       "detail": "Copied tools keep access only for pipelines copied with them. Every other caller is denied."
     },
     "ready": "All dependencies resolved · creates local drafts",
-    "readyUnresolved": "Creates local drafts · unresolved connections and secrets show as missing",
+    "readyUnresolved": "Creates local drafts · unresolved connections, MCP servers and secrets show as missing",
     "blocked": {
       "nameTaken": "Rename {{name}} to continue.",
       "nameInvalid": "Name the copy of {{name}} to continue.",

@@ -11,7 +11,10 @@ use std::{
 
 use lurq::node::element::ElementRef;
 use orchester_core::{
-  connection::{AgentProvider, Connection, ConnectionKind},
+  connection::{
+    AgentProvider, Connection, ConnectionKind,
+    mcp::{HttpServer, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, McpUrl},
+  },
   id::{ConnectionId, ResourceId},
   name::Name,
   permission::StepPermissions,
@@ -19,7 +22,7 @@ use orchester_core::{
     AgentProfile, AgentTargets, InjectionEvent, Instruction, InstructionScope, ModelId, Pipeline, PromptText,
     ProviderSettings, RepositoryAccess, ResourceKind, Slug, Step, StepKey, StepKind,
   },
-  store::{ConnectionStore, ResourceStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_desktop::activity::{Place, Target};
@@ -42,6 +45,91 @@ fn codex(db: &mut ProjectDb) -> ConnectionId {
   .expect("absolute executable");
   db.create_connection(&connection).expect("stored");
   connection.id()
+}
+
+fn mcp(db: &mut ProjectDb, label: &str) -> ConnectionId {
+  let server = McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new(label).expect("valid server name"),
+    McpTransport::Http(HttpServer::new(
+      McpUrl::new("https://mcp.example.test/v1").expect("valid URL"),
+      None,
+    )),
+    McpEnvironment::default(),
+    Timestamp::now(),
+  )
+  .expect("valid server");
+  db.create_mcp_server(&server).expect("stored");
+  server.id()
+}
+
+#[test]
+fn import_profile_maps_its_mcp_server_in_the_dependency_dialog() {
+  let mut source = None;
+  let mut target_server = None;
+  let mut desktop = Desktop::with_other_project(
+    |repo| {
+      let mut db = ProjectDb::open(repo).expect("source project");
+      let connection = codex(&mut db);
+      let server = mcp(&mut db, "source-docs");
+      let profile = AgentProfile::new(
+        name("Builder"),
+        String::new(),
+        PromptText::new("Build.").expect("prompt"),
+        connection,
+        ModelId::new("gpt-5.5").expect("model"),
+        ProviderSettings::default(),
+      )
+      .with_mcp_servers(McpServerSelection::new(vec![server]).expect("one server"));
+      let id = db
+        .create_resource(
+          Slug::new("builder").expect("slug"),
+          name("Builder"),
+          &profile,
+          Timestamp::now(),
+        )
+        .expect("profile")
+        .id();
+      source = Some((id, server));
+    },
+    |repo| {
+      let mut db = ProjectDb::open(repo).expect("target project");
+      target_server = Some(mcp(&mut db, "target-docs"));
+    },
+  );
+  let (profile, source_server) = source.expect("seeded profile");
+  let target_server = target_server.expect("seeded local server");
+  desktop.wait_for("nav-import");
+  desktop.press("nav-import");
+  desktop.wait_for("import-dialog");
+  desktop.press("import-tab-agents");
+  let resource = format!("import-resource-{profile}");
+  desktop.wait_for(&resource);
+  desktop.press(&resource);
+  desktop.press("import-resolve");
+  let row = format!("import-mapping-{source_server}");
+  desktop.wait_for(&row);
+  assert!(shows(&mut desktop, &row, "MCP server"));
+  let status = format!("import-status-{source_server}");
+  assert!(shows(&mut desktop, &status, "Unresolved"));
+  choose(
+    &mut desktop,
+    &format!("import-choice-{source_server}"),
+    "Use target-docs",
+  );
+  assert!(shows(&mut desktop, &status, "Mapped"));
+  desktop.press("import-submit");
+  desktop.wait_for("agent-editor");
+
+  let db = ProjectDb::open(desktop.repo()).expect("target project");
+  let copied = db.resources(ResourceKind::AgentProfile).expect("profiles");
+  assert_eq!(copied.len(), 1);
+  let draft = db
+    .draft::<AgentProfile>(copied[0].id())
+    .expect("read")
+    .expect("imported draft");
+  assert_eq!(draft.body().mcp_servers().ids(), [target_server]);
+  assert_ne!(draft.body().mcp_servers().ids(), [source_server]);
 }
 
 /// What Personal website holds: Preview release v1 runs Builder, whose connection is Codex, and

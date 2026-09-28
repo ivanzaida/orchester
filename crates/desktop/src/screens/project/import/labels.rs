@@ -137,6 +137,9 @@ pub(super) fn name(catalog: &Catalog, entity: Entity) -> Arc<str> {
     Entity::Connection(id) => catalog
       .connection(id)
       .map_or_else(|| Arc::from(""), |connection| connection.name().as_str().into()),
+    Entity::McpServer(id) => catalog
+      .mcp_server(id)
+      .map_or_else(|| Arc::from(""), |server| server.name().as_str().into()),
     Entity::Secret(id) => catalog
       .secret(id)
       .map_or_else(|| Arc::from(""), |secret| secret.name().as_str().into()),
@@ -163,6 +166,7 @@ pub(super) fn source_detail(ctx: &Ctx, source: &Catalog, item: &Item) -> Arc<str
       parts.extend(program);
       separated(ctx, &parts)
     }
+    Entity::McpServer(_) => ctx.t("projectImport.kind.mcpServer"),
     Entity::Secret(id) => {
       let environment = source
         .secret(id)
@@ -205,7 +209,9 @@ fn use_label(ctx: &Ctx, target: &Catalog, entity: Entity) -> Arc<str> {
         [("name", &*name), ("version", &*version)],
       )
     }
-    Entity::Connection(_) => ctx.t_args("projectImport.option.useConnection", [("name", &*name)]),
+    Entity::Connection(_) | Entity::McpServer(_) => {
+      ctx.t_args("projectImport.option.useConnection", [("name", &*name)])
+    }
     Entity::Secret(id) => {
       let environment = target
         .secret(id)
@@ -312,7 +318,7 @@ fn used(catalogs: &Catalogs, entity: Entity) -> (Message, Message) {
         .with("name", name)
         .with("project", target),
     ),
-    Entity::Connection(_) | Entity::Secret(_) => (
+    Entity::Connection(_) | Entity::McpServer(_) | Entity::Secret(_) => (
       Message::new("projectImport.status.mapped"),
       Message::new("projectImport.status.mappedDetail")
         .with("name", name)

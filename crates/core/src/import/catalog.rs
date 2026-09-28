@@ -1,16 +1,16 @@
 //! What a project holds that an import copies from or maps to: its resources with their latest
-//! published version and draft, its connections and its active secrets.
+//! published version and draft, its connections, MCP servers and active secrets.
 
 use serde_json::Value;
 
 use super::{Entity, references};
 use crate::{
-  connection::Connection,
+  connection::{Connection, mcp::McpServer},
   id::{ConnectionId, ResourceId, SecretId},
   project::Project,
   resource::{AgentProfile, Instruction, Pipeline, Resource, ResourceBody, ResourceKind, Tool, VersionNumber},
   secret::Secret,
-  store::{ConnectionStore, ResourceStore, SecretStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore},
 };
 
 /// The body of a resource of any kind.
@@ -128,12 +128,13 @@ impl CatalogResource {
   }
 }
 
-/// A project's resources, connections and active secrets, as an import reads them.
+/// A project's resources, connections, MCP servers and active secrets, as an import reads them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Catalog {
   project: Project,
   resources: Vec<CatalogResource>,
   connections: Vec<Connection>,
+  mcp_servers: Vec<McpServer>,
   secrets: Vec<Secret>,
 }
 
@@ -150,12 +151,14 @@ impl Catalog {
     project: Project,
     resources: Vec<CatalogResource>,
     connections: Vec<Connection>,
+    mcp_servers: Vec<McpServer>,
     secrets: Vec<Secret>,
   ) -> Self {
     Self {
       project,
       resources,
       connections,
+      mcp_servers,
       secrets,
     }
   }
@@ -163,7 +166,7 @@ impl Catalog {
   /// Reads `project`'s catalog from its `store`. Only `&S` is needed: reading changes nothing.
   pub fn read<S, E>(project: Project, store: &S) -> Result<Self, E>
   where
-    S: ResourceStore<Error = E> + ConnectionStore<Error = E> + SecretStore<Error = E>,
+    S: ResourceStore<Error = E> + ConnectionStore<Error = E> + McpServerStore<Error = E> + SecretStore<Error = E>,
   {
     let mut resources = Vec::new();
     for kind in KINDS {
@@ -174,7 +177,13 @@ impl Catalog {
         ResourceKind::Tool => read_kind(store, Content::Tool)?,
       });
     }
-    Ok(Self::new(project, resources, store.connections()?, store.secrets()?))
+    Ok(Self::new(
+      project,
+      resources,
+      store.connections()?,
+      store.mcp_servers()?,
+      store.secrets()?,
+    ))
   }
 
   pub const fn project(&self) -> &Project {
@@ -196,6 +205,14 @@ impl Catalog {
 
   pub fn connection(&self, id: ConnectionId) -> Option<&Connection> {
     self.connections.iter().find(|connection| connection.id() == id)
+  }
+
+  pub fn mcp_servers(&self) -> &[McpServer] {
+    &self.mcp_servers
+  }
+
+  pub fn mcp_server(&self, id: ConnectionId) -> Option<&McpServer> {
+    self.mcp_servers.iter().find(|server| server.id() == id)
   }
 
   /// Secrets that are not archived.
@@ -223,6 +240,7 @@ impl Catalog {
     match entity {
       Entity::Resource(id) => self.resource(id).is_some(),
       Entity::Connection(id) => self.connection(id).is_some(),
+      Entity::McpServer(id) => self.mcp_server(id).is_some(),
       Entity::Secret(id) => self.secret(id).is_some(),
     }
   }
@@ -232,6 +250,7 @@ impl Catalog {
     [
       Entity::Resource(ResourceId::from_uuid(uuid)),
       Entity::Connection(ConnectionId::from_uuid(uuid)),
+      Entity::McpServer(ConnectionId::from_uuid(uuid)),
       Entity::Secret(SecretId::from_uuid(uuid)),
     ]
     .into_iter()

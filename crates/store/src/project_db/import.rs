@@ -62,6 +62,11 @@ fn check_exists(transaction: &Transaction<'_>, entity: Entity) -> Result<(), Sto
       id.to_string(),
       StoreError::ConnectionNotFound(id),
     ),
+    Entity::McpServer(id) => (
+      "SELECT EXISTS (SELECT 1 FROM mcp_servers WHERE id = ?1)",
+      id.to_string(),
+      StoreError::ConnectionNotFound(id),
+    ),
     Entity::Secret(id) => (
       "SELECT EXISTS (SELECT 1 FROM secrets WHERE id = ?1 AND archived_at IS NULL)",
       id.to_string(),

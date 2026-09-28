@@ -3,4 +3,5 @@
 mod batch;
 mod catalog;
 mod fixture;
+mod mcp;
 mod plan;

@@ -6,7 +6,7 @@
 //! where it came from (project, resource, version) is recorded for display only.
 //!
 //! Whatever a copy refers to is resolved in this project ([`Plan`]): a resource is copied too or
-//! replaced by one of this project's. A connection or a secret is never copied — access does not
+//! replaced by one of this project's. A connection, MCP server or secret is never copied — access does not
 //! move between projects — so it is mapped to one of this project's or left unresolved; a copy
 //! then keeps naming one this project does not have, a problem its draft shows until it changes.
 
@@ -27,6 +27,7 @@ use crate::id::{ConnectionId, ResourceId, SecretId};
 pub enum Entity {
   Resource(ResourceId),
   Connection(ConnectionId),
+  McpServer(ConnectionId),
   Secret(SecretId),
 }
 
@@ -35,6 +36,7 @@ impl Entity {
     match self {
       Self::Resource(id) => id.as_uuid(),
       Self::Connection(id) => id.as_uuid(),
+      Self::McpServer(id) => id.as_uuid(),
       Self::Secret(id) => id.as_uuid(),
     }
   }

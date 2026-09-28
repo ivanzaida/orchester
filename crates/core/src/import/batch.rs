@@ -102,8 +102,8 @@ struct Named<'a> {
 
 impl Plan {
   /// The batch that carries out the plan as `key`, created at `now`. Every copy gets a new id;
-  /// its references to copied resources, to the target's resources and to mapped connections and
-  /// secrets are replaced, and unresolved ones stay as they are.
+  /// its references to copied resources, to the target's resources and to mapped connections,
+  /// MCP servers and secrets are replaced, and unresolved ones stay as they are.
   pub fn batch(&self, source: &Catalog, key: IdempotencyKey, now: Timestamp) -> Result<ImportBatch, ImportError> {
     if !self.is_ready() {
       return Err(ImportError::NotReady);
@@ -159,6 +159,7 @@ impl Plan {
       .iter()
       .map(|resource| resource.resource().id().as_uuid())
       .chain(source.connections().iter().map(|connection| connection.id().as_uuid()))
+      .chain(source.mcp_servers().iter().map(|server| server.id().as_uuid()))
       .chain(source.secrets().iter().map(|secret| secret.id().as_uuid()))
       .collect();
     Remap { values, keys, known }

@@ -23,7 +23,7 @@ pub enum Choice {
   Rename,
   /// Use this resource, connection or secret of the target instead.
   Use(Entity),
-  /// Leave a connection or secret unresolved: the copies keep naming the source's, which the
+  /// Leave a connection, MCP server or secret unresolved: the copies keep naming the source's, which the
   /// target does not have, and show it as missing.
   Unresolved,
   /// Do not import an instruction written for a copied pipeline.
@@ -303,7 +303,7 @@ impl Builder<'_> {
   fn pick_of(&self, entity: Entity) -> Option<Pick> {
     match entity {
       Entity::Resource(id) => self.source.resource(id).map(CatalogResource::default_pick),
-      Entity::Connection(_) | Entity::Secret(_) => None,
+      Entity::Connection(_) | Entity::McpServer(_) | Entity::Secret(_) => None,
     }
   }
 }
@@ -322,8 +322,8 @@ fn instructions_for(source: &Catalog, pipeline: ResourceId) -> impl Iterator<Ite
 
 /// What can be chosen for `entity`: a selected resource is copied, a resource a copy needs is
 /// copied or replaced by one of the target's of its kind, an instruction for a copied pipeline
-/// can be left out, and a connection or secret is mapped to one of the target's (a connection of
-/// the same kind) or left unresolved.
+/// can be left out, and a connection, MCP server or secret is mapped to one of the target's (an
+/// agent connection of the same kind) or left unresolved.
 fn options(entity: Entity, role: Role, source: &Catalog, target: &Catalog) -> Vec<Choice> {
   let copies = [Choice::Copy, Choice::Rename];
   match (entity, role) {
@@ -348,6 +348,12 @@ fn options(entity: Entity, role: Role, source: &Catalog, target: &Catalog) -> Ve
         .chain([Choice::Unresolved])
         .collect()
     }
+    (Entity::McpServer(_), _) => target
+      .mcp_servers()
+      .iter()
+      .map(|server| Choice::Use(Entity::McpServer(server.id())))
+      .chain([Choice::Unresolved])
+      .collect(),
     (Entity::Secret(_), _) => target
       .secrets()
       .iter()
@@ -358,7 +364,7 @@ fn options(entity: Entity, role: Role, source: &Catalog, target: &Catalog) -> Ve
 }
 
 /// A resource a copy needs is the target's resource of its kind with its slug or name when there
-/// is one, otherwise a copy; a connection or secret is left for the user to map.
+/// is one, otherwise a copy; a connection, MCP server or secret is left for the user to map.
 fn default_choice(entity: Entity, role: Role, source: &Catalog, target: &Catalog) -> Choice {
   match (entity, role) {
     (Entity::Resource(id), Role::Dependency) => source
@@ -366,7 +372,7 @@ fn default_choice(entity: Entity, role: Role, source: &Catalog, target: &Catalog
       .and_then(|resource| counterpart(resource, target))
       .map_or(Choice::Copy, |existing| Choice::Use(Entity::Resource(existing))),
     (Entity::Resource(_), Role::Selected | Role::PipelineInstruction) => Choice::Copy,
-    (Entity::Connection(_) | Entity::Secret(_), _) => Choice::Unresolved,
+    (Entity::Connection(_) | Entity::McpServer(_) | Entity::Secret(_), _) => Choice::Unresolved,
   }
 }
 

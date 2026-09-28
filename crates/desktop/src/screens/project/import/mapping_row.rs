@@ -1,4 +1,4 @@
-//! One row of the dependency mapping (`HfNoA`): the source resource, connection or secret and the
+//! One row of the dependency mapping (`HfNoA`): the source resource, connection, MCP server or secret and the
 //! content it takes; how it is resolved in this project, with the name typed for a renamed copy
 //! beside the select (`ixzlL`, 06.C `FKzQ9`); and what that means. A row with a problem strokes the
 //! name field as every field error does.
@@ -202,6 +202,7 @@ pub(super) fn row_key(entity: Entity) -> String {
   match entity {
     Entity::Resource(id) => id.to_string(),
     Entity::Connection(id) => id.to_string(),
+    Entity::McpServer(id) => id.to_string(),
     Entity::Secret(id) => id.to_string(),
   }
 }
