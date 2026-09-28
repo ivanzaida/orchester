@@ -2564,6 +2564,7 @@ name = "orchester-exec"
 version = "0.1.0"
 dependencies = [
  "orchester-core",
+ "rustix 1.1.5",
  "tempfile",
  "tracing",
 ]

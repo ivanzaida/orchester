@@ -2,8 +2,9 @@
 //! them. Each child is contained (see [`contain`]) so that ending it also ends everything it
 //! started: an agent CLI spawns shells and tools.
 //!
-//! A child is contained right after it starts; a grandchild spawned in that instant escapes the
-//! child's containment but not the desktop's job around the runner (Windows).
+//! On Windows a child joins its Job Object right after it starts; a grandchild spawned in that
+//! instant escapes the child's job but not the desktop's job around the runner. On macOS the
+//! child leads its process group from before it runs, so there is no such instant.
 
 mod contain;
 

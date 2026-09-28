@@ -6,6 +6,8 @@ use std::{path::Path, time::Duration};
 use orchester_core::command::{Command, CommandError, CommandRunner};
 use orchester_exec::ProcessRunner;
 
+#[cfg(unix)]
+mod group;
 #[cfg(windows)]
 mod shim;
 
