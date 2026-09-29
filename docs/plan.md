@@ -29,6 +29,7 @@ then the backlog by area.
 | M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; an exact remote-selected inspector Pencil frame is missing. |
 | U5 | `codex/u5-small-mismatches` | Independent tests and live checks, including real parallel waiting rows, pass; the after-Remove-worktree live state was not reached and its Pencil frame is missing. |
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; exact Not started, Interrupted and recipient-menu Pencil frames are missing. |
+| D5 | `codex/d5-free-space` | Independent Windows tests, code review, `check.ps1`, and the macOS `fs4` dependency check pass. Full runner macOS cross-check needs an SDK or Mac; exact Pencil error frames and an app/design comparison are missing. |
 
 M1 evidence and parser tests are on `master`; Claude's MCP allow rule still needs a signed-in model turn.
 
@@ -59,12 +60,27 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
    merge from Orchester while another agent is merging branches into `master` by hand.
 
-### D5 · Check free disk space outside the agent CLI (non-UI)
+### D5 · Check free disk space outside the agent CLI
 
 In the first D3 run, Codex 0.139.0 with `-a never` declined `Get-PSDrive`, `fsutil volume diskfree H:` and `Get-Volume H`
 in a read-only step. A task that required that check stopped before cargo. Add an Orchester host-side free-space
 preflight for builds using a shared target, with a clear low-space result on Windows and macOS, so the agent does not
 depend on shell commands that its sandbox may decline. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md`.
+
+The implementation on `codex/d5-free-space` checks an absolute project `CARGO_TARGET_DIR` on the host before creating
+a run or worktree. It returns typed, localized errors when the target's volume cannot be measured or has less than
+10 GiB free for a cold target or 1 GiB for a populated one. Relative targets are skipped. A low-space target also
+blocks a documentation-only run because the runner cannot know whether an arbitrary step will build.
+
+**Done when** the filtered boundary and error-path tests, `tools/check.ps1`, independent review, and Windows host
+measurement pass; the runner macOS target passes cross-check or a Mac smoke test; and a separate agent compares the
+new visible error states with exact Pencil frames and app screenshots of the same size and state.
+
+**Status 2026-09-29: In progress.** Independent Windows code review, filtered tests, `check.ps1`, and the macOS `fs4`
+dependency check pass. A full `orchester-runner` macOS cross-check is limited by missing macOS SDK headers on this
+Windows host. Pencil has no exact low-space or cannot-measure preflight frame, and no matching app/Pencil screenshot
+pair exists. A real low-space state was not safely reached; boundary behavior was checked by tests. Evidence:
+`docs/evidence/d5-status-2026-09-29.md`.
 
 ### D4 · A UI verification step inside a run (after D3)
 
