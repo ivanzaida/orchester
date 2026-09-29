@@ -25,7 +25,7 @@ then the backlog by area.
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | D4 | `codex/d4-focus-watch` | Run #10 reached independent Verify but failed on major New Task visual mismatches. Follow-up UI fixes at `ef6f2e8` passed independent code review, filtered `new_task_` tests 10/10 and `check.ps1`; no post-fix Pencil/app pass exists. Truthful header, context and review design states remain open; U3's Pencil Save As is pending before shared design edits. UI remains unmerged. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
-| U3 | `codex/claude-mechanism` | Live Pencil/app comparison passes; the edited `.pen` is not saved into the worktree yet. |
+| U3 | `codex/u3-current-port` | Live Pencil/app comparison and current-master i18n/check pass. The edited `.pen` is still active in the main checkout, not saved into the U3 worktree; Pencil MCP ignored an explicit `filePath`, so Save As/open and exact editor-path confirmation are required before merge. |
 | M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and MCP-only live checks pass; the live mixed state and exact MCP/mixed *Used by* Pencil frames are unavailable. |
 | M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; an exact remote-selected inspector Pencil frame is missing. |
 | U5 | `codex/u5-small-mismatches` | Independent tests and live checks, including real parallel waiting rows, pass; the after-Remove-worktree live state was not reached and its Pencil frame is missing. |
@@ -204,6 +204,13 @@ runs; the *Merge* button gets narrower while merging; the Working branch row sti
 ### U3 · Claude mechanism line in the enforcement panel (UI)
 
 The Claude repository mechanism line wraps onto two lines in the 300 wide panel. Check the design's wording and width.
+
+**Status 2026-09-29: In progress.** The shorter copy passed an independent live Pencil/app comparison at the
+300-wide panel, and its current-master code port passed filtered i18n tests and `tools/check.ps1`. The design edit
+has not been saved into its worktree. Pencil MCP returned nodes from the active main document even when given a
+nonexistent `filePath`; do not use that argument as a target guard. Save As/open the exact U3 worktree `.pen`, confirm
+it in `get_editor_state`, then verify and merge the persisted design and copy. The active main `.pen` is left
+untouched by this task.
 
 ### U5 · Smaller mismatches left by earlier verifications (UI)
 
