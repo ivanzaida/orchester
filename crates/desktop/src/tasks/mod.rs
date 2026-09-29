@@ -15,6 +15,7 @@ pub mod permissions;
 pub mod plan;
 pub mod progress;
 pub mod run;
+pub mod run_again;
 pub mod transcript;
 pub mod unreadable;
 pub mod usage;

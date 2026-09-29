@@ -5,13 +5,13 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::{Button, Row, Text},
+  components::{Button, Column, Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, dimension::Dimension},
 };
 
 use super::pressable::{Ring, keyboard_stop};
-use crate::theme::{ExtraRadius, ExtraSpacing, LOCKED_SWITCH_OPACITY};
+use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, LOCKED_SWITCH_OPACITY};
 
 /// Track and knob sizes (`K8ItM`, knob `Y0aZS`).
 const TRACK_WIDTH: f32 = 28.0;
@@ -24,6 +24,7 @@ pub struct Switch {
   on: bool,
   emphasized: bool,
   detail: Option<Arc<str>>,
+  note: Option<Arc<str>>,
 }
 
 impl Switch {
@@ -34,6 +35,7 @@ impl Switch {
       on,
       emphasized: false,
       detail: None,
+      note: None,
     }
   }
 
@@ -49,6 +51,14 @@ impl Switch {
   /// the detail evenly (`k1QWD`).
   pub fn detail(mut self, detail: Arc<str>) -> Self {
     self.detail = Some(detail);
+    self
+  }
+
+  /// A dialog option: the label as the option's title, with `note`, what choosing it does, wrapping
+  /// under it, both beside the track at its top (`SmhER` in ORC-16 `R5y5x`). Pressing either flips
+  /// the switch.
+  pub fn note(mut self, note: Arc<str>) -> Self {
+    self.note = Some(note);
     self
   }
 
@@ -95,6 +105,9 @@ impl Switch {
 
   /// The switch and its label, then the detail if any; a press on the switch or its label flips it.
   pub fn render(self, flip: impl Fn() + Send + Sync + 'static) -> Element {
+    if let Some(note) = &self.note {
+      return self.option(note, flip);
+    }
     let switch = self.track();
     let (label, gap) = self.label();
     let button = keyboard_stop(Button::empty().button(), Ring::Outer)
@@ -118,6 +131,34 @@ impl Switch {
         .into(),
       None => button.into(),
     }
+  }
+
+  fn option(&self, note: &str, flip: impl Fn() + Send + Sync + 'static) -> Element {
+    let copy = Column::new()
+      .flex(1.0)
+      .spacing(SpacingSize::Xs)
+      .child(
+        Text::new(&self.label)
+          .variant(ExtraTypography::NoticeHeading.role())
+          .color(PaletteColor::TextPrimary),
+      )
+      .child(
+        Text::new(note)
+          .variant(ExtraTypography::CellLabel.role())
+          .width(Dimension::Pct(100.0)),
+      );
+    keyboard_stop(Button::empty().button(), Ring::Outer)
+      .id(self.id.clone())
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Stack.role())
+      .align_items(Alignment::Start)
+      .rounded(RadiusSize::Sm)
+      .cursor(CursorIcon::Pointer)
+      .describe("checked", if self.on { "true" } else { "false" })
+      .on_click(move |_| flip())
+      .child(self.track())
+      .child(copy)
+      .into()
   }
 
   /// The track with its knob: off in the raised surface with a muted knob at the left (`K8ItM`),

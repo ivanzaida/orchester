@@ -19,7 +19,10 @@ use orchester_core::{
   tokens::compact_tokens,
 };
 
-use super::{progress::rows, summary::budget_value};
+use super::{
+  progress::rows,
+  summary::{budget_value, with_reason},
+};
 use crate::{
   display,
   tasks::{detail::RunView, progress::progress},
@@ -37,13 +40,14 @@ use crate::{
 const PANEL_WIDTH: f32 = 360.0;
 const REPORT_BUTTON_WIDTH: f32 = 216.0;
 
-/// The Summary tab of a run whose `step` used up its retries.
-pub(super) fn retry_limit(ctx: &Ctx, run: &RunView, step: &StepKey) -> Element {
+/// The Summary tab of a run whose `step` used up its retries; `reason` says why its task cannot
+/// run again, under the notice.
+pub(super) fn retry_limit(ctx: &Ctx, run: &RunView, step: &StepKey, reason: Option<Element>) -> Element {
   Row::new()
     .id("task-retry-limit")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(evidence(ctx, run, step))
+    .child(evidence(ctx, run, step, reason))
     .child(settings(ctx, run, step))
     .into()
 }
@@ -57,7 +61,7 @@ fn step_name<'a>(run: &'a RunView, step: &'a StepKey) -> &'a str {
 }
 
 /// What failed and the latest attempt's steps (`yYFkk`).
-fn evidence(ctx: &Ctx, run: &RunView, step: &StepKey) -> Element {
+fn evidence(ctx: &Ctx, run: &RunView, step: &StepKey, reason: Option<Element>) -> Element {
   let taken = run.run.retries_taken(step);
   let title = if taken == 1 {
     "runs.retryLimit.title.one"
@@ -109,7 +113,7 @@ fn evidence(ctx: &Ctx, run: &RunView, step: &StepKey) -> Element {
     .height(Dimension::Pct(100.0))
     .padding(SpacingSize::Section)
     .spacing(ExtraSpacing::Form.role())
-    .child(notice)
+    .child(with_reason(notice.into(), reason))
     .child(Text::new(&latest).variant(ExtraTypography::Subheading.role()))
     .child(rows(ctx, &attempt_rows, ExtraSpacing::Form.role()))
     .with_children(excerpt(ctx, run, step))

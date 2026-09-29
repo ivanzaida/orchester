@@ -51,17 +51,19 @@ use crate::{
 const PANEL_WIDTH: f32 = 336.0;
 
 /// `lost`: the run is recorded as running but has no runner, and why. `pipelines`: the project's
-/// published pipelines, for the one a task without a run would start with.
+/// published pipelines, for the one a task without a run would start with. `reason`: why the task
+/// cannot run again, under the notice.
 pub(super) fn summary(
   ctx: &mut Ctx,
   detail: &TaskDetail,
   (limits, lost, pipelines): (Option<ProjectLimits>, Option<Lost>, Option<&[PipelineChoice]>),
   (repo_root, scrolls): (&Path, &TaskScrolls),
+  reason: Option<Element>,
 ) -> Element {
   if let Some(run) = &detail.run
     && let RunStatus::Failed(RunFailure::RetriesExhausted(step)) = run.run.status()
   {
-    return retry_limit(ctx, run, step);
+    return retry_limit(ctx, run, step, reason);
   }
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
   let content = Column::new()
@@ -70,7 +72,7 @@ pub(super) fn summary(
     .padding_left(SpacingSize::Section)
     .padding_right(ExtraSpacing::BesideGutter.role())
     .spacing(ExtraSpacing::Form.role())
-    .child(notice(ctx, detail, lost))
+    .child(with_reason(notice(ctx, detail, lost), reason))
     .with_children(raise)
     .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())))
     .with_children(brief_section(ctx, detail.task.details()));
@@ -84,6 +86,19 @@ pub(super) fn summary(
     .flex(1.0)
     .child(progress_column(content, latest, &scrolls.progress))
     .child(panel)
+    .into()
+}
+
+/// `notice`, with the line under it that says why its task cannot run again (`xwy6L` in `iE8eQ`).
+pub(super) fn with_reason(notice: Element, reason: Option<Element>) -> Element {
+  let Some(reason) = reason else {
+    return notice;
+  };
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Stack.role())
+    .child(notice)
+    .child(reason)
     .into()
 }
 

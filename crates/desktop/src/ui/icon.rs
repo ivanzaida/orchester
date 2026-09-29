@@ -116,6 +116,7 @@ icons! {
   RefreshCw => '\u{e145}',
   Repeat => '\u{e146}',
   Rocket => '\u{e286}',
+  RotateCcw => '\u{e148}',
   Save => '\u{e14d}',
   ScanEye => '\u{e536}',
   Search => '\u{e151}',

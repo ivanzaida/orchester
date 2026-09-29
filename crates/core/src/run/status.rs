@@ -86,6 +86,11 @@ impl RunStatus {
   pub const fn is_terminal(&self) -> bool {
     matches!(self, Self::Succeeded | Self::Failed(_) | Self::Cancelled)
   }
+
+  /// A run that failed or was cancelled is final; its task can only run again ([`super::run_again`]).
+  pub const fn can_run_again(&self) -> bool {
+    matches!(self, Self::Failed(_) | Self::Cancelled)
+  }
 }
 
 /// What a waiting step waits for.

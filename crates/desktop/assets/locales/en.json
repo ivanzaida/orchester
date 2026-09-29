@@ -1013,6 +1013,57 @@
         "notRemoved": "Git didn’t remove {{path}}: {{detail}}"
       }
     },
+    "runAgain": {
+      "action": "Run again",
+      "unavailable": {
+        "runActive": "Run again is unavailable: run #{{run}} of this task is active. A task has one active run at a time; Run again returns when it ends.",
+        "pipelineNotPublished": "Run again is unavailable: {{pipeline}} has no published version any more. Publish it again in Pipelines to run this task again.",
+        "dailyBudgetUsed": "Run again is unavailable: the daily token budget is used ({{used}} of {{budget}} today). New runs wait until tomorrow, or raise it in Project settings › Limits.",
+        "notEnded": "Run again is unavailable: the task’s latest run changed. Its page shows it now."
+      },
+      "title": "Start run #{{run}} of {{task}}?",
+      "explanation": {
+        "branch": "Run #{{run}} starts from the first step in a new worktree, on a new branch from {{base}} as it is now. Run #{{previous}} keeps its record, its branch and, unless you remove it below, its worktree.",
+        "head": "Run #{{run}} starts from the first step in a new worktree, on a new branch from your checkout’s HEAD as it is now. Run #{{previous}} keeps its record, its branch and, unless you remove it below, its worktree."
+      },
+      "property": {
+        "pipeline": "Pipeline",
+        "pipelineValue": "{{pipeline}} {{version}} · latest published",
+        "previous": "Run #{{run}} used",
+        "previousValue": "{{pipeline}} {{version}}",
+        "startsFrom": "Starts from",
+        "startsFromValue": "{{step}} · step 1 of {{count}}",
+        "base": "Base",
+        "baseValue": "{{branch}} at {{revision}}",
+        "baseDetached": "HEAD at {{revision}}",
+        "baseUnknown": "Read when the run starts",
+        "branch": "New branch",
+        "worktree": "New worktree",
+        "worktreeValue": "A new folder in {{folder}}",
+        "limits": "Limits",
+        "limitsValue": "{{budget}} tokens · {{minutes}} min · from the task"
+      },
+      "remove": {
+        "title": {
+          "one": "Remove the worktree of run #{{run}}",
+          "other": "Remove the worktrees of run #{{run}}"
+        },
+        "clean": {
+          "one": "No uncommitted changes in it.",
+          "other": "No uncommitted changes in them."
+        },
+        "cleanKept": {
+          "one": "No uncommitted changes in it. Its commits stay on {{branch}}.",
+          "other": "No uncommitted changes in them. Its commits stay on {{branch}}."
+        },
+        "uncommitted": {
+          "one": "1 file not committed would be discarded: {{files}}",
+          "other": "{{count}} files not committed would be discarded: {{files}}"
+        }
+      },
+      "start": "Start run #{{run}}",
+      "starting": "Starting…"
+    },
     "preflight": {
       "pipelineNotPublished": "The task’s pipeline has no published version.",
       "noSteps": "The pipeline has no steps.",

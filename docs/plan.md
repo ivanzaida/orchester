@@ -165,6 +165,15 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+ORC-16 · Run again · branch `claude/orc16` (a failed or cancelled task starts its next run from the first step in a
+new worktree and branch, with the latest published pipeline version and the task's limits; the rule is core's
+`run_again`, the runner's `RunAgain` command is idempotent by key and can first remove the run before's worktrees
+with the *Remove worktree* rules; the task page offers *Run again* beside *Remove worktree*, the confirmation
+`R5y5x`, and while blocked the action stays unavailable with the reason under the notice. Core `run`, store `runs`,
+all runner binaries, `form_keyboard ::`, `tasks`, `i18n`, `theme` and `tools/check.ps1` passed. An independent
+exact-PID comparison with `zM693`, `M1upHe`, `R5y5x` and `iE8eQ` reached every state and found no blocking or major
+mismatch; the failed/cancelled Summary body predates ORC-16 and still differs from `zM693`).
+
 ORC-14 · Show and edit a saved task's brief and acceptance criteria · branch `claude/orc14` (a task's Summary
 shows its brief and numbered criteria, a draft's *This task* panel its pipeline and limits, and *Edit* reopens a draft
 in the New task form under `tasks/<id>/edit`; *Save changes* updates the same task in place
