@@ -36122,7 +36122,7 @@
       "y": 0,
       "name": "02 / Tasks & runs",
       "width": 4896,
-      "height": 31836,
+      "height": 34172,
       "fill": "$canvas",
       "layout": "none",
       "children": [
@@ -43721,6 +43721,21 @@
                                         "tidLB": {
                                           "enabled": true,
                                           "content": "2"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "A0xGY",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "name": "Failed tab",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "content": "Failed"
+                                        },
+                                        "tidLB": {
+                                          "content": "1",
+                                          "enabled": true
                                         }
                                       }
                                     }
@@ -91898,6 +91913,21 @@
                               "content": "Cancel run"
                             }
                           }
+                        },
+                        {
+                          "id": "hdFZv",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Edit started task",
+                          "height": 36,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "pencil"
+                            },
+                            "Y7HQGw": {
+                              "content": "Edit"
+                            }
+                          }
                         }
                       ]
                     },
@@ -97376,6 +97406,1075 @@
               "fontFamily": "$font",
               "fontSize": 14,
               "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "dRN4m",
+              "x": 1568,
+              "y": 2196,
+              "name": "ORC-12 · Edit started task / Saved details",
+              "clip": true,
+              "width": 1440,
+              "height": 960,
+              "fill": "$surface",
+              "children": [
+                {
+                  "id": "zihSW",
+                  "type": "ref",
+                  "ref": "zo9Py",
+                  "name": "Sidebar / New task",
+                  "height": "fill_container",
+                  "descendants": {
+                    "JI3gd": {
+                      "fill": "$sidebar"
+                    },
+                    "JI3gd/sQnmq": {
+                      "fill": "$muted"
+                    },
+                    "JI3gd/YWsP0": {
+                      "fill": "$muted"
+                    },
+                    "KYnRz": {
+                      "fill": "$hover"
+                    },
+                    "KYnRz/sQnmq": {
+                      "fill": "$text"
+                    },
+                    "KYnRz/YWsP0": {
+                      "fill": "$text"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "BHb0i",
+                  "name": "New task content",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "yOXdo",
+                      "name": "New task topbar",
+                      "width": "fill_container",
+                      "height": 64,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 12,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "Hqizg",
+                          "name": "Back to tasks",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "arrow-left",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "QMGBG",
+                          "name": "New task breadcrumb",
+                          "fill": "$muted",
+                          "content": "Kontur / Tasks / ORC-7 / Edit",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "y0PYk",
+                          "name": "New task bar spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "OJm04",
+                          "name": "Draft state",
+                          "fill": "$muted",
+                          "content": "Task saved locally",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "JXMbA",
+                      "name": "New task heading",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 10,
+                      "padding": [
+                        32,
+                        40,
+                        24,
+                        40
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "yFfSN",
+                          "name": "New task title",
+                          "fill": "$text",
+                          "content": "Edit task",
+                          "fontFamily": "$font",
+                          "fontSize": 28,
+                          "fontWeight": "500",
+                          "letterSpacing": -0.5
+                        },
+                        {
+                          "type": "text",
+                          "id": "MNtyp",
+                          "name": "New task description",
+                          "fill": "$muted",
+                          "content": "Changes to ORC-7 apply to future runs. Existing runs keep the task details they started with.",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "P5Lml",
+                      "name": "Brief and execution plan",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "gap": 40,
+                      "padding": [
+                        8,
+                        40,
+                        32,
+                        40
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "MNwiH",
+                          "name": "Task brief form",
+                          "width": "fill_container",
+                          "height": "fill_container",
+                          "layout": "vertical",
+                          "gap": 24,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "yJhCu",
+                              "name": "Project field",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "UehZd",
+                                  "name": "Project label",
+                                  "fill": "$text",
+                                  "content": "Project · current context",
+                                  "fontFamily": "$font",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "NS2Nm",
+                                  "name": "Connected repository",
+                                  "width": "fill_container",
+                                  "height": 48,
+                                  "fill": "$sidebar",
+                                  "cornerRadius": 7,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "gap": 12,
+                                  "padding": [
+                                    0,
+                                    14
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "xDjGd",
+                                      "name": "GitHub source",
+                                      "width": 18,
+                                      "height": 18,
+                                      "icon": "github",
+                                      "library": "lucide",
+                                      "fill": "$text"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "hdB67",
+                                      "name": "Repository name",
+                                      "fill": "$text",
+                                      "content": "Kontur",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "TGlcE",
+                                      "name": "Repository path",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "ivanzaida/kontur",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "sj4qc",
+                                      "name": "Base branch value",
+                                      "fill": "$muted",
+                                      "content": "main",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Beqms",
+                              "name": "Task title field",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "s2sukI",
+                                  "name": "Task title label",
+                                  "fill": "$text",
+                                  "content": "Task title",
+                                  "fontFamily": "$font",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "id": "v7iT7X",
+                                  "type": "ref",
+                                  "ref": "ZGwlv",
+                                  "name": "Task title input",
+                                  "width": "fill_container",
+                                  "height": 44,
+                                  "descendants": {
+                                    "ObbY7": {
+                                      "content": "Add GitHub authentication",
+                                      "fontSize": 13
+                                    },
+                                    "eASPF": {
+                                      "enabled": false
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "xTi9z",
+                              "name": "Outcome field",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "OM4fM",
+                                  "name": "Describe the outcome label",
+                                  "fill": "$text",
+                                  "content": "Describe the outcome",
+                                  "fontFamily": "$font",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "tlR3a",
+                                  "name": "Outcome textarea",
+                                  "width": "fill_container",
+                                  "fill": "$sidebar",
+                                  "cornerRadius": 8,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "layout": "vertical",
+                                  "gap": 22,
+                                  "padding": 16,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "rd6Sc",
+                                      "name": "Outcome description",
+                                      "fill": "$text",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Let users sign in with their GitHub account. Build on the existing authentication flow and keep the current email sign-in available.\n\nInclude loading, cancellation and error states.",
+                                      "lineHeight": 1.7,
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "Z7OdMh",
+                                      "name": "Brief input hint",
+                                      "fill": "$subtle",
+                                      "content": "Add context, constraints, or links.",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Q4s5x",
+                              "name": "Acceptance criteria",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 12,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "uKXOS",
+                                  "name": "Acceptance criteria label",
+                                  "fill": "$text",
+                                  "content": "Acceptance criteria",
+                                  "fontFamily": "$font",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "ZfM1q",
+                                  "name": "Acceptance criterion",
+                                  "width": "fill_container",
+                                  "gap": 10,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "A4jWL",
+                                      "name": "Criterion marker",
+                                      "width": 13,
+                                      "height": 13,
+                                      "icon": "circle",
+                                      "library": "lucide",
+                                      "fill": "$subtle"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "egNyW",
+                                      "name": "Criterion content",
+                                      "fill": "$muted",
+                                      "content": "A new user can sign in with GitHub.",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "koKwy",
+                                  "name": "Acceptance criterion",
+                                  "width": "fill_container",
+                                  "gap": 10,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "d3aHmK",
+                                      "name": "Criterion marker",
+                                      "width": 13,
+                                      "height": 13,
+                                      "icon": "circle",
+                                      "library": "lucide",
+                                      "fill": "$subtle"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "z1wl9",
+                                      "name": "Criterion content",
+                                      "fill": "$muted",
+                                      "content": "Existing email sign-in continues to work.",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "hyRln",
+                                  "name": "Acceptance criterion",
+                                  "width": "fill_container",
+                                  "gap": 10,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "l8mFq",
+                                      "name": "Criterion marker",
+                                      "width": 13,
+                                      "height": 13,
+                                      "icon": "circle",
+                                      "library": "lucide",
+                                      "fill": "$subtle"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "C22iD",
+                                      "name": "Criterion content",
+                                      "fill": "$muted",
+                                      "content": "The sign-in flow is covered by integration tests.",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "AC87c",
+                                  "name": "Cancellation acceptance criterion",
+                                  "width": "fill_container",
+                                  "gap": 10,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "wThqc",
+                                      "name": "Criterion marker",
+                                      "width": 13,
+                                      "height": 13,
+                                      "icon": "circle",
+                                      "library": "lucide",
+                                      "fill": "$subtle"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "L7ZGt",
+                                      "name": "Criterion content",
+                                      "fill": "$muted",
+                                      "content": "Cancelled or failed OAuth shows a recoverable error.",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "NU5sA",
+                                  "name": "Add acceptance criterion",
+                                  "fill": "$text",
+                                  "content": "+  Add criterion",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "m1TkKT",
+                              "name": "Attached context",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 12,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "VnGsQ",
+                                  "name": "Context label",
+                                  "fill": "$text",
+                                  "content": "Context",
+                                  "fontFamily": "$font",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "IU0Ka",
+                                  "name": "Context attachments",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "id": "leTzc",
+                                      "type": "ref",
+                                      "ref": "u1XBP",
+                                      "enabled": false,
+                                      "name": "AGENTS.md",
+                                      "height": 32,
+                                      "descendants": {
+                                        "xfnek": {
+                                          "icon": "book-open",
+                                          "width": 13,
+                                          "height": 13
+                                        },
+                                        "Y7HQGw": {
+                                          "content": "Orchester rules",
+                                          "fontSize": 11
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "MY0VE",
+                                      "type": "ref",
+                                      "ref": "u1XBP",
+                                      "enabled": false,
+                                      "name": "Repository index",
+                                      "height": 32,
+                                      "descendants": {
+                                        "xfnek": {
+                                          "icon": "folder-git-2",
+                                          "width": 13,
+                                          "height": 13
+                                        },
+                                        "Y7HQGw": {
+                                          "content": "Repository context",
+                                          "fontSize": 11
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "sl5EV",
+                                      "type": "ref",
+                                      "ref": "u1XBP",
+                                      "name": "Attach context · unavailable",
+                                      "opacity": 0.4,
+                                      "height": 32,
+                                      "descendants": {
+                                        "xfnek": {
+                                          "icon": "plus",
+                                          "width": 13,
+                                          "height": 13
+                                        },
+                                        "Y7HQGw": {
+                                          "type": "frame",
+                                          "id": "bau7L",
+                                          "name": "Label and lock",
+                                          "gap": 8,
+                                          "alignItems": "center",
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "PNOZw",
+                                              "name": "Label",
+                                              "fill": "$text",
+                                              "content": "Attach context",
+                                              "fontFamily": "$font",
+                                              "fontSize": 11,
+                                              "fontWeight": "500"
+                                            },
+                                            {
+                                              "type": "icon",
+                                              "id": "osho2",
+                                              "name": "Unavailable lock",
+                                              "width": 12,
+                                              "height": 12,
+                                              "icon": "lock",
+                                              "library": "lucide",
+                                              "fill": "$text"
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "qPdcF",
+                              "name": "Form flexible space",
+                              "width": "fill_container",
+                              "height": "fill_container"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "dBxJB",
+                              "name": "Instructions footer",
+                              "width": "fill_container",
+                              "gap": 12,
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "lCerV",
+                                  "name": "Context scope note",
+                                  "fill": "$subtle",
+                                  "content": "Project, agent and pipeline instructions are included automatically.",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Q3MHZP",
+                                  "name": "Preview · unavailable",
+                                  "opacity": 0.4,
+                                  "gap": 4,
+                                  "padding": [
+                                    4,
+                                    0
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "MdBPm",
+                                      "name": "Preview",
+                                      "fill": "$text",
+                                      "content": "Preview",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "icon",
+                                      "id": "NWgnA",
+                                      "name": "Unavailable lock",
+                                      "width": 11,
+                                      "height": 11,
+                                      "icon": "lock",
+                                      "library": "lucide",
+                                      "fill": "$subtle"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "EnU1G",
+                          "name": "Execution plan",
+                          "width": 336,
+                          "height": "fill_container",
+                          "stroke": "$hairline",
+                          "strokeWidth": {
+                            "left": 1
+                          },
+                          "layout": "vertical",
+                          "gap": 16,
+                          "padding": [
+                            0,
+                            0,
+                            0,
+                            28
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "A0x1BS",
+                              "name": "Execution plan heading",
+                              "fill": "$text",
+                              "content": "Execution plan",
+                              "fontFamily": "$font",
+                              "fontSize": 15,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "id": "DrbAg",
+                              "type": "ref",
+                              "ref": "ZGwlv",
+                              "name": "Pipeline selector",
+                              "width": "fill_container",
+                              "height": 42,
+                              "descendants": {
+                                "ObbY7": {
+                                  "content": "Feature delivery · v3"
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "F23Rz",
+                              "name": "Pipeline preview",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 8,
+                              "children": [
+                                {
+                                  "id": "JLbqv",
+                                  "type": "ref",
+                                  "ref": "XVkaB",
+                                  "name": "Research and plan preview",
+                                  "width": "fill_container",
+                                  "height": 34,
+                                  "descendants": {
+                                    "WTDFX": {
+                                      "content": "Research"
+                                    },
+                                    "IaMc9": {
+                                      "content": "Explorer · Claude / Opus"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "r2qbKP",
+                                  "type": "ref",
+                                  "ref": "XVkaB",
+                                  "name": "Plan and approval preview",
+                                  "width": "fill_container",
+                                  "height": 34,
+                                  "descendants": {
+                                    "AtKp7": {
+                                      "content": "02"
+                                    },
+                                    "WTDFX": {
+                                      "content": "Plan"
+                                    },
+                                    "IaMc9": {
+                                      "content": "Planner · Sol · waits for approval"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "XaJwk",
+                                  "type": "ref",
+                                  "ref": "XVkaB",
+                                  "name": "Implement preview",
+                                  "width": "fill_container",
+                                  "height": 34,
+                                  "descendants": {
+                                    "AtKp7": {
+                                      "content": "03"
+                                    },
+                                    "WTDFX": {
+                                      "content": "Implement"
+                                    },
+                                    "IaMc9": {
+                                      "content": "Builder · Codex / Sol"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "uf34i",
+                                  "type": "ref",
+                                  "ref": "XVkaB",
+                                  "name": "Verify & review preview",
+                                  "width": "fill_container",
+                                  "height": 34,
+                                  "descendants": {
+                                    "AtKp7": {
+                                      "content": "04"
+                                    },
+                                    "WTDFX": {
+                                      "content": "Run checks"
+                                    },
+                                    "IaMc9": {
+                                      "content": "Tool · Run tests"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "v5IgR",
+                                  "type": "ref",
+                                  "ref": "XVkaB",
+                                  "name": "Independent review preview",
+                                  "width": "fill_container",
+                                  "height": 34,
+                                  "descendants": {
+                                    "AtKp7": {
+                                      "content": "05"
+                                    },
+                                    "WTDFX": {
+                                      "content": "Review"
+                                    },
+                                    "IaMc9": {
+                                      "content": "Reviewer · Claude / Opus"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "Y3zMA",
+                                  "type": "ref",
+                                  "ref": "XVkaB",
+                                  "name": "Prepare pull request preview",
+                                  "width": "fill_container",
+                                  "height": 34,
+                                  "descendants": {
+                                    "AtKp7": {
+                                      "content": "06"
+                                    },
+                                    "WTDFX": {
+                                      "content": "Create pull request"
+                                    },
+                                    "IaMc9": {
+                                      "content": "Tool · Open pull request"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "RTOyN",
+                              "name": "Edit pipeline link",
+                              "fill": "$text",
+                              "content": "View pipeline  ↗",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Z9A2i0",
+                              "name": "Run limits",
+                              "width": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "top": 1
+                              },
+                              "layout": "vertical",
+                              "gap": 14,
+                              "padding": [
+                                20,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "EakKF",
+                                  "name": "Run budget setting",
+                                  "width": "fill_container",
+                                  "gap": 12,
+                                  "justifyContent": "space_between",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "r79yTY",
+                                      "name": "Limit label",
+                                      "fill": "$muted",
+                                      "content": "Run budget",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "id": "cex7U",
+                                      "type": "ref",
+                                      "ref": "sN3du",
+                                      "name": "Run budget input",
+                                      "width": 150,
+                                      "height": 32,
+                                      "descendants": {
+                                        "w1g9B": {
+                                          "content": "1,400,000",
+                                          "fontSize": 11
+                                        },
+                                        "y8ez5": {
+                                          "fontSize": 10
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "EpiDG",
+                                  "name": "Run budget read-back",
+                                  "width": "fill_container",
+                                  "justifyContent": "end",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "AjZYg",
+                                      "name": "Read-back",
+                                      "fill": "$subtle",
+                                      "content": "= 1.4M tokens · input + output · max 10M per run",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "n3sq7",
+                                  "name": "Time limit setting",
+                                  "width": "fill_container",
+                                  "gap": 12,
+                                  "justifyContent": "space_between",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "DzLXx",
+                                      "name": "Limit label",
+                                      "fill": "$muted",
+                                      "content": "Time limit",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "id": "l9tSUI",
+                                      "type": "ref",
+                                      "ref": "sN3du",
+                                      "name": "Time limit input",
+                                      "height": 32,
+                                      "width": 150,
+                                      "descendants": {
+                                        "w1g9B": {
+                                          "content": "30",
+                                          "fontSize": 11
+                                        },
+                                        "y8ez5": {
+                                          "content": "minutes",
+                                          "fontSize": 10
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "tzhSA",
+                                  "name": "Time limit read-back",
+                                  "width": "fill_container",
+                                  "justifyContent": "end",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "ukq2L",
+                                      "name": "Read-back",
+                                      "fill": "$subtle",
+                                      "content": "Active agent time · pauses and waiting for you don’t count",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "BXQes",
+                              "name": "Human approval policy",
+                              "width": "fill_container",
+                              "fill": "$raised",
+                              "cornerRadius": 8,
+                              "gap": 10,
+                              "padding": 14,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "cZ5lr",
+                                  "name": "Human review icon",
+                                  "width": 17,
+                                  "height": 17,
+                                  "icon": "hand",
+                                  "library": "lucide",
+                                  "fill": "$muted"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "cIkit",
+                                  "name": "Human review explanation",
+                                  "fill": "$muted",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Approval is required for Plan.",
+                                  "lineHeight": 1.6,
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "KWTBj",
+                              "name": "Plan flexible space",
+                              "width": "fill_container",
+                              "height": "fill_container"
+                            },
+                            {
+                              "id": "jAvqF",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "enabled": false,
+                              "name": "Create and run",
+                              "width": "fill_container(308)",
+                              "height": 42,
+                              "fill": "$accent",
+                              "stroke": "$accent",
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "play",
+                                  "fill": "$inverse-text"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Create & run",
+                                  "fill": "$inverse-text",
+                                  "fontSize": 12
+                                }
+                              }
+                            },
+                            {
+                              "type": "text",
+                              "id": "lYOiy",
+                              "name": "Save draft option",
+                              "opacity": 0.4,
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Save changes",
+                              "textAlign": "center",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "dY0XF",
+              "x": 1568,
+              "y": 2164,
+              "name": "ORC-12 · Edit started task label",
+              "fill": "$muted",
+              "content": "ORC-12 · Edit started task / Saved details",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
             }
           ]
         },
@@ -101248,6 +102347,2844 @@
                       "content": "A row opens its task (the whole row and the chevron); the checkbox only selects it. Run again is on the task page, beside Remove worktree. A row menu would be a separate decision for every row action, not only this one."
                     }
                   }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "AAdQb",
+          "x": 0,
+          "y": 31786,
+          "name": "States · Overview Failed",
+          "width": 4896,
+          "height": 1120,
+          "fill": "$canvas",
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "L4BnT",
+              "x": 48,
+              "y": -34,
+              "name": "Overview Failed states heading",
+              "fill": "$muted",
+              "content": "OVERVIEW · FAILED TASKS",
+              "fontFamily": "$font",
+              "fontSize": 22,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "K1vXQ",
+              "x": 48,
+              "y": 18,
+              "name": "02.08F · Failed tasks label",
+              "fill": "$muted",
+              "content": "02.08F · Overview / Failed tasks",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "mcGO1",
+              "x": 1568,
+              "y": 18,
+              "name": "02.08F2 · No failed tasks label",
+              "fill": "$muted",
+              "content": "02.08F2 · Overview / No failed tasks",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "pHNfB",
+              "x": 48,
+              "y": 100,
+              "name": "02.08F · Overview / Failed tasks",
+              "clip": true,
+              "width": 1440,
+              "height": 960,
+              "fill": "$surface",
+              "children": [
+                {
+                  "id": "MYJIB",
+                  "type": "ref",
+                  "ref": "zo9Py",
+                  "name": "Sidebar / Overview",
+                  "height": "fill_container"
+                },
+                {
+                  "type": "frame",
+                  "id": "wlRHO",
+                  "name": "Project content",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "QsqsS",
+                      "name": "Project bar",
+                      "width": "fill_container",
+                      "height": 64,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 10,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "BDIdO",
+                          "name": "Breadcrumb",
+                          "fill": "$muted",
+                          "content": "Kontur",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "l8EpZ",
+                          "name": "Breadcrumb separator",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$subtle"
+                        },
+                        {
+                          "type": "text",
+                          "id": "i75RG",
+                          "name": "Current page",
+                          "fill": "$text",
+                          "content": "Overview",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "mNsZB",
+                          "name": "Toolbar spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "qVz9g",
+                          "name": "Search",
+                          "width": 224,
+                          "height": 32,
+                          "fill": "$sidebar",
+                          "cornerRadius": 6,
+                          "stroke": "$hairline",
+                          "strokeWidth": 1,
+                          "gap": 8,
+                          "padding": [
+                            0,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "maQta",
+                              "name": "Search icon",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "search",
+                              "library": "lucide",
+                              "fill": "$muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "fEb4O",
+                              "name": "Search placeholder",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Search anything...",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "p3X8NO",
+                              "name": "Search shortcut",
+                              "fill": "$subtle",
+                              "content": "Ctrl K",
+                              "fontFamily": "$mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "icon",
+                          "id": "FCdIt",
+                          "name": "Notifications",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "bell",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ztcJ4",
+                      "name": "Overview body",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "gap": 28,
+                      "padding": 32,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "bXByy",
+                          "name": "Overview heading",
+                          "width": "fill_container",
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "ZTFmM",
+                              "name": "Heading text",
+                              "layout": "vertical",
+                              "gap": 9,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "oMwwE",
+                                  "name": "Page title",
+                                  "fill": "$text",
+                                  "content": "Kontur",
+                                  "fontFamily": "$font",
+                                  "fontSize": 30,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "jaXsU",
+                                  "name": "Page description",
+                                  "fill": "$muted",
+                                  "content": "Everything moving in this project, and what needs you.",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "id": "a6xYKt",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "New task / Primary",
+                              "height": 38,
+                              "padding": [
+                                0,
+                                16
+                              ],
+                              "fill": "$accent",
+                              "stroke": "$accent",
+                              "descendants": {
+                                "xfnek": {
+                                  "fill": "$inverse-text"
+                                },
+                                "Y7HQGw": {
+                                  "fill": "$inverse-text"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "gh4W9",
+                          "name": "Project pulse",
+                          "width": "fill_container",
+                          "height": 94,
+                          "stroke": "$hairline",
+                          "strokeWidth": {
+                            "top": 1,
+                            "bottom": 1
+                          },
+                          "gap": 32,
+                          "padding": [
+                            20,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "id": "X37EI4",
+                              "type": "ref",
+                              "ref": "dZ2Zt",
+                              "name": "Running now",
+                              "width": "fill_container"
+                            },
+                            {
+                              "id": "R6zaRs",
+                              "type": "ref",
+                              "ref": "dZ2Zt",
+                              "name": "Need your input",
+                              "width": "fill_container",
+                              "descendants": {
+                                "PwPmH": {
+                                  "content": "2"
+                                },
+                                "n3SNM": {
+                                  "content": "Need your input"
+                                },
+                                "gGUCg": {
+                                  "content": "Review & decisions"
+                                }
+                              }
+                            },
+                            {
+                              "id": "fmfaJ",
+                              "type": "ref",
+                              "ref": "dZ2Zt",
+                              "name": "Completed today",
+                              "width": "fill_container",
+                              "descendants": {
+                                "PwPmH": {
+                                  "content": "2"
+                                },
+                                "n3SNM": {
+                                  "content": "Completed today"
+                                },
+                                "gGUCg": {
+                                  "content": "2 completed pull requests"
+                                }
+                              }
+                            },
+                            {
+                              "id": "q5JUa",
+                              "type": "ref",
+                              "ref": "dZ2Zt",
+                              "name": "Spent today",
+                              "width": "fill_container",
+                              "descendants": {
+                                "PwPmH": {
+                                  "content": "3.8M"
+                                },
+                                "n3SNM": {
+                                  "content": "Tokens today"
+                                },
+                                "gGUCg": {
+                                  "content": "of 20M daily project budget"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "RMM4G",
+                          "name": "Tasks and attention",
+                          "width": "fill_container",
+                          "height": "fill_container",
+                          "gap": 32,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "SDS1O",
+                              "name": "Task list",
+                              "width": "fill_container",
+                              "height": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "Yd39N",
+                                  "name": "Task list heading",
+                                  "width": "fill_container",
+                                  "height": 34,
+                                  "justifyContent": "space_between",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "H7J3W",
+                                      "name": "Task list title",
+                                      "fill": "$text",
+                                      "content": "Tasks",
+                                      "fontFamily": "$font",
+                                      "fontSize": 16,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "eJE7u",
+                                      "name": "Project filter",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "u0i9ol",
+                                          "name": "Filter value",
+                                          "fill": "$muted",
+                                          "content": "All pipelines",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "icon",
+                                          "id": "QmLXA",
+                                          "name": "Filter arrow",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "chevron-down",
+                                          "library": "lucide",
+                                          "fill": "$muted"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "TgHew",
+                                  "name": "Task filters",
+                                  "width": "fill_container",
+                                  "height": 48,
+                                  "stroke": "$hairline",
+                                  "strokeWidth": {
+                                    "bottom": 1
+                                  },
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "id": "Wkw2w",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "strokeWidth": 0,
+                                      "name": "All tasks tab",
+                                      "stroke": "$text",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "fill": "$muted"
+                                        },
+                                        "tidLB": {
+                                          "enabled": true,
+                                          "content": "8"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "XpDSK",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "name": "Running tab",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "content": "Running"
+                                        },
+                                        "tidLB": {
+                                          "enabled": true,
+                                          "content": "2"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "w8gQ8",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "name": "Needs you tab",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "content": "Needs you"
+                                        },
+                                        "tidLB": {
+                                          "enabled": true,
+                                          "content": "2"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "i9KCCH",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "name": "Queued tab",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "content": "Queued"
+                                        },
+                                        "tidLB": {
+                                          "enabled": true,
+                                          "content": "2"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "ZXZcX",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "stroke": "$text",
+                                      "strokeWidth": {
+                                        "bottom": 2
+                                      },
+                                      "name": "Failed tab",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "fill": "$text",
+                                          "content": "Failed"
+                                        },
+                                        "tidLB": {
+                                          "content": "2",
+                                          "enabled": true
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "K9v5fg",
+                                  "type": "ref",
+                                  "ref": "zemhy",
+                                  "name": "Update API documentation",
+                                  "width": "fill_container",
+                                  "height": 78,
+                                  "descendants": {
+                                    "UR2gw": {
+                                      "icon": "circle-x"
+                                    },
+                                    "KhX6a": {
+                                      "content": "Update API documentation"
+                                    },
+                                    "b3TWwx": {
+                                      "content": "ORC-123 · Run failed"
+                                    },
+                                    "YIg8h/bhGXK": {
+                                      "icon": "circle-x"
+                                    },
+                                    "YIg8h/JuW4o": {
+                                      "content": "Failed"
+                                    },
+                                    "XY1PR": {
+                                      "content": "5m ago"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "z6Ync",
+                                  "type": "ref",
+                                  "ref": "zemhy",
+                                  "name": "Fix canvas zoom on trackpad",
+                                  "width": "fill_container",
+                                  "height": 78,
+                                  "descendants": {
+                                    "UR2gw": {
+                                      "icon": "circle-x"
+                                    },
+                                    "KhX6a": {
+                                      "content": "Fix canvas zoom on trackpad"
+                                    },
+                                    "b3TWwx": {
+                                      "content": "ORC-125 · Run failed"
+                                    },
+                                    "YIg8h/bhGXK": {
+                                      "icon": "circle-x"
+                                    },
+                                    "YIg8h/JuW4o": {
+                                      "content": "Failed"
+                                    },
+                                    "XY1PR": {
+                                      "content": "14m ago"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "iHztZ",
+                                  "name": "Task list footer",
+                                  "width": "fill_container",
+                                  "height": 54,
+                                  "justifyContent": "space_between",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "mNAuL",
+                                      "name": "Visible task count",
+                                      "fill": "$muted",
+                                      "content": "4 active tasks · 2 completed",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "lxbB8",
+                                      "name": "View all tasks",
+                                      "fill": "$text",
+                                      "content": "View all tasks  →",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "vcqVO",
+                              "name": "Attention and activity",
+                              "width": 288,
+                              "height": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "left": 1
+                              },
+                              "layout": "vertical",
+                              "gap": 24,
+                              "padding": [
+                                0,
+                                0,
+                                0,
+                                24
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "a5tYwj",
+                                  "name": "Attention heading",
+                                  "width": "fill_container",
+                                  "height": 34,
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "teyLE",
+                                      "name": "Attention icon",
+                                      "width": 16,
+                                      "height": 16,
+                                      "icon": "inbox",
+                                      "library": "lucide",
+                                      "fill": "$text"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "jYNl7",
+                                      "name": "Attention title",
+                                      "fill": "$text",
+                                      "content": "Needs you",
+                                      "fontFamily": "$font",
+                                      "fontSize": 14,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "erYex",
+                                      "name": "Heading spacer",
+                                      "width": "fill_container",
+                                      "height": 1
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "x2hRs",
+                                      "name": "Attention count",
+                                      "fill": "$muted",
+                                      "content": "2",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "qLymq",
+                                  "name": "Review decision",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 12,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "xCK5t",
+                                      "name": "Decision type",
+                                      "fill": "$subtle",
+                                      "content": "REVIEW PULL REQUEST",
+                                      "fontFamily": "$font",
+                                      "fontSize": 9,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "m14Huf",
+                                      "name": "Decision title",
+                                      "fill": "$text",
+                                      "content": "GitHub sign-in is ready",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "GKshl",
+                                      "name": "Decision summary",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "All checks passed. Review the changes before merging PR #42.",
+                                      "lineHeight": 1.6,
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "id": "xFleQ",
+                                      "type": "ref",
+                                      "ref": "u1XBP",
+                                      "name": "Review changes",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "xfnek": {
+                                          "icon": "git-pull-request"
+                                        },
+                                        "Y7HQGw": {
+                                          "content": "Review changes"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "sOcbe",
+                                  "name": "Open decision",
+                                  "width": "fill_container",
+                                  "stroke": "$hairline",
+                                  "strokeWidth": {
+                                    "top": 1,
+                                    "bottom": 1
+                                  },
+                                  "layout": "vertical",
+                                  "gap": 10,
+                                  "padding": [
+                                    20,
+                                    0,
+                                    24,
+                                    0
+                                  ],
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "M0ELM2",
+                                      "name": "Decision category",
+                                      "fill": "$subtle",
+                                      "content": "CLARIFICATION",
+                                      "fontFamily": "$font",
+                                      "fontSize": 9,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "gG0eY",
+                                      "name": "Decision question",
+                                      "fill": "$text",
+                                      "content": "Choose a rate limit strategy",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "J9Onn",
+                                      "name": "Decision project",
+                                      "fill": "$muted",
+                                      "content": "Planner is waiting · Kontur",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "WcIGX",
+                                      "name": "Answer action",
+                                      "fill": "$text",
+                                      "content": "Answer question  →",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "UiPL1",
+                                  "name": "Recent activity",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 18,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "imEyJ",
+                                      "name": "Activity heading",
+                                      "fill": "$text",
+                                      "content": "Recent activity",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "id": "yutgM",
+                                      "type": "ref",
+                                      "ref": "mBkeJ",
+                                      "name": "Reviewer approved run #128",
+                                      "width": "fill_container",
+                                      "height": 54,
+                                      "descendants": {
+                                        "xQYdP": {
+                                          "icon": "circle-check"
+                                        },
+                                        "T7xzhd": {
+                                          "content": "Reviewer approved run #128",
+                                          "fontSize": 11
+                                        },
+                                        "mLcIg": {
+                                          "content": "Kontur · 2 minutes ago",
+                                          "fontSize": 10
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "m0CE2",
+                                      "type": "ref",
+                                      "ref": "mBkeJ",
+                                      "name": "Builder started implementation",
+                                      "width": "fill_container",
+                                      "height": 54,
+                                      "descendants": {
+                                        "xQYdP": {
+                                          "icon": "code"
+                                        },
+                                        "T7xzhd": {
+                                          "content": "Builder started implementation",
+                                          "fontSize": 11
+                                        },
+                                        "mLcIg": {
+                                          "content": "Kontur · 6 minutes ago",
+                                          "fontSize": 10
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "g0WO8E",
+                                      "type": "ref",
+                                      "ref": "mBkeJ",
+                                      "name": "Run #126 completed",
+                                      "width": "fill_container",
+                                      "height": 54,
+                                      "descendants": {
+                                        "xQYdP": {
+                                          "icon": "flag"
+                                        },
+                                        "T7xzhd": {
+                                          "content": "Run #126 completed",
+                                          "fontSize": 11
+                                        },
+                                        "mLcIg": {
+                                          "content": "Kontur · 24 minutes ago",
+                                          "fontSize": 10
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "aSpMm",
+              "x": 1568,
+              "y": 100,
+              "name": "02.08F2 · Overview / No failed tasks",
+              "clip": true,
+              "width": 1440,
+              "height": 960,
+              "fill": "$surface",
+              "children": [
+                {
+                  "id": "y4XOzw",
+                  "type": "ref",
+                  "ref": "zo9Py",
+                  "name": "Sidebar / Overview",
+                  "height": "fill_container"
+                },
+                {
+                  "type": "frame",
+                  "id": "odDav",
+                  "name": "Project content",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "JuyOK",
+                      "name": "Project bar",
+                      "width": "fill_container",
+                      "height": 64,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 10,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "IM53N",
+                          "name": "Breadcrumb",
+                          "fill": "$muted",
+                          "content": "Kontur",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "eq6e3",
+                          "name": "Breadcrumb separator",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$subtle"
+                        },
+                        {
+                          "type": "text",
+                          "id": "pFudZ",
+                          "name": "Current page",
+                          "fill": "$text",
+                          "content": "Overview",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "U62iT",
+                          "name": "Toolbar spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "o7GSL",
+                          "name": "Search",
+                          "width": 224,
+                          "height": 32,
+                          "fill": "$sidebar",
+                          "cornerRadius": 6,
+                          "stroke": "$hairline",
+                          "strokeWidth": 1,
+                          "gap": 8,
+                          "padding": [
+                            0,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "R2STLt",
+                              "name": "Search icon",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "search",
+                              "library": "lucide",
+                              "fill": "$muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "fyfeu",
+                              "name": "Search placeholder",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Search anything...",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Q2wKTZ",
+                              "name": "Search shortcut",
+                              "fill": "$subtle",
+                              "content": "Ctrl K",
+                              "fontFamily": "$mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "icon",
+                          "id": "qX0OD",
+                          "name": "Notifications",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "bell",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Yg53C",
+                      "name": "Overview body",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "gap": 28,
+                      "padding": 32,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Xuufu",
+                          "name": "Overview heading",
+                          "width": "fill_container",
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "ZWvX0",
+                              "name": "Heading text",
+                              "layout": "vertical",
+                              "gap": 9,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "GYTeh",
+                                  "name": "Page title",
+                                  "fill": "$text",
+                                  "content": "Kontur",
+                                  "fontFamily": "$font",
+                                  "fontSize": 30,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "p8eu2",
+                                  "name": "Page description",
+                                  "fill": "$muted",
+                                  "content": "Everything moving in this project, and what needs you.",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "id": "DsYqs",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "New task / Primary",
+                              "height": 38,
+                              "padding": [
+                                0,
+                                16
+                              ],
+                              "fill": "$accent",
+                              "stroke": "$accent",
+                              "descendants": {
+                                "xfnek": {
+                                  "fill": "$inverse-text"
+                                },
+                                "Y7HQGw": {
+                                  "fill": "$inverse-text"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "kXmwX",
+                          "name": "Project pulse",
+                          "width": "fill_container",
+                          "height": 94,
+                          "stroke": "$hairline",
+                          "strokeWidth": {
+                            "top": 1,
+                            "bottom": 1
+                          },
+                          "gap": 32,
+                          "padding": [
+                            20,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "id": "eOGAg",
+                              "type": "ref",
+                              "ref": "dZ2Zt",
+                              "name": "Running now",
+                              "width": "fill_container"
+                            },
+                            {
+                              "id": "NETxy",
+                              "type": "ref",
+                              "ref": "dZ2Zt",
+                              "name": "Need your input",
+                              "width": "fill_container",
+                              "descendants": {
+                                "PwPmH": {
+                                  "content": "2"
+                                },
+                                "n3SNM": {
+                                  "content": "Need your input"
+                                },
+                                "gGUCg": {
+                                  "content": "Review & decisions"
+                                }
+                              }
+                            },
+                            {
+                              "id": "bEmdU",
+                              "type": "ref",
+                              "ref": "dZ2Zt",
+                              "name": "Completed today",
+                              "width": "fill_container",
+                              "descendants": {
+                                "PwPmH": {
+                                  "content": "2"
+                                },
+                                "n3SNM": {
+                                  "content": "Completed today"
+                                },
+                                "gGUCg": {
+                                  "content": "2 completed pull requests"
+                                }
+                              }
+                            },
+                            {
+                              "id": "ieV3c",
+                              "type": "ref",
+                              "ref": "dZ2Zt",
+                              "name": "Spent today",
+                              "width": "fill_container",
+                              "descendants": {
+                                "PwPmH": {
+                                  "content": "3.8M"
+                                },
+                                "n3SNM": {
+                                  "content": "Tokens today"
+                                },
+                                "gGUCg": {
+                                  "content": "of 20M daily project budget"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vXDXS",
+                          "name": "Tasks and attention",
+                          "width": "fill_container",
+                          "height": "fill_container",
+                          "gap": 32,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "t8qbn",
+                              "name": "Task list",
+                              "width": "fill_container",
+                              "height": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "A1gzd",
+                                  "name": "Task list heading",
+                                  "width": "fill_container",
+                                  "height": 34,
+                                  "justifyContent": "space_between",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "Z1AxpT",
+                                      "name": "Task list title",
+                                      "fill": "$text",
+                                      "content": "Tasks",
+                                      "fontFamily": "$font",
+                                      "fontSize": 16,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "t588h",
+                                      "name": "Project filter",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "dtCln",
+                                          "name": "Filter value",
+                                          "fill": "$muted",
+                                          "content": "All pipelines",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "icon",
+                                          "id": "tHBYO",
+                                          "name": "Filter arrow",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "chevron-down",
+                                          "library": "lucide",
+                                          "fill": "$muted"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "pSLea",
+                                  "name": "Task filters",
+                                  "width": "fill_container",
+                                  "height": 48,
+                                  "stroke": "$hairline",
+                                  "strokeWidth": {
+                                    "bottom": 1
+                                  },
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "id": "HOXAt",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "strokeWidth": 0,
+                                      "name": "All tasks tab",
+                                      "stroke": "$text",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "fill": "$muted"
+                                        },
+                                        "tidLB": {
+                                          "enabled": true,
+                                          "content": "8"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "JNrzT",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "name": "Running tab",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "content": "Running"
+                                        },
+                                        "tidLB": {
+                                          "enabled": true,
+                                          "content": "2"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "NkFKL",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "name": "Needs you tab",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "content": "Needs you"
+                                        },
+                                        "tidLB": {
+                                          "enabled": true,
+                                          "content": "2"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "PYP0r",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "name": "Queued tab",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "content": "Queued"
+                                        },
+                                        "tidLB": {
+                                          "enabled": true,
+                                          "content": "2"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "Vh7cX",
+                                      "type": "ref",
+                                      "ref": "SOW6S",
+                                      "stroke": "$text",
+                                      "strokeWidth": {
+                                        "bottom": 2
+                                      },
+                                      "name": "Failed tab",
+                                      "descendants": {
+                                        "v66T9G": {
+                                          "fill": "$text",
+                                          "content": "Failed"
+                                        },
+                                        "tidLB": {
+                                          "content": "0",
+                                          "enabled": true
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "AdHrC",
+                                  "name": "No failed tasks row",
+                                  "width": "fill_container",
+                                  "padding": [
+                                    16,
+                                    0
+                                  ],
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "lsnB2",
+                                      "name": "No failed tasks message",
+                                      "fill": "$muted",
+                                      "content": "No failed tasks.",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "z6uTC",
+                                  "name": "Task list footer",
+                                  "width": "fill_container",
+                                  "height": 54,
+                                  "justifyContent": "space_between",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "renGo",
+                                      "name": "Visible task count",
+                                      "fill": "$muted",
+                                      "content": "4 active tasks · 2 completed",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "XTVXn",
+                                      "name": "View all tasks",
+                                      "fill": "$text",
+                                      "content": "View all tasks  →",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Rkg4M",
+                              "name": "Attention and activity",
+                              "width": 288,
+                              "height": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "left": 1
+                              },
+                              "layout": "vertical",
+                              "gap": 24,
+                              "padding": [
+                                0,
+                                0,
+                                0,
+                                24
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "MyEmv",
+                                  "name": "Attention heading",
+                                  "width": "fill_container",
+                                  "height": 34,
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "LAyMQ",
+                                      "name": "Attention icon",
+                                      "width": 16,
+                                      "height": 16,
+                                      "icon": "inbox",
+                                      "library": "lucide",
+                                      "fill": "$text"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "KXDtF",
+                                      "name": "Attention title",
+                                      "fill": "$text",
+                                      "content": "Needs you",
+                                      "fontFamily": "$font",
+                                      "fontSize": 14,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "TM2Er",
+                                      "name": "Heading spacer",
+                                      "width": "fill_container",
+                                      "height": 1
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "xdqOP",
+                                      "name": "Attention count",
+                                      "fill": "$muted",
+                                      "content": "2",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "NYe8H",
+                                  "name": "Review decision",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 12,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "UD6kX",
+                                      "name": "Decision type",
+                                      "fill": "$subtle",
+                                      "content": "REVIEW PULL REQUEST",
+                                      "fontFamily": "$font",
+                                      "fontSize": 9,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "HQi6q",
+                                      "name": "Decision title",
+                                      "fill": "$text",
+                                      "content": "GitHub sign-in is ready",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "DYKWz",
+                                      "name": "Decision summary",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "All checks passed. Review the changes before merging PR #42.",
+                                      "lineHeight": 1.6,
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "id": "EjjUD",
+                                      "type": "ref",
+                                      "ref": "u1XBP",
+                                      "name": "Review changes",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "xfnek": {
+                                          "icon": "git-pull-request"
+                                        },
+                                        "Y7HQGw": {
+                                          "content": "Review changes"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "eh3aZ",
+                                  "name": "Open decision",
+                                  "width": "fill_container",
+                                  "stroke": "$hairline",
+                                  "strokeWidth": {
+                                    "top": 1,
+                                    "bottom": 1
+                                  },
+                                  "layout": "vertical",
+                                  "gap": 10,
+                                  "padding": [
+                                    20,
+                                    0,
+                                    24,
+                                    0
+                                  ],
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "VA2SR",
+                                      "name": "Decision category",
+                                      "fill": "$subtle",
+                                      "content": "CLARIFICATION",
+                                      "fontFamily": "$font",
+                                      "fontSize": 9,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "S09SY",
+                                      "name": "Decision question",
+                                      "fill": "$text",
+                                      "content": "Choose a rate limit strategy",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "nH3bl",
+                                      "name": "Decision project",
+                                      "fill": "$muted",
+                                      "content": "Planner is waiting · Kontur",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "u8N2X",
+                                      "name": "Answer action",
+                                      "fill": "$text",
+                                      "content": "Answer question  →",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "G71Tl",
+                                  "name": "Recent activity",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 18,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "dTfx1",
+                                      "name": "Activity heading",
+                                      "fill": "$text",
+                                      "content": "Recent activity",
+                                      "fontFamily": "$font",
+                                      "fontSize": 13,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "id": "xar9v",
+                                      "type": "ref",
+                                      "ref": "mBkeJ",
+                                      "name": "Reviewer approved run #128",
+                                      "width": "fill_container",
+                                      "height": 54,
+                                      "descendants": {
+                                        "xQYdP": {
+                                          "icon": "circle-check"
+                                        },
+                                        "T7xzhd": {
+                                          "content": "Reviewer approved run #128",
+                                          "fontSize": 11
+                                        },
+                                        "mLcIg": {
+                                          "content": "Kontur · 2 minutes ago",
+                                          "fontSize": 10
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "bjme4",
+                                      "type": "ref",
+                                      "ref": "mBkeJ",
+                                      "name": "Builder started implementation",
+                                      "width": "fill_container",
+                                      "height": 54,
+                                      "descendants": {
+                                        "xQYdP": {
+                                          "icon": "code"
+                                        },
+                                        "T7xzhd": {
+                                          "content": "Builder started implementation",
+                                          "fontSize": 11
+                                        },
+                                        "mLcIg": {
+                                          "content": "Kontur · 6 minutes ago",
+                                          "fontSize": 10
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "zVFji",
+                                      "type": "ref",
+                                      "ref": "mBkeJ",
+                                      "name": "Run #126 completed",
+                                      "width": "fill_container",
+                                      "height": 54,
+                                      "descendants": {
+                                        "xQYdP": {
+                                          "icon": "flag"
+                                        },
+                                        "T7xzhd": {
+                                          "content": "Run #126 completed",
+                                          "fontSize": 11
+                                        },
+                                        "mLcIg": {
+                                          "content": "Kontur · 24 minutes ago",
+                                          "fontSize": 10
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "sJeSn",
+          "x": 0,
+          "y": 33052,
+          "name": "States · ORC-41 · Interactive tool approval",
+          "width": 4896,
+          "height": 1120,
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "pNX3f",
+              "x": 48,
+              "y": 16,
+              "name": "Group heading",
+              "fill": "$muted",
+              "content": "ORC-41 · INTERACTIVE TOOL APPROVAL",
+              "fontFamily": "$font",
+              "fontSize": 22,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "S0HW6g",
+              "x": 48,
+              "y": 68,
+              "name": "Approval dialog label",
+              "fill": "$muted",
+              "content": "ORC-41 · Pending MCP tool action / Approve once or deny",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "t0q3ws",
+              "x": 3088,
+              "y": 100,
+              "name": "ORC-41 · Pending MCP tool approval",
+              "clip": true,
+              "width": 1440,
+              "height": 960,
+              "fill": "$surface",
+              "children": [
+                {
+                  "id": "wrOcb",
+                  "type": "ref",
+                  "ref": "zo9Py",
+                  "name": "Sidebar / Tasks",
+                  "height": "fill_container",
+                  "descendants": {
+                    "JI3gd": {
+                      "fill": "$sidebar"
+                    },
+                    "JI3gd/sQnmq": {
+                      "fill": "$muted"
+                    },
+                    "JI3gd/YWsP0": {
+                      "fill": "$muted"
+                    },
+                    "KYnRz": {
+                      "fill": "$hover"
+                    },
+                    "KYnRz/sQnmq": {
+                      "fill": "$text"
+                    },
+                    "KYnRz/YWsP0": {
+                      "fill": "$text"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "qrlWl",
+                  "name": "Task content",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "HLBLe",
+                      "name": "Task breadcrumb",
+                      "width": "fill_container",
+                      "height": 64,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 12,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "VT88I",
+                          "name": "Breadcrumb",
+                          "fill": "$muted",
+                          "content": "Kontur / Tasks / ORC-131",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "yQ5RN",
+                          "name": "Task breadcrumb spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "id": "dQwGb",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Remove worktree",
+                          "height": 36,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "folder-x"
+                            },
+                            "Y7HQGw": {
+                              "content": "Remove worktree"
+                            }
+                          }
+                        },
+                        {
+                          "id": "EV1zI",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Run again",
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "height": 36,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "rotate-ccw",
+                              "fill": "$inverse-text"
+                            },
+                            "Y7HQGw": {
+                              "content": "Run again",
+                              "fill": "$inverse-text"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RDqsn",
+                      "name": "Task title area",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 14,
+                      "padding": [
+                        28,
+                        32,
+                        22,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "K2tSW",
+                          "name": "Task title",
+                          "fill": "$text",
+                          "content": "Add switcher keyboard shortcuts",
+                          "fontFamily": "$font",
+                          "fontSize": 27,
+                          "fontWeight": "500",
+                          "letterSpacing": -0.5
+                        },
+                        {
+                          "type": "frame",
+                          "id": "QsIEL",
+                          "name": "Task metadata",
+                          "width": "fill_container",
+                          "gap": 14,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "ZMO75",
+                              "type": "ref",
+                              "ref": "DeizF",
+                              "name": "Ready for review status",
+                              "descendants": {
+                                "bhGXK": {
+                                  "icon": "circle-x"
+                                },
+                                "JuW4o": {
+                                  "content": "Failed"
+                                }
+                              }
+                            },
+                            {
+                              "type": "text",
+                              "id": "Z4iPv",
+                              "name": "Run metadata",
+                              "fill": "$muted",
+                              "content": "Run #131  ·  Feature delivery v3  ·  Failed at Run checks, 14:32",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qNzgf",
+                      "name": "Task tabs",
+                      "width": "fill_container",
+                      "height": 44,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 20,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "id": "QIDlG",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Summary tab",
+                          "height": "fill_container",
+                          "stroke": "$text",
+                          "strokeWidth": {
+                            "bottom": 2
+                          },
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Summary",
+                              "fill": "$text"
+                            },
+                            "tidLB": {
+                              "content": "",
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "IZx8r",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Conversation tab",
+                          "height": "fill_container",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Conversation",
+                              "fill": "$muted"
+                            }
+                          }
+                        },
+                        {
+                          "id": "O9xxNP",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Changes tab",
+                          "height": "fill_container",
+                          "stroke": "$surface",
+                          "strokeWidth": {
+                            "bottom": 2
+                          },
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Changes",
+                              "fill": "$muted"
+                            },
+                            "tidLB": {
+                              "enabled": false,
+                              "content": "6"
+                            }
+                          }
+                        },
+                        {
+                          "id": "RQLG7",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Activity tab",
+                          "height": "fill_container",
+                          "stroke": "$surface",
+                          "strokeWidth": {
+                            "bottom": 2
+                          },
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Activity",
+                              "fill": "$muted"
+                            },
+                            "tidLB": {
+                              "enabled": false,
+                              "content": "24"
+                            }
+                          }
+                        },
+                        {
+                          "id": "vtuty",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Artifacts tab",
+                          "height": "fill_container",
+                          "stroke": "$surface",
+                          "strokeWidth": {
+                            "bottom": 2
+                          },
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Artifacts",
+                              "fill": "$muted"
+                            },
+                            "tidLB": {
+                              "enabled": false,
+                              "content": "3"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "y8TjlZ",
+                      "name": "Task summary body",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "UZaLl",
+                          "name": "Summary and evidence",
+                          "width": "fill_container",
+                          "height": "fill_container",
+                          "layout": "vertical",
+                          "gap": 24,
+                          "padding": 32,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "VUIRS",
+                              "name": "Summary viewport · scrolls with the gutter",
+                              "clip": true,
+                              "width": "fill_container",
+                              "height": "fill_container",
+                              "layout": "vertical",
+                              "gap": 24,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "mAPwD",
+                                  "name": "Review readiness",
+                                  "width": "fill_container",
+                                  "height": 76,
+                                  "fill": "$raised",
+                                  "cornerRadius": 9,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "gap": 14,
+                                  "padding": 16,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "PKTqj",
+                                      "name": "Ready icon",
+                                      "width": 24,
+                                      "height": 24,
+                                      "icon": "circle-x",
+                                      "library": "lucide",
+                                      "fill": "$text"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "NmLAk",
+                                      "name": "Readiness message",
+                                      "width": "fill_container",
+                                      "layout": "vertical",
+                                      "gap": 7,
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "Sb8Sv",
+                                          "name": "Readiness title",
+                                          "fill": "$text",
+                                          "content": "The run failed at Run checks",
+                                          "fontFamily": "$font",
+                                          "fontSize": 14,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "W2ni1",
+                                          "name": "Readiness explanation",
+                                          "fill": "$muted",
+                                          "content": "Activity shows the command, its exit code and its output.",
+                                          "fontFamily": "$font",
+                                          "fontSize": 12,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "p2zjM",
+                                  "name": "Run stage progress",
+                                  "width": "fill_container",
+                                  "height": 44,
+                                  "gap": 12,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "X0YyR",
+                                      "type": "ref",
+                                      "ref": "i9rVFu",
+                                      "name": "Research complete",
+                                      "width": "fill_container"
+                                    },
+                                    {
+                                      "id": "uZBGG",
+                                      "type": "ref",
+                                      "ref": "i9rVFu",
+                                      "name": "Plan complete",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "L3nDW": {
+                                          "content": "Plan"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "wuoUY",
+                                      "type": "ref",
+                                      "ref": "i9rVFu",
+                                      "name": "Build complete",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "L3nDW": {
+                                          "content": "Implement"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "cWQOz",
+                                      "type": "ref",
+                                      "ref": "i9rVFu",
+                                      "name": "Verify complete",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "tXLO2": {
+                                          "icon": "x"
+                                        },
+                                        "L3nDW": {
+                                          "content": "Run checks"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "lAu5k",
+                                      "type": "ref",
+                                      "ref": "i9rVFu",
+                                      "name": "Review complete",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "tXLO2": {
+                                          "enabled": false
+                                        },
+                                        "L3nDW": {
+                                          "content": "Review"
+                                        },
+                                        "nK1Sl": {
+                                          "fill": "$hover"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "XN7uC",
+                                  "name": "Change summary",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 11,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "J4SrF",
+                                      "name": "Change summary heading",
+                                      "fill": "$text",
+                                      "content": "What changed",
+                                      "fontFamily": "$font",
+                                      "fontSize": 15,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "bCIHx",
+                                      "name": "Change summary item",
+                                      "width": "fill_container",
+                                      "gap": 10,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "ellipse",
+                                          "id": "AdeJl",
+                                          "name": "Bullet",
+                                          "fill": "$muted",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "C5seIm",
+                                          "name": "Change description",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": "fill_container",
+                                          "content": "Ctrl+K (Cmd+K on macOS) opens the repository switcher.",
+                                          "lineHeight": 1.4,
+                                          "fontFamily": "$font",
+                                          "fontSize": 12,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "l0P7v",
+                                      "name": "Change summary item",
+                                      "width": "fill_container",
+                                      "gap": 10,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "ellipse",
+                                          "id": "yMqwV",
+                                          "name": "Bullet",
+                                          "fill": "$muted",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "H5v8Cx",
+                                          "name": "Change description",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": "fill_container",
+                                          "content": "Arrow keys and Enter choose a repository in the switcher.",
+                                          "lineHeight": 1.4,
+                                          "fontFamily": "$font",
+                                          "fontSize": 12,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "FqUnj",
+                                  "name": "Verification · steps at the final revision",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "yWyZ9",
+                                      "name": "Evidence heading",
+                                      "width": "fill_container",
+                                      "justifyContent": "space_between",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "TbXVN",
+                                          "name": "Evidence title",
+                                          "fill": "$text",
+                                          "content": "Verification",
+                                          "fontFamily": "$font",
+                                          "fontSize": 15,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "AnB5B",
+                                          "name": "Verified revision",
+                                          "fill": "$muted",
+                                          "content": "commit 2c7e91a",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 10,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "ifKjq",
+                                      "type": "ref",
+                                      "ref": "l3hyb",
+                                      "name": "Research · Explorer",
+                                      "width": "fill_container",
+                                      "height": 40,
+                                      "descendants": {
+                                        "U5Dej": {
+                                          "content": "Research · Explorer"
+                                        },
+                                        "knHpx": {
+                                          "content": "Complete · attempt 1 · 61k tokens · 2 min"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "d0hPU",
+                                      "type": "ref",
+                                      "ref": "l3hyb",
+                                      "name": "Plan · Planner",
+                                      "width": "fill_container",
+                                      "height": 40,
+                                      "descendants": {
+                                        "U5Dej": {
+                                          "content": "Plan · Planner"
+                                        },
+                                        "knHpx": {
+                                          "content": "Complete · attempt 1 · 38k tokens · 2 min"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "xkdps",
+                                      "type": "ref",
+                                      "ref": "l3hyb",
+                                      "name": "Implement · Builder",
+                                      "width": "fill_container",
+                                      "height": 40,
+                                      "descendants": {
+                                        "U5Dej": {
+                                          "content": "Implement · Builder"
+                                        },
+                                        "knHpx": {
+                                          "content": "Complete · attempt 1 · 402k tokens · 14 min"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "qHU7p",
+                                      "type": "ref",
+                                      "ref": "l3hyb",
+                                      "name": "Run checks",
+                                      "width": "fill_container",
+                                      "height": 40,
+                                      "descendants": {
+                                        "ai8hy": {
+                                          "icon": "circle-x"
+                                        },
+                                        "U5Dej": {
+                                          "content": "Run checks"
+                                        },
+                                        "knHpx": {
+                                          "content": "Failed · attempt 1 · exit 1 · 2 min"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "cpMY8",
+                                      "type": "ref",
+                                      "ref": "l3hyb",
+                                      "name": "Review · Reviewer",
+                                      "height": 40,
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "ai8hy": {
+                                          "icon": "circle-dashed",
+                                          "fill": "$muted"
+                                        },
+                                        "U5Dej": {
+                                          "fill": "$muted",
+                                          "content": "Review · Reviewer"
+                                        },
+                                        "knHpx": {
+                                          "content": "Not started"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "a7jcbU",
+                          "name": "Run context panel",
+                          "width": 300,
+                          "height": "fill_container",
+                          "fill": "$sidebar",
+                          "stroke": "$hairline",
+                          "strokeWidth": {
+                            "left": 1
+                          },
+                          "layout": "vertical",
+                          "gap": 20,
+                          "padding": 24,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "TKyXj",
+                              "name": "Run details heading",
+                              "fill": "$text",
+                              "content": "Run details",
+                              "fontFamily": "$font",
+                              "fontSize": 13,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "pUnS2",
+                              "name": "Run properties",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 17,
+                              "children": [
+                                {
+                                  "id": "PzraA",
+                                  "type": "ref",
+                                  "ref": "tfGRt",
+                                  "name": "Project property",
+                                  "width": "fill_container"
+                                },
+                                {
+                                  "id": "fYjqh",
+                                  "type": "ref",
+                                  "ref": "tfGRt",
+                                  "name": "Pipeline",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "QkG27": {
+                                      "content": "Pipeline"
+                                    },
+                                    "yeeIR": {
+                                      "content": "Feature delivery · v3",
+                                      "fontFamily": "$font"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "PdZN3",
+                                  "type": "ref",
+                                  "ref": "tfGRt",
+                                  "name": "Base branch",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "QkG27": {
+                                      "content": "Base revision"
+                                    },
+                                    "yeeIR": {
+                                      "content": "9b41e0c",
+                                      "fontFamily": "$mono"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "dqOtp",
+                                  "type": "ref",
+                                  "ref": "tfGRt",
+                                  "name": "Working branch",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "QkG27": {
+                                      "content": "Working branch"
+                                    },
+                                    "yeeIR": {
+                                      "content": "orc/switcher-shortcuts",
+                                      "fontFamily": "$font"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "sh24d",
+                                  "type": "ref",
+                                  "ref": "tfGRt",
+                                  "name": "Duration",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "QkG27": {
+                                      "content": "Duration"
+                                    },
+                                    "yeeIR": {
+                                      "content": "20m 11s",
+                                      "fontFamily": "$mono"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "s8tk7i",
+                                  "type": "ref",
+                                  "ref": "tfGRt",
+                                  "name": "Tokens used",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "QkG27": {
+                                      "content": "Tokens used"
+                                    },
+                                    "yeeIR": {
+                                      "content": "501k / 1.4M tokens",
+                                      "fontFamily": "$mono"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "H43T9",
+                              "name": "Agents on this run",
+                              "width": "fill_container",
+                              "stroke": "$hairline",
+                              "strokeWidth": {
+                                "top": 1
+                              },
+                              "layout": "vertical",
+                              "gap": 12,
+                              "padding": [
+                                18,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "j100jI",
+                                  "name": "Agent section title",
+                                  "fill": "$text",
+                                  "content": "Agents on this run",
+                                  "fontFamily": "$font",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "id": "R7zdR",
+                                  "type": "ref",
+                                  "ref": "mBkeJ",
+                                  "name": "Explorer",
+                                  "width": "fill_container",
+                                  "height": 44,
+                                  "descendants": {
+                                    "xQYdP": {
+                                      "icon": "search"
+                                    },
+                                    "T7xzhd": {
+                                      "content": "Explorer",
+                                      "fontSize": 11
+                                    },
+                                    "mLcIg": {
+                                      "content": "Claude / Opus · Research",
+                                      "fontSize": 10
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "nEgAS",
+                                  "type": "ref",
+                                  "ref": "mBkeJ",
+                                  "name": "Planner",
+                                  "height": 44,
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "xQYdP": {
+                                      "icon": "list-checks"
+                                    },
+                                    "T7xzhd": {
+                                      "content": "Planner",
+                                      "fontSize": 11
+                                    },
+                                    "mLcIg": {
+                                      "content": "Codex / Sol · Plan",
+                                      "fontSize": 10
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "f9P3Q",
+                                  "type": "ref",
+                                  "ref": "mBkeJ",
+                                  "name": "Builder",
+                                  "width": "fill_container",
+                                  "height": 44,
+                                  "descendants": {
+                                    "xQYdP": {
+                                      "icon": "code"
+                                    },
+                                    "T7xzhd": {
+                                      "content": "Builder",
+                                      "fontSize": 11
+                                    },
+                                    "mLcIg": {
+                                      "content": "Codex / Sol · Implement",
+                                      "fontSize": 10
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "N2wEbE",
+                                  "type": "ref",
+                                  "ref": "mBkeJ",
+                                  "name": "Reviewer",
+                                  "width": "fill_container",
+                                  "height": 44,
+                                  "descendants": {
+                                    "xQYdP": {
+                                      "icon": "scan-eye"
+                                    },
+                                    "T7xzhd": {
+                                      "content": "Reviewer",
+                                      "fontSize": 11
+                                    },
+                                    "mLcIg": {
+                                      "content": "Claude / Opus · Review",
+                                      "fontSize": 10
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ol8Co",
+                              "name": "Inspector flexible space",
+                              "width": "fill_container",
+                              "height": "fill_container"
+                            },
+                            {
+                              "id": "Z3DiI",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Open task conversation",
+                              "width": "fill_container",
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "messages-square"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Open conversation"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "v212M",
+                  "layoutPosition": "absolute",
+                  "x": 0,
+                  "y": 0,
+                  "name": "Run again backdrop",
+                  "width": 1440,
+                  "height": 960,
+                  "fill": "#000000A6",
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ybPUT",
+                      "name": "Interactive tool approval dialog",
+                      "clip": true,
+                      "width": 600,
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-panel",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "GJABe",
+                          "name": "Dialog header",
+                          "width": "fill_container",
+                          "stroke": "$hairline",
+                          "strokeWidth": {
+                            "bottom": 1
+                          },
+                          "layout": "vertical",
+                          "gap": 8,
+                          "padding": [
+                            24,
+                            28
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "bUVAu",
+                              "name": "Dialog title",
+                              "fill": "$text",
+                              "content": "Approve tool action?",
+                              "fontFamily": "$font",
+                              "fontSize": 20,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "text",
+                              "id": "L7ZoT",
+                              "name": "Dialog explanation",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Builder requests one MCP action. Review the agent, server, action and target before deciding. Approve once applies only to this request; Deny fails this step.",
+                              "lineHeight": 1.6,
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "rXmR4",
+                          "name": "Pending tool action details",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 12,
+                          "padding": [
+                            20,
+                            28
+                          ],
+                          "children": [
+                            {
+                              "id": "SdU7v",
+                              "type": "ref",
+                              "ref": "tfGRt",
+                              "name": "Agent",
+                              "width": "fill_container",
+                              "descendants": {
+                                "QkG27": {
+                                  "content": "Agent"
+                                },
+                                "yeeIR": {
+                                  "content": "Builder",
+                                  "fontFamily": "$font"
+                                }
+                              }
+                            },
+                            {
+                              "id": "t2IcET",
+                              "type": "ref",
+                              "ref": "tfGRt",
+                              "name": "MCP server",
+                              "width": "fill_container",
+                              "descendants": {
+                                "QkG27": {
+                                  "content": "MCP server"
+                                },
+                                "yeeIR": {
+                                  "content": "pencil",
+                                  "fontFamily": "$font"
+                                }
+                              }
+                            },
+                            {
+                              "id": "NvR4c",
+                              "type": "ref",
+                              "ref": "tfGRt",
+                              "name": "Action",
+                              "width": "fill_container",
+                              "descendants": {
+                                "QkG27": {
+                                  "content": "Action"
+                                },
+                                "yeeIR": {
+                                  "content": "batch_design",
+                                  "fontFamily": "$font"
+                                }
+                              }
+                            },
+                            {
+                              "id": "CruVt",
+                              "type": "ref",
+                              "ref": "tfGRt",
+                              "name": "Target",
+                              "width": "fill_container",
+                              "descendants": {
+                                "QkG27": {
+                                  "content": "Target"
+                                },
+                                "yeeIR": {
+                                  "content": "data/orchester.pen",
+                                  "fontFamily": "$mono"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "BaKFp",
+                          "name": "Dialog actions",
+                          "width": "fill_container",
+                          "height": 76,
+                          "stroke": "$hairline",
+                          "strokeWidth": {
+                            "top": 1
+                          },
+                          "gap": 12,
+                          "padding": [
+                            0,
+                            28
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "jse2N",
+                              "name": "Actions spacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "id": "s6KSp",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Deny",
+                              "height": 36,
+                              "descendants": {
+                                "xfnek": {
+                                  "enabled": true,
+                                  "icon": "x"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Deny"
+                                }
+                              }
+                            },
+                            {
+                              "id": "M6urN",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Approve once",
+                              "height": 36,
+                              "fill": "$accent",
+                              "stroke": "$accent",
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "check",
+                                  "fill": "$inverse-text"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Approve once",
+                                  "fill": "$inverse-text"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             }

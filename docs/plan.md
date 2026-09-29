@@ -18,20 +18,6 @@ then the backlog by area.
 - When a task is done, move it to *Done* at the end of this file in the same change, with the commit or branch.
 - Tasks marked **needs decision** wait for the user; do not start them.
 
-## Current user-requested fix
-
-### Edit a task after its first run starts
-
-**Status 2026-09-29: In progress on `codex/edit-started-task`.** The task form now opens for a
-task with a recorded run and saves its details in place for future runs. Existing runs retain a
-snapshot of the task details they started with; legacy runs acquire that snapshot before the
-first edit. A queued task with no recorded run stays locked, and a started task cannot be saved
-incomplete. Independent filtered core, store, runner and desktop tests passed after the Summary
-snapshot refinement; `tools/check.ps1` passed. Independent same-state Pencil/app verification
-found no remaining major mismatch after that refinement.
-Pencil changes are in the shared editor and must be saved to `data/orchester.pen` before merge.
-Verification: `docs/evidence/edit-started-task-2026-09-29.md`.
-
 ## Current work · ORC-41 interactive tool approvals
 
 **Status 2026-09-29: In progress** on `codex/interactive-approvals`. The existing ORC-41 task asks for a
@@ -43,14 +29,23 @@ limit excludes time waiting for the person. Independent tests must exercise appr
 disposable Pencil document, run affected filtered tests and `tools/check.ps1`, and compare any new UI with
 the Pencil frame.
 
-**Milestone 2026-09-29:** the runner's opt-in App Server transport, inherited normal Codex profile,
-connected project MCP check, per-request decision routing, durable pending records and
-interruption handling compile. Named parser and storage tests pass, including concurrent-call
-rejection, interrupted delivery, and a project-wide pending-request query. The project-wide approval UI
-is being integrated with the runner. The ordinary Codex account and global MCP servers remain
-available. The actual request method from Pencil `batch_design` remains unverified.
-Live approve and deny against a disposable active Pencil document, independent design
-verification and the final check are still pending.
+**Milestone 2026-09-29:** the opt-in App Server transport,
+project-selected MCP server check, per-request routing, durable decisions and interruption handling
+are integrated with a project-wide approval modal. The modal appears over Overview and Task detail
+in a disposable project. Independent parser, invocation, active-time, store and i18n tests and
+`tools/check.ps1` pass. A separate agent compared the Pencil modal (`ybPUT`) with exact-PID app
+screenshots at the same logical size and found no blocking or major mismatch in the changed UI;
+the full Task detail background differs because the synthetic fixture has an interrupted offline
+run. Evidence: `docs/evidence/orc41-interactive-approvals-2026-09-29.md`.
+
+The App Server uses the existing Codex sign-in and preserves the user's global MCP servers. A
+signed-out account produces a clear step error. The actual request method from Pencil
+`batch_design` and live approve/deny on a disposable active document remain unverified. The
+user objected to opening a disposable document, so that test was stopped without a Pencil write;
+the main design was restored as the active editor. The completed Pencil design changes were
+saved to `data/orchester.pen`. macOS runner cross-build
+stops in native dependencies because the Windows host lacks a macOS C toolchain; no Mac is
+available. Keep ORC-41 in progress until these acceptance checks complete.
 
 ## D · Developing Orchester inside Orchester
 
@@ -153,14 +148,6 @@ and MCP tools in the Tools library.
 
 ## U · Screens
 
-### Overview · Failed task tab (UI, in progress)
-
-Add a *Failed* tab to the Overview task list. Its count and newest-first rows show tasks whose latest run failed;
-cancelled, unreadable, draft and successful tasks stay out. The selected tab has its own route and a truthful empty
-state. The 02.08F `pHNfB` and 02.08F2 `aSpMm` Pencil frames are drawn in editor memory. Independent
-same-size app comparison found no blocking or major mismatch; a coordinated Pencil save remains.
-Verification: `docs/evidence/overview-failed-2026-09-29.md`.
-
 ### U10 · Pull requests screen jumps while it loads (UI)
 
 Opening the Pull requests tab shifts its content two or three times
@@ -185,7 +172,8 @@ Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
 ## L · After lurq 0.30.0
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
-select-menu width option in 0.30.2, and the verifier window focus option in 0.30.3. This workspace uses 0.30.3.
+select-menu width option in 0.30.2, and the verifier window focus option in 0.30.3. This workspace uses 0.30.4,
+which also preserves text selection after a drag on scaled displays.
 
 ## P · Product decisions waiting for the user
 
@@ -207,6 +195,17 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+Edit a task after its first run starts · branch `codex/edit-started-task` (the task form saves
+future-run details in place while existing runs retain their snapshots; queued tasks remain locked
+and started tasks cannot be saved incomplete. Independent filtered core, store, runner and desktop
+tests, `tools/check.ps1`, and same-state Pencil/app verification passed. The design was saved.
+Evidence: `docs/evidence/edit-started-task-2026-09-29.md`).
+
+Overview · Failed task tab · branch `codex/overview-failed` (the tab has a count, newest-first
+failed rows, its own route and an accurate empty state; independent filtered tests,
+`tools/check.ps1`, and same-size Pencil/app verification passed. The design was saved.
+Evidence: `docs/evidence/overview-failed-2026-09-29.md`).
 
 D5 · Check free disk space outside the agent CLI · branch `codex/d5-final-port` (absolute shared `CARGO_TARGET_DIR`
 checked by the host before run/worktree creation; truthful, locked queued task can be reopened and retried under the
