@@ -5,11 +5,15 @@ The app and this client must use the same LOCALAPPDATA (Windows) or HOME (macOS)
 """
 
 import argparse
+import base64
+import binascii
 import json
 import os
 import sys
+import tempfile
 import urllib.error
 import urllib.request
+import zlib
 from pathlib import Path
 
 
@@ -169,6 +173,117 @@ def redact(value, token):
     return value
 
 
+def decode_png_pixels(compressed, width, height):
+    row_bytes = width * 4 + 1
+    expected = row_bytes * height
+    if expected > 128 * 1024 * 1024:
+        raise ClientError("MCP screenshot PNG dimensions are too large")
+    decoder = zlib.decompressobj()
+    try:
+        pixels = decoder.decompress(compressed, expected + 1)
+    except zlib.error:
+        raise ClientError("MCP screenshot PNG data cannot be decoded") from None
+    if (
+        len(pixels) != expected
+        or not decoder.eof
+        or decoder.unconsumed_tail
+        or decoder.unused_data
+        or any(pixels[offset] > 4 for offset in range(0, expected, row_bytes))
+    ):
+        raise ClientError("MCP screenshot PNG data is incomplete or invalid")
+
+
+def png_dimensions(png):
+    if len(png) > 64 * 1024 * 1024 or png[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ClientError("MCP screenshot data is not a PNG")
+    offset = 8
+    width = height = None
+    idat = []
+    after_idat = False
+    while offset < len(png):
+        if len(png) - offset < 12:
+            raise ClientError("MCP screenshot PNG is incomplete")
+        length = int.from_bytes(png[offset:offset + 4], "big")
+        end = offset + 12 + length
+        if end > len(png):
+            raise ClientError("MCP screenshot PNG is incomplete")
+        kind = png[offset + 4:offset + 8]
+        data = png[offset + 8:end - 4]
+        checksum = int.from_bytes(png[end - 4:end], "big")
+        if zlib.crc32(kind + data) != checksum:
+            raise ClientError("MCP screenshot PNG checksum failed")
+        if width is None:
+            if kind != b"IHDR" or length != 13:
+                raise ClientError("MCP screenshot data is not a PNG")
+            width = int.from_bytes(data[:4], "big")
+            height = int.from_bytes(data[4:8], "big")
+            if width == 0 or height == 0 or data[8:] != bytes((8, 6, 0, 0, 0)):
+                raise ClientError("MCP screenshot has invalid PNG dimensions or format")
+        elif kind == b"IDAT":
+            if after_idat:
+                raise ClientError("MCP screenshot PNG has noncontiguous image data")
+            idat.append(data)
+        elif kind == b"IEND":
+            if length != 0 or not idat or end != len(png):
+                raise ClientError("MCP screenshot PNG is incomplete or invalid")
+            decode_png_pixels(b"".join(idat), width, height)
+            return width, height
+        elif kind == b"IHDR" or kind[0] & 0x20 == 0:
+            raise ClientError("MCP screenshot PNG has an unsupported chunk")
+        if kind != b"IDAT" and idat:
+            after_idat = True
+        offset = end
+    raise ClientError("MCP screenshot PNG is incomplete")
+
+
+def screenshot_png(result):
+    if result.get("isError"):
+        raise ClientError("MCP screenshot tool reported an error")
+    content = result.get("content")
+    if not isinstance(content, list) or len(content) != 1:
+        raise ClientError("MCP screenshot must contain exactly one image block")
+    image = content[0]
+    if not isinstance(image, dict) or image.get("type") != "image" or image.get("mimeType") != "image/png":
+        raise ClientError("MCP screenshot is not a PNG image block")
+    encoded = image.get("data")
+    if not isinstance(encoded, str) or not encoded:
+        raise ClientError("MCP screenshot has no base64 image data")
+    try:
+        png = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        raise ClientError("MCP screenshot has invalid base64 image data") from None
+    width, height = png_dimensions(png)
+    return png, width, height
+
+
+def save_png(path, png):
+    destination = Path(path)
+    if destination.suffix.lower() != ".png":
+        raise ClientError("Screenshot output path must end in .png")
+    temporary = None
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="wb", prefix=".lurq-screenshot-", suffix=".tmp", dir=destination.parent, delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(png)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, destination)
+        if not destination.is_file() or destination.stat().st_size != len(png):
+            raise ClientError("Screenshot PNG was not saved")
+    except OSError as error:
+        raise ClientError(f"Cannot save screenshot PNG ({type(error).__name__})") from None
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                # A cleanup failure must not hide the original write result.
+                pass
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pid", type=int, help="PID of the app started by this run")
@@ -176,6 +291,7 @@ def main(argv=None):
     parser.add_argument("--app", default="orchester", help="expected app name in discovery")
     parser.add_argument("--arguments", default="{}", help="JSON object of tool arguments; do not pass secrets")
     parser.add_argument("--discovery-dir", help="directory containing the exact-PID discovery file")
+    parser.add_argument("--image-out", help="run-owned PNG output path for lurq_screenshot")
     args = parser.parse_args(argv)
     if args.pid <= 0:
         parser.error("PID must be positive")
@@ -183,9 +299,24 @@ def main(argv=None):
         arguments = json.loads(args.arguments)
         if not isinstance(arguments, dict):
             raise ClientError("Tool arguments must be a JSON object")
+        if args.image_out is not None and args.tool != "lurq_screenshot":
+            raise ClientError("--image-out is only valid with lurq_screenshot")
         directory = discovery_dir(args.discovery_dir)
         url, token = load_discovery(args.pid, args.app, directory)
         result = call_tool(url, token, args.tool, arguments)
+        if args.tool == "lurq_screenshot":
+            png, width, height = screenshot_png(result)
+            if args.image_out is not None:
+                save_png(args.image_out, png)
+            print(json.dumps({
+                "ok": True,
+                "saved": args.image_out is not None,
+                "mime_type": "image/png",
+                "bytes": len(png),
+                "width": width,
+                "height": height,
+            }))
+            return 0
         # ASCII JSON survives Windows pipes even when their encoding cannot represent UI text.
         print(json.dumps(redact(result, token), ensure_ascii=True))
         return 0

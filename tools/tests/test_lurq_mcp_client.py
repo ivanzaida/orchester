@@ -1,5 +1,6 @@
 """Protocol and credential-output tests for the exact-PID lurq MCP client."""
 
+import base64
 import http.server
 import json
 import os
@@ -8,6 +9,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import zlib
 from pathlib import Path
 
 
@@ -17,6 +19,20 @@ TOKEN = "SYNTHETIC_D7_TOKEN_DO_NOT_USE"
 PID = 12345
 
 
+def png_fixture(idat=None):
+    def chunk(kind, data):
+        return len(data).to_bytes(4, "big") + kind + data + zlib.crc32(kind + data).to_bytes(4, "big")
+
+    ihdr = (1).to_bytes(4, "big") * 2 + bytes((8, 6, 0, 0, 0))
+    if idat is None:
+        idat = zlib.compress(b"\0\0\0\0\0")
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
+
+
+PNG = png_fixture()
+IMAGE = {"type": "image", "mimeType": "image/png", "data": base64.b64encode(PNG).decode("ascii")}
+
+
 class McpHandler(http.server.BaseHTTPRequestHandler):
     calls = []
     reject = False
@@ -24,6 +40,8 @@ class McpHandler(http.server.BaseHTTPRequestHandler):
     malformed_stage = None
     sse_heartbeat = False
     non_ascii = False
+    screenshot_blocks = None
+    screenshot_error = False
 
     def do_GET(self):
         self.calls.append(("redirected GET", self.headers.get("Authorization")))
@@ -71,8 +89,12 @@ class McpHandler(http.server.BaseHTTPRequestHandler):
                 return
             reply = {"jsonrpc": "2.0", "id": 2}
             if self.malformed_stage != "tools/call":
-                text = "🌍 " + TOKEN if self.non_ascii else TOKEN
-                reply["result"] = {"content": [{"text": text}]}
+                if payload["params"]["name"] == "lurq_screenshot":
+                    blocks = self.screenshot_blocks if self.screenshot_blocks is not None else [IMAGE]
+                    reply["result"] = {"content": blocks, "isError": self.screenshot_error}
+                else:
+                    text = "🌍 " + TOKEN if self.non_ascii else TOKEN
+                    reply["result"] = {"content": [{"text": text}]}
             body = ("data: " + json.dumps(reply) + "\n\n").encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -95,6 +117,8 @@ class ExactPidClientTest(unittest.TestCase):
         McpHandler.malformed_stage = None
         McpHandler.sse_heartbeat = False
         McpHandler.non_ascii = False
+        McpHandler.screenshot_blocks = None
+        McpHandler.screenshot_error = False
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), McpHandler)
         thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         thread.start()
@@ -112,9 +136,12 @@ class ExactPidClientTest(unittest.TestCase):
         }
         (Path(self.directory.name) / f"{PID}.json").write_text(json.dumps(data), encoding="utf-8")
 
-    def client(self, *, env=None):
+    def client(self, *, env=None, tool="lurq_windows", image_out=None):
+        command = [sys.executable, str(CLIENT), str(PID), tool, "--discovery-dir", self.directory.name]
+        if image_out is not None:
+            command.extend(("--image-out", str(image_out)))
         return subprocess.run(
-            [sys.executable, str(CLIENT), str(PID), "lurq_windows", "--discovery-dir", self.directory.name],
+            command,
             capture_output=True,
             text=True,
             timeout=10,
@@ -201,6 +228,90 @@ class ExactPidClientTest(unittest.TestCase):
         self.assertTrue(result.stdout.isascii())
         self.assertEqual(json.loads(result.stdout)["content"][0]["text"], "🌍 [REDACTED]")
         self.assertNotIn(TOKEN, result.stdout + result.stderr)
+
+    def test_screenshot_writes_png_and_only_safe_metadata(self):
+        self.discovery()
+        destination = Path(self.directory.name) / "captures" / "screen.png"
+        result = self.client(tool="lurq_screenshot", image_out=destination)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(destination.read_bytes(), PNG)
+        self.assertEqual(
+            json.loads(result.stdout),
+            {"ok": True, "saved": True, "mime_type": "image/png", "bytes": len(PNG), "width": 1, "height": 1},
+        )
+        self.assertNotIn(TOKEN, result.stdout + result.stderr)
+        self.assertNotIn(IMAGE["data"], result.stdout + result.stderr)
+
+    def test_screenshot_without_output_reports_unsaved_metadata(self):
+        self.discovery()
+        result = self.client(tool="lurq_screenshot")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["saved"], False)
+        self.assertNotIn(IMAGE["data"], result.stdout + result.stderr)
+
+    def test_image_out_is_rejected_for_other_tools_before_network(self):
+        self.discovery()
+        result = self.client(image_out=Path(self.directory.name) / "screen.png")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("only valid with lurq_screenshot", result.stderr)
+        self.assertFalse(McpHandler.calls)
+
+    def test_screenshot_tool_error_and_invalid_content_never_write(self):
+        self.discovery()
+        destination = Path(self.directory.name) / "screen.png"
+        cases = (
+            (True, [IMAGE], "reported an error"),
+            (False, "not a list", "exactly one image block"),
+            (False, [], "exactly one image block"),
+            (False, [IMAGE, IMAGE], "exactly one image block"),
+            (False, [{"type": "text", "text": TOKEN}], "not a PNG image block"),
+            (False, [{**IMAGE, "mimeType": "image/jpeg"}], "not a PNG image block"),
+            (False, [{**IMAGE, "data": "%%%"}], "invalid base64"),
+            (False, [{**IMAGE, "data": base64.b64encode(b"not a PNG").decode()}], "not a PNG"),
+        )
+        for error, blocks, message in cases:
+            with self.subTest(message=message):
+                McpHandler.screenshot_error = error
+                McpHandler.screenshot_blocks = blocks
+                result = self.client(tool="lurq_screenshot", image_out=destination)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(message, result.stderr)
+                self.assertFalse(destination.exists())
+                self.assertNotIn(TOKEN, result.stdout + result.stderr)
+                self.assertNotIn(IMAGE["data"], result.stdout + result.stderr)
+
+    def test_screenshot_rejects_incomplete_or_corrupt_png(self):
+        self.discovery()
+        destination = Path(self.directory.name) / "screen.png"
+        bad_crc = bytearray(PNG)
+        bad_crc[29] ^= 1
+        cases = (
+            ("reviewer IHDR-only payload", PNG[:33]),
+            ("missing IEND", PNG[:-12]),
+            ("invalid IHDR checksum", bytes(bad_crc)),
+            ("corrupt IDAT with valid checksum", png_fixture(idat=b"not zlib")),
+            ("invalid PNG row filter", png_fixture(idat=zlib.compress(b"\5\0\0\0\0"))),
+        )
+        for name, payload in cases:
+            with self.subTest(name=name):
+                encoded = base64.b64encode(payload).decode("ascii")
+                McpHandler.screenshot_blocks = [{**IMAGE, "data": encoded}]
+                result = self.client(tool="lurq_screenshot", image_out=destination)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertFalse(destination.exists())
+                self.assertNotIn(TOKEN, result.stderr)
+                self.assertNotIn(encoded, result.stderr)
+
+    def test_screenshot_write_failure_never_reports_success(self):
+        self.discovery()
+        destination = Path(self.directory.name) / "screen.png"
+        destination.mkdir()
+        result = self.client(tool="lurq_screenshot", image_out=destination)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Cannot save screenshot PNG", result.stderr)
+        self.assertFalse(list(Path(self.directory.name).glob(".lurq-screenshot-*")))
 
 
 if __name__ == "__main__":

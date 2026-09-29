@@ -21,10 +21,17 @@ Call a tool with the PID returned when starting that app, for example:
 ```text
 python tools/lurq-mcp-client.py 12345 lurq_windows
 python tools/lurq-mcp-client.py 12345 lurq_read_tree --arguments '{"window":"main","max_chars":1000}'
+python tools/lurq-mcp-client.py 12345 lurq_screenshot --arguments '{"window":"main"}' --image-out .tmp/verify/task/app.png
 ```
 
 On macOS, use `python3` if `python` is unavailable. `--discovery-dir` can point directly to the run-owned `lurq/mcp`
 directory when the client's environment differs from the app's. The optional `--app` value defaults to `orchester`.
+For `lurq_screenshot`, `--image-out` writes one PNG to the supplied run-owned path, creating its parent directory if
+needed. The client checks the single image block, `image/png` MIME, base64, PNG chunk checksums and complete decodable
+RGBA8 image data before writing the file. It
+reports only JSON metadata (`saved`, MIME, byte count and dimensions); the PNG base64 and discovery credential never
+appear in output. Without `--image-out`, it reports the same metadata with `saved:false` and writes no file. A failed
+call or file write exits nonzero and does not report success. Other MCP tools keep their existing JSON result output.
 Do not put secret values in `--arguments`: command lines and tool results may be recorded in run activity. The client
 protects the **discovery bearer token**, not arbitrary data returned by an MCP tool. It does not launch or close the
 app; the verifier owns only its own PID and must close that process after the check.
