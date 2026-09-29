@@ -81,7 +81,9 @@ new visible error states with exact Pencil frames and app screenshots of the sam
 dependency check pass. A full `orchester-runner` macOS cross-check is limited by missing macOS SDK headers on this
 Windows host. Pencil has no exact low-space or cannot-measure preflight frame, and no matching app/Pencil screenshot
 pair exists. A real low-space state was not safely reached; boundary behavior was checked by tests. Evidence:
-`docs/evidence/d5-status-2026-09-29.md`.
+`docs/evidence/d5-status-2026-09-29.md`. The proposed New task error frames and a safe
+cannot-measure reproduction are documented in `docs/evidence/d5-design-path-2026-09-29.md`;
+neither frame exists yet, and low-space app capture remains blocked.
 
 ### D4 · A UI verification step inside a run (after D3)
 
