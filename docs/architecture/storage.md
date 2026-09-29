@@ -218,6 +218,8 @@ locks (`orchester_core::integration`).
   blobs/<aa>/<sha256>          zstd-compressed content
   worktrees/<run-id>/          agent git worktrees: the run's, on its branch
   worktrees/<execution-id>/    a step running beside others, on `<run-branch>--<step>-<attempt>`
+  skills/<execution-id>/<slug>/ the published skills that reach a step execution's agent (SKILL.md and
+                               reference files), written again at each start of the execution and kept
   step-result.schema.json      the JSON schema new agent sessions end with (Codex `--output-schema`)
   logs/runner-<YYYY-MM-DD>.log runner process log (UTC date), kept in full
   runner.lock                  one runner per project
