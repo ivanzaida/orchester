@@ -7,7 +7,8 @@
 //! resume. A gated step a reviewer sent back is told what should change instead (the plan
 //! revision). The extra writable folders its permissions grant are resolved in the repository at
 //! each start, and those under `.orchester/` that do not exist yet are created: the CLIs ignore a
-//! folder that does not exist.
+//! folder that does not exist. The skills that reach the agent are placed and listed in its prompt, and the
+//! project's repository agent files setting is read at each start ([`super::skills`]).
 
 use std::path::{Path, PathBuf};
 
@@ -15,7 +16,7 @@ use orchester_core::{
   command::Command,
   connection::{
     AgentConnection, AgentProvider, REASONING_EFFORT,
-    invocation::{ClaudeInvocation, ClaudeSession, CodexInvocation, InvocationError, Platform},
+    invocation::{ClaudeInvocation, ClaudeSession, CodexAgentFiles, CodexInvocation, InvocationError, Platform},
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
@@ -33,6 +34,7 @@ use super::{
   super::run::RunTask,
   Continuation,
   mcp::{McpServers, McpSetup},
+  skills::{PlacedSkills, repository_skills},
 };
 use crate::private_file::PrivateFile;
 
@@ -61,6 +63,11 @@ struct Cli<'a> {
   worktree: &'a Path,
   resume: Option<&'a str>,
   environment: &'a CommandEnvironment,
+  /// The folder of the skills the agent gets, if any.
+  skills: Option<&'a Path>,
+  /// The repository's skills Codex disables, when the project has its agent files off; `None` while
+  /// they are on.
+  repository_skills: Option<&'a [PathBuf]>,
 }
 
 impl RunTask {
@@ -95,7 +102,8 @@ impl RunTask {
       version: profile.number,
       body: &body,
     };
-    let AssembledPrompt { text: prompt, sources } = self.prompt(execution, step, info, continuation)?;
+    let placed = self.place_skills(execution, step, info)?;
+    let AssembledPrompt { text: prompt, sources } = self.prompt(execution, step, info, continuation, &placed)?;
     // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
     // because an agent never starts with permissions that are not enforced. The run's permissions
     // for the profile, if they were changed for it, else the profile's, narrowed by the step.
@@ -111,6 +119,14 @@ impl RunTask {
       .project_environment()
       .map_err(|error| problem(error.to_string()))?;
     let provider = connection.provider();
+    let agent_files = self
+      .db
+      .repository_agent_files()
+      .map_err(|error| problem(error.to_string()))?;
+    let repository = match (agent_files.is_on(), provider) {
+      (false, AgentProvider::CodexCli) => Some(repository_skills(worktree)?),
+      _ => None,
+    };
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
     let cli = Cli {
       connection: &connection,
@@ -124,6 +140,8 @@ impl RunTask {
       worktree,
       resume: continuation.session.as_deref(),
       environment: &environment,
+      skills: placed.folder.as_deref(),
+      repository_skills: repository.as_deref(),
     };
     let (command, mcp_file) = self.cli_command(&cli, setup, prompt)?;
     Ok(AgentStart {
@@ -206,6 +224,9 @@ impl RunTask {
         resume: cli.resume,
         output_schema: Some(&self.schema_path()),
         mcp: Some(mcp),
+        agent_files: cli
+          .repository_skills
+          .map_or(CodexAgentFiles::Loaded, |skills| CodexAgentFiles::LeftOut { skills }),
       }
       .command(prompt, std::env::vars_os(), cli.environment),
       McpSetup::Claude(file) => ClaudeInvocation {
@@ -217,6 +238,7 @@ impl RunTask {
         worktree: cli.worktree,
         session: ClaudeSession::continuing(cli.resume),
         mcp: file.as_ref().map(|(file, servers)| (file.path(), servers.as_slice())),
+        skills: cli.skills,
       }
       .command(prompt, std::env::vars_os(), cli.environment),
     };
@@ -238,6 +260,7 @@ impl RunTask {
     step: &Step,
     profile: ProfileInfo<'_>,
     continuation: &Continuation,
+    placed: &PlacedSkills,
   ) -> Result<AssembledPrompt, RunnerProblem> {
     let event = if continuation.session.is_some() {
       InjectionEvent::Resume
@@ -270,6 +293,7 @@ impl RunTask {
         body,
       })
       .collect();
+    let skills = placed.listings();
     let attempt = self
       .run
       .attempts()
@@ -291,6 +315,7 @@ impl RunTask {
       step,
       profile,
       instructions: &sources,
+      skills: &skills,
       dependencies: &dependencies,
       revision: Plan::awaiting_revision(&plans, execution, continuation.last_started).map(|(plan, note)| {
         PlanRevision {
