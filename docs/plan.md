@@ -24,7 +24,7 @@ then the backlog by area.
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | L6 | `codex/verifier-no-focus` | lurq 0.30.3 candidate and no-focus app checks pass; release approval is pending. |
-| D4 | `codex/d4-focus-watch` | Disposable run #5 built and pinned its candidate, but Verify failed before app MCP discovery or image capture. Diagnose the early exits, rerun independent Verify, and release L6. |
+| D4 | `codex/d4-focus-watch` | Disposable run #6 passed Implement, Build+Pin and Review. Verify's one-PID app capture reached MCP but its fixture had an invalid resource slug; no PNG pair was made. Correct the fixture and rerun independent Verify. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
 | U3 | `codex/claude-mechanism` | Live Pencil/app comparison passes; the edited `.pen` is not saved into the worktree yet. |
 | M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and MCP-only live checks pass; the live mixed state and exact MCP/mixed *Used by* Pencil frames are unavailable. |
@@ -103,8 +103,10 @@ focus during launch (`docs/verification/foreground-watch.md`,
 run #5 passed Implement, Build and pin candidate, and Review, but Verify's pinned app exited before
 MCP discovery on both launch attempts. No Pencil/app PNG pair exists, and the final app foreground
 verdict is inconclusive; the separate host Orchester watcher passed at its sampled instants.
-Observed facts and the next capture gate are in `docs/evidence/d4-run5-2026-09-29.md`. D4 stays
-open until a fresh independent Verify run compares Pencil and app images at the same state and size.
+Observed facts are in `docs/evidence/d4-run5-2026-09-29.md` and
+`docs/evidence/d4-run6-2026-09-29.md`. Run #6 fixed the child-process lifetime problem with one
+persistent capture command; it failed before screenshots because the disposable fixture used an invalid resource slug.
+D4 stays open until a fresh independent Verify run compares Pencil and app images at the same state and size.
 
 ## T · Tests and runner
 
