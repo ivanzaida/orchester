@@ -18,6 +18,21 @@ then the backlog by area.
 - When a task is done, move it to *Done* at the end of this file in the same change, with the commit or branch.
 - Tasks marked **needs decision** wait for the user; do not start them.
 
+## Work in progress · 2026-09-29
+
+| Task | Branch | Verified progress and next gate |
+| --- | --- | --- |
+| L6 | `codex/verifier-no-focus` | lurq 0.30.3 candidate and no-focus app checks pass; release approval is pending. |
+| U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
+| U3 | `codex/claude-mechanism` | Live Pencil/app comparison passes; the edited `.pen` is not saved into the worktree yet. |
+| M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and MCP-only live checks pass; the live mixed state and exact MCP/mixed *Used by* Pencil frames are unavailable. |
+| M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; an exact remote-selected inspector Pencil frame is missing. |
+| U5 | `codex/u5-small-mismatches` | Independent tests and live checks, including real parallel waiting rows, pass; the after-Remove-worktree live state was not reached and its Pencil frame is missing. |
+| U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; exact Not started, Interrupted and recipient-menu Pencil frames are missing. |
+| D3 | `codex/d3-first-run` | Isolated first real Orchester run is being investigated. |
+
+M1 evidence and parser tests are on `master`; Claude's MCP allow rule still needs a signed-in model turn.
+
 ## D · Developing Orchester inside Orchester
 
 What is already in place: runs in their own worktrees, pipelines with agent and command steps, limits, questions and
