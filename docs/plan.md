@@ -66,14 +66,6 @@ in a read-only step. A task that required that check stopped before cargo. Add a
 preflight for builds using a shared target, with a clear low-space result on Windows and macOS, so the agent does not
 depend on shell commands that its sandbox may decline. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md`.
 
-### D7 · Keep embedded MCP bearer tokens out of agent transcripts (non-UI)
-
-An agent diagnosing D3 read a disposable host app's discovery JSON with a shell command, which exposed its ephemeral
-bearer token to that run's transcript. Provide a small exact-PID MCP client that reads discovery in process memory,
-prints only tool results and errors, and never prints the token or raw discovery file. Document its use for in-run UI
-verification. **Done when** a run can discover and call its own app MCP without displaying the credential. Evidence:
-`docs/evidence/d3-mcp-inside-run-2026-09-29.md`.
-
 ### D4 · A UI verification step inside a run (after D3)
 
 A pipeline step that verifies a UI change the way `.claude/skills/design-verification/SKILL.md` describes: Pencil
@@ -83,7 +75,7 @@ embedded MCP server. Use L6's no-focus startup, a writable run-owned discovery d
 discovery credentials (D7), and pinned app artifacts (D6). Inside Codex's Windows
 sandbox `GetForegroundWindow` returned PID 0; verify host foreground separately instead of treating `0 -> 0` as
 evidence that the user's window stayed active. **Done when** a UI task runs end to end in Orchester with a verifier step
-whose report follows the skill. Depends on the L6 release and D6/D7.
+whose report follows the skill. D6 and D7 are complete; the L6 release remains a prerequisite.
 
 ## T · Tests and runner
 
@@ -201,6 +193,12 @@ catch the user's typing.
 
 ## Done
 
+D7 · Keep embedded MCP bearer tokens out of agent transcripts · branch `codex/d7-safe-mcp-client` (the exact-PID
+client reads discovery only in memory, rejects redirects and non-loopback URLs, and prints ASCII-safe redacted tool
+results. Independent synthetic tests 9/9, `tools/check.ps1`, `git diff --check`, and a real Implement → Review run
+passed. The run used D6 to pin its own app pair, called `lurq_windows` and `lurq_read_tree` by spawned PID without
+printing the credential, then closed the app; a 200 ms host watcher recorded an unchanged foreground PID. Evidence:
+`docs/evidence/d7-safe-mcp-client-2026-09-29.md`; usage: `docs/mcp-verification-client.md`).
 D6 · Pin the verification app built by a run · branch `codex/d6-pin-verifier-app` (`orchester-exec` CLI copies the
 desktop and runner to one run-owned directory and verifies source/copy SHA-256; independent synthetic tests 3/3,
 `tools/check.ps1`, `git diff --check`, and macOS cross-check passed. Replacing the shared-target source after pinning
@@ -209,8 +207,8 @@ left both copies unchanged. The helper cannot prove which build produced source 
 D3 · First real Orchester runs on an isolated clone · branches `codex/d3-first-run` and `codex/d3-mcp-inside-run`
 (Codex sandbox passed core check, two filtered runner process/pipe tests, desktop+runner MCP build and
 `tools/check.ps1`; an in-run no-focus desktop PID answered exact-PID `lurq_windows` and `lurq_read_tree`, then closed;
-separate Review passed. Sandbox foreground PID was unavailable, and follow-up host replays were inconclusive; D4/D6/D7
-track the remaining verification setup. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md` and
+separate Review passed. Sandbox foreground PID was unavailable, and follow-up host replays were inconclusive; D4
+tracks the remaining UI verification setup. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md` and
 `docs/evidence/d3-mcp-inside-run-2026-09-29.md`).
 M2 · Map imported profiles' MCP servers · branch `codex/import-mcp` (source server IDs are resolved to target servers
 or left explicit as unresolved; independent core import 20/20, store 1/1, desktop 1/1, i18n 2/2 and
