@@ -22,11 +22,7 @@ then the backlog by area.
 
 | Task | Branch | Verified progress and next gate |
 | --- | --- | --- |
-| M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
-| U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; Not started, Interrupted and recipient-menu frames are now saved on `master` and need exact app comparisons. |
 | D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. Pencil now has matching error/retry frames. Same-state comparison and full runner macOS check remain; candidate unmerged. |
-
-M1's Codex evidence and parser tests are on `master`; Claude's MCP allow rule still needs a signed-in model turn.
 
 ## D · Developing Orchester inside Orchester
 
@@ -109,14 +105,6 @@ that failed to start in a signed-in run, and whether Claude's `mcp__<name>` allo
 confirmed or fixed, with the observed CLI output saved as a fixture and parser tests updated
 (`crates/core/src/connection/mcp/`).
 
-**Status 2026-09-29:** signed-in Codex 0.139 model turns confirmed MCP calls under `-a never`, a test variable present
-in the server but absent from an agent shell command, and an unnamed stderr warning for a failed server while the turn
-completes. One initial unannotated call was cancelled; two later unannotated calls succeeded, so the cause is unknown.
-Claude 2.1.89 listed `mcp__m1probe__ping` with the allow rule but stopped at `authentication_failed` before a model turn.
-A 2026-09-29 follow-up `auth status --json` returned exit 1 and `loggedIn: false`, so no new model turn was attempted.
-M1 remains in progress until that rule is checked in a signed-in Claude run. Evidence:
-`docs/evidence/mcp-real-run-2026-09-29.md`.
-
 ### M6 · Environment names in secret references (needs decision)
 
 Environments display in lower case (`@staging`, *(staging)*) where the design writes *Staging*, and typing `@Staging`
@@ -129,25 +117,6 @@ Tool discovery and OAuth sign-in for MCP servers, narrowing servers per pipeline
 and MCP tools in the Tools library.
 
 ## U · Screens
-
-### U6 · Conversation states not seen in the app (UI)
-
-The Paused, Stopped, Interrupted and Not started states of the conversation panel, and direct messages to one agent,
-are covered only by data tests. Verify them in the app and fix what differs from `jgqPe` / `kjsmd`.
-
-Pencil (drawn 2026-09-29): `sYuiX` (02.S3, Interrupted), `Ok14G` (02.S4, Not started), `cj2a2` (02.S5, recipient menu
-open).
-
-### U8 · Agent profile header states need a design check (UI/design)
-
-**In progress (2026-09-29):** the live Pencil audit found two 1440 × 960 saved-draft frames, `WPmtS` and `T1rjv`,
-but no published-without-draft frame. Both omit the disabled *Save draft* button shown by the app. The proposed
-resolution and same-state verification gates are in `docs/evidence/u8-header-states-2026-09-29.md`; no Pencil or app
-change has been made. Earlier app lifecycle evidence is `.tmp/verify/u3-u4/report.md`.
-
-Pencil (drawn 2026-09-29): `dWnw7` (04.03A, published without a draft), `t2wCI` (04.04A, the same on Permissions),
-`Jw98x` (04.03B, unsaved changes with Save draft). `WPmtS` and `T1rjv` stay the saved-draft state (no Save draft), which
-matches `codex/u8-header`.
 
 ### U10 · Pull requests screen jumps while it loads (UI)
 
@@ -196,6 +165,29 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+U6 · Verify conversation states and direct recipient timing · branch `codex/u6-final-port` (an independent agent
+compared exact-PID Interrupted `sYuiX`, Not started `Ok14G`, real Live recipient menu `cj2a2`, and Paused/Stopped
+component captures at matching sizes; none had blocking or major visual mismatches. A later-agent message initially
+promised delivery before Builder's next action, which the runner cannot guarantee. The corrected Paused and real
+Live Builder→Reviewer states now say it waits for Reviewer's next turn; independent recheck passed conversation
+8/8, i18n 5/5 and `tools/check.ps1`, with no own app focus in 1,343 host samples. Pencil has no separate saved
+later-recipient message frame, so its exact copy lacks a literal same-state design comparison; the verified line
+fits the saved panel geometry. Evidence: `docs/evidence/u6-conversation-states-2026-09-29.md`.)
+M1 · Confirm MCP behaviour in signed-in CLI turns · branch `codex/m1-claude-allow-rule` (Codex 0.139 under `-a never`
+called a probe MCP tool, kept a test variable out of agent shell commands, and reported an unnamed startup warning
+for a broken server while the turn completed. Two repeat unannotated calls succeeded after one unexplained
+cancellation. After sign-in, Claude Code 2.1.89 called `mcp__m1probe__ping` with `--allowedTools mcp__m1probe` and
+no other tools; the turn exited 0 with the inert result and zero permission denials. Observed CLI fixtures and parser
+tests were updated. The independent Claude fixture test passed 1/1 and `tools/check.ps1` reported OK. A full
+Orchester pipeline run was not part of this probe. Evidence: `docs/evidence/mcp-real-run-2026-09-29.md` and
+`.tmp/verify/m1-claude-allow-rule/report.md`).
+U8 · Align agent profile header lifecycle actions with Pencil · branch `codex/u8-final-port` (Save draft appears only
+for unsaved edits, while Publish follows the saved-draft state. An independent verifier matched all five saved
+1440 × 960 header frames `dWnw7`, `t2wCI`, `Jw98x`, `WPmtS` and `T1rjv` to source-matched exact-PID app captures at
+2160 × 1440 physical px, with no blocking or major header mismatch. Named agent form tests passed 4/4,
+`tools/check.ps1` passed, and the host watcher recorded 931 samples without app focus. Fixture-specific profile
+bodies differ from Pencil and were not claimed as full-screen parity. Evidence:
+`docs/evidence/u8-header-states-2026-09-29.md` and `.tmp/verify/u8-final-port/report.md`).
 U2 · Guard merge and worktree removal while integration runs · branch `codex/u2-merged-fix` (project/run-scoped busy
 state keeps conflicting controls unavailable, the Merging button retains its width, and a merged run shows its
 historical branch with a fully visible `· deleted` suffix. Independent real-Git integration tests passed 11/11;

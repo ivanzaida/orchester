@@ -6,11 +6,12 @@
 mod support;
 
 use orchester_core::{
+  connection::stream::InvocationOutcome,
   conversation::{AgentMessage, Message, MessageBody, Recipient},
   id::{IdempotencyKey, InvocationId, TaskId},
   integration::{LeftWorktree, Leftovers, WorktreeOwner},
   resource::ModelId,
-  run::{Run, WaitReason},
+  run::{InterruptCause, Run, RunLimit, WaitReason},
   store::{ActivityStore, ConversationStore},
   time::Timestamp,
 };
@@ -79,6 +80,7 @@ fn conversation_messages_read_who_wrote_them_and_where_they_stand() {
 
   let conversation = read(&fixture, task);
   assert_eq!(conversation.state, PanelState::Live);
+  assert!(conversation.active_agent_turn);
   let states: Vec<(&Author, &EntryState)> = conversation
     .entries
     .iter()
@@ -113,6 +115,33 @@ fn conversation_messages_read_who_wrote_them_and_where_they_stand() {
   assert_eq!(conversation.participants.working, ["Builder".into()]);
   assert!(conversation.participants.available.is_empty());
   assert_eq!(conversation.next_agent, None);
+}
+
+#[test]
+fn conversation_policy_requires_a_running_agent_turn() {
+  let mut fixture = Fixture::new();
+  let task = fixture.task("Add login", at(10));
+  assert!(!read(&fixture, task).active_agent_turn);
+
+  let mut run = fixture.started_run(task, at(20));
+  assert!(!read(&fixture, task).active_agent_turn, "no CLI turn has started");
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let mut turn = fixture
+    .db
+    .start_invocation(run.id(), execution, &ModelId::new("gpt-5.5").expect("model"), at(21))
+    .expect("invocation");
+  assert!(read(&fixture, task).active_agent_turn);
+
+  let events = run.wait_step(execution, WaitReason::Approval, at(22)).expect("waits");
+  fixture.record(&run, &events);
+  let waiting = read(&fixture, task);
+  assert_eq!(waiting.state, PanelState::Waiting);
+  assert!(waiting.active_agent_turn, "the CLI still waits for approval");
+
+  turn.ended_at = Some(at(23));
+  turn.outcome = Some(InvocationOutcome::Completed);
+  fixture.db.save_invocation(&turn).expect("invocation ended");
+  assert!(!read(&fixture, task).active_agent_turn);
 }
 
 #[test]
@@ -169,6 +198,7 @@ fn conversation_what_a_message_written_now_does_follows_the_run() {
   send(&mut fixture, task, None, "Keep email sign-in.", at(11));
   let before = read(&fixture, task);
   assert_eq!(before.state, PanelState::NotStarted);
+  assert!(!before.active_agent_turn);
   assert_eq!(before.entries[0].state, EntryState::Queued(Queue::RunStarts));
   assert_eq!(before.recipients.len(), 1, "only Orchestrator before a run");
 
@@ -176,6 +206,7 @@ fn conversation_what_a_message_written_now_does_follows_the_run() {
   fixture.succeed(&mut run, at(30));
   let ready = read(&fixture, task);
   assert_eq!(ready.state, PanelState::Ready);
+  assert!(!ready.active_agent_turn);
   assert_eq!(ready.next_agent.as_deref(), Some("Builder"));
   assert!(ready.state.takes_messages());
 
@@ -188,6 +219,76 @@ fn conversation_what_a_message_written_now_does_follows_the_run() {
   assert_eq!(ended.state, PanelState::Ended);
   assert!(!ended.state.takes_messages());
   assert_eq!(ended.entries[0].state, EntryState::Queued(Queue::RunEnded));
+}
+
+#[test]
+fn conversation_suspended_runs_keep_direct_messages_queued_for_the_right_agent_turn() {
+  for state in [PanelState::Paused, PanelState::Stopped, PanelState::Interrupted] {
+    let mut fixture = Fixture::reviewed();
+    let task = fixture.task("Add login", at(10));
+    let mut run = fixture.started_run(task, at(20));
+    invocation(&mut fixture, &run, at(20));
+    let events = match state {
+      PanelState::Paused => run.pause(at(21)).expect("paused"),
+      PanelState::Stopped => run.stop_at_limit(RunLimit::Tokens, at(21)).expect("stopped"),
+      PanelState::Interrupted => run.interrupt(InterruptCause::Crashed, at(21)).expect("interrupted"),
+      _ => unreachable!("the test lists only suspended states"),
+    };
+    fixture.record(&run, &events);
+    let recipients = read(&fixture, task).recipients;
+    send_in(
+      fixture.repo.path(),
+      IdempotencyKey::generate(),
+      (task, Some(run.id())),
+      recipients[1].recipient,
+      "Please check the OAuth dialog.",
+    )
+    .expect("direct message stored");
+    send_in(
+      fixture.repo.path(),
+      IdempotencyKey::generate(),
+      (task, Some(run.id())),
+      recipients[2].recipient,
+      "Review this after implementation.",
+    )
+    .expect("later agent message stored");
+
+    let conversation = read(&fixture, task);
+    assert_eq!(conversation.state, state);
+    assert!(!conversation.active_agent_turn);
+    assert_eq!(conversation.suspended_agent.as_deref(), Some("Builder"));
+    assert_eq!(conversation.entries[0].author, Author::YouTo("Builder".into()));
+    let queue = if state == PanelState::Paused {
+      Queue::RunResumes
+    } else {
+      Queue::RunContinues
+    };
+    assert_eq!(conversation.entries[0].state, EntryState::Queued(queue));
+    assert_eq!(conversation.entries[1].author, Author::YouTo("Reviewer".into()));
+    assert_eq!(conversation.entries[1].state, EntryState::Queued(Queue::AgentNextTurn));
+  }
+}
+
+#[test]
+fn conversation_live_direct_message_to_later_agent_waits_for_its_turn() {
+  let mut fixture = Fixture::reviewed();
+  let task = fixture.task("Add login", at(10));
+  let run = fixture.started_run(task, at(20));
+  invocation(&mut fixture, &run, at(21));
+  let reviewer = read(&fixture, task).recipients[2].recipient;
+  send_in(
+    fixture.repo.path(),
+    IdempotencyKey::generate(),
+    (task, Some(run.id())),
+    reviewer,
+    "Review this after implementation.",
+  )
+  .expect("later agent message stored");
+
+  let conversation = read(&fixture, task);
+  assert_eq!(conversation.state, PanelState::Live);
+  assert_eq!(conversation.entries[0].author, Author::YouTo("Reviewer".into()));
+  assert_eq!(conversation.entries[0].state, EntryState::Queued(Queue::AgentNextTurn));
 }
 
 #[test]
