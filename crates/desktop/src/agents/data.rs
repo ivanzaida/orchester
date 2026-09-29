@@ -5,6 +5,7 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
+  agent_files::RepositoryAgentFiles,
   connection::{AgentConnection, invocation::Platform, mcp::McpServer},
   id::ResourceId,
   permission::AgentPermissions,
@@ -105,6 +106,9 @@ pub struct ProjectAgents {
   /// The build folder Project settings › Environment sets (`CARGO_TARGET_DIR`), which the
   /// Permissions tab suggests as an extra writable folder.
   pub target_dir: Option<Arc<str>>,
+  /// Whether the project's agents may load the repository's own agent files (Project settings ›
+  /// General), which the enforcement panel shows beside the profile's permissions.
+  pub agent_files: RepositoryAgentFiles,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProjectAgents {}
@@ -123,6 +127,7 @@ impl ProjectAgents {
       steps: Arc::new(step_uses(store)?),
       mcp: Arc::new(store.mcp_servers()?),
       target_dir: store.project_environment()?.get(CARGO_TARGET_DIR).map(Arc::from),
+      agent_files: store.repository_agent_files()?,
     })
   }
 

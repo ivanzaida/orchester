@@ -18,6 +18,7 @@ use orchester_desktop::{
   navigation::{
     Navigation, Places, Start, forward,
     import::{self, ImportTab},
+    repository_import,
     route::{
       AgentSelection, ChangedFile, ConnectionTab, InstructionsTab, Page, PipelineView, Route, SettingsTab, TaskPageTab,
       ToolSelection, changed_file, changes_path,
@@ -162,6 +163,8 @@ fn pages() -> Vec<Page> {
     Page::Pipeline(ResourceId::generate(), PipelineView::Compare(version(3))),
     Page::Instructions(InstructionsTab::ProjectRules, None),
     Page::Instructions(InstructionsTab::StepOverrides, Some(ResourceId::generate())),
+    Page::Skills(None),
+    Page::Skills(Some(ResourceId::generate())),
     Page::Agents(AgentSelection::First),
     Page::Agents(AgentSelection::New),
     Page::Agents(AgentSelection::Profile(ResourceId::generate())),
@@ -474,4 +477,22 @@ fn route_leaving_setup_returns_to_where_it_was_opened() {
   window.navigation.open(Route::Setup, OpenIn::Current);
   window.navigation.leave_setup();
   assert_eq!(window.path(), Route::AllProjects.path());
+}
+
+#[test]
+fn route_repository_import_opens_over_the_page_and_closes_to_it() {
+  let project = ProjectId::generate();
+  for page in [
+    Page::Skills(None),
+    Page::Instructions(InstructionsTab::AgentRoles, None),
+    Page::Settings(SettingsTab::General),
+  ] {
+    let under = Route::Project(project, page).path();
+    let over = repository_import::open(&under);
+    assert_eq!(Route::parse(&over), Some(Route::Project(project, page)), "{over}");
+    assert!(repository_import::shown(&over));
+    assert!(!repository_import::shown(&under));
+    assert_eq!(repository_import::close(&over), under);
+    assert_eq!(repository_import::open(&over), over, "one import at a time");
+  }
 }

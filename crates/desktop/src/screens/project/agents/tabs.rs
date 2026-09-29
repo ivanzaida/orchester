@@ -134,7 +134,14 @@ impl ProfileEditor {
   fn permission_summary(&self, ctx: &Ctx) -> Arc<str> {
     let enforcement = self.enforcement();
     let enforced = enforcement.as_ref().and_then(|result| result.as_ref().ok());
-    enforced_summary(ctx, &self.permissions.get(), enforced, Length::Long)
+    let summary = enforced_summary(ctx, &self.permissions.get(), enforced, Length::Long);
+    if self.context.agents.agent_files.is_on() {
+      return summary;
+    }
+    ctx.t_args(
+      "agents.permissions.enforcement.repositoryFiles.summary",
+      [("summary", &*summary)],
+    )
   }
 
   /// What blocks publishing, and what the last connection change reset.

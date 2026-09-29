@@ -74,12 +74,17 @@ pub fn tab(path: &str) -> Option<ImportTab> {
 
 /// `path` without Import resources over it.
 pub fn close(path: &str) -> String {
+  without_query(path, QUERY)
+}
+
+/// `path` without the query `name`, which a dialog over the page carries.
+pub(super) fn without_query(path: &str, name: &str) -> String {
   let Some((page, query)) = path.split_once('?') else {
     return path.to_owned();
   };
   let rest: Vec<&str> = query
     .split('&')
-    .filter(|pair| pair.split('=').next() != Some(QUERY))
+    .filter(|pair| pair.split('=').next() != Some(name))
     .collect();
   if rest.is_empty() {
     page.to_owned()

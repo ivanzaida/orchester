@@ -320,6 +320,19 @@ fn value_box_parts(
   }
 }
 
+/// A read-only identifier in mono at `height`, e.g. the name of the skill being edited (`un4ZX`
+/// in `ecJtg`).
+pub fn mono_value_box(ctx: &Ctx, id: &'static str, text: &str, height: Dimension) -> Element {
+  value_box_parts(
+    ctx,
+    id,
+    (text, ExtraTypography::MonoValue.role()),
+    ValueTone::Value,
+    Trailing::None,
+    height,
+  )
+}
+
 /// A read-only path at `height` with an icon that says what the path is, e.g. the project
 /// folder beside its own *Choose folder…* button (`xZAZc`, icon `eASPF`). A path is in mono
 /// (`ObbY7` in `xZAZc`, `F5KwDR`); the placeholder is not (`bnN26`).

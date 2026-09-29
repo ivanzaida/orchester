@@ -5,6 +5,7 @@
 pub mod bar;
 mod log;
 pub mod operations;
+pub mod skill_operations;
 
 use std::{
   sync::Arc,

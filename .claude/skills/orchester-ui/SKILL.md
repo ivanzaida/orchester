@@ -174,7 +174,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::IconEntry.role()` / `IconEvent` / `IconState` | lucide 13 / 14 / 20 | transcript entry glyph (`DQmo9`), activity event glyph (`xQYdP` in `mBkeJ`), tab state icon (`qgZru` in `hig8O`) |
 | `ExtraTypography::RuleTitle.role()` | 20/500 | title of the instruction being edited (`sjJOc` in `yRKeF`) |
 | `ExtraTypography::PromptText.role()` | mono 12, 1.8 | instruction prompt, edited and resolved (`g2Tkg`, `iJdsS`) |
-| `ExtraTypography::VariableName.role()` | mono 20/500 | variable shown in the catalog (`Z69wX` in `EfTiT`) |
+| `ExtraTypography::VariableName.role()` | mono 20/500 | variable shown in the catalog (`Z69wX` in `EfTiT`); skill being edited (`ERFw4` in `ecJtg`) |
 | `ExtraTypography::ContextNote.role()` | 9 muted | preview execution context notes (`HvDGw`, `utiRC` in `TnjFo`) |
 | `ExtraTypography::CellLabel.role()` | 11 muted, 1.5 | table cell label that wraps beside its icon (worktree state `VHSnL` in `Py65X`) |
 | `ExtraTypography::WrappingError.role()` | 11 `text`, 1.5 | field error that wraps beside its icon, e.g. why a dialog's action is unavailable (`foNvP` in `glurU`, `eeksu` in `XIEn8`); through `ui::field::wrapping_field_error` |

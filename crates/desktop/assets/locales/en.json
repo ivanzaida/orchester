@@ -126,6 +126,7 @@
     "pullRequests": "Pull requests",
     "pipelines": "Pipelines",
     "instructions": "Instructions",
+    "skills": "Skills",
     "agents": "Agents",
     "tools": "Tools",
     "secrets": "Secrets",
@@ -1557,6 +1558,15 @@
           "outsideHow": "own processes · network on",
           "noneLoad": "No MCP servers load",
           "noneLoadHow": "none can start here · user’s own ignored"
+        },
+        "repositoryFiles": {
+          "off": "Repository agent files off · enforced",
+          "on": "Repository agent files on",
+          "codexLeftOut": "project_doc_max_bytes=0 · skills off",
+          "codexLoads": "loads AGENTS.md · .agents/skills",
+          "claude": "--setting-sources \"\" · loads neither",
+          "note": "Repository agent files is set for all of {{project}} in Project settings › General, not per profile.",
+          "summary": "{{summary}} · Repository files off"
         }
       },
       "mechanism": {
@@ -2072,7 +2082,7 @@
   "settings": {
     "breadcrumb": "{{project}} / Project settings / {{tab}}",
     "title": "Project settings",
-    "description": "Name, folder and GitHub account for {{project}}.",
+    "description": "Name, folder, GitHub account and what agents read from the repository.",
     "loadFailed": "Couldn’t read the project’s settings",
     "saved": "All changes saved",
     "saving": "Saving…",
@@ -2139,6 +2149,32 @@
       "useSignedIn": "Use signed-in account ({{account}})",
       "expectedNotice": "Use signed-in account changes only what {{project}} expects",
       "expectedNoticeDetail": "It records the account gh is using now. It doesn’t sign in, switch or change gh. The next sync and pull request use it."
+    },
+    "repositoryAgentFiles": {
+      "section": "Agents and the repository",
+      "name": "Repository agent files",
+      "description": "Whether agents may read the repository’s own AGENTS.md, CLAUDE.md and skills folders besides Orchester’s instructions and skills. A change applies to agents that start after it.",
+      "on": "On · agents may read them",
+      "off": "Off · agents load none of them",
+      "found": "Found: {{items}}",
+      "skillFolders": {
+        "one": "1 skills folder",
+        "other": "{{count}} skills folders"
+      },
+      "nothingFound": "No AGENTS.md, CLAUDE.md or skills folders found",
+      "reading": "Reading the repository…",
+      "readFailed": "The repository could not be read",
+      "offReadback": "Agents get only Orchester’s instructions and skills",
+      "onPanel": "What each CLI may load from the repository",
+      "offPanel": "Not loaded while this is off",
+      "codex": "Codex",
+      "claude": "Claude Code",
+      "codexOn": "AGENTS.md · .agents/skills",
+      "claudeOn": "none · started without project settings",
+      "codexOff": "AGENTS.md and repository skills (.agents/skills)",
+      "claudeOff": "CLAUDE.md and .claude/skills",
+      "onNote": "Agents read these files as they are in the run’s worktree, so they are not versioned with the run. Claude Code is started without project settings, so it loads neither CLAUDE.md nor .claude/skills. To keep them in Orchester instead, import them as drafts and turn this off.",
+      "offNote": "Neither CLI loads these files, so everything agents know comes from Orchester’s published instructions and skills. The files stay in the worktree like any other file, and nothing in the repository changes."
     }
   },
   "time": {
@@ -3160,6 +3196,245 @@
       "create": "Create draft"
     }
   },
+  "skills": {
+    "title": "Skills",
+    "description": "Know-how agents load when a task needs it, versioned like instructions. Runs use a published version, never a draft.",
+    "editorDescription": "Know-how agents load when a task needs it. The description is what an agent reads to decide whether to load it.",
+    "breadcrumb": "{{project}}  /  Skills",
+    "editorBreadcrumb": "{{project}}  /  Skills  /  {{skill}}",
+    "new": "New skill",
+    "publish": "Publish v{{version}}",
+    "filter": {
+      "all": "All scopes",
+      "project": "Project",
+      "roles": "Agent roles",
+      "pipelines": "Pipelines & steps"
+    },
+    "library": {
+      "counts": {
+        "one": "1 skill · {{drafts}} with unpublished drafts",
+        "other": "{{count}} skills · {{drafts}} with unpublished drafts"
+      },
+      "columns": {
+        "skill": "Skill",
+        "files": "Files",
+        "version": "Version",
+        "scope": "Scope",
+        "lastPublished": "Last published"
+      },
+      "never": "Never",
+      "noDescription": "No description yet",
+      "ownership": "Skills belong to {{project}}. Agents get them from Orchester; the repository’s own skills folders are read only when Project settings › Repository agent files is on. Select a skill to open it in the editor.",
+      "loadFailed": "Skills could not be read"
+    },
+    "files": {
+      "none": "No files",
+      "one": "1 file",
+      "other": "{{count}} files",
+      "title": "Reference files",
+      "explanation": "Published with the skill. The agent opens them when the body points to them.",
+      "add": "Add file",
+      "pick": "Choose a reference file",
+      "metadata": "{{kind}} · {{size}}",
+      "kind": {
+        "markdown": "Markdown",
+        "text": "Text",
+        "script": "Script",
+        "file": "File"
+      },
+      "errors": {
+        "name": "{{name}} cannot name a reference file: rename it without \\ : * ? \" < > | or a trailing dot",
+        "read": "{{name}} could not be read",
+        "duplicate": "Two reference files are called {{name}}: remove one"
+      }
+    },
+    "version": {
+      "published": "Published v{{version}}",
+      "draftSaved": "v{{published}} · Draft v{{version}} saved",
+      "draftOnly": "Draft v{{version}} · not published",
+      "stale": "Draft of v{{basedOn}} · v{{version}} published since",
+      "short": {
+        "published": "v{{version}}",
+        "draftOf": "v{{published}} · Draft v{{version}}",
+        "draft": "Draft v{{version}}"
+      }
+    },
+    "scope": {
+      "project": "Project",
+      "role": "Role · {{role}}",
+      "pipeline": "Pipeline · {{pipeline}}",
+      "step": "Step · {{step}}",
+      "pipelineStep": "Step · {{pipeline}} / {{step}}",
+      "removed": "Removed"
+    },
+    "kind": {
+      "project": "Project",
+      "role": "Role",
+      "pipeline": "Pipeline",
+      "step": "Step"
+    },
+    "state": {
+      "draft": "{{kind}} skill · Draft v{{version}}",
+      "published": "{{kind}} skill · Published v{{version}}"
+    },
+    "status": {
+      "saving": "Saving draft…",
+      "notSaved": "Not saved · fix the marked fields",
+      "draftSaved": "Draft saved · Published v{{version}}",
+      "draftNeverPublished": "Draft saved · Not published",
+      "published": "Published v{{version}}",
+      "staleDraft": "Draft based on v{{basedOn}} · v{{version}} was published since"
+    },
+    "tabs": {
+      "all": "All skills",
+      "project": "Project",
+      "roles": "Agent roles",
+      "pipelines": "Pipelines & steps"
+    },
+    "list": {
+      "label": "SKILLS",
+      "metadata": "{{version}} · {{scope}}",
+      "storage": "Owned by {{project}}.\nVersioned with every run."
+    },
+    "editor": {
+      "name": "Name",
+      "scope": "Scope",
+      "description": "Description · what an agent reads to decide whether to load it",
+      "descriptionPlaceholder": "When an agent should load this skill",
+      "body": "Body",
+      "bodyFormat": "Markdown · {{file}}",
+      "bodyPlaceholder": "What an agent should know or do, in Markdown",
+      "publishEffect": "Publishing applies to new runs. Active runs keep v{{version}}.",
+      "publishEffectFirst": "Publishing makes v1, which new runs load."
+    },
+    "loadedFor": {
+      "heading": "LOADED FOR",
+      "project": "Project",
+      "everyAgent": "Every agent",
+      "role": "Role",
+      "pipeline": "Pipeline",
+      "step": "Step"
+    },
+    "origin": {
+      "from": "Imported from",
+      "on": "Imported on",
+      "onValue": "{{date}} · as draft v1",
+      "note": "Editing here never changes {{source}} in the repository, and later changes there do not reach this skill."
+    },
+    "versions": {
+      "title": "How skills reach agents",
+      "scopeTitle": "Scope decides who gets it",
+      "scopeDetail": "Project: every agent. Role: agents of that profile. Pipeline or step: only agents working there.",
+      "publishTitle": "Publish vN",
+      "publishDetail": "Publishing turns the draft into the next version. New runs load it; a draft never reaches an agent.",
+      "keepTitle": "Runs keep their version",
+      "keepDetail": "A run keeps the skill versions it started with, even after a newer one is published.",
+      "hint": "Import from repository turns AGENTS.md, CLAUDE.md and skills folders into drafts. It changes no repository file.",
+      "hintEmpty": "The repository’s own skills folders are read by agents only when Project settings › Repository agent files is on."
+    },
+    "empty": {
+      "title": "No skills in {{project}} yet",
+      "description": "A skill is know-how an agent loads when a task needs it: a name and a description it is chosen by, a Markdown body and reference files. Write one, or import what this repository already gives its agents.",
+      "found": "Found in this repository",
+      "foundCount": {
+        "one": "1 item",
+        "other": "{{count}} items"
+      },
+      "becomesInstruction": "becomes a draft project instruction",
+      "becomesSkill": "becomes draft skill {{name}}",
+      "becomesSkillWithFiles": "becomes draft skill {{name}} · {{files}}",
+      "foundResult": "Import from repository shows each item with a preview and lets you choose. It creates drafts only: nothing is published and no file in the repository changes."
+    },
+    "create": {
+      "title": "New skill",
+      "explanation": "The skill starts as an empty draft for all of {{project}}. Write its description and body in the editor, then publish it.",
+      "name": "Name",
+      "namePlaceholder": "e.g. run-checks",
+      "create": "Create draft"
+    },
+    "errors": {
+      "blankDescription": "Write a description first: agents choose a skill by it",
+      "blankBody": "Write the body first: it is what an agent loads"
+    },
+    "import": {
+      "action": "Import from repository",
+      "title": "Import from repository",
+      "explanation": "Found in {{folder}}. Choose what becomes a draft in Orchester; open an item to see what it will contain.",
+      "groups": {
+        "instructions": "INSTRUCTIONS · EACH BECOMES A DRAFT PROJECT INSTRUCTION",
+        "skills": "SKILLS · EACH BECOMES A DRAFT SKILL"
+      },
+      "kind": {
+        "instruction": "Instruction",
+        "skill": "Skill"
+      },
+      "becomesInstruction": {
+        "one": "Draft project instruction “{{name}}” · 1 line",
+        "other": "Draft project instruction “{{name}}” · {{lines}} lines"
+      },
+      "becomesSkill": "Draft skill {{name}} · SKILL.md",
+      "becomesSkillWithFiles": "Draft skill {{name}} · SKILL.md and {{files}}",
+      "reason": {
+        "onlyImports": "Only points to {{targets}} ({{imports}}) · nothing to import",
+        "empty": "Empty · nothing to import",
+        "notText": "Not text · nothing to import",
+        "noSkillFile": "No SKILL.md · nothing to import",
+        "unsupportedFiles": "{{paths}} cannot be kept in a skill · not imported"
+      },
+      "preview": {
+        "title": "Preview",
+        "becomes": "Becomes",
+        "instruction": "Draft project instruction {{name}} · v1",
+        "skill": "Draft skill {{name}} · v1",
+        "scope": "Scope",
+        "scopeValue": "Project · change it in the editor",
+        "description": "Description",
+        "files": "Reference files",
+        "none": "None"
+      },
+      "notice": "Creates drafts only: nothing is published and no repository file changes",
+      "noticeDetail": "You review and publish each draft yourself. Agents read the repository’s own AGENTS.md, CLAUDE.md and skills only while Project settings › Repository agent files is on.",
+      "selected": "{{selected}} of {{total}} selected · {{instructions}}, {{skills}}",
+      "instructions": {
+        "one": "1 instruction",
+        "other": "{{count}} instructions"
+      },
+      "skills": {
+        "one": "1 skill",
+        "other": "{{count}} skills"
+      },
+      "create": {
+        "one": "Create 1 draft",
+        "other": "Create {{count}} drafts"
+      },
+      "createFailed": "The drafts could not be created; nothing was imported. Try again.",
+      "reading": "Reading the repository…",
+      "readingDetail": "Looking for AGENTS.md, CLAUDE.md, .claude/skills and .agents/skills.",
+      "readFailed": "{{folder}} could not be read.",
+      "readFailedTitle": "The repository could not be read",
+      "nothingTitle": "Nothing to import",
+      "nothingDetail": "This repository has no AGENTS.md, CLAUDE.md, .claude/skills or .agents/skills.",
+      "result": {
+        "title": {
+          "one": "1 draft created",
+          "other": "{{count}} drafts created"
+        },
+        "explanation": "Nothing is published and no repository file changed. No agent gets a draft: review each one and publish it when it is ready.",
+        "instruction": "Draft project instruction v1",
+        "skill": "Draft skill v1",
+        "skillWithFiles": "Draft skill v1 · {{files}}",
+        "notImported": "NOT IMPORTED",
+        "notSelected": "{{source}} was not selected.",
+        "onlyImports": "{{source}} only points to {{targets}}.",
+        "empty": "{{source}} is empty.",
+        "notText": "{{source}} is not text.",
+        "noSkillFile": "{{source}} has no SKILL.md.",
+        "unsupportedFiles": "{{source}} has files a skill cannot keep: {{paths}}.",
+        "openInstructions": "Open Instructions",
+        "reviewSkills": "Review skills"
+      }
+    }
+  },
   "statusBar": {
     "runner": {
       "starting": "Starting runner…",
@@ -3434,6 +3709,36 @@
         "running": "Turning off MCP server {{name}}",
         "done": "MCP server turned off · {{name}}",
         "failed": "Could not turn off MCP server {{name}}"
+      },
+      "skillDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "skillPublish": {
+        "running": "Publishing {{name}} v{{version}}",
+        "done": "Published {{name}} v{{version}}",
+        "failed": "Could not publish {{name}} v{{version}}"
+      },
+      "skillCreate": {
+        "running": "Creating skill {{name}}",
+        "done": "Skill created · {{name}}",
+        "failed": "Could not create skill {{name}}"
+      },
+      "skillFileAdd": {
+        "running": "Adding a reference file · {{name}}",
+        "done": "Reference file added · {{name}}",
+        "failed": "Could not add a reference file · {{name}}"
+      },
+      "repositoryImport": {
+        "running": "Creating {{count}} drafts from the repository",
+        "done": "Created {{count}} drafts from the repository",
+        "failed": "Could not create drafts from the repository"
+      },
+      "agentFiles": {
+        "running": "Saving repository agent files",
+        "done": "Repository agent files saved",
+        "failed": "Could not save repository agent files"
       }
     },
     "opens": {
@@ -3447,6 +3752,7 @@
       "settings": "opens Project settings",
       "pullRequests": "opens Pull requests",
       "instruction": "opens the instruction",
+      "skill": "opens the skill",
       "task": "opens the task",
       "secrets": "opens Secrets"
     },
@@ -3460,6 +3766,7 @@
       "settings": "Open settings",
       "pullRequests": "Open pull requests",
       "instruction": "Open instruction",
+      "skill": "Open skill",
       "task": "Open task",
       "secrets": "Open secrets"
     }

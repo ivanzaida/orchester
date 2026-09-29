@@ -108,6 +108,7 @@ fn seed_runs(repo: &Path) {
     profiles: &profiles,
     tools: &tools,
     instructions: &instructions,
+    skills: &std::collections::BTreeMap::new(),
   };
   let snapshot = RunSnapshot::build(pipeline, &version, published).expect("snapshot");
   for (number, checkpoint) in [(1, Some(revision('b'))), (2, None)] {

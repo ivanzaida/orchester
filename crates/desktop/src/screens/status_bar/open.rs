@@ -85,6 +85,7 @@ impl Opener {
       Place::Pipeline(id) => Page::Pipeline(id, PipelineView::Draft),
       // The instructions screen moves to the tab of the instruction's scope.
       Place::Instruction(id) => Page::Instructions(InstructionsTab::ProjectRules, Some(id)),
+      Place::Skill(id) => Page::Skills(Some(id)),
       Place::AgentProfile(id) => Page::Agents(AgentSelection::Profile(id)),
       Place::Task(id) => Page::task(id),
       Place::TaskConversation(id) => Page::Task(id, TaskPageTab::Conversation),

@@ -18,7 +18,11 @@ use orchester_core::{
   repository::RepositoryLink,
 };
 
-use super::{Actions, SettingsScreen, work::SettingsWork};
+use super::{
+  Actions, SettingsScreen,
+  agent_files::{AgentFilesProps, AgentFilesSection},
+  work::SettingsWork,
+};
 use crate::{
   connections::data::ProjectConnections,
   display,
@@ -57,7 +61,13 @@ struct General<'a> {
 }
 
 impl SettingsScreen {
-  pub(super) fn general(&self, ctx: &Ctx, open: &OpenProject, data: &ProjectConnections, actions: &Actions) -> Element {
+  pub(super) fn general(
+    &self,
+    ctx: &mut Ctx,
+    open: &OpenProject,
+    data: &ProjectConnections,
+    actions: &Actions,
+  ) -> Element {
     let link = data.link.as_deref();
     let busy = actions.detect.state().get().is_pending() || actions.work.state().get().is_pending();
     let check = (!busy).then(|| {
@@ -104,9 +114,16 @@ impl SettingsScreen {
         .id("settings-expected-notice"),
       );
     }
+    let agent_files = ctx.mount_keyed::<AgentFilesSection>(
+      "settings-agent-files",
+      AgentFilesProps {
+        open: open.clone(),
+        status: self.general_status.clone(),
+      },
+    );
     form(
       None,
-      ScrollVertical::new(content)
+      ScrollVertical::new(content.child(agent_files))
         .with_scroll_state(self.scroll.clone())
         .id("settings-general")
         .width(Dimension::Pct(100.0))

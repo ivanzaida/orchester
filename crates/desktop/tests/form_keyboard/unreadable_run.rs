@@ -81,6 +81,7 @@ pub(crate) fn delivery(db: &mut ProjectDb) -> RunSnapshot {
     profiles: &profiles,
     tools: &tools,
     instructions: &instructions,
+    skills: &std::collections::BTreeMap::new(),
   };
   RunSnapshot::build(delivery, &version, published).expect("snapshot")
 }

@@ -71,6 +71,8 @@ pub fn store_error(error: &StoreError) -> Message {
       Message::new("pipelines.problems.notPublishable")
     }
     StoreError::Publish(PublishError::BlankInstruction) => Message::new("instructions.errors.blankText"),
+    StoreError::Publish(PublishError::BlankSkillDescription) => Message::new("skills.errors.blankDescription"),
+    StoreError::Publish(PublishError::BlankSkillBody) => Message::new("skills.errors.blankBody"),
     StoreError::Publish(PublishError::ConnectionMissing) => {
       Message::new("agents.permissions.publish.connectionMissing")
     }

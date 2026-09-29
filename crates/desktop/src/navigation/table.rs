@@ -55,6 +55,7 @@ fn project_pages(routes: Routes) -> Routes {
     .layout("/instructions", project::page, |routes| {
       selection(routes, "/:instruction")
     })
+    .layout("/skills", project::page, |routes| selection(routes, "/:skill"))
     .layout("/agents", project::page, |routes| {
       selection(routes, "/:profile").route("/new", |_ctx| Element::new())
     })

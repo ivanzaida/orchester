@@ -12,20 +12,20 @@ use super::log::{OperationSpec, Place, Target};
 use crate::{agents::data::ProfileChange, messages::Message, tools::data::ToolChange, workspace::OpenProject};
 
 /// Copy keys of one operation: while it runs, once it finished, and its failure heading.
-struct Wording {
-  running: &'static str,
-  done: &'static str,
-  failed: &'static str,
+pub(super) struct Wording {
+  pub(super) running: &'static str,
+  pub(super) done: &'static str,
+  pub(super) failed: &'static str,
 }
 
 impl Wording {
   /// The operation on the object called `name`.
-  fn named(&self, name: &str) -> OperationSpec {
+  pub(super) fn named(&self, name: &str) -> OperationSpec {
     let message = |key| Message::new(key).with("name", name.to_owned());
     OperationSpec::new(message(self.running), message(self.done), message(self.failed))
   }
 
-  fn unnamed(&self) -> OperationSpec {
+  pub(super) fn unnamed(&self) -> OperationSpec {
     OperationSpec::new(
       Message::new(self.running),
       Message::new(self.done),
@@ -34,7 +34,7 @@ impl Wording {
   }
 }
 
-fn in_project(open: &OpenProject, place: Place) -> Target {
+pub(super) fn in_project(open: &OpenProject, place: Place) -> Target {
   Target::Project {
     repo_root: open.repo_root.clone(),
     place,

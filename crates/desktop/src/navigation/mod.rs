@@ -5,6 +5,7 @@
 pub(crate) mod entry;
 mod history;
 pub mod import;
+pub mod repository_import;
 pub mod route;
 mod table;
 

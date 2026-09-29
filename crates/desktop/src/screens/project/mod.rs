@@ -17,11 +17,13 @@ mod page;
 mod pages;
 mod pipelines;
 mod pull_requests;
+mod repository_import;
 mod runner;
 mod runner_card;
 mod secrets;
 mod settings;
 mod sidebar;
+mod skills;
 mod switcher;
 mod task;
 mod task_rows;
@@ -48,6 +50,7 @@ use crate::{
   navigation::{
     Navigation, PROJECT_PARAM, entry,
     import::{self as import_query, ImportTab},
+    repository_import as repository_query,
     route::{self, ChangedFile, Page, Route},
   },
   runner::{RunnerStatus, Runners, state::RunnerState},
@@ -168,6 +171,34 @@ impl ProjectNav {
     } else {
       entry::replace(&self.navigator, under);
     }
+  }
+
+  /// Opens Import from repository over the page shown.
+  pub fn show_repository_import(&self) {
+    let path = self.navigator.path().get_untracked();
+    entry::push(&self.navigator, repository_query::open(&path));
+  }
+
+  /// Whether Import from repository is open over the page shown.
+  pub fn repository_import_shown(&self) -> bool {
+    repository_query::shown(&self.navigator.path().get_untracked())
+  }
+
+  /// Closes Import from repository, as [`Self::close_import`] closes Import resources.
+  pub fn close_repository_import(&self) {
+    let under = repository_query::close(&self.navigator.path().get_untracked());
+    let from = entry::from(&self.navigator);
+    if from.is_some() && from == Route::parse(&under) {
+      self.navigator.back();
+    } else {
+      entry::replace(&self.navigator, under);
+    }
+  }
+
+  /// Leaves Import from repository for `page`, in its place: the dialog's entry is not visited
+  /// again.
+  pub fn leave_repository_import(&self, page: Page) {
+    entry::replace(&self.navigator, page.path(self.project));
   }
 
   /// Opens Connections with Add GitHub connection open, e.g. for a remote on an Enterprise host.
@@ -339,5 +370,6 @@ impl Component for ProjectShell {
       )
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
       .child(import::dialog(ctx, &open))
+      .child(repository_import::dialog(ctx, &open))
   }
 }

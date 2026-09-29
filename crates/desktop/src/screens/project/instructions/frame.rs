@@ -1,6 +1,6 @@
 //! The Instructions page around the library and the editor (`CWoy4` in `yRKeF`): the topbar
-//! (`wuKkf`) with the save state and Publish, the page heading (`fRdKl`) and the scope tabs
-//! (`GfEHL`).
+//! (`wuKkf`) with Import from repository (ORC-15 `DO46L`), the save state and Publish, the page
+//! heading (`fRdKl`) and the scope tabs (`GfEHL`).
 
 use lurq::{
   app::{
@@ -12,11 +12,15 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 
-use super::super::ProjectNav;
+use super::super::{ProjectNav, page::TOPBAR_BUTTON_HEIGHT};
 use crate::{
   navigation::route::{InstructionsTab, Page},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::tab::{Tab, tab_row},
+  ui::{
+    button::ActionButton,
+    icon::Icon,
+    tab::{Tab, tab_row},
+  },
   workspace::OpenProject,
 };
 
@@ -52,6 +56,7 @@ pub fn frame(ctx: &Ctx, frame: Frame<'_>) -> Element {
         .nowrap(),
     )
     .child(Spacer::new().flex(1.0))
+    .child(import_button(ctx, frame.nav))
     .with_children(frame.trailing);
   let heading = Column::new()
     .width(Dimension::Pct(100.0))
@@ -79,6 +84,18 @@ pub fn frame(ctx: &Ctx, frame: Frame<'_>) -> Element {
         .child(frame.body),
     )
     .into()
+}
+
+/// Import from repository (`j6JMzL` in `DO46L`): the repository's `AGENTS.md` and `CLAUDE.md` as
+/// draft instructions.
+fn import_button(ctx: &Ctx, nav: &ProjectNav) -> Element {
+  let nav = nav.clone();
+  ActionButton::new(ctx.t("skills.import.action"))
+    .icon(Icon::FolderInput)
+    .id("instructions-import-repository")
+    .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
+    .on_click(move || nav.show_repository_import())
+    .render(ctx)
 }
 
 /// Project rules, Agent roles, Pipeline overrides, Step overrides (`GfEHL`).

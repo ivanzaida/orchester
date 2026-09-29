@@ -24,6 +24,7 @@ pub enum Place {
   PullRequests,
   Pipeline(ResourceId),
   Instruction(ResourceId),
+  Skill(ResourceId),
   /// A task's page: its latest run.
   Task(TaskId),
   /// A task's conversation.
