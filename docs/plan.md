@@ -22,6 +22,7 @@ then the backlog by area.
 
 | Task | Branch | Verified progress and next gate |
 | --- | --- | --- |
+| M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | L6 | `codex/verifier-no-focus` | lurq 0.30.3 candidate and no-focus app checks pass; release approval is pending. |
 | D4 | `codex/d4-focus-watch` | Disposable run #5 built and pinned its candidate, but Verify failed before app MCP discovery or image capture. Diagnose the early exits, rerun independent Verify, and release L6. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
@@ -32,7 +33,7 @@ then the backlog by area.
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; exact Not started, Interrupted and recipient-menu Pencil frames are missing. |
 | D5 | `codex/d5-free-space` | Independent Windows tests, code review, `check.ps1`, and the macOS `fs4` dependency check pass. Full runner macOS cross-check needs an SDK or Mac; exact Pencil error frames and an app/design comparison are missing. |
 
-M1 evidence and parser tests are on `master`; Claude's MCP allow rule still needs a signed-in model turn.
+M1's Codex evidence and parser tests are on `master`; Claude's MCP allow rule still needs a signed-in model turn.
 
 ## D · Developing Orchester inside Orchester
 
@@ -128,7 +129,9 @@ confirmed or fixed, with the observed CLI output saved as a fixture and parser t
 in the server but absent from an agent shell command, and an unnamed stderr warning for a failed server while the turn
 completes. One initial unannotated call was cancelled; two later unannotated calls succeeded, so the cause is unknown.
 Claude 2.1.89 listed `mcp__m1probe__ping` with the allow rule but stopped at `authentication_failed` before a model turn.
-Keep M1 open until that rule is checked in a signed-in Claude run. Evidence: `docs/evidence/mcp-real-run-2026-09-29.md`.
+A 2026-09-29 follow-up `auth status --json` returned exit 1 and `loggedIn: false`, so no new model turn was attempted.
+M1 remains in progress until that rule is checked in a signed-in Claude run. Evidence:
+`docs/evidence/mcp-real-run-2026-09-29.md`.
 
 ### M3 · Secrets "Used by" lists MCP servers (UI)
 

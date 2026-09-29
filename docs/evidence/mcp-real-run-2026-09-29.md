@@ -47,3 +47,10 @@ test secret values never enter prompts, fixture text or MCP output.
 - No full test suite or macOS runtime was run.
 
 M1 remains open because Claude's `mcp__<name>` allow rule has not been exercised in a signed-in model turn.
+
+## Claude authentication follow-up · 2026-09-29
+
+In the isolated `codex/m1-claude-mcp` worktree, Claude Code 2.1.89 `claude auth status --json` returned exit code 1
+and `loggedIn: false`. The raw authentication output was neither printed nor saved; only sanitized status fields were
+surfaced. No model turn was attempted without a signed-in session. The `mcp__<name>` allow rule remains unverified,
+and M1 stays in progress.
