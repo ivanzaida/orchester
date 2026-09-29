@@ -23,6 +23,7 @@ mod retry_limit;
 mod run_again;
 mod summary;
 mod tab_state;
+mod tool_approval;
 mod unreadable;
 mod worktree;
 
@@ -49,6 +50,7 @@ use orchester_core::{
   run::{RunStatus, TaskPhase},
   task::TaskStatus,
 };
+pub(super) use tool_approval::modal as tool_approval_modal;
 
 use self::{
   activity::{ActivityProps, ActivityTab},

@@ -7,7 +7,7 @@ use orchester_core::{
   conversation::{Message, latest_question},
   id::{IdempotencyKey, ResourceId, TaskId},
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
-  run::{Run, RunEvent, StepExecutor},
+  run::{PendingToolApproval, Run, RunEvent, StepExecutor},
   store::{ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
   time::Timestamp,
@@ -48,6 +48,8 @@ pub struct PipelineChoice {
 pub struct ProjectTasks {
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  /// Tool requests awaiting a decision anywhere in this project, oldest first.
+  pub pending_tool_approvals: Arc<Vec<PendingToolApproval>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
   /// Runs started in the project, of every task, that can be read.
@@ -78,6 +80,7 @@ impl ProjectTasks {
     Ok(Self {
       tasks: Arc::new(tasks),
       pipelines: Arc::new(published_pipelines(&db)?),
+      pending_tool_approvals: Arc::new(db.pending_tool_approvals_all()?),
       phases: Arc::new(phases),
       runs: count,
       lost_to_runner: 0,

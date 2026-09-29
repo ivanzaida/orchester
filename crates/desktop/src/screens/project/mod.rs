@@ -350,6 +350,10 @@ impl Component for ProjectShell {
     let status = feed.status.get().unwrap_or_else(RunnerStatus::none);
     let runner = status.state_for(&open.repo_root);
     let tasks = feed.tasks.get().without_runner(runner == RunnerState::Online);
+    let pending = tasks
+      .ready()
+      .map(|tasks| tasks.pending_tool_approvals.as_slice())
+      .unwrap_or_default();
     let usage = feed.usage.get();
     let page = Route::current_page(ctx);
     ctx.provide(Shown {
@@ -398,5 +402,6 @@ impl Component for ProjectShell {
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
       .child(import::dialog(ctx, &open))
       .child(repository_import::dialog(ctx, &open))
+      .with_children(task::tool_approval_modal(ctx, pending))
   }
 }

@@ -400,6 +400,10 @@ impl Session {
         reporter.run_changed();
         true
       }
+      Some(Ok(Some(Event::ToolApprovalChanged { .. }))) => {
+        reporter.run_changed();
+        true
+      }
       Some(Ok(Some(Event::AgentActivity { .. }))) => {
         reporter.transcript_grew();
         true

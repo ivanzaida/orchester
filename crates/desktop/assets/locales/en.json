@@ -919,6 +919,20 @@
         "notAwaited": "This plan no longer waits for a decision. The page shows where the run stands now."
       }
     },
+    "toolApproval": {
+      "title": "Approve tool action?",
+      "explanation": "{{agent}} requests {{action}} from the {{server}} MCP server. Review the target before deciding. Approve once applies only to this request; Deny fails this step.",
+      "agent": "Agent",
+      "server": "MCP server",
+      "action": "Action",
+      "target": "Target",
+      "remaining": "Additional requests waiting: {{count}}",
+      "deny": "Deny",
+      "denying": "Denying…",
+      "approveOnce": "Approve once",
+      "approving": "Approving…",
+      "notAwaited": "This tool action no longer waits for a decision."
+    },
     "ready": {
       "status": "Ready for review",
       "meta": "Run #{{run}}  ·  {{pipeline}}  ·  Finished at {{time}}",
