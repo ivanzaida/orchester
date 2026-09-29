@@ -7,8 +7,10 @@
 use std::{path::PathBuf, time::Duration};
 
 use orchester_core::{
-  connection::app_server::{PendingApproval, Update},
-  connection::stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker},
+  connection::{
+    app_server::{PendingApproval, Update},
+    stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker},
+  },
   id::{StepExecutionId, TaskId},
   run::{Invocation, PendingToolApproval, RunLimit, ToolApprovalDecision},
   store::ActivityStore,
@@ -480,7 +482,7 @@ impl Worker {
         self.app_server.as_ref().is_some_and(AppServerSession::complete),
       ) {
         (_, false, true) => watch.tracker.outcome(Some(0)),
-        (ProcessExit::Terminated, _, _) | (_, true, _) => InvocationOutcome::Terminated,
+        (ProcessExit::Terminated, ..) | (_, true, _) => InvocationOutcome::Terminated,
         (ProcessExit::Exited { code }, false, _) => watch.tracker.outcome(*code),
         (ProcessExit::WaitFailed { .. }, false, _) => InvocationOutcome::ExitFailed { code: None },
       }

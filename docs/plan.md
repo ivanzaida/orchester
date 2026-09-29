@@ -43,13 +43,12 @@ limit excludes time waiting for the person. Independent tests must exercise appr
 disposable Pencil document, run affected filtered tests and `tools/check.ps1`, and compare any new UI with
 the Pencil frame.
 
-**Milestone 2026-09-29:** the runner's opt-in App Server transport, isolated per-project Codex
-home, fail-closed MCP inventory check, per-request decision routing, durable pending records and
+**Milestone 2026-09-29:** the runner's opt-in App Server transport, inherited normal Codex profile,
+connected project MCP check, per-request decision routing, durable pending records and
 interruption handling compile. Named parser and storage tests pass, including concurrent-call
 rejection, interrupted delivery, and a project-wide pending-request query. The project-wide approval UI
-is being integrated with the runner. The login path is documented in
-`docs/interactive-tool-approvals.md`. The isolated home is not signed in, so the actual request
-method from Pencil `batch_design` remains unverified.
+is being integrated with the runner. The ordinary Codex account and global MCP servers remain
+available. The actual request method from Pencil `batch_design` remains unverified.
 Live approve and deny against a disposable active Pencil document, independent design
 verification and the final check are still pending.
 

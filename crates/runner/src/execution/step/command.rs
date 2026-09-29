@@ -10,8 +10,10 @@
 //! folder that does not exist. The skills that reach the agent are placed and listed in its prompt, and the
 //! project's repository agent files setting is read at each start ([`super::skills`]).
 
-use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::{
+  collections::BTreeSet,
+  path::{Path, PathBuf},
+};
 
 use orchester_core::{
   command::Command,
@@ -35,7 +37,6 @@ use super::{
   super::run::RunTask,
   Continuation,
   app_server::AppServerSetup,
-  approval_home,
   mcp::{McpServers, McpSetup},
   skills::{PlacedSkills, repository_skills},
 };
@@ -182,8 +183,6 @@ impl RunTask {
     let McpSetup::Codex(mcp) = setup else {
       return Err(problem("interactive tool approvals require Codex".to_owned()));
     };
-    let home = approval_home::for_project(self.project.id())
-      .map_err(|error| problem(format!("cannot prepare isolated Codex approval home: {error}")))?;
     let expected_servers = mcp.servers().iter().map(ToString::to_string).collect::<BTreeSet<_>>();
     let invocation = CodexInvocation {
       executable: cli.connection.executable(),
@@ -202,7 +201,7 @@ impl RunTask {
         .map_or(CodexAgentFiles::Loaded, |skills| CodexAgentFiles::LeftOut { skills }),
     };
     let command = invocation
-      .app_server_command(&home, std::env::vars_os(), cli.environment)
+      .app_server_command(std::env::vars_os(), cli.environment)
       .map_err(|error| problem(error.to_string()))?;
     let schema = (cli.resume.is_none()).then(|| {
       serde_json::from_str(orchester_core::run::STEP_RESULT_SCHEMA)
@@ -221,7 +220,6 @@ impl RunTask {
         resume: cli.resume.map(str::to_owned),
         expected_servers,
         output_schema: schema,
-        home,
       },
     ))
   }

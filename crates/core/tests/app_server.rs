@@ -8,10 +8,12 @@ use orchester_core::{
 use serde_json::{Value, json};
 
 fn approval(updates: Vec<Update>) -> orchester_core::connection::app_server::PendingApproval {
-  let [Update::Approval(request)] = updates.as_slice() else {
+  let mut updates = updates.into_iter();
+  let Some(Update::Approval(request)) = updates.next() else {
     panic!("one approval request expected");
   };
-  request.clone()
+  assert!(updates.next().is_none(), "one approval request expected");
+  request
 }
 
 #[test]

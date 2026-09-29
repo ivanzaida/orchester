@@ -6,7 +6,6 @@ use orchester_core::{
   run::{BranchName, NewRun, PendingToolApproval, ToolApprovalDecision},
   store::{ActivityStore, RunStore},
 };
-
 use support::{at, budget, model, started_run};
 
 #[test]
@@ -63,7 +62,7 @@ fn project_pending_requests_span_runs_in_request_time_order() {
   );
   assert_eq!(
     db.pending_tool_approvals(first.id()).expect("first only"),
-    [first_request.clone()]
+    std::slice::from_ref(&first_request)
   );
   assert!(
     db.interrupt_tool_approvals(second.id(), second_invocation.id)
@@ -92,7 +91,7 @@ fn one_tool_request_is_decided_once_and_no_longer_pending() {
   db.request_tool_approval(&approval).expect("request");
   assert_eq!(
     db.pending_tool_approvals(run.id()).expect("pending"),
-    [approval.clone()]
+    std::slice::from_ref(&approval)
   );
   assert!(
     db.claim_tool_approval(run.id(), &approval.id, true, at(12))

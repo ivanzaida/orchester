@@ -17,8 +17,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::AgentProvider,
-  connection::invocation::Platform,
+  connection::{AgentProvider, invocation::Platform},
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess, StepCommands,
     StepNetwork, StepPermissions,

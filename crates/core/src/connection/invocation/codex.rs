@@ -96,18 +96,13 @@ pub enum CodexAgentFiles<'a> {
 }
 
 impl CodexInvocation<'_> {
-  /// Starts a bidirectional App Server with a separate Codex home so global MCP servers,
-  /// plugins, and rules cannot enter this step. The home has its own explicit CLI login.
+  /// Starts a bidirectional App Server with the normal Codex profile and its configured MCP servers.
   pub fn app_server_command(
     &self,
-    home: &Path,
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
     unicode_folders(self.writable_roots)?;
-    let home = home
-      .to_str()
-      .ok_or_else(|| InvocationError::NotUnicode(home.to_path_buf()))?;
     let mut args = vec!["app-server".to_owned(), "--stdio".to_owned()];
     if self.access == RepositoryAccess::Write && self.platform == Platform::Windows {
       args.extend(["-c".to_owned(), "windows.sandbox=elevated".to_owned()]);
@@ -144,8 +139,6 @@ impl CodexInvocation<'_> {
     }
     let mut variables = agent_environment(environment);
     project.add_to(&mut variables);
-    variables.retain(|(name, _)| !name.eq_ignore_ascii_case("CODEX_HOME"));
-    variables.push(("CODEX_HOME".to_owned(), home.to_owned()));
     let command = Command::new(self.executable, args)
       .with_current_dir(self.worktree)
       .with_environment(variables)

@@ -15,34 +15,16 @@ Codex 0.159 schema names that request `item/tool/requestUserInput`; the document
 it `tool/requestUserInput`. Orchester accepts either spelling only when it identifies one active
 MCP call and has a blocking, non-secret, single-choice approval question. It also accepts a
 `mcpServer/elicitation/request` only for an empty confirmation form correlated to exactly one
-active MCP call. Other requests fail the step. The isolated Codex home is not yet signed in, so
-which request Pencil `batch_design` sends, and whether its write completes after approval, still
-need a live test with a disposable active Pencil document.
+active MCP call. Other requests fail the step. Which request Pencil `batch_design` sends, and
+whether its write completes after approval, still need a live test with a disposable active Pencil
+document.
 
-## One-time Codex login
+## Codex profile
 
-Codex App Server cannot ignore the normal user's MCP configuration as `codex exec` does. Orchester
-therefore gives each project a separate Codex home. It begins empty and signed out. The first
-interactive step stops with a `Not signed in` event containing the exact login command for that
-project. Run that command in a terminal and retry the step. Orchester never copies an existing
-Codex token or signs in on the user's behalf.
-
-On Windows, the command shown by the step has this form in PowerShell:
-
-```powershell
-$env:CODEX_HOME = 'C:\Users\<user>\AppData\Local\OrchesterApprovalHomes\<project-id>'; codex login
-```
-
-On macOS, it has this form:
-
-```sh
-CODEX_HOME="$HOME/Library/Application Support/OrchesterApprovalHomes/<project-id>" codex login
-```
-
-The path in the step's event is authoritative. Orchester verifies that the App Server's active MCP
-inventory contains exactly the servers selected by the agent profile before starting the turn. If
-the isolated home has extra MCP servers, the step fails with a configuration error; remove those
-servers from that home before retrying.
+Interactive steps inherit the user's normal Codex account and configured global MCP servers.
+Orchester adds the project-selected MCP servers and checks that each selected server is connected
+before starting the turn. Other global servers remain available. If Codex is signed out, the step
+reports a clear `Not signed in` failure; Orchester does not start a separate login flow.
 
 ## Interrupted decisions
 

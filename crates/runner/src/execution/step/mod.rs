@@ -4,7 +4,6 @@
 //! or the step's earlier session continued — handed to a [`worker::Worker`] of its own.
 
 mod app_server;
-mod approval_home;
 mod command;
 mod end;
 mod mcp;
@@ -24,8 +23,10 @@ use orchester_core::{
 use orchester_ipc::Event;
 use tokio::sync::mpsc;
 
-use self::app_server::AppServerSession;
-use self::worker::{Stop, Worker};
+use self::{
+  app_server::AppServerSession,
+  worker::{Stop, Worker},
+};
 use super::{
   record::RecordError,
   run::{ExecutionError, RunTask},

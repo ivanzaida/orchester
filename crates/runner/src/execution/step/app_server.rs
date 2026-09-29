@@ -1,20 +1,22 @@
 //! Bidirectional Codex App Server conversation for one invocation. Only MCP elicitation is
 //! requestable; command, file and sandbox approvals remain disabled. Every unexpected host
-//! request and every unexpected MCP server fails the invocation closed.
+//! request fails the invocation closed. The normal Codex profile keeps its global MCP servers;
+//! project-selected servers must be connected before the turn begins.
 
 use std::{collections::BTreeSet, io, path::PathBuf};
 
-use orchester_core::connection::stream::OutputStream;
-use orchester_core::connection::{
-  app_server::{AppServerStream, Update},
-  stream::AgentEvent,
+use orchester_core::{
+  connection::{
+    app_server::{AppServerStream, Update},
+    app_server_mcp::verify_selected_servers,
+    stream::{AgentEvent, OutputStream},
+  },
+  permission::NetworkAccess,
+  resource::RepositoryAccess,
 };
-use orchester_core::permission::NetworkAccess;
-use orchester_core::resource::RepositoryAccess;
 use serde_json::{Value, json};
 use thiserror::Error;
 
-use super::approval_home;
 use crate::supervisor::Supervised;
 
 #[derive(Debug, Error)]
@@ -42,7 +44,6 @@ pub(super) struct AppServerSetup {
   pub resume: Option<String>,
   pub expected_servers: BTreeSet<String>,
   pub output_schema: Option<Value>,
-  pub home: PathBuf,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -147,10 +148,9 @@ impl AppServerSession {
       }
       (Phase::Account, 2) => {
         if result.get("account").is_none_or(Value::is_null) {
-          return Err(AppServerFailure::NotSignedIn(format!(
-            "Codex interactive approvals need a separate login. Run `{}` and retry this step.",
-            approval_home::login_command(&self.setup.home)
-          )));
+          return Err(AppServerFailure::NotSignedIn(
+            "Codex is not signed in. Sign in to the normal Codex account and retry this step.".to_owned(),
+          ));
         }
         self.phase = Phase::Thread;
         self.start_thread(process).await.map_err(io_message)?;
@@ -254,22 +254,7 @@ impl AppServerSession {
   }
 
   fn check_servers(&self, result: &Value) -> Result<(), String> {
-    if result.get("nextCursor").is_some_and(|cursor| !cursor.is_null()) {
-      return Err("Codex App Server MCP inventory is too large to verify".to_owned());
-    }
-    let data = result
-      .get("data")
-      .and_then(Value::as_array)
-      .ok_or_else(|| "Codex App Server omitted MCP inventory".to_owned())?;
-    let names: Option<BTreeSet<_>> = data
-      .iter()
-      .map(|server| server.get("name").and_then(Value::as_str).map(str::to_owned))
-      .collect();
-    let names = names.ok_or_else(|| "Codex App Server MCP inventory has unnamed servers".to_owned())?;
-    if names != self.setup.expected_servers {
-      return Err("Codex App Server loaded MCP servers outside this agent profile".to_owned());
-    }
-    Ok(())
+    verify_selected_servers(result, &self.setup.expected_servers).map_err(|error| error.to_string())
   }
 
   async fn start_thread(&self, process: &Supervised) -> io::Result<()> {
