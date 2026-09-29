@@ -8,7 +8,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, ScrollVertical, Text, TextOverflow},
+  components::{Button, Column, Row, ScrollVertical, Text, TextInput, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -215,6 +215,7 @@ fn title_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
   )
   .height(Dimension::Px(TITLE_HEIGHT))
   .placeholder(&ctx.t("tasks.new.titlePlaceholder"));
+  let input = locked_input(input, state.queued || state.starting);
   labelled(ctx, "tasks.new.taskTitle", input)
     .with_children(error.map(|error| wrapping_field_error(&error)))
     .into()
@@ -228,6 +229,7 @@ fn brief_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
     .rows(BRIEF_ROWS.0, BRIEF_ROWS.1)
     .width(Dimension::Pct(100.0))
     .placeholder(&ctx.t("tasks.new.briefPlaceholder"));
+  let input = locked_input(input, state.queued || state.starting);
   let area = Column::new()
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Md)
@@ -249,10 +251,11 @@ fn brief_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
 /// Acceptance criteria (`Sc7Ua`): one input per criterion, rows can be added and removed.
 fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
   let criteria = form.criteria.get();
-  let removable = criteria.len() > 1;
+  let locked = state.queued || state.starting;
+  let removable = criteria.len() > 1 && !locked;
   let rows: Vec<Element> = criteria
     .iter()
-    .map(|criterion| criterion_row(ctx, &form.criteria, criterion, removable))
+    .map(|criterion| criterion_row(ctx, &form.criteria, criterion, removable, locked))
     .collect();
   let signal = form.criteria.clone();
   // The link's padding keeps its focus ring off the text, and an equal shift back keeps the text
@@ -288,20 +291,27 @@ fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
     .spacing(ExtraSpacing::Stack.role())
     .child(Text::new(&ctx.t("tasks.new.criteria")).variant(ExtraTypography::FormLabel.role()))
     .with_children(rows)
-    .child(add)
+    .with_children((!locked).then_some(add))
     .with_children(missing_note(ctx, state, MissingDetail::AcceptanceCriteria))
     // Add criterion may be last; its focus ring reaches past the column.
     .overflow_visible()
     .into()
 }
 
-fn criterion_row(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, criterion: &Criterion, removable: bool) -> Element {
+fn criterion_row(
+  ctx: &Ctx,
+  criteria: &Signal<Vec<Criterion>>,
+  criterion: &Criterion,
+  removable: bool,
+  locked: bool,
+) -> Element {
   let input = styled_input(ctx, criterion.text.clone(), TypographyStyle::FieldLabel)
     .id(Arc::<str>::from(format!("criterion-{}", criterion.id)))
     .single_line()
     .flex(1.0)
     .caret_color(PaletteColor::TextPrimary)
     .placeholder(&ctx.t("tasks.new.criterionPlaceholder"));
+  let input = locked_input(input, locked);
   let row = Row::new()
     .key(Arc::<str>::from(format!("criterion-{}", criterion.id)))
     .width(Dimension::Pct(100.0))
@@ -339,4 +349,14 @@ fn criterion_row(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, criterion: &Crite
         .child(icon(Icon::X, IconSize::Dismiss, PaletteColor::TextSecondary)),
     )
     .into()
+}
+
+fn locked_input(input: TextInput, locked: bool) -> TextInput {
+  if locked {
+    input
+      .on_input(|event: lurq::app::events::TextInputEvent| event.prevent_default())
+      .focusable(false)
+  } else {
+    input
+  }
 }

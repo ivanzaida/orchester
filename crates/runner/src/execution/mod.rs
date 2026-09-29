@@ -16,6 +16,7 @@
 mod again;
 mod attach;
 mod board;
+mod build_space;
 mod checkpoint;
 mod control;
 mod conversation;
@@ -44,7 +45,7 @@ use std::{
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   integration::Leftovers,
-  run::{InterruptCause, RaisedLimits},
+  run::{InterruptCause, RaisedLimits, RunStatus},
   secret::SecretVault,
   store::RunStore,
   tokens::TokenBudget,
@@ -166,8 +167,19 @@ impl Scheduler {
     let _one_at_a_time = self.inner.continuing.lock().await;
     let root = &self.inner.project_root;
     let mut db = self.open()?;
+    if let Some(recorded) = db
+      .run_with_key(key)
+      .map_err(|error| read_failed("cannot read runs", error))?
+    {
+      if recorded.status() == &RunStatus::Pending {
+        self.admit(&db)?;
+        build_space::preflight(&db, root)?;
+      }
+      let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
+      return self.begin(db, prepared);
+    }
     self.admit(&db)?;
-    let prepared = prepare::prepare(&mut db, root, key, task)?;
+    let prepared = prepare::prepare_first(&mut db, root, key, task)?;
     self.begin(db, prepared)
   }
 
@@ -204,20 +216,26 @@ impl Scheduler {
     let _one_at_a_time = self.inner.continuing.lock().await;
     let root = &self.inner.project_root;
     let mut db = self.open()?;
-    let repeated = db
+    let recorded = db
       .run_with_key(key)
-      .map_err(|error| read_failed("cannot read runs", error))?
-      .is_some();
-    if repeated {
-      let prepared = prepare::prepare(&mut db, root, key, task)?;
+      .map_err(|error| read_failed("cannot read runs", error))?;
+    if let Some(recorded) = recorded {
+      if recorded.status() == &RunStatus::Pending {
+        self.admit(&db)?;
+        build_space::preflight(&db, root)?;
+      }
+      let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
       return self.begin(db, prepared);
     }
     let previous = again::check(&db, task, after)?;
     self.admit(&db)?;
-    let checked = prepare::check(&db, root, task)?;
+    let checked = prepare::check_again(&db, root, task)?;
     if let Some(confirmed) = &remove_worktrees {
       again::remove_worktrees(root, &previous, confirmed)?;
     }
+    // The confirmed cleanup can free the shared build target's volume. Check after it, but
+    // before recording this run or creating its worktree.
+    build_space::preflight(&db, root)?;
     let prepared = prepare::record(&mut db, root, key, checked)?;
     self.begin(db, prepared)
   }

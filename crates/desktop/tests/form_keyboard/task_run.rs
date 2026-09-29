@@ -16,10 +16,12 @@ use orchester_core::{
   name::Name,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, StepPermissions},
   resource::{
-    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
+    AgentProfile, CommandEnvironment, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step,
+    StepKey, StepKind, VariableName,
   },
   run::RunStatus,
-  store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
+  store::{ConnectionStore, ResourceStore, RunStore, SettingsStore, TaskStore},
+  task::TaskStatus,
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -298,6 +300,121 @@ fn create_and_run_opens_the_task_page_with_the_run_and_its_activity() {
     .output()
     .expect("run git");
   assert_eq!(String::from_utf8_lossy(&head.stdout), "hi\nhello\n");
+}
+
+fn block_shared_target(repo: &Path) {
+  let blocker = repo.join("not-a-directory");
+  fs::write(&blocker, "x").expect("write target blocker");
+  let environment = CommandEnvironment::new(BTreeMap::from([(
+    VariableName::new("CARGO_TARGET_DIR").expect("name"),
+    blocker.join("target").to_string_lossy().into_owned(),
+  )]))
+  .expect("environment");
+  ProjectDb::open(repo)
+    .expect("open project")
+    .save_project_environment(&environment)
+    .expect("save environment");
+}
+
+#[test]
+fn create_and_run_keeps_a_queued_task_truthful_and_retries_it_after_space_recovers() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed(repo, &fake, false);
+    block_shared_target(repo);
+  });
+  fill_new_task(&mut desktop, "Check the shared target.", "1400000");
+  desktop.wait_until("the runner online", |desktop| {
+    shows(desktop, "status-runner", "Runner online")
+  });
+  desktop.click("create-and-run");
+  desktop.wait_until("the host space error on the queued task", |desktop| {
+    shows(
+      desktop,
+      "execution-plan",
+      "Cannot check free space for CARGO_TARGET_DIR",
+    ) && shows(desktop, "new-task-state", "Queued · run not started")
+  });
+  let mut db = ProjectDb::open(desktop.repo()).expect("open project");
+  let tasks = db.tasks().expect("tasks");
+  assert_eq!(tasks.len(), 1);
+  let task = &tasks[0];
+  assert_eq!(task.status(), TaskStatus::Queued);
+  assert!(db.runs_of_task(task.id()).expect("runs").is_empty());
+  assert!(!has(&mut desktop, "save-draft"));
+  assert!(shows(&mut desktop, "create-and-run", "Retry run"));
+  assert!(shows(&mut desktop, "pipeline-selector", "Delivery"));
+  assert!(
+    desktop
+      .tree
+      .get_element_by_id_mut("pipeline-selector")
+      .and_then(|element| element.as_select())
+      .is_none()
+  );
+  desktop.press("pipeline-selector");
+  assert!(shows(&mut desktop, "pipeline-selector", "Delivery"));
+  let title = desktop.value("task-title");
+  desktop.click("task-title");
+  desktop.type_text("X");
+  assert_eq!(desktop.value("task-title"), title);
+  db.save_project_environment(&CommandEnvironment::new(BTreeMap::new()).expect("environment"))
+    .expect("clear target");
+  desktop.click("create-and-run");
+  desktop.wait_until("the same task's run page", |desktop| has(desktop, "task-page"));
+  let db = ProjectDb::open(desktop.repo()).expect("open project");
+  let after = db.tasks().expect("tasks");
+  assert_eq!(after.len(), 1);
+  assert_eq!(after[0].id(), task.id());
+  assert_eq!(db.runs_of_task(task.id()).expect("runs").len(), 1);
+}
+
+#[test]
+fn queued_task_reopens_for_retry_with_the_same_first_run_key() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed(repo, &fake, false);
+    block_shared_target(repo);
+  });
+  fill_new_task(&mut desktop, "Check the shared target.", "1400000");
+  desktop.wait_until("the runner online", |desktop| {
+    shows(desktop, "status-runner", "Runner online")
+  });
+  desktop.click("create-and-run");
+  desktop.wait_until("the task is queued", |desktop| {
+    shows(desktop, "new-task-state", "Queued · run not started")
+  });
+  let db = ProjectDb::open(desktop.repo()).expect("open project");
+  let task = db.tasks().expect("tasks").remove(0);
+  assert!(db.runs_of_task(task.id()).expect("runs").is_empty());
+  drop(db);
+
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  desktop.click("task-row-KON-1");
+  desktop.wait_until("the locked retry form", |desktop| {
+    has(desktop, "execution-plan")
+      && shows(desktop, "execution-plan", "No run is recorded for this task")
+      && shows(desktop, "create-and-run", "Retry run")
+  });
+  assert!(!has(&mut desktop, "save-draft"));
+  let title = desktop.value("task-title");
+  desktop.click("task-title");
+  desktop.type_text("X");
+  assert_eq!(desktop.value("task-title"), title);
+  ProjectDb::open(desktop.repo())
+    .expect("open project")
+    .save_project_environment(&CommandEnvironment::new(BTreeMap::new()).expect("environment"))
+    .expect("clear target");
+  desktop.click("create-and-run");
+  desktop.wait_until("the same task's run page", |desktop| has(desktop, "task-page"));
+  let db = ProjectDb::open(desktop.repo()).expect("open project");
+  let runs = db.runs_of_task(task.id()).expect("runs");
+  assert_eq!(runs.len(), 1);
+  let run = runs.into_iter().next().expect("one run").expect("readable run");
+  assert_eq!(
+    db.run_with_key(task.id().first_run_key()).expect("lookup by key"),
+    Some(run)
+  );
 }
 
 #[test]

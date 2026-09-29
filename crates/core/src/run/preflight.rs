@@ -8,7 +8,7 @@
 //! approvals), tools with access rules and approval gates on tool steps are reported as not
 //! supported yet rather than skipped.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -24,6 +24,8 @@ use crate::{
 pub enum PreflightProblem {
   /// The task has no pipeline, or its pipeline has no published version.
   PipelineNotPublished,
+  /// A queued task predates version pinning, so its originally selected version is unknown.
+  PipelineVersionNotPinned,
   /// A published pipeline has at least one step; this one has none.
   NoSteps,
   /// The step's tool has no published version.
@@ -50,12 +52,43 @@ pub enum PreflightProblem {
   NotAGitRepository,
   /// The repository has no commit to start the run's branch from.
   NoCommits,
+  /// The configured Cargo target's volume has too little space for a build.
+  BuildSpaceLow {
+    target: PathBuf,
+    available: u64,
+    required: u64,
+  },
+  /// The runner could not measure space on the configured Cargo target's volume.
+  BuildSpaceUnavailable { target: PathBuf },
+}
+
+const GIB: u64 = 1024 * 1024 * 1024;
+
+/// A new target can need 10–20 GiB; an existing target needs a smaller emergency floor so
+/// incremental builds are not refused only because they have already filled their cache.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuildTargetState {
+  Empty,
+  Populated,
+}
+
+/// The low-space problem for a shared Cargo target, if its host volume is below the floor.
+pub fn build_space_problem(target: PathBuf, available: u64, state: BuildTargetState) -> Option<PreflightProblem> {
+  let required = match state {
+    BuildTargetState::Empty => 10 * GIB,
+    BuildTargetState::Populated => GIB,
+  };
+  (available < required).then_some(PreflightProblem::BuildSpaceLow {
+    target,
+    available,
+    required,
+  })
 }
 
 /// The configuration a task's run would use.
 #[derive(Clone, Copy, Debug)]
 pub struct PreflightInput<'a> {
-  /// The latest published version of the task's pipeline, if any.
+  /// The selected or pinned published version of the task's pipeline, if any.
   pub pipeline: Option<&'a Pipeline>,
   /// Latest published version of each agent profile.
   pub profiles: &'a BTreeMap<ResourceId, Version<AgentProfile>>,

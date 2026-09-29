@@ -8,6 +8,7 @@ use std::{fs, time::Duration};
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, ResourceId},
   project::{Project, ProjectKey},
+  resource::VersionNumber,
   store::TaskStore,
   task::{EditError, TaskDetails, TaskLimits, TaskStatus},
   tokens::TokenBudget,
@@ -96,7 +97,7 @@ fn task_edits_are_refused_for_a_queued_task() {
     .create_tasks(IdempotencyKey::generate(), vec![edited()], at(1))
     .expect("draft")
     .remove(0);
-  task.queue().expect("a complete draft queues");
+  task.queue(VersionNumber::FIRST).expect("a complete draft queues");
   db.save_task(&task).expect("queued");
   assert!(matches!(
     db.update_draft(task.id(), draft("Other")),

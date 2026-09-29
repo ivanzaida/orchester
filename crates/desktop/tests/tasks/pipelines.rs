@@ -1,15 +1,20 @@
+use std::time::Duration;
+
 use orchester_core::{
-  id::{ConnectionId, ResourceId},
+  id::{ConnectionId, IdempotencyKey, ResourceId},
   name::Name,
   permission::StepPermissions,
   resource::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
   },
-  store::ResourceStore,
+  store::{ResourceStore, TaskStore},
+  task::{TaskDetails, TaskLimits},
+  tokens::TokenBudget,
 };
 use orchester_desktop::tasks::{
-  data::{ProjectTasks, published_pipelines},
+  data::{ProjectTasks, SaveTarget, pinned_pipeline, published_pipelines},
   list::PipelineLabel,
+  run::queue_in,
 };
 use orchester_store::ProjectDb;
 
@@ -92,6 +97,79 @@ fn only_published_pipelines_can_be_chosen() {
   let loaded = ProjectTasks::load(repo.path()).expect("load the project's tasks");
   assert_eq!(loaded.pipelines.len(), 1);
   assert!(loaded.tasks.is_empty());
+}
+
+#[test]
+fn queued_pipeline_choice_keeps_its_published_steps_after_republish() {
+  let (_repo, mut db) = project_db();
+  let pipeline = Pipeline::new(vec![research_step()]).expect("valid pipeline");
+  let id = db
+    .create_resource(
+      Slug::new("delivery").expect("slug"),
+      Name::new("Delivery").expect("name"),
+      &pipeline,
+      now(),
+    )
+    .expect("create pipeline")
+    .id();
+  let v1 = db.publish_draft::<Pipeline>(id, now()).expect("publish v1");
+  let mut changed = pipeline.steps().to_vec();
+  changed[0].name = Name::new("Research updated").expect("name");
+  let mut draft = v1.to_draft(now());
+  draft.edit(Pipeline::new(changed).expect("valid pipeline"), now());
+  db.save_draft(id, &draft).expect("save v2 draft");
+  db.publish_draft::<Pipeline>(id, now()).expect("publish v2");
+
+  let pinned = pinned_pipeline(&db, id, v1.number())
+    .expect("read v1")
+    .expect("v1 exists");
+  let latest = published_pipelines(&db).expect("latest");
+  assert_eq!(pinned.version, v1.number());
+  assert_eq!(&*pinned.steps[0].name, "Research");
+  assert_eq!(&*latest[0].steps[0].name, "Research updated");
+}
+
+#[test]
+fn replaying_a_queued_batch_returns_the_original_pin_after_republish() {
+  let (repo, mut db) = project_db();
+  let pipeline = Pipeline::new(vec![research_step()]).expect("pipeline");
+  let id = db
+    .create_resource(
+      Slug::new("delivery").expect("slug"),
+      Name::new("Delivery").expect("name"),
+      &pipeline,
+      now(),
+    )
+    .expect("create pipeline")
+    .id();
+  let v1 = db.publish_draft::<Pipeline>(id, now()).expect("publish v1");
+  let details = TaskDetails {
+    title: Name::new("Build feature").expect("title"),
+    brief: "Complete the requested feature.".into(),
+    acceptance_criteria: vec!["It works.".into()],
+    pipeline: Some(id),
+    limits: Some(TaskLimits::new(TokenBudget::new(1_000).expect("budget"), Duration::from_secs(60)).expect("limits")),
+  };
+  let batch = IdempotencyKey::generate();
+  let mut queued = db
+    .create_tasks(batch, vec![details.clone()], now())
+    .expect("create task")
+    .remove(0);
+  queued.queue(v1.number()).expect("queue v1");
+  db.save_task(&queued).expect("save task");
+  let mut changed = pipeline.steps().to_vec();
+  changed[0].name = Name::new("Research updated").expect("name");
+  let mut draft = v1.to_draft(now());
+  draft.edit(Pipeline::new(changed).expect("pipeline"), now());
+  db.save_draft(id, &draft).expect("save draft");
+  let v2 = db.publish_draft::<Pipeline>(id, now()).expect("publish v2");
+  drop(db);
+
+  let replay = queue_in(repo.path(), SaveTarget::New(batch), details, v2.number()).expect("replay queued task");
+  assert_eq!(replay.task.id(), queued.id());
+  assert_eq!(replay.task.pipeline_version(), Some(v1.number()));
+  assert_eq!(replay.pipeline.version, v1.number());
+  assert_eq!(&*replay.pipeline.steps[0].name, "Research");
 }
 
 #[test]

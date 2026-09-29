@@ -94,7 +94,7 @@ const fn outside_key(route: Route) -> &'static str {
 fn page_name(ctx: &Ctx, page: Page, tasks: &TasksState) -> (Arc<str>, Option<Arc<str>>) {
   let ready = tasks.ready();
   match page {
-    Page::Task(task, _) | Page::EditTask(task) => ready
+    Page::Task(task, _) | Page::EditTask(task) | Page::RetryTask(task) => ready
       .and_then(|tasks| tasks.tasks.iter().find(|candidate| candidate.id() == task))
       .map_or_else(
         || (ctx.t("nav.tasks"), None),
@@ -117,7 +117,7 @@ fn page_name(ctx: &Ctx, page: Page, tasks: &TasksState) -> (Arc<str>, Option<Arc
 const fn section_key(page: Page) -> &'static str {
   match page {
     Page::Overview(_) => "nav.overview",
-    Page::Tasks(_) | Page::NewTask | Page::Task(..) | Page::EditTask(_) => "nav.tasks",
+    Page::Tasks(_) | Page::NewTask | Page::Task(..) | Page::EditTask(_) | Page::RetryTask(_) => "nav.tasks",
     Page::PullRequests | Page::PullRequest(_) => "nav.pullRequests",
     Page::Pipelines | Page::Pipeline(..) => "nav.pipelines",
     Page::Instructions(..) => "nav.instructions",

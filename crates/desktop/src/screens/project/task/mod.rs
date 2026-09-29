@@ -47,6 +47,7 @@ use orchester_core::{
   integration::Leftovers,
   limits::ProjectLimits,
   run::{RunStatus, TaskPhase},
+  task::TaskStatus,
 };
 
 use self::{
@@ -224,6 +225,9 @@ impl Component for TaskScreen {
         .child(self.topbar(ctx, &props, (None, Vec::new()), &control))
         .child(centered(panel.into()));
     };
+    if self.redirect_queued_retry(&detail) {
+      return column;
+    }
     if let Some(run) = detail.run.as_ref() {
       ctx.provide(self.nav.integration(run.id()));
     }
@@ -263,6 +267,14 @@ impl Component for TaskScreen {
 }
 
 impl TaskScreen {
+  fn redirect_queued_retry(&self, detail: &TaskDetail) -> bool {
+    if detail.task.status() != TaskStatus::Queued || detail.run.is_some() || detail.latest_unreadable.is_some() {
+      return false;
+    }
+    self.nav.replace(Page::RetryTask(detail.task.id()));
+    true
+  }
+
   /// The selected tab; the Summary of a run that succeeded is Ready for review (02.13). While the
   /// latest run cannot be read, the Summary is 02.R and no other tab has anything of it to show.
   fn body(

@@ -58,6 +58,7 @@ pub struct UnitInput {
   focused: FocusedInput,
   unit: Arc<str>,
   invalid: bool,
+  read_only: bool,
   size: UnitSize,
   width: Dimension,
   height: Dimension,
@@ -78,6 +79,7 @@ impl UnitInput {
       focused,
       unit,
       invalid: false,
+      read_only: false,
       size: UnitSize::Field,
       width: Dimension::Pct(100.0),
       height: Dimension::Pct(100.0),
@@ -106,6 +108,11 @@ impl UnitInput {
 
   pub fn invalid(mut self, invalid: bool) -> Self {
     self.invalid = invalid;
+    self
+  }
+
+  pub fn read_only(mut self, read_only: bool) -> Self {
+    self.read_only = read_only;
     self
   }
 
@@ -153,6 +160,11 @@ impl UnitInput {
     });
     if let Some(separator) = self.group_separator {
       field = field.on_input(group_while_typing(self.value.clone(), separator));
+    }
+    if self.read_only {
+      field = field
+        .on_input(|event: TextInputEvent| event.prevent_default())
+        .focusable(false);
     }
     Row::new()
       .width(self.width)

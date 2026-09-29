@@ -38,7 +38,7 @@ pub struct PipelineStepChoice {
 pub struct PipelineChoice {
   pub id: ResourceId,
   pub name: Arc<str>,
-  /// The latest published version, which new runs use.
+  /// The published version this choice represents.
   pub version: VersionNumber,
   pub steps: Vec<PipelineStepChoice>,
 }
@@ -177,14 +177,36 @@ pub fn published_pipelines(store: &ProjectDb) -> Result<Vec<PipelineChoice>, Sto
     let Some(version) = store.latest_version::<Pipeline>(resource.id())? else {
       continue;
     };
-    choices.push(PipelineChoice {
-      id: resource.id(),
-      name: resource.name().as_str().into(),
-      version: version.number(),
-      steps: step_choices(version.body().steps(), &assignables),
-    });
+    choices.push(pipeline_choice(&resource, &version, &assignables));
   }
   Ok(choices)
+}
+
+/// Reads the exact published pipeline pinned to a queued task.
+pub fn pinned_pipeline(
+  store: &ProjectDb,
+  id: ResourceId,
+  number: VersionNumber,
+) -> Result<Option<PipelineChoice>, StoreError> {
+  let Some(version) = store.version::<Pipeline>(id, number)? else {
+    return Ok(None);
+  };
+  let resource = store.resource(id)?.ok_or(StoreError::ResourceNotFound(id))?;
+  let assignables = Assignables::load(store)?;
+  Ok(Some(pipeline_choice(&resource, &version, &assignables)))
+}
+
+fn pipeline_choice(
+  resource: &orchester_core::resource::Resource,
+  version: &orchester_core::resource::Version<Pipeline>,
+  assignables: &Assignables,
+) -> PipelineChoice {
+  PipelineChoice {
+    id: resource.id(),
+    name: resource.name().as_str().into(),
+    version: version.number(),
+    steps: step_choices(version.body().steps(), assignables),
+  }
 }
 
 fn step_choices(steps: &[Step], assignables: &Assignables) -> Vec<PipelineStepChoice> {
@@ -216,7 +238,14 @@ pub fn save_draft<S: TaskStore>(
   if task.details() == &details || task.status() != TaskStatus::Draft {
     return Ok(task);
   }
-  let edited = Task::from_stored(task.id(), task.key().clone(), details, task.status(), task.created_at());
+  let edited = Task::from_stored(
+    task.id(),
+    task.key().clone(),
+    details,
+    task.status(),
+    task.pipeline_version(),
+    task.created_at(),
+  );
   store.save_task(&edited)?;
   Ok(edited)
 }

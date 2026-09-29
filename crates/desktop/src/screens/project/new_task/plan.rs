@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, Select, Spacer, Text, TextOverflow},
+  components::{Button, Column, Row, ScrollVertical, Select, Spacer, Text, TextOverflow},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -23,7 +23,7 @@ use crate::{
   navigation::route::{Page, PipelineView},
   tabs::OpenIn,
   tasks::data::PipelineChoice,
-  theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::{ActionButton, SKIPPED_BY_TAB},
     field::{ValueTone, select_style, value_box_sized, wrapping_field_error},
@@ -54,8 +54,32 @@ pub fn execution_plan(
   start: Submit,
 ) -> Element {
   let selected = form.pipeline.get().0;
-  let pipeline = pipelines.and_then(|choices| choices.iter().find(|choice| Some(choice.id) == selected));
+  let pipeline = state
+    .queued_task
+    .as_ref()
+    .map(|queued| queued.pipeline.as_ref())
+    .or(state.starting_pipeline.as_deref())
+    .or_else(|| pipelines.and_then(|choices| choices.iter().find(|choice| Some(choice.id) == selected)));
   let steps = pipeline.map(|choice| pipeline_steps(ctx, choice));
+  let details = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Md)
+    .child(plan_heading(ctx))
+    .child(pipeline_selector(
+      ctx,
+      &form.pipeline,
+      pipelines,
+      state
+        .queued_task
+        .as_ref()
+        .map(|queued| queued.pipeline.as_ref())
+        .or(state.starting_pipeline.as_deref()),
+    ))
+    .with_children(steps)
+    .with_children(pipeline.map(|choice| view_pipeline(ctx, form, choice)))
+    .with_children(missing_note(ctx, state, MissingDetail::Pipeline))
+    .child(run_limits(ctx, form, state, limits))
+    .with_children(pipeline.map(|choice| review_policy(ctx, choice)));
   Column::new()
     .id("execution-plan")
     .width(Dimension::Px(PLAN_WIDTH))
@@ -65,14 +89,13 @@ pub fn execution_plan(
     // The full-width actions at its edges keep their focus rings (`xURvJ`).
     .overflow_visible()
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(plan_heading(ctx))
-    .child(pipeline_selector(ctx, &form.pipeline, pipelines))
-    .with_children(steps)
-    .with_children(pipeline.map(|choice| view_pipeline(ctx, form, choice)))
-    .with_children(missing_note(ctx, state, MissingDetail::Pipeline))
-    .child(run_limits(ctx, form, state, limits))
-    .with_children(pipeline.map(|choice| review_policy(ctx, choice)))
-    .child(Spacer::new().flex(1.0))
+    .child(
+      ScrollVertical::new(details)
+        .id("execution-plan-details")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .scrollbar(gutter_scrollbar()),
+    )
     .child(actions(ctx, state, save, start))
     .into()
 }
@@ -120,8 +143,19 @@ fn pipeline_selector(
   ctx: &Ctx,
   selection: &Signal<PipelineSelection>,
   pipelines: Option<&Vec<PipelineChoice>>,
+  queued_pipeline: Option<&PipelineChoice>,
 ) -> Element {
   let height = Dimension::Px(SELECTOR_HEIGHT);
+  if let Some(choice) = queued_pipeline {
+    let label = ctx.t_args(
+      "tasks.pipeline.published",
+      [
+        ("name", &*choice.name),
+        ("version", choice.version.to_string().as_str()),
+      ],
+    );
+    return value_box_sized(ctx, "pipeline-selector", &label, ValueTone::Value, None, height);
+  }
   let reason = match pipelines {
     None => ctx.t("tasks.new.pipelinesLoading"),
     Some(choices) if choices.is_empty() => ctx.t("tasks.new.noPipelines"),
@@ -236,17 +270,37 @@ fn review_policy(ctx: &Ctx, pipeline: &PipelineChoice) -> Element {
 fn run_status(ctx: &Ctx, state: &FormState) -> Vec<Element> {
   if state.starting {
     return vec![
-      Text::new(&ctx.t("tasks.new.startingDetail"))
-        .variant(TypographyStyle::Caption)
-        .into(),
+      Text::new(&ctx.t(if state.retrying {
+        "tasks.new.retryingDetail"
+      } else {
+        "tasks.new.startingDetail"
+      }))
+      .variant(TypographyStyle::Caption)
+      .into(),
     ];
   }
   if let Some(problems) = &state.run_problems {
     return problems
-      .0
+      .messages
       .iter()
       .map(|problem| wrapping_field_error(&message_text(ctx, problem)))
       .collect();
+  }
+  if state.recovered {
+    return vec![
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Xs)
+        .align_items(Alignment::Start)
+        .child(icon(Icon::Clock3, IconSize::Small, PaletteColor::TextMuted))
+        .child(
+          Text::new(&ctx.t("tasks.new.recoveredDetail"))
+            .variant(TypographyStyle::Caption)
+            .color(PaletteColor::TextMuted)
+            .flex(1.0),
+        )
+        .into(),
+    ];
   }
   if state.missing.is_empty() {
     return Vec::new();
@@ -283,6 +337,7 @@ fn run_limits(ctx: &Ctx, form: &NewTaskForm, state: &FormState, limits: ProjectL
   )
   .tokens(separator)
   .compact()
+  .read_only(state.queued || state.starting)
   .invalid(budget_error.is_some());
   let time = UnitInput::new(
     "task-time-limit",
@@ -291,6 +346,7 @@ fn run_limits(ctx: &Ctx, form: &NewTaskForm, state: &FormState, limits: ProjectL
     form.focused_input.clone(),
   )
   .compact()
+  .read_only(state.queued || state.starting)
   .invalid(time_error.is_some());
   Column::new()
     .width(Dimension::Pct(100.0))
@@ -358,13 +414,15 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element
     .collect();
   let label = if state.starting {
     ctx.t("tasks.new.starting")
+  } else if state.queued_task.is_some() {
+    ctx.t("tasks.new.retryRun")
   } else {
     ctx.t("tasks.new.createAndRun")
   };
   let enabled = start.is_some();
   let create_and_run = ActionButton::new(label)
     .primary()
-    .icon(Icon::Play)
+    .icon(if state.starting { Icon::Loader } else { Icon::Play })
     .id("create-and-run")
     .in_form()
     .fill_width()
@@ -383,12 +441,12 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element
     .with_children(run_status)
     .with_children(status)
     .with_children(reasons)
-    .child(
+    .with_children((!state.queued).then(|| {
       Row::new()
         .width(Dimension::Pct(100.0))
         .justify(Justify::Center)
-        .child(save_button(ctx, state, save)),
-    )
+        .child(save_button(ctx, state, save))
+    }))
     .into()
 }
 

@@ -9,6 +9,7 @@ use crate::{
   id::{ResourceId, TaskId},
   name::Name,
   project::TaskKey,
+  resource::VersionNumber,
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -114,21 +115,23 @@ pub struct Task {
   key: TaskKey,
   details: TaskDetails,
   status: TaskStatus,
+  pipeline_version: Option<VersionNumber>,
   created_at: Timestamp,
 }
 
 impl Task {
   /// A new task always starts as a draft.
   pub const fn draft(id: TaskId, key: TaskKey, details: TaskDetails, created_at: Timestamp) -> Self {
-    Self::from_stored(id, key, details, TaskStatus::Draft, created_at)
+    Self::from_stored(id, key, details, TaskStatus::Draft, None, created_at)
   }
 
-  /// Rebuilds a persisted task.
+  /// Rebuilds a persisted task. A queued task without a pin is a legacy row and cannot run.
   pub const fn from_stored(
     id: TaskId,
     key: TaskKey,
     details: TaskDetails,
     status: TaskStatus,
+    pipeline_version: Option<VersionNumber>,
     created_at: Timestamp,
   ) -> Self {
     Self {
@@ -136,6 +139,7 @@ impl Task {
       key,
       details,
       status,
+      pipeline_version,
       created_at,
     }
   }
@@ -154,6 +158,10 @@ impl Task {
 
   pub const fn status(&self) -> TaskStatus {
     self.status
+  }
+
+  pub const fn pipeline_version(&self) -> Option<VersionNumber> {
+    self.pipeline_version
   }
 
   pub const fn created_at(&self) -> Timestamp {
@@ -181,7 +189,7 @@ impl Task {
   }
 
   /// Moves a complete draft to the queue; an incomplete one reports what is missing.
-  pub fn queue(&mut self) -> Result<(), QueueError> {
+  pub fn queue(&mut self, pipeline_version: VersionNumber) -> Result<(), QueueError> {
     if self.status != TaskStatus::Draft {
       return Err(QueueError::NotDraft(self.status));
     }
@@ -190,6 +198,7 @@ impl Task {
       return Err(QueueError::Incomplete(missing));
     }
     self.status = TaskStatus::Queued;
+    self.pipeline_version = Some(pipeline_version);
     Ok(())
   }
 }

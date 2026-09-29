@@ -12,15 +12,17 @@ use lurq::{
 use orchester_core::{
   id::{ResourceId, TaskId},
   limits::ProjectLimits,
+  task::TaskStatus,
 };
 use orchester_ipc::WorkSummary;
+use orchester_store::ProjectDb;
 
 use super::{
   ProjectNav, TasksState,
   agents::AgentsScreen,
   connections::ConnectionsScreen,
   instructions::InstructionsScreen,
-  new_task::{Editing, NewTaskForm, NewTaskProps},
+  new_task::{Editing, NewTaskForm, NewTaskProps, Recovering},
   overview::{OverviewProps, OverviewScreen},
   pipelines::{PipelinesProps, PipelinesScreen},
   pull_requests::{PullRequestProps, PullRequestScreen, PullRequestsScreen},
@@ -32,9 +34,14 @@ use super::{
   tools::ToolsScreen,
 };
 use crate::{
+  background,
+  messages::{self, Message},
   navigation::route::{self, Page, PipelineView, Route},
   runner::{RunnerStatus, state::RunnerState},
-  tasks::usage::ProjectUsage,
+  tasks::{
+    data::{PipelineChoice, pinned_pipeline},
+    usage::ProjectUsage,
+  },
   ui::{icon::Icon, message_text, panel::RecoveryPanel},
   workspace::OpenProject,
 };
@@ -96,9 +103,11 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         pipelines: shown.tasks.ready().map(|tasks| tasks.pipelines.clone()),
         limits,
         editing: None,
+        recovering: None,
       },
     ),
     Page::EditTask(task) => edit_task(ctx, open, task, &shown.tasks, limits),
+    Page::RetryTask(task) => retry_task(ctx, open, task, &shown.tasks, limits),
     Page::Task(task, tab) => ctx.mount_keyed::<TaskScreen>(
       &format!("task-{task}"),
       TaskProps {
@@ -176,8 +185,93 @@ fn edit_task(
       pipelines: Some(tasks.pipelines.clone()),
       limits,
       editing: Some(editing),
+      recovering: None,
     },
   )
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RecoveredChoice(PipelineChoice);
+
+impl lurq::app::component::DevtoolsInspectable for RecoveredChoice {}
+
+/// Reopen the locked form only for a queued task that has no run, then read its pinned version.
+fn retry_task(
+  ctx: &mut Ctx,
+  project: OpenProject,
+  task: TaskId,
+  tasks: &TasksState,
+  limits: Option<ProjectLimits>,
+) -> Element {
+  let TasksState::Ready(tasks) = tasks else {
+    return edit_task(ctx, project, task, tasks, limits);
+  };
+  let Some(saved) = tasks.tasks.iter().find(|candidate| candidate.id() == task) else {
+    return redirect_to_task(ctx, task);
+  };
+  if saved.status() != TaskStatus::Queued || tasks.phases.contains_key(&task) {
+    return redirect_to_task(ctx, task);
+  }
+  let Some(pipeline) = saved.details().pipeline else {
+    return recovery_error(ctx, "runs.preflight.pipelineNotPublished");
+  };
+  let Some(version) = saved.pipeline_version() else {
+    return recovery_error(ctx, "runs.preflight.pipelineVersionNotPinned");
+  };
+  let load = ctx.future(
+    (project.repo_root.clone(), pipeline, version),
+    |(root, id, number)| async move {
+      let found = background::run(move || ProjectDb::open(&root).and_then(|db| pinned_pipeline(&db, id, number)))
+        .await?
+        .map_err(|error| messages::store_error(&error))?;
+      found
+        .map(RecoveredChoice)
+        .ok_or_else(|| Message::new("runs.preflight.pipelineNotPublished"))
+    },
+  );
+  let state = load.state().get();
+  let Some(RecoveredChoice(choice)) = state.data else {
+    let detail = state
+      .error
+      .as_ref()
+      .map_or_else(|| ctx.t("runs.page.loadingDetail"), |error| message_text(ctx, error));
+    let title = ctx.t(if state.error.is_some() {
+      "runs.page.loadFailed"
+    } else {
+      "runs.page.loading"
+    });
+    let icon = if state.error.is_some() {
+      Icon::AlertCircle
+    } else {
+      Icon::Loader
+    };
+    return centered(RecoveryPanel::new(icon, &title, &detail).into());
+  };
+  ctx.mount_keyed::<NewTaskForm>(
+    &format!("retry-task-{task}"),
+    NewTaskProps {
+      project,
+      pipelines: Some(tasks.pipelines.clone()),
+      limits,
+      editing: None,
+      recovering: Some(Recovering {
+        task: Arc::new(saved.clone()),
+        pipeline: Arc::new(choice),
+      }),
+    },
+  )
+}
+
+fn redirect_to_task(ctx: &mut Ctx, task: TaskId) -> Element {
+  ctx
+    .use_context::<ProjectNav>()
+    .expect("the project shell provides ProjectNav")
+    .replace(Page::task(task));
+  Element::new()
+}
+
+fn recovery_error(ctx: &Ctx, key: &str) -> Element {
+  centered(RecoveryPanel::new(Icon::AlertCircle, &ctx.t("tasks.new.cannotRetry"), &ctx.t(key)).into())
 }
 
 fn centered(content: Element) -> Element {

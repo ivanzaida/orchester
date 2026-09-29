@@ -132,9 +132,45 @@ fn saving_a_queued_task_persists_details_and_status() {
     .create_tasks(IdempotencyKey::generate(), vec![complete("Switcher")], now())
     .expect("create")
     .remove(0);
-  task.queue().expect("complete task queues");
+  task
+    .queue(orchester_core::resource::VersionNumber::FIRST)
+    .expect("complete task queues");
   db.save_task(&task).expect("save");
   let stored = db.task(task.id()).expect("read").expect("exists");
   assert_eq!(stored, task);
   assert_eq!(stored.status(), TaskStatus::Queued);
+  assert_eq!(
+    stored.pipeline_version(),
+    Some(orchester_core::resource::VersionNumber::FIRST)
+  );
+}
+
+#[test]
+fn old_queued_task_without_a_version_remains_unpinned_after_reopen() {
+  let repo = git_repo();
+  let mut db = ProjectDb::create(repo.path(), kontur()).expect("create");
+  let mut task = db
+    .create_tasks(IdempotencyKey::generate(), vec![complete("Legacy")], now())
+    .expect("create")
+    .remove(0);
+  task
+    .queue(orchester_core::resource::VersionNumber::FIRST)
+    .expect("queue");
+  db.save_task(&task).expect("save");
+  drop(db);
+  let database = repo.path().join(".orchester/orchester.db");
+  rusqlite::Connection::open(database)
+    .expect("open raw fixture")
+    .execute(
+      "UPDATE tasks SET pipeline_version = NULL WHERE id = ?1",
+      [task.id().to_string()],
+    )
+    .expect("simulate a pre-migration queued row");
+  let loaded = ProjectDb::open(repo.path())
+    .expect("reopen")
+    .task(task.id())
+    .expect("read")
+    .expect("task exists");
+  assert_eq!(loaded.status(), TaskStatus::Queued);
+  assert_eq!(loaded.pipeline_version(), None);
 }

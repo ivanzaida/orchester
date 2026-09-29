@@ -42,7 +42,7 @@ pub use self::{
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
   plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},
-  preflight::{PreflightInput, PreflightProblem, preflight},
+  preflight::{BuildTargetState, PreflightInput, PreflightProblem, build_space_problem, preflight},
   prompt::{
     AssembledPrompt, CONTINUE_PROMPT, Composition, DeliveredMessages, DependencyOutput, ExcludedInstruction,
     InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion, PipelineInfo, PlanRevision, ProfileInfo,

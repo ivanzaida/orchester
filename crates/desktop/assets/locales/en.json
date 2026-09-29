@@ -443,9 +443,17 @@
       "notSaved": "Not saved yet",
       "saving": "Saving draft…",
       "saved": "Draft saved locally",
-      "queued": "Task queued",
+      "queued": "Queued · run not started",
+      "unconfirmed": "Task saved · run status unconfirmed",
       "title": "What would you like to build?",
       "description": "Describe the outcome and how to check it. The selected pipeline defines the steps.",
+      "queuedDescription": "This task is saved and queued. Its details cannot be edited here. Fix the issue below, then retry the run.",
+      "recoveredDescription": "This task is saved and queued. No run is recorded. Its details are locked; retry to ask the runner to start it.",
+      "recoveredDetail": "No run is recorded for this task. Retry uses the saved settings and the same start request, so it cannot create a second run.",
+      "recoveryBreadcrumb": "{{project}} / Tasks / {{task}} / Retry run",
+      "cannotRetry": "This queued task cannot be retried",
+      "firstStartQueuedDescription": "This task is saved and queued. The runner is starting it; its details cannot be edited here.",
+      "unconfirmedDescription": "The task is saved, but the runner has not confirmed whether its run started. Check Tasks or retry the same request. The task details are locked.",
       "project": "Project · current context",
       "taskTitle": "Task title",
       "titlePlaceholder": "Name the outcome",
@@ -472,6 +480,7 @@
       "timeLimitReadBack": "Active agent time · pauses and waiting for you don’t count",
       "minutes": "minutes",
       "createAndRun": "Create & run",
+      "retryRun": "Retry run",
       "saveDraft": "Save as draft",
       "noLongerDraft": "This task is already queued and cannot be saved as a draft. Retry Create & run or open it from Tasks.",
       "savedDetailsDiffer": "The stored draft differs from this form. Open it from Tasks before editing.",
@@ -480,6 +489,8 @@
       "repositoryPath": "{{owner}}/{{name}}",
       "starting": "Starting the run…",
       "startingDetail": "Saving the task, checking its setup and handing it to the runner.",
+      "retryingDetail": "Retrying the same run request with the runner.",
+      "runExplanation": "Saves the task, queues it and starts its run in its own branch and worktree.",
       "runNeedsDetails": "Add the missing details above to run the task."
     },
     "edit": {
@@ -1067,6 +1078,7 @@
     },
     "preflight": {
       "pipelineNotPublished": "The task’s pipeline has no published version.",
+      "pipelineVersionNotPinned": "This queued task has no saved pipeline version. It cannot start safely; create a new task with the same details.",
       "noSteps": "The pipeline has no steps.",
       "toolNotPublished": "Step “{{step}}” calls a tool without a published version.",
       "toolNotRunnable": {
@@ -1082,15 +1094,17 @@
       "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
       "notAGitRepository": "The project folder is not a git repository.",
-      "noCommits": "The repository has no commit to start the run from."
+      "noCommits": "The repository has no commit to start the run from.",
+      "buildSpaceLow": "Low disk space for CARGO_TARGET_DIR ({{target}}): {{available}} GiB free; at least {{required}} GiB is needed before this run can start. Free space or choose another build folder.",
+      "buildSpaceUnavailable": "Cannot check free space for CARGO_TARGET_DIR ({{target}}). Check that the folder or its volume is accessible before starting this run."
     },
     "start": {
       "incomplete": "Add the missing details before running the task.",
       "runnerUnavailable": "The runner is not connected. Try again once it is online.",
-      "lost": "The runner stopped answering. Try again; the same run is started, never a second one.",
+      "lost": "The runner stopped answering. The run may have started. Retry uses the same request, so it will not create a second run.",
       "taskMissing": "The task no longer exists.",
       "notQueued": "The task is not queued for a run.",
-      "failed": "The runner could not start the run. The runner log says why."
+      "failed": "The runner reported a problem while starting the run. Check the task and runner log before retrying."
     },
     "limit": {
       "tokenTitle": "Stopped at the token limit",

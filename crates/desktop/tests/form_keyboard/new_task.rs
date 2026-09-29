@@ -173,7 +173,9 @@ fn queued_task_cannot_be_reported_as_a_saved_draft() {
   };
   let mut db = ProjectDb::open(&desktop.repo).expect("open project");
   let mut task = save_draft(&mut db, batch, details.clone(), Timestamp::now()).expect("save draft");
-  task.queue().expect("complete task queues");
+  task
+    .queue(orchester_core::resource::VersionNumber::FIRST)
+    .expect("complete task queues");
   db.save_task(&task).expect("persist queued task");
   assert_eq!(task.status(), TaskStatus::Queued);
   let result = save_draft_in(&desktop.repo, SaveTarget::New(batch), details);

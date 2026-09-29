@@ -328,7 +328,9 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     .create_tasks(IdempotencyKey::generate(), vec![details], now)
     .expect("task")[0]
     .clone();
-  task.queue().expect("complete task");
+  task
+    .queue(orchester_core::resource::VersionNumber::FIRST)
+    .expect("complete task");
   db.save_task(&task).expect("save task");
   task.id()
 }
@@ -354,7 +356,9 @@ pub fn queue_another_task(root: &Path) -> TaskId {
     .create_tasks(IdempotencyKey::generate(), vec![details], Timestamp::now())
     .expect("task")[0]
     .clone();
-  task.queue().expect("complete task");
+  task
+    .queue(first.pipeline_version().expect("first task is pinned"))
+    .expect("complete task");
   db.save_task(&task).expect("save task");
   task.id()
 }

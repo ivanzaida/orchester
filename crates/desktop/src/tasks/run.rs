@@ -1,13 +1,13 @@
 //! Create & run on the new task form (02.09 `l2YA4`): check that the run can start, save the
 //! task and queue it, then ask the runner to start its run. Every step is safe to retry: the
-//! draft is saved under the form's batch key, queueing a queued task changes nothing, and the
-//! run is started under the form's run key.
+//! new draft is saved under the form's batch key or an existing draft is edited in place;
+//! queueing a queued task changes nothing, and the run is started under the form's run key.
 
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version},
+  resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version, VersionNumber},
   run::{PreflightInput, PreflightProblem, RunLimit, preflight},
   store::{ConnectionStore, ResourceStore, TaskStore},
   task::{QueueError, Task, TaskDetails, TaskStatus},
@@ -17,7 +17,7 @@ use orchester_core::{
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::data::{SaveTarget, save_to};
+use super::data::{PipelineChoice, SaveTarget, pinned_pipeline, save_to};
 use crate::{
   messages::{self, Message},
   runner::{RequestError, RunRequestError},
@@ -48,34 +48,74 @@ impl QueueFailure {
   }
 }
 
-/// Checks the configuration `details` would run with, then saves the task where `target` says and
-/// queues it. A draft being edited that an earlier attempt queued already is left as it was.
-pub fn queue_in(repo_root: &Path, target: SaveTarget, details: TaskDetails) -> Result<Task, QueueFailure> {
+/// The saved task and the exact pipeline version its queued run will use.
+pub struct QueuedStart {
+  pub task: Task,
+  pub pipeline: PipelineChoice,
+}
+
+/// Checks the selected configuration, then saves and queues the task. A queued task reached by
+/// an idempotent retry keeps its original version, even if a newer version was published.
+pub fn queue_in(
+  repo_root: &Path,
+  target: SaveTarget,
+  details: TaskDetails,
+  selected_version: VersionNumber,
+) -> Result<QueuedStart, QueueFailure> {
   let mut db = ProjectDb::open(repo_root)?;
-  let problems = check(&db, &details)?;
+  let existing = match target {
+    SaveTarget::New(batch) => db.task_by_batch(batch)?,
+    SaveTarget::Draft(id) => db.task(id)?,
+  };
+  if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
+    return queued_start(&db, task);
+  }
+  let problems = check(&db, &details, selected_version)?;
   if !problems.is_empty() {
     return Err(QueueFailure::Preflight(problems));
   }
-  let queued = match target {
-    SaveTarget::Draft(task) => db.task(task)?.filter(|task| task.status() != TaskStatus::Draft),
-    SaveTarget::New(_) => None,
-  };
-  if let Some(task) = queued {
-    return Ok(task);
-  }
+  // No fallible pipeline read may follow a successful transition to Queued: the form must
+  // receive that state even if the database becomes unreadable immediately afterwards.
+  let selected_pipeline = load_pipeline(&db, details.pipeline, selected_version)?;
   let mut task = save_to(&mut db, target, details, Timestamp::now())?;
   if task.status() == TaskStatus::Draft {
-    task.queue().map_err(QueueFailure::Queue)?;
+    task.queue(selected_version).map_err(QueueFailure::Queue)?;
     db.save_task(&task)?;
+    return Ok(QueuedStart {
+      task,
+      pipeline: selected_pipeline,
+    });
   }
-  Ok(task)
+  // An idempotent save may return a task queued by another attempt; reload its persisted pin.
+  queued_start(&db, task)
+}
+
+fn queued_start(db: &ProjectDb, task: Task) -> Result<QueuedStart, QueueFailure> {
+  let number = task
+    .pipeline_version()
+    .ok_or_else(|| QueueFailure::Preflight(vec![PreflightProblem::PipelineVersionNotPinned]))?;
+  let pipeline = load_pipeline(db, task.details().pipeline, number)?;
+  Ok(QueuedStart { task, pipeline })
+}
+
+fn load_pipeline(
+  db: &ProjectDb,
+  pipeline_id: Option<ResourceId>,
+  number: VersionNumber,
+) -> Result<PipelineChoice, QueueFailure> {
+  let id = pipeline_id.ok_or_else(|| QueueFailure::Preflight(vec![PreflightProblem::PipelineNotPublished]))?;
+  pinned_pipeline(db, id, number)?.ok_or_else(|| QueueFailure::Preflight(vec![PreflightProblem::PipelineNotPublished]))
 }
 
 /// Problems the runner would refuse the run for, as far as the configuration shows them. The
 /// runner checks again and also checks the repository.
-fn check(db: &ProjectDb, details: &TaskDetails) -> Result<Vec<PreflightProblem>, StoreError> {
+fn check(
+  db: &ProjectDb,
+  details: &TaskDetails,
+  selected_version: VersionNumber,
+) -> Result<Vec<PreflightProblem>, StoreError> {
   let pipeline = match details.pipeline {
-    Some(pipeline) => db.latest_version::<Pipeline>(pipeline)?,
+    Some(pipeline) => db.version::<Pipeline>(pipeline, selected_version)?,
     None => None,
   };
   let connections = db.connections()?;
@@ -104,6 +144,7 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     |key: &'static str, step: &orchester_core::resource::StepKey| Message::new(key).with("step", step.to_string());
   match problem {
     PreflightProblem::PipelineNotPublished => Message::new("runs.preflight.pipelineNotPublished"),
+    PreflightProblem::PipelineVersionNotPinned => Message::new("runs.preflight.pipelineVersionNotPinned"),
     PreflightProblem::NoSteps => Message::new("runs.preflight.noSteps"),
     PreflightProblem::ToolNotPublished { step: key } => step("runs.preflight.toolNotPublished", key),
     PreflightProblem::ToolNotRunnable {
@@ -129,10 +170,26 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     }
     PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
     PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),
+    PreflightProblem::BuildSpaceLow {
+      target,
+      available,
+      required,
+    } => Message::new("runs.preflight.buildSpaceLow")
+      .with("target", target.display().to_string())
+      .with("available", gib(*available))
+      .with("required", gib(*required)),
+    PreflightProblem::BuildSpaceUnavailable { target } => {
+      Message::new("runs.preflight.buildSpaceUnavailable").with("target", target.display().to_string())
+    }
   }
 }
 
-/// What a person reads when the runner did not start the run.
+fn gib(bytes: u64) -> String {
+  let tenths = u128::from(bytes) * 10 / (1024_u128 * 1024 * 1024);
+  format!("{}.{}", tenths / 10, tenths % 10)
+}
+
+/// What a person reads when the start request fails, including an unconfirmed outcome.
 pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
   match error {
     RunRequestError::Request(RequestError::NotConnected) => vec![Message::new("runs.start.runnerUnavailable")],
@@ -167,6 +224,44 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::WorktreeNotRemoved { .. }
       | Rejection::Busy,
     ) => vec![Message::new("runs.start.failed")],
+  }
+}
+
+/// Whether a failed start request definitely stopped before a run was created. Once a reply is
+/// lost or the runner reports a failure, a later preflight rejection cannot prove that an
+/// earlier request did not already create the run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StartOutcome {
+  ConfirmedNotStarted,
+  Unconfirmed,
+}
+
+impl StartOutcome {
+  pub fn after(self, error: &RunRequestError) -> Self {
+    if self == Self::Unconfirmed
+      || matches!(
+        error,
+        RunRequestError::Request(RequestError::Lost) | RunRequestError::Rejected(Rejection::Failed { .. })
+      )
+    {
+      Self::Unconfirmed
+    } else {
+      Self::ConfirmedNotStarted
+    }
+  }
+
+  pub fn status_key(self) -> &'static str {
+    match self {
+      Self::ConfirmedNotStarted => "tasks.new.queued",
+      Self::Unconfirmed => "tasks.new.unconfirmed",
+    }
+  }
+
+  pub fn description_key(self) -> &'static str {
+    match self {
+      Self::ConfirmedNotStarted => "tasks.new.queuedDescription",
+      Self::Unconfirmed => "tasks.new.unconfirmedDescription",
+    }
   }
 }
 

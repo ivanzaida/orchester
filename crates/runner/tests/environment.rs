@@ -11,9 +11,10 @@ use orchester_core::{
   connection::stream::AgentEvent,
   id::IdempotencyKey,
   resource::{CommandEnvironment, VariableName},
-  run::RunStatus,
-  store::{ActivityStore, SettingsStore},
+  run::{PreflightProblem, RunStatus},
+  store::{ActivityStore, RunStore, SettingsStore},
 };
+use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
 use self::support::{Setup, StepSpec, TestProject, project, reported, scheduler, tools::ToolSpec, wait_for};
@@ -75,4 +76,74 @@ async fn environment_additions_reach_the_agent_cli_and_the_command_tool() {
   );
   // Only what the project added passes; the rest of the environment stays cleaned.
   assert!(output.lines().any(|line| line == "GH_TOKEN is not set"), "{output}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn environment_space_preflight_reports_an_unmeasurable_target_before_creating_a_run() {
+  let project = project(&Setup::new("Do one task."));
+  let root = project.repo.path();
+  let blocker = root.join("not-a-directory");
+  std::fs::write(&blocker, "x").expect("write blocker");
+  let target = blocker.join("target");
+  let environment = CommandEnvironment::new(BTreeMap::from([(
+    VariableName::new("CARGO_TARGET_DIR").expect("name"),
+    target.to_string_lossy().into_owned(),
+  )]))
+  .expect("valid environment");
+  let mut db = ProjectDb::open(root).expect("open");
+  db.save_project_environment(&environment).expect("save environment");
+  let (scheduler, _events) = scheduler(root);
+  assert_eq!(
+    scheduler.start_run(IdempotencyKey::generate(), project.task).await,
+    Err(Rejection::Preflight {
+      problems: vec![PreflightProblem::BuildSpaceUnavailable { target }],
+    })
+  );
+  assert!(db.runs_of_task(project.task).expect("read runs").is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn environment_space_preflight_rejects_a_dangling_target_link() {
+  let project = project(&Setup::new("Do one task."));
+  let root = project.repo.path();
+  let target = root.join("shared-target-link");
+  let missing = root.join("missing-target-volume");
+  #[cfg(windows)]
+  {
+    // A junction needs no symlink privilege on Windows. Remove its destination after creation.
+    std::fs::create_dir(&missing).expect("create junction destination");
+    let output = std::process::Command::new("cmd")
+      .args(["/C", "mklink", "/J"])
+      .arg(&target)
+      .arg(&missing)
+      .output()
+      .expect("create junction");
+    assert!(
+      output.status.success(),
+      "mklink /J: {}",
+      String::from_utf8_lossy(&output.stderr)
+    );
+    std::fs::remove_dir(&missing).expect("remove junction destination");
+  }
+  #[cfg(unix)]
+  std::os::unix::fs::symlink(&missing, &target).expect("create dangling target symlink");
+  assert!(
+    std::fs::symlink_metadata(&target).is_ok(),
+    "the link itself still exists"
+  );
+  let environment = CommandEnvironment::new(BTreeMap::from([(
+    VariableName::new("CARGO_TARGET_DIR").expect("name"),
+    target.to_string_lossy().into_owned(),
+  )]))
+  .expect("valid environment");
+  let mut db = ProjectDb::open(root).expect("open");
+  db.save_project_environment(&environment).expect("save environment");
+  let (scheduler, _events) = scheduler(root);
+  assert_eq!(
+    scheduler.start_run(IdempotencyKey::generate(), project.task).await,
+    Err(Rejection::Preflight {
+      problems: vec![PreflightProblem::BuildSpaceUnavailable { target }],
+    })
+  );
+  assert!(db.runs_of_task(project.task).expect("read runs").is_empty());
 }

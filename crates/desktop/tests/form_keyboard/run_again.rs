@@ -9,7 +9,7 @@ use std::{fs, path::Path, process::Command};
 use orchester_core::{
   connection::stream::AgentEvent,
   id::{IdempotencyKey, TaskId},
-  resource::{ModelId, Pipeline, Slug},
+  resource::{ModelId, Pipeline, Slug, VersionNumber},
   run::{Run, RunSnapshot, StepFailure, TokenUsage},
   store::{ActivityStore, ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
@@ -182,7 +182,7 @@ fn queued_task(db: &mut ProjectDb, pipeline: orchester_core::id::ResourceId) -> 
     .create_tasks(IdempotencyKey::generate(), vec![details], at(5))
     .expect("task")[0]
     .clone();
-  task.queue().expect("a complete task");
+  task.queue(VersionNumber::FIRST).expect("a complete task");
   db.save_task(&task).expect("queue");
   task.id()
 }

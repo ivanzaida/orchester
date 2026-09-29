@@ -18,12 +18,6 @@ then the backlog by area.
 - When a task is done, move it to *Done* at the end of this file in the same change, with the commit or branch.
 - Tasks marked **needs decision** wait for the user; do not start them.
 
-## Work in progress · 2026-09-29
-
-| Task | Branch | Verified progress and next gate |
-| --- | --- | --- |
-| D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. Pencil now has matching error/retry frames. Same-state comparison and full runner macOS check remain; candidate unmerged. |
-
 ## D · Developing Orchester inside Orchester
 
 What is already in place: runs in their own worktrees, pipelines with agent and command steps, limits, questions and
@@ -67,24 +61,31 @@ blocks a documentation-only run because the runner cannot know whether an arbitr
 measurement pass; the runner macOS target passes cross-check or a Mac smoke test; and a separate agent compares the
 new visible error states with exact Pencil frames and app screenshots of the same size and state.
 
-**Status 2026-09-29: In progress.** A current-master candidate at `codex/d5-live-repro` passed filtered Windows
-tests, independent code review, `check.ps1`, and four independent exact-PID app runs. A regular file beneath the
-absolute Cargo target reproduced the cannot-measure error before run/worktree creation. The first run exposed a
-misleading *Not saved yet* state after the task had been queued. The candidate now shows the queued state truthfully,
-freezes its fields and pipeline, and retries the same task/run key; the second run verified one successful run after
-the target was corrected, and the third verified the inert pipeline and visible error. A fourth run used an empty,
-absolute target on H: with 2.643 GiB free, below the cold-target 10 GiB threshold. It showed a readable low-space
-error, left exactly one new task queued, and created no run or worktree. Ambiguous runner replies now remain
-explicitly unconfirmed. Evidence: `docs/evidence/d5-live-reproduction-2026-09-29.md`.
+**Status 2026-09-29: Done on Windows, with macOS verification deferred by the user.** The implementation on
+`codex/d5-final-port` checks absolute shared build targets before run/worktree creation, persists the selected
+pipeline version, keeps a queued task locked across navigation, and retries under its persisted first-run key.
+Post-rebase independent verification passed 17 named-filter Windows test commands (including all seven Run again
+tests) and `tools/check.ps1`. Exact-PID app captures matched the D5 form, error, and Retry regions in all four saved
+Pencil states without blocking or major differences. The newer ORC-15 Skills sidebar item is absent from those D5
+frames, a major global design-source difference the user explicitly accepted as a D5 exception on 2026-09-29.
+The direct low-space capture used a synthetic measurement for visual verification; the inaccessible-target run and
+tests cover the host error path. A retry after publishing pipeline v2 created one run with its pinned v1 snapshot;
+the integrated ORC-16 Run again path uses the latest published version and checks build space after confirmed
+worktree cleanup. See
+`docs/evidence/d5-final-verification-2026-09-29.md` and the full local report at `.tmp/verify/d5-final-port/report.md`.
 
-The candidate stays unmerged: the new Pencil low-space and cannot-measure frames need a same-state app comparison.
-The macOS `fs4` dependency check passed, but a full `orchester-runner` cross-check needs macOS SDK headers or a Mac.
-The proposed design path is in `docs/evidence/d5-design-path-2026-09-29.md`; earlier checks are in
+A full `orchester-runner` macOS cross-check could not run on this Windows host without macOS SDK headers, and no Mac
+was available. The user explicitly chose to close D5 with this limitation and track macOS verification separately.
+The verifier also observed intermittent foreground activation of its own app window, including one failure and one
+clean interval after the final rebase. No D5 activation call or causal link was found, so no speculative focus change
+was made.
+This observation remains open for a separate reproduction. Earlier evidence is in
+`docs/evidence/d5-live-reproduction-2026-09-29.md`, `docs/evidence/d5-design-path-2026-09-29.md`, and
 `docs/evidence/d5-status-2026-09-29.md`.
 
 Pencil (drawn 2026-09-29): `WOdDe` (02.09C, cannot measure), `WmW1G` (02.09D, low space), `l801hD` (02.09E, retrying the
-same run). They include D4's New Task changes (View pipeline, the approval card, the instructions footer), which the D5
-branch does not have yet; compare the header, description, pipeline box and the actions with their error.
+same run), and `T6bVyU` (queued task reopened after navigation). Compare the header, description, pipeline box,
+actions, and error or recovery text in the same app state and size.
 
 ## T · Tests and runner
 
@@ -164,6 +165,14 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+D5 · Check free disk space outside the agent CLI · branch `codex/d5-final-port` (absolute shared `CARGO_TARGET_DIR`
+checked by the host before run/worktree creation; truthful, locked queued task can be reopened and retried under the
+same first-run key and pinned pipeline version. Post-rebase independent 17 named-filter Windows test commands and
+`tools/check.ps1` passed; four exact-route, same-size Pencil/app comparisons found no blocking or major mismatch in
+D5 regions. The user accepted the missing ORC-15 Skills sidebar item in the older D5 design frames as an exception.
+macOS runner verification was unavailable and explicitly deferred by the user; intermittent verifier-window foreground
+activation is recorded without an attributed D5 cause. Evidence: `docs/evidence/d5-final-verification-2026-09-29.md`).
 
 ORC-16 · Run again · branch `claude/orc16` (a failed or cancelled task starts its next run from the first step in a
 new worktree and branch, with the latest published pipeline version and the task's limits; the rule is core's

@@ -194,9 +194,12 @@ fn stored_tasks() -> Vec<Task> {
     queued.key().clone(),
     complete,
     queued.status(),
+    queued.pipeline_version(),
     queued.created_at(),
   );
-  queued.queue().expect("complete draft can be queued");
+  queued
+    .queue(orchester_core::resource::VersionNumber::FIRST)
+    .expect("complete draft can be queued");
   db.save_task(&queued).expect("save queued task");
   db.tasks().expect("read tasks")
 }

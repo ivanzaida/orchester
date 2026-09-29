@@ -124,6 +124,7 @@ orchester-core.workspace = true
 orchester-exec.workspace = true
 orchester-ipc.workspace = true
 orchester-store.workspace = true
+fs4.workspace = true
 # Reads the values of the secrets MCP servers use from the OS keychain when an agent starts.
 orchester-vault.workspace = true
 parking_lot.workspace = true

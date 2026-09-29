@@ -5,15 +5,15 @@
 
 mod support;
 
-use std::{fs, path::Path, time::Duration};
+use std::{collections::BTreeMap, fs, path::Path, time::Duration};
 
 use orchester_core::{
-  id::{IdempotencyKey, RunId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, TaskId},
   integration::{Leftovers, leftovers},
   limits::ProjectLimits,
   name::Name,
-  resource::{Pipeline, Slug},
-  run::{InterruptCause, Run, RunAgainBlock, RunStatus},
+  resource::{CommandEnvironment, Pipeline, Slug, StepKind, VariableName},
+  run::{BranchName, InterruptCause, NewRun, PreflightProblem, Run, RunAgainBlock, RunStatus},
   store::{ResourceStore, RunStore, SettingsStore, TaskStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -63,6 +63,21 @@ async fn run_again_after_a_failed_run_starts_the_next_run_from_the_first_step() 
   let failed = wait_for(root, &mut events, first, |run| run.status().is_terminal()).await;
   assert!(matches!(failed.status(), RunStatus::Failed(_)));
 
+  let mut db = ProjectDb::open(root).expect("open");
+  let task = db.task(project.task).expect("read task").expect("task");
+  let pipeline = task.details().pipeline.expect("pipeline");
+  let v1 = db.latest_version::<Pipeline>(pipeline).expect("read v1").expect("v1");
+  assert_eq!(task.pipeline_version(), Some(v1.number()));
+  assert_eq!(failed.snapshot().pipeline().version, v1.id());
+  let mut steps = v1.body().steps().to_vec();
+  steps[0].name = Name::new("Implement revised").expect("step name");
+  let now = Timestamp::now();
+  let mut draft = v1.to_draft(now);
+  draft.edit(Pipeline::new(steps).expect("pipeline"), now);
+  db.save_draft(pipeline, &draft).expect("save draft");
+  let v2 = db.publish_draft::<Pipeline>(pipeline, now).expect("publish v2");
+  drop(db);
+
   let again = scheduler
     .run_again(IdempotencyKey::generate(), project.task, first, None)
     .await
@@ -70,6 +85,9 @@ async fn run_again_after_a_failed_run_starts_the_next_run_from_the_first_step() 
   assert_ne!(again, first);
   let next = run(root, again);
   assert_eq!(next.task(), project.task);
+  assert_eq!(next.snapshot().pipeline().version, v2.id());
+  assert_eq!(next.snapshot().pipeline().number, v2.number());
+  assert_eq!(next.snapshot().body().steps()[0].name.as_str(), "Implement revised");
   assert_eq!(next.number().get(), failed.number().get() + 1);
   assert_eq!(next.branch().as_str(), "orchester/orc-1-run-2");
   assert_ne!(next.status(), &RunStatus::Pending, "the run started");
@@ -99,6 +117,27 @@ async fn run_again_after_a_cancelled_run_starts_once_per_request() {
   let again = once.expect("the task runs again");
   assert_eq!(twice, Ok(again));
   assert_eq!(scheduler.run_again(key, project.task, first, None).await, Ok(again));
+  let mut db = ProjectDb::open(root).expect("open");
+  let task = db.task(project.task).expect("read task").expect("task");
+  let pipeline = task.details().pipeline.expect("pipeline");
+  let v1 = db.latest_version::<Pipeline>(pipeline).expect("read v1").expect("v1");
+  let mut steps = v1.body().steps().to_vec();
+  let StepKind::Agent { profile, .. } = &mut steps[0].kind else {
+    panic!("the first step is an agent");
+  };
+  *profile = Some(ResourceId::generate());
+  let now = Timestamp::now();
+  let mut draft = v1.to_draft(now);
+  draft.edit(Pipeline::new(steps).expect("pipeline"), now);
+  db.save_draft(pipeline, &draft).expect("save draft");
+  db.publish_draft::<Pipeline>(pipeline, now)
+    .expect("publish invalid-for-run v2");
+  drop(db);
+  assert_eq!(
+    scheduler.run_again(key, project.task, first, None).await,
+    Ok(again),
+    "a recorded request does not recheck a later pipeline version"
+  );
   let runs = ProjectDb::open(root)
     .expect("open")
     .runs_of_task(project.task)
@@ -113,6 +152,54 @@ async fn run_again_after_a_cancelled_run_starts_once_per_request() {
     Err(blocked(RunAgainBlock::RunActive { number }))
   );
   scheduler.stop_all(InterruptCause::QuitNow).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn recorded_pending_run_again_rechecks_space_before_creating_its_worktree() {
+  let project = project(&Setup::new("Please fail."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let first = start(&scheduler, project.task).await;
+  let previous = wait_for(root, &mut events, first, |run| run.status().is_terminal()).await;
+  let mut db = ProjectDb::open(root).expect("open");
+  let task = db.task(project.task).expect("read task").expect("task");
+  let key = IdempotencyKey::generate();
+  let pending = db
+    .create_run(
+      key,
+      NewRun {
+        task: project.task,
+        snapshot: previous.snapshot().clone(),
+        branch: BranchName::for_next_run(task.key(), 1),
+        base: previous.base().clone(),
+        base_branch: previous.base_branch().cloned(),
+        budget: previous.budget(),
+        max_duration: previous.max_duration(),
+      },
+      Timestamp::now(),
+    )
+    .expect("record pending run");
+  assert_eq!(pending.status(), &RunStatus::Pending);
+  let blocked = root.join("blocked-target");
+  fs::write(&blocked, "not a directory").expect("block target");
+  db.save_project_environment(
+    &CommandEnvironment::new(BTreeMap::from([(
+      VariableName::new("CARGO_TARGET_DIR").expect("variable name"),
+      blocked.to_str().expect("Unicode path").into(),
+    )]))
+    .expect("environment"),
+  )
+  .expect("save target");
+  drop(db);
+
+  assert_eq!(
+    scheduler.run_again(key, project.task, first, None).await,
+    Err(Rejection::Preflight {
+      problems: vec![PreflightProblem::BuildSpaceUnavailable { target: blocked }],
+    })
+  );
+  assert_eq!(run(root, pending.id()).status(), &RunStatus::Pending);
+  assert!(!worktree(root, pending.id()).exists());
 }
 
 #[tokio::test(flavor = "multi_thread")]

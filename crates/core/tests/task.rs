@@ -4,6 +4,7 @@ use orchester_core::{
   id::{ResourceId, TaskId},
   name::Name,
   project::{ProjectKey, TaskKey},
+  resource::VersionNumber,
   task::{EditError, LimitsError, MissingDetail, QueueError, Task, TaskDetails, TaskLimits, TaskStatus},
   time::Timestamp,
   tokens::TokenBudget,
@@ -52,16 +53,38 @@ fn incomplete_draft_reports_every_missing_detail_and_stays_a_draft() {
     MissingDetail::Pipeline,
     MissingDetail::Limits,
   ];
-  assert_eq!(task.queue(), Err(QueueError::Incomplete(expected)));
+  assert_eq!(task.queue(VersionNumber::FIRST), Err(QueueError::Incomplete(expected)));
   assert_eq!(task.status(), TaskStatus::Draft);
 }
 
 #[test]
 fn complete_draft_is_queued_once() {
   let mut task = task(complete());
-  assert_eq!(task.queue(), Ok(()));
+  assert_eq!(task.queue(VersionNumber::FIRST), Ok(()));
   assert_eq!(task.status(), TaskStatus::Queued);
-  assert_eq!(task.queue(), Err(QueueError::NotDraft(TaskStatus::Queued)));
+  assert_eq!(task.pipeline_version(), Some(VersionNumber::FIRST));
+  assert_eq!(
+    task.queue(VersionNumber::FIRST),
+    Err(QueueError::NotDraft(TaskStatus::Queued))
+  );
+}
+
+#[test]
+fn first_run_key_survives_queue_and_reload_but_differs_for_another_task() {
+  let mut first = task(complete());
+  let key = first.id().first_run_key();
+  assert_eq!(key.as_uuid(), first.id().as_uuid());
+  first.queue(VersionNumber::FIRST).expect("queue first task");
+  let reloaded = Task::from_stored(
+    first.id(),
+    first.key().clone(),
+    first.details().clone(),
+    first.status(),
+    first.pipeline_version(),
+    first.created_at(),
+  );
+  assert_eq!(key, reloaded.id().first_run_key());
+  assert_ne!(key, task(complete()).id().first_run_key());
 }
 
 #[test]
@@ -90,7 +113,7 @@ fn edit_is_refused_once_the_task_has_a_run_or_left_the_drafts() {
 
   let details = complete();
   let mut queued = task(details.clone());
-  queued.queue().expect("a complete draft queues");
+  queued.queue(VersionNumber::FIRST).expect("a complete draft queues");
   assert_eq!(
     queued.edit(title_only(), false),
     Err(EditError::NotDraft(TaskStatus::Queued))

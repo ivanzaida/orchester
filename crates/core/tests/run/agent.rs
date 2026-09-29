@@ -203,6 +203,7 @@ fn task_phase_follows_the_task_and_its_latest_run() {
     draft.key().clone(),
     draft.details().clone(),
     TaskStatus::Queued,
+    None,
     draft.created_at(),
   );
   assert_eq!(TaskPhase::of(&queued, None, None), TaskPhase::Queued);

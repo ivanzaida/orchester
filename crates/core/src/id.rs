@@ -71,6 +71,14 @@ define_id!(
   /// Client-generated key that makes a create/queue/send action safe to retry.
   IdempotencyKey
 );
+
+impl TaskId {
+  /// Reopening a queued task must retry its first run with the same key. Later runs use
+  /// independent request keys.
+  pub const fn first_run_key(self) -> IdempotencyKey {
+    IdempotencyKey::from_uuid(self.as_uuid())
+  }
+}
 define_id!(
   /// One attempt of a run; a failure routed back to an upstream step starts a new attempt.
   AttemptId

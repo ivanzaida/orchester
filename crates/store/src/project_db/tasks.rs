@@ -4,6 +4,7 @@ use orchester_core::{
   id::{IdempotencyKey, TaskId},
   name::Name,
   project::{ProjectKey, TaskKey},
+  resource::VersionNumber,
   store::TaskStore,
   task::{Task, TaskDetails, TaskLimits, TaskStatus},
   time::Timestamp,
@@ -16,8 +17,20 @@ use crate::{
   rows::{budget_value, corrupt, duration_value, millis_column, parse, tokens_column},
 };
 
-const SELECT_TASKS: &str =
-  "SELECT id, number, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, created_at FROM tasks";
+const SELECT_TASKS: &str = "SELECT id, number, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, created_at, pipeline_version FROM tasks";
+
+impl ProjectDb {
+  /// Finds the task already created by an idempotent form submission, if any.
+  pub fn task_by_batch(&self, batch: IdempotencyKey) -> Result<Option<Task>, StoreError> {
+    let mut found = load_tasks(
+      &self.connection,
+      self.project.key(),
+      "WHERE batch_key = ?1 ORDER BY number LIMIT 1",
+      [batch.to_string()],
+    )?;
+    Ok(found.pop())
+  }
+}
 
 impl TaskStore for ProjectDb {
   type Error = StoreError;
@@ -98,7 +111,7 @@ fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreEr
   let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
   let updated = transaction.execute(
     "UPDATE tasks SET title = ?2, brief = ?3, pipeline_id = ?4, budget_tokens = ?5, max_duration_ms = ?6, \
-     status = ?7 WHERE id = ?1",
+     status = ?7, pipeline_version = ?8 WHERE id = ?1",
     params![
       task.id().to_string(),
       details.title.as_str(),
@@ -107,6 +120,7 @@ fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreEr
       budget_tokens,
       max_duration_ms,
       status_text(task.status()),
+      task.pipeline_version().map(|version| version.get()),
     ],
   )?;
   if updated == 0 {
@@ -120,7 +134,7 @@ fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &str) -> Resul
   let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
   transaction.execute(
     "INSERT INTO tasks (id, number, batch_key, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, \
-     created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+     created_at, pipeline_version) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
     params![
       task.id().to_string(),
       task.key().number().get(),
@@ -132,6 +146,7 @@ fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &str) -> Resul
       max_duration_ms,
       status_text(task.status()),
       task.created_at().unix_millis(),
+      task.pipeline_version().map(|version| version.get()),
     ],
   )?;
   write_criteria(transaction, task.id(), &details.acceptance_criteria)
@@ -185,6 +200,7 @@ struct TaskRow {
   max_duration_ms: Option<i64>,
   status: String,
   created_at: i64,
+  pipeline_version: Option<i64>,
 }
 
 impl TaskRow {
@@ -199,6 +215,7 @@ impl TaskRow {
       max_duration_ms: row.get(6)?,
       status: row.get(7)?,
       created_at: row.get(8)?,
+      pipeline_version: row.get(9)?,
     })
   }
 
@@ -215,11 +232,13 @@ impl TaskRow {
         .transpose()?,
       limits,
     };
+    let pipeline_version = self.pipeline_version.map(version_number).transpose()?;
     Ok(Task::from_stored(
       parse("task id", &self.id)?,
       TaskKey::new(project.clone(), task_number(self.number)?),
       details,
       parse_status(&self.status)?,
+      pipeline_version,
       Timestamp::from_unix_millis(self.created_at),
     ))
   }
@@ -252,6 +271,14 @@ fn task_number(number: i64) -> Result<NonZeroU32, StoreError> {
     .ok()
     .and_then(NonZeroU32::new)
     .ok_or_else(|| corrupt("task number", number))
+}
+
+fn version_number(number: i64) -> Result<VersionNumber, StoreError> {
+  u32::try_from(number)
+    .ok()
+    .and_then(NonZeroU32::new)
+    .map(VersionNumber::new)
+    .ok_or_else(|| corrupt("task pipeline version", number))
 }
 
 const fn status_text(status: TaskStatus) -> &'static str {

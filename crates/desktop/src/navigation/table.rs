@@ -50,6 +50,7 @@ fn project_pages(routes: Routes) -> Routes {
     .route("/tasks/new", project::page)
     .route("/tasks/:task", project::page)
     .route("/tasks/:task/edit", project::page)
+    .route("/tasks/:task/retry", project::page)
     .route("/pull-requests", project::page)
     .route("/pull-requests/:number", project::page)
     .layout("/pipelines", project::page, |routes| selection(routes, "/:pipeline"))

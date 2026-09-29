@@ -9,6 +9,7 @@
 mod brief;
 mod edit;
 mod plan;
+mod start;
 
 /// Room the brief's scroll content keeps on its left for the outer focus rings of controls on
 /// its edge: the ring (`focus-extent`) and the padding of a link inside it.
@@ -37,8 +38,8 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use self::brief::Criterion;
-pub use self::edit::Editing;
+pub use self::edit::{Editing, Recovering};
+use self::{brief::Criterion, start::run_action};
 use super::ProjectNav;
 use crate::{
   activity::{Activity, operations},
@@ -47,13 +48,12 @@ use crate::{
   messages,
   messages::Message,
   navigation::route::Page,
-  runner::Runners,
   tabs::dirty::EditMark,
   tasks::{
     data::{PipelineChoice, SaveTarget, TaskDraftSaveError, save_draft_in},
     form::{FormErrors, TaskForm},
     list::missing_key,
-    run::{queue_in, start_messages},
+    run::StartOutcome,
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
@@ -77,6 +77,8 @@ pub struct NewTaskProps {
   pub limits: Option<ProjectLimits>,
   /// The saved draft the form edits (Edit task); `None` for a new task.
   pub editing: Option<Editing>,
+  /// A queued task reopened after the form was closed, with its pinned published pipeline.
+  pub recovering: Option<Recovering>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for NewTaskProps {}
@@ -102,14 +104,42 @@ pub struct StartedTask(TaskId);
 
 impl lurq::app::component::DevtoolsInspectable for StartedTask {}
 
-/// Why Create & run did not start the run, one message per reason.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RunProblems(pub(super) Arc<[Message]>);
+struct QueuedTask {
+  task: TaskId,
+  outcome: StartOutcome,
+  pipeline: Arc<PipelineChoice>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for QueuedTask {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct StartingPipeline(Arc<PipelineChoice>);
+
+impl lurq::app::component::DevtoolsInspectable for StartingPipeline {}
+
+/// Why the start request failed, and any task already queued for retry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunProblems {
+  pub(super) messages: Arc<[Message]>,
+  queued: Option<QueuedTask>,
+}
 
 impl lurq::app::component::DevtoolsInspectable for RunProblems {}
 
-/// Where the task is saved, and the run's key.
-type RunArgs = (PathBuf, SaveTarget, IdempotencyKey, TaskDetails);
+/// A new task must be queued once; a retry starts the same queued task under the same run key.
+#[derive(Clone)]
+enum RunArgs {
+  New {
+    repo_root: PathBuf,
+    target: SaveTarget,
+    details: TaskDetails,
+    pipeline: Arc<PipelineChoice>,
+  },
+  Retry {
+    queued: QueuedTask,
+  },
+}
 type RunAction = FutureAction<RunArgs, StartedTask, RunProblems>;
 
 /// Everything a part of the form needs to know about the current values.
@@ -123,9 +153,15 @@ struct FormState {
   /// The form edits a saved draft (Edit task).
   editing: bool,
   queued: bool,
+  recovered: bool,
   save_error: Option<Message>,
   /// Create & run is under way.
   starting: bool,
+  /// This pending request was started from Retry run, not the first Create & run.
+  retrying: bool,
+  /// The selected published version while the first request has not queued the task yet.
+  starting_pipeline: Option<Arc<PipelineChoice>>,
+  queued_task: Option<QueuedTask>,
   run_problems: Option<RunProblems>,
 }
 
@@ -153,12 +189,11 @@ pub struct NewTaskForm {
   /// The fields were filled in, from the project's defaults or the draft being edited; they are
   /// filled in once.
   seeded: Signal<bool>,
-  /// Once this form's batch was queued, retries cannot turn it back into a draft.
-  queued: Signal<bool>,
   /// Generated once per form: every save attempt of this form uses it.
   batch: IdempotencyKey,
-  /// Generated once per form: every Create & run attempt of this form starts this run.
-  run: IdempotencyKey,
+  queued_task: Signal<Option<QueuedTask>>,
+  retrying: Signal<bool>,
+  starting_pipeline: Signal<Option<StartingPipeline>>,
   nav: ProjectNav,
   /// The edits of a draft being edited that are not saved, which leaving the form asks about.
   unsaved: Option<EditMark>,
@@ -178,14 +213,20 @@ impl Component for NewTaskForm {
         saved.tasks_changed();
       }
     });
-    let queued = ctx.signal(false);
-    let run = run_action(ctx, queued.clone());
+    let queued_task = ctx.signal(None);
+    let retrying = ctx.signal(false);
+    let starting_pipeline = ctx.signal(None);
+    let run = run_action(ctx, queued_task.clone());
+    let queued_on_failure = queued_task.clone();
     let started = nav.clone();
     ctx.watch(&run.state(), move |state| {
       if state.is_pending() {
         return;
       }
-      // The task may have been saved and queued even when the run did not start.
+      if let Some(task) = state.error.as_ref().and_then(|problems| problems.queued.clone()) {
+        queued_on_failure.set(Some(task));
+      }
+      // The task may have been saved and queued even when the start outcome is unknown.
       started.tasks_changed();
       if let Some(StartedTask(task)) = state.data {
         started.finish(Page::task(task));
@@ -200,9 +241,10 @@ impl Component for NewTaskForm {
       time_limit: ctx.signal(String::new()),
       focused_input: ctx.signal(None),
       seeded: ctx.signal(false),
-      queued,
       batch: IdempotencyKey::generate(),
-      run: IdempotencyKey::generate(),
+      queued_task,
+      retrying,
+      starting_pipeline,
       nav,
       unsaved: EditMark::of(ctx),
     }
@@ -211,21 +253,27 @@ impl Component for NewTaskForm {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<NewTaskProps>().clone();
     let save = save_action(ctx);
-    let run = run_action(ctx, self.queued.clone());
+    let run = run_action(ctx, self.queued_task.clone());
     let link = repository_link(ctx, &props.project);
     let limits = props.limits.unwrap_or_default();
-    self.seed(ctx, props.limits, props.editing.as_ref());
+    self.seed(ctx, props.limits, props.editing.as_ref(), props.recovering.as_ref());
     let editing = props.editing.as_ref().map(|editing| &*editing.task);
+    let recovered = props.recovering.as_ref().map(|recovering| &*recovering.task);
     let separator = ctx.t("number.groupSeparator");
-    let state = self.state(&save, &run, &separator, (limits, editing));
+    let state = self.state(&save, &run, &separator, (limits, editing), recovered.is_some());
     self.mark_unsaved(&state, editing);
-    let target = self.target(editing);
+    let target = self.target(editing.or(recovered));
     let submit = self
       .save_handler(&save, &props.project, target, state.ready.clone())
       .filter(|_| state.can_save());
     let start = self
-      .run_handler(&run, &props.project, target, state.ready.clone())
-      .filter(|_| !state.saving && !state.starting && state.missing.is_empty());
+      .run_handler(
+        &run,
+        (&props.project, target, props.pipelines.as_deref()),
+        state.ready.clone(),
+        state.queued_task.clone(),
+      )
+      .filter(|_| !state.saving && !state.starting && (state.queued_task.is_some() || state.missing.is_empty()));
     // The brief's scroll viewport starts `FOCUS_ROOM` early and its content is padded by the
     // same amount, so the content stays at the designed inset and keeps room for focus rings.
     let brief_left = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0)
@@ -255,9 +303,9 @@ impl Component for NewTaskForm {
         ctx,
         props.project.project.name().as_str(),
         &self.nav,
-        (&state, editing),
+        (&state, editing, recovered),
       ))
-      .child(heading(ctx, editing))
+      .child(heading(ctx, editing, &state))
       .child(form(submit, content))
   }
 }
@@ -265,13 +313,23 @@ impl Component for NewTaskForm {
 impl NewTaskForm {
   /// Fills in the draft being edited, or else the project's default run budget and time limit
   /// once they are read, unless something was typed there already.
-  fn seed(&self, ctx: &Ctx, limits: Option<ProjectLimits>, editing: Option<&Editing>) {
+  fn seed(&self, ctx: &Ctx, limits: Option<ProjectLimits>, editing: Option<&Editing>, recovering: Option<&Recovering>) {
     if self.seeded.get_untracked() {
       return;
     }
     if let Some(editing) = editing {
       self.seeded.set(true);
       edit::open(ctx, self, editing);
+      return;
+    }
+    if let Some(recovering) = recovering {
+      self.seeded.set(true);
+      edit::seed(ctx, self, &recovering.task);
+      self.queued_task.set(Some(QueuedTask {
+        task: recovering.task.id(),
+        outcome: StartOutcome::ConfirmedNotStarted,
+        pipeline: recovering.pipeline.clone(),
+      }));
       return;
     }
     let Some(limits) = limits else {
@@ -307,6 +365,7 @@ impl NewTaskForm {
     run: &RunAction,
     separator: &str,
     (limits, editing): (ProjectLimits, Option<&Task>),
+    recovered: bool,
   ) -> FormState {
     let criteria: Vec<String> = self
       .criteria
@@ -336,7 +395,8 @@ impl NewTaskForm {
       Err(errors) => (None, errors),
     };
     let starting = run.state().get();
-    let queued = self.queued.get();
+    let queued_task = self.queued_task.get();
+    let queued = queued_task.is_some();
     let stored = saving
       .data
       .as_ref()
@@ -348,10 +408,17 @@ impl NewTaskForm {
       saved: !queued && ready.as_ref().is_some_and(|details| stored == Some(details)),
       editing: editing.is_some(),
       queued,
+      recovered,
       ready,
       saving: saving.is_pending(),
       save_error: saving.error.clone().filter(|_| !saving.is_pending()),
       starting: starting.is_pending(),
+      retrying: self.retrying.get(),
+      starting_pipeline: starting
+        .is_pending()
+        .then(|| self.starting_pipeline.get().map(|held| held.0))
+        .flatten(),
+      queued_task,
       run_problems: starting.error.clone().filter(|_| !starting.is_pending()),
     }
   }
@@ -369,26 +436,6 @@ impl NewTaskForm {
     let repo_root = project.repo_root.clone();
     Some(Arc::new(move || {
       save.run((repo_root.clone(), target, details.clone()));
-    }))
-  }
-}
-
-impl NewTaskForm {
-  /// Queues the complete form and starts its run under the form's keys; `None` while the form
-  /// is not valid.
-  fn run_handler(
-    &self,
-    run: &RunAction,
-    project: &OpenProject,
-    target: SaveTarget,
-    ready: Option<TaskDetails>,
-  ) -> Submit {
-    let details = ready?;
-    let run = run.clone();
-    let repo_root = project.repo_root.clone();
-    let key = self.run;
-    Some(Arc::new(move || {
-      run.run((repo_root.clone(), target, key, details.clone()));
     }))
   }
 }
@@ -435,40 +482,17 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
   })
 }
 
-fn run_action(ctx: &mut Ctx, queued: Signal<bool>) -> RunAction {
-  let runners = ctx
-    .use_context::<Runners>()
-    .expect("the root provides Runners before mounting screens");
-  ctx.future_action(move |(repo_root, target, key, details): RunArgs| {
-    let runners = runners.clone();
-    let queued_state = queued.clone();
-    async move {
-      let problems = |messages: Vec<Message>| RunProblems(messages.into());
-      let queued = background::run(move || queue_in(&repo_root, target, details))
-        .await
-        .map_err(|error| problems(vec![error]))?;
-      let task = queued.map_err(|failure| {
-        tracing::warn!(?failure, "the task was not queued for a run");
-        problems(failure.messages())
-      })?;
-      if !queued_state.get_untracked() {
-        queued_state.set(true);
-      }
-      runners.start_run(key, task.id()).await.map_err(|error| {
-        tracing::warn!(%error, "the run did not start");
-        problems(start_messages(&error))
-      })?;
-      Ok(StartedTask(task.id()))
-    }
-  })
-}
-
 /// Back to the task list, or to the task being edited, the breadcrumb and the persisted task state
 /// (`dWjfr`, `kTm0n`): a draft being edited reads *Unsaved changes* once it differs from the
 /// saved one.
-fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, (form, editing): (&FormState, Option<&Task>)) -> Element {
+fn topbar(
+  ctx: &Ctx,
+  project: &str,
+  nav: &ProjectNav,
+  (form, editing, recovered): (&FormState, Option<&Task>, Option<&Task>),
+) -> Element {
   let nav = nav.clone();
-  let back_to = editing.map_or(Page::TASKS, |task| Page::task(task.id()));
+  let back_to = editing.or(recovered).map_or(Page::TASKS, |task| Page::task(task.id()));
   let back = pressable(surface().id("new-task-back"), move || nav.leave(back_to))
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
@@ -477,8 +501,8 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, (form, editing): (&FormSta
     ctx.t("tasks.new.starting")
   } else if form.saving {
     ctx.t("tasks.new.saving")
-  } else if form.queued {
-    ctx.t("tasks.new.queued")
+  } else if let Some(queued) = form.queued_task.as_ref() {
+    ctx.t(queued.outcome.status_key())
   } else if form.saved {
     ctx.t("tasks.new.saved")
   } else if form.editing {
@@ -501,15 +525,24 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, (form, editing): (&FormSta
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(back)
-    .child(Text::new(&edit::breadcrumb(ctx, project, editing)).variant(TypographyStyle::Description))
+    .child(Text::new(&edit::breadcrumb(ctx, project, editing, recovered)).variant(TypographyStyle::Description))
     .child(Spacer::new().flex(1.0))
     .child(state)
     .into()
 }
 
 /// Heading (`hkWbp`; `h79DDd` while editing).
-fn heading(ctx: &Ctx, editing: Option<&Task>) -> Element {
+fn heading(ctx: &Ctx, editing: Option<&Task>, state: &FormState) -> Element {
   let (title, description) = edit::heading_texts(ctx, editing);
+  let description = if state.starting && state.queued_task.is_some() && !state.retrying {
+    ctx.t("tasks.new.firstStartQueuedDescription")
+  } else if state.recovered && state.run_problems.is_none() {
+    ctx.t("tasks.new.recoveredDescription")
+  } else if let Some(queued) = state.queued_task.as_ref() {
+    ctx.t(queued.outcome.description_key())
+  } else {
+    description
+  };
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Section)

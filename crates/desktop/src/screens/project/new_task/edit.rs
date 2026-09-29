@@ -11,6 +11,7 @@ use super::{NewTaskForm, PipelineSelection, brief::Criterion};
 use crate::{
   budget::minutes_text,
   messages::{Message, edit_error},
+  tasks::data::PipelineChoice,
 };
 
 /// The saved draft the form edits, as the project's tasks were last read.
@@ -19,6 +20,13 @@ pub struct Editing {
   pub task: Arc<Task>,
   /// A run was started for the task.
   pub has_run: bool,
+}
+
+/// A queued task without a run, opened in the locked form to retry its first run.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Recovering {
+  pub task: Arc<Task>,
+  pub pipeline: Arc<PipelineChoice>,
 }
 
 /// Fills the form with the draft's saved details when it can still be edited; otherwise leads to
@@ -33,7 +41,7 @@ pub(super) fn open(ctx: &Ctx, form: &NewTaskForm, editing: &Editing) {
 
 /// Fills the form with `task`'s saved details; an empty criteria list keeps one empty row to type
 /// in, as a new form has.
-fn seed(ctx: &Ctx, form: &NewTaskForm, task: &Task) {
+pub(super) fn seed(ctx: &Ctx, form: &NewTaskForm, task: &Task) {
   let details = task.details();
   form.title.set(details.title.as_str().to_owned());
   form.brief.set(details.brief.clone());
@@ -59,7 +67,13 @@ pub(super) fn leave_question(task: &Task) -> Message {
 }
 
 /// The topbar's breadcrumb (`K51w5h`).
-pub(super) fn breadcrumb(ctx: &Ctx, project: &str, editing: Option<&Task>) -> Arc<str> {
+pub(super) fn breadcrumb(ctx: &Ctx, project: &str, editing: Option<&Task>, recovering: Option<&Task>) -> Arc<str> {
+  if let Some(task) = recovering {
+    return ctx.t_args(
+      "tasks.new.recoveryBreadcrumb",
+      [("project", project), ("task", task.key().to_string().as_str())],
+    );
+  }
   match editing {
     Some(task) => ctx.t_args(
       "tasks.edit.breadcrumb",

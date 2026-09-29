@@ -39,13 +39,13 @@ pub(super) struct Prepared {
   pub(super) execute: bool,
 }
 
-pub(super) fn prepare(
+pub(super) fn prepare_first(
   db: &mut ProjectDb,
   root: &Path,
   key: IdempotencyKey,
   task_id: TaskId,
 ) -> Result<Prepared, Rejection> {
-  let checked = check(db, root, task_id)?;
+  let checked = check(db, root, task_id, PipelineSource::QueuedPin)?;
   record(db, root, key, checked)
 }
 
@@ -55,10 +55,20 @@ pub(super) struct Checked {
   new: NewRun,
 }
 
-/// Checks that queued task `task_id` can start its next run and pins what that run uses: the
-/// latest published version of its pipeline, the repository's `HEAD` and branch, the task's
-/// limits and the branch of its next run.
-pub(super) fn check(db: &ProjectDb, root: &Path, task_id: TaskId) -> Result<Checked, Rejection> {
+/// Run again takes the latest published pipeline; the queued first run takes its saved version.
+pub(super) fn check_again(db: &ProjectDb, root: &Path, task_id: TaskId) -> Result<Checked, Rejection> {
+  check(db, root, task_id, PipelineSource::LatestPublished)
+}
+
+#[derive(Clone, Copy)]
+enum PipelineSource {
+  QueuedPin,
+  LatestPublished,
+}
+
+/// Checks a queued task before its next run and pins the selected pipeline, repository revision,
+/// branch, and task limits in that run.
+fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -> Result<Checked, Rejection> {
   let store = |error: StoreError| failed("cannot read the project database", &error);
   let task = db.task(task_id).map_err(store)?.ok_or(Rejection::TaskNotFound)?;
   // Unreadable runs count too: each run of the task has its own branch.
@@ -72,7 +82,15 @@ pub(super) fn check(db: &ProjectDb, root: &Path, task_id: TaskId) -> Result<Chec
     .details()
     .pipeline
     .ok_or_else(|| preflight_failed(PreflightProblem::PipelineNotPublished))?;
-  let pipeline = db.latest_version::<Pipeline>(pipeline_id).map_err(store)?;
+  let pipeline = match source {
+    PipelineSource::QueuedPin => {
+      let number = task
+        .pipeline_version()
+        .ok_or_else(|| preflight_failed(PreflightProblem::PipelineVersionNotPinned))?;
+      db.version::<Pipeline>(pipeline_id, number).map_err(store)?
+    }
+    PipelineSource::LatestPublished => db.latest_version::<Pipeline>(pipeline_id).map_err(store)?,
+  };
   let published = Published::read(db).map_err(store)?;
   let connections = db.connections().map_err(store)?;
   let problems = preflight(PreflightInput {
@@ -83,6 +101,9 @@ pub(super) fn check(db: &ProjectDb, root: &Path, task_id: TaskId) -> Result<Chec
   });
   if !problems.is_empty() {
     return Err(Rejection::Preflight { problems });
+  }
+  if matches!(source, PipelineSource::QueuedPin) {
+    super::build_space::preflight(db, root)?;
   }
   let pipeline = pipeline.expect("the preflight rejects a pipeline without a published version");
   let base = base_revision(root)?;
@@ -103,17 +124,40 @@ pub(super) fn check(db: &ProjectDb, root: &Path, task_id: TaskId) -> Result<Chec
   Ok(Checked { task, new })
 }
 
-/// Records the run `checked` starts under `key`, creates its worktree and starts it; finds the run
-/// an earlier request with `key` created instead, and starts it only if it had not started yet.
+/// Records the run `checked` starts under `key`, then starts it only if it is still pending.
 pub(super) fn record(
   db: &mut ProjectDb,
   root: &Path,
   key: IdempotencyKey,
   Checked { task, new }: Checked,
 ) -> Result<Prepared, Rejection> {
-  let mut run = db
+  let run = db
     .create_run(key, new, Timestamp::now())
     .map_err(|error| read_failed("cannot record the run", error))?;
+  finish_recorded(db, root, run, task)
+}
+
+/// A retry of a recorded request reads that run directly, without rechecking configuration that
+/// may have changed since the first request. A pending record still needs its worktree and start.
+pub(super) fn resume_recorded(
+  db: &mut ProjectDb,
+  root: &Path,
+  task_id: TaskId,
+  run: Run,
+) -> Result<Prepared, Rejection> {
+  if run.task() != task_id {
+    return Err(Rejection::Failed {
+      detail: "the start request key belongs to another task".into(),
+    });
+  }
+  let task = db
+    .task(task_id)
+    .map_err(|error| failed("cannot read the run's task", &error))?
+    .ok_or(Rejection::TaskNotFound)?;
+  finish_recorded(db, root, run, task)
+}
+
+fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) -> Result<Prepared, Rejection> {
   let worktrees = Worktrees::new(root).map_err(|error| failed("cannot find the worktrees", &error))?;
   let worktree = worktrees.path(run.id());
   if run.status() != &RunStatus::Pending {
