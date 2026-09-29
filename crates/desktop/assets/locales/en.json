@@ -478,6 +478,10 @@
       "starting": "Starting the run…",
       "startingDetail": "Saving the task, checking its setup and handing it to the runner.",
       "runNeedsDetails": "Add the missing details above to run the task."
+    },
+    "edit": {
+      "notDraft": "This task is queued for a run, so it can no longer be edited.",
+      "hasRun": "This task has a run, so it can no longer be edited."
     }
   },
   "runs": {
