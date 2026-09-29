@@ -1,4 +1,5 @@
 mod activity;
+mod agent_files;
 mod blobs;
 mod connections;
 mod environment;
@@ -14,6 +15,7 @@ mod pull_request_diffs;
 mod pull_requests;
 mod read_only;
 mod repository;
+mod repository_import;
 mod resources;
 mod revision_diffs;
 mod runs;

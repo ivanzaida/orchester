@@ -11,10 +11,11 @@ use std::{
   process,
 };
 
-use orchester_core::time::Timestamp;
+use orchester_core::{blob::ContentHash, store::BlobStore, time::Timestamp};
 use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 
+use super::ProjectDb;
 use crate::{StoreError, rows::corrupt};
 
 const DIRECTORY: &str = "blobs";
@@ -134,4 +135,21 @@ fn remove_temporary(temporary: &Path) {
   // A leftover temporary file is never read, only wastes space; the write's own error is the one
   // to report, so a failed removal is dropped.
   let _ = fs::remove_file(temporary);
+}
+
+impl BlobStore for ProjectDb {
+  type Error = StoreError;
+
+  fn put_blob(&mut self, media_type: &str, content: &[u8]) -> Result<ContentHash, StoreError> {
+    let hash = put(&self.connection, &self.directory, media_type, content, Timestamp::now())?;
+    ContentHash::new(hash.as_str()).map_err(|error| corrupt("blob hash", error))
+  }
+
+  fn blob(&self, hash: &ContentHash) -> Result<Vec<u8>, StoreError> {
+    get(
+      &self.connection,
+      &self.directory,
+      &BlobHash::stored(hash.as_str().to_owned())?,
+    )
+  }
 }

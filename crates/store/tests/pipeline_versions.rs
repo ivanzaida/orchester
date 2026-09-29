@@ -38,6 +38,7 @@ fn pipeline_versions_list_the_runs_that_pinned_each_version() {
     profiles: &profiles,
     tools: &tools,
     instructions: &instructions,
+    skills: &BTreeMap::new(),
   };
   let new = NewRun {
     task: first.task(),

@@ -1,6 +1,7 @@
 //! Project database migrations. Append only: never edit a migration that has shipped. Later
 //! migrations live in modules of their own, named after what they add.
 
+mod agent_files;
 mod conversation;
 mod import;
 mod mcp;
@@ -558,4 +559,5 @@ CREATE TABLE run_merges (
   conversation::MIGRATION,
   import::MIGRATION,
   mcp::MIGRATION,
+  agent_files::MIGRATION,
 ];

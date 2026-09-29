@@ -161,6 +161,7 @@ impl Fixture {
       profiles: &profiles,
       tools: &tools,
       instructions: &instructions,
+      skills: &BTreeMap::new(),
     };
     RunSnapshot::build(delivery, &pipeline_version, published).expect("published references")
   }
