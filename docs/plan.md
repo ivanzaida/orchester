@@ -30,7 +30,7 @@ then the backlog by area.
 | M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; an exact remote-selected inspector Pencil frame is missing. |
 | U5 | `codex/u5-small-mismatches` | Independent tests and live checks, including real parallel waiting rows, pass; the after-Remove-worktree live state was not reached and its Pencil frame is missing. |
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; exact Not started, Interrupted and recipient-menu Pencil frames are missing. |
-| D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and three exact-PID app runs now cover the cannot-measure error, truthful queued state, same-task retry, and inert queued pipeline. The candidate is unmerged: exact Pencil error frames, same-state design comparison, safe low-space app capture, and a full runner macOS check remain open. |
+| D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover the cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. The candidate is unmerged: exact Pencil error frames, same-state design comparison, and a full runner macOS check remain open. |
 
 M1's Codex evidence and parser tests are on `master`; Claude's MCP allow rule still needs a signed-in model turn.
 
@@ -78,17 +78,18 @@ measurement pass; the runner macOS target passes cross-check or a Mac smoke test
 new visible error states with exact Pencil frames and app screenshots of the same size and state.
 
 **Status 2026-09-29: In progress.** A current-master candidate at `codex/d5-live-repro` passed filtered Windows
-tests, independent code review, `check.ps1`, and three independent exact-PID app runs. A regular file beneath the
+tests, independent code review, `check.ps1`, and four independent exact-PID app runs. A regular file beneath the
 absolute Cargo target reproduced the cannot-measure error before run/worktree creation. The first run exposed a
 misleading *Not saved yet* state after the task had been queued. The candidate now shows the queued state truthfully,
 freezes its fields and pipeline, and retries the same task/run key; the second run verified one successful run after
-the target was corrected, and the third verified the inert pipeline and visible error. Ambiguous runner replies now
-remain explicitly unconfirmed. Evidence: `docs/evidence/d5-live-reproduction-2026-09-29.md`.
+the target was corrected, and the third verified the inert pipeline and visible error. A fourth run used an empty,
+absolute target on H: with 2.643 GiB free, below the cold-target 10 GiB threshold. It showed a readable low-space
+error, left exactly one new task queued, and created no run or worktree. Ambiguous runner replies now remain
+explicitly unconfirmed. Evidence: `docs/evidence/d5-live-reproduction-2026-09-29.md`.
 
 The candidate stays unmerged: Pencil has no exact low-space or cannot-measure error frame for a same-state comparison.
-A safe low-space app state was not reached; boundary behavior was checked by tests. The macOS `fs4` dependency check
-passed, but a full `orchester-runner` cross-check needs macOS SDK headers or a Mac. The proposed design path is in
-`docs/evidence/d5-design-path-2026-09-29.md`; earlier implementation checks are in
+The macOS `fs4` dependency check passed, but a full `orchester-runner` cross-check needs macOS SDK headers or a Mac.
+The proposed design path is in `docs/evidence/d5-design-path-2026-09-29.md`; earlier checks are in
 `docs/evidence/d5-status-2026-09-29.md`.
 
 ### D4 · A UI verification step inside a run (after D3)

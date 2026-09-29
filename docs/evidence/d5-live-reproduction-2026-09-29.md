@@ -1,4 +1,4 @@
-# D5 cannot-measure target · live reproduction (2026-09-29)
+# D5 build-space preflight · live reproduction (2026-09-29)
 
 The current-master D5 candidate is `codex/d5-live-repro`, based on `0cae412`. It combines the earlier unmerged
 host-side build-space preflight with registry lurq 0.30.3's no-focus verifier startup. The final complete binary
@@ -40,8 +40,16 @@ capture, stable installation, or user database was touched.
   foreground watcher passed with 529 samples; the verifier's app PID was never observed in front. Its own app and
   watcher exited. The final run did not repeat the successful retry or force an ambiguous transport loss live;
   those paths have the second run and filtered regressions, respectively.
+- [Low-space run](../../.tmp/verify/d5-live-low/report.md): a different independent verifier reused the pinned final
+  binaries and confirmed the full candidate diff was unchanged. Its disposable project used an absolute, nonexistent
+  `CARGO_TARGET_DIR` on H:, with 2.643 GiB free immediately before one Create & run action. The fully readable
+  localized error showed `2.6 GiB free; at least 10.0 GiB` in a 2160 × 1530
+  [app screenshot](../../.tmp/verify/d5-live-low/app-error-neutral.png). One new task (#13) remained queued; runs
+  stayed at 11, Git worktrees at one, and the target directory was not created. `Retry run` appeared and Save draft
+  was absent. The exact-PID app never gained foreground focus across 1,943 host samples. The verifier closed only
+  its own app and watcher. This run did not repeat Cargo tests or `check.ps1`.
 
 Pencil has no exact New Task frame for either the cannot-measure or low-space error. The canonical frame is a
-different state, so a same-state Pencil/app comparison is **unavailable**, not passed. The low-space app state was
-not safely reproduced. The `fs4` dependency passed an aarch64-apple-darwin check in the earlier D5 review, but a
-full runner cross-check needs macOS SDK headers or a Mac; live macOS behavior was not run. D5 remains in progress.
+different state, so a same-state Pencil/app comparison is **unavailable**, not passed. The `fs4` dependency passed
+an aarch64-apple-darwin check in the earlier D5 review, but a full runner cross-check needs macOS SDK headers or a
+Mac; live macOS behavior was not run. D5 remains in progress.

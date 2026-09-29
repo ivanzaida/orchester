@@ -26,19 +26,21 @@ screens at (48, 100) and (1568, 100). Grow the section to fit. Name the proposed
 These names and coordinates specify a placement for a future design edit; they are **not node
 IDs or existing frames**.
 
-Keep the form, sidebar, pipeline and controls from `l2YA4`. In each proposed frame, place one
-wrapping error between `Hc1Cp` and `Q4xE7q`: a 12 px `circle-alert` and 11 px normal Inter
-text in `$text`, with the established small theme spacing, matching the existing field-error
-pattern. Use the shipped English copy templates from `runs.preflight.buildSpaceLow` and
-`runs.preflight.buildSpaceUnavailable`, with an illustrative absolute target path and, for low
-space, illustrative `available` and `required` GiB values. Such fixture values must never
-become app defaults. The button stays available for a retry after the target is corrected.
+Keep the form, sidebar and pipeline from `l2YA4`, but show the saved queued state that the
+verifier reached: the `Queued · run not started` header, `Retry run` in place of Create & run,
+and no Save draft action. Place one wrapping error below Retry run: a 12 px `circle-alert` and
+11 px normal Inter text in `$text`, with the established small theme spacing, matching the
+existing field-error pattern. Use the shipped English copy templates from
+`runs.preflight.buildSpaceLow` and `runs.preflight.buildSpaceUnavailable`, with an illustrative
+absolute target path and, for low space, illustrative `available` and `required` GiB values.
+Such fixture values must never become app defaults. Retry stays available after the target is
+corrected.
 
-**Geometry risk:** `AoFj6` currently has only a 26 px flexible spacer before the 42 px button;
-Save draft is near the bottom of the screen, with about 32 px below it. A long absolute path
-can make either error wrap to several lines in the 308 px content width. The designer must show
-the complete error and Save draft inside the 960 px screen without clipping, then export the
-full-size frames for review. The current code has not been visually checked in this state.
+**Geometry risk:** `AoFj6` currently has only a 26 px flexible spacer before the 42 px button.
+A long absolute path can make either error wrap to several lines in the 308 px content width.
+The designer must show the complete error and Retry run inside the 960 px screen without
+clipping, then export the full-size frames for review. The app's low-space state has since been
+captured, but cannot be compared with a matching Pencil frame yet.
 
 ## Safe reproduction and remaining gate
 
@@ -48,14 +50,14 @@ Create a regular file such as `<repo>/not-a-directory`, then configure the proje
 The runner test `environment_space_preflight_reports_an_unmeasurable_target_before_creating_a_run`
 already proves this produces typed `BuildSpaceUnavailable` before a run or worktree is created.
 The task may have been saved and queued before the runner rejects its start, so a design must not
-claim that nothing was saved. This UI reproduction has **not** yet been performed.
+claim that nothing was saved. Three independent app runs reproduced this state; see
+`docs/evidence/d5-live-reproduction-2026-09-29.md`.
 
-For **Low space**, the core boundary tests use synthetic available-byte inputs; they do not
-produce the app state. An ordinary host with ample free space cannot safely show this state
-without altering available capacity. A separate, bounded test volume owned by the verifier,
-if the host supports one, or an explicit test-only typed-rejection path would permit a UI
-capture without filling the user's disk. Neither is in place. Low-space app verification remains
-blocked until a safe path is implemented and exercised.
+For **Low space**, a verifier used an empty absolute target on H: while the host had 2.643 GiB
+free, below the 10 GiB cold-target threshold. This reached the real host preflight without filling
+the disk or adding a test-only path. The independent exact-PID app capture shows a complete error,
+one queued task, and no run or worktree; see `.tmp/verify/d5-live-low/report.md`. Its visual
+comparison still requires an exact Pencil frame.
 
 An independent verifier should export both exact Pencil frames from the live editor, run a
 pinned candidate app and runner with a disposable project, drive only that app's embedded MCP,
