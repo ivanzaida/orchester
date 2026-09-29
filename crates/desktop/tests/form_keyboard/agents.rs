@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use orchester_desktop::{
   agents::{
-    data::{ProfileChange, ProjectAgents, apply_in},
+    data::{ProfileChange, ProjectAgents, VersionState, apply_in},
     form::{ModelSelection, ProfileForm},
   },
   connections::data::{ConnectionDraft, save_in},
@@ -67,6 +67,12 @@ fn new_profile() -> Desktop {
 fn status(desktop: &mut Desktop) -> String {
   let status = desktop.tree.get_element_by_id(STATUS).expect("save status");
   status.text_content().unwrap_or_default().to_owned()
+}
+
+fn wait_status(desktop: &mut Desktop, expected: &str) {
+  desktop.settle(expected, |tree| {
+    tree.get_element_by_id(STATUS).and_then(|status| status.text_content()) == Some(expected)
+  });
 }
 
 #[test]
@@ -152,4 +158,40 @@ fn agent_list_press_chooses_the_profile_without_taking_the_focus() {
   assert!(stops.contains(&Some(ROLE.to_owned())));
   assert!(!stops.contains(&Some(planner)));
   assert!(!stops.contains(&Some(builder)));
+}
+
+#[test]
+fn agent_header_tracks_saved_published_and_dirty_states() {
+  let mut desktop = with_connection();
+  let builder = stored_profile(&desktop, "Builder");
+  desktop.wait_for("nav-agents");
+  desktop.click("nav-agents");
+  desktop.wait_for(&builder);
+  desktop.click(&builder);
+  wait_status(&mut desktop, "Draft saved · Not published");
+  assert!(desktop.tree.get_element_by_id("agent-save-draft").is_none());
+  desktop.press("agent-publish");
+  wait_status(&mut desktop, "Published v1");
+  assert!(desktop.tree.get_element_by_id("agent-save-draft").is_none());
+
+  desktop.press("agent-tab-permissions");
+  assert!(desktop.tree.get_element_by_id("agent-save-draft").is_none());
+  desktop.press("agent-permission-edit");
+  wait_status(&mut desktop, "Unsaved changes · Published v1");
+  assert!(desktop.tree.get_element_by_id("agent-save-draft").is_some());
+  desktop.press("agent-publish");
+  let agents = ProjectAgents::load_in(desktop.repo()).expect("the project's agents load");
+  let builder = agents
+    .profiles
+    .iter()
+    .find(|entry| entry.profile.role().as_str() == "Builder")
+    .expect("the Builder profile");
+  assert!(matches!(builder.state, VersionState::Published(_)));
+
+  desktop.press("agent-save-draft");
+  wait_status(&mut desktop, "Draft saved · Published v1");
+  assert!(desktop.tree.get_element_by_id("agent-save-draft").is_none());
+  desktop.press("agent-publish");
+  wait_status(&mut desktop, "Published v2");
+  assert!(desktop.tree.get_element_by_id("agent-save-draft").is_none());
 }

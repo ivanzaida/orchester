@@ -1162,6 +1162,9 @@
       "askingOnly": "{{agents}} asks you",
       "available": "{{available}} available",
       "cannotContinue": "{{agents}} cannot continue",
+      "paused": "{{agent}} paused · messages stay in this task",
+      "stopped": "{{agent}} stopped at the limit · messages wait in this task",
+      "interrupted": "{{agent}} interrupted · messages wait in this task",
       "none": "No agent takes part in this task yet"
     },
     "author": {
@@ -1172,7 +1175,9 @@
     "delivery": {
       "queued": "Queued · waiting for the next checkpoint",
       "queuedRunStart": "Queued · waiting for the run to start",
-      "queuedRunContinue": "Queued · waiting for the run to continue",
+      "queuedRunResume": "Queued · delivered before the next action on resume",
+      "queuedRunContinue": "Queued · delivered when the run continues",
+      "queuedAgentNextTurn": "Queued · waiting for this agent’s next turn",
       "notDelivered": "Not delivered · the run has ended",
       "notDeliveredWorktree": "Not delivered · the run’s worktree was removed",
       "delivered": "Delivered to {{agent}}",
@@ -1196,6 +1201,8 @@
       "checkpoint": "Messages arrive at a checkpoint. Pause for an urgent change.",
       "answer": "Your reply resumes {{agent}}'s session.",
       "queued": "Messages stay queued until the run continues.",
+      "paused": "You can write while paused. Resume keeps this run and its saved versions.",
+      "stopped": "You can write while the run is stopped. Continuing keeps this run and its saved versions.",
       "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
       "readyNoAgent": "No agent step of this run can be asked again.",
       "merged": "This run's work was merged. Messages no longer reach its agents.",

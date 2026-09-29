@@ -38,7 +38,7 @@ use crate::{
   messages::Message,
   runner::Runners,
   tasks::{
-    conversation::{Conversation, PanelState, Participants, send_in},
+    conversation::{Conversation, PanelState, send_in},
     run::control_message,
   },
   theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
@@ -230,7 +230,7 @@ impl Component for ConversationPanel {
       .child(beside_gutter(heading(ctx, conversation.state)))
       .child(beside_gutter(self.recipient(ctx, conversation)))
       .child(beside_gutter(
-        Text::new(&participants(ctx, conversation.state, &conversation.participants))
+        Text::new(&participants(ctx, conversation))
           .id("conversation-participants")
           .variant(ExtraTypography::Footnote.role())
           .into(),
@@ -387,10 +387,22 @@ fn heading(ctx: &Ctx, state: PanelState) -> Element {
 }
 
 /// "Builder working · Planner, Reviewer available".
-fn participants(ctx: &Ctx, state: PanelState, participants: &Participants) -> Arc<str> {
+fn participants(ctx: &Ctx, conversation: &Conversation) -> Arc<str> {
+  if let Some(agent) = conversation.suspended_agent.as_deref() {
+    let key = match conversation.state {
+      PanelState::Paused => Some("conversation.participants.paused"),
+      PanelState::Stopped => Some("conversation.participants.stopped"),
+      PanelState::Interrupted => Some("conversation.participants.interrupted"),
+      _ => None,
+    };
+    if let Some(key) = key {
+      return ctx.t_args(key, [("agent", agent)]);
+    }
+  }
+  let participants = &conversation.participants;
   let separator = ctx.t("common.listSeparator");
   let join = |agents: &[Arc<str>]| agents.iter().map(|agent| &**agent).collect::<Vec<_>>().join(&separator);
-  if state == PanelState::WorktreeRemoved && !participants.available.is_empty() {
+  if conversation.state == PanelState::WorktreeRemoved && !participants.available.is_empty() {
     return ctx.t_args(
       "conversation.participants.cannotContinue",
       [("agents", join(&participants.available).as_str())],
@@ -433,7 +445,9 @@ fn explanation(ctx: &Ctx, conversation: &Conversation) -> Arc<str> {
     (PanelState::NotStarted, _) => ctx.t("conversation.explanation.notStarted"),
     (PanelState::Waiting, Some(agent)) => ctx.t_args("conversation.explanation.answer", [("agent", agent)]),
     (PanelState::Live | PanelState::Waiting, _) => ctx.t("conversation.explanation.checkpoint"),
-    (PanelState::Paused | PanelState::Stopped | PanelState::Interrupted, _) => ctx.t("conversation.explanation.queued"),
+    (PanelState::Paused, _) => ctx.t("conversation.explanation.paused"),
+    (PanelState::Stopped, _) => ctx.t("conversation.explanation.stopped"),
+    (PanelState::Interrupted, _) => ctx.t("conversation.explanation.queued"),
     (PanelState::Ready, Some(agent)) => ctx.t_args("conversation.explanation.ready", [("agent", agent)]),
     (PanelState::Ready, None) => ctx.t("conversation.explanation.readyNoAgent"),
     (PanelState::WorktreeRemoved, _) => ctx.t("conversation.explanation.worktreeRemoved"),

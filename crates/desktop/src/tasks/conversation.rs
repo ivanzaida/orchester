@@ -104,8 +104,12 @@ pub enum Queue {
   NextCheckpoint,
   /// Once the task's run starts.
   RunStarts,
+  /// Before the next action after a person resumes a paused run.
+  RunResumes,
   /// Once the paused, stopped or interrupted run continues.
   RunContinues,
+  /// At a direct recipient's next turn, rather than the current agent's checkpoint.
+  AgentNextTurn,
   /// Never: the run it was written for has ended.
   RunEnded,
   /// Never: the run's worktree was removed, so its agent cannot continue.
@@ -145,6 +149,10 @@ pub struct Conversation {
   pub entries: Vec<Entry>,
   pub recipients: Vec<RecipientChoice>,
   pub participants: Participants,
+  /// An agent CLI invocation is still running and can end its current turn.
+  pub active_agent_turn: bool,
+  /// The agent whose work was suspended by a pause, limit or interruption.
+  pub suspended_agent: Option<Arc<str>>,
   /// The agent a message to Orchestrator reaches next when the run is ready for review or waits
   /// for an answer; `None` otherwise.
   pub next_agent: Option<Arc<str>>,
@@ -174,6 +182,14 @@ impl Conversation {
       entries,
       recipients: run.map(recipients).unwrap_or_else(|| vec![orchestrator()]),
       participants: run.map(participants).unwrap_or_default(),
+      active_agent_turn: matches!(state, PanelState::Live | PanelState::Waiting)
+        && run.is_some_and(|run| {
+          run
+            .invocations
+            .iter()
+            .any(|invocation| invocation.model().is_some() && invocation.ended_at.is_none())
+        }),
+      suspended_agent: run.and_then(|run| suspended_agent(run, state)),
       next_agent: run.and_then(|run| next_agent(run, state)),
     }
   }
@@ -185,6 +201,15 @@ impl Conversation {
       .iter()
       .find(|entry| entry.state == EntryState::Question { open: true })
   }
+}
+
+fn suspended_agent(run: &RunView, state: PanelState) -> Option<Arc<str>> {
+  let step = match state {
+    PanelState::Paused | PanelState::Interrupted => run.current_step(),
+    PanelState::Stopped => run.stopped_step().or_else(|| run.current_step()),
+    _ => return None,
+  };
+  step.and_then(|step| step.agent.clone())
 }
 
 fn orchestrator() -> RecipientChoice {
@@ -333,17 +358,32 @@ fn queue(message: &Message, run: Option<&RunView>, state: PanelState) -> Queue {
   if message.run().is_some_and(|own| own != run.id()) {
     return Queue::RunEnded;
   }
+  let later_agent = direct_recipient_waits_for_later_turn(message, run, state);
   match run.run.status() {
     RunStatus::Pending => Queue::RunStarts,
-    RunStatus::Paused(PauseReason::Requested | PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) => {
-      Queue::RunContinues
-    }
+    RunStatus::Paused(PauseReason::Requested) if later_agent => Queue::AgentNextTurn,
+    RunStatus::Paused(PauseReason::Requested) => Queue::RunResumes,
+    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) if later_agent => Queue::AgentNextTurn,
+    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) => Queue::RunContinues,
     RunStatus::Failed(_) | RunStatus::Cancelled => Queue::RunEnded,
     // A run recorded as running without a runner is interrupted until one is back.
+    RunStatus::Running if state == PanelState::Interrupted && later_agent => Queue::AgentNextTurn,
     RunStatus::Running if state == PanelState::Interrupted => Queue::RunContinues,
     RunStatus::Succeeded if state == PanelState::WorktreeRemoved => Queue::WorktreeRemoved,
+    RunStatus::Running | RunStatus::Succeeded if later_agent => Queue::AgentNextTurn,
     RunStatus::Running | RunStatus::Succeeded => Queue::NextCheckpoint,
   }
+}
+
+fn direct_recipient_waits_for_later_turn(message: &Message, run: &RunView, state: PanelState) -> bool {
+  let Some(Recipient::Agent(profile)) = message.queued_for(run.id()) else {
+    return false;
+  };
+  let step = match state {
+    PanelState::Stopped => run.stopped_step().or_else(|| run.current_step()),
+    _ => run.current_step(),
+  };
+  step.and_then(|step| profile_of(run, &step.key)) != Some(profile)
 }
 
 /// Why a message was not sent.

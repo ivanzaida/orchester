@@ -366,14 +366,17 @@ impl ProfileEditor {
     let next = version
       .and_then(VersionState::published)
       .map_or(1, |published| published.get() + 1);
-    vec![
+    let mut actions = vec![
       Text::new(&status)
         .variant(TypographyStyle::Caption)
         .id("agent-save-status")
         .into(),
-      self.save_button(ctx, state),
-      self.publish_button(ctx, state, publishable && !state.dirty, next),
-    ]
+    ];
+    if state.dirty && !state.saving {
+      actions.push(self.save_button(ctx, state));
+    }
+    actions.push(self.publish_button(ctx, state, publishable && !state.dirty, next));
+    actions
   }
 
   fn save_button(&self, ctx: &Ctx, state: &EditorState) -> Element {

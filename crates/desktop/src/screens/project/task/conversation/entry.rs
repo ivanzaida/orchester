@@ -83,7 +83,9 @@ fn state_line(ctx: &Ctx, state: &EntryState) -> Arc<str> {
   match state {
     EntryState::Queued(Queue::NextCheckpoint) => ctx.t("conversation.delivery.queued"),
     EntryState::Queued(Queue::RunStarts) => ctx.t("conversation.delivery.queuedRunStart"),
+    EntryState::Queued(Queue::RunResumes) => ctx.t("conversation.delivery.queuedRunResume"),
     EntryState::Queued(Queue::RunContinues) => ctx.t("conversation.delivery.queuedRunContinue"),
+    EntryState::Queued(Queue::AgentNextTurn) => ctx.t("conversation.delivery.queuedAgentNextTurn"),
     EntryState::Queued(Queue::RunEnded) => ctx.t("conversation.delivery.notDelivered"),
     EntryState::Queued(Queue::WorktreeRemoved) => ctx.t("conversation.delivery.notDeliveredWorktree"),
     EntryState::Delivered { agent } => ctx.t_args("conversation.delivery.delivered", [("agent", &**agent)]),
