@@ -22,7 +22,6 @@ then the backlog by area.
 
 | Task | Branch | Verified progress and next gate |
 | --- | --- | --- |
-| U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; Not started, Interrupted and recipient-menu frames are now saved on `master` and need exact app comparisons. |
 | D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. Pencil now has matching error/retry frames. Same-state comparison and full runner macOS check remain; candidate unmerged. |
 
 ## D · Developing Orchester inside Orchester
@@ -119,14 +118,6 @@ and MCP tools in the Tools library.
 
 ## U · Screens
 
-### U6 · Conversation states not seen in the app (UI)
-
-The Paused, Stopped, Interrupted and Not started states of the conversation panel, and direct messages to one agent,
-are covered only by data tests. Verify them in the app and fix what differs from `jgqPe` / `kjsmd`.
-
-Pencil (drawn 2026-09-29): `sYuiX` (02.S3, Interrupted), `Ok14G` (02.S4, Not started), `cj2a2` (02.S5, recipient menu
-open).
-
 ### U10 · Pull requests screen jumps while it loads (UI)
 
 Opening the Pull requests tab shifts its content two or three times
@@ -174,6 +165,14 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+U6 · Verify conversation states and direct recipient timing · branch `codex/u6-final-port` (an independent agent
+compared exact-PID Interrupted `sYuiX`, Not started `Ok14G`, real Live recipient menu `cj2a2`, and Paused/Stopped
+component captures at matching sizes; none had blocking or major visual mismatches. A later-agent message initially
+promised delivery before Builder's next action, which the runner cannot guarantee. The corrected Paused and real
+Live Builder→Reviewer states now say it waits for Reviewer's next turn; independent recheck passed conversation
+8/8, i18n 5/5 and `tools/check.ps1`, with no own app focus in 1,343 host samples. Pencil has no separate saved
+later-recipient message frame, so its exact copy lacks a literal same-state design comparison; the verified line
+fits the saved panel geometry. Evidence: `docs/evidence/u6-conversation-states-2026-09-29.md`.)
 M1 · Confirm MCP behaviour in signed-in CLI turns · branch `codex/m1-claude-allow-rule` (Codex 0.139 under `-a never`
 called a probe MCP tool, kept a test variable out of agent shell commands, and reported an unnamed startup warning
 for a broken server while the turn completed. Two repeat unannotated calls succeeded after one unexplained
