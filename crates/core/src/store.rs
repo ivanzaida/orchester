@@ -258,6 +258,12 @@ pub trait RunStore {
   /// created the first time instead of a new one.
   fn create_run(&mut self, key: IdempotencyKey, new: NewRun, now: Timestamp) -> Result<Run, Self::Error>;
 
+  /// The run [`RunStore::create_run`] created with `key`, if one did.
+  fn run_with_key(&self, key: IdempotencyKey) -> Result<Option<Run>, Self::Error>;
+
+  /// The number the project's next run gets.
+  fn next_run_number(&self) -> Result<RunNumber, Self::Error>;
+
   /// Appends `events`, which must not be empty, and stores `run`, the state after them,
   /// atomically. The first event must directly follow the stored log; otherwise another writer
   /// appended first and the call fails with a sequence conflict, changing nothing.

@@ -239,7 +239,11 @@ fn runs_are_created_with_consecutive_numbers_and_a_creation_event() {
 fn runs_creation_is_idempotent_per_key() {
   let mut fixture = Fixture::new();
   let key = IdempotencyKey::generate();
+  assert_eq!(fixture.db.run_with_key(key).expect("find"), None);
+  assert_eq!(fixture.db.next_run_number().expect("next").get(), 1);
   let first = fixture.db.create_run(key, fixture.new_run(), at(10)).expect("create");
+  assert_eq!(fixture.db.run_with_key(key).expect("find"), Some(first.clone()));
+  assert_eq!(fixture.db.next_run_number().expect("next").get(), 2);
   let retry = fixture.db.create_run(key, fixture.new_run(), at(11)).expect("retry");
   assert_eq!(retry, first);
   assert_eq!(fixture.db.runs_of_task(fixture.task).expect("list").len(), 1);
