@@ -310,13 +310,13 @@ fn history_a_tab_is_an_entry() {
   desktop.press("nav-settings");
   desktop.wait_for("settings-tab-limits");
   desktop.press("settings-tab-limits");
-  desktop.wait_for("settings-save-status");
+  desktop.wait_for("settings-limits");
   side_button(&mut desktop, BACK);
   desktop.settle("the General tab", |tree| {
-    tree.get_element_by_id("settings-save-status").is_none() && tree.get_element_by_id("settings-tab-general").is_some()
+    tree.get_element_by_id("settings-limits").is_none() && tree.get_element_by_id("settings-general").is_some()
   });
   side_button(&mut desktop, FORWARD);
-  desktop.wait_for("settings-save-status");
+  desktop.wait_for("settings-limits");
 }
 
 #[test]
