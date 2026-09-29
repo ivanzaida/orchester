@@ -13,6 +13,7 @@
 //! budget holds new and continued work back once
 //! today's runs used it.
 
+mod again;
 mod attach;
 mod board;
 mod checkpoint;
@@ -42,8 +43,10 @@ use std::{
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
+  integration::Leftovers,
   run::{InterruptCause, RaisedLimits},
   secret::SecretVault,
+  store::RunStore,
   tokens::TokenBudget,
 };
 use orchester_ipc::{Event, Rejection};
@@ -165,6 +168,12 @@ impl Scheduler {
     let mut db = self.open()?;
     self.admit(&db)?;
     let prepared = prepare::prepare(&mut db, root, key, task)?;
+    self.begin(db, prepared)
+  }
+
+  /// Tells the desktop about the run `prepared` recorded and executes it, unless an earlier
+  /// request already does.
+  fn begin(&self, db: ProjectDb, prepared: Prepared) -> Result<RunId, Rejection> {
     let run = prepared.run.id();
     self.inner.notifier.send(Event::RunChanged {
       run,
@@ -174,6 +183,43 @@ impl Scheduler {
       self.spawn(db, prepared)?;
     }
     Ok(run)
+  }
+
+  /// Starts the next run of `task` after its latest run `after` failed or was cancelled (Run
+  /// again), removing `remove_worktrees`, what `after` left, first; or finds the run an earlier
+  /// request with `key` started, and then removes nothing. Returns once the new run is recorded as
+  /// started.
+  pub async fn run_again(
+    &self,
+    key: IdempotencyKey,
+    task: TaskId,
+    after: RunId,
+    remove_worktrees: Option<Leftovers>,
+  ) -> Result<RunId, Rejection> {
+    // The run's task may still be ending its agents after it recorded the run's end. A run its
+    // task still executes has not ended, which the rule finds in the run's record below.
+    if let Err(executing) = self.settled(after).await {
+      tracing::debug!(%after, ?executing, "run again asked while the run is executed");
+    }
+    let _one_at_a_time = self.inner.continuing.lock().await;
+    let root = &self.inner.project_root;
+    let mut db = self.open()?;
+    let repeated = db
+      .run_with_key(key)
+      .map_err(|error| read_failed("cannot read runs", error))?
+      .is_some();
+    if repeated {
+      let prepared = prepare::prepare(&mut db, root, key, task)?;
+      return self.begin(db, prepared);
+    }
+    let previous = again::check(&db, task, after)?;
+    self.admit(&db)?;
+    let checked = prepare::check(&db, root, task)?;
+    if let Some(confirmed) = &remove_worktrees {
+      again::remove_worktrees(root, &previous, confirmed)?;
+    }
+    let prepared = prepare::record(&mut db, root, key, checked)?;
+    self.begin(db, prepared)
   }
 
   /// Pauses `run` at its next checkpoint. Returns once the request is recorded; the run is

@@ -8,6 +8,7 @@
 
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{GitError, git::Git};
@@ -21,7 +22,8 @@ use crate::{
 pub const WORKTREES_DIR: &str = ".orchester/worktrees";
 
 /// Whose worktree it is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "execution", rename_all = "snake_case")]
 pub enum WorktreeOwner {
   Run,
   /// A step execution that ran beside other steps of the run.
@@ -29,7 +31,7 @@ pub enum WorktreeOwner {
 }
 
 /// A worktree of the run, as git lists it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LeftWorktree {
   /// As git prints it: absolute, with `/` separators on every platform.
   pub path: String,
@@ -43,15 +45,16 @@ pub struct LeftWorktree {
 }
 
 /// A branch of the run: its own or a step's (`<run-branch>--<step>-<attempt>`).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LeftBranch {
   pub name: BranchName,
   /// Its commits are on the base branch or the checkout's branch: deleting it loses nothing.
   pub merged: bool,
 }
 
-/// Everything the run left.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// Everything the run left. It travels to the runner as what a person saw before confirming its
+/// removal (Run again).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Leftovers {
   pub worktrees: Vec<LeftWorktree>,
   pub branches: Vec<LeftBranch>,
