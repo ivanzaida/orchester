@@ -174,6 +174,15 @@ all runner binaries, `form_keyboard ::`, `tasks`, `i18n`, `theme` and `tools/che
 exact-PID comparison with `zM693`, `M1upHe`, `R5y5x` and `iE8eQ` reached every state and found no blocking or major
 mismatch; the failed/cancelled Summary body predates ORC-16 and still differs from `zM693`).
 
+ORC-14 · Show and edit a saved task's brief and acceptance criteria · branch `claude/orc14` (a task's Summary
+shows its brief and numbered criteria, a draft's *This task* panel its pipeline and limits, and *Edit* reopens a draft
+in the New task form under `tasks/<id>/edit`; *Save changes* updates the same task in place
+(`TaskStore::update_draft`), *Create & run* starts it, a task with a run cannot be edited, and leaving the form with
+unsaved changes asks *Discard changes?*. Latest activity now scrolls with the Summary after the brief. Independent
+same-size Pencil/exact-PID app comparison of `tqn5P`, `h3IIs`, `E1o77O`, `ctHXE`, `kDmo9` and `uv4PY` found no blocking
+or major mismatch; `dKiEj` could not be reached at design size with the fixture. Filtered core, store, `form_keyboard`,
+tasks, navigation, tabs, i18n and theme tests and `tools/check.ps1` passed).
+
 U6 · Verify conversation states and direct recipient timing · branch `codex/u6-final-port` (an independent agent
 compared exact-PID Interrupted `sYuiX`, Not started `Ok14G`, real Live recipient menu `cj2a2`, and Paused/Stopped
 component captures at matching sizes; none had blocking or major visual mismatches. A later-agent message initially

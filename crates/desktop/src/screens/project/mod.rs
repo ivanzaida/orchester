@@ -69,13 +69,18 @@ pub struct ProjectNav {
   feed: ProjectFeed,
   /// Connections opens Add GitHub connection when it next mounts.
   add_github: Signal<bool>,
+  /// Why the task an Edit task page was opened for can no longer be edited; its page, shown
+  /// instead, says so.
+  refused_edit: Signal<Option<(TaskId, Message)>>,
   tabs: Tabs,
 }
 
 impl ProjectNav {
-  /// Opens `page` as a new history entry, as every user navigation does.
+  /// Opens `page` as a new history entry, as every user navigation does, once the page shown may
+  /// be left ([`Tabs::leave_active`]).
   pub fn show(&self, page: Page) {
-    entry::push(&self.navigator, page.path(self.project));
+    let (navigator, path) = (self.navigator.clone(), page.path(self.project));
+    self.tabs.leave_active(move || entry::push(&navigator, path.clone()));
   }
 
   /// Opens `page` where `open` says: in this tab as a new history entry, or in a new tab.
@@ -132,11 +137,14 @@ impl ProjectNav {
   /// `page` shows, history goes back to that entry, on the tab it was on; otherwise `page` opens
   /// as a new entry. The form stays in history either way, as any screen left unfinished does.
   pub fn leave(&self, page: Page) {
-    if self.opened_from(&page) {
-      self.navigator.back();
-    } else {
+    if !self.opened_from(&page) {
       self.show(page);
+      return;
     }
+    let navigator = self.navigator.clone();
+    self.tabs.leave_active(move || {
+      navigator.back();
+    });
   }
 
   /// Whether the current entry was opened from the screen `page` shows, on any tab.
@@ -183,6 +191,24 @@ impl ProjectNav {
       self.add_github.set(false);
     }
     requested
+  }
+
+  /// Edit task was opened for `task`, which can no longer be edited (`reason`): its page takes the
+  /// form's place and says why.
+  pub fn refuse_edit(&self, task: TaskId, reason: Message) {
+    self.refused_edit.set(Some((task, reason)));
+    self.replace(Page::task(task));
+  }
+
+  /// Why Edit task was refused for `task`, once: the task page that took the form's place shows
+  /// it.
+  pub fn take_refused_edit(&self, task: TaskId) -> Option<Message> {
+    let (refused, reason) = self.refused_edit.get_untracked()?;
+    if refused != task {
+      return None;
+    }
+    self.refused_edit.set(None);
+    Some(reason)
   }
 
   /// Tasks were saved; every tab of the project reads them again.
@@ -276,6 +302,7 @@ impl Component for ProjectShell {
         project,
         feed: feeds.of(project),
         add_github: ctx.signal(false),
+        refused_edit: ctx.signal(None),
         tabs: ctx
           .use_context::<Tabs>()
           .expect("the window provides Tabs before mounting screens"),

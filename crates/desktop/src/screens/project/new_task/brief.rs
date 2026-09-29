@@ -59,6 +59,13 @@ impl Criterion {
       remove_focused: Signal::new(false),
     }
   }
+
+  /// A row holding a saved criterion.
+  pub fn with_text(id: u64, text: &str) -> Self {
+    let criterion = Self::new(id);
+    criterion.text.set(text.to_owned());
+    criterion
+  }
 }
 
 pub fn brief_form(

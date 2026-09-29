@@ -25,6 +25,7 @@ use orchester_core::{
 
 use super::{
   TaskScrolls,
+  brief::{brief_section, this_task},
   heading::agent_of,
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
   notice::{Lost, notice},
@@ -35,7 +36,10 @@ use super::{
 use crate::{
   budget::whole_minutes,
   display,
-  tasks::detail::{RunView, TaskDetail},
+  tasks::{
+    data::PipelineChoice,
+    detail::{RunView, TaskDetail},
+  },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     message_text,
@@ -46,12 +50,15 @@ use crate::{
 /// "This run" panel width (`F5Lsi`).
 const PANEL_WIDTH: f32 = 336.0;
 
-/// `lost`: the run is recorded as running but has no runner, and why.
+/// `lost`: the run is recorded as running but has no runner, and why. `pipelines`: the project's
+/// published pipelines, for the one a task without a run would start with. `reason`: why the task
+/// cannot run again, under the notice.
 pub(super) fn summary(
   ctx: &mut Ctx,
   detail: &TaskDetail,
-  (limits, lost, reason): (Option<ProjectLimits>, Option<Lost>, Option<Element>),
+  (limits, lost, pipelines): (Option<ProjectLimits>, Option<Lost>, Option<&[PipelineChoice]>),
   (repo_root, scrolls): (&Path, &TaskScrolls),
+  reason: Option<Element>,
 ) -> Element {
   if let Some(run) = &detail.run
     && let RunStatus::Failed(RunFailure::RetriesExhausted(step)) = run.run.status()
@@ -59,7 +66,6 @@ pub(super) fn summary(
     return retry_limit(ctx, run, step, reason);
   }
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
-  let raising = raise.is_some();
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Section)
@@ -68,18 +74,18 @@ pub(super) fn summary(
     .spacing(ExtraSpacing::Form.role())
     .child(with_reason(notice(ctx, detail, lost), reason))
     .with_children(raise)
-    .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())));
+    .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())))
+    .with_children(brief_section(ctx, detail.task.details()));
   let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
+  let panel = match &detail.run {
+    Some(run) => this_run(ctx, run, (repo_root, &scrolls.this_run)),
+    None => this_task(ctx, detail, pipelines, &scrolls.this_run),
+  };
   Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(progress_column(content, latest, (raising, &scrolls.progress)))
-    .with_children(
-      detail
-        .run
-        .as_ref()
-        .map(|run| this_run(ctx, run, (repo_root, &scrolls.this_run))),
-    )
+    .child(progress_column(content, latest, &scrolls.progress))
+    .child(panel)
     .into()
 }
 
@@ -96,41 +102,23 @@ pub(super) fn with_reason(notice: Element, reason: Option<Element>) -> Element {
     .into()
 }
 
-/// The notice, the raise panel and the progress rows (`content`) in a viewport with the scroll
-/// gutter (`ZVdRa`, thumb `PigH4`), so nothing is cut when they are taller than the window.
-/// Latest activity sits at the bottom when there is room. With the raise panel the column is
-/// taller than a 960px window (02.L2), so Latest activity scrolls with it, below the fold;
-/// otherwise it stays below the viewport. lurq cannot make scrolled content at least as tall as
-/// its viewport, which both at once would need.
-fn progress_column(content: Column, latest: Option<Element>, (raising, scroll): (bool, &ScrollState)) -> Element {
-  let scrolled = |content: Column| {
-    ScrollVertical::new(content)
-      .id("task-progress-scroll")
-      .with_scroll_state(scroll.clone())
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .scrollbar(gutter_scrollbar())
-  };
-  let column = Column::new()
+/// The notice, the raise panel, the progress rows, the brief and Latest activity in a viewport
+/// with the scroll gutter (`ZVdRa`, thumb `PigH4`; `hF9R9` in `uv4PY`), so nothing is cut when
+/// they are taller than the window: Latest activity follows the brief and scrolls with the column
+/// (`dKiEj`), as it does below the raise panel of 02.L2.
+fn progress_column(content: Column, latest: Option<Element>, scroll: &ScrollState) -> Element {
+  let scrolled = ScrollVertical::new(content.with_children(latest).padding_bottom(SpacingSize::Section))
+    .id("task-progress-scroll")
+    .with_scroll_state(scroll.clone())
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .scrollbar(gutter_scrollbar());
+  Column::new()
     .id("task-progress")
     .flex(1.0)
-    .height(Dimension::Pct(100.0));
-  if raising {
-    return column
-      .child(scrolled(
-        content.with_children(latest).padding_bottom(SpacingSize::Section),
-      ))
-      .into();
-  }
-  let latest = latest.map(|latest| {
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding_top(ExtraSpacing::Form.role())
-      .padding_horizontal(SpacingSize::Section)
-      .padding_bottom(SpacingSize::Section)
-      .child(latest)
-  });
-  column.child(scrolled(content)).with_children(latest).into()
+    .height(Dimension::Pct(100.0))
+    .child(scrolled)
+    .into()
 }
 
 /// Raise the limit to continue (`ZUYM0`), for a run stopped at a limit.
@@ -237,7 +225,7 @@ fn this_run(ctx: &mut Ctx, run: &RunView, (repo_root, scroll): (&Path, &ScrollSt
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
     .with_children(permissions);
-  this_run_panel(ctx, rows, scroll)
+  this_run_panel(rows, scroll, &ctx.t("runs.summary.snapshotNote"))
 }
 
 /// The *Permissions* row of the current step's agent, with its *change ↗* (`C5Ai5o`), beside the
@@ -257,15 +245,15 @@ pub(super) fn permissions_row(ctx: &mut Ctx, run: &RunView, repo_root: &Path, in
   Some(ctx.mount_keyed::<RunPermissionsRow>(&format!("task-permissions-{}", step.key), props))
 }
 
-/// The "This run" panel around its `rows`. They scroll when a permission change's notices make
-/// them taller than the window, their bar in a gutter of its own that takes the right padding's
-/// inner half, so the values still end 24 from the edge (design doc, "Scroll gutter"); the note
-/// stays at the bottom.
-fn this_run_panel(ctx: &Ctx, rows: Column, scroll: &ScrollState) -> Element {
+/// The "This run" panel around its `rows` (and "This task", `FLGqL`). They scroll when a
+/// permission change's notices make them taller than the window, their bar in a gutter of its own
+/// that takes the right padding's inner half, so the values still end 24 from the edge (design
+/// doc, "Scroll gutter"); the `note` stays at the bottom.
+pub(super) fn this_run_panel(rows: Column, scroll: &ScrollState, note: &str) -> Element {
   let note = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_right(ExtraSpacing::Stack.role())
-    .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()));
+    .child(Text::new(note).variant(ExtraTypography::Detail.role()));
   Column::new()
     .id("task-this-run")
     .width(Dimension::Px(PANEL_WIDTH))

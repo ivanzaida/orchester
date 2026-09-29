@@ -4,7 +4,7 @@ use orchester_core::{
   id::{ResourceId, TaskId},
   name::Name,
   project::{ProjectKey, TaskKey},
-  task::{LimitsError, MissingDetail, QueueError, Task, TaskDetails, TaskLimits, TaskStatus},
+  task::{EditError, LimitsError, MissingDetail, QueueError, Task, TaskDetails, TaskLimits, TaskStatus},
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -69,4 +69,31 @@ fn limits_reject_an_empty_budget_and_duration() {
   assert!(TokenBudget::new(0).is_err());
   let budget = TokenBudget::new(1_400_000).expect("above zero");
   assert_eq!(TaskLimits::new(budget, Duration::ZERO), Err(LimitsError::ZeroDuration));
+}
+
+#[test]
+fn edit_replaces_a_drafts_details_and_keeps_its_identity() {
+  let mut task = task(title_only());
+  let (id, key) = (task.id(), task.key().clone());
+  let details = complete();
+  assert_eq!(task.edit(details.clone(), false), Ok(()));
+  assert_eq!(task.details(), &details);
+  assert_eq!((task.id(), task.key()), (id, &key));
+  assert_eq!(task.status(), TaskStatus::Draft);
+}
+
+#[test]
+fn edit_is_refused_once_the_task_has_a_run_or_left_the_drafts() {
+  let mut started = task(title_only());
+  assert_eq!(started.edit(complete(), true), Err(EditError::HasRun));
+  assert_eq!(started.details(), &title_only());
+
+  let details = complete();
+  let mut queued = task(details.clone());
+  queued.queue().expect("a complete draft queues");
+  assert_eq!(
+    queued.edit(title_only(), false),
+    Err(EditError::NotDraft(TaskStatus::Queued))
+  );
+  assert_eq!(queued.details(), &details);
 }

@@ -189,6 +189,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::ReviewNote.role()` | 12, 1.6 | a note written to an agent, e.g. the changes a plan needs (`DDXc5` in `NbNN0`) |
 | `ExtraTypography::AgentText.role()` | 12, 1.6 | text an agent wrote: a message body, a plan under review (`FP6BD` in `J5MIT`); also the Markdown body |
 | `ExtraTypography::TabInitial.role()` | 9/600 | a project's initial in a title bar tab's avatar (`T0R2Hv` in `nAKyb`) |
+| `ExtraTypography::Criterion.role()` | 12, 1.5 | an acceptance criterion and its number (`TextMuted`) on a task's Summary (`j0Ye4t`, `a88TT` in `tqn5P`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.
