@@ -4,7 +4,8 @@
 //! Create & run checks that the run can start, saves and queues the task and asks the runner to
 //! start its run under a second key generated when the form opens, so a retry after a failure
 //! never starts a second run; it then opens the task page. Opened on a saved draft, the same form
-//! edits it ([`edit`]).
+//! edits it ([`edit`]). A task with a recorded run can be saved for future runs without
+//! starting another run from this form.
 
 mod brief;
 mod edit;
@@ -33,7 +34,7 @@ use orchester_core::{
   limits::ProjectLimits,
   repository::RepositoryLink,
   store::RepositoryStore,
-  task::{MissingDetail, Task, TaskDetails},
+  task::{MissingDetail, Task, TaskDetails, TaskStatus},
   tokens::grouped,
 };
 use orchester_store::ProjectDb;
@@ -75,7 +76,7 @@ pub struct NewTaskProps {
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// The project's limits, once read: the defaults the form starts with and the maximum budget.
   pub limits: Option<ProjectLimits>,
-  /// The saved draft the form edits (Edit task); `None` for a new task.
+  /// The saved task the form edits (Edit task); `None` for a new task.
   pub editing: Option<Editing>,
   /// A queued task reopened after the form was closed, with its pinned published pipeline.
   pub recovering: Option<Recovering>,
@@ -148,10 +149,12 @@ struct FormState {
   missing: Vec<MissingDetail>,
   ready: Option<TaskDetails>,
   saving: bool,
-  /// The form holds what is stored: the latest save, or the draft being edited.
+  /// The form holds what is stored: the latest save, or the task being edited.
   saved: bool,
-  /// The form edits a saved draft (Edit task).
+  /// The form edits a saved task (Edit task).
   editing: bool,
+  /// An existing run fixes its own prompt; this form changes future runs only.
+  started: bool,
   queued: bool,
   recovered: bool,
   save_error: Option<Message>,
@@ -173,7 +176,11 @@ impl FormState {
   /// Whether Save as draft can be pressed: not while a save or Create & run is under way or the
   /// task is queued, and for a draft being edited not while it holds what is stored.
   const fn can_save(&self) -> bool {
-    !(self.saving || self.starting || self.queued || (self.editing && self.saved))
+    !(self.saving
+      || self.starting
+      || self.queued
+      || (self.editing && self.saved)
+      || (self.started && !self.missing.is_empty()))
   }
 }
 
@@ -266,13 +273,16 @@ impl Component for NewTaskForm {
     let submit = self
       .save_handler(&save, &props.project, target, state.ready.clone())
       .filter(|_| state.can_save());
-    let start = self
-      .run_handler(
-        &run,
-        (&props.project, target, props.pipelines.as_deref()),
-        state.ready.clone(),
-        state.queued_task.clone(),
-      )
+    let start = (!state.started)
+      .then(|| {
+        self.run_handler(
+          &run,
+          (&props.project, target, props.pipelines.as_deref()),
+          state.ready.clone(),
+          state.queued_task.clone(),
+        )
+      })
+      .flatten()
       .filter(|_| !state.saving && !state.starting && (state.queued_task.is_some() || state.missing.is_empty()));
     // The brief's scroll viewport starts `FOCUS_ROOM` early and its content is padded by the
     // same amount, so the content stays at the designed inset and keeps room for focus rings.
@@ -347,7 +357,7 @@ impl NewTaskForm {
 
   /// Where the form saves: over the draft it edits, or as a new draft under the form's key.
   fn target(&self, editing: Option<&Task>) -> SaveTarget {
-    editing.map_or(SaveTarget::New(self.batch), |task| SaveTarget::Draft(task.id()))
+    editing.map_or(SaveTarget::New(self.batch), |task| SaveTarget::Task(task.id()))
   }
 
   /// Records whether a draft being edited holds changes that are not saved, so leaving the form
@@ -407,6 +417,7 @@ impl NewTaskForm {
       missing: form.missing(),
       saved: !queued && ready.as_ref().is_some_and(|details| stored == Some(details)),
       editing: editing.is_some(),
+      started: editing.is_some_and(|task| task.status() == TaskStatus::Queued),
       queued,
       recovered,
       ready,
@@ -500,11 +511,19 @@ fn topbar(
   let state = if form.starting {
     ctx.t("tasks.new.starting")
   } else if form.saving {
-    ctx.t("tasks.new.saving")
+    ctx.t(if form.editing {
+      "tasks.edit.savingChanges"
+    } else {
+      "tasks.new.saving"
+    })
   } else if let Some(queued) = form.queued_task.as_ref() {
     ctx.t(queued.outcome.status_key())
   } else if form.saved {
-    ctx.t("tasks.new.saved")
+    ctx.t(if form.started {
+      "tasks.edit.saved"
+    } else {
+      "tasks.new.saved"
+    })
   } else if form.editing {
     ctx.t("tasks.edit.unsaved")
   } else {

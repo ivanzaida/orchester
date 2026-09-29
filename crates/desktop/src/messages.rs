@@ -85,8 +85,8 @@ pub fn store_error(error: &StoreError) -> Message {
 /// Why a task can no longer be edited.
 pub const fn edit_error(error: &EditError) -> Message {
   match error {
-    EditError::NotDraft(_) => Message::new("tasks.edit.notDraft"),
-    EditError::HasRun => Message::new("tasks.edit.hasRun"),
+    EditError::QueuedWithoutRun => Message::new("tasks.edit.notStarted"),
+    EditError::Incomplete(_) => Message::new("tasks.edit.incomplete"),
   }
 }
 

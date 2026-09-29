@@ -437,10 +437,13 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .overflow_visible()
-    .child(create_and_run.render(ctx))
-    .with_children(run_status)
+    .with_children((!state.started).then(|| create_and_run.render(ctx)))
+    .with_children((!state.started).then_some(run_status).into_iter().flatten())
     .with_children(status)
     .with_children(reasons)
+    .with_children(
+      (state.started && !state.missing.is_empty()).then(|| wrapping_field_error(&ctx.t("tasks.edit.incomplete"))),
+    )
     .with_children((!state.queued).then(|| {
       Row::new()
         .width(Dimension::Pct(100.0))

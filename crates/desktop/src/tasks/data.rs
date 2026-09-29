@@ -250,16 +250,14 @@ pub fn save_draft<S: TaskStore>(
   Ok(edited)
 }
 
-/// Where the task form saves: a new draft under `New`, the key the form generated when it opened,
-/// or the saved draft it edits.
+/// Where the task form saves: a new draft under `New`, or an existing task in place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SaveTarget {
   New(IdempotencyKey),
-  Draft(TaskId),
+  Task(TaskId),
 }
 
-/// Saves `details` where `target` says: as a new draft ([`save_draft`]), or over the draft being
-/// edited, in place ([`TaskStore::update_draft`]).
+/// Saves `details` as a new draft or over an existing task in place.
 pub fn save_to<S: TaskStore>(
   store: &mut S,
   target: SaveTarget,
@@ -268,7 +266,7 @@ pub fn save_to<S: TaskStore>(
 ) -> Result<Task, S::Error> {
   match target {
     SaveTarget::New(batch) => save_draft(store, batch, details, now),
-    SaveTarget::Draft(task) => store.update_draft(task, details),
+    SaveTarget::Task(task) => store.update_task(task, details),
   }
 }
 
@@ -279,11 +277,11 @@ pub enum TaskDraftSaveError {
   Store(#[from] StoreError),
   #[error("the task is no longer a draft: {0:?}")]
   NotDraft(TaskStatus),
-  #[error("the persisted draft differs from the requested details")]
+  #[error("the persisted task differs from the requested details")]
   DetailsMismatch,
 }
 
-/// [`save_to`] in the project database of `repo_root`, confirmed as the requested draft.
+/// [`save_to`] in the project database of `repo_root`, confirmed as the requested details.
 pub fn save_draft_in(
   repo_root: &Path,
   target: SaveTarget,
@@ -291,7 +289,7 @@ pub fn save_draft_in(
 ) -> Result<TaskDetails, TaskDraftSaveError> {
   let mut db = ProjectDb::open(repo_root)?;
   let saved = save_to(&mut db, target, details.clone(), Timestamp::now())?;
-  if saved.status() != TaskStatus::Draft {
+  if matches!(target, SaveTarget::New(_)) && saved.status() != TaskStatus::Draft {
     return Err(TaskDraftSaveError::NotDraft(saved.status()));
   }
   if saved.details() != &details {

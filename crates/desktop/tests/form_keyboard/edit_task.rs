@@ -1,7 +1,7 @@
 //! A saved task's brief and acceptance criteria on its Summary, and a draft reopened in the New
 //! task form (design doc, "ORC-12 · Draft Summary and editing"): Edit fills the form, *Save changes*
-//! saves over the same task, *Create & run* starts it, leaving with changes that are not saved asks
-//! first, and a task with a run cannot be edited.
+//! saves over the same task, *Create & run* starts it, and leaving with changes that are not saved
+//! asks first. Editing after a run starts changes future runs, while the existing run keeps its task.
 
 use std::{path::Path, time::Duration};
 
@@ -24,7 +24,6 @@ use crate::{
   task_run::{init_repository, latest_run, programs, seed, set_text},
 };
 
-const FORWARD: MouseButton = MouseButton::Other(5);
 const ROW: &str = "task-row-KON-1";
 
 fn draft(title: &str) -> TaskDetails {
@@ -197,7 +196,7 @@ fn seed_runnable_draft(repo: &Path, fake: &Path) {
 }
 
 #[test]
-fn edit_task_create_and_run_starts_the_same_task_which_can_no_longer_be_edited() {
+fn edit_task_create_and_run_keeps_the_run_snapshot_when_edited_again() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed_runnable_draft(repo, &fake));
   desktop.wait_for("nav-tasks");
@@ -224,32 +223,41 @@ fn edit_task_create_and_run_starts_the_same_task_which_can_no_longer_be_edited()
     has(desktop, "task-page")
   });
   desktop.wait_until("the run stopped at its limit", |desktop| has(desktop, "raise-limit"));
+  desktop.wait_for("task-brief");
   assert!(shows(&mut desktop, "task-brief", "Work in turns."));
   assert!(shows(&mut desktop, "task-criteria", "README.md ends with hello"));
-  assert!(!has(&mut desktop, "task-edit"), "a task with a run has no Edit");
+  assert!(shows(&mut desktop, "task-edit", "Edit"));
   let tasks = stored(&desktop.repo);
   assert_eq!(tasks.len(), 1, "Create & run started the edited draft");
   assert_eq!(tasks[0].key().to_string(), "KON-1");
   assert_eq!(tasks[0].details().title.as_str(), "Say hello twice");
-  assert!(latest_run(&desktop.repo).is_some());
+  let run = latest_run(&desktop.repo).expect("the run was started");
 
-  // Tab 1 still holds the form it opened before the run; opened again, it gives way to the
-  // task's page, which says why.
-  command(&mut desktop, "1", "Digit1", false);
-  desktop.wait_for("task-title");
-  // Its fields still hold the title before the run, so leaving asks.
-  side_button(&mut desktop, BACK);
-  desktop.wait_for("discard-changes-confirm");
-  desktop.press("discard-changes-confirm");
+  edit(&mut desktop);
+  assert!(shows(
+    &mut desktop,
+    "task-form",
+    "Changes to KON-1 apply to future runs. Existing runs keep the task details they started with."
+  ));
+  assert!(!has(&mut desktop, "create-and-run"));
+  set_text(&mut desktop, "task-title", "Say hello three times");
+  set_text(&mut desktop, "task-brief", "Work in future turns.");
+  desktop.press("save-draft");
+  state_reads(&mut desktop, "Task saved locally");
+  assert_eq!(
+    stored(&desktop.repo)[0].details().title.as_str(),
+    "Say hello three times"
+  );
+
+  desktop.press("new-task-back");
   desktop.wait_for("task-page");
-  side_button(&mut desktop, FORWARD);
-  desktop.wait_until("the refusal on the task page", |desktop| {
-    has(desktop, "task-page")
-      && shows(
-        desktop,
-        "task-page",
-        "This task has a run, so it can no longer be edited.",
-      )
-  });
-  assert!(!has(&mut desktop, "task-title"));
+  desktop.wait_for("task-brief");
+  assert!(shows(&mut desktop, "task-brief", "Work in turns."));
+  let db = ProjectDb::open(&desktop.repo).expect("open the project");
+  let original = db
+    .task_for_run(tasks[0].id(), run.id())
+    .expect("read run task")
+    .expect("the run task exists");
+  assert_eq!(original.details().title.as_str(), "Say hello twice");
+  assert_eq!(original.details().brief, "Work in turns.");
 }

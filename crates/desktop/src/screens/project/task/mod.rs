@@ -548,7 +548,7 @@ impl TaskScreen {
 /// with an empty note.
 fn plan_review(ctx: &mut Ctx, detail: &TaskDetail, run: &RunView, review: PlanReview) -> Element {
   let key = format!("plan-review-{}-{}", run.id(), review.waiting().version);
-  let task = detail.task.details();
+  let task = detail.run_task.as_ref().unwrap_or(&detail.task).details();
   let props = PlanReviewProps {
     review: Arc::new(review),
     task: task.title.as_str().into(),

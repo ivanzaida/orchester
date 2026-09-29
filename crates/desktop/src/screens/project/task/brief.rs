@@ -160,7 +160,7 @@ fn limit_rows(ctx: &Ctx, limits: Option<TaskLimits>) -> Vec<Element> {
   ]
 }
 
-/// *Edit* (`IyZyB`), for a draft that can still be edited: opens it in the New task form.
+/// *Edit* (`IyZyB`): opens the task form when its details can be changed.
 pub(super) fn edit_button(ctx: &Ctx, nav: &ProjectNav, detail: &TaskDetail) -> Option<Element> {
   if !detail.editable() {
     return None;

@@ -1,12 +1,11 @@
-//! Editing a saved draft in place: the same task, with its number, takes the new details; a task
-//! with a run or out of the drafts is refused and left as it was.
+//! Editing a task in place: each existing run keeps the prompt content it started with.
 
 mod support;
 
 use std::{fs, time::Duration};
 
 use orchester_core::{
-  id::{IdempotencyKey, ProjectId, ResourceId},
+  id::{IdempotencyKey, ProjectId, ResourceId, RunId},
   project::{Project, ProjectKey},
   resource::VersionNumber,
   store::TaskStore,
@@ -55,7 +54,7 @@ fn task_edits_update_a_draft_in_place() {
 
   let details = edited();
   let updated = db
-    .update_draft(created[0].id(), details.clone())
+    .update_task(created[0].id(), details.clone())
     .expect("the draft is edited");
   assert_eq!(updated.details(), &details);
   assert_eq!((updated.id(), updated.key()), (created[0].id(), created[0].key()));
@@ -70,17 +69,73 @@ fn task_edits_update_a_draft_in_place() {
 }
 
 #[test]
-fn task_edits_are_refused_for_a_task_with_a_run() {
-  let (_repo, mut db, run, _) = started_run();
+fn task_with_a_run_can_be_edited_without_changing_its_run_snapshot() {
+  let (repo, mut db, run, _) = started_run();
   let before = db.task(run.task()).expect("read").expect("the task exists");
-  assert!(matches!(
-    db.update_draft(run.task(), edited()),
-    Err(StoreError::TaskNotEditable {
-      source: EditError::HasRun,
-      ..
-    })
-  ));
-  assert_eq!(db.task(run.task()).expect("read"), Some(before));
+  let changed = edited();
+  let updated = db.update_task(run.task(), changed.clone()).expect("edit started task");
+  assert_eq!(updated.details(), &changed);
+  assert_eq!(
+    (updated.id(), updated.key(), updated.status()),
+    (before.id(), before.key(), before.status())
+  );
+  assert_eq!(
+    db.task_for_run(run.task(), run.id()).expect("run task"),
+    Some(before.clone())
+  );
+  db.update_task(
+    run.task(),
+    TaskDetails {
+      title: name("Again"),
+      ..changed
+    },
+  )
+  .expect("edit the task again");
+  assert_eq!(
+    db.task_for_run(run.task(), run.id()).expect("run task"),
+    Some(before.clone())
+  );
+  drop(db);
+
+  let db = ProjectDb::open(repo.path()).expect("reopen");
+  assert_eq!(
+    db.task(run.task())
+      .expect("task")
+      .expect("task exists")
+      .details()
+      .title
+      .as_str(),
+    "Again"
+  );
+  assert_eq!(db.task_for_run(run.task(), run.id()).expect("run task"), Some(before));
+}
+
+#[test]
+fn legacy_run_gets_its_task_snapshot_before_the_first_edit() {
+  let (repo, db, run, _) = started_run();
+  let before = db.task(run.task()).expect("task").expect("task exists");
+  drop(db);
+  // Simulate a database migrated from the version before run task snapshots existed.
+  let connection = rusqlite::Connection::open(repo.path().join(".orchester/orchester.db")).expect("database");
+  connection
+    .execute_batch("DROP TRIGGER run_task_snapshots_no_delete; DELETE FROM run_task_snapshots;")
+    .expect("remove the new snapshot");
+  drop(connection);
+
+  let mut db = ProjectDb::open(repo.path()).expect("reopen");
+  db.update_task(run.task(), edited()).expect("edit migrated task");
+  assert_eq!(db.task_for_run(run.task(), run.id()).expect("run task"), Some(before));
+}
+
+#[test]
+fn task_for_run_rejects_a_run_of_another_task_or_an_unknown_run() {
+  let (_repo, mut db, run, _) = started_run();
+  let other = db
+    .create_tasks(IdempotencyKey::generate(), vec![draft("Other")], at(2))
+    .expect("another task")
+    .remove(0);
+  assert_eq!(db.task_for_run(other.id(), run.id()).expect("lookup"), None);
+  assert_eq!(db.task_for_run(run.task(), RunId::generate()).expect("lookup"), None);
 }
 
 #[test]
@@ -100,9 +155,9 @@ fn task_edits_are_refused_for_a_queued_task() {
   task.queue(VersionNumber::FIRST).expect("a complete draft queues");
   db.save_task(&task).expect("queued");
   assert!(matches!(
-    db.update_draft(task.id(), draft("Other")),
+    db.update_task(task.id(), draft("Other")),
     Err(StoreError::TaskNotEditable {
-      source: EditError::NotDraft(TaskStatus::Queued),
+      source: EditError::QueuedWithoutRun,
       ..
     })
   ));

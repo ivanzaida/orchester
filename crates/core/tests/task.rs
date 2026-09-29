@@ -106,17 +106,25 @@ fn edit_replaces_a_drafts_details_and_keeps_its_identity() {
 }
 
 #[test]
-fn edit_is_refused_once_the_task_has_a_run_or_left_the_drafts() {
-  let mut started = task(title_only());
-  assert_eq!(started.edit(complete(), true), Err(EditError::HasRun));
-  assert_eq!(started.details(), &title_only());
-
+fn queued_task_edits_need_a_run_and_complete_details() {
   let details = complete();
   let mut queued = task(details.clone());
   queued.queue(VersionNumber::FIRST).expect("a complete draft queues");
+  assert_eq!(queued.edit(title_only(), false), Err(EditError::QueuedWithoutRun));
+  assert_eq!(queued.details(), &details);
   assert_eq!(
-    queued.edit(title_only(), false),
-    Err(EditError::NotDraft(TaskStatus::Queued))
+    queued.edit(title_only(), true),
+    Err(EditError::Incomplete(vec![
+      MissingDetail::Brief,
+      MissingDetail::AcceptanceCriteria,
+      MissingDetail::Pipeline,
+      MissingDetail::Limits,
+    ]))
   );
   assert_eq!(queued.details(), &details);
+  let next = complete();
+  assert_eq!(queued.edit(next.clone(), true), Ok(()));
+  assert_eq!(queued.details(), &next);
+  assert_eq!(queued.status(), TaskStatus::Queued);
+  assert_eq!(queued.pipeline_version(), Some(VersionNumber::FIRST));
 }

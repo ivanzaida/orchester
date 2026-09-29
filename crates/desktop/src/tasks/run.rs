@@ -65,7 +65,7 @@ pub fn queue_in(
   let mut db = ProjectDb::open(repo_root)?;
   let existing = match target {
     SaveTarget::New(batch) => db.task_by_batch(batch)?,
-    SaveTarget::Draft(id) => db.task(id)?,
+    SaveTarget::Task(id) => db.task(id)?,
   };
   if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
     return queued_start(&db, task);

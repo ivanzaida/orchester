@@ -498,12 +498,14 @@
       "breadcrumb": "{{project}} / Tasks / {{task}} / Edit",
       "title": "Edit task",
       "description": "Changes apply to draft {{task}}. Nothing runs until you choose Create & run.",
+      "descriptionStarted": "Changes to {{task}} apply to future runs. Existing runs keep the task details they started with.",
       "unsaved": "Unsaved changes",
+      "saved": "Task saved locally",
       "saveChanges": "Save changes",
       "savingChanges": "Saving changes…",
-      "leave": "Your edits to {{task}} are not saved yet. Leaving discards them; the saved draft stays as it was.",
-      "notDraft": "This task is queued for a run, so it can no longer be edited.",
-      "hasRun": "This task has a run, so it can no longer be edited."
+      "leave": "Your edits to {{task}} are not saved yet. Leaving discards them; the saved task stays as it was.",
+      "notStarted": "This task is queued. Its details can be edited after the first run is recorded.",
+      "incomplete": "A task that has started must keep a brief, acceptance criteria, pipeline and limits."
     }
   },
   "runs": {

@@ -173,6 +173,8 @@ impl RunView {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TaskDetail {
   pub task: Task,
+  /// The task details pinned by the latest readable run, for run-specific review UI.
+  pub run_task: Option<Task>,
   /// The latest run, when it can be read.
   pub run: Option<RunView>,
   /// The merge of the latest run into its base branch, once it was merged.
@@ -197,8 +199,7 @@ impl TaskDetail {
     TaskPhase::of(&self.task, self.run.as_ref().map(|run| &run.run), self.merge.as_ref())
   }
 
-  /// Whether the task can still be edited: a draft that no run was started for
-  /// ([`Task::check_editable`]).
+  /// Whether the task can be edited: a draft or a task with a recorded run.
   pub fn editable(&self) -> bool {
     let has_run = self.run.is_some() || self.latest_unreadable.is_some();
     self.task.check_editable(has_run).is_ok()
@@ -235,12 +236,18 @@ impl TaskDetail {
       .map(Unreadable::of)
       .collect();
     let latest = latest.and_then(Result::ok);
+    let run_task = latest
+      .as_ref()
+      .map(|run| db.task_for_run(task.id(), run.id()))
+      .transpose()?
+      .flatten();
     let merge = match &latest {
       Some(run) => db.run_merge(run.id())?,
       None => None,
     };
     Ok(Self {
       run: latest.map(|run| run_view(&db, run)).transpose()?,
+      run_task,
       merge,
       earlier_unreadable,
       ..Self::without_runs(task, messages)
@@ -250,6 +257,7 @@ impl TaskDetail {
   fn without_runs(task: Task, messages: Vec<Message>) -> Self {
     Self {
       task,
+      run_task: None,
       run: None,
       merge: None,
       messages,

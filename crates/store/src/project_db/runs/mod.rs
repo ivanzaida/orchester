@@ -17,7 +17,7 @@ use self::{
   columns::{attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text, step_status_columns},
   load::{load_checkpoint, load_events, load_runs},
 };
-use super::{ProjectDb, plans, resources::version_number};
+use super::{ProjectDb, plans, resources::version_number, tasks::snapshot_new_run};
 use crate::{
   RunStoreError, StoreError,
   rows::{corrupt, encode_json, millis_column, tokens_column},
@@ -33,21 +33,15 @@ impl RunStore for ProjectDb {
 
   fn create_run(&mut self, key: IdempotencyKey, new: NewRun, now: Timestamp) -> Result<Run, RunStoreError> {
     let key = key.to_string();
+    let project = self.project.key().clone();
     let transaction = self.connection.transaction()?;
     if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
       return existing.map_err(|unreadable| unreadable.error);
     }
-    let task_exists: bool = transaction.query_row(
-      "SELECT EXISTS (SELECT 1 FROM tasks WHERE id = ?1)",
-      [new.task.to_string()],
-      |row| row.get(0),
-    )?;
-    if !task_exists {
-      return Err(StoreError::TaskNotFound(new.task).into());
-    }
     let number: i64 = transaction.query_row("SELECT next FROM counters WHERE name = 'run'", [], |row| row.get(0))?;
     let (run, created) = Run::create(RunId::generate(), run_number(number)?, new, now)?;
     insert_run(&transaction, &run, &key)?;
+    snapshot_new_run(&transaction, run.id(), run.task(), &project)?;
     insert_event(&transaction, &created)?;
     transaction.execute("UPDATE counters SET next = ?1 WHERE name = 'run'", [number + 1])?;
     transaction.commit()?;

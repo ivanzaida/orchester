@@ -18,6 +18,20 @@ then the backlog by area.
 - When a task is done, move it to *Done* at the end of this file in the same change, with the commit or branch.
 - Tasks marked **needs decision** wait for the user; do not start them.
 
+## Current user-requested fix
+
+### Edit a task after its first run starts
+
+**Status 2026-09-29: In progress on `codex/edit-started-task`.** The task form now opens for a
+task with a recorded run and saves its details in place for future runs. Existing runs retain a
+snapshot of the task details they started with; legacy runs acquire that snapshot before the
+first edit. A queued task with no recorded run stays locked, and a started task cannot be saved
+incomplete. Independent filtered core, store, runner and desktop tests passed after the Summary
+snapshot refinement; `tools/check.ps1` passed. Independent same-state Pencil/app verification
+found no remaining major mismatch after that refinement.
+Pencil changes are in the shared editor and must be saved to `data/orchester.pen` before merge.
+Verification: `docs/evidence/edit-started-task-2026-09-29.md`.
+
 ## D · Developing Orchester inside Orchester
 
 What is already in place: runs in their own worktrees, pipelines with agent and command steps, limits, questions and

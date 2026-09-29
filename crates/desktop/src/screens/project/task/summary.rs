@@ -66,6 +66,9 @@ pub(super) fn summary(
     return retry_limit(ctx, run, step, reason);
   }
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
+  // Brief and criteria on a run page describe what that run was asked to do, even after the
+  // task is edited for a later run.
+  let details = detail.run_task.as_ref().unwrap_or(&detail.task).details();
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Section)
@@ -75,7 +78,7 @@ pub(super) fn summary(
     .child(with_reason(notice(ctx, detail, lost), reason))
     .with_children(raise)
     .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())))
-    .with_children(brief_section(ctx, detail.task.details()));
+    .with_children(brief_section(ctx, details));
   let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
   let panel = match &detail.run {
     Some(run) => this_run(ctx, run, (repo_root, &scrolls.this_run)),

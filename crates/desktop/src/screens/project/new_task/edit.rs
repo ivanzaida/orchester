@@ -1,4 +1,4 @@
-//! The New task form reopened on a saved draft: Edit task (`E1o77O`, after a change `ctHXE`). The
+//! The New task form reopened on a saved task: Edit task (`E1o77O`, after a change `ctHXE`). The
 //! fields start with the saved values, *Save changes* saves over the same task and is unavailable
 //! while nothing differs from it, and leaving with changes that are not saved asks first (`kDmo9`).
 
@@ -14,7 +14,7 @@ use crate::{
   tasks::data::PipelineChoice,
 };
 
-/// The saved draft the form edits, as the project's tasks were last read.
+/// The saved task the form edits, as the project's tasks were last read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Editing {
   pub task: Arc<Task>,
@@ -29,7 +29,7 @@ pub struct Recovering {
   pub pipeline: Arc<PipelineChoice>,
 }
 
-/// Fills the form with the draft's saved details when it can still be edited; otherwise leads to
+/// Fills the form with the task's saved details when it can still be edited; otherwise leads to
 /// the task's page, which says why. Checked once, when the form opens: a draft the form itself
 /// queues with Create & run stays on the form until its run starts.
 pub(super) fn open(ctx: &Ctx, form: &NewTaskForm, editing: &Editing) {
@@ -88,7 +88,14 @@ pub(super) fn heading_texts(ctx: &Ctx, editing: Option<&Task>) -> (Arc<str>, Arc
   match editing {
     Some(task) => (
       ctx.t("tasks.edit.title"),
-      ctx.t_args("tasks.edit.description", [("task", task.key().to_string().as_str())]),
+      ctx.t_args(
+        if task.status() == orchester_core::task::TaskStatus::Draft {
+          "tasks.edit.description"
+        } else {
+          "tasks.edit.descriptionStarted"
+        },
+        [("task", task.key().to_string().as_str())],
+      ),
     ),
     None => (ctx.t("tasks.new.title"), ctx.t("tasks.new.description")),
   }

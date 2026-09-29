@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use orchester_core::{
-  id::{IdempotencyKey, TaskId},
+  id::{IdempotencyKey, RunId, TaskId},
   name::Name,
   project::{ProjectKey, TaskKey},
   resource::VersionNumber,
@@ -9,15 +9,24 @@ use orchester_core::{
   task::{Task, TaskDetails, TaskLimits, TaskStatus},
   time::Timestamp,
 };
-use rusqlite::{Connection, Params, Row, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Params, Row, Transaction, params};
 
 use super::ProjectDb;
 use crate::{
   StoreError,
-  rows::{budget_value, corrupt, duration_value, millis_column, parse, tokens_column},
+  rows::{budget_value, corrupt, decode_json, duration_value, encode_json, millis_column, parse, tokens_column},
 };
 
 const SELECT_TASKS: &str = "SELECT id, number, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, created_at, pipeline_version FROM tasks";
+
+struct RunTaskSnapshot {
+  title: String,
+  brief: String,
+  criteria: String,
+  pipeline: Option<String>,
+  budget: Option<i64>,
+  duration: Option<i64>,
+}
 
 impl ProjectDb {
   /// Finds the task already created by an idempotent form submission, if any.
@@ -30,6 +39,112 @@ impl ProjectDb {
     )?;
     Ok(found.pop())
   }
+
+  /// The task content a run started with, including after the task is edited for a later run.
+  /// A run from before snapshots existed uses current details until its first subsequent edit.
+  pub fn task_for_run(&self, task_id: TaskId, run_id: RunId) -> Result<Option<Task>, StoreError> {
+    let Some(task) = self.task(task_id)? else {
+      return Ok(None);
+    };
+    let belongs_to_task: bool = self.connection.query_row(
+      "SELECT EXISTS(SELECT 1 FROM runs WHERE id = ?1 AND task_id = ?2)",
+      params![run_id.to_string(), task_id.to_string()],
+      |row| row.get(0),
+    )?;
+    if !belongs_to_task {
+      return Ok(None);
+    }
+    let snapshot: Option<RunTaskSnapshot> = self.connection.query_row(
+      "SELECT title, brief, criteria, pipeline_id, budget_tokens, max_duration_ms FROM run_task_snapshots WHERE run_id = ?1",
+      [run_id.to_string()],
+      |row| Ok(RunTaskSnapshot {
+        title: row.get(0)?,
+        brief: row.get(1)?,
+        criteria: row.get(2)?,
+        pipeline: row.get(3)?,
+        budget: row.get(4)?,
+        duration: row.get(5)?,
+      }),
+    ).optional()?;
+    let Some(snapshot) = snapshot else {
+      return Ok(Some(task));
+    };
+    let mut details = task.details().clone();
+    details.title = Name::new(&snapshot.title).map_err(|error| corrupt("run task title", error))?;
+    details.brief = snapshot.brief;
+    details.acceptance_criteria = decode_json("run task criteria", 1, &snapshot.criteria)?;
+    details.pipeline = snapshot
+      .pipeline
+      .as_deref()
+      .map(|id| parse("run task pipeline", id))
+      .transpose()?;
+    details.limits = match (snapshot.budget, snapshot.duration) {
+      (Some(tokens), Some(millis)) => Some(
+        TaskLimits::new(
+          budget_value("run task budget", tokens)?,
+          duration_value("run task duration", millis)?,
+        )
+        .map_err(|error| corrupt("run task limits", error))?,
+      ),
+      (None, None) => None,
+      _ => return Err(corrupt("run task limits", "one limit is missing")),
+    };
+    Ok(Some(Task::from_stored(
+      task.id(),
+      task.key().clone(),
+      details,
+      task.status(),
+      task.pipeline_version(),
+      task.created_at(),
+    )))
+  }
+}
+
+/// Records the task prompt content for a newly created run, inside its creation transaction.
+pub(super) fn snapshot_new_run(
+  transaction: &Transaction<'_>,
+  run: RunId,
+  task_id: TaskId,
+  project: &ProjectKey,
+) -> Result<(), StoreError> {
+  let task = load_tasks(transaction, project, "WHERE id = ?1", [task_id.to_string()])?
+    .pop()
+    .ok_or(StoreError::TaskNotFound(task_id))?;
+  let (budget, duration) = limit_columns(task.details().limits)?;
+  transaction.execute(
+    "INSERT INTO run_task_snapshots (run_id, title, brief, criteria, pipeline_id, budget_tokens, max_duration_ms) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    params![
+      run.to_string(),
+      task.details().title.as_str(),
+      task.details().brief,
+      encode_json("run task criteria", 1, &task.details().acceptance_criteria)?,
+      task.details().pipeline.map(|id| id.to_string()),
+      budget,
+      duration
+    ],
+  )?;
+  Ok(())
+}
+
+/// Existing runs from before this schema acquire their original prompt content before an edit.
+fn snapshot_earlier_runs(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
+  let (budget, duration) = limit_columns(task.details().limits)?;
+  transaction.execute(
+    "INSERT INTO run_task_snapshots (run_id, title, brief, criteria, pipeline_id, budget_tokens, max_duration_ms) \
+     SELECT id, ?2, ?3, ?4, ?5, ?6, ?7 FROM runs WHERE task_id = ?1 \
+     AND id NOT IN (SELECT run_id FROM run_task_snapshots)",
+    params![
+      task.id().to_string(),
+      task.details().title.as_str(),
+      task.details().brief,
+      encode_json("run task criteria", 1, &task.details().acceptance_criteria)?,
+      task.details().pipeline.map(|id| id.to_string()),
+      budget,
+      duration
+    ],
+  )?;
+  Ok(())
 }
 
 impl TaskStore for ProjectDb {
@@ -86,7 +201,7 @@ impl TaskStore for ProjectDb {
     Ok(())
   }
 
-  fn update_draft(&mut self, id: TaskId, details: TaskDetails) -> Result<Task, StoreError> {
+  fn update_task(&mut self, id: TaskId, details: TaskDetails) -> Result<Task, StoreError> {
     let transaction = self.connection.transaction()?;
     let mut task = load_tasks(&transaction, self.project.key(), "WHERE id = ?1", [id.to_string()])?
       .pop()
@@ -96,9 +211,13 @@ impl TaskStore for ProjectDb {
       [id.to_string()],
       |row| row.get(0),
     )?;
+    let before = task.clone();
     task
       .edit(details, has_run)
       .map_err(|source| StoreError::TaskNotEditable { task: id, source })?;
+    if has_run {
+      snapshot_earlier_runs(&transaction, &before)?;
+    }
     update_task(&transaction, &task)?;
     transaction.commit()?;
     Ok(task)

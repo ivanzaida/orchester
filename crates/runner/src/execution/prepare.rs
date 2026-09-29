@@ -134,6 +134,10 @@ pub(super) fn record(
   let run = db
     .create_run(key, new, Timestamp::now())
     .map_err(|error| read_failed("cannot record the run", error))?;
+  let task = db
+    .task_for_run(task.id(), run.id())
+    .map_err(|error| failed("cannot read the run's task snapshot", &error))?
+    .ok_or(Rejection::TaskNotFound)?;
   finish_recorded(db, root, run, task)
 }
 
@@ -151,7 +155,7 @@ pub(super) fn resume_recorded(
     });
   }
   let task = db
-    .task(task_id)
+    .task_for_run(task_id, run.id())
     .map_err(|error| failed("cannot read the run's task", &error))?
     .ok_or(Rejection::TaskNotFound)?;
   finish_recorded(db, root, run, task)
@@ -190,7 +194,7 @@ impl Prepared {
   /// A recorded run that continues in its existing worktree: resumed or with raised limits.
   pub(super) fn continuing(db: &ProjectDb, root: &Path, run: Run) -> Result<Self, Rejection> {
     let task = db
-      .task(run.task())
+      .task_for_run(run.task(), run.id())
       .map_err(|error| failed("cannot read the run's task", &error))?
       .ok_or(Rejection::TaskNotFound)?;
     let worktree = existing_worktree(root, run.id())?;

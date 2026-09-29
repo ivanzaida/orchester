@@ -99,14 +99,14 @@ pub enum QueueError {
   Incomplete(Vec<MissingDetail>),
 }
 
-/// Why a task's details cannot be changed any more: only a draft that no run was started for can
-/// be edited, since a run keeps the details it started with.
+/// Why a task's details cannot be changed. A queued task waiting for its first run stays locked;
+/// once a run exists, edits must keep the task complete for future runs.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum EditError {
-  #[error("only draft tasks can be edited; this task is {0:?}")]
-  NotDraft(TaskStatus),
-  #[error("a run was started for this task")]
-  HasRun,
+  #[error("a queued task cannot be edited before its first run starts")]
+  QueuedWithoutRun,
+  #[error("a task with a run is missing {0:?}")]
+  Incomplete(Vec<MissingDetail>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -168,22 +168,24 @@ impl Task {
     self.created_at
   }
 
-  /// Whether the task's details can still be changed; `has_run` says whether a run was started
-  /// for it.
+  /// A queued task is editable once its first run is recorded.
   pub const fn check_editable(&self, has_run: bool) -> Result<(), EditError> {
-    if has_run {
-      return Err(EditError::HasRun);
-    }
-    if !matches!(self.status, TaskStatus::Draft) {
-      return Err(EditError::NotDraft(self.status));
+    if matches!(self.status, TaskStatus::Queued) && !has_run {
+      return Err(EditError::QueuedWithoutRun);
     }
     Ok(())
   }
 
-  /// Replaces the details of a draft that no run was started for, keeping its id, number and
-  /// creation time. An incomplete draft stays allowed, as it was when first saved.
+  /// Replaces the task's details, keeping its identity and status. A draft may be incomplete;
+  /// a task that has started must remain complete for its next run.
   pub fn edit(&mut self, details: TaskDetails, has_run: bool) -> Result<(), EditError> {
     self.check_editable(has_run)?;
+    if has_run {
+      let missing = details.missing();
+      if !missing.is_empty() {
+        return Err(EditError::Incomplete(missing));
+      }
+    }
     self.details = details;
     Ok(())
   }
