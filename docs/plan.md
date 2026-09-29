@@ -13,8 +13,8 @@ then the backlog by area.
 - **Non-UI** tasks need `powershell -File tools/check.ps1` and the named filtered tests.
 - **UI** tasks also need an independent design verification (`AGENTS.md` rule 15): a second agent that did not write
   the change compares Pencil and app screenshots. Inside an Orchester run that means a separate *Verify* step with its
-  own agent profile. Until a run can build and drive the app through its MCP server (see D3), leave UI tasks to work
-  outside Orchester.
+  own agent profile. Until D4 provides an independent *Verify* step with Pencil and app screenshots and a host-side
+  focus check, leave UI tasks to work outside Orchester.
 - When a task is done, move it to *Done* at the end of this file in the same change, with the commit or branch.
 - Tasks marked **needs decision** wait for the user; do not start them.
 
@@ -29,7 +29,6 @@ then the backlog by area.
 | M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; an exact remote-selected inspector Pencil frame is missing. |
 | U5 | `codex/u5-small-mismatches` | Independent tests and live checks, including real parallel waiting rows, pass; the after-Remove-worktree live state was not reached and its Pencil frame is missing. |
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; exact Not started, Interrupted and recipient-menu Pencil frames are missing. |
-| D3 | `codex/d3-first-run` | Isolated Implement and Review passed; desktop launch from inside a run remains to be checked. |
 
 M1 evidence and parser tests are on `master`; Claude's MCP allow rule still needs a signed-in model turn.
 
@@ -41,7 +40,8 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 
 ### D1 · Set up the Orchester project in the stable build (user, manual)
 
-1. In the stable build, add `H:/projects/orchester` as a project.
+1. In the stable build, add `H:/projects/orchester` as a project. First make `.orchester/` ignored by Git for this
+   checkout (for example in its local `.git/info/exclude`); the runner refuses to create a run worktree otherwise.
 2. Project instruction: *Read AGENTS.md at the repository root and follow it. Before writing Rust, read
    `.claude/skills/rust-code-quality/SKILL.md`. Take tasks from `docs/plan.md`.* Claude Code is started with
    `--setting-sources ""`, so it does not load `CLAUDE.md` on its own; Codex reads `AGENTS.md` itself.
@@ -59,26 +59,6 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
    merge from Orchester while another agent is merging branches into `master` by hand.
 
-### D3 · Find what a run can and cannot do on this repository (first real run)
-
-The first two runs used an isolated clone of this repository; the stable user project has not run. Record what happens
-in `docs/evidence/` (dated file):
-
-- whether `cargo build` / `cargo test` work inside Codex's Windows sandbox (`windows.sandbox=elevated`), including the
-  runner tests that start processes and named pipes (`--features test-agent`);
-- whether an agent can build and start the desktop with `--features mcp` and reach its MCP server, which a UI
-  verification step needs;
-- token use and time per step, and anything that failed or needed the user.
-
-**Done when** the evidence file exists and every failure found has its own task in this plan.
-
-**Status 2026-09-29: In progress.** In disposable project runs, Codex's elevated Windows workspace-write sandbox passed
-`cargo check`, two filtered runner process/named-pipe tests with `--features test-agent`, the runner+desktop `--features
-mcp` build and `tools/check.ps1`; a separate read-only Review passed. The first run exposed a read-only pipeline-step
-default and declined CLI disk-space commands. Starting that built desktop *inside* a run and reaching its embedded MCP
-remain unverified until L6's no-focus startup is available in the run checkout. Evidence:
-`docs/evidence/d3-first-real-run-2026-09-29.md`.
-
 ### D5 · Check free disk space outside the agent CLI (non-UI)
 
 In the first D3 run, Codex 0.139.0 with `-a never` declined `Get-PSDrive`, `fsutil volume diskfree H:` and `Get-Volume H`
@@ -86,12 +66,32 @@ in a read-only step. A task that required that check stopped before cargo. Add a
 preflight for builds using a shared target, with a clear low-space result on Windows and macOS, so the agent does not
 depend on shell commands that its sandbox may decline. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md`.
 
+### D6 · Pin the verification app built by a run (non-UI)
+
+A shared `CARGO_TARGET_DIR` can be rebuilt by a different checkout or feature set between build and UI verification.
+During D3 the shared `orchester.exe` timestamp changed after the successful in-run MCP probe; later host replays found
+no MCP discovery. The timestamp alone does not identify what rebuilt the binary. Copy the just-built desktop and runner
+into a run-owned app directory, or otherwise pin the exact artifacts before launch. **Done when** concurrent builds
+cannot replace the binary chosen by a UI verifier. Evidence: `docs/evidence/d3-mcp-inside-run-2026-09-29.md`.
+
+### D7 · Keep embedded MCP bearer tokens out of agent transcripts (non-UI)
+
+An agent diagnosing D3 read a disposable host app's discovery JSON with a shell command, which exposed its ephemeral
+bearer token to that run's transcript. Provide a small exact-PID MCP client that reads discovery in process memory,
+prints only tool results and errors, and never prints the token or raw discovery file. Document its use for in-run UI
+verification. **Done when** a run can discover and call its own app MCP without displaying the credential. Evidence:
+`docs/evidence/d3-mcp-inside-run-2026-09-29.md`.
+
 ### D4 · A UI verification step inside a run (after D3)
 
 A pipeline step that verifies a UI change the way `.claude/skills/design-verification/SKILL.md` describes: Pencil
 screenshots through the Pencil MCP server (configured as a project MCP server) and app screenshots through the app's
-embedded MCP server. **Done when** a UI task runs end to end in Orchester with a verifier step whose report follows the
-skill. Depends on D3's findings.
+embedded MCP server. Use L6's no-focus startup, a writable run-owned discovery data directory for both app and client
+(`%LOCALAPPDATA%` on Windows; `$HOME/Library/Application Support` on macOS), an exact-PID client that does not print
+discovery credentials (D7), and pinned app artifacts (D6). Inside Codex's Windows
+sandbox `GetForegroundWindow` returned PID 0; verify host foreground separately instead of treating `0 -> 0` as
+evidence that the user's window stayed active. **Done when** a UI task runs end to end in Orchester with a verifier step
+whose report follows the skill. Depends on the L6 release and D6/D7.
 
 ## T · Tests and runner
 
@@ -209,6 +209,12 @@ catch the user's typing.
 
 ## Done
 
+D3 · First real Orchester runs on an isolated clone · branches `codex/d3-first-run` and `codex/d3-mcp-inside-run`
+(Codex sandbox passed core check, two filtered runner process/pipe tests, desktop+runner MCP build and
+`tools/check.ps1`; an in-run no-focus desktop PID answered exact-PID `lurq_windows` and `lurq_read_tree`, then closed;
+separate Review passed. Sandbox foreground PID was unavailable, and follow-up host replays were inconclusive; D4/D6/D7
+track the remaining verification setup. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md` and
+`docs/evidence/d3-mcp-inside-run-2026-09-29.md`).
 M2 · Map imported profiles' MCP servers · branch `codex/import-mcp` (source server IDs are resolved to target servers
 or left explicit as unresolved; independent core import 20/20, store 1/1, desktop 1/1, i18n 2/2 and
 `tools/check.ps1` passed. No-focus MCP/Pencil verification found 0 blocking/major/minor in the generic mapping row;
