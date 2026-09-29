@@ -23,7 +23,7 @@ then the backlog by area.
 | Task | Branch | Verified progress and next gate |
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
-| L6 | `codex/verifier-no-focus` | lurq 0.30.3 candidate and no-focus app checks pass; release approval is pending. |
+| L6 | `codex/verifier-no-focus` | lurq 0.30.3 is an uncommitted release candidate: filtered focus tests 5/5, independent code/integration review and final `cargo publish --dry-run --allow-dirty` pass. Explicit 0.30.3 release approval and a registry-backed Orchester check after publication remain pending. |
 | D4 | `codex/d4-focus-watch` | Run #10 reached independent Verify but failed on major New Task visual mismatches. Follow-up UI fixes at `ef6f2e8` passed independent code review, filtered `new_task_` tests 10/10 and `check.ps1`; no post-fix Pencil/app pass exists. Truthful header, context and review design states remain open; U3's Pencil Save As is pending before shared design edits. UI remains unmerged. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
 | U3 | `codex/claude-mechanism` | Live Pencil/app comparison passes; the edited `.pen` is not saved into the worktree yet. |
@@ -237,6 +237,14 @@ A verifier's own app instance received real keyboard input while the user worked
 a field), probably because the window took focus when it opened. Find a way to start agent-driven app instances without
 activating them (a lurq window option such as "start without focus", or a flag the MCP build honours), so they never
 catch the user's typing.
+
+**Status 2026-09-29: In progress.** The uncommitted lurq 0.30.3 candidate is based on `48be139`. A corrected
+filtered focus-reconciliation run passed 5/5; `cargo publish --dry-run --allow-dirty` packaged and verified 565 files
+without uploading. The dry run reported a yanked `chacha20` version in `Cargo.lock` and three dead-code warnings.
+Independent code/integration review found no blockers. The changelog date now reads 2026-09-29, and the repeat
+dry run passed. Explicit approval for a 0.30.3 release remains pending.
+Orchester still uses registry lurq 0.30.2; check it against registry 0.30.3 after publication. Evidence:
+`docs/evidence/l6-release-readiness-2026-09-29.md`.
 
 ## P · Product decisions waiting for the user
 
