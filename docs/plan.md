@@ -18,20 +18,6 @@ then the backlog by area.
 - When a task is done, move it to *Done* at the end of this file in the same change, with the commit or branch.
 - Tasks marked **needs decision** wait for the user; do not start them.
 
-## Current user-requested fix
-
-### Edit a task after its first run starts
-
-**Status 2026-09-29: In progress on `codex/edit-started-task`.** The task form now opens for a
-task with a recorded run and saves its details in place for future runs. Existing runs retain a
-snapshot of the task details they started with; legacy runs acquire that snapshot before the
-first edit. A queued task with no recorded run stays locked, and a started task cannot be saved
-incomplete. Independent filtered core, store, runner and desktop tests passed after the Summary
-snapshot refinement; `tools/check.ps1` passed. Independent same-state Pencil/app verification
-found no remaining major mismatch after that refinement.
-Pencil changes are in the shared editor and must be saved to `data/orchester.pen` before merge.
-Verification: `docs/evidence/edit-started-task-2026-09-29.md`.
-
 ## D · Developing Orchester inside Orchester
 
 What is already in place: runs in their own worktrees, pipelines with agent and command steps, limits, questions and
@@ -133,14 +119,6 @@ and MCP tools in the Tools library.
 
 ## U · Screens
 
-### Overview · Failed task tab (UI, in progress)
-
-Add a *Failed* tab to the Overview task list. Its count and newest-first rows show tasks whose latest run failed;
-cancelled, unreadable, draft and successful tasks stay out. The selected tab has its own route and a truthful empty
-state. The 02.08F `pHNfB` and 02.08F2 `aSpMm` Pencil frames are drawn in editor memory. Independent
-same-size app comparison found no blocking or major mismatch; a coordinated Pencil save remains.
-Verification: `docs/evidence/overview-failed-2026-09-29.md`.
-
 ### U10 · Pull requests screen jumps while it loads (UI)
 
 Opening the Pull requests tab shifts its content two or three times
@@ -187,6 +165,17 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+Edit a task after its first run starts · branch `codex/edit-started-task` (the task form saves
+future-run details in place while existing runs retain their snapshots; queued tasks remain locked
+and started tasks cannot be saved incomplete. Independent filtered core, store, runner and desktop
+tests, `tools/check.ps1`, and same-state Pencil/app verification passed. The design was saved.
+Evidence: `docs/evidence/edit-started-task-2026-09-29.md`).
+
+Overview · Failed task tab · branch `codex/overview-failed` (the tab has a count, newest-first
+failed rows, its own route and an accurate empty state; independent filtered tests,
+`tools/check.ps1`, and same-size Pencil/app verification passed. The design was saved.
+Evidence: `docs/evidence/overview-failed-2026-09-29.md`).
 
 D5 · Check free disk space outside the agent CLI · branch `codex/d5-final-port` (absolute shared `CARGO_TARGET_DIR`
 checked by the host before run/worktree creation; truthful, locked queued task can be reopened and retried under the
