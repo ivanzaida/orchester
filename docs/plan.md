@@ -138,17 +138,6 @@ are covered only by data tests. Verify them in the app and fix what differs from
 Pencil (drawn 2026-09-29): `sYuiX` (02.S3, Interrupted), `Ok14G` (02.S4, Not started), `cj2a2` (02.S5, recipient menu
 open).
 
-### U8 · Agent profile header states need a design check (UI/design)
-
-**In progress (2026-09-29):** the live Pencil audit found two 1440 × 960 saved-draft frames, `WPmtS` and `T1rjv`,
-but no published-without-draft frame. Both omit the disabled *Save draft* button shown by the app. The proposed
-resolution and same-state verification gates are in `docs/evidence/u8-header-states-2026-09-29.md`; no Pencil or app
-change has been made. Earlier app lifecycle evidence is `.tmp/verify/u3-u4/report.md`.
-
-Pencil (drawn 2026-09-29): `dWnw7` (04.03A, published without a draft), `t2wCI` (04.04A, the same on Permissions),
-`Jw98x` (04.03B, unsaved changes with Save draft). `WPmtS` and `T1rjv` stay the saved-draft state (no Save draft), which
-matches `codex/u8-header`.
-
 ### U10 · Pull requests screen jumps while it loads (UI)
 
 Opening the Pull requests tab shifts its content two or three times
@@ -196,6 +185,13 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+U8 · Align agent profile header lifecycle actions with Pencil · branch `codex/u8-final-port` (Save draft appears only
+for unsaved edits, while Publish follows the saved-draft state. An independent verifier matched all five saved
+1440 × 960 header frames `dWnw7`, `t2wCI`, `Jw98x`, `WPmtS` and `T1rjv` to source-matched exact-PID app captures at
+2160 × 1440 physical px, with no blocking or major header mismatch. Named agent form tests passed 4/4,
+`tools/check.ps1` passed, and the host watcher recorded 931 samples without app focus. Fixture-specific profile
+bodies differ from Pencil and were not claimed as full-screen parity. Evidence:
+`docs/evidence/u8-header-states-2026-09-29.md` and `.tmp/verify/u8-final-port/report.md`).
 U2 · Guard merge and worktree removal while integration runs · branch `codex/u2-merged-fix` (project/run-scoped busy
 state keeps conflicting controls unavailable, the Merging button retains its width, and a merged run shows its
 historical branch with a fully visible `· deleted` suffix. Independent real-Git integration tests passed 11/11;
