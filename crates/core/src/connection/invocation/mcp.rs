@@ -125,6 +125,7 @@ pub fn bearer_variable(server: &McpServerName) -> String {
 pub struct CodexMcp {
   args: Vec<String>,
   secrets: Vec<SecretVariable>,
+  servers: Vec<McpServerName>,
 }
 
 impl CodexMcp {
@@ -138,6 +139,7 @@ impl CodexMcp {
         Ok(new) => {
           mcp.add(server);
           mcp.secrets.extend(new);
+          mcp.servers.push(server.name.clone());
         }
         Err(problem) => left_out.push((server.name.clone(), problem)),
       }
@@ -160,6 +162,11 @@ impl CodexMcp {
   /// Variables of the Codex process that its servers take their secrets from.
   pub fn secrets(&self) -> &[SecretVariable] {
     &self.secrets
+  }
+
+  /// The exact server names supplied by this invocation, for App Server inventory checks.
+  pub fn servers(&self) -> &[McpServerName] {
+    &self.servers
   }
 
   /// The secret variables `server` adds to the Codex process, or why it cannot have them.

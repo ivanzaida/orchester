@@ -23,6 +23,7 @@ mod schema;
 mod secrets;
 mod step_outputs;
 mod tasks;
+mod tool_approvals;
 
 use std::{
   fs,

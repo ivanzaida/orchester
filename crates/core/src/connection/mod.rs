@@ -7,6 +7,7 @@
 
 mod adapter;
 mod agent;
+pub mod app_server;
 mod catalog;
 mod discovery;
 mod github;

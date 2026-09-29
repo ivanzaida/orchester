@@ -160,6 +160,7 @@ fn plans_waiting_for_a_decision_is_not_active_agent_time() {
     ended_at: Some(at(61_000)),
     usage: TokenUsage::default(),
     outcome: None,
+    timing: orchester_core::run::InvocationTiming::default(),
   };
   // An hour of waiting for the reviewer adds nothing to the minute the agent worked.
   let active = active_time(std::slice::from_ref(&invocation), at(3_661_000));

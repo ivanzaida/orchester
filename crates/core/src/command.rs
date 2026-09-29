@@ -68,6 +68,7 @@ pub struct Command {
   secret_env: Vec<SecretVariable>,
   inherit_env: bool,
   stdin: Option<String>,
+  interactive_stdin: bool,
 }
 
 impl Command {
@@ -87,6 +88,7 @@ impl Command {
       secret_env: Vec::new(),
       inherit_env: true,
       stdin: None,
+      interactive_stdin: false,
     }
   }
 
@@ -138,6 +140,14 @@ impl Command {
     self
   }
 
+  /// Keeps standard input open for a bidirectional line protocol after the child starts.
+  #[must_use]
+  pub fn with_interactive_stdin(mut self) -> Self {
+    self.stdin = None;
+    self.interactive_stdin = true;
+    self
+  }
+
   pub fn program(&self) -> &Path {
     &self.program
   }
@@ -171,6 +181,10 @@ impl Command {
 
   pub fn stdin(&self) -> Option<&str> {
     self.stdin.as_deref()
+  }
+
+  pub const fn interactive_stdin(&self) -> bool {
+    self.interactive_stdin
   }
 }
 

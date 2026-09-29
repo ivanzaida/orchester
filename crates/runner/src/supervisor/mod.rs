@@ -63,6 +63,7 @@ pub enum ProcessEvent {
 pub struct Supervised {
   events: mpsc::Receiver<ProcessEvent>,
   terminate: Option<oneshot::Sender<()>>,
+  input: Option<mpsc::Sender<(String, oneshot::Sender<io::Result<()>>)>>,
 }
 
 impl Supervised {
@@ -82,21 +83,49 @@ impl Supervised {
         source,
       })?;
     let containment = Containment::of(&child).map_err(|source| SupervisorError::Contain { program, source })?;
-    if let (Some(stdin), Some(input)) = (child.stdin.take(), command.stdin()) {
-      tokio::spawn(write_input(stdin, input.to_owned()));
-    }
+    let input = if command.interactive_stdin() {
+      let stdin = child.stdin.take().ok_or_else(|| SupervisorError::Spawn {
+        program: command.program().to_path_buf(),
+        source: io::Error::new(io::ErrorKind::BrokenPipe, "interactive child has no stdin"),
+      })?;
+      let (sender, receiver) = mpsc::channel(32);
+      tokio::spawn(write_lines(stdin, receiver));
+      Some(sender)
+    } else {
+      if let (Some(stdin), Some(input)) = (child.stdin.take(), command.stdin()) {
+        tokio::spawn(write_input(stdin, input.to_owned()));
+      }
+      None
+    };
     let (sender, events) = mpsc::channel(EVENT_BUFFER);
     let (terminate, terminated) = oneshot::channel();
     tokio::spawn(supervise(child, containment, terminated, sender));
     Ok(Self {
       events,
       terminate: Some(terminate),
+      input,
     })
   }
 
   /// The next event; `None` after the exit was reported.
   pub async fn next(&mut self) -> Option<ProcessEvent> {
     self.events.recv().await
+  }
+
+  /// Sends one JSON-RPC message to an interactive child, retaining its stdin for later replies.
+  pub async fn send_line(&self, line: String) -> io::Result<()> {
+    let input = self
+      .input
+      .as_ref()
+      .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "child stdin is not interactive"))?;
+    let (ack, done) = oneshot::channel();
+    input
+      .send((line, ack))
+      .await
+      .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "child stdin closed"))?;
+    done
+      .await
+      .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "child stdin writer ended"))?
   }
 
   /// Ends the process and everything it started. Its exit is reported as
@@ -115,6 +144,25 @@ async fn write_input(mut stdin: ChildStdin, input: String) {
     tracing::warn!(%error, "cannot write the program's input");
   }
   // Dropping `stdin` closes it, so the program sees the end of its input.
+}
+
+async fn write_lines(mut stdin: ChildStdin, mut lines: mpsc::Receiver<(String, oneshot::Sender<io::Result<()>>)>) {
+  while let Some((line, ack)) = lines.recv().await {
+    let result = async {
+      stdin.write_all(line.as_bytes()).await?;
+      stdin.write_all(b"\n").await?;
+      stdin.flush().await
+    }
+    .await;
+    let failed = result.is_err();
+    // The caller may have ended the invocation before the pipe write finished.
+    if ack.send(result).is_err() {
+      tracing::debug!("the interactive child no longer waits for its input write");
+    }
+    if failed {
+      break;
+    }
+  }
 }
 
 /// Runs until the child has exited and all its output is forwarded. A terminate request, or

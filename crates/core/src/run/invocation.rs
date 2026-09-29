@@ -40,6 +40,58 @@ pub struct Invocation {
   /// Sum of the usage the CLI reported so far.
   pub usage: TokenUsage,
   pub outcome: Option<InvocationOutcome>,
+  /// Time spent waiting for an interactive tool decision, excluded from the active limit.
+  pub timing: InvocationTiming,
+}
+
+/// A persisted stop watch for one invocation's interactive approval waits.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct InvocationTiming {
+  inactive_ms: u64,
+  waiting_since: Option<Timestamp>,
+}
+
+impl InvocationTiming {
+  /// Restores the accounting saved before a runner restart.
+  pub const fn restored(inactive_ms: u64, waiting_since: Option<Timestamp>) -> Self {
+    Self {
+      inactive_ms,
+      waiting_since,
+    }
+  }
+
+  pub const fn inactive_ms(&self) -> u64 {
+    self.inactive_ms
+  }
+
+  pub const fn waiting_since(&self) -> Option<Timestamp> {
+    self.waiting_since
+  }
+
+  /// Starts excluding time for a pending user decision. Repeated notification is idempotent.
+  pub fn wait_for_person(&mut self, at: Timestamp) {
+    if self.waiting_since.is_none() {
+      self.waiting_since = Some(at);
+    }
+  }
+
+  /// Stops excluding time after the person's decision has reached the live process.
+  pub fn resume(&mut self, at: Timestamp) {
+    if let Some(since) = self.waiting_since.take() {
+      self.inactive_ms = self
+        .inactive_ms
+        .saturating_add(u64::try_from((at.unix_millis() - since.unix_millis()).max(0)).expect("nonnegative interval"));
+    }
+  }
+
+  fn inactive_millis(&self, end: Timestamp) -> i64 {
+    let waiting = self
+      .waiting_since
+      .map_or(0, |since| (end.unix_millis() - since.unix_millis()).max(0));
+    i64::try_from(self.inactive_ms)
+      .unwrap_or(i64::MAX)
+      .saturating_add(waiting)
+  }
 }
 
 impl Invocation {
@@ -54,7 +106,7 @@ impl Invocation {
   /// Active agent time: from the launch to its end, or to `now` while it runs.
   pub fn active_millis(&self, now: Timestamp) -> i64 {
     let end = self.ended_at.unwrap_or(now);
-    (end.unix_millis() - self.started_at.unix_millis()).max(0)
+    (end.unix_millis() - self.started_at.unix_millis() - self.timing.inactive_millis(end)).max(0)
   }
 }
 

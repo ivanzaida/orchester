@@ -34,6 +34,10 @@ pub struct StepPermissions {
   pub commands: StepCommands,
   #[serde(default)]
   pub network: StepNetwork,
+  /// This agent step may pause for a person's decision on one Codex MCP or app tool call.
+  /// The default keeps the existing non-interactive Codex policy for published pipelines.
+  #[serde(default)]
+  pub interactive_tool_approvals: bool,
 }
 
 impl StepPermissions {

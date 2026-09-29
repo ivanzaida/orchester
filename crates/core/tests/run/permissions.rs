@@ -87,6 +87,7 @@ fn narrowing_run() -> (Logged, ResourceId) {
     permissions: StepPermissions {
       commands: StepCommands::Only(commands(&["git"])),
       network: StepNetwork::Off,
+      ..StepPermissions::default()
     },
   };
   let pipeline = version(1, Pipeline::new(vec![implement]).expect("pipeline"));

@@ -128,6 +128,7 @@ fs4.workspace = true
 # Reads the values of the secrets MCP servers use from the OS keychain when an agent starts.
 orchester-vault.workspace = true
 parking_lot.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -136,8 +137,6 @@ tracing-subscriber.workspace = true
 [dev-dependencies]
 # The in-memory keychain of the tests is shared with the scheduler.
 parking_lot.workspace = true
-# Reads the MCP configuration file the fake Claude Code CLI reports.
-serde_json.workspace = true
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
 rusqlite.workspace = true
 tempfile.workspace = true

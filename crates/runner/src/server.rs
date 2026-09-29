@@ -318,6 +318,17 @@ async fn answer(
         handle.decide_plan(run, execution, version, decision).await
       });
     }
+    Command::DecideToolApproval {
+      run,
+      ref approval,
+      approve,
+    } => {
+      let approval = approval.clone();
+      return later.answer(
+        run,
+        async move { handle.decide_tool_approval(run, approval, approve).await },
+      );
+    }
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),

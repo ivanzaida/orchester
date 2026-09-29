@@ -4,7 +4,7 @@ use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome},
   id::{InvocationId, RunId, StepExecutionId},
   resource::ModelId,
-  run::{ActivityEntry, Invocation, InvocationKind, InvocationPrompt, StepOutput, TokenUsage},
+  run::{ActivityEntry, Invocation, InvocationKind, InvocationPrompt, InvocationTiming, StepOutput, TokenUsage},
   store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
@@ -21,7 +21,8 @@ const EVENT_SCHEMA: u32 = 1;
 const OUTCOME_SCHEMA: u32 = 1;
 
 const SELECT_INVOCATIONS: &str = "SELECT id, run_id, step_execution_id, number, kind, model, session_id, \
-                                  started_at, ended_at, input_tokens, cached_input_tokens, output_tokens, outcome \
+                                  started_at, ended_at, input_tokens, cached_input_tokens, output_tokens, outcome, \
+                                  inactive_ms, waiting_since \
                                   FROM invocations";
 /// `kind` of an agent CLI's invocation and of a command tool's.
 const AGENT: &str = "agent";
@@ -58,7 +59,7 @@ impl ActivityStore for ProjectDb {
       .transpose()?;
     let changed = self.connection.execute(
       "UPDATE invocations SET session_id = ?2, ended_at = ?3, input_tokens = ?4, cached_input_tokens = ?5, \
-       output_tokens = ?6, outcome = ?7 WHERE id = ?1",
+       output_tokens = ?6, outcome = ?7, inactive_ms = ?8, waiting_since = ?9 WHERE id = ?1",
       params![
         invocation.id.to_string(),
         invocation.session,
@@ -67,6 +68,8 @@ impl ActivityStore for ProjectDb {
         count_column(invocation.usage.cached_input)?,
         count_column(invocation.usage.output)?,
         outcome,
+        count_column(invocation.timing.inactive_ms())?,
+        invocation.timing.waiting_since().map(Timestamp::unix_millis),
       ],
     )?;
     if changed == 0 {
@@ -220,6 +223,7 @@ fn start(
     ended_at: None,
     usage: TokenUsage::default(),
     outcome: None,
+    timing: InvocationTiming::default(),
   };
   transaction.execute(
     "INSERT INTO invocations (id, run_id, step_execution_id, number, kind, model, started_at, input_tokens,      cached_input_tokens, output_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 0, 0)",
@@ -270,6 +274,8 @@ struct InvocationRow {
   ended_at: Option<i64>,
   tokens: [i64; 3],
   outcome: Option<String>,
+  inactive_ms: i64,
+  waiting_since: Option<i64>,
 }
 
 impl InvocationRow {
@@ -286,6 +292,8 @@ impl InvocationRow {
       ended_at: row.get(8)?,
       tokens: [row.get(9)?, row.get(10)?, row.get(11)?],
       outcome: row.get(12)?,
+      inactive_ms: row.get(13)?,
+      waiting_since: row.get(14)?,
     })
   }
 
@@ -317,6 +325,10 @@ impl InvocationRow {
         output: count(self.tokens[2])?,
       },
       outcome,
+      timing: InvocationTiming::restored(
+        count(self.inactive_ms)?,
+        self.waiting_since.map(Timestamp::from_unix_millis),
+      ),
     })
   }
 }

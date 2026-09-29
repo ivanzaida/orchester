@@ -25,6 +25,7 @@ mod snapshot;
 mod state;
 mod status;
 mod step;
+mod tool_approval;
 mod tool_step;
 mod transition;
 mod unreadable;
@@ -37,7 +38,7 @@ pub use self::{
   counts::RunCounts,
   error::RunError,
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
-  invocation::{ActivityEntry, Invocation, InvocationKind, active_time, execution_tokens},
+  invocation::{ActivityEntry, Invocation, InvocationKind, InvocationTiming, active_time, execution_tokens},
   number::RunNumber,
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
@@ -55,6 +56,7 @@ pub use self::{
     AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus,
     StepFailure, StepStatus, WaitReason,
   },
+  tool_approval::{PendingToolApproval, ToolApprovalDecision},
   tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
   transition::RaisedLimits,
   unreadable::{ListedRun, UnreadableRun},

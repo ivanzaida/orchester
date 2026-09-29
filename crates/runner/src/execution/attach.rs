@@ -88,6 +88,13 @@ impl Scheduler {
     let mut continued = Vec::new();
     for run in waiting.iter().filter(|run| run.continues_on_reconnect()) {
       let id = run.id();
+      if db
+        .has_interrupted_tool_approval(id)
+        .map_err(|error| failed("cannot inspect interrupted tool approvals", &error))?
+      {
+        tracing::warn!(run = %id, "run awaits explicit continuation after a lost tool approval");
+        continue;
+      }
       match self.continue_idle(id, |db, root| idle::continue_after_reconnect(db, root, id)) {
         Ok(()) => continued.push(id),
         // It stays interrupted and can be continued from its task page once there is room.
@@ -142,7 +149,14 @@ fn interrupt(db: &mut ProjectDb, run: &mut Run, cause: InterruptCause) -> Result
       .map_or(invocation.started_at, |entry| entry.at);
     invocation.ended_at = Some(last_seen);
     invocation.outcome = Some(InvocationOutcome::Terminated);
+    invocation.timing.resume(last_seen);
+    db.interrupt_tool_approvals(run.id(), invocation.id)
+      .map_err(|error| store(&error))?;
     db.save_invocation(&invocation).map_err(|error| store(&error))?;
+  }
+  for approval in db.pending_tool_approvals(run.id()).map_err(|error| store(&error))? {
+    db.interrupt_tool_approvals(run.id(), approval.invocation)
+      .map_err(|error| store(&error))?;
   }
   let events = run.interrupt(cause, Timestamp::now()).map_err(|error| store(&error))?;
   db.append_events(run, &events).map_err(|error| store(&error))

@@ -87,7 +87,7 @@ pub fn prepare(command: &Command) -> Result<Process, CommandError> {
         .iter()
         .map(|variable| (variable.name(), variable.expose())),
     )
-    .stdin(if command.stdin().is_some() {
+    .stdin(if command.stdin().is_some() || command.interactive_stdin() {
       Stdio::piped()
     } else {
       Stdio::null()

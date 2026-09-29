@@ -10,6 +10,7 @@
 //! folder that does not exist. The skills that reach the agent are placed and listed in its prompt, and the
 //! project's repository agent files setting is read at each start ([`super::skills`]).
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
@@ -33,6 +34,8 @@ use orchester_core::{
 use super::{
   super::run::RunTask,
   Continuation,
+  app_server::AppServerSetup,
+  approval_home,
   mcp::{McpServers, McpSetup},
   skills::{PlacedSkills, repository_skills},
 };
@@ -51,6 +54,8 @@ pub(super) struct AgentStart {
   pub(super) mcp_file: Option<PrivateFile>,
   /// An event for each MCP server the agent works without.
   pub(super) mcp_left_out: Vec<AgentEvent>,
+  pub(super) app_server: Option<AppServerSetup>,
+  pub(super) agent: String,
 }
 
 /// What decides the CLI's arguments besides its prompt and MCP servers.
@@ -143,14 +148,82 @@ impl RunTask {
       skills: placed.folder.as_deref(),
       repository_skills: repository.as_deref(),
     };
-    let (command, mcp_file) = self.cli_command(&cli, setup, prompt)?;
+    let interactive =
+      matches!(&step.kind, StepKind::Agent { permissions, .. } if permissions.interactive_tool_approvals);
+    if interactive && provider != AgentProvider::CodexCli {
+      return Err(problem(
+        "interactive tool approvals require a Codex agent profile".to_owned(),
+      ));
+    }
+    let (command, mcp_file, app_server) = if interactive && provider == AgentProvider::CodexCli {
+      let (command, app) = self.app_server_command(&cli, setup, prompt)?;
+      (command, None, Some(app))
+    } else {
+      let (command, file) = self.cli_command(&cli, setup, prompt)?;
+      (command, file, None)
+    };
     Ok(AgentStart {
       command,
       provider,
       prompt: sources,
       mcp_file,
       mcp_left_out: left_out,
+      app_server,
+      agent: body.role().as_str().to_owned(),
     })
+  }
+
+  fn app_server_command(
+    &self,
+    cli: &Cli<'_>,
+    setup: McpSetup,
+    prompt: String,
+  ) -> Result<(Command, AppServerSetup), RunnerProblem> {
+    let McpSetup::Codex(mcp) = setup else {
+      return Err(problem("interactive tool approvals require Codex".to_owned()));
+    };
+    let home = approval_home::for_project(self.project.id())
+      .map_err(|error| problem(format!("cannot prepare isolated Codex approval home: {error}")))?;
+    let expected_servers = mcp.servers().iter().map(ToString::to_string).collect::<BTreeSet<_>>();
+    let invocation = CodexInvocation {
+      executable: cli.connection.executable(),
+      model: cli.model.as_str(),
+      reasoning_effort: cli.effort,
+      access: cli.enforced.permissions().repository(),
+      network: cli.enforced.permissions().network(),
+      writable_roots: cli.writable_roots,
+      worktree: cli.worktree,
+      platform: Platform::current(),
+      resume: cli.resume,
+      output_schema: None,
+      mcp: Some(&mcp),
+      agent_files: cli
+        .repository_skills
+        .map_or(CodexAgentFiles::Loaded, |skills| CodexAgentFiles::LeftOut { skills }),
+    };
+    let command = invocation
+      .app_server_command(&home, std::env::vars_os(), cli.environment)
+      .map_err(|error| problem(error.to_string()))?;
+    let schema = (cli.resume.is_none()).then(|| {
+      serde_json::from_str(orchester_core::run::STEP_RESULT_SCHEMA)
+        .expect("the static step result schema is valid JSON")
+    });
+    Ok((
+      command,
+      AppServerSetup {
+        prompt,
+        model: cli.model.as_str().to_owned(),
+        effort: cli.effort.map(str::to_owned),
+        worktree: cli.worktree.to_path_buf(),
+        access: cli.enforced.permissions().repository(),
+        network: cli.enforced.permissions().network(),
+        writable_roots: cli.writable_roots.to_vec(),
+        resume: cli.resume.map(str::to_owned),
+        expected_servers,
+        output_schema: schema,
+        home,
+      },
+    ))
   }
 
   /// The extra writable folders `enforced` grants, resolved in the project's repository, the missing

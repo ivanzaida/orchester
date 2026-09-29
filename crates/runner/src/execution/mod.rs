@@ -29,6 +29,7 @@ mod record;
 mod run;
 mod step;
 mod tool;
+mod tool_approval;
 mod work;
 mod workspace;
 

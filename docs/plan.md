@@ -32,6 +32,27 @@ found no remaining major mismatch after that refinement.
 Pencil changes are in the shared editor and must be saved to `data/orchester.pen` before merge.
 Verification: `docs/evidence/edit-started-task-2026-09-29.md`.
 
+## Current work · ORC-41 interactive tool approvals
+
+**Status 2026-09-29: In progress** on `codex/interactive-approvals`. The existing ORC-41 task asks for a
+pending approval of one Codex tool action during a Designer run, with Approve once or Deny returning to the
+same session. The implementation uses Codex App Server's bidirectional request path and keeps command and
+sandbox approvals under their existing policy. Its request must show the agent, server, action and available
+target details; the decision and outcome must be recorded without approving later calls. The active-time
+limit excludes time waiting for the person. Independent tests must exercise approval and denial with a
+disposable Pencil document, run affected filtered tests and `tools/check.ps1`, and compare any new UI with
+the Pencil frame.
+
+**Milestone 2026-09-29:** the runner's opt-in App Server transport, isolated per-project Codex
+home, fail-closed MCP inventory check, per-request decision routing, durable pending records and
+interruption handling compile. Named parser and storage tests pass, including concurrent-call
+rejection, interrupted delivery, and a project-wide pending-request query. The project-wide approval UI
+is being integrated with the runner. The login path is documented in
+`docs/interactive-tool-approvals.md`. The isolated home is not signed in, so the actual request
+method from Pencil `batch_design` remains unverified.
+Live approve and deny against a disposable active Pencil document, independent design
+verification and the final check are still pending.
+
 ## D · Developing Orchester inside Orchester
 
 What is already in place: runs in their own worktrees, pipelines with agent and command steps, limits, questions and

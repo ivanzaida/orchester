@@ -50,7 +50,7 @@ use std::{
 };
 
 use super::{
-  CodexMcp, InvocationError, Platform, agent_command,
+  CodexMcp, InvocationError, Platform, agent_command, agent_environment,
   mcp::{toml_array, toml_string},
   unicode_folders,
 };
@@ -96,6 +96,66 @@ pub enum CodexAgentFiles<'a> {
 }
 
 impl CodexInvocation<'_> {
+  /// Starts a bidirectional App Server with a separate Codex home so global MCP servers,
+  /// plugins, and rules cannot enter this step. The home has its own explicit CLI login.
+  pub fn app_server_command(
+    &self,
+    home: &Path,
+    environment: impl IntoIterator<Item = (OsString, OsString)>,
+    project: &CommandEnvironment,
+  ) -> Result<Command, InvocationError> {
+    unicode_folders(self.writable_roots)?;
+    let home = home
+      .to_str()
+      .ok_or_else(|| InvocationError::NotUnicode(home.to_path_buf()))?;
+    let mut args = vec!["app-server".to_owned(), "--stdio".to_owned()];
+    if self.access == RepositoryAccess::Write && self.platform == Platform::Windows {
+      args.extend(["-c".to_owned(), "windows.sandbox=elevated".to_owned()]);
+    }
+    if self.access == RepositoryAccess::Write {
+      args.extend([
+        "-c".to_owned(),
+        format!(
+          "sandbox_workspace_write.network_access={}",
+          self.network == NetworkAccess::On
+        ),
+      ]);
+    }
+    if self.access == RepositoryAccess::Write {
+      let roots: Vec<_> = self.writable_roots.iter().map(|root| root.to_string_lossy()).collect();
+      args.extend([
+        "-c".to_owned(),
+        format!("sandbox_workspace_write.writable_roots={}", toml_array(&roots)),
+      ]);
+    }
+    if let CodexAgentFiles::LeftOut { skills } = self.agent_files {
+      unicode_folders(skills)?;
+      args.extend(["-c".to_owned(), "project_doc_max_bytes=0".to_owned()]);
+      if !skills.is_empty() {
+        let disabled: Vec<String> = skills
+          .iter()
+          .map(|skill| format!("{{path={},enabled=false}}", toml_string(&skill.to_string_lossy())))
+          .collect();
+        args.extend(["-c".to_owned(), format!("skills.config=[{}]", disabled.join(","))]);
+      }
+    }
+    if let Some(mcp) = self.mcp {
+      args.extend(mcp.args().iter().cloned());
+    }
+    let mut variables = agent_environment(environment);
+    project.add_to(&mut variables);
+    variables.retain(|(name, _)| !name.eq_ignore_ascii_case("CODEX_HOME"));
+    variables.push(("CODEX_HOME".to_owned(), home.to_owned()));
+    let command = Command::new(self.executable, args)
+      .with_current_dir(self.worktree)
+      .with_environment(variables)
+      .with_interactive_stdin();
+    let Some(mcp) = self.mcp else {
+      return Ok(command);
+    };
+    Ok(mcp.secrets().iter().cloned().fold(command, Command::with_secret_env))
+  }
+
   /// Arguments after the program, in order.
   pub fn args(&self) -> Vec<OsString> {
     let mut args: Vec<OsString> = ["-a", "never", "exec"].into_iter().map(OsString::from).collect();

@@ -3,6 +3,8 @@
 //! worktree — a new session,
 //! or the step's earlier session continued — handed to a [`worker::Worker`] of its own.
 
+mod app_server;
+mod approval_home;
 mod command;
 mod end;
 mod mcp;
@@ -22,13 +24,14 @@ use orchester_core::{
 use orchester_ipc::Event;
 use tokio::sync::mpsc;
 
+use self::app_server::AppServerSession;
 use self::worker::{Stop, Worker};
 use super::{
   record::RecordError,
   run::{ExecutionError, RunTask},
   workspace::{Start, Workspace},
 };
-use crate::{private_file::PrivateFile, supervisor::Supervised};
+use crate::supervisor::Supervised;
 
 /// How an execution's next invocation continues it: the CLI session it resumes, if its last
 /// invocation reported one, when that invocation started, and the people's messages it delivers.
@@ -69,6 +72,7 @@ impl Occasion {
 /// An agent at work on one execution of the run.
 pub(super) struct Active {
   stops: mpsc::UnboundedSender<Stop>,
+  pub(super) approvals: Option<mpsc::UnboundedSender<worker::ApprovalDecision>>,
   pub(super) workspace: Workspace,
   /// The invocation as it started, for reporting problems around it.
   pub(super) invocation: Invocation,
@@ -90,6 +94,7 @@ impl Active {
   ) -> Self {
     Self {
       stops,
+      approvals: None,
       workspace,
       invocation,
       budget: None,
@@ -204,7 +209,7 @@ impl RunTask {
         return Ok(true);
       }
     };
-    let start = match self.command(execution, &continuation, (invocation.id, workspace.path())) {
+    let mut start = match self.command(execution, &continuation, (invocation.id, workspace.path())) {
       Ok(start) => start,
       Err(problem) => {
         self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted)?;
@@ -212,7 +217,7 @@ impl RunTask {
       }
     };
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
-    self.record_left_out(&invocation, start.mcp_left_out)?;
+    self.record_left_out(&invocation, std::mem::take(&mut start.mcp_left_out))?;
     let process = match Supervised::start(&start.command) {
       Ok(process) => process,
       Err(error) => {
@@ -226,7 +231,7 @@ impl RunTask {
     // Messages that never reached a started agent stay queued.
     self.deliver(execution, &invocation, std::mem::take(&mut continuation.messages))?;
     let output = AgentStream::new(start.provider);
-    self.spawn(execution, invocation, (output, process, start.mcp_file), workspace)?;
+    self.spawn(execution, invocation, (output, process, start), workspace)?;
     Ok(true)
   }
 
@@ -249,11 +254,13 @@ impl RunTask {
     &mut self,
     execution: StepExecutionId,
     invocation: Invocation,
-    (output, process, mcp_file): (AgentStream, Supervised, Option<PrivateFile>),
+    (output, process, start): (AgentStream, Supervised, command::AgentStart),
     workspace: Workspace,
   ) -> Result<(), ExecutionError> {
     let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);
     let (stops, stopped) = mpsc::unbounded_channel();
+    let (approvals, decisions) = mpsc::unbounded_channel();
+    let interactive = start.app_server.is_some();
     let worker = Worker {
       root: self.root.clone(),
       invocation: invocation.clone(),
@@ -262,7 +269,11 @@ impl RunTask {
       notifier: self.notifier.clone(),
       events: self.worker_events.clone(),
       stops: stopped,
-      mcp_file,
+      mcp_file: start.mcp_file,
+      app_server: start.app_server.map(AppServerSession::new),
+      agent: start.agent,
+      task: self.task.id(),
+      decisions,
     };
     tokio::spawn(worker.work());
     // The budget in force: one raised for the run after it stopped at the step's limit, else the
@@ -275,6 +286,7 @@ impl RunTask {
       execution,
       Active {
         stops,
+        approvals: interactive.then_some(approvals),
         workspace,
         invocation,
         budget,

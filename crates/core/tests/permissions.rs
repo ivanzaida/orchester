@@ -403,6 +403,7 @@ fn permissions_steps_only_narrow() {
   let step = StepPermissions {
     commands: StepCommands::Only(commands(&["git log", "pnpm test src", "curl"])),
     network: StepNetwork::Off,
+    ..StepPermissions::default()
   };
   assert_eq!(
     profile.narrowed(RepositoryAccess::ReadOnly, &step),
@@ -420,6 +421,7 @@ fn permissions_steps_only_narrow() {
   let widening = StepPermissions {
     commands: StepCommands::Only(commands(&["curl"])),
     network: StepNetwork::AsProfile,
+    ..StepPermissions::default()
   };
   assert_eq!(
     read_only.narrowed(RepositoryAccess::Write, &widening),
@@ -434,6 +436,7 @@ fn permissions_step_narrowing_is_omitted_from_stored_steps_that_narrow_nothing()
   let json = serde_json::to_string(&StepPermissions {
     commands: StepCommands::Only(commands(&["git"])),
     network: StepNetwork::Off,
+    ..StepPermissions::default()
   })
   .expect("serialize");
   assert_eq!(

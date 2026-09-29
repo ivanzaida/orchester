@@ -125,6 +125,13 @@ pub enum Command {
     version: PlanVersion,
     decision: PlanDecision,
   },
+  /// One decision on a live Codex tool call; the same App Server session resumes on approval.
+  /// A stale or already-decided request is rejected.
+  DecideToolApproval {
+    run: RunId,
+    approval: String,
+    approve: bool,
+  },
   /// The desktop stored a person's messages to the task of run `run`: the runner delivers them at
   /// the run's next invocation boundary. A step waiting for an answer to its agent's question
   /// resumes now; a run that succeeded works again on a follow-up of its last agent step (Ask
@@ -240,6 +247,8 @@ pub enum Event {
     task_key: String,
     agent: String,
   },
+  /// A pending tool decision was created, resolved, or interrupted; reread the project's record.
+  ToolApprovalChanged { run: RunId, task: TaskId },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -363,6 +372,8 @@ pub enum Rejection {
   /// The plan does not wait for a decision: a newer version exists, it was decided already, or
   /// its step works on it again.
   PlanNotAwaited,
+  /// The selected tool request is no longer pending in a live Codex session.
+  ToolApprovalNotAwaited,
   /// The runner is stopping and starts no work.
   ShuttingDown,
   /// [`Command::StopIfIdle`] while the runner has work.

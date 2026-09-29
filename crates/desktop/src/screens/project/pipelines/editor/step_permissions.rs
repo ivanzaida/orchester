@@ -17,6 +17,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
+  connection::AgentProvider,
   connection::invocation::Platform,
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess, StepCommands,
@@ -70,6 +71,9 @@ pub fn rows(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, handle: &Edi
   let mut rows = vec![repository_row(ctx, choice, &effective, fields)];
   rows.extend(commands_rows(ctx, choice, narrowing, &effective, &edit));
   rows.push(network_row(ctx, choice, narrowing, &effective, &edit));
+  if choice.provider == Some(AgentProvider::CodexCli) {
+    rows.push(tool_approvals_row(ctx, narrowing, &edit));
+  }
   rows.push(note(&narrowing_note(ctx, choice, narrowing)));
   rows
 }
@@ -238,6 +242,22 @@ fn network_row(
         StepNetwork::Off => StepNetwork::AsProfile,
       };
     });
+  });
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .align_items(Alignment::Center)
+    .child(Text::new(&label).variant(TypographyStyle::Caption).flex(1.0))
+    .child(switch)
+    .into()
+}
+
+/// Opts this Codex step into one-call decisions for tools that ask the host for approval.
+fn tool_approvals_row(ctx: &Ctx, narrowing: &StepPermissions, edit: &StepEdit) -> Element {
+  let label = ctx.t("pipelines.inspector.permissions.interactiveToolApprovals");
+  let enabled = narrowing.interactive_tool_approvals;
+  let edit = edit.clone();
+  let switch = Switch::new("step-tool-approvals", label.clone(), enabled).render(move || {
+    edit.apply(|permissions| permissions.interactive_tool_approvals = !enabled);
   });
   Row::new()
     .width(Dimension::Pct(100.0))

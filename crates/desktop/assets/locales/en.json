@@ -2648,6 +2648,7 @@
         "commands": "Commands",
         "commandsNarrowed": "Commands · narrowed",
         "networkStaysOn": "Stays on",
+        "interactiveToolApprovals": "Ask for each tool action",
         "onlyNarrow": "Steps can only narrow profile permissions.",
         "alsoAllows": "{{profile}} {{version}} also allows {{commands}}. Steps can only narrow profile permissions."
       }

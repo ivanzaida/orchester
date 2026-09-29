@@ -37,6 +37,32 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
   }
 }
 
+#[test]
+fn app_server_uses_a_separate_home_and_open_stdin_without_bypass_flags() {
+  let home = Path::new("/repo/.orchester/codex-approval-home");
+  let command = invocation(RepositoryAccess::Write, Platform::Windows)
+    .app_server_command(
+      home,
+      [(OsString::from("CODEX_HOME"), OsString::from("/user/.codex"))],
+      &CommandEnvironment::default(),
+    )
+    .expect("unicode paths");
+  assert!(command.interactive_stdin());
+  assert!(command.stdin().is_none());
+  assert_eq!(command.args()[..2], ["app-server", "--stdio"]);
+  assert!(command.args().contains(&"windows.sandbox=elevated".to_owned()));
+  assert!(!command.args().iter().any(|arg| arg.contains("dangerously")));
+  assert_eq!(
+    command
+      .env()
+      .iter()
+      .find(|(name, _)| name == "CODEX_HOME")
+      .map(|(_, value)| value.as_str()),
+    Some("/repo/.orchester/codex-approval-home")
+  );
+  assert_eq!(command.env().iter().filter(|(name, _)| name == "CODEX_HOME").count(), 1);
+}
+
 fn args(invocation: &CodexInvocation<'_>) -> Vec<String> {
   invocation
     .args()

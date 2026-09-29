@@ -174,11 +174,17 @@ fn run_limits_time_counts_active_agent_time_only() {
     ended_at: ended.map(at),
     usage: orchester_core::run::TokenUsage::default(),
     outcome: ended.map(|_| InvocationOutcome::Terminated),
+    timing: orchester_core::run::InvocationTiming::default(),
   };
   // Ten minutes of work, a pause of an hour, then five minutes of a running invocation.
   let minute = 60_000;
   let invocations = [invocation(0, Some(10 * minute)), invocation(70 * minute, None)];
   assert_eq!(active_time(&invocations, at(75 * minute)), MINUTE * 15);
+  let mut awaiting = invocation(0, None);
+  awaiting.timing.wait_for_person(at(2 * minute));
+  assert_eq!(active_time(&[awaiting.clone()], at(12 * minute)), MINUTE * 2);
+  awaiting.timing.resume(at(12 * minute));
+  assert_eq!(active_time(&[awaiting], at(15 * minute)), MINUTE * 5);
   let logged = working(0);
   assert!(!logged.run.time_limit_reached(MINUTE * 29));
   assert!(logged.run.time_limit_reached(MINUTE * 30));

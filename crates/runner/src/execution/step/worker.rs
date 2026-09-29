@@ -7,21 +7,29 @@
 use std::{path::PathBuf, time::Duration};
 
 use orchester_core::{
+  connection::app_server::{PendingApproval, Update},
   connection::stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker},
-  id::StepExecutionId,
-  run::{Invocation, RunLimit},
+  id::{StepExecutionId, TaskId},
+  run::{Invocation, PendingToolApproval, RunLimit, ToolApprovalDecision},
   store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
 };
-use orchester_ipc::Event;
+use orchester_ipc::{Event, Rejection};
 use orchester_store::{ProjectDb, StoreError};
 use tokio::{
   sync::mpsc,
   time::{Instant, sleep},
 };
 
-use super::super::{Notifier, tool::CommandFinished};
+use super::{
+  super::{
+    Notifier,
+    control::{Ack, answer},
+    tool::CommandFinished,
+  },
+  app_server::{AppServerFailure, AppServerSession},
+};
 use crate::{
   private_file::PrivateFile,
   supervisor::{ProcessEvent, ProcessExit, Supervised},
@@ -80,6 +88,12 @@ pub(in super::super) enum WorkerEvent {
   },
 }
 
+pub(in super::super) struct ApprovalDecision {
+  pub id: String,
+  pub approve: bool,
+  pub ack: Ack,
+}
+
 /// How an invocation ended.
 pub(in super::super) struct Finished {
   pub(in super::super) outcome: InvocationOutcome,
@@ -101,6 +115,10 @@ pub(in super::super) struct Worker {
   pub(in super::super) stops: mpsc::UnboundedReceiver<Stop>,
   /// The MCP configuration the CLI read, removed once the CLI has ended.
   pub(in super::super) mcp_file: Option<PrivateFile>,
+  pub(super) app_server: Option<AppServerSession>,
+  pub(in super::super) agent: String,
+  pub(in super::super) task: TaskId,
+  pub(in super::super) decisions: mpsc::UnboundedReceiver<ApprovalDecision>,
 }
 
 struct Watch {
@@ -115,6 +133,7 @@ struct Watch {
   commands: usize,
   /// Ends the agent once no command runs.
   after_command: Option<StopCause>,
+  approval: Option<(String, PendingApproval)>,
 }
 
 impl Worker {
@@ -142,18 +161,45 @@ impl Worker {
       over: None,
       commands: 0,
       after_command: None,
+      approval: None,
     };
+    if let Some(app) = &self.app_server
+      && let Err(error) = app.start(&self.process).await
+    {
+      self.observe(
+        &mut watch,
+        AgentEvent::TurnFailed {
+          message: format!("cannot initialize Codex App Server: {error}"),
+        },
+      )?;
+      self.process.terminate();
+    }
     let mut flush = tokio::time::interval(FLUSH_INTERVAL);
     let grace = sleep(Duration::ZERO);
     tokio::pin!(grace);
     let mut grace_armed = false;
     let mut listening = true;
+    let mut deciding = self.app_server.is_some();
     loop {
       tokio::select! {
         event = self.process.next() => match event {
           Some(ProcessEvent::Output { stream, line }) => {
-            for event in self.output.parse(stream, &line) {
-              self.observe(&mut watch, event)?;
+            if let Some(app) = self.app_server.as_mut() {
+              match app.receive(stream, &line, &self.process).await {
+                Ok(updates) => for update in updates { self.app_update(&mut watch, update)?; },
+                Err(error) => {
+                  let event = match error {
+                    AppServerFailure::Protocol(message) => AgentEvent::TurnFailed { message },
+                    AppServerFailure::NotSignedIn(message) => AgentEvent::NotSignedIn { message },
+                  };
+                  self.observe(&mut watch, event)?;
+                  self.process.terminate();
+                }
+              }
+            } else {
+              for event in self.output.parse(stream, &line) {
+                self.observe(&mut watch, event)?;
+              }
             }
             if watch.stop.is_some() {
               self.process.terminate();
@@ -163,6 +209,10 @@ impl Worker {
           None => return self.finish(watch, &ProcessExit::WaitFailed { reason: String::new() }),
         },
         _ = flush.tick() => self.flush(&mut watch)?,
+        decision = self.decisions.recv(), if deciding => match decision {
+          Some(decision) => self.decide(&mut watch, decision).await?,
+          None => deciding = false,
+        },
         stop = self.stops.recv(), if listening => match stop {
           Some(Stop::Now(cause)) => {
             if watch.stop.is_none() {
@@ -195,6 +245,152 @@ impl Worker {
         }
       }
     }
+  }
+
+  fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), StoreError> {
+    match update {
+      Update::Activity(event) => self.observe(watch, event),
+      Update::Approval(request) => self.request_approval(watch, request),
+      Update::TurnEnded => {
+        self.process.terminate();
+        Ok(())
+      }
+    }
+  }
+
+  fn request_approval(&mut self, watch: &mut Watch, request: PendingApproval) -> Result<(), StoreError> {
+    if watch.approval.is_some() {
+      self.observe(
+        watch,
+        AgentEvent::TurnFailed {
+          message: "Codex requested another tool decision while one is pending".to_owned(),
+        },
+      )?;
+      self.process.terminate();
+      return Ok(());
+    }
+    let id = format!("{}:{}", watch.invocation.id, request.request_key());
+    let approval = PendingToolApproval {
+      id: id.clone(),
+      run: watch.invocation.run,
+      execution: watch.invocation.execution,
+      invocation: watch.invocation.id,
+      agent: self.agent.clone(),
+      server: request.server.clone(),
+      action: request.action.clone(),
+      target: request.target.clone(),
+      requested_at: Timestamp::now(),
+    };
+    watch.db.request_tool_approval(&approval)?;
+    watch.invocation.timing.wait_for_person(approval.requested_at);
+    watch.db.save_invocation(&watch.invocation)?;
+    watch.approval = Some((id, request));
+    self.notifier.send(Event::ToolApprovalChanged {
+      run: approval.run,
+      task: self.task,
+    });
+    Ok(())
+  }
+
+  async fn decide(&mut self, watch: &mut Watch, decision: ApprovalDecision) -> Result<(), StoreError> {
+    let result = self.apply_decision(watch, &decision.id, decision.approve).await;
+    match result {
+      Ok(reply) => answer(decision.ack, reply),
+      Err(error) => {
+        answer(
+          decision.ack,
+          Err(Rejection::Failed {
+            detail: "the tool decision could not be recorded".to_owned(),
+          }),
+        );
+        self.process.terminate();
+        return Err(error);
+      }
+    }
+    Ok(())
+  }
+
+  async fn apply_decision(
+    &mut self,
+    watch: &mut Watch,
+    id: &str,
+    approve: bool,
+  ) -> Result<Result<(), Rejection>, StoreError> {
+    let Some((pending_id, request)) = watch.approval.as_ref() else {
+      return Ok(Err(Rejection::ToolApprovalNotAwaited));
+    };
+    if pending_id != id {
+      return Ok(Err(Rejection::ToolApprovalNotAwaited));
+    }
+    if !watch
+      .db
+      .claim_tool_approval(watch.invocation.run, id, approve, Timestamp::now())?
+    {
+      return Ok(Err(Rejection::ToolApprovalNotAwaited));
+    }
+    self.notifier.send(Event::ToolApprovalChanged {
+      run: watch.invocation.run,
+      task: self.task,
+    });
+    if let Err(error) = self.process.send_line(request.response(approve)).await {
+      watch
+        .db
+        .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
+      self.end_approval_wait(watch)?;
+      self.observe(
+        watch,
+        AgentEvent::TurnFailed {
+          message: "The Codex session closed before the tool decision arrived".to_owned(),
+        },
+      )?;
+      self.process.terminate();
+      return Ok(Err(Rejection::Failed {
+        detail: format!("cannot send the tool decision to Codex: {error}"),
+      }));
+    }
+    let kind = if approve {
+      ToolApprovalDecision::Approved
+    } else {
+      ToolApprovalDecision::Denied
+    };
+    if !watch.db.delivered_tool_approval(watch.invocation.run, id, kind)? {
+      watch
+        .db
+        .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
+      self.end_approval_wait(watch)?;
+      self.observe(
+        watch,
+        AgentEvent::TurnFailed {
+          message: "The tool decision could not be recorded after delivery".to_owned(),
+        },
+      )?;
+      self.process.terminate();
+      return Ok(Err(Rejection::Failed {
+        detail: "the tool decision could not be recorded after delivery".to_owned(),
+      }));
+    }
+    self.end_approval_wait(watch)?;
+    if !approve {
+      self.observe(
+        watch,
+        AgentEvent::TurnFailed {
+          message: "The requested tool action was denied".to_owned(),
+        },
+      )?;
+      self.process.terminate();
+    }
+    Ok(Ok(()))
+  }
+
+  fn end_approval_wait(&self, watch: &mut Watch) -> Result<(), StoreError> {
+    watch.invocation.timing.resume(Timestamp::now());
+    watch.db.save_invocation(&watch.invocation)?;
+    watch.approval = None;
+    self.notifier.send(Event::ToolApprovalChanged {
+      run: watch.invocation.run,
+      task: self.task,
+    });
+    Ok(())
   }
 
   /// Takes in one event: a turn's usage goes to the run, and a new turn after a used-up budget
@@ -259,11 +455,35 @@ impl Worker {
   }
 
   fn finish(&self, mut watch: Watch, exit: &ProcessExit) -> Result<Finished, StoreError> {
+    if watch.approval.is_some() {
+      watch
+        .db
+        .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
+      watch.invocation.timing.resume(Timestamp::now());
+      self.notifier.send(Event::ToolApprovalChanged {
+        run: watch.invocation.run,
+        task: self.task,
+      });
+    }
     self.flush(&mut watch)?;
-    let outcome = match (exit, watch.stop.is_some()) {
-      (ProcessExit::Terminated, _) | (_, true) => InvocationOutcome::Terminated,
-      (ProcessExit::Exited { code }, false) => watch.tracker.outcome(*code),
-      (ProcessExit::WaitFailed { .. }, false) => InvocationOutcome::ExitFailed { code: None },
+    let reported = watch.tracker.outcome(Some(1));
+    let outcome = if watch.stop.is_none()
+      && matches!(
+        reported,
+        InvocationOutcome::TurnFailed { .. } | InvocationOutcome::NotSignedIn { .. }
+      ) {
+      reported
+    } else {
+      match (
+        exit,
+        watch.stop.is_some(),
+        self.app_server.as_ref().is_some_and(AppServerSession::complete),
+      ) {
+        (_, false, true) => watch.tracker.outcome(Some(0)),
+        (ProcessExit::Terminated, _, _) | (_, true, _) => InvocationOutcome::Terminated,
+        (ProcessExit::Exited { code }, false, _) => watch.tracker.outcome(*code),
+        (ProcessExit::WaitFailed { .. }, false, _) => InvocationOutcome::ExitFailed { code: None },
+      }
     };
     watch.invocation.ended_at = Some(Timestamp::now());
     watch.invocation.outcome = Some(outcome.clone());
