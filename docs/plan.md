@@ -180,9 +180,10 @@ are covered only by data tests. Verify them in the app and fix what differs from
 
 ### U8 · Agent profile header states need a design check (UI/design)
 
-The published profile with no draft has no Pencil frame. In the saved-draft frame `WPmtS`, the app also shows a
-disabled *Save draft* button that the drawing omits (major visual mismatch). Draw the missing state, decide whether
-the disabled button should be shown, then align the app and verify both states. Evidence: `.tmp/verify/u3-u4/report.md`.
+**In progress (2026-09-29):** the live Pencil audit found two 1440 × 960 saved-draft frames, `WPmtS` and `T1rjv`,
+but no published-without-draft frame. Both omit the disabled *Save draft* button shown by the app. The proposed
+resolution and same-state verification gates are in `docs/evidence/u8-header-states-2026-09-29.md`; no Pencil or app
+change has been made. Earlier app lifecycle evidence is `.tmp/verify/u3-u4/report.md`.
 
 ## L · After lurq 0.30.0
 
