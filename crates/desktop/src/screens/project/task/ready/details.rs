@@ -15,11 +15,12 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::time::Timestamp;
+use orchester_core::{integration::Leftovers, time::Timestamp};
 
 use super::super::{activity::engine, summary::budget_value};
 use crate::{
   display,
+  messages::Message,
   tasks::detail::{RunView, StepView},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
@@ -27,7 +28,7 @@ use crate::{
     icon::{Icon, IconSize, icon},
     link::Link,
     message_text,
-    property::{ValueStyle, property, styled_property},
+    property::{ValueStyle, property, property_with_suffix, styled_property},
   },
 };
 
@@ -36,7 +37,14 @@ const PANEL_WIDTH: f32 = 300.0;
 const AGENT_HEIGHT: f32 = 44.0;
 const AGENT_GLYPH: f32 = 28.0;
 
-pub(super) fn run_details(ctx: &Ctx, run: &RunView, project: &str, open: Link) -> Element {
+pub(super) fn run_details(
+  ctx: &Ctx,
+  run: &RunView,
+  project: &str,
+  leftovers: Option<&Result<Leftovers, Message>>,
+  merged: bool,
+  open: Link,
+) -> Element {
   let version = run.version.to_string();
   let pipeline = ctx.t_args(
     "runs.summary.pipelineValue",
@@ -54,7 +62,7 @@ pub(super) fn run_details(ctx: &Ctx, run: &RunView, project: &str, open: Link) -
       display::short_revision(run.run.base().as_str()),
       ValueStyle::Mono,
     ))
-    .child(property(&ctx.t("runs.ready.workingBranch"), run.run.branch().as_str()))
+    .child(working_branch_property(ctx, run, leftovers, merged))
     .child(styled_property(
       &ctx.t("runs.ready.duration"),
       &duration,
@@ -86,6 +94,32 @@ pub(super) fn run_details(ctx: &Ctx, run: &RunView, project: &str, open: Link) -
         .render(ctx),
     )
     .into()
+}
+
+fn working_branch_property(
+  ctx: &Ctx,
+  run: &RunView,
+  leftovers: Option<&Result<Leftovers, Message>>,
+  merged: bool,
+) -> Element {
+  let label = ctx.t("runs.ready.workingBranch");
+  match leftovers {
+    Some(Ok(leftovers))
+      if leftovers
+        .branches
+        .iter()
+        .all(|branch| branch.name.as_str() != run.run.branch().as_str()) =>
+    {
+      property_with_suffix(
+        &label,
+        run.run.branch().as_str(),
+        &ctx.t("runs.ready.workingBranchDeleted"),
+      )
+    }
+    Some(Err(_)) => property(&label, &ctx.t("runs.ready.workingBranchUnavailable")),
+    None if merged => property(&label, &ctx.t("runs.ready.workingBranchChecking")),
+    _ => property(&label, run.run.branch().as_str()),
+  }
 }
 
 /// The agents that worked on the run, each with its CLI, model and steps (`it5nz`).

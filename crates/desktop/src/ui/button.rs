@@ -11,7 +11,7 @@ use lurq::{
     theme::{BorderSize, FormButtonRole, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, Select, SelectOption, Text},
-  core::{Signal, signal::SignalValue},
+  core::{ElementRef, Signal, signal::SignalValue},
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, SelectPartStyle, Style, border::Border, dimension::Dimension},
 };
@@ -47,6 +47,8 @@ pub struct ActionButton {
   kind: Kind,
   state: State,
   width: Option<Dimension>,
+  min_width: Option<Dimension>,
+  element_ref: Option<ElementRef>,
   height: Option<Dimension>,
   roomy: bool,
   compact: bool,
@@ -65,6 +67,8 @@ impl ActionButton {
       kind: Kind::Secondary,
       state: State::Unavailable,
       width: None,
+      min_width: None,
+      element_ref: None,
       height: None,
       roomy: false,
       compact: false,
@@ -117,6 +121,17 @@ impl ActionButton {
 
   pub fn width(mut self, width: impl Into<Dimension>) -> Self {
     self.width = Some(width.into());
+    self
+  }
+
+  pub fn min_width(mut self, width: impl Into<Dimension>) -> Self {
+    self.min_width = Some(width.into());
+    self
+  }
+
+  /// Observe this button's laid-out bounds from its owning component.
+  pub fn ref_element(mut self, element_ref: ElementRef) -> Self {
+    self.element_ref = Some(element_ref);
     self
   }
 
@@ -193,11 +208,17 @@ impl ActionButton {
       .align_items(Alignment::Center)
       .justify(if self.start { Justify::Start } else { Justify::Center })
       .child(content);
+    if let Some(element_ref) = self.element_ref {
+      button = button.ref_element(element_ref);
+    }
     if self.roomy {
       button = button.padding_horizontal(SpacingSize::Md);
     }
     if let Some(width) = self.width {
       button = button.width(width);
+    }
+    if let Some(width) = self.min_width {
+      button = button.min_width(width);
     }
     if let Some(id) = self.id {
       button = button.id(id);

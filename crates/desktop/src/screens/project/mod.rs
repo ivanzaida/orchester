@@ -35,7 +35,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
   router::Navigator,
 };
-use orchester_core::id::{ProjectId, TaskId};
+use orchester_core::id::{ProjectId, RunId, TaskId};
 
 pub(crate) use self::pages::page;
 use self::{
@@ -55,7 +55,7 @@ use crate::{
     OpenIn, Tabs,
     feed::{ProjectFeed, ProjectFeeds},
   },
-  tasks::{data::ProjectTasks, list, overview::OverviewTab},
+  tasks::{data::ProjectTasks, integration_jobs::RunIntegration, list, overview::OverviewTab},
   ui::link::Link,
   workspace::OpenProject,
 };
@@ -214,6 +214,11 @@ impl ProjectNav {
   /// Tasks were saved; every tab of the project reads them again.
   pub fn tasks_changed(&self) {
     self.feed.revision.update(|revision| *revision += 1);
+  }
+
+  /// The current operation for a run, shared across every tab of this project.
+  pub fn integration(&self, run: RunId) -> RunIntegration {
+    self.feed.integration.of(run)
   }
 
   /// Resources were imported: the screens that list pipelines, profiles, instructions or tools

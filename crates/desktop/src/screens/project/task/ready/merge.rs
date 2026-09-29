@@ -10,26 +10,23 @@ use std::sync::Arc;
 
 use lurq::{
   app::{
-    ctx::{Ctx, FutureAction},
+    ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
+  core::ElementRef,
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{
-  id::RunId,
-  integration::{Leftovers, MergeKind, RunMerge},
-};
+use orchester_core::integration::{Leftovers, MergeKind, RunMerge};
 
 use crate::{
-  activity::{Activity, operations},
-  background, display,
-  messages::Message,
+  activity::Activity,
+  display,
   programs::Programs,
   tasks::{
     detail::TaskDetail,
-    integration::{Merged, merge_in},
+    integration_jobs::{JobState, MergeArgs, RunIntegration},
   },
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
@@ -43,39 +40,50 @@ use crate::{
 
 /// Height of the readiness card (`IBuWf`).
 const READINESS_HEIGHT: f32 = 76.0;
+/// Minimum width of Merge into main in the design (`gSsaS`); long names reserve their own width.
+const MERGE_BUTTON_WIDTH: f32 = 140.0;
 
-pub(super) type MergeAction = FutureAction<RunId, Merged, Message>;
+#[derive(Clone)]
+pub(super) struct MergeAction {
+  job: RunIntegration,
+  start: Arc<dyn Fn() + Send + Sync>,
+}
 
 /// Merges the latest run of `detail`'s task in `open`'s checkout, reported in the status bar.
 pub(super) fn merge_action(ctx: &mut Ctx, open: &OpenProject, detail: &TaskDetail) -> MergeAction {
+  let job = ctx
+    .use_context::<RunIntegration>()
+    .expect("the task page provides its run integration");
+  let nav = ctx
+    .use_context::<super::super::super::ProjectNav>()
+    .expect("the project shell provides ProjectNav");
   let programs = ctx
     .use_context::<Programs>()
     .expect("the root provides Programs before mounting screens");
   let activity = Activity::of(ctx);
   let separator = ctx.t("common.listSeparator");
-  let open = open.clone();
   let (task, key) = (detail.task.id(), detail.task.key().to_string());
   let (number, branch) = detail.run.as_ref().map_or_else(Default::default, |run| {
     let branch = run.run.base_branch().map_or_else(String::new, ToString::to_string);
     (run.run.number().get(), branch)
   });
-  ctx.future_action(move |run: RunId| {
-    let (programs, activity, separator, open) = (programs.clone(), activity.clone(), separator.clone(), open.clone());
-    let running = activity.start(operations::run_merge(&open, task, (&key, number), &branch));
-    let not_done = Message::new("statusBar.operations.runMerge.notDone")
-      .with("task", key.clone())
-      .with("run", number.to_string());
-    async move {
-      let repo_root = open.repo_root.clone();
-      let merged = background::run(move || merge_in(&repo_root, &programs, run)).await;
-      match &merged {
-        Ok(Ok(_)) => running.finish(),
-        Ok(Err(problem)) => problem.end(running, not_done),
-        Err(message) => running.fail(message.clone()),
-      }
-      merged?.map_err(|problem| problem.message(&separator))
-    }
-  })
+  let args = MergeArgs {
+    open: open.clone(),
+    task,
+    key,
+    number,
+    branch,
+    run: detail.run.as_ref().expect("Ready for review has a run").id(),
+    programs,
+    activity,
+    separator,
+    changed: Arc::new(move || nav.tasks_changed()),
+  };
+  let run_job = job.clone();
+  MergeAction {
+    job,
+    start: Arc::new(move || run_job.start_merge(args.clone())),
+  }
 }
 
 /// The readiness card (`IBuWf`): ready for review, or where the run's work was merged.
@@ -184,33 +192,52 @@ fn left_behind(ctx: &Ctx, leftovers: &Leftovers) -> Arc<str> {
 
 /// *Merge into main* (`git-merge`), "Merging…" while it runs; unavailable when the run did not
 /// record its base branch.
-pub(super) fn merge_button(ctx: &Ctx, detail: &TaskDetail, action: &MergeAction) -> Option<Element> {
+pub(super) fn merge_button(
+  ctx: &Ctx,
+  detail: &TaskDetail,
+  action: &MergeAction,
+  button_ref: &ElementRef,
+) -> Option<Element> {
   if detail.merge.is_some() {
     return None;
   }
   let run = detail.run.as_ref()?;
-  let pending = action.state().get().is_pending();
+  let state = action.job.merge().get();
+  let pending = matches!(state, JobState::Running);
+  let removal_running = matches!(action.job.remove().get(), JobState::Running);
+  let busy = action.job.busy() || removal_running || state == JobState::Succeeded;
   let button = match run.run.base_branch() {
     None => ActionButton::new(ctx.t("runs.merge.mergeUnknown")).icon(Icon::GitMerge),
     Some(_) if pending => ActionButton::new(ctx.t("runs.merge.merging"))
       .icon(Icon::Loader)
+      .width(Dimension::Px(action.job.merge_width().get()))
       .disabled(),
     Some(branch) => {
-      let (action, id) = (action.clone(), run.id());
+      let start = action.start.clone();
       ActionButton::new(ctx.t_args("runs.merge.merge", [("branch", branch.as_str())]))
         .icon(Icon::GitMerge)
-        .on_click(move || action.run(id))
+        .on_click(move || start())
+        .enabled(!busy)
     }
   };
-  Some(button.id("task-merge").render(ctx))
+  Some(
+    button
+      .id("task-merge")
+      .ref_element(button_ref.clone())
+      .min_width(Dimension::Px(MERGE_BUTTON_WIDTH))
+      .render(ctx),
+  )
 }
 
 /// Why the last merge did not happen, above the actions; nothing while one runs or after one
 /// succeeded.
 pub(super) fn merge_problem(ctx: &Ctx, detail: &TaskDetail, action: &MergeAction) -> Option<Element> {
-  let state = action.state().get();
-  let idle = !state.is_pending();
-  let error = state.error.filter(|_| idle && detail.merge.is_none())?;
+  let JobState::Failed(error) = action.job.merge().get() else {
+    return None;
+  };
+  if detail.merge.is_some() {
+    return None;
+  }
   let branch = detail.run.as_ref()?.run.base_branch()?.to_string();
   Some(
     Notice::new(

@@ -93,9 +93,18 @@ impl Desktop {
   /// `seed` run on the repository once the project exists. Programs are real, as in the
   /// application: the task page reads a run's changes with git.
   pub fn with_runner(runner: PathBuf, init: impl FnOnce(&Path), seed: impl FnOnce(&Path)) -> Self {
+    Self::with_runner_and_programs(runner, Programs::processes(), init, seed)
+  }
+
+  pub fn with_runner_and_programs(
+    runner: PathBuf,
+    programs: Programs,
+    init: impl FnOnce(&Path),
+    seed: impl FnOnce(&Path),
+  ) -> Self {
     Self::start_with(
       Some(Box::new(init)),
-      Programs::processes(),
+      programs,
       runner,
       Some(Box::new(seed)),
       None,

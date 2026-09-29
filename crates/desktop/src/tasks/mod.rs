@@ -8,6 +8,7 @@ pub mod data;
 pub mod detail;
 pub mod form;
 pub mod integration;
+pub mod integration_jobs;
 pub mod list;
 pub mod overview;
 pub mod permissions;

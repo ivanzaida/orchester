@@ -28,6 +28,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
+  core::ElementRef,
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension},
 };
@@ -43,6 +44,7 @@ use crate::{
   tasks::{
     changes::Checkpointed,
     detail::{RunView, TaskDetail},
+    integration_jobs::{JobState, RunIntegration},
   },
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
@@ -78,24 +80,21 @@ pub(super) struct ReadyProps {
 impl lurq::app::component::DevtoolsInspectable for ReadyProps {}
 
 /// The Summary tab of a run that succeeded, with its merge; mounted per run.
-pub(super) struct ReadyForReview;
+pub(super) struct ReadyForReview {
+  merge_ref: ElementRef,
+  integration: RunIntegration,
+}
 
 impl Component for ReadyForReview {
   type Props = ReadyProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let props = ctx.props::<ReadyProps>().clone();
-    let action = merge_action(ctx, &props.open, &props.detail);
-    let nav = ctx
-      .use_context::<ProjectNav>()
-      .expect("the project shell provides ProjectNav");
-    // The task page reads the merge and what the run left again.
-    ctx.watch(&action.state(), move |state| {
-      if !state.is_pending() && state.data.is_some() {
-        nav.tasks_changed();
-      }
-    });
-    Self
+    Self {
+      merge_ref: ctx.element_ref(),
+      integration: ctx
+        .use_context::<RunIntegration>()
+        .expect("the task page provides its run integration"),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -137,12 +136,36 @@ impl Component for ReadyForReview {
           .scrollbar(gutter_scrollbar()),
       )
       .with_children(merge_problem(ctx, detail, &action).map(beside_gutter))
-      .child(beside_gutter(actions(ctx, (detail, &action), checkpointed, ask)));
+      .child(beside_gutter(actions(
+        ctx,
+        (detail, &action),
+        checkpointed,
+        ask,
+        &self.merge_ref,
+      )));
     Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(summary)
-      .child(details::run_details(ctx, run, props.open.project.name().as_str(), open))
+      .child(details::run_details(
+        ctx,
+        run,
+        props.open.project.name().as_str(),
+        props.leftovers.as_ref(),
+        detail.merge.is_some(),
+        open,
+      ))
+  }
+
+  fn after_layout(&self) {
+    if matches!(self.integration.merge().get_untracked(), JobState::Running) || !self.merge_ref.is_attached() {
+      return;
+    }
+    let width = self.merge_ref.width();
+    let saved = self.integration.merge_width();
+    if width > 0.0 && (saved.get_untracked() - width).abs() > 0.5 {
+      saved.set(width);
+    }
   }
 }
 
@@ -294,6 +317,7 @@ fn actions(
   (detail, merge): (&TaskDetail, &MergeAction),
   checkpointed: Option<&Checkpointed>,
   ask: Option<Handler>,
+  merge_ref: &ElementRef,
 ) -> Element {
   let scope = match checkpointed {
     Some(Checkpointed::Read { changes, .. }) => {
@@ -363,7 +387,7 @@ fn actions(
             .nowrap(),
         )
         .with_children(ask)
-        .with_children(merge_button(ctx, detail, merge))
+        .with_children(merge_button(ctx, detail, merge, merge_ref))
         .child(review),
     )
     .child(hint("task-ready-unavailable", &ctx.t("runs.ready.unavailable")))

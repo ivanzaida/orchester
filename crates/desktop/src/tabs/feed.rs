@@ -33,7 +33,7 @@ use crate::{
   messages::{self, Message},
   runner::{RunnerStatus, Runners},
   screens::project::TasksState,
-  tasks::{data::ProjectTasks, usage::ProjectUsage},
+  tasks::{data::ProjectTasks, integration_jobs::IntegrationJobs, usage::ProjectUsage},
   workspace::OpenProject,
 };
 
@@ -52,6 +52,8 @@ pub struct ProjectFeed {
   pub revision: Signal<u64>,
   /// Counts imports: screens listing resources are mounted again after one.
   pub resources: Signal<u64>,
+  /// Merge and cleanup operations that outlive a task page and are shared by its tabs.
+  pub integration: IntegrationJobs,
 }
 
 /// The feeds of the projects the tabs show, by project.
@@ -80,6 +82,7 @@ impl ProjectFeeds {
         changes: Signal::new(0),
         revision: Signal::new(0),
         resources: Signal::new(0),
+        integration: IntegrationJobs::default(),
       })
       .clone()
   }

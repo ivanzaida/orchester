@@ -158,15 +158,16 @@ impl Component for TaskScreen {
     control_action(ctx);
     let focus_composer = ctx.signal(false);
     ctx.provide(conversation::ComposerFocus(focus_composer.clone()));
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav");
     Self {
       requested: ctx.signal(None),
       retry: ctx.signal(0),
       reload: ctx.signal(0),
       focus_composer,
       refused_edit: ctx.signal(None),
-      nav: ctx
-        .use_context::<ProjectNav>()
-        .expect("the project shell provides ProjectNav"),
+      nav,
       runners: ctx
         .use_context::<Runners>()
         .expect("the root provides Runners before mounting screens"),
@@ -222,6 +223,9 @@ impl Component for TaskScreen {
         .child(self.topbar(ctx, &props, (None, None), &control))
         .child(centered(panel.into()));
     };
+    if let Some(run) = detail.run.as_ref() {
+      ctx.provide(self.nav.integration(run.id()));
+    }
     let online = props.runner == RunnerState::Online;
     let lost = detail.lost_its_runner(online).then(|| Lost::of(&props.runner));
     let checkpointed = self.checkpointed(ctx, &props, &detail);
@@ -232,19 +236,7 @@ impl Component for TaskScreen {
     let leftovers = self.leftovers(ctx, &props, &detail);
     let body = self.body(ctx, &props, &detail, (lost, files), (checkpointed, leftovers.clone()));
     let runner_notice = connection_notice(ctx, &props.runner, props.runner_since, &self.runners).map(padded);
-    let control_error = control
-      .state()
-      .get()
-      .error
-      .filter(|_| !control.state().get().is_pending())
-      .map(|error| control_error_row(&message_text(ctx, &error)))
-      .into_iter()
-      .chain(
-        self
-          .refused_edit
-          .get()
-          .map(|reason| control_error_row(&message_text(ctx, &reason))),
-      );
+    let control_error = self.error_rows(ctx, &control);
     let removal = self.removal(ctx, &props, &detail, leftovers.as_ref());
     let earlier_unreadable = detail
       .earlier_unreadable
@@ -446,6 +438,18 @@ impl TaskScreen {
 }
 
 impl TaskScreen {
+  /// Why the runner did not carry out the last run control, and why Edit task, opened for this
+  /// task, was refused (`field-error` below the heading).
+  fn error_rows(&self, ctx: &Ctx, control: &ControlAction) -> Vec<Element> {
+    let state = control.state().get();
+    let control_error = if state.is_pending() { None } else { state.error };
+    control_error
+      .into_iter()
+      .chain(self.refused_edit.get())
+      .map(|error| control_error_row(&message_text(ctx, &error)))
+      .collect()
+  }
+
   /// The breadcrumb back to the task list, then the run controls (`ctwcG`) and `removal`, *Remove
   /// worktree* of a run that ended. A run that lost its runner has no controls: nothing can pause,
   /// cancel or continue it until a runner is back, and the runner notice offers Restart runner. A
