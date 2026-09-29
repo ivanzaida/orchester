@@ -22,11 +22,8 @@ then the backlog by area.
 
 | Task | Branch | Verified progress and next gate |
 | --- | --- | --- |
-| M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; Not started, Interrupted and recipient-menu frames are now saved on `master` and need exact app comparisons. |
 | D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. Pencil now has matching error/retry frames. Same-state comparison and full runner macOS check remain; candidate unmerged. |
-
-M1's Codex evidence and parser tests are on `master`; Claude's MCP allow rule still needs a signed-in model turn.
 
 ## D · Developing Orchester inside Orchester
 
@@ -109,14 +106,6 @@ that failed to start in a signed-in run, and whether Claude's `mcp__<name>` allo
 confirmed or fixed, with the observed CLI output saved as a fixture and parser tests updated
 (`crates/core/src/connection/mcp/`).
 
-**Status 2026-09-29:** signed-in Codex 0.139 model turns confirmed MCP calls under `-a never`, a test variable present
-in the server but absent from an agent shell command, and an unnamed stderr warning for a failed server while the turn
-completes. One initial unannotated call was cancelled; two later unannotated calls succeeded, so the cause is unknown.
-Claude 2.1.89 listed `mcp__m1probe__ping` with the allow rule but stopped at `authentication_failed` before a model turn.
-A 2026-09-29 follow-up `auth status --json` returned exit 1 and `loggedIn: false`, so no new model turn was attempted.
-M1 remains in progress until that rule is checked in a signed-in Claude run. Evidence:
-`docs/evidence/mcp-real-run-2026-09-29.md`.
-
 ### M6 · Environment names in secret references (needs decision)
 
 Environments display in lower case (`@staging`, *(staging)*) where the design writes *Staging*, and typing `@Staging`
@@ -185,6 +174,14 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+M1 · Confirm MCP behaviour in signed-in CLI turns · branch `codex/m1-claude-allow-rule` (Codex 0.139 under `-a never`
+called a probe MCP tool, kept a test variable out of agent shell commands, and reported an unnamed startup warning
+for a broken server while the turn completed. Two repeat unannotated calls succeeded after one unexplained
+cancellation. After sign-in, Claude Code 2.1.89 called `mcp__m1probe__ping` with `--allowedTools mcp__m1probe` and
+no other tools; the turn exited 0 with the inert result and zero permission denials. Observed CLI fixtures and parser
+tests were updated. The independent Claude fixture test passed 1/1 and `tools/check.ps1` reported OK. A full
+Orchester pipeline run was not part of this probe. Evidence: `docs/evidence/mcp-real-run-2026-09-29.md` and
+`.tmp/verify/m1-claude-allow-rule/report.md`).
 U8 · Align agent profile header lifecycle actions with Pencil · branch `codex/u8-final-port` (Save draft appears only
 for unsaved edits, while Publish follows the saved-draft state. An independent verifier matched all five saved
 1440 × 960 header frames `dWnw7`, `t2wCI`, `Jw98x`, `WPmtS` and `T1rjv` to source-matched exact-PID app captures at
