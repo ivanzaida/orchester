@@ -182,6 +182,20 @@ fn mono_field_path_follows_pencil() {
 }
 
 #[test]
+fn agent_enforcement_row_text_matches_pencil_line_boxes() {
+  let app = themed_app();
+  let setting = app.theme().typography_style(ExtraTypography::EnforcementSetting.role());
+  assert_eq!((setting.font_size, setting.line_height), (12.0, 1.25));
+  let mechanism = app
+    .theme()
+    .typography_style(ExtraTypography::EnforcementMechanism.role());
+  assert_eq!(
+    (&*mechanism.font_family, mechanism.font_size, mechanism.line_height),
+    ("Geist Mono", 10.0, 1.3)
+  );
+}
+
+#[test]
 fn version_history_change_lines_follow_pencil() {
   let app = themed_app();
   // A change of a version, 12 at 1.4, beside a 17px icon slot: one line of it (`o6to5`, `Q1Geah`).

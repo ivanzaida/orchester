@@ -147,6 +147,10 @@ pub enum ExtraTypography {
   /// A note under an inspector's details or actions: where the models come from, what the
   /// connection's status means (`xK9v9`, `Thdx2` in `JuVaA`).
   InspectorNote,
+  /// Setting name in the agent enforcement panel (`vgkrV` in `CIeqc`).
+  EnforcementSetting,
+  /// CLI mechanism beneath an enforced setting (`x4ZFi` in `CIeqc`).
+  EnforcementMechanism,
   /// Title of the plan under review, e.g. "Plan v1 · GitHub sign-in" (`J7irj` in `x3lVC`), 19/500.
   PlanTitle,
   /// A note written to an agent, e.g. the changes a plan needs (`DDXc5` in `NbNN0`): 12, 1.6.
@@ -168,7 +172,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 75] = [
+  const ALL: [Self; 77] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -235,6 +239,8 @@ impl ExtraTypography {
     Self::CellLabel,
     Self::WrappingError,
     Self::InspectorNote,
+    Self::EnforcementSetting,
+    Self::EnforcementMechanism,
     Self::PlanTitle,
     Self::ReviewNote,
     Self::AgentText,
@@ -314,6 +320,8 @@ impl ExtraTypography {
       Self::CellLabel => "cell-label",
       Self::WrappingError => "wrapping-error",
       Self::InspectorNote => "inspector-note",
+      Self::EnforcementSetting => "enforcement-setting",
+      Self::EnforcementMechanism => "enforcement-mechanism",
       Self::PlanTitle => "plan-title",
       Self::ReviewNote => "review-note",
       Self::AgentText => "agent-text",
@@ -472,6 +480,8 @@ impl ExtraTypography {
       Self::CellLabel => leading(1.5, style(11.0, FontWeight::Normal, MUTED)),
       Self::WrappingError => leading(1.5, style(11.0, FontWeight::Normal, TEXT)),
       Self::InspectorNote => leading(1.6, style(10.0, FontWeight::Normal, MUTED)),
+      Self::EnforcementSetting => leading(1.25, style(12.0, FontWeight::Normal, TEXT)),
+      Self::EnforcementMechanism => leading(1.3, mono(10.0, MUTED)),
       Self::PlanTitle => style(19.0, FontWeight::Medium, TEXT),
       Self::ReviewNote => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),
       Self::AgentText => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),

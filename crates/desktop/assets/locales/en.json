@@ -1563,7 +1563,7 @@
         "codexNetworkOff": "sandbox · network access off",
         "codexNetworkOn": "sandbox · network access on",
         "codexWritableRoots": "sandbox · writable roots",
-        "claudeEditToolsRemoved": "edit tools removed · listed commands still run",
+        "claudeEditToolsRemoved": "edit tools removed · listed cmds run",
         "claudeAcceptEdits": "permission mode · accept edits",
         "claudeAllowedTools": {
           "one": "allowed tools · 1 prefix rule",

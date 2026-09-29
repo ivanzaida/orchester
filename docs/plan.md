@@ -24,7 +24,6 @@ then the backlog by area.
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass. Pencil now has corrected merging, removal and deleted-branch states; compare them with exact live app states and fix remaining differences. |
-| U3 | `codex/u3-final` | Shorter English copy passes current-master i18n tests and `check.ps1`; the Pencil design copy is committed on `master` at `357a745`. Independent exact-PID verification found the mechanism row matches the 300-wide design without clipping and a corrected no-focus replay passed. Full-panel parity is blocked: Claude network is locked On in the app while Pencil shows web tools removed. |
 | M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; exact remote-selected inspector frame `a4lm6D` is saved on `master` and awaits the same-state comparison. |
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; Not started, Interrupted and recipient-menu frames are now saved on `master` and need exact app comparisons. |
 | D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. Pencil now has matching error/retry frames. Same-state comparison and full runner macOS check remain; candidate unmerged. |
@@ -153,19 +152,6 @@ Cancel unavailable). Corrected: `jnagB` in `XIEn8` (Cancel unavailable while rem
 keeps 140 wide), `y6Pua` in `bMJUA` (*Working branch* reads *orc/github-auth · deleted*, where the app shows *No longer
 exists*).
 
-### U3 · Claude mechanism line in the enforcement panel (UI)
-
-The Claude repository mechanism line wraps onto two lines in the 300 wide panel. Check the design's wording and width.
-
-**Status 2026-09-29: In progress.** The shorter copy passed an independent live Pencil/app comparison at the
-300-wide panel, and its current-master code port passed filtered i18n tests and `tools/check.ps1`. The design copy
-was committed on `master` at `357a745`. The final `codex/u3-final` code worktree passed an independent check of the
-changed mechanism row and a corrected no-focus replay. The full-panel visual gate remains open: the Claude network
-control is locked On in the running app, while Pencil shows web tools removed. With the other prefix and MCP rows
-configured, the app panel is 300 × 470 logical pixels versus Pencil's 300 × 495. Resolve the unreachable design
-state before reporting U3 done. Evidence: `.tmp/verify/u3-final/report.md`. Pencil MCP returned nodes from the
-active document even when given a nonexistent `filePath`; do not use that argument as a target guard for future edits.
-
 ### U6 · Conversation states not seen in the app (UI)
 
 The Paused, Stopped, Interrupted and Not started states of the conversation panel, and direct messages to one agent,
@@ -232,6 +218,12 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+U3 · Fit the Claude mechanism line and enforcement panel to Pencil · branch `codex/u3-final-port`
+(shorter English copy and two theme typography roles align the one-line mechanism, row spacing and wrapping in the
+300-wide panel. Independent exact-PID same-state comparison to Pencil `CIeqc` found no blocking or major mismatch;
+the full app panel is 300 × 492.7 logical px versus 300 × 495 in Pencil. The 2.3px residual and pre-existing heading
+copy are minor. Independent theme/i18n tests and `tools/check.ps1` passed; a separate bounded host watcher confirmed
+the own app stayed out of focus. Evidence: `docs/evidence/u3-enforcement-panel-2026-09-29.md`).
 M3 · List MCP servers under Secrets “Used by” · branch `codex/m3-final-port` (independent MCP-only and mixed-use
 checks passed. Pencil `wPXgW`/`R2ImH`/`RxpL1` and exact-PID app captures had no blocking or major mismatch after the
 archive geometry fix. A bounded Add Secret → Staging → masked value → Archive flow passed a 944-sample host no-focus

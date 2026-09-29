@@ -174,16 +174,8 @@ pub(super) fn row(glyph: Icon, title: &str, how: &str) -> Element {
       Column::new()
         .flex(1.0)
         .spacing(SpacingSize::Xs)
-        .child(
-          Text::new(title)
-            .variant(TypographyStyle::FieldLabel)
-            .color(PaletteColor::TextPrimary),
-        )
-        .child(
-          Text::new(how)
-            .variant(TypographyStyle::Mono)
-            .color(PaletteColor::TextSecondary),
-        ),
+        .child(Text::new(title).variant(ExtraTypography::EnforcementSetting.role()))
+        .child(Text::new(how).variant(ExtraTypography::EnforcementMechanism.role())),
     )
     .into()
 }
