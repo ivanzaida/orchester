@@ -2,9 +2,12 @@
 //! and agents' messages, written by the runner. The schema keeps what a message says and lets its
 //! delivery only move forward.
 
+use std::num::NonZeroU64;
+
 use orchester_core::{
   conversation::{AgentMessage, Delivery, Message, MessageBody, Recipient, Sender},
   id::{IdempotencyKey, RunId, TaskId},
+  run::EventSequence,
   store::ConversationStore,
   time::Timestamp,
 };
@@ -19,7 +22,7 @@ use crate::{
 const PERSON: &str = "person";
 const AGENT: &str = "agent";
 const COLUMNS: &str = "id, task_id, run_id, author, kind, recipient_profile, step_execution_id, invocation_id, body, \
-                       created_at, delivered_at, acknowledged_at";
+                       created_at, delivered_at, acknowledged_at, recovery_sequence";
 
 impl ConversationStore for ProjectDb {
   type Error = StoreError;
@@ -136,8 +139,8 @@ fn insert(connection: &Connection, message: &Message, key: Option<IdempotencyKey
   };
   connection.execute(
     "INSERT INTO messages (id, task_id, run_id, idempotency_key, author, kind, recipient_profile, step_execution_id, \
-     invocation_id, body, created_at, delivered_at, acknowledged_at) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+     invocation_id, body, created_at, delivered_at, acknowledged_at, recovery_sequence) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
     params![
       message.id().to_string(),
       message.task().to_string(),
@@ -152,6 +155,11 @@ fn insert(connection: &Connection, message: &Message, key: Option<IdempotencyKey
       message.created_at().unix_millis(),
       delivered_at,
       acknowledged_at,
+      message
+        .recovery_after()
+        .map(|sequence| i64::try_from(sequence.get()))
+        .transpose()
+        .map_err(|error| corrupt("message recovery sequence", error))?,
     ],
   )?;
   Ok(())
@@ -207,6 +215,7 @@ struct StoredRow {
   created_at: i64,
   delivered_at: Option<i64>,
   acknowledged_at: Option<i64>,
+  recovery_sequence: Option<i64>,
 }
 
 impl StoredRow {
@@ -224,12 +233,13 @@ impl StoredRow {
       created_at: row.get(9)?,
       delivered_at: row.get(10)?,
       acknowledged_at: row.get(11)?,
+      recovery_sequence: row.get(12)?,
     })
   }
 
   fn into_message(self) -> Result<Message, StoreError> {
     let sender = self.sender()?;
-    Message::restore(
+    let message = Message::restore(
       parse("message id", &self.id)?,
       parse("task id", &self.task)?,
       self.run.as_deref().map(|run| parse("run id", run)).transpose()?,
@@ -237,7 +247,17 @@ impl StoredRow {
       MessageBody::new(&self.body).map_err(|error| corrupt("message", error))?,
       Timestamp::from_unix_millis(self.created_at),
     )
-    .map_err(|error| corrupt("message", error))
+    .map_err(|error| corrupt("message", error))?;
+    match self.recovery_sequence {
+      None => Ok(message),
+      Some(sequence) => {
+        let sequence = u64::try_from(sequence).map_err(|error| corrupt("message recovery sequence", error))?;
+        let sequence = NonZeroU64::new(sequence).ok_or_else(|| corrupt("message recovery sequence", "zero"))?;
+        message
+          .recovering_after(EventSequence::new(sequence))
+          .map_err(|error| corrupt("message", error))
+      }
+    }
   }
 
   fn sender(&self) -> Result<Sender, StoreError> {

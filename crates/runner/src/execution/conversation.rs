@@ -45,7 +45,15 @@ impl Scheduler {
       if let Some(answer) = self.ask(run, Control::DeliverMessages) {
         drop(one_at_a_time);
         if let Ok(result) = answer.await {
-          return result;
+          result?;
+          let stored = idle::load(&self.open()?, run)?;
+          if stored.status().is_terminal() {
+            // The task may be finishing just as the message arrives. Wait for its removal,
+            // then deliver through the idle path instead of acknowledging an unread message.
+            tokio::task::yield_now().await;
+            continue;
+          }
+          return Ok(());
         }
         continue;
       }
@@ -121,7 +129,8 @@ impl Scheduler {
 fn deliver_idle(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Option<Prepared>, Rejection> {
   let stored = idle::load(db, run)?;
   match stored.status() {
-    RunStatus::Failed(_) | RunStatus::Cancelled => Err(Rejection::RunEnded),
+    RunStatus::Failed(_) => super::recovery::recover(db, root, stored),
+    RunStatus::Cancelled => Err(Rejection::RunEnded),
     // Its work was merged into its base branch: the task is done.
     RunStatus::Succeeded if merged(db, run)? => Err(Rejection::RunEnded),
     RunStatus::Succeeded => follow_up(db, root, stored),
@@ -134,6 +143,9 @@ fn deliver_idle(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Option<Pr
 /// not merged is followed up; anything else keeps them queued.
 fn follow_up_after_attach(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Option<Prepared>, Rejection> {
   let stored = idle::load(db, run)?;
+  if matches!(stored.status(), RunStatus::Failed(_)) {
+    return super::recovery::recover(db, root, stored);
+  }
   if stored.status() != &RunStatus::Succeeded || merged(db, run)? {
     return Ok(None);
   }

@@ -35,7 +35,7 @@ use orchester_core::{
 
 use super::{
   super::run::RunTask,
-  Continuation,
+  Continuation, Occasion,
   app_server::AppServerSetup,
   mcp::{McpServers, McpSetup},
   skills::{PlacedSkills, repository_skills},
@@ -389,10 +389,12 @@ impl RunTask {
           note,
         }
       }),
-      messages: (!continuation.messages.is_empty()).then(|| DeliveredMessages {
-        occasion: continuation.occasion.as_prompt(),
-        messages: &continuation.messages,
-      }),
+      messages: (!continuation.messages.is_empty() || matches!(continuation.occasion, Occasion::Recovery(_))).then(
+        || DeliveredMessages {
+          occasion: continuation.occasion.as_prompt(),
+          messages: &continuation.messages,
+        },
+      ),
     }
     .assemble(event)
     .map_err(

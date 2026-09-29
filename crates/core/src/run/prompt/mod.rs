@@ -122,6 +122,8 @@ pub enum MessageOccasion<'a> {
   Answer { question: &'a str },
   /// The run had finished and a person asks the agent of the step about its work (Ask agent).
   FollowUp,
+  /// A person's new instructions recover a failed attempt; retain its result as context.
+  Recovery { previous_result: &'a str },
 }
 
 /// People's messages an invocation delivers, oldest first, and why it delivers them now.

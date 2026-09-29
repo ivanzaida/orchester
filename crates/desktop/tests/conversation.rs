@@ -239,7 +239,7 @@ fn conversation_suspended_runs_keep_direct_messages_queued_for_the_right_agent_t
     send_in(
       fixture.repo.path(),
       IdempotencyKey::generate(),
-      (task, Some(run.id())),
+      (task, Some(run.id()), None),
       recipients[1].recipient,
       "Please check the OAuth dialog.",
     )
@@ -247,7 +247,7 @@ fn conversation_suspended_runs_keep_direct_messages_queued_for_the_right_agent_t
     send_in(
       fixture.repo.path(),
       IdempotencyKey::generate(),
-      (task, Some(run.id())),
+      (task, Some(run.id()), None),
       recipients[2].recipient,
       "Review this after implementation.",
     )
@@ -279,7 +279,7 @@ fn conversation_live_direct_message_to_later_agent_waits_for_its_turn() {
   send_in(
     fixture.repo.path(),
     IdempotencyKey::generate(),
-    (task, Some(run.id())),
+    (task, Some(run.id()), None),
     reviewer,
     "Review this after implementation.",
   )
@@ -333,19 +333,61 @@ fn conversation_sending_stores_a_message_once_per_key() {
   let run = fixture.started_run(task, at(20));
   let key = IdempotencyKey::generate();
   let root = fixture.repo.path().to_path_buf();
-  let first = send_in(&root, key, (task, Some(run.id())), Recipient::Orchestrator, "  Hi.  ").expect("stored");
+  let first = send_in(
+    &root,
+    key,
+    (task, Some(run.id()), None),
+    Recipient::Orchestrator,
+    "  Hi.  ",
+  )
+  .expect("stored");
   assert_eq!(first.body().as_str(), "Hi.");
-  let again = send_in(&root, key, (task, Some(run.id())), Recipient::Orchestrator, "Hi.").expect("the first");
+  let again = send_in(&root, key, (task, Some(run.id()), None), Recipient::Orchestrator, "Hi.").expect("the first");
   assert_eq!(again, first);
   assert!(
     send_in(
       &root,
       IdempotencyKey::generate(),
-      (task, None),
+      (task, None, None),
       Recipient::Orchestrator,
       "  "
     )
     .is_err()
   );
   assert_eq!(read(&fixture, task).entries.len(), 1);
+}
+
+#[test]
+fn conversation_failed_run_accepts_explicit_recovery_and_disables_removed_worktree() {
+  let mut fixture = Fixture::reviewed();
+  let task = fixture.task("Add login", at(10));
+  let mut run = fixture.started_run(task, at(20));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run
+    .fail_step(execution, orchester_core::run::StepFailure::ReportedFailed, at(30))
+    .expect("failure");
+  fixture.record(&run, &events);
+  let conversation = read(&fixture, task);
+  assert_eq!(conversation.state, PanelState::Failed);
+  assert!(conversation.state.takes_messages());
+  assert_eq!(conversation.next_agent.as_deref(), Some("Builder"));
+  assert_eq!(conversation.recipients.len(), 2, "unexecuted Reviewer is unavailable");
+  assert_eq!(conversation.recovery_after, Some(run.last_sequence()));
+  let message = send_in(
+    fixture.repo.path(),
+    IdempotencyKey::generate(),
+    (task, Some(run.id()), conversation.recovery_after),
+    Recipient::Orchestrator,
+    "Continue with my answer.",
+  )
+  .expect("sent");
+  assert_eq!(message.recovery_after(), Some(run.last_sequence()));
+  let saved = fixture.db.messages(task).expect("messages");
+  assert_eq!(saved[0], message, "recovery intent survives persistence");
+  let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("detail");
+  let removed = Conversation::of(&detail, false, Some(&Leftovers::default()));
+  assert_eq!(removed.state, PanelState::FailedWorktreeRemoved);
+  assert!(!removed.state.takes_messages());
+  assert_eq!(removed.recovery_after, None);
+  assert_eq!(removed.entries[0].state, EntryState::Queued(Queue::WorktreeRemoved));
 }

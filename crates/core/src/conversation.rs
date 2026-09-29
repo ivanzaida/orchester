@@ -21,7 +21,7 @@ use thiserror::Error;
 use crate::{
   id::{InvocationId, MessageId, ResourceId, RunId, StepExecutionId, TaskId},
   resource::StepKey,
-  run::{Run, StepStatus, WaitReason},
+  run::{EventSequence, Run, StepStatus, WaitReason},
   time::Timestamp,
 };
 
@@ -157,6 +157,7 @@ pub struct Message {
   sender: Sender,
   body: MessageBody,
   created_at: Timestamp,
+  recovery_after: Option<EventSequence>,
 }
 
 impl Message {
@@ -178,6 +179,7 @@ impl Message {
       },
       body,
       created_at: now,
+      recovery_after: None,
     }
   }
 
@@ -201,6 +203,7 @@ impl Message {
       },
       body,
       created_at: now,
+      recovery_after: None,
     }
   }
 
@@ -227,6 +230,7 @@ impl Message {
       sender,
       body,
       created_at,
+      recovery_after: None,
     })
   }
 
@@ -252,6 +256,23 @@ impl Message {
 
   pub const fn created_at(&self) -> Timestamp {
     self.created_at
+  }
+
+  /// The failure the person explicitly chose to continue after. A message queued before a
+  /// failure cannot retry it; another failure requires another explicit choice.
+  pub const fn recovery_after(&self) -> Option<EventSequence> {
+    self.recovery_after
+  }
+
+  pub fn recovering_after(mut self, failure: EventSequence) -> Result<Self, MessageError> {
+    if !matches!(self.sender, Sender::Person { .. }) {
+      return Err(MessageError::NotFromAPerson);
+    }
+    if self.run.is_none() {
+      return Err(MessageError::WithoutRun);
+    }
+    self.recovery_after = Some(failure);
+    Ok(self)
   }
 
   /// A person's message and where it stands; `None` for an agent's.

@@ -4,6 +4,7 @@ mod again;
 mod agent;
 mod conversation;
 mod counts;
+mod failed_recovery;
 mod fixture;
 mod lifecycle;
 mod limits;

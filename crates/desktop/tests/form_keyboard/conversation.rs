@@ -143,3 +143,31 @@ fn conversation_ask_agent_follows_up_a_run_ready_for_review() {
   desktop.click("task-open-conversation");
   desktop.wait_for("task-conversation-panel");
 }
+
+#[test]
+fn conversation_failed_run_continues_from_the_composer_without_run_again() {
+  let mut desktop = desktop();
+  create_and_run(&mut desktop, "Report failure.", "1400000");
+  desktop.wait_until("failed run on the page", |desktop| {
+    latest_run(desktop.repo()).is_some_and(|run| matches!(run.status(), RunStatus::Failed(_)))
+      && shows(desktop, "task-notice", "The run failed at Implement")
+  });
+  let failed = latest_run(desktop.repo()).expect("failed run");
+  assert!(matches!(failed.status(), RunStatus::Failed(_)));
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-composer");
+  assert!(shows(&mut desktop, "conversation-status", "Failed"));
+  assert!(shows(&mut desktop, "conversation-send", "Send & continue"));
+  desktop.click("conversation-input");
+  desktop.type_text("Continue with the corrected instruction.");
+  send_with_keyboard(&mut desktop);
+  desktop.wait_until("recovered run to succeed", |desktop| {
+    latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Succeeded && run.attempts().len() == 2)
+  });
+  let done = latest_run(desktop.repo()).expect("recovered");
+  assert_eq!(done.id(), failed.id());
+  assert_eq!(done.branch(), failed.branch());
+  desktop.wait_until("delivered instructions", |desktop| {
+    shows(desktop, "task-conversation-panel", "Acknowledged by Builder")
+  });
+}

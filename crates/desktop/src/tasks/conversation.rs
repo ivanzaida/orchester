@@ -12,7 +12,7 @@ use orchester_core::{
   id::{IdempotencyKey, MessageId, ResourceId, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
   resource::StepKey,
-  run::{PauseReason, RunStatus, StepExecutor, StepStatus, TaskPhase, WaitReason},
+  run::{EventSequence, PauseReason, RunStatus, StepExecutor, StepStatus, TaskPhase, WaitReason},
   store::ConversationStore,
   time::Timestamp,
 };
@@ -36,12 +36,18 @@ pub enum PanelState {
   Interrupted,
   /// Ready for review: a message asks the agent again.
   Ready,
+  /// A new message continues the failed run from an existing agent's work.
+  Failed,
+  /// A failed run whose worktree was removed cannot resume its agent.
+  FailedWorktreeRemoved,
+  /// The failed pipeline has no executed agent to receive a message.
+  FailedNoAgent,
   /// Ready for review, but its worktree was removed: its agent cannot continue, so no agent reads
   /// messages any more.
   WorktreeRemoved,
   /// Its work was merged into its base branch: no agent reads messages any more.
   Merged,
-  /// Failed or cancelled: no agent reads messages any more.
+  /// Cancelled: no agent reads messages any more.
   Ended,
 }
 
@@ -56,13 +62,17 @@ impl PanelState {
       TaskPhase::Interrupted => Self::Interrupted,
       TaskPhase::Succeeded => Self::Ready,
       TaskPhase::Merged => Self::Merged,
-      TaskPhase::Failed | TaskPhase::Cancelled => Self::Ended,
+      TaskPhase::Failed => Self::Failed,
+      TaskPhase::Cancelled => Self::Ended,
     }
   }
 
   /// Whether a message written now can reach an agent of the task.
   pub const fn takes_messages(self) -> bool {
-    !matches!(self, Self::Merged | Self::WorktreeRemoved | Self::Ended)
+    !matches!(
+      self,
+      Self::Merged | Self::WorktreeRemoved | Self::FailedWorktreeRemoved | Self::FailedNoAgent | Self::Ended
+    )
   }
 }
 
@@ -146,6 +156,7 @@ pub struct Participants {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Conversation {
   pub state: PanelState,
+  pub recovery_after: Option<EventSequence>,
   pub entries: Vec<Entry>,
   pub recipients: Vec<RecipientChoice>,
   pub participants: Participants,
@@ -169,6 +180,17 @@ impl Conversation {
       PanelState::Ready if leftovers.is_some_and(|leftovers| !leftovers.keeps_run_worktree()) => {
         PanelState::WorktreeRemoved
       }
+      PanelState::Failed if leftovers.is_some_and(|leftovers| !leftovers.keeps_run_worktree()) => {
+        PanelState::FailedWorktreeRemoved
+      }
+      PanelState::Failed
+        if detail
+          .run
+          .as_ref()
+          .is_none_or(|run| run.run.recovery_step(None).is_none()) =>
+      {
+        PanelState::FailedNoAgent
+      }
       state => state,
     };
     let run = detail.run.as_ref();
@@ -179,6 +201,9 @@ impl Conversation {
       .collect();
     Self {
       state,
+      recovery_after: run
+        .filter(|_| state == PanelState::Failed)
+        .map(|run| run.run.last_sequence()),
       entries,
       recipients: run.map(recipients).unwrap_or_else(|| vec![orchestrator()]),
       participants: run.map(participants).unwrap_or_default(),
@@ -227,6 +252,7 @@ fn recipients(run: &RunView) -> Vec<RecipientChoice> {
       continue;
     };
     if step.tool_step
+      || (matches!(run.run.status(), RunStatus::Failed(_)) && run.run.recovery_step(Some(profile)).is_none())
       || choices
         .iter()
         .any(|choice| choice.recipient == Recipient::Agent(profile))
@@ -282,6 +308,10 @@ fn next_agent(run: &RunView, state: PanelState) -> Option<Arc<str>> {
     PanelState::Waiting => *run.run.awaiting_answer().first()?,
     PanelState::Ready => {
       let step = run.run.follow_up_step(None)?;
+      run.run.latest_execution(&step)?.id()
+    }
+    PanelState::Failed => {
+      let step = run.run.recovery_step(None)?;
       run.run.latest_execution(&step)?.id()
     }
     _ => return None,
@@ -365,6 +395,8 @@ fn queue(message: &Message, run: Option<&RunView>, state: PanelState) -> Queue {
     RunStatus::Paused(PauseReason::Requested) => Queue::RunResumes,
     RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) if later_agent => Queue::AgentNextTurn,
     RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) => Queue::RunContinues,
+    RunStatus::Failed(_) if state == PanelState::FailedWorktreeRemoved => Queue::WorktreeRemoved,
+    RunStatus::Failed(_) if state == PanelState::Failed => Queue::RunContinues,
     RunStatus::Failed(_) | RunStatus::Cancelled => Queue::RunEnded,
     // A run recorded as running without a runner is interrupted until one is back.
     RunStatus::Running if state == PanelState::Interrupted && later_agent => Queue::AgentNextTurn,
@@ -390,6 +422,7 @@ fn direct_recipient_waits_for_later_turn(message: &Message, run: &RunView, state
 #[derive(Debug)]
 pub enum SendError {
   Blank,
+  InvalidRecovery,
   Store(StoreError),
 }
 
@@ -397,6 +430,7 @@ impl SendError {
   pub fn message(&self) -> UiMessage {
     match self {
       Self::Blank => UiMessage::new("conversation.errors.blank"),
+      Self::InvalidRecovery => UiMessage::new("conversation.errors.invalidRecovery"),
       Self::Store(error) => messages::store_error(error),
     }
   }
@@ -407,13 +441,19 @@ impl SendError {
 pub fn send_in(
   repo_root: &Path,
   key: IdempotencyKey,
-  (task, run): (TaskId, Option<RunId>),
+  (task, run, recovery_after): (TaskId, Option<RunId>, Option<EventSequence>),
   recipient: Recipient,
   text: &str,
 ) -> Result<Message, SendError> {
   // A new message's text is only checked for being blank.
   let body = MessageBody::new(text).map_err(|_: MessageError| SendError::Blank)?;
   let message = Message::from_person(task, run, recipient, body, Timestamp::now());
+  let message = match recovery_after {
+    Some(sequence) => message
+      .recovering_after(sequence)
+      .map_err(|_| SendError::InvalidRecovery)?,
+    None => message,
+  };
   let mut db = ProjectDb::open(repo_root).map_err(SendError::Store)?;
   db.send_message(key, &message).map_err(SendError::Store)
 }

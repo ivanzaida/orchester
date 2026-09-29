@@ -19,6 +19,7 @@ mod phase;
 mod plan;
 mod preflight;
 mod prompt;
+mod recovery;
 mod result;
 mod schedule;
 mod snapshot;

@@ -26,6 +26,7 @@ mod permissions;
 mod plan;
 mod prepare;
 mod record;
+mod recovery;
 mod run;
 mod step;
 mod tool;

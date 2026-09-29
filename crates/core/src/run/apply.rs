@@ -109,6 +109,7 @@ impl Run {
         }
       }
       RunEventKind::Reopened => self.expect_status(kind, self.status == RunStatus::Succeeded),
+      RunEventKind::RecoveryRequested => self.expect_status(kind, matches!(self.status, RunStatus::Failed(_))),
       RunEventKind::FollowUpFailed => {
         if !self.in_follow_up() {
           return Err(RunError::NotFollowingUp);
@@ -304,6 +305,7 @@ impl Run {
       (true, _) => Err(RunError::InvalidAttempt("the first attempt executes every step")),
       (false, AttemptReason::Retry { .. }) => Ok(()),
       (false, AttemptReason::FollowUp { step }) => self.check_follow_up(step, executions),
+      (false, AttemptReason::Recovery { step }) => self.check_recovery(step, executions),
       (false, AttemptReason::Initial) => Err(RunError::InvalidAttempt("only the first attempt is initial")),
     }
   }
@@ -336,7 +338,11 @@ impl Run {
   fn apply(&mut self, kind: &RunEventKind, at: Timestamp) {
     match kind {
       RunEventKind::Created(_) => unreachable!("Run::check rejects a second creation event"),
-      RunEventKind::Started | RunEventKind::Resumed | RunEventKind::Continued { .. } | RunEventKind::Reopened => {
+      RunEventKind::Started
+      | RunEventKind::Resumed
+      | RunEventKind::Continued { .. }
+      | RunEventKind::Reopened
+      | RunEventKind::RecoveryRequested => {
         self.status = RunStatus::Running;
       }
       RunEventKind::FollowUpFailed => self.end(RunStatus::Succeeded, AttemptStatus::Failed),

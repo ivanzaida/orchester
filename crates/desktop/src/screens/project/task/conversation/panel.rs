@@ -97,6 +97,7 @@ struct Outgoing {
   key: IdempotencyKey,
   task: TaskId,
   run: Option<RunId>,
+  recovery_after: Option<orchester_core::run::EventSequence>,
   recipient: Recipient,
   text: String,
 }
@@ -126,10 +127,11 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
         key,
         task,
         run,
+        recovery_after,
         recipient,
         text,
       } = outgoing;
-      background::run(move || send_in(&repo_root, key, (task, run), recipient, &text))
+      background::run(move || send_in(&repo_root, key, (task, run, recovery_after), recipient, &text))
         .await?
         .map_err(|error| {
           tracing::warn!(?error, "the message was not stored");
@@ -196,6 +198,13 @@ impl Component for ConversationPanel {
       props.focus.set(false);
     }
     let conversation = &props.conversation;
+    if !conversation
+      .recipients
+      .iter()
+      .any(|choice| choice.recipient == self.to.get().0)
+    {
+      self.to.set(To(Recipient::Orchestrator));
+    }
     self.follow(conversation.entries.len());
     let state = action.state().get();
     let sending = state.is_pending();
@@ -215,6 +224,7 @@ impl Component for ConversationPanel {
         send,
         sending,
         open: conversation.state.takes_messages(),
+        continues_failed: conversation.state == PanelState::Failed,
       },
     );
     Column::new()
@@ -267,6 +277,7 @@ impl ConversationPanel {
         key: self.key.get().0,
         task: props.task,
         run: props.run,
+        recovery_after: props.conversation.recovery_after,
         recipient: self.to.get().0,
         text,
       },
@@ -373,6 +384,9 @@ fn heading(ctx: &Ctx, state: PanelState) -> Element {
     PanelState::Interrupted => (Icon::CirclePause, "conversation.status.interrupted"),
     // The run is still ready for review; only its agent cannot be asked.
     PanelState::Ready | PanelState::WorktreeRemoved => (Icon::GitPullRequest, "conversation.status.ready"),
+    PanelState::Failed | PanelState::FailedWorktreeRemoved | PanelState::FailedNoAgent => {
+      (Icon::CircleX, "conversation.status.failed")
+    }
     PanelState::Merged => (Icon::GitMerge, "conversation.status.merged"),
     PanelState::Ended => (Icon::Square, "conversation.status.ended"),
   };
@@ -450,6 +464,9 @@ fn explanation(ctx: &Ctx, conversation: &Conversation) -> Arc<str> {
     (PanelState::Interrupted, _) => ctx.t("conversation.explanation.queued"),
     (PanelState::Ready, Some(agent)) => ctx.t_args("conversation.explanation.ready", [("agent", agent)]),
     (PanelState::Ready, None) => ctx.t("conversation.explanation.readyNoAgent"),
+    (PanelState::Failed, _) => ctx.t("conversation.explanation.failed"),
+    (PanelState::FailedWorktreeRemoved, _) => ctx.t("conversation.explanation.worktreeRemoved"),
+    (PanelState::FailedNoAgent, _) => ctx.t("conversation.explanation.failedNoAgent"),
     (PanelState::WorktreeRemoved, _) => ctx.t("conversation.explanation.worktreeRemoved"),
     (PanelState::Merged, _) => ctx.t("conversation.explanation.merged"),
     (PanelState::Ended, _) => ctx.t("conversation.explanation.ended"),

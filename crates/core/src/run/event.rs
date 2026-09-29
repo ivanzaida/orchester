@@ -160,6 +160,8 @@ pub enum RunEventKind {
   /// A succeeded run works again: a follow-up attempt comes with this event
   /// ([`super::Run::follow_up`]).
   Reopened,
+  /// A person resumes a failed run through its conversation; a recovery attempt follows.
+  RecoveryRequested,
   /// The follow-up attempt's execution failed: the attempt fails, and the run is succeeded again
   /// with the result it had.
   FollowUpFailed,
@@ -249,6 +251,7 @@ impl RunEventKind {
       Self::Continued { .. } => "continued",
       Self::Succeeded => "succeeded",
       Self::Reopened => "reopened",
+      Self::RecoveryRequested => "recovery_requested",
       Self::FollowUpFailed => "follow_up_failed",
       Self::Failed { .. } => "failed",
       Self::Cancelled => "cancelled",

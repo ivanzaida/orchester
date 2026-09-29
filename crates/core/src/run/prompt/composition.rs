@@ -319,6 +319,12 @@ fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[Prompt
     }
   }
   if event == InjectionEvent::Resume {
+    if input
+      .messages
+      .is_some_and(|messages| matches!(messages.occasion, MessageOccasion::Recovery { .. }))
+    {
+      push_dependencies(&mut text, input.dependencies);
+    }
     text.push_str("\n\n# When you finish\n");
     push_block(&mut text, RESULT_INSTRUCTIONS);
     if input.step.approval_gate {
@@ -375,6 +381,7 @@ fn push_task_messages(text: &mut String, delivered: DeliveredMessages<'_>) {
       text.push_str("\n# Follow-up\n");
       push_block(text, FOLLOW_UP_LEAD);
     }
+    MessageOccasion::Recovery { previous_result } => push_recovery(text, previous_result),
   }
   push_messages(text, delivered.messages);
 }
@@ -382,6 +389,21 @@ fn push_task_messages(text: &mut String, delivered: DeliveredMessages<'_>) {
 /// What a follow-up's session reads before the messages.
 const FOLLOW_UP_LEAD: &str = "You completed this step and the run is ready for review. The person reviewing it \
                               writes to you:";
+
+fn push_recovery(text: &mut String, previous_result: &str) {
+  text.push_str("\n# Continue after failure\n");
+  push_block(
+    text,
+    "The earlier attempt failed. The person asks you to continue this step in the same run. \
+    Keep the existing changes, including uncommitted work; inspect the worktree before making changes. \
+    Do not start the task over or discard progress. Dependent steps run again after this step passes.",
+  );
+  if !previous_result.is_empty() {
+    text.push_str("\n## Earlier result\n");
+    push_block(text, previous_result);
+  }
+  text.push_str("\n## New instructions from the person\n");
+}
 
 /// What a resumed session reads first when it delivers people's messages: why it reads them now,
 /// the messages, and how to end.
@@ -401,13 +423,14 @@ fn push_resumed_messages(text: &mut String, delivered: DeliveredMessages<'_>) {
       text.push_str(FOLLOW_UP_LEAD);
       text.push('\n');
     }
+    MessageOccasion::Recovery { previous_result } => push_recovery(text, previous_result),
   }
   push_messages(text, delivered.messages);
   let close = match delivered.occasion {
     MessageOccasion::Written | MessageOccasion::AfterTurn => {
       "Take their messages into account: answer what they ask, and change your work if they ask you to."
     }
-    MessageOccasion::Answer { .. } => "Continue the step with their answer.",
+    MessageOccasion::Answer { .. } | MessageOccasion::Recovery { .. } => "Continue the step with their answer.",
     MessageOccasion::FollowUp => {
       "Answer them, and make the changes they ask for in the worktree, if any. Your summary is your answer to them."
     }

@@ -38,6 +38,8 @@ pub(super) struct Composer<'a> {
   pub(super) sending: bool,
   /// The run takes messages; one that ended does not.
   pub(super) open: bool,
+  /// Sending explicitly continues a failed run, rather than only queuing a message.
+  pub(super) continues_failed: bool,
 }
 
 pub(super) fn composer(ctx: &Ctx, composer: Composer<'_>) -> Element {
@@ -58,6 +60,8 @@ pub(super) fn composer(ctx: &Ctx, composer: Composer<'_>) -> Element {
   };
   let send_label = if composer.sending {
     ctx.t("conversation.composer.sending")
+  } else if composer.continues_failed {
+    ctx.t("conversation.composer.sendAndContinue")
   } else {
     ctx.t("conversation.composer.send")
   };

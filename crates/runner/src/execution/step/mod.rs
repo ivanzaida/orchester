@@ -57,6 +57,8 @@ pub(super) enum Occasion {
   Answer(String),
   /// A follow-up of a run that succeeded.
   FollowUp,
+  /// A new message resumes a failed attempt with its earlier output as context.
+  Recovery(String),
 }
 
 impl Occasion {
@@ -66,6 +68,7 @@ impl Occasion {
       Self::AfterTurn => MessageOccasion::AfterTurn,
       Self::Answer(question) => MessageOccasion::Answer { question },
       Self::FollowUp => MessageOccasion::FollowUp,
+      Self::Recovery(previous_result) => MessageOccasion::Recovery { previous_result },
     }
   }
 }
@@ -308,19 +311,35 @@ impl RunTask {
     let status = self.run.execution(execution).map(|execution| execution.status());
     if status == Some(StepStatus::Pending) {
       self.transition(|run, now| run.start_step(execution, now))?;
-      let Some(followed) = self.run.followed_up(execution) else {
+      let recovered = self.run.recovered_execution(execution);
+      let Some(followed) = recovered.or_else(|| self.run.followed_up(execution)) else {
         return Ok(Continuation {
           messages,
           ..Continuation::default()
         });
       };
       return Ok(Continuation {
-        session: self
-          .last_invocation(followed)?
-          .and_then(|invocation| invocation.session),
+        session: if recovered.is_some() {
+          self.recovery_session(followed)?
+        } else {
+          self
+            .last_invocation(followed)?
+            .and_then(|invocation| invocation.session)
+        },
         last_started: None,
         messages,
-        occasion: Occasion::FollowUp,
+        occasion: if recovered.is_some() {
+          let previous_result = self
+            .db
+            .step_outputs(self.run.id())?
+            .into_iter()
+            .find(|output| output.execution == followed)
+            .map(|output| output.text)
+            .unwrap_or_default();
+          Occasion::Recovery(previous_result)
+        } else {
+          Occasion::FollowUp
+        },
       });
     }
     let last = self.last_invocation(execution)?;
@@ -355,6 +374,23 @@ impl RunTask {
         .rev()
         .find(|invocation| invocation.execution == execution),
     )
+  }
+
+  fn recovery_session(&self, execution: StepExecutionId) -> Result<Option<String>, ExecutionError> {
+    let invocations = self.db.invocations(self.run.id())?;
+    let mut earlier = Some(execution);
+    while let Some(execution) = earlier {
+      if let Some(session) = invocations
+        .iter()
+        .rev()
+        .filter(|invocation| invocation.execution == execution)
+        .find_map(|invocation| invocation.session.clone())
+      {
+        return Ok(Some(session));
+      }
+      earlier = self.run.previous_execution(execution);
+    }
+    Ok(None)
   }
 
   /// Whether `execution` continues because a reviewer sent its plan back: its last invocation

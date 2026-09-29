@@ -49,6 +49,9 @@ fn outcome_prompt_keeps_permission_and_scope_decisions_resumable_on_every_turn()
       question: "Allow this command outside the sandbox?",
     }),
     Some(MessageOccasion::FollowUp),
+    Some(MessageOccasion::Recovery {
+      previous_result: "Saved partial work.",
+    }),
   ] {
     let mut input = prompt.input(&[], &[], true);
     input.messages = occasion.map(|occasion| DeliveredMessages {

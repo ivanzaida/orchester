@@ -1203,6 +1203,7 @@
       "interrupted": "Interrupted",
       "ready": "Ready for review",
       "merged": "Merged",
+      "failed": "Failed",
       "ended": "Ended"
     },
     "to": {
@@ -1247,6 +1248,7 @@
       "placeholder": "Ask, clarify or redirect this task…",
       "attach": "Attach",
       "send": "Send",
+      "sendAndContinue": "Send & continue",
       "sending": "Sending…",
       "closed": "No agent of this run reads messages any more."
     },
@@ -1259,12 +1261,15 @@
       "stopped": "You can write while the run is stopped. Continuing keeps this run and its saved versions.",
       "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
       "readyNoAgent": "No agent step of this run can be asked again.",
+      "failed": "Your message continues this run from its saved work. The agent resumes its session when available; dependent steps run again.",
+      "failedNoAgent": "This run has no agent step to continue. Its saved work remains on its branch.",
       "merged": "This run's work was merged. Messages no longer reach its agents.",
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.",
       "ended": "This run has ended. Messages no longer reach its agents."
     },
     "errors": {
-      "blank": "Write a message first."
+      "blank": "Write a message first.",
+      "invalidRecovery": "This message cannot continue a run. Refresh the task and try again."
     },
     "policy": "Questions and clarifications stay in this task. An agent reads your messages when its current turn ends.",
     "worktreeRemovedNoticeDetail": "Its committed changes remain ready for review. No agent can continue this run.",

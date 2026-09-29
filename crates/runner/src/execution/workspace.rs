@@ -37,7 +37,11 @@ pub(super) enum Workspace {
   /// The run's worktree, on the run's branch: the step runs alone.
   Run(PathBuf),
   /// A worktree of the step's own, on `branch` off the run's branch.
-  Own { path: PathBuf, branch: String },
+  Own {
+    path: PathBuf,
+    branch: String,
+    owner: StepExecutionId,
+  },
 }
 
 impl Workspace {
@@ -58,17 +62,37 @@ impl Workspace {
     start: Start,
   ) -> Result<Self, WorktreeError> {
     let worktrees = Worktrees::new(root)?;
+    let mut previous = run.recovered_execution(execution);
+    while let Some(earlier) = previous {
+      let path = worktrees.step_path(earlier);
+      if path.is_dir() {
+        return Ok(Self::Own {
+          path,
+          branch: branch(run, earlier),
+          owner: earlier,
+        });
+      }
+      previous = run.previous_execution(earlier);
+    }
     let path = worktrees.step_path(execution);
     let branch = branch(run, execution);
     if path.is_dir() {
-      return Ok(Self::Own { path, branch });
+      return Ok(Self::Own {
+        path,
+        branch,
+        owner: execution,
+      });
     }
     if start != Start::BesideOthers {
       return Ok(Self::Run(run_worktree.to_path_buf()));
     }
     let base = checkpoint::head(run_worktree)?;
     worktrees.create_step(execution, &branch, base.as_str())?;
-    Ok(Self::Own { path, branch })
+    Ok(Self::Own {
+      path,
+      branch,
+      owner: execution,
+    })
   }
 }
 

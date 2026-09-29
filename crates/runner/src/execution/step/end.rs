@@ -166,7 +166,7 @@ impl RunTask {
   fn integrate(&mut self, execution: StepExecutionId, active: &Active) -> Result<Integrated, IntegrateError> {
     let message = self.commit_message(execution, None);
     let committed = checkpoint::commit(active.workspace.path(), &message)?;
-    let Workspace::Own { branch, .. } = &active.workspace else {
+    let Workspace::Own { branch, owner, .. } = &active.workspace else {
       if let Some(revision) = committed {
         self.checkpoint(execution, revision)?;
       }
@@ -187,8 +187,7 @@ impl RunTask {
       self.checkpoint(execution, merged)?;
     }
     // The step's commits are on the run's branch now; a worktree left behind only takes space.
-    if let Err(error) = Worktrees::new(&self.root).and_then(|worktrees| worktrees.remove_merged_step(execution, branch))
-    {
+    if let Err(error) = Worktrees::new(&self.root).and_then(|worktrees| worktrees.remove_merged_step(*owner, branch)) {
       tracing::warn!(run = %self.run.id(), %execution, %error, "the merged step's worktree was not removed");
     }
     Ok(Integrated::Done)

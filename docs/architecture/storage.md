@@ -138,7 +138,8 @@ at work takes one.
   session resumes to read them, as with *Apply now* without a change of permissions. The turn that
   ends after a delivery *acknowledges* the messages, and its final message (its summary, when it is
   a structured result) is the agent's reply in the conversation. A paused, stopped or interrupted
-  run keeps messages queued until it continues; a run that failed or was cancelled takes none.
+  run keeps messages queued until it continues; a failed run needs an explicit recovery message (below), while a
+  cancelled run takes none.
   *DeliverMessages* only wakes a run; what is queued is read from the database.
 - **Questions.** A result with the outcome `question` asks the person before the step can go on: its
   work is committed, the question is the agent's message, and the step waits for a message (like a
@@ -157,9 +158,26 @@ at work takes one.
   ran) is followed up at once. A run whose work was merged into its base branch takes no messages. A
   question answered while no runner was attached resumes its step once a runner attaches, and a run
   that succeeded, was not merged and was written to meanwhile is followed up then, once; messages to
-  a merged, failed or cancelled run stay queued. A follow-up needs the run's worktree: once a person
+  a merged or cancelled run stay queued; a failed run resumes only with an explicit recovery request. A follow-up needs the run's worktree: once a person
   removed it, the run is not followed up (the runner refuses with *worktree removed* before changing
   it) and messages to it stay queued.
+- **Failed-run recovery (Send & continue).** The Conversation composer stays open for the latest failed run
+  when its worktree survives and an executed agent can receive the instructions. A message explicitly carries
+  the failed run's event sequence visible when the person sends it. The runner accepts that marker only from
+  the latest `Failed` event through the current last sequence: old queued messages, stale composers from an
+  earlier failure, and duplicate notifications cannot create repeated automatic attempts. This works across
+  runner reconnects and equal message/failure timestamps. An old run cannot resume after the task started another.
+  A `RecoveryRequested` event and an attempt with reason `recovery` retain the same run ID, branch, worktree,
+  checkpoints and previous attempts. Orchestrator routes to the failed agent, or its latest executed upstream
+  agent if a command failed; a direct recipient can return to its own executed agent step. That step, its
+  downstream steps and unfinished steps execute again; other passed steps remain passed. Existing provider
+  sessions and retained parallel worktrees are reused, looking past attempts that never started the step.
+  A recovered parallel worktree is removed by its original owner ID only after its branch has merged. Recovery
+  prompts preserve partial/uncommitted work and include the earlier result, new instructions and current
+  dependency outputs. Missing provider sessions start a new session in the retained workspace. Worktree removal
+  blocks recovery without recreating it; missing agents are visibly unavailable. Recovery respects the run's
+  saved permissions, budgets and pinned configuration. A subsequent error is recorded as another failed attempt;
+  the person can send fresh instructions again. It does not classify arbitrary prose as a question or failure.
 - **Tool steps (M10a).** A tool step runs a published command tool: its program with fixed
   arguments, no shell, found on the `PATH` or in the worktree and started like every program
   (command scripts, the cleaned environment plus the tool's variables, no console window, its
@@ -367,7 +385,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | Table | Purpose |
 | --- | --- |
 | `conversations` | *not built yet*: project and pull request thread conversations (scope, title); a task's conversation is its messages |
-| `messages` | task, run, idempotency key (a person's), author (person, agent), kind (an agent's reply or question), recipient profile (a person's; none: Orchestrator), step execution and invocation (delivered to, or written by), body, created, delivered, acknowledged — what a message says never changes, it is never deleted and its delivery only moves forward; attachments are not built yet |
+| `messages` | task, run, idempotency key (a person's), author (person, agent), kind (an agent's reply or question), recipient profile (a person's; none: Orchestrator), step execution and invocation (delivered to, or written by), body, created, delivered, acknowledged, optional immutable recovery event sequence — what a message says never changes, it is never deleted and its delivery only moves forward; attachments are not built yet |
 | `proposals` | conversation, version, proposed task set (not tasks until created) |
 | `pull_requests` | number, title, state, branches, head revision, linked task, synced at |
 | `pull_request_syncs` | repository (host / owner / name) and when its open pull requests were last read; `pull_requests` rows of a repository are replaced with every sync (a cache of GitHub, desktop-written) |
@@ -414,7 +432,8 @@ SQLite serializes writes between the two processes; ownership keeps meaning unam
   committed. A run that reaches its token budget or time limit is paused as stopped at limit
   after its agent was ended and its work committed; raising the limit continues it. A succeeded
   run is reopened by a follow-up (Ask agent) → running → succeeded again, also when the follow-up
-  fails. A failed or cancelled run is final; its task starts its next run with Run again
+  fails. A failed run can continue through a recovery attempt (Send & continue); a cancelled run remains final.
+  Either task can instead start its next run with Run again
   (`orchester_core::run::run_again`): from the first step, in a new worktree on a new branch
   (`…-run-<n>`) from the checkout's `HEAD`, with the latest published version of the task's pipeline
   and the task's limits, and the project's next run number. It is refused while another run of the

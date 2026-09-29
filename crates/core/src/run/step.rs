@@ -184,7 +184,7 @@ impl Run {
 
   /// Executions of a retry attempt returning to `return_to`: that step, everything downstream
   /// of it, and any other step that has not passed. Passed steps elsewhere keep their result.
-  fn retry_executions(&self, return_to: &StepKey) -> Vec<PlannedExecution> {
+  pub(super) fn retry_executions(&self, return_to: &StepKey) -> Vec<PlannedExecution> {
     let reset = self.snapshot().downstream_of(return_to);
     self
       .snapshot()

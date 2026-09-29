@@ -87,7 +87,7 @@ impl RunStatus {
     matches!(self, Self::Succeeded | Self::Failed(_) | Self::Cancelled)
   }
 
-  /// A run that failed or was cancelled is final; its task can only run again ([`super::run_again`]).
+  /// A failed or cancelled run also permits starting a separate run ([`super::run_again`]).
   pub const fn can_run_again(&self) -> bool {
     matches!(self, Self::Failed(_) | Self::Cancelled)
   }
@@ -158,6 +158,10 @@ pub enum AttemptReason {
   /// The run had succeeded and a person asked the agent of `step` about it (Ask agent): its one
   /// execution continues the session of the step's passed one ([`super::Run::follow_up`]).
   FollowUp {
+    step: StepKey,
+  },
+  /// A person's message resumes `step` after failure, then runs its dependent and unfinished steps.
+  Recovery {
     step: StepKey,
   },
 }

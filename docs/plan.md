@@ -167,6 +167,19 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+Continue failed runs through task conversation · branch `codex/continue-failed-run`
+
+- **Done 2026-09-30.** **Send & continue** resumes the same failed run in a new attempt, preserving its branch,
+  saved/uncommitted work, available provider session and failure history. Dependent and unfinished steps run again.
+  Durable failure markers prevent old queued messages and duplicate notifications from triggering retry loops.
+- Independent verification: 46 filtered tests, final `tools/check.ps1`, live UI/Pencil comparison and removed-worktree
+  closed state passed. Release binaries built. macOS core cross-check passed; store/runner cross-check requires a
+  target C compiler and physical Mac verification remains unavailable.
+- Main Pencil frame `vUPqr` is live; its manual Save remains pending. Verified design/app exports and the independent
+  report are committed in [evidence](evidence/failed-run-conversation-recovery-2026-09-30.md). Stable installation is
+  unchanged; the candidate does not silently resume ORC-44 or mutate its database.
+
+
 ORC-44 follow-up · Outcome instructions distinguish user decisions from failures · branch `codex/attention-outcomes`
 
 - **Done 2026-09-29.** New and resumed turns receive the same explicit JSON contract: needed permission, access and

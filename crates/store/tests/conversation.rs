@@ -188,3 +188,99 @@ fn conversation_a_follow_up_attempt_round_trips() {
   assert_eq!(stored.followed_up(follow_up), Some(execution));
   assert_eq!(Run::replay(&db.events(run.id()).expect("events")), Ok(run));
 }
+
+#[test]
+fn conversation_recovery_intent_round_trips_and_cannot_be_rewritten() {
+  let (repo, mut db, mut run, execution, invocation) = working();
+  let events = run
+    .fail_step(execution, orchester_core::run::StepFailure::ReportedFailed, at(20))
+    .expect("failed");
+  db.append_events(&run, &events).expect("stored");
+  let mut message = Message::from_person(
+    run.task(),
+    Some(run.id()),
+    Recipient::Orchestrator,
+    body("Continue."),
+    at(20),
+  )
+  .recovering_after(run.last_sequence())
+  .expect("recovery");
+  db.send_message(IdempotencyKey::generate(), &message).expect("stored");
+  let step = run.recovery_step(None).expect("agent");
+  let events = run.recover(&step, at(21)).expect("recovered");
+  db.append_events(&run, &events).expect("stored attempt");
+  assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
+  message
+    .deliver(run.id(), (execution, invocation), at(22))
+    .expect("delivered");
+  db.save_deliveries(std::slice::from_ref(&message)).expect("delivery");
+  message.acknowledge(at(23)).expect("acknowledge");
+  db.save_deliveries(std::slice::from_ref(&message))
+    .expect("acknowledged");
+  assert_eq!(db.messages(run.task()).expect("read"), [message]);
+  let connection = raw(db, repo.path());
+  assert!(
+    connection
+      .execute("UPDATE messages SET recovery_sequence = NULL", [])
+      .is_err()
+  );
+  assert!(
+    connection
+      .execute("UPDATE messages SET recovery_sequence = recovery_sequence + 1", [])
+      .is_err()
+  );
+}
+
+#[test]
+fn conversation_recovery_migration_preserves_existing_failed_run_and_messages() {
+  let (repo, mut db, mut run, execution, _) = working();
+  let events = run
+    .fail_step(execution, orchester_core::run::StepFailure::ReportedFailed, at(20))
+    .expect("failed");
+  db.append_events(&run, &events).expect("stored failure");
+  let message = Message::from_person(
+    run.task(),
+    Some(run.id()),
+    Recipient::Orchestrator,
+    body("Earlier message."),
+    at(19),
+  );
+  db.send_message(IdempotencyKey::generate(), &message).expect("stored");
+  let connection = raw(db, repo.path());
+  let version: u32 = connection
+    .pragma_query_value(None, "user_version", |row| row.get(0))
+    .expect("version");
+  // Restore the preceding schema's two changed tables, retaining genuine stored run records.
+  connection
+    .execute_batch(
+      r"
+    PRAGMA foreign_keys = OFF;
+    DROP TRIGGER messages_recovery_immutable;
+    ALTER TABLE messages DROP COLUMN recovery_sequence;
+    CREATE TABLE attempts_previous (
+      id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id),
+      number INTEGER NOT NULL CHECK(number > 0),
+      reason TEXT NOT NULL CHECK(reason IN ('initial', 'retry', 'follow_up')),
+      failed_step TEXT, return_to TEXT,
+      status TEXT NOT NULL CHECK(status IN ('active', 'routed_back', 'succeeded', 'failed', 'cancelled')),
+      UNIQUE(run_id, number), CHECK((reason = 'retry') = (failed_step IS NOT NULL)),
+      CHECK((reason = 'initial') = (return_to IS NULL))
+    ) STRICT;
+    INSERT INTO attempts_previous SELECT * FROM attempts;
+    DROP TABLE attempts;
+    ALTER TABLE attempts_previous RENAME TO attempts;
+  ",
+    )
+    .expect("preceding schema");
+  connection
+    .pragma_update(None, "user_version", version - 1)
+    .expect("previous version");
+  drop(connection);
+  let mut db = ProjectDb::open(repo.path()).expect("migrate existing project");
+  assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
+  assert_eq!(db.messages(run.task()).expect("messages"), [message]);
+  let step = run.recovery_step(None).expect("agent");
+  let events = run.recover(&step, at(21)).expect("recovery");
+  db.append_events(&run, &events).expect("new attempt after migration");
+  assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
+}
