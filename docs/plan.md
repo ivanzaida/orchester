@@ -269,6 +269,27 @@ Pencil (drawn 2026-09-29): `dWnw7` (04.03A, published without a draft), `t2wCI` 
 `Jw98x` (04.03B, unsaved changes with Save draft). `WPmtS` and `T1rjv` stay the saved-draft state (no Save draft), which
 matches `codex/u8-header`.
 
+### U10 · Pull requests screen jumps while it loads (UI)
+
+Opening the Pull requests tab shifts its content two or three times
+(`crates/desktop/src/screens/project/pull_requests/mod.rs`):
+
+1. The stored inbox is read from the project database asynchronously (`actions::load` → `ctx.future`,
+   `actions.rs`). Until it arrives, `inbox` is `None`: the body is an empty column and the Open tab has no count.
+2. When the stored inbox arrives, the Open tab gains its count (`synced.pull_requests.len()`), so it widens and pushes
+   the other tabs right, and the list appears below. For an unlinked repository the whole tab row disappears
+   (`tabs` is skipped for `Inbox::Unlinked`), which moves the body up.
+3. `create` also starts a GitHub sync through `gh` at once. While it runs the topbar sync status text changes width,
+   and afterwards the list and count may change again.
+
+**Done when** the screen keeps a stable layout from the first frame: the heading, tab row and body keep their place
+until the stored inbox is known (no empty-body frame followed by a list; no tab row that appears and then vanishes),
+the Open tab reserves room for its count so a count arriving does not move the other tabs, and the topbar sync status
+does not shift the Refresh button when its text changes. A sync that changes the list may still add or remove rows.
+Tests: a headless `form_keyboard` test that records the tab and body bounds before and after the stored inbox and a
+sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
+Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
+
 ## L · After lurq 0.30.0
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
