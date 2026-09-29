@@ -149,6 +149,7 @@ impl RepositoryImportDialog {
       .padding_horizontal(SpacingSize::Md)
       .spacing(ExtraSpacing::Group.role())
       .align_items(Alignment::Center)
+      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .background(if opened {
         PaletteColor::AccentMuted
       } else {

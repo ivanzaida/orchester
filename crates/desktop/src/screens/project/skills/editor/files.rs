@@ -34,7 +34,7 @@ use crate::{
 
 /// Panel width and a file row's height (`A4dvu`, `SV0BN`).
 const PANEL_WIDTH: f32 = 320.0;
-const FILE_ROW_HEIGHT: f32 = 44.0;
+const FILE_ROW_HEIGHT: f32 = 62.0;
 
 /// A reference file read from disk; `None` when no file was chosen.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -126,7 +126,7 @@ impl SkillEditor {
     Row::new()
       .width(Dimension::Pct(100.0))
       .min_height(Dimension::Px(FILE_ROW_HEIGHT))
-      .padding_vertical(ExtraSpacing::Indicator.role())
+      .padding_vertical(ExtraSpacing::Stack.role())
       .spacing(ExtraSpacing::Inline.role())
       .align_items(Alignment::Start)
       .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))

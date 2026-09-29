@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, TypographyStyle},
   },
-  components::{Column, Row, Stack, Text},
+  components::{Column, Row, Stack, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -54,17 +54,29 @@ impl ProfileEditor {
         .selected(current == tab)
         .on_click(move || select.set(tab))
     };
+    // The permissions give way (ellipsized) before the project's repository files setting does.
+    let repository_files = (!self.context.agents.agent_files.is_on()).then(|| {
+      Text::new(&ctx.t("agents.permissions.enforcement.repositoryFiles.summary"))
+        .variant(TypographyStyle::Caption)
+        .nowrap()
+        .flex_shrink(0.0)
+    });
     let summary = Row::new()
       .id("agent-permission-summary")
+      .flex(1.0)
       .height(Dimension::Px(TAB_HEIGHT))
       .spacing(ExtraSpacing::Tight.role())
       .align_items(Alignment::Center)
+      .child(Column::new().flex(1.0))
       .child(icon(Icon::Shield, IconSize::Small, PaletteColor::TextMuted))
       .child(
         Text::new(&self.permission_summary(ctx))
           .variant(TypographyStyle::Caption)
-          .nowrap(),
-      );
+          .nowrap()
+          .text_overflow(TextOverflow::Elipsis)
+          .flex_shrink(1.0),
+      )
+      .with_children(repository_files);
     let row = Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
@@ -81,7 +93,6 @@ impl ProfileEditor {
         EditorTab::Permissions,
       ))
       .child(tab("agent-tab-usage", "agents.usedInPipelines", EditorTab::Usage).count(self.use_count()))
-      .child(Column::new().flex(1.0))
       .child(summary);
     // The hairline is drawn under the tabs, so a selected tab's underline covers it.
     Stack::new()
@@ -134,14 +145,7 @@ impl ProfileEditor {
   fn permission_summary(&self, ctx: &Ctx) -> Arc<str> {
     let enforcement = self.enforcement();
     let enforced = enforcement.as_ref().and_then(|result| result.as_ref().ok());
-    let summary = enforced_summary(ctx, &self.permissions.get(), enforced, Length::Long);
-    if self.context.agents.agent_files.is_on() {
-      return summary;
-    }
-    ctx.t_args(
-      "agents.permissions.enforcement.repositoryFiles.summary",
-      [("summary", &*summary)],
-    )
+    enforced_summary(ctx, &self.permissions.get(), enforced, Length::Long)
   }
 
   /// What blocks publishing, and what the last connection change reset.

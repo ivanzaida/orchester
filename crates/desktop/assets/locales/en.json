@@ -1645,7 +1645,7 @@
           "codexLoads": "loads AGENTS.md · .agents/skills",
           "claude": "--setting-sources \"\" · loads neither",
           "note": "Repository agent files is set for all of {{project}} in Project settings › General, not per profile.",
-          "summary": "{{summary}} · Repository files off"
+          "summary": "· Repository files off"
         }
       },
       "mechanism": {

@@ -239,7 +239,7 @@ impl Library {
       .flex(1.0)
       .spacing(SpacingSize::Md)
       .child(filters)
-      .child(ScrollVertical::new(rows).width(Dimension::Pct(100.0)).flex(1.0))
+      .child(ScrollVertical::new(rows).width(Dimension::Pct(100.0)))
       .child(ownership_note(
         &ctx.t_args("skills.library.ownership", [("project", project)]),
       ))
