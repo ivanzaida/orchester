@@ -69,7 +69,7 @@ impl SecretsScreen {
         let row = SecretRow {
           secret,
           project,
-          uses: data.used_by(id).count(),
+          uses: data.use_counts(id),
           selected: shown.is_some_and(|shown| shown.id() == id),
         };
         secret_row(ctx, &row, self.nav.link(Page::Secrets(Some(id))))
@@ -90,7 +90,14 @@ impl SecretsScreen {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(list)
-      .child(inspector(ctx, (shown, &self.details_scroll), project, &uses, &actions))
+      .child(inspector(
+        ctx,
+        (shown, &self.details_scroll),
+        project,
+        (&uses, data.use_counts(shown.id())),
+        &self.nav,
+        &actions,
+      ))
       .into()
   }
 

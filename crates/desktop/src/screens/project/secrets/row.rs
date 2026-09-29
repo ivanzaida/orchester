@@ -1,5 +1,5 @@
 //! A secret in the list (`vxAMD`): its kind's icon, its name in mono, the project, environment
-//! and kind, how many tools use it, and a chevron. The shown secret's row is raised.
+//! and kind, how many resources use it, and a chevron. The shown secret's row is raised.
 
 use std::sync::Arc;
 
@@ -16,6 +16,7 @@ use orchester_core::secret::Secret;
 
 use super::labels::{environment_key, kind_icon, kind_key};
 use crate::{
+  secrets::data::UseCounts,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
@@ -31,8 +32,7 @@ const ROW_HEIGHT: f32 = 84.0;
 pub struct SecretRow<'a> {
   pub secret: &'a Secret,
   pub project: &'a str,
-  /// Tools that use the secret.
-  pub uses: usize,
+  pub uses: UseCounts,
   pub selected: bool,
 }
 
@@ -46,12 +46,24 @@ pub fn secret_row(ctx: &Ctx, row: &SecretRow, link: Link) -> Element {
       ("kind", &*ctx.t(kind_key(secret.kind()))),
     ],
   );
-  let (usage_icon, usage) = match row.uses {
-    0 => (Icon::Minus, ctx.t("secrets.usage.none")),
-    1 => (Icon::Link, ctx.t("secrets.usage.one")),
-    count => (
+  let (usage_icon, usage) = match (row.uses.tools, row.uses.mcp_servers) {
+    (0, 0) => (Icon::Minus, ctx.t("secrets.usage.none")),
+    (1, 0) => (Icon::Link, ctx.t("secrets.usage.one")),
+    (count, 0) => (
       Icon::Link,
       ctx.t_args("secrets.usage.other", [("count", count.to_string().as_str())]),
+    ),
+    (0, 1) => (Icon::Link, ctx.t("secrets.usage.mcpOne")),
+    (0, count) => (
+      Icon::Link,
+      ctx.t_args("secrets.usage.mcpOther", [("count", count.to_string().as_str())]),
+    ),
+    _ => (
+      Icon::Link,
+      ctx.t_args(
+        "secrets.usage.mixed",
+        [("count", row.uses.total().to_string().as_str())],
+      ),
     ),
   };
   let identity = Column::new()

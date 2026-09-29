@@ -19,6 +19,7 @@ use orchester_core::secret::Secret;
 use super::library::handling_notice;
 use crate::{
   messages::Message,
+  secrets::data::UseCounts,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     backdrop::backdrop,
@@ -30,7 +31,7 @@ use crate::{
   },
 };
 
-/// Dialog width and action bar height (`jYL1V`, `M4vhEv`).
+/// Dialog width and action bar height (`zCJwl`, `c56lcT`).
 const DIALOG_WIDTH: f32 = 600.0;
 const ACTIONS_HEIGHT: f32 = 76.0;
 const BUTTON_HEIGHT: f32 = 36.0;
@@ -38,8 +39,7 @@ const BUTTON_HEIGHT: f32 = 36.0;
 pub struct ArchiveDialog<'a> {
   pub secret: &'a Secret,
   pub project: &'a str,
-  /// Tools that use the secret.
-  pub uses: usize,
+  pub uses: UseCounts,
   pub pending: bool,
   /// Why the last attempt failed.
   pub error: Option<Message>,
@@ -63,16 +63,22 @@ pub fn archive_dialog(ctx: &mut Ctx, dialog: &ArchiveDialog) -> Element {
       Text::new(&ctx.t_args("secrets.archive.explanation", [("project", dialog.project)]))
         .variant(ExtraTypography::Explanation.role()),
     );
-  let uses = match dialog.uses {
-    0 => ctx.t("secrets.archive.unused"),
-    1 => ctx.t("secrets.archive.usedByOne"),
-    count => ctx.t_args("secrets.archive.usedByOther", [("count", count.to_string().as_str())]),
+  let uses = match (dialog.uses.tools, dialog.uses.mcp_servers) {
+    (0, 0) => ctx.t("secrets.archive.unused"),
+    (1, 0) => ctx.t("secrets.archive.usedByOne"),
+    (count, 0) => ctx.t_args("secrets.archive.usedByOther", [("count", count.to_string().as_str())]),
+    (0, 1) => ctx.t("secrets.archive.mcpOne"),
+    (0, count) => ctx.t_args("secrets.archive.mcpOther", [("count", count.to_string().as_str())]),
+    _ => ctx.t_args(
+      "secrets.archive.mixed",
+      [("count", dialog.uses.total().to_string().as_str())],
+    ),
   };
   let body = Column::new()
     .width(Dimension::Pct(100.0))
-    .padding_top(ExtraSpacing::Step.role())
+    .padding_top(ExtraSpacing::Rail.role())
     .padding_horizontal(ExtraSpacing::Rail.role())
-    .padding_bottom(SpacingSize::Lg)
+    .padding_bottom(ExtraSpacing::Rail.role())
     .child(handling_notice(&uses, None));
   let content = Column::new()
     .id("archive-secret-dialog")
@@ -83,7 +89,11 @@ pub fn archive_dialog(ctx: &mut Ctx, dialog: &ArchiveDialog) -> Element {
     .child(header)
     .child(body)
     .child(actions(ctx, dialog));
-  backdrop(ctx, form(dialog.confirm.clone(), content))
+  // The archive dialog in `RxpL1` sits 10px below the screen centre.
+  let position = Column::new()
+    .padding_top(ExtraSpacing::Step.role())
+    .child(form(dialog.confirm.clone(), content));
+  backdrop(ctx, position)
 }
 
 fn actions(ctx: &Ctx, dialog: &ArchiveDialog) -> Element {

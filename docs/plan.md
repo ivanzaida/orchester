@@ -25,7 +25,6 @@ then the backlog by area.
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass. Pencil now has corrected merging, removal and deleted-branch states; compare them with exact live app states and fix remaining differences. |
 | U3 | `codex/u3-final` | Shorter English copy passes current-master i18n tests and `check.ps1`; the Pencil design copy is committed on `master` at `357a745`. Independent exact-PID verification found the mechanism row matches the 300-wide design without clipping and a corrected no-focus replay passed. Full-panel parity is blocked: Claude network is locked On in the app while Pencil shows web tools removed. |
-| M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and live MCP-only/mixed functional behavior pass; the first mixed-state run had an unexplained foreground-focus incident. Persisted MCP-only and mixed *Used by* frames match the changed regions, but the archive dialog is 18 physical px shorter than Pencil, a major mismatch. Fix and recheck before merge. |
 | M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; exact remote-selected inspector frame `a4lm6D` is saved on `master` and awaits the same-state comparison. |
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; Not started, Interrupted and recipient-menu frames are now saved on `master` and need exact app comparisons. |
 | D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. Pencil now has matching error/retry frames. Same-state comparison and full runner macOS check remain; candidate unmerged. |
@@ -120,14 +119,6 @@ Claude 2.1.89 listed `mcp__m1probe__ping` with the allow rule but stopped at `au
 A 2026-09-29 follow-up `auth status --json` returned exit 1 and `loggedIn: false`, so no new model turn was attempted.
 M1 remains in progress until that rule is checked in a signed-in Claude run. Evidence:
 `docs/evidence/mcp-real-run-2026-09-29.md`.
-
-### M3 · Secrets "Used by" lists MCP servers (UI)
-
-A secret used by an MCP server variable or bearer token is not listed under its *Used by*.
-
-Pencil (drawn 2026-09-29): `wPXgW` (07.B, used by an MCP server's bearer token), `R2ImH` (07.C, a tool and an MCP
-server's variable), `RxpL1` (07.D, the mixed archive warning). Profiles are not secret users; see
-`docs/design/orchester-workspace.md`, "Used by MCP servers".
 
 ### M5 · Remote server details name who reaches it (UI)
 
@@ -241,6 +232,11 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+M3 · List MCP servers under Secrets “Used by” · branch `codex/m3-final-port` (independent MCP-only and mixed-use
+checks passed. Pencil `wPXgW`/`R2ImH`/`RxpL1` and exact-PID app captures had no blocking or major mismatch after the
+archive geometry fix. A bounded Add Secret → Staging → masked value → Archive flow passed a 944-sample host no-focus
+watcher; earlier foreground episodes during taskbar switching remain documented. Seven named Secrets/i18n tests and
+`tools/check.ps1` passed on the current-master port. Evidence: `docs/evidence/m3-secret-mcp-users-2026-09-29.md`).
 D4 · Verify a UI change inside an Orchester run · branch `codex/d4-current-port` (DOS-12 passed
 Implement checks, Build+Pin, independent read-only Review and Verify. The verifier compared saved New Task design
 `m82tU` with the exact-PID app at 2160 × 1440 and found no blocking or major mismatch; the candidate's host-side

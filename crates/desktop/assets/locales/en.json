@@ -1620,7 +1620,10 @@
     "usage": {
       "none": "Unused",
       "one": "1 tool",
-      "other": "{{count}} tools"
+      "other": "{{count}} tools",
+      "mcpOne": "1 MCP server",
+      "mcpOther": "{{count}} MCP servers",
+      "mixed": "{{count}} resources"
     },
     "handling": "Tools in this project select the secrets they need. Secret values stay out of agent prompts, variable previews and copied instructions.",
     "recentAccess": "Recent access",
@@ -1650,12 +1653,18 @@
       "neverRotated": "Never · added {{date}}",
       "unknownDate": "Unknown date",
       "usedBy": {
-        "none": "USED BY · NO TOOLS",
+        "none": "USED BY · NONE",
         "one": "USED BY · 1 TOOL",
-        "other": "USED BY · {{count}} TOOLS"
+        "other": "USED BY · {{count}} TOOLS",
+        "mcpOne": "USED BY · 1 MCP SERVER",
+        "mcpOther": "USED BY · {{count}} MCP SERVERS",
+        "mixed": "USED BY · {{count}} RESOURCES"
       },
-      "notUsed": "No tool uses this secret yet. A tool selects it in its Credentials settings.",
+      "notUsed": "No tool or MCP server uses this secret yet. Select it in a tool’s Credentials settings or an MCP server’s configuration.",
+      "mcpLink": "MCP · {{name}}",
       "toolsNote": "{{project}} / Tools\nBindings and access rules are edited on the tool.",
+      "mcpNote": "{{project}} / Connections\nSecret references are edited on the MCP server.",
+      "mixedNote": "{{project}} / Tools and Connections\nBindings are edited on each tool or MCP server.",
       "usageLog": "View usage log",
       "archive": "Archive secret"
     },
@@ -1686,9 +1695,12 @@
     "archive": {
       "title": "Archive {{name}}?",
       "explanation": "Its value is deleted from the system keychain of this computer and cannot be restored. The secret leaves the secrets of {{project}}, and its name can be used again.",
-      "unused": "No tool uses this secret.",
+      "unused": "No tool or MCP server uses this secret.",
       "usedByOne": "1 tool uses this secret. It is not ready until it selects another secret.",
       "usedByOther": "{{count}} tools use this secret. They are not ready until they select another secret.",
+      "mcpOne": "1 MCP server uses this secret. It is not ready until it selects another secret.",
+      "mcpOther": "{{count}} MCP servers use this secret. They are not ready until they select another secret.",
+      "mixed": "Tools and MCP servers use this secret ({{count}} total). They are not ready until they select another secret.",
       "confirm": "Archive secret",
       "archiving": "Archiving…"
     }

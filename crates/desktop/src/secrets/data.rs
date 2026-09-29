@@ -1,14 +1,14 @@
-//! Reading the project's secrets with the tools that use them, and adding, replacing and
+//! Reading the project's secrets with the tools and MCP servers that use them, and adding, replacing and
 //! archiving secrets through the project database and the keychain. Every function blocks on
 //! SQLite or on the keychain; the UI calls them off the UI thread.
 
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  id::{ResourceId, SecretId},
+  id::{ConnectionId, ResourceId, SecretId},
   resource::{ResourceKind, Tool},
   secret::{self, NewSecret, Secret, SecretError, SecretValue, SecretVault},
-  store::{ResourceStore, SecretStore},
+  store::{McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -16,19 +16,38 @@ use orchester_store::{ProjectDb, StoreError};
 /// Why a secret could not be added, replaced or archived.
 pub type SecretFailure = SecretError<StoreError>;
 
-/// A tool whose current content refers to a secret, for the read-only "Used by" list.
+/// The kind of project resource referring to a secret.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SecretUseKind {
+  Tool(ResourceId),
+  McpServer(ConnectionId),
+}
+
+/// A resource referring to a secret, for the read-only "Used by" list.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ToolUse {
+pub struct SecretUse {
   pub secret: SecretId,
-  pub tool: ResourceId,
+  pub kind: SecretUseKind,
   pub name: Arc<str>,
 }
 
-/// The project's secrets that are not archived, and the tools that use them, read together.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct UseCounts {
+  pub tools: usize,
+  pub mcp_servers: usize,
+}
+
+impl UseCounts {
+  pub const fn total(self) -> usize {
+    self.tools + self.mcp_servers
+  }
+}
+
+/// The project's secrets that are not archived, and their users, read together.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectSecrets {
   pub secrets: Arc<Vec<Secret>>,
-  pub uses: Arc<Vec<ToolUse>>,
+  pub uses: Arc<Vec<SecretUse>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProjectSecrets {}
@@ -36,21 +55,31 @@ impl lurq::app::component::DevtoolsInspectable for ProjectSecrets {}
 impl ProjectSecrets {
   pub fn load<S>(store: &S) -> Result<Self, StoreError>
   where
-    S: SecretStore<Error = StoreError> + ResourceStore<Error = StoreError>,
+    S: SecretStore<Error = StoreError> + ResourceStore<Error = StoreError> + McpServerStore<Error = StoreError>,
   {
     let secrets = store.secrets()?;
     let tools = current_tools(store)?;
+    let servers = store.mcp_servers()?;
     let uses = secrets
       .iter()
       .flat_map(|secret| {
-        tools
+        let tool_uses = tools
           .iter()
           .filter(|current| secret::tool_uses(&current.body, secret.id()))
-          .map(|current| ToolUse {
+          .map(|current| SecretUse {
             secret: secret.id(),
-            tool: current.id,
+            kind: SecretUseKind::Tool(current.id),
             name: current.name.clone(),
-          })
+          });
+        let server_uses = servers
+          .iter()
+          .filter(|server| server.secrets().contains(&secret.id()))
+          .map(|server| SecretUse {
+            secret: secret.id(),
+            kind: SecretUseKind::McpServer(server.id()),
+            name: server.name().as_str().into(),
+          });
+        tool_uses.chain(server_uses)
       })
       .collect();
     Ok(Self {
@@ -67,9 +96,19 @@ impl ProjectSecrets {
     self.secrets.iter().find(|secret| secret.id() == id)
   }
 
-  /// Tools that use secret `id`, in tool order.
-  pub fn used_by(&self, id: SecretId) -> impl Iterator<Item = &ToolUse> {
+  /// Resources that use secret `id`, in tool order then MCP server order.
+  pub fn used_by(&self, id: SecretId) -> impl Iterator<Item = &SecretUse> {
     self.uses.iter().filter(move |used| used.secret == id)
+  }
+
+  pub fn use_counts(&self, id: SecretId) -> UseCounts {
+    self.used_by(id).fold(UseCounts::default(), |mut counts, used| {
+      match used.kind {
+        SecretUseKind::Tool(_) => counts.tools += 1,
+        SecretUseKind::McpServer(_) => counts.mcp_servers += 1,
+      }
+      counts
+    })
   }
 }
 

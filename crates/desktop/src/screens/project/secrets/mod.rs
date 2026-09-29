@@ -2,8 +2,8 @@
 //! (`CQxCb`), adding one (07.02 `tpF7R`; a name already taken, 07.A `m9Dhp`), replacing its value
 //! and archiving it. A value is typed into a masked field, goes straight to the OS keychain and is
 //! never shown again: the design offers Replace value, no reveal. Import from project, the usage
-//! log and the audit log do not exist yet and are shown unavailable; which tools use a secret is
-//! derived from the tools.
+//! log and the audit log do not exist yet and are shown unavailable; which resources use a secret
+//! is derived from the tools and MCP servers.
 
 mod archive_dialog;
 mod dialog;
@@ -49,7 +49,7 @@ use crate::{
   navigation::route::{Page, Route},
   secrets::{
     Vault,
-    data::{ProjectSecrets, archive_in},
+    data::{ProjectSecrets, UseCounts, archive_in},
   },
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -219,7 +219,7 @@ impl SecretsScreen {
       DialogMode::Add => self.secret_dialog(ctx, open, data, DialogPurpose::Add),
       DialogMode::Replace(secret) => self.secret_dialog(ctx, open, data, DialogPurpose::Replace(secret)),
       DialogMode::Archive(secret) => {
-        let uses = data.used_by(secret.id()).count();
+        let uses = data.use_counts(secret.id());
         self.archive_dialog(ctx, open, archive, &secret, uses)
       }
     };
@@ -263,7 +263,7 @@ impl SecretsScreen {
     open: &OpenProject,
     archive: &ArchiveAction,
     secret: &Secret,
-    uses: usize,
+    uses: UseCounts,
   ) -> Element {
     let state = archive.state().get();
     let pending = state.is_pending();

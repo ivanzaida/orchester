@@ -1,6 +1,6 @@
 //! The shown secret's details (`CQxCb`): its kind, name and masked value, where it belongs, when
-//! its value was last replaced, and the tools that use it, read-only (bindings and access rules
-//! are edited on the tool). Replace value and Archive secret stay at the bottom; the usage log
+//! its value was last replaced, and the tools or MCP servers that use it, read-only. Replace value
+//! and Archive secret stay at the bottom; the usage log
 //! does not exist yet.
 
 use std::sync::Arc;
@@ -19,10 +19,14 @@ use lurq::{
 };
 use orchester_core::secret::Secret;
 
-use super::labels::{date, environment_key, kind_icon, kind_key};
+use super::{
+  ProjectNav,
+  labels::{date, environment_key, kind_icon, kind_key},
+};
 use crate::{
+  navigation::route::{ConnectionTab, Page},
   screens::project::page::TOPBAR_BUTTON_HEIGHT,
-  secrets::data::ToolUse,
+  secrets::data::{SecretUse, SecretUseKind, UseCounts},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::ActionButton,
@@ -49,7 +53,8 @@ pub fn inspector(
   ctx: &Ctx,
   (secret, scroll): (&Secret, &ScrollState),
   project: &str,
-  uses: &[&ToolUse],
+  (uses, counts): (&[&SecretUse], UseCounts),
+  nav: &ProjectNav,
   actions: &InspectorActions,
 ) -> Element {
   let details = Column::new()
@@ -72,7 +77,7 @@ pub fn inspector(
     )
     .child(stored_value(ctx))
     .child(properties(ctx, secret, project))
-    .child(used_by(ctx, uses, project));
+    .child(used_by(ctx, uses, counts, project, nav));
   let replace = actions.replace.clone();
   let pinned = Column::new()
     .width(Dimension::Pct(100.0))
@@ -156,18 +161,26 @@ fn properties(ctx: &Ctx, secret: &Secret, project: &str) -> Element {
     .into()
 }
 
-/// The tools that use the secret (`ABEPt`). The Tools screen does not exist yet, so a tool is
-/// shown but cannot be opened.
-fn used_by(ctx: &Ctx, uses: &[&ToolUse], project: &str) -> Element {
-  let heading = match uses.len() {
-    0 => ctx.t("secrets.inspector.usedBy.none"),
-    1 => ctx.t("secrets.inspector.usedBy.one"),
-    count => ctx.t_args(
+/// The tools and MCP servers that use the secret (`ABEPt`). The Tools screen does not exist yet.
+fn used_by(ctx: &Ctx, uses: &[&SecretUse], counts: UseCounts, project: &str, nav: &ProjectNav) -> Element {
+  let heading = match (counts.tools, counts.mcp_servers) {
+    (0, 0) => ctx.t("secrets.inspector.usedBy.none"),
+    (1, 0) => ctx.t("secrets.inspector.usedBy.one"),
+    (count, 0) => ctx.t_args(
       "secrets.inspector.usedBy.other",
       [("count", count.to_string().as_str())],
     ),
+    (0, 1) => ctx.t("secrets.inspector.usedBy.mcpOne"),
+    (0, count) => ctx.t_args(
+      "secrets.inspector.usedBy.mcpOther",
+      [("count", count.to_string().as_str())],
+    ),
+    _ => ctx.t_args(
+      "secrets.inspector.usedBy.mixed",
+      [("count", counts.total().to_string().as_str())],
+    ),
   };
-  let tools: Vec<Element> = if uses.is_empty() {
+  let links: Vec<Element> = if uses.is_empty() {
     vec![
       Text::new(&ctx.t("secrets.inspector.notUsed"))
         .variant(TypographyStyle::Caption)
@@ -177,13 +190,27 @@ fn used_by(ctx: &Ctx, uses: &[&ToolUse], project: &str) -> Element {
     uses
       .iter()
       .map(|used| {
-        ActionButton::new(used.name.clone())
+        let label = match used.kind {
+          SecretUseKind::Tool(_) => used.name.clone(),
+          SecretUseKind::McpServer(_) => ctx.t_args("secrets.inspector.mcpLink", [("name", &*used.name)]),
+        };
+        let button = ActionButton::new(label)
           .icon(Icon::ExternalLink)
           .fill_width()
-          .height(Dimension::Px(TOOL_LINK_HEIGHT))
-          .render(ctx)
+          .height(Dimension::Px(TOOL_LINK_HEIGHT));
+        match used.kind {
+          SecretUseKind::Tool(_) => button.render(ctx),
+          SecretUseKind::McpServer(id) => button
+            .link(nav.link(Page::Connections(ConnectionTab::McpServers, Some(id))))
+            .render(ctx),
+        }
       })
       .collect()
+  };
+  let note_key = match (counts.tools > 0, counts.mcp_servers > 0) {
+    (false, true) => "secrets.inspector.mcpNote",
+    (true, true) => "secrets.inspector.mixedNote",
+    _ => "secrets.inspector.toolsNote",
   };
   Column::new()
     .id("secret-used-by")
@@ -192,11 +219,8 @@ fn used_by(ctx: &Ctx, uses: &[&ToolUse], project: &str) -> Element {
     .spacing(ExtraSpacing::Stack.role())
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(Text::new(&heading).variant(ExtraTypography::Overline.role()))
-    .with_children(tools)
-    .child(
-      Text::new(&ctx.t_args("secrets.inspector.toolsNote", [("project", project)]))
-        .variant(ExtraTypography::Detail.role()),
-    )
+    .with_children(links)
+    .child(Text::new(&ctx.t_args(note_key, [("project", project)])).variant(ExtraTypography::Detail.role()))
     .into()
 }
 
