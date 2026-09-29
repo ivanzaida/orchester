@@ -81,6 +81,11 @@ pub(super) fn merge_action(ctx: &mut Ctx, open: &OpenProject, detail: &TaskDetai
 /// The readiness card (`IBuWf`): ready for review, or where the run's work was merged.
 pub(super) fn readiness(ctx: &Ctx, merge: Option<&RunMerge>, leftovers: Option<&Leftovers>) -> Element {
   let (glyph, title, detail) = match merge {
+    None if leftovers.is_some_and(|leftovers| !leftovers.keeps_run_worktree()) => (
+      Icon::FolderX,
+      ctx.t("runs.ready.title"),
+      ctx.t("runs.ready.worktreeRemovedDetail"),
+    ),
     None => (Icon::CircleCheck, ctx.t("runs.ready.title"), ctx.t("runs.ready.detail")),
     Some(merge) => (
       Icon::GitMerge,

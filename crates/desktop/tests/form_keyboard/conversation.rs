@@ -41,6 +41,22 @@ fn messages(desktop: &Desktop) -> usize {
 }
 
 #[test]
+fn conversation_layout_matches_pencil_rhythm() {
+  let mut desktop = desktop();
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  finished_on_page(&mut desktop);
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-composer");
+
+  // `C3nu0z` is 83 high; `Lr8Dg` is 42 below the Budget row `yT3k7` in 02.S `JOG1i`.
+  let composer_height = desktop.bounds("conversation-composer").height;
+  assert!((composer_height - 83.0).abs() < 1.0, "composer: {composer_height}px");
+  let budget = desktop.bounds("task-conversation-budget");
+  let permissions = desktop.bounds("task-permissions");
+  assert_eq!(permissions.y - budget.y, 42.0);
+}
+
+#[test]
 fn conversation_a_question_is_answered_from_the_composer() {
   let mut desktop = desktop();
   create_and_run(&mut desktop, "Ask first.", "1400000");

@@ -43,6 +43,7 @@ use crate::{
 /// Lines the variables field shows before it scrolls, as a command tool's (`YEWFo`), and the height
 /// of *Add CARGO_TARGET_DIR* (`IgW07`).
 const AREA_ROWS: (usize, usize) = (4, 12);
+const VARIABLES_AREA_HEIGHT: f32 = 116.0;
 const ADD_TARGET_HEIGHT: f32 = 32.0;
 
 #[derive(Clone)]
@@ -166,6 +167,7 @@ impl EnvironmentTab {
       .on_blur(move || blur());
     let area = Column::new()
       .width(Dimension::Pct(100.0))
+      .min_height(Dimension::Px(VARIABLES_AREA_HEIGHT))
       .padding(ExtraSpacing::Stack.role())
       .background(PaletteColor::SurfaceInput)
       .border(Border::inside(
@@ -224,6 +226,7 @@ impl EnvironmentTab {
         ctx.t("settings.environment.targetDetail"),
       )
       .action(add)
+      .top_aligned_action()
       .id("settings-environment-target")
       .into(),
     )

@@ -20,6 +20,7 @@ pub struct Notice {
   detail: Arc<str>,
   emphasized: bool,
   actions: Vec<Element>,
+  action_alignment: Alignment,
   id: Option<&'static str>,
   /// Drawn instead of `icon`, for a mark that is not a font glyph (the GitHub mark).
   mark: Option<Element>,
@@ -33,6 +34,7 @@ impl Notice {
       detail,
       emphasized: false,
       actions: Vec::new(),
+      action_alignment: Alignment::Center,
       id: None,
       mark: None,
     }
@@ -46,6 +48,12 @@ impl Notice {
   /// Content on the right of the copy: buttons, a countdown, a dismiss control.
   pub fn action(mut self, action: impl Into<Element>) -> Self {
     self.actions.push(action.into());
+    self
+  }
+
+  /// Align an action with the first line of a multi-line notice (`CMSyB`).
+  pub fn top_aligned_action(mut self) -> Self {
+    self.action_alignment = Alignment::Start;
     self
   }
 
@@ -81,7 +89,7 @@ impl From<Notice> for Element {
     let mut content = Row::new()
       .flex(1.0)
       .spacing(SpacingSize::Md)
-      .align_items(Alignment::Center)
+      .align_items(notice.action_alignment)
       .child(copy);
     if !notice.actions.is_empty() {
       content = content.child(

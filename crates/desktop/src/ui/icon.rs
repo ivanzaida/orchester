@@ -148,6 +148,7 @@ icons! {
 /// 24px recovery panel icon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IconSize {
+  Tag,
   Small,
   Reason,
   Marker,
@@ -168,6 +169,7 @@ pub enum IconSize {
 impl IconSize {
   fn role(self) -> ExtraTypography {
     match self {
+      Self::Tag => ExtraTypography::IconTag,
       Self::Small => ExtraTypography::IconSmall,
       Self::Reason => ExtraTypography::IconReason,
       Self::Marker => ExtraTypography::IconMarker,

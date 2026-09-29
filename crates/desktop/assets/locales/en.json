@@ -877,6 +877,7 @@
       "meta": "Run #{{run}}  ·  {{pipeline}}  ·  Finished at {{time}}",
       "title": "Ready for your review",
       "detail": "Every step of the run passed. Its changes wait for your review.",
+      "worktreeRemovedDetail": "Every step passed. The worktree was removed; committed changes remain ready.",
       "whatChanged": "What changed",
       "verification": "Verification",
       "commit": "commit {{revision}}",
@@ -1096,6 +1097,7 @@
       "asking": "{{agents}} asks you · {{available}} available",
       "askingOnly": "{{agents}} asks you",
       "available": "{{available}} available",
+      "cannotContinue": "{{agents}} cannot continue",
       "none": "No agent takes part in this task yet"
     },
     "author": {
@@ -1117,6 +1119,7 @@
     },
     "reply": "Reply  →",
     "empty": "No messages yet. Questions and clarifications you write here stay with this task.",
+    "emptyWorktreeRemoved": "No messages were sent before this run’s worktree was removed.",
     "composer": {
       "placeholder": "Ask, clarify or redirect this task…",
       "attach": "Attach",
@@ -1139,6 +1142,7 @@
       "blank": "Write a message first."
     },
     "policy": "Questions and clarifications stay in this task. An agent reads your messages when its current turn ends.",
+    "worktreeRemovedNoticeDetail": "Its committed changes remain ready for review. No agent can continue this run.",
     "work": {
       "title": "Working context",
       "noCheckpoint": "No checkpoint yet",

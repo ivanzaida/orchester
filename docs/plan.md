@@ -28,7 +28,6 @@ then the backlog by area.
 | U3 | `codex/u3-final` | Shorter English copy passes current-master i18n tests and `check.ps1`; the Pencil design copy is committed on `master` at `357a745`. Independent exact-PID verification found the mechanism row matches the 300-wide design without clipping and a corrected no-focus replay passed. Full-panel parity is blocked: Claude network is locked On in the app while Pencil shows web tools removed. |
 | M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and live MCP-only/mixed functional behavior pass; the first mixed-state run had an unexplained foreground-focus incident. Persisted MCP-only and mixed *Used by* frames match the changed regions, but the archive dialog is 18 physical px shorter than Pencil, a major mismatch. Fix and recheck before merge. |
 | M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; exact remote-selected inspector frame `a4lm6D` is saved on `master` and awaits the same-state comparison. |
-| U5 | `codex/u5-small-mismatches` | Independent tests and live checks, including real parallel waiting rows and a removed worktree, pass. Misleading participant copy is fixed and independently rechecked with `check.ps1`. After-Remove frames `PacyY`/`Y8hyj` are saved on `master`; queued Not delivered and final same-state comparison remain. |
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; Not started, Interrupted and recipient-menu frames are now saved on `master` and need exact app comparisons. |
 | D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. Pencil now has matching error/retry frames. Same-state comparison and full runner macOS check remain; candidate unmerged. |
 
@@ -234,22 +233,6 @@ configured, the app panel is 300 × 470 logical pixels versus Pencil's 300 × 49
 state before reporting U3 done. Evidence: `.tmp/verify/u3-final/report.md`. Pencil MCP returned nodes from the
 active document even when given a nonexistent `filePath`; do not use that argument as a target guard for future edits.
 
-### U5 · Smaller mismatches left by earlier verifications (UI)
-
-- Pipeline editor: *Back to editing* label is larger than 11/500; the canvas has no dot grid; the *Changed in draft*
-  tag's icon is slightly large and its border faint.
-- Conversation: *change ↗* uses the heavier link style; the Permissions row is 39 below the row above it, not 42; the
-  composer is about 3px taller; waiting parallel steps are grouped into one row where the design shows two.
-- Environment tab: the text area is 100 high where the design node is 116; *Add CARGO_TARGET_DIR* is centred instead
-  of top-aligned.
-- Tabs: the *+* button sits about 2px left of the design.
-- All projects: headings sit about 2px high.
-- After Remove worktree: the original Summary card and Conversation notice did not say the worktree was removed;
-  the explanation wrapped to two lines; the permissions row showed *view ↗*. The candidate now reaches this state
-  in a live app, shows the removal state and reports that the agent cannot continue. Pencil frames `PacyY` (02.Q4,
-  Summary) and `Y8hyj` (02.Q5, Conversation) are saved; the queued Not delivered state and final same-state comparison
-  remain (`docs/design/orchester-workspace.md`, "After Remove worktree").
-
 ### U6 · Conversation states not seen in the app (UI)
 
 The Paused, Stopped, Interrupted and Not started states of the conversation panel, and direct messages to one agent,
@@ -316,6 +299,13 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+U5 · Align the remaining task UI states with Pencil · branch `codex/u5-current-port` (independent source-matched
+verification passed 10 named tests and `tools/check.ps1`. Exact-PID app checks covered parallel waiting rows,
+pipeline and environment details, and the transition from a queued message to *Not delivered* after Remove worktree.
+The reached changed regions match saved Pencil frames `PacyY`/`Y8hyj` without blocking or major mismatches; a host
+watcher recorded 2,461 samples without the test app taking focus. The live queued transition used a typed store seed;
+the runner refusal was verified by a focused test, not a live Send. Illustrative design row counts differ from the
+disposable fixture. Evidence: `.tmp/verify/u5-current-port-verify/report.md` and `.tmp/verify/u5/preflight.md`).
 D7 · Keep embedded MCP bearer tokens out of agent transcripts · branch `codex/d7-safe-mcp-client` (the exact-PID
 client reads discovery only in memory, rejects redirects and non-loopback URLs, and prints ASCII-safe redacted tool
 results. Independent synthetic tests 9/9, `tools/check.ps1`, `git diff --check`, and a real Implement → Review run

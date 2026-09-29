@@ -235,6 +235,7 @@ fn task_screen_roles_follow_pencil() {
 fn pipeline_editor_roles_follow_pencil() {
   let app = themed_app();
   let theme = app.theme();
+  assert_eq!(theme.typography_style(ExtraTypography::IconTag.role()).font_size, 10.0);
   let label = theme.typography_style(ExtraTypography::CanvasLabel.role());
   assert_eq!((label.font_size, label.letter_spacing), (9.0, 1.0));
   assert_eq!(&*label.font_family, "Geist Mono");

@@ -1,4 +1,4 @@
-//! The run's progress (`qB7mj` in 02.12 `FjbKY`): a check row (`l3hyb`) per step, or per stage of
+//! The run's progress (`AVgu9` in 02.S `JOG1i`): a check row (`l3hyb`) per step, including
 //! parallel steps that have not started, with where it stands, its attempt, tokens and active
 //! agent time ("Working · attempt 2 · 12k tokens · 3 min").
 
@@ -72,17 +72,11 @@ fn progress_row(ctx: &Ctx, row: &ProgressRow) -> Element {
     .into()
 }
 
-/// "Implement · Builder", or "Checks + Review" for steps shown together.
+/// "Implement · Builder"; a step with no available agent shows its name alone.
 fn title(ctx: &Ctx, row: &ProgressRow) -> Arc<str> {
-  match row.steps.as_slice() {
-    [(step, Some(agent))] => ctx.t_args("runs.progress.stepAgent", [("step", &**step), ("agent", &**agent)]),
-    [(step, None)] => step.clone(),
-    steps => steps
-      .iter()
-      .map(|(step, _)| &**step)
-      .collect::<Vec<_>>()
-      .join(&ctx.t("runs.progress.together"))
-      .into(),
+  match &row.agent {
+    Some(agent) => ctx.t_args("runs.progress.stepAgent", [("step", &*row.step), ("agent", &**agent)]),
+    None => row.step.clone(),
   }
 }
 
