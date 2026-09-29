@@ -21,6 +21,7 @@ const KNOB_SIZE: f32 = 10.0;
 pub struct Switch {
   id: Arc<str>,
   label: Arc<str>,
+  label_visible: bool,
   on: bool,
   emphasized: bool,
   detail: Option<Arc<str>>,
@@ -32,11 +33,18 @@ impl Switch {
     Self {
       id: id.into(),
       label,
+      label_visible: true,
       on,
       emphasized: false,
       detail: None,
       note: None,
     }
+  }
+
+  /// A control beside a separate setting label (`UCOuw`); retain its name in the MCP tree.
+  pub fn hide_label(mut self) -> Self {
+    self.label_visible = false;
+    self
   }
 
   /// The label in the text color and size of a dialog's body, a little further from the track: a
@@ -96,9 +104,10 @@ impl Switch {
       .opacity(LOCKED_SWITCH_OPACITY)
       .cursor(CursorIcon::NotAllowed)
       .describe("checked", if self.on { "true" } else { "false" })
+      .describe("label", self.label.clone())
       .describe("state", "locked")
       .child(self.track())
-      .child(label)
+      .with_children(self.label_visible.then_some(label))
       .with_children(self.detail.as_deref().map(detail))
       .into()
   }
@@ -117,9 +126,10 @@ impl Switch {
       .rounded(RadiusSize::Sm)
       .cursor(CursorIcon::Pointer)
       .describe("checked", if self.on { "true" } else { "false" })
+      .describe("label", self.label.clone())
       .on_click(move |_| flip())
       .child(switch)
-      .child(label);
+      .with_children(self.label_visible.then_some(label));
     match self.detail {
       // The button's outer focus ring reaches past the row.
       Some(text) => Row::new()

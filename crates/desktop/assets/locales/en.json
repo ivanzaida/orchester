@@ -2662,7 +2662,7 @@
         "commands": "Commands",
         "commandsNarrowed": "Commands · narrowed",
         "networkStaysOn": "Stays on",
-        "interactiveToolApprovals": "Ask for each tool action",
+        "interactiveToolApprovals": "Ask when a tool needs approval",
         "onlyNarrow": "Steps can only narrow profile permissions.",
         "alsoAllows": "{{profile}} {{version}} also allows {{commands}}. Steps can only narrow profile permissions."
       }

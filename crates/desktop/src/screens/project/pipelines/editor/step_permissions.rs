@@ -255,9 +255,11 @@ fn tool_approvals_row(ctx: &Ctx, narrowing: &StepPermissions, edit: &StepEdit) -
   let label = ctx.t("pipelines.inspector.permissions.interactiveToolApprovals");
   let enabled = narrowing.interactive_tool_approvals;
   let edit = edit.clone();
-  let switch = Switch::new("step-tool-approvals", label.clone(), enabled).render(move || {
-    edit.apply(|permissions| permissions.interactive_tool_approvals = !enabled);
-  });
+  let switch = Switch::new("step-tool-approvals", label.clone(), enabled)
+    .hide_label()
+    .render(move || {
+      edit.apply(|permissions| permissions.interactive_tool_approvals = !enabled);
+    });
   Row::new()
     .width(Dimension::Pct(100.0))
     .align_items(Alignment::Center)
