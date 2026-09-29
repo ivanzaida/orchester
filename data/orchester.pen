@@ -4280,6 +4280,51 @@
                     },
                     {
                       "type": "frame",
+                      "id": "JaMJ7",
+                      "name": "MCP",
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "b90aCM",
+                          "name": "MCP icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "radio",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "APfDY",
+                          "name": "MCP label",
+                          "fill": "$muted",
+                          "content": "MCP",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "By3kB",
+                          "name": "MCP address",
+                          "fill": "$subtle",
+                          "content": "127.0.0.1:52341",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
                       "id": "jyUjc",
                       "name": "Version",
                       "height": 22,
@@ -7037,6 +7082,180 @@
               "fontFamily": "$font",
               "fontSize": 13,
               "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "lulpS",
+              "x": 1616,
+              "y": 660,
+              "name": "MCP port · status bar",
+              "width": 1488,
+              "fill": "$surface",
+              "cornerRadius": 12,
+              "layout": "vertical",
+              "gap": 32,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ikORn",
+                  "name": "State K · MCP listening (hint open)",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Q7392G",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "K · MCP listening (hint open)",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hBXR7",
+                      "name": "Stage · bar with hint",
+                      "width": 1440,
+                      "height": 96,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "id": "Uo7v7",
+                          "type": "ref",
+                          "ref": "pmOpt",
+                          "name": "Status bar · K · MCP listening",
+                          "x": 0,
+                          "y": 68,
+                          "descendants": {
+                            "F7mn6G": {
+                              "content": "0/4",
+                              "fill": "$subtle"
+                            },
+                            "O7DBvB": {
+                              "content": "0",
+                              "fill": "$subtle"
+                            },
+                            "w4CgvX": {
+                              "content": "1"
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ejqcH",
+                          "x": 1020,
+                          "y": 15,
+                          "name": "Hint · MCP",
+                          "width": 420,
+                          "fill": "$raised",
+                          "cornerRadius": "$radius-control",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "padding": [
+                            4,
+                            8
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "X1KVCk",
+                              "name": "Hint text",
+                              "fill": "$text",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Agents can drive this window over MCP at http://127.0.0.1:52341/mcp. Clients read the access token from this process’s discovery file, lurq/mcp/18244.json in your local app data folder.",
+                              "lineHeight": 1.2,
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "buZDf",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Every build starts the embedded MCP server on 127.0.0.1 with a port the OS picks; the item shows that address in Geist Mono $subtle, between the right separator and the version, with or without a project. It opens nothing (pointer only, no focus): the endpoint alone does not let a client in. Its hint, like every status bar hint, hangs 6 px above the bar on $raised and stays inside the window (here flush with its right edge); it names the endpoint and says clients read the access token from this process's discovery file. The token itself is never shown, copied or logged.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "m1KCFv",
+                  "name": "State L · MCP unavailable",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "DMNv9",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "L · MCP unavailable",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "id": "lRrZH",
+                      "type": "ref",
+                      "ref": "pmOpt",
+                      "name": "Status bar · L · MCP unavailable",
+                      "descendants": {
+                        "F7mn6G": {
+                          "content": "0/4",
+                          "fill": "$subtle"
+                        },
+                        "O7DBvB": {
+                          "content": "0",
+                          "fill": "$subtle"
+                        },
+                        "w4CgvX": {
+                          "content": "1"
+                        },
+                        "b90aCM": {
+                          "icon": "server-off",
+                          "fill": "$text"
+                        },
+                        "APfDY": {
+                          "content": "MCP unavailable",
+                          "fill": "$text"
+                        },
+                        "By3kB": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "AppGi",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "The server did not start (lurq could not bind a local port or start its thread): server-off and “MCP unavailable” in $text, no address. Hint: “The MCP server did not start, so agents cannot drive this window. The app log has the reason.” Persistent for the session; nothing retries.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
