@@ -10,6 +10,7 @@ pub mod launch;
 #[cfg(unix)]
 pub mod process_group;
 pub mod search_path;
+pub mod verifier_app;
 
 use std::{
   io::{self, Read, Write},

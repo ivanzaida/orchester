@@ -11,6 +11,9 @@ workspace = true
 
 [dependencies]
 orchester-core.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 
 # Signals the process group of each program on macOS (see `process_group`).
