@@ -7,13 +7,11 @@ use orchester_core::{
 };
 use serde_json::{Value, json};
 
-fn approval(updates: Vec<Update>) -> orchester_core::connection::app_server::PendingApproval {
-  let mut updates = updates.into_iter();
-  let Some(Update::Approval(request)) = updates.next() else {
+fn approval(updates: &[Update]) -> orchester_core::connection::app_server::PendingApproval {
+  let [Update::Approval(request)] = updates else {
     panic!("one approval request expected");
   };
-  assert!(updates.next().is_none(), "one approval request expected");
-  request
+  request.clone()
 }
 
 #[test]
@@ -32,7 +30,7 @@ fn one_app_tool_decision_is_scoped_to_its_item_and_keeps_arguments_out_of_debug(
       {"label":"Decline","description":"Do not run it"}
     ]}]
   }});
-  let request = approval(stream.parse(&requested.to_string()).expect("approval"));
+  let request = approval(&stream.parse(&requested.to_string()).expect("approval"));
   assert_eq!(request.server, "pencil");
   assert_eq!(request.action, "batch_design");
   assert_eq!(request.target.as_deref(), Some("/scratch/disposable.pen"));
@@ -48,7 +46,7 @@ fn one_app_tool_decision_is_scoped_to_its_item_and_keeps_arguments_out_of_debug(
   let mut documented_method = requested;
   documented_method["method"] = json!("tool/requestUserInput");
   let equivalent = approval(
-    stream
+    &stream
       .parse(&documented_method.to_string())
       .expect("documented request"),
   );
@@ -67,7 +65,7 @@ fn empty_mcp_confirmation_accepts_once_and_required_form_fails_closed() {
     "threadId":"thread-2","turnId":"turn-3","serverName":"pencil","mode":"form",
     "message":"Allow this change?","requestedSchema":{"type":"object","properties":{}}
   }});
-  let request = approval(stream.parse(&requested.to_string()).expect("approval"));
+  let request = approval(&stream.parse(&requested.to_string()).expect("approval"));
   assert_eq!(
     serde_json::from_str::<Value>(&request.response(true)).expect("response"),
     json!({"id":"rpc-9","result":{"action":"accept","content":{},"_meta":null}})

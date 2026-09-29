@@ -149,13 +149,7 @@ impl RunTask {
       skills: placed.folder.as_deref(),
       repository_skills: repository.as_deref(),
     };
-    let interactive =
-      matches!(&step.kind, StepKind::Agent { permissions, .. } if permissions.interactive_tool_approvals);
-    if interactive && provider != AgentProvider::CodexCli {
-      return Err(problem(
-        "interactive tool approvals require a Codex agent profile".to_owned(),
-      ));
-    }
+    let interactive = interactive_mode(step, provider)?;
     let (command, mcp_file, app_server) = if interactive && provider == AgentProvider::CodexCli {
       let (command, app) = self.app_server_command(&cli, setup, prompt)?;
       (command, None, Some(app))
@@ -430,6 +424,16 @@ impl RunTask {
     pinned.sort_by(|(left, _), (right, _)| left.cmp(right));
     Ok(pinned.into_iter().map(|(_, instruction)| instruction).collect())
   }
+}
+
+fn interactive_mode(step: &Step, provider: AgentProvider) -> Result<bool, RunnerProblem> {
+  let interactive = matches!(&step.kind, StepKind::Agent { permissions, .. } if permissions.interactive_tool_approvals);
+  if interactive && provider != AgentProvider::CodexCli {
+    return Err(problem(
+      "interactive tool approvals require a Codex agent profile".to_owned(),
+    ));
+  }
+  Ok(interactive)
 }
 
 /// The outputs of the passed executions of the steps `step` depends on, in pipeline order: a gated

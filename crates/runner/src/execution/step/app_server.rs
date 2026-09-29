@@ -1,7 +1,7 @@
-//! Bidirectional Codex App Server conversation for one invocation. Only MCP elicitation is
-//! requestable; command, file and sandbox approvals remain disabled. Every unexpected host
-//! request fails the invocation closed. The normal Codex profile keeps its global MCP servers;
-//! project-selected servers must be connected before the turn begins.
+//! Bidirectional Codex App Server conversation for one invocation. MCP user input and elicitation
+//! requests can be answered; command, file and sandbox approvals remain disabled. Unexpected
+//! host requests fail the invocation. Global MCP servers remain available; project-selected
+//! servers must be connected before the turn begins.
 
 use std::{collections::BTreeSet, io, path::PathBuf};
 
@@ -137,13 +137,13 @@ impl AppServerSession {
         self.phase = Phase::Account;
         send(process, json!({"method":"initialized"}))
           .await
-          .map_err(io_message)?;
+          .map_err(|error| io_message(&error))?;
         send(
           process,
           json!({"id":2,"method":"account/read","params":{"refreshToken":false}}),
         )
         .await
-        .map_err(io_message)?;
+        .map_err(|error| io_message(&error))?;
         Ok(Vec::new())
       }
       (Phase::Account, 2) => {
@@ -153,7 +153,7 @@ impl AppServerSession {
           ));
         }
         self.phase = Phase::Thread;
-        self.start_thread(process).await.map_err(io_message)?;
+        self.start_thread(process).await.map_err(|error| io_message(&error))?;
         Ok(Vec::new())
       }
       (Phase::Thread, 3) => {
@@ -173,13 +173,13 @@ impl AppServerSession {
           }}),
         )
         .await
-        .map_err(io_message)?;
+        .map_err(|error| io_message(&error))?;
         Ok(vec![Update::Activity(AgentEvent::SessionStarted { session: thread })])
       }
       (Phase::Servers, 4) => {
         self.check_servers(result)?;
         self.phase = Phase::Turn;
-        self.start_turn(process).await.map_err(io_message)?;
+        self.start_turn(process).await.map_err(|error| io_message(&error))?;
         Ok(Vec::new())
       }
       (Phase::Turn, 5) => {
@@ -306,7 +306,7 @@ fn phase_name(phase: Phase) -> &'static str {
   }
 }
 
-fn io_message(error: io::Error) -> String {
+fn io_message(error: &io::Error) -> String {
   format!("cannot write to Codex App Server: {error}")
 }
 

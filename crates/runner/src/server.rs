@@ -322,18 +322,19 @@ async fn answer(
       run,
       ref approval,
       approve,
-    } => {
-      let approval = approval.clone();
-      return later.answer(
-        run,
-        async move { handle.decide_tool_approval(run, approval, approve).await },
-      );
-    }
+    } => return answer_tool_approval(&later, handle, run, approval, approve),
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
   };
   Answer::Reply(Event::Reply { id, reply })
+}
+
+fn answer_tool_approval(later: &Later<'_>, scheduler: Scheduler, run: RunId, approval: &str, approve: bool) -> Answer {
+  let approval = approval.to_owned();
+  later.answer(run, async move {
+    scheduler.decide_tool_approval(run, approval, approve).await
+  })
 }
 
 fn accepted(run: RunId, result: Result<(), Rejection>) -> Reply {

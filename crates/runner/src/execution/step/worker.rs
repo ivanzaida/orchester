@@ -4,7 +4,10 @@
 //! a step budget lets the turn that used it end: the agent has [`TURN_GRACE`] to exit on its own,
 //! and starting another turn ends it at once.
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+  path::{Path, PathBuf},
+  time::Duration,
+};
 
 use orchester_core::{
   connection::{
@@ -138,6 +141,22 @@ struct Watch {
   approval: Option<(String, PendingApproval)>,
 }
 
+impl Watch {
+  fn open(root: &Path, invocation: &Invocation) -> Result<Self, StoreError> {
+    Ok(Self {
+      db: ProjectDb::open(root)?,
+      invocation: invocation.clone(),
+      tracker: InvocationTracker::default(),
+      pending: Vec::new(),
+      stop: None,
+      over: None,
+      commands: 0,
+      after_command: None,
+      approval: None,
+    })
+  }
+}
+
 impl Worker {
   /// Follows the CLI until it exits, then tells the run how it ended.
   pub(in super::super) async fn work(mut self) {
@@ -154,28 +173,8 @@ impl Worker {
   }
 
   async fn follow(mut self) -> Result<Finished, StoreError> {
-    let mut watch = Watch {
-      db: ProjectDb::open(&self.root)?,
-      invocation: self.invocation.clone(),
-      tracker: InvocationTracker::default(),
-      pending: Vec::new(),
-      stop: None,
-      over: None,
-      commands: 0,
-      after_command: None,
-      approval: None,
-    };
-    if let Some(app) = &self.app_server
-      && let Err(error) = app.start(&self.process).await
-    {
-      self.observe(
-        &mut watch,
-        AgentEvent::TurnFailed {
-          message: format!("cannot initialize Codex App Server: {error}"),
-        },
-      )?;
-      self.process.terminate();
-    }
+    let mut watch = Watch::open(&self.root, &self.invocation)?;
+    self.initialize_app_server(&mut watch).await?;
     let mut flush = tokio::time::interval(FLUSH_INTERVAL);
     let grace = sleep(Duration::ZERO);
     tokio::pin!(grace);
@@ -247,6 +246,21 @@ impl Worker {
         }
       }
     }
+  }
+
+  async fn initialize_app_server(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+    if let Some(app) = &self.app_server
+      && let Err(error) = app.start(&self.process).await
+    {
+      self.observe(
+        watch,
+        AgentEvent::TurnFailed {
+          message: format!("cannot initialize Codex App Server: {error}"),
+        },
+      )?;
+      self.process.terminate();
+    }
+    Ok(())
   }
 
   fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), StoreError> {

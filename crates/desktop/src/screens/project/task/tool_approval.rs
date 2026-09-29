@@ -123,7 +123,7 @@ impl Component for ToolApprovalDialog {
   }
 }
 
-pub(super) fn modal(ctx: &mut Ctx, pending: &[PendingToolApproval]) -> Option<Element> {
+pub(in crate::screens::project) fn modal(ctx: &mut Ctx, pending: &[PendingToolApproval]) -> Option<Element> {
   let approval = pending.first()?.clone();
   let key = format!("tool-approval-{}", approval.id);
   Some(ctx.mount_keyed::<ToolApprovalDialog>(
@@ -209,7 +209,6 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
         [("count", props.remaining.to_string().as_str())],
       ))
       .variant(TypographyStyle::Description)
-      .into()
     }))
     .into()
 }
@@ -240,7 +239,7 @@ fn actions(ctx: &Ctx, state: &DialogState<'_>) -> Element {
         .icon(Icon::X)
         .in_form()
         .height(Dimension::Px(BUTTON_HEIGHT))
-        .on_click(move || deny())
+        .on_click(deny)
         .enabled(!state.busy)
         .render(ctx),
     )
@@ -251,7 +250,7 @@ fn actions(ctx: &Ctx, state: &DialogState<'_>) -> Element {
         .primary()
         .in_form()
         .height(Dimension::Px(BUTTON_HEIGHT))
-        .on_click(move || approve())
+        .on_click(approve)
         .enabled(!state.busy)
         .render(ctx),
     )
