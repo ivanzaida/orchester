@@ -178,6 +178,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::ContextNote.role()` | 9 muted | preview execution context notes (`HvDGw`, `utiRC` in `TnjFo`) |
 | `ExtraTypography::CellLabel.role()` | 11 muted, 1.5 | table cell label that wraps beside its icon (worktree state `VHSnL` in `Py65X`) |
 | `ExtraTypography::WrappingError.role()` | 11 `text`, 1.5 | field error that wraps beside its icon, e.g. why a dialog's action is unavailable (`foNvP` in `glurU`, `eeksu` in `XIEn8`); through `ui::field::wrapping_field_error` |
+| `ExtraTypography::WrappingProperty.role()` | 11 `text`, 1.6 | long remote MCP Authentication value that wraps in the inspector (`K8qeZv` in `a4lm6D`) |
 | `ExtraTypography::InspectorNote.role()` | 10 muted, 1.6 | note under an inspector's details or actions (model source `xK9v9`, status detail `Thdx2`) |
 | `ExtraTypography::EnforcementSetting.role()` | 12 text, 1.25 | setting name in the agent enforcement panel (`vgkrV` in `CIeqc`) |
 | `ExtraTypography::EnforcementMechanism.role()` | mono 10 muted, 1.3 | mechanism beneath an enforced setting (`x4ZFi` in `CIeqc`) |

@@ -29,26 +29,38 @@ pub fn property(label: &str, value: &str) -> Element {
 }
 
 pub fn styled_property(label: &str, value: &str, style: ValueStyle) -> Element {
+  aligned_property(label, value, style, Alignment::Center)
+}
+
+/// The MCP details in 04.D (`QdLRd`) place text at the top of each 20px property row.
+pub fn top_property(label: &str, value: &str, style: ValueStyle) -> Element {
+  aligned_property(label, value, style, Alignment::Start)
+}
+
+/// An MCP remote authentication value may span several lines (`J6IaSG` in `a4lm6D`).
+pub fn wrapping_top_property(label: &str, value: &str) -> Element {
+  property_row(label, Alignment::Start)
+    .min_height(Dimension::Px(PROPERTY_HEIGHT))
+    .child(
+      Text::new(value)
+        .variant(ExtraTypography::WrappingProperty.role())
+        .color(PaletteColor::TextPrimary)
+        .text_align(TextAlign::Right)
+        .flex(1.0)
+        .selectable(true),
+    )
+    .into()
+}
+
+fn aligned_property(label: &str, value: &str, style: ValueStyle, alignment: Alignment) -> Element {
   let (typography, color) = match style {
     ValueStyle::Text => (TypographyStyle::Caption, PaletteColor::TextPrimary),
     ValueStyle::Mono => (ExtraTypography::MonoValue.role(), PaletteColor::TextPrimary),
     ValueStyle::Path => (TypographyStyle::Mono, PaletteColor::TextPrimary),
     ValueStyle::Pending => (TypographyStyle::Caption, PaletteColor::TextMuted),
   };
-  Row::new()
-    .width(Dimension::Pct(100.0))
+  property_row(label, alignment)
     .height(Dimension::Px(PROPERTY_HEIGHT))
-    .align_items(Alignment::Center)
-    .spacing(SpacingSize::Sm)
-    .justify(Justify::SpaceBetween)
-    // The label keeps its width; the value takes the rest after the gap and shortens with an
-    // ellipsis, so the two never touch.
-    .child(
-      Text::new(label)
-        .variant(TypographyStyle::Caption)
-        .nowrap()
-        .flex_shrink(0.0),
-    )
     .child(
       Text::new(value)
         .variant(typography)
@@ -60,4 +72,19 @@ pub fn styled_property(label: &str, value: &str, style: ValueStyle) -> Element {
         .selectable(true),
     )
     .into()
+}
+
+fn property_row(label: &str, alignment: Alignment) -> Row {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .align_items(alignment)
+    .spacing(SpacingSize::Sm)
+    .justify(Justify::SpaceBetween)
+    // The label keeps its width; the value takes the rest after the gap.
+    .child(
+      Text::new(label)
+        .variant(TypographyStyle::Caption)
+        .nowrap()
+        .flex_shrink(0.0),
+    )
 }

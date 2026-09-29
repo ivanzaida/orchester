@@ -24,7 +24,6 @@ then the backlog by area.
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass. Pencil now has corrected merging, removal and deleted-branch states; compare them with exact live app states and fix remaining differences. |
-| M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; exact remote-selected inspector frame `a4lm6D` is saved on `master` and awaits the same-state comparison. |
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; Not started, Interrupted and recipient-menu frames are now saved on `master` and need exact app comparisons. |
 | D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. Pencil now has matching error/retry frames. Same-state comparison and full runner macOS check remain; candidate unmerged. |
 
@@ -119,16 +118,6 @@ A 2026-09-29 follow-up `auth status --json` returned exit 1 and `loggedIn: false
 M1 remains in progress until that rule is checked in a signed-in Claude run. Evidence:
 `docs/evidence/mcp-real-run-2026-09-29.md`.
 
-### M5 · Remote server details name who reaches it (UI)
-
-The MCP server inspector (`crates/desktop/src/screens/project/connections/mcp_inspector.rs`) shows only Type, Endpoint
-and Authentication for a remote (HTTP) server; 04.D `QdLRd` suggests a *Reached by* row as the dialog has
-(`connections.mcp.property.reachedBy`). Confirm with the drawing, then add it. Also from that verification: the
-Arguments and Variables text in the MCP dialog sit about 4px higher than drawn, and the 04.D details rows 2–4px lower.
-
-Pencil (drawn 2026-09-29): `a4lm6D` (04.D2, remote server selected, with *Reached by*). The drawing wraps a long
-Authentication value onto a second line instead of ending it with an ellipsis.
-
 ### M6 · Environment names in secret references (needs decision)
 
 Environments display in lower case (`@staging`, *(staging)*) where the design writes *Staging*, and typing `@Staging`
@@ -218,6 +207,12 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+M5 · Show who reaches a remote MCP server and wrap its Authentication value · branch `codex/m5-final-port`
+(remote inspector adds *Reached by*, aligns property rows to the top, and lets only the long Authentication row
+grow. Independent same-state 2160 × 1440 Pencil `a4lm6D` / exact-PID app comparison found no blocking or major
+mismatch; the value was fully visible on two lines and sections below aligned within 2–3 physical px. Named MCP,
+typography and i18n tests and `tools/check.ps1` passed; the host no-focus watcher passed. Evidence:
+`docs/evidence/m5-remote-inspector-2026-09-29.md`).
 U3 · Fit the Claude mechanism line and enforcement panel to Pencil · branch `codex/u3-final-port`
 (shorter English copy and two theme typography roles align the one-line mechanism, row spacing and wrapping in the
 300-wide panel. Independent exact-PID same-state comparison to Pencil `CIeqc` found no blocking or major mismatch;

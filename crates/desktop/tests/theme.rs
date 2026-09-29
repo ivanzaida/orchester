@@ -95,6 +95,8 @@ fn extra_typography_follows_pencil() {
     14.0
   );
   assert_eq!(theme.typography_style(ExtraTypography::Metric.role()).font_size, 23.0);
+  let wrapped = theme.typography_style(ExtraTypography::WrappingProperty.role());
+  assert_eq!((wrapped.font_size, wrapped.line_height), (11.0, 1.6));
 }
 
 #[test]

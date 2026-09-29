@@ -129,6 +129,17 @@ fn mcp_tab_lists_the_servers_with_their_details_and_turns_one_off() {
     assert!(shows(&mut desktop, INSPECTOR, text), "{text}");
   }
   assert!(shows(&mut desktop, INSPECTOR, "cannot list their tools yet"));
+  desktop.click(&knowledge);
+  for text in [
+    "Remote MCP",
+    "Reached by",
+    "The agent’s CLI, over HTTP",
+    "mcp.example.dev",
+    "Bearer token from DOCS_TOKEN (staging)",
+  ] {
+    assert!(shows(&mut desktop, INSPECTOR, text), "{text}");
+  }
+  desktop.click(&docs);
   desktop.click("mcp-toggle");
   desktop.wait_until("the server is turned off", |desktop| {
     shows(desktop, &docs, "Turned off")
@@ -140,6 +151,36 @@ fn mcp_tab_lists_the_servers_with_their_details_and_turns_one_off() {
   assert!(desktop.tree.get_element_by_id(&docs).is_none());
   desktop.click("connections-tab-all");
   desktop.wait_for(&docs);
+}
+
+#[test]
+fn remote_authentication_wraps_without_fixed_row_height() {
+  let mut desktop = Desktop::with_project();
+  let ids = seed_servers(desktop.repo());
+  let without_auth = server(
+    "without-auth",
+    McpTransport::Http(HttpServer::new(
+      McpUrl::new("https://mcp.example.dev/without-auth").expect("valid URL"),
+      None,
+    )),
+    McpEnvironment::default(),
+  );
+  ProjectDb::open(desktop.repo())
+    .expect("project database")
+    .create_mcp_server(&without_auth)
+    .expect("server");
+  open_mcp_tab(&mut desktop);
+  desktop.click(&format!("connection-{}", ids[1]));
+  desktop.wait_until("remote authentication", |desktop| {
+    shows(desktop, INSPECTOR, "Bearer token from DOCS_TOKEN (staging)")
+  });
+  let wrapped = desktop.bounds("mcp-authentication-property");
+  assert!(wrapped.height > 20.0, "authentication row should grow: {wrapped:?}");
+
+  desktop.click(&format!("connection-{}", without_auth.id()));
+  desktop.wait_until("no authentication", |desktop| shows(desktop, INSPECTOR, "None"));
+  let short = desktop.bounds("mcp-authentication-property");
+  assert_eq!(short.height, 20.0, "short authentication keeps one row");
 }
 
 #[test]

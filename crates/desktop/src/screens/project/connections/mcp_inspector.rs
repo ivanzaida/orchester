@@ -33,7 +33,7 @@ use crate::{
     icon::Icon,
     link::Link,
     message_text,
-    property::{ValueStyle, property, styled_property},
+    property::{ValueStyle, top_property, wrapping_top_property},
     status_label::status_label as label,
   },
 };
@@ -140,13 +140,13 @@ impl McpInspector<'_> {
 
   /// Type, what runs or where, and how it authenticates (`uvJAu`, `LvBSE`, `u3eWqy`).
   fn properties(&self, ctx: &Ctx) -> Vec<Element> {
-    let row = |key: &str, value: &str| property(&ctx.t(key), value);
+    let row = |key: &str, value: &str| top_property(&ctx.t(key), value, ValueStyle::Text);
     match self.server.transport() {
       McpTransport::Stdio(stdio) => {
         let args: Vec<&str> = stdio.args().iter().map(|arg| arg.as_str()).collect();
         // A path in mono, as the program; the default in words.
         let folder = match stdio.working_directory() {
-          Some(folder) => styled_property(
+          Some(folder) => top_property(
             &ctx.t("connections.mcp.property.folder"),
             folder.as_str(),
             ValueStyle::Path,
@@ -155,12 +155,12 @@ impl McpInspector<'_> {
         };
         vec![
           row("connections.mcp.property.type", &ctx.t("connections.mcp.typeStdio")),
-          styled_property(
+          top_property(
             &ctx.t("connections.mcp.property.program"),
             stdio.program().as_str(),
             ValueStyle::Path,
           ),
-          styled_property(
+          top_property(
             &ctx.t("connections.mcp.property.arguments"),
             &args.join(" "),
             ValueStyle::Path,
@@ -179,8 +179,13 @@ impl McpInspector<'_> {
         };
         vec![
           row("connections.mcp.property.type", &ctx.t("connections.mcp.typeHttp")),
+          row(
+            "connections.mcp.property.reachedBy",
+            &ctx.t("connections.mcp.reachedByCli"),
+          ),
           row("connections.mcp.property.endpoint", http.url().host()),
-          row("connections.property.authentication", &authentication),
+          wrapping_top_property(&ctx.t("connections.property.authentication"), &authentication)
+            .id("mcp-authentication-property"),
         ]
       }
     }
@@ -200,7 +205,7 @@ impl McpInspector<'_> {
           [("secret", &*self.secret_name(ctx, *secret))],
         ),
       };
-      styled_property(name.as_str(), &value, ValueStyle::Mono)
+      top_property(name.as_str(), &value, ValueStyle::Mono)
     });
     Some(
       Column::new()
