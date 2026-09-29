@@ -14,6 +14,7 @@ mod claude_run;
 mod conversation;
 mod dialogs;
 mod draft_autosave;
+mod edit_task;
 mod github;
 mod harness;
 mod history;

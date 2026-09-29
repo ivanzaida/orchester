@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use orchester_core::{
   conversation::{Message, latest_question},
-  id::{IdempotencyKey, ResourceId},
+  id::{IdempotencyKey, ResourceId, TaskId},
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, StepExecutor},
   store::{ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
@@ -221,6 +221,28 @@ pub fn save_draft<S: TaskStore>(
   Ok(edited)
 }
 
+/// Where the task form saves: a new draft under `New`, the key the form generated when it opened,
+/// or the saved draft it edits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SaveTarget {
+  New(IdempotencyKey),
+  Draft(TaskId),
+}
+
+/// Saves `details` where `target` says: as a new draft ([`save_draft`]), or over the draft being
+/// edited, in place ([`TaskStore::update_draft`]).
+pub fn save_to<S: TaskStore>(
+  store: &mut S,
+  target: SaveTarget,
+  details: TaskDetails,
+  now: Timestamp,
+) -> Result<Task, S::Error> {
+  match target {
+    SaveTarget::New(batch) => save_draft(store, batch, details, now),
+    SaveTarget::Draft(task) => store.update_draft(task, details),
+  }
+}
+
 /// A Save as draft request cannot succeed when its idempotency key now names a queued task.
 #[derive(Debug, Error)]
 pub enum TaskDraftSaveError {
@@ -232,14 +254,14 @@ pub enum TaskDraftSaveError {
   DetailsMismatch,
 }
 
-/// [`save_draft`] in the project database of `repo_root`, confirmed as the requested draft.
+/// [`save_to`] in the project database of `repo_root`, confirmed as the requested draft.
 pub fn save_draft_in(
   repo_root: &Path,
-  batch: IdempotencyKey,
+  target: SaveTarget,
   details: TaskDetails,
 ) -> Result<TaskDetails, TaskDraftSaveError> {
   let mut db = ProjectDb::open(repo_root)?;
-  let saved = save_draft(&mut db, batch, details.clone(), Timestamp::now())?;
+  let saved = save_to(&mut db, target, details.clone(), Timestamp::now())?;
   if saved.status() != TaskStatus::Draft {
     return Err(TaskDraftSaveError::NotDraft(saved.status()));
   }

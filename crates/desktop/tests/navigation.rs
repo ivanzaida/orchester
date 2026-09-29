@@ -154,6 +154,7 @@ fn pages() -> Vec<Page> {
     Page::task(TaskId::generate()),
     Page::Task(TaskId::generate(), TaskPageTab::Activity),
     Page::Task(TaskId::generate(), TaskPageTab::Changes),
+    Page::EditTask(TaskId::generate()),
     Page::PullRequests,
     Page::PullRequest(42),
     Page::Pipelines,

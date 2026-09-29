@@ -25,6 +25,7 @@ use orchester_core::{
 
 use super::{
   TaskScrolls,
+  brief::{brief_section, this_task},
   heading::agent_of,
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
   notice::{Lost, notice},
@@ -35,7 +36,10 @@ use super::{
 use crate::{
   budget::whole_minutes,
   display,
-  tasks::detail::{RunView, TaskDetail},
+  tasks::{
+    data::PipelineChoice,
+    detail::{RunView, TaskDetail},
+  },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     message_text,
@@ -46,11 +50,12 @@ use crate::{
 /// "This run" panel width (`F5Lsi`).
 const PANEL_WIDTH: f32 = 336.0;
 
-/// `lost`: the run is recorded as running but has no runner, and why.
+/// `lost`: the run is recorded as running but has no runner, and why. `pipelines`: the project's
+/// published pipelines, for the one a task without a run would start with.
 pub(super) fn summary(
   ctx: &mut Ctx,
   detail: &TaskDetail,
-  (limits, lost): (Option<ProjectLimits>, Option<Lost>),
+  (limits, lost, pipelines): (Option<ProjectLimits>, Option<Lost>, Option<&[PipelineChoice]>),
   (repo_root, scrolls): (&Path, &TaskScrolls),
 ) -> Element {
   if let Some(run) = &detail.run
@@ -68,18 +73,18 @@ pub(super) fn summary(
     .spacing(ExtraSpacing::Form.role())
     .child(notice(ctx, detail, lost))
     .with_children(raise)
-    .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())));
+    .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())))
+    .with_children(brief_section(ctx, detail.task.details()));
   let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
+  let panel = match &detail.run {
+    Some(run) => this_run(ctx, run, (repo_root, &scrolls.this_run)),
+    None => this_task(ctx, detail, pipelines, &scrolls.this_run),
+  };
   Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .child(progress_column(content, latest, (raising, &scrolls.progress)))
-    .with_children(
-      detail
-        .run
-        .as_ref()
-        .map(|run| this_run(ctx, run, (repo_root, &scrolls.this_run))),
-    )
+    .child(panel)
     .into()
 }
 
@@ -224,7 +229,7 @@ fn this_run(ctx: &mut Ctx, run: &RunView, (repo_root, scroll): (&Path, &ScrollSt
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
     .with_children(permissions);
-  this_run_panel(ctx, rows, scroll)
+  this_run_panel(rows, scroll, &ctx.t("runs.summary.snapshotNote"))
 }
 
 /// The *Permissions* row of the current step's agent, with its *change ↗* (`C5Ai5o`), beside the
@@ -244,15 +249,15 @@ pub(super) fn permissions_row(ctx: &mut Ctx, run: &RunView, repo_root: &Path, in
   Some(ctx.mount_keyed::<RunPermissionsRow>(&format!("task-permissions-{}", step.key), props))
 }
 
-/// The "This run" panel around its `rows`. They scroll when a permission change's notices make
-/// them taller than the window, their bar in a gutter of its own that takes the right padding's
-/// inner half, so the values still end 24 from the edge (design doc, "Scroll gutter"); the note
-/// stays at the bottom.
-fn this_run_panel(ctx: &Ctx, rows: Column, scroll: &ScrollState) -> Element {
+/// The "This run" panel around its `rows` (and "This task", `FLGqL`). They scroll when a
+/// permission change's notices make them taller than the window, their bar in a gutter of its own
+/// that takes the right padding's inner half, so the values still end 24 from the edge (design
+/// doc, "Scroll gutter"); the `note` stays at the bottom.
+pub(super) fn this_run_panel(rows: Column, scroll: &ScrollState, note: &str) -> Element {
   let note = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_right(ExtraSpacing::Stack.role())
-    .child(Text::new(&ctx.t("runs.summary.snapshotNote")).variant(ExtraTypography::Detail.role()));
+    .child(Text::new(note).variant(ExtraTypography::Detail.role()));
   Column::new()
     .id("task-this-run")
     .width(Dimension::Px(PANEL_WIDTH))

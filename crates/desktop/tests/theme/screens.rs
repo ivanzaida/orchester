@@ -30,6 +30,9 @@ fn task_screen_roles_follow_pencil() {
   );
   let brief = theme.typography_style(ExtraTypography::Brief.role());
   assert_eq!((brief.font_size, brief.line_height), (13.0, 1.7));
+  // An acceptance criterion on the Summary, 12 at 1.5 (`j0Ye4t` in `tqn5P`).
+  let criterion = theme.typography_style(ExtraTypography::Criterion.role());
+  assert_eq!((criterion.font_size, criterion.line_height), (12.0, 1.5));
   assert_eq!(
     theme.spacing_value(ExtraSpacing::HeadingTop.role()),
     Dimension::Px(26.0)

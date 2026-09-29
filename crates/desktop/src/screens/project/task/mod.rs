@@ -8,6 +8,7 @@
 //! *Remove worktree* clears it. Artifacts come in a later milestone and are shown unavailable.
 
 mod activity;
+mod brief;
 mod changes;
 mod controls;
 mod conversation;
@@ -65,6 +66,7 @@ use crate::{
   runner::{Runners, state::RunnerState},
   tasks::{
     changes::checkpointed_in,
+    data::PipelineChoice,
     detail::{RunView, TaskDetail},
     integration::{LeftBehind, leftovers_in},
     plan::PlanReview,
@@ -104,6 +106,8 @@ pub struct TaskProps {
   pub revision: (u64, u64),
   /// The project's limits, once read: the most a raised limit may be.
   pub limits: Option<ProjectLimits>,
+  /// The project's published pipelines, once read: the one a task without a run would use.
+  pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// The project's runner, and since when it has had trouble: a run recorded as running is
   /// interrupted while it is not online, and 02.H (`EFY7I`) shows while it could not restart.
   pub runner: RunnerState,
@@ -127,6 +131,8 @@ pub struct TaskScreen {
   reload: Signal<u64>,
   /// Puts the focus in the conversation's composer (Ask agent).
   focus_composer: Signal<bool>,
+  /// Why Edit task, opened for this task, was refused and this page shown instead.
+  refused_edit: Signal<Option<Message>>,
   nav: ProjectNav,
   runners: Runners,
   scrolls: TaskScrolls,
@@ -157,6 +163,7 @@ impl Component for TaskScreen {
       retry: ctx.signal(0),
       reload: ctx.signal(0),
       focus_composer,
+      refused_edit: ctx.signal(None),
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
@@ -174,6 +181,9 @@ impl Component for TaskScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TaskProps>().clone();
+    if let Some(reason) = self.nav.take_refused_edit(props.task) {
+      self.refused_edit.set(Some(reason));
+    }
     let control = control_action(ctx);
     let deps = (
       props.project.repo_root.clone(),
@@ -227,7 +237,14 @@ impl Component for TaskScreen {
       .get()
       .error
       .filter(|_| !control.state().get().is_pending())
-      .map(|error| control_error_row(&message_text(ctx, &error)));
+      .map(|error| control_error_row(&message_text(ctx, &error)))
+      .into_iter()
+      .chain(
+        self
+          .refused_edit
+          .get()
+          .map(|reason| control_error_row(&message_text(ctx, &reason))),
+      );
     let removal = self.removal(ctx, &props, &detail, leftovers.as_ref());
     let earlier_unreadable = detail
       .earlier_unreadable
@@ -298,7 +315,7 @@ impl TaskScreen {
       (TaskPageTab::Summary, _) => summary::summary(
         ctx,
         detail,
-        (props.limits, lost),
+        (props.limits, lost, props.pipelines.as_deref().map(Vec::as_slice)),
         (&props.project.repo_root, &self.scrolls),
       ),
       (TaskPageTab::Activity, _) => ctx.mount_keyed::<ActivityTab>(
@@ -461,7 +478,8 @@ impl TaskScreen {
         .map(|run| control_buttons(ctx, run, control, &self.requested))
         .unwrap_or_default(),
     };
-    page::topbar_with(breadcrumb.into(), buttons.into_iter().chain(removal))
+    let edit = detail.and_then(|detail| brief::edit_button(ctx, &self.nav, detail));
+    page::topbar_with(breadcrumb.into(), buttons.into_iter().chain(removal).chain(edit))
   }
 
   /// Summary, Changes with the count of files changed up to the latest checkpoint, and Activity;

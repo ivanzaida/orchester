@@ -169,12 +169,14 @@ pub enum ExtraTypography {
   MonoArea,
   /// A change a version makes, in the version history (`o6to5` in `DOroV`).
   ChangeLine,
+  /// An acceptance criterion and its number on a task's Summary (`j0Ye4t`, `a88TT` in `tqn5P`).
+  Criterion,
   /// A project's initial in a title bar tab's avatar (`T0R2Hv` in `nAKyb`): 9/600.
   TabInitial,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 78] = [
+  const ALL: [Self; 79] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -252,10 +254,40 @@ impl ExtraTypography {
     Self::ColumnHeading,
     Self::MonoArea,
     Self::ChangeLine,
+    Self::Criterion,
     Self::TabInitial,
   ];
 
   fn name(self) -> &'static str {
+    self.icon_name().unwrap_or_else(|| self.text_name())
+  }
+
+  /// The name of an icon role; `None` for a text role.
+  const fn icon_name(self) -> Option<&'static str> {
+    match self {
+      Self::IconTag => Some("icon-tag"),
+      Self::IconSmall => Some("icon-small"),
+      Self::IconReason => Some("icon-reason"),
+      Self::IconMarker => Some("icon-marker"),
+      Self::IconButton => Some("icon-button"),
+      Self::IconNav => Some("icon-nav"),
+      Self::IconDismiss => Some("icon-dismiss"),
+      Self::IconOption => Some("icon-option"),
+      Self::IconNotice => Some("icon-notice"),
+      Self::IconFeature => Some("icon-feature"),
+      Self::IconPanel => Some("icon-panel"),
+      Self::IconWindowControl => Some("icon-window-control"),
+      Self::IconSelect => Some("icon-select"),
+      Self::IconLarge => Some("icon-large"),
+      Self::IconRow => Some("icon-row"),
+      Self::IconEntry => Some("icon-entry"),
+      Self::IconEvent => Some("icon-event"),
+      Self::IconState => Some("icon-state"),
+      _ => None,
+    }
+  }
+
+  fn text_name(self) -> &'static str {
     match self {
       Self::SectionHeading => "section-heading",
       Self::CardTitle => "card-title",
@@ -279,19 +311,6 @@ impl ExtraTypography {
       Self::Brief => "brief",
       Self::DialogTitle => "dialog-title",
       Self::Explanation => "explanation",
-      Self::IconTag => "icon-tag",
-      Self::IconSmall => "icon-small",
-      Self::IconReason => "icon-reason",
-      Self::IconMarker => "icon-marker",
-      Self::IconButton => "icon-button",
-      Self::IconNav => "icon-nav",
-      Self::IconDismiss => "icon-dismiss",
-      Self::IconOption => "icon-option",
-      Self::IconNotice => "icon-notice",
-      Self::IconFeature => "icon-feature",
-      Self::IconPanel => "icon-panel",
-      Self::IconWindowControl => "icon-window-control",
-      Self::IconSelect => "icon-select",
       Self::CanvasLabel => "canvas-label",
       Self::MonoTag => "mono-tag",
       Self::MonoValue => "mono-value",
@@ -300,11 +319,9 @@ impl ExtraTypography {
       Self::Hint => "hint",
       Self::VersionFigure => "version-figure",
       Self::Summary => "summary",
-      Self::IconLarge => "icon-large",
       Self::CompactStatusLabel => "compact-status-label",
       Self::InspectorTitle => "inspector-title",
       Self::RowTitle => "row-title",
-      Self::IconRow => "icon-row",
       Self::PullRequestTitle => "pull-request-title",
       Self::PullRequestContext => "pull-request-context",
       Self::FileListHeading => "file-list-heading",
@@ -313,9 +330,6 @@ impl ExtraTypography {
       Self::DiffLineNumber => "diff-line-number",
       Self::Code => "code",
       Self::Output => "output",
-      Self::IconEntry => "icon-entry",
-      Self::IconEvent => "icon-event",
-      Self::IconState => "icon-state",
       Self::RuleTitle => "rule-title",
       Self::PromptText => "prompt-text",
       Self::VariableName => "variable-name",
@@ -334,7 +348,9 @@ impl ExtraTypography {
       Self::ColumnHeading => "column-heading",
       Self::MonoArea => "mono-area",
       Self::ChangeLine => "change-line",
+      Self::Criterion => "criterion",
       Self::TabInitial => "tab-initial",
+      icon => icon.icon_name().expect("every role without a text name is an icon"),
     }
   }
 
@@ -492,6 +508,7 @@ impl ExtraTypography {
       Self::AgentText => leading(1.6, style(12.0, FontWeight::Normal, TEXT)),
       Self::ColumnHeading => style(9.0, FontWeight::Normal, MUTED),
       Self::ChangeLine => leading(1.4, style(12.0, FontWeight::Normal, TEXT)),
+      Self::Criterion => leading(1.5, style(12.0, FontWeight::Normal, TEXT)),
       Self::TabInitial => style(9.0, FontWeight::SemiBold, TEXT),
       icon_role => icon(
         icon_role

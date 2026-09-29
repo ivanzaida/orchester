@@ -8,7 +8,7 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokenBudget,
 };
-use orchester_desktop::tasks::data::{TaskDraftSaveError, save_draft, save_draft_in};
+use orchester_desktop::tasks::data::{SaveTarget, TaskDraftSaveError, save_draft, save_draft_in};
 use orchester_store::ProjectDb;
 
 use crate::{
@@ -176,7 +176,7 @@ fn queued_task_cannot_be_reported_as_a_saved_draft() {
   task.queue().expect("complete task queues");
   db.save_task(&task).expect("persist queued task");
   assert_eq!(task.status(), TaskStatus::Queued);
-  let result = save_draft_in(&desktop.repo, batch, details);
+  let result = save_draft_in(&desktop.repo, SaveTarget::New(batch), details);
   assert!(matches!(result, Err(TaskDraftSaveError::NotDraft(TaskStatus::Queued))));
 }
 

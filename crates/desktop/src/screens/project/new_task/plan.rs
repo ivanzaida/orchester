@@ -23,7 +23,7 @@ use crate::{
   navigation::route::{Page, PipelineView},
   tabs::OpenIn,
   tasks::data::PipelineChoice,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, SKIPPED_BY_TAB},
     field::{ValueTone, select_style, value_box_sized, wrapping_field_error},
@@ -356,34 +356,6 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element
         .width(Dimension::Pct(100.0))
     })
     .collect();
-  let label = if state.saving {
-    ctx.t("tasks.new.savingDraft")
-  } else {
-    ctx.t("tasks.new.saveDraft")
-  };
-  let text = Text::new(&label)
-    .variant(TypographyStyle::Caption)
-    .color(PaletteColor::TextMuted);
-  let save_draft = Button::empty()
-    .button()
-    .id("save-draft")
-    .padding_horizontal(SpacingSize::Xs)
-    .padding_vertical(SpacingSize::Xs)
-    .align_items(Alignment::Start)
-    .justify(Justify::Center)
-    .rounded(RadiusSize::Sm)
-    .child(text);
-  let save_draft = match save {
-    Some(save) => keyboard_stop(save_draft, Ring::Outer)
-      .describe("state", "enabled")
-      .cursor(CursorIcon::Pointer)
-      .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-      .on_click(move |_| save()),
-    None => save_draft
-      .describe("state", "disabled")
-      .cursor(CursorIcon::NotAllowed)
-      .tab_index(SKIPPED_BY_TAB),
-  };
   let label = if state.starting {
     ctx.t("tasks.new.starting")
   } else {
@@ -415,7 +387,48 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element
       Row::new()
         .width(Dimension::Pct(100.0))
         .justify(Justify::Center)
-        .child(save_draft),
+        .child(save_button(ctx, state, save)),
     )
     .into()
+}
+
+/// Save as draft, or Save changes while a draft is edited (`Q4xE7q`, `fNWfv`); `save` is `None`
+/// while it cannot be pressed.
+fn save_button(ctx: &Ctx, state: &FormState, save: Submit) -> Button {
+  let label = match (state.editing, state.saving) {
+    (true, true) => ctx.t("tasks.edit.savingChanges"),
+    (true, false) => ctx.t("tasks.edit.saveChanges"),
+    (false, true) => ctx.t("tasks.new.savingDraft"),
+    (false, false) => ctx.t("tasks.new.saveDraft"),
+  };
+  let text = Text::new(&label)
+    .variant(TypographyStyle::Caption)
+    .color(PaletteColor::TextMuted);
+  let save_draft = Button::empty()
+    .button()
+    .id("save-draft")
+    .padding_horizontal(SpacingSize::Xs)
+    .padding_vertical(SpacingSize::Xs)
+    .align_items(Alignment::Start)
+    .justify(Justify::Center)
+    .rounded(RadiusSize::Sm)
+    .child(text);
+  let disabled = save.is_none();
+  let save_draft = match save {
+    Some(save) => keyboard_stop(save_draft, Ring::Outer)
+      .describe("state", "enabled")
+      .cursor(CursorIcon::Pointer)
+      .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+      .on_click(move |_| save()),
+    None => save_draft
+      .describe("state", "disabled")
+      .cursor(CursorIcon::NotAllowed)
+      .tab_index(SKIPPED_BY_TAB),
+  };
+  // Save changes that cannot be pressed fades (`fNWfv` in `E1o77O`).
+  if state.editing && disabled {
+    save_draft.opacity(DISABLED_OPACITY)
+  } else {
+    save_draft
+  }
 }

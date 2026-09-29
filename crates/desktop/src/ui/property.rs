@@ -22,6 +22,8 @@ pub enum ValueStyle {
   Path,
   /// Not known (yet), in the subtle color: *Checking…*, *Not signed in*.
   Pending,
+  /// Not chosen or not set yet, in the muted color: *No pipeline chosen* (`zo13H` in `h3IIs`).
+  Unset,
 }
 
 pub fn property(label: &str, value: &str) -> Element {
@@ -58,6 +60,7 @@ fn aligned_property(label: &str, value: &str, style: ValueStyle, alignment: Alig
     ValueStyle::Mono => (ExtraTypography::MonoValue.role(), PaletteColor::TextPrimary),
     ValueStyle::Path => (TypographyStyle::Mono, PaletteColor::TextPrimary),
     ValueStyle::Pending => (TypographyStyle::Caption, PaletteColor::TextMuted),
+    ValueStyle::Unset => (TypographyStyle::Caption, PaletteColor::TextSecondary),
   };
   property_row(label, alignment)
     .height(Dimension::Px(PROPERTY_HEIGHT))

@@ -6,7 +6,7 @@
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
-  id::{IdempotencyKey, ResourceId},
+  id::ResourceId,
   resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version},
   run::{PreflightInput, PreflightProblem, RunLimit, preflight},
   store::{ConnectionStore, ResourceStore, TaskStore},
@@ -17,7 +17,7 @@ use orchester_core::{
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::data::save_draft;
+use super::data::{SaveTarget, save_to};
 use crate::{
   messages::{self, Message},
   runner::{RequestError, RunRequestError},
@@ -48,15 +48,22 @@ impl QueueFailure {
   }
 }
 
-/// Checks the configuration `details` would run with, then saves the task under `batch` and
-/// queues it.
-pub fn queue_in(repo_root: &Path, batch: IdempotencyKey, details: TaskDetails) -> Result<Task, QueueFailure> {
+/// Checks the configuration `details` would run with, then saves the task where `target` says and
+/// queues it. A draft being edited that an earlier attempt queued already is left as it was.
+pub fn queue_in(repo_root: &Path, target: SaveTarget, details: TaskDetails) -> Result<Task, QueueFailure> {
   let mut db = ProjectDb::open(repo_root)?;
   let problems = check(&db, &details)?;
   if !problems.is_empty() {
     return Err(QueueFailure::Preflight(problems));
   }
-  let mut task = save_draft(&mut db, batch, details, Timestamp::now())?;
+  let queued = match target {
+    SaveTarget::Draft(task) => db.task(task)?.filter(|task| task.status() != TaskStatus::Draft),
+    SaveTarget::New(_) => None,
+  };
+  if let Some(task) = queued {
+    return Ok(task);
+  }
+  let mut task = save_to(&mut db, target, details, Timestamp::now())?;
   if task.status() == TaskStatus::Draft {
     task.queue().map_err(QueueFailure::Queue)?;
     db.save_task(&task)?;
