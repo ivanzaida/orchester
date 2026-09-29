@@ -24,7 +24,7 @@ then the backlog by area.
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | L6 | `codex/verifier-no-focus` | lurq 0.30.3 candidate and no-focus app checks pass; release approval is pending. |
-| D4 | `codex/d4-focus-watch` | Run #8 applied the reviewed New Task patch and passed focused tests/check, but Implement failed after two lifecycle tests failed in-run and manual commit was denied. Both exact tests passed in an independent host rerun; cause remains unknown. Build+Pin, Review and Verify were skipped. Rerun from disposable checkpoint. |
+| D4 | `codex/d4-focus-watch` | Run #9 passed Implement and Build+Pin from checkpoint `a118614`; Review's read-only sandbox rejected the agent's attempted test/check launches. Review reported failed before finishing, and Verify was skipped. A fresh 2160×1440 Pencil design was staged, but no app comparison exists. Prepare Review profile v2 and rerun. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
 | U3 | `codex/claude-mechanism` | Live Pencil/app comparison passes; the edited `.pen` is not saved into the worktree yet. |
 | M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and MCP-only live checks pass; the live mixed state and exact MCP/mixed *Used by* Pencil frames are unavailable. |
@@ -122,6 +122,12 @@ a manual commit. Both exact lifecycle tests passed 1/1 in an independent host re
 in-run failures. Orchester created clean checkpoint `a118614`; the disposable project's `master` now points to it.
 Build+Pin, Review and Verify were skipped, so there is still no successful Pencil/app comparison or UI pass. The
 host-app foreground watcher passed at sampled instants. See `docs/evidence/d4-run8-2026-09-29.md`.
+Run #9 passed Implement's focused tests/check and Build+Pin from clean checkpoint `a118614`. The host staged a fresh
+2160 × 1440 Pencil design image and frozen helpers. Review could inspect Git, but its read-only sandbox rejected
+the agent's attempted Cargo tests, `check.ps1` and `git rev-parse` launches before execution. The agent reported
+failure before finishing review, and Verify was skipped. No verifier
+app PNG or design comparison exists. Review profile v2 is being prepared; see
+`docs/evidence/d4-run9-2026-09-29.md`.
 D4 stays open until an independent Verify run compares Pencil and app images at the same state and size and reports
 no blocking or major mismatches.
 
