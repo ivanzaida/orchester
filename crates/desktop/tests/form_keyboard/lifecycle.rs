@@ -376,9 +376,8 @@ fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   ));
   assert!(!has(&mut desktop, "raise-limit"));
   assert!(has(&mut desktop, "task-cancel-run"));
-  // Without the raise panel Latest activity stays at the bottom, below the scrolled rows (`F2aBX`).
-  assert!(!text_of(&mut desktop, "task-progress-scroll", "Latest activity"));
-  assert!(text_of(&mut desktop, "task-progress", "Latest activity"));
+  // Latest activity follows the brief and scrolls with the rows (`uv4PY`, `dKiEj`).
+  assert!(text_of(&mut desktop, "task-progress-scroll", "Latest activity"));
   desktop.click("task-resume-run");
   let refusal = "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.";
   desktop.wait_until("the refusal", |desktop| text_of(desktop, "task-page", refusal));

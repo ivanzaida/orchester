@@ -64,7 +64,6 @@ pub(super) fn summary(
     return retry_limit(ctx, run, step);
   }
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
-  let raising = raise.is_some();
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Section)
@@ -83,46 +82,28 @@ pub(super) fn summary(
   Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(progress_column(content, latest, (raising, &scrolls.progress)))
+    .child(progress_column(content, latest, &scrolls.progress))
     .child(panel)
     .into()
 }
 
-/// The notice, the raise panel and the progress rows (`content`) in a viewport with the scroll
-/// gutter (`ZVdRa`, thumb `PigH4`), so nothing is cut when they are taller than the window.
-/// Latest activity sits at the bottom when there is room. With the raise panel the column is
-/// taller than a 960px window (02.L2), so Latest activity scrolls with it, below the fold;
-/// otherwise it stays below the viewport. lurq cannot make scrolled content at least as tall as
-/// its viewport, which both at once would need.
-fn progress_column(content: Column, latest: Option<Element>, (raising, scroll): (bool, &ScrollState)) -> Element {
-  let scrolled = |content: Column| {
-    ScrollVertical::new(content)
-      .id("task-progress-scroll")
-      .with_scroll_state(scroll.clone())
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .scrollbar(gutter_scrollbar())
-  };
-  let column = Column::new()
+/// The notice, the raise panel, the progress rows, the brief and Latest activity in a viewport
+/// with the scroll gutter (`ZVdRa`, thumb `PigH4`; `hF9R9` in `uv4PY`), so nothing is cut when
+/// they are taller than the window: Latest activity follows the brief and scrolls with the column
+/// (`dKiEj`), as it does below the raise panel of 02.L2.
+fn progress_column(content: Column, latest: Option<Element>, scroll: &ScrollState) -> Element {
+  let scrolled = ScrollVertical::new(content.with_children(latest).padding_bottom(SpacingSize::Section))
+    .id("task-progress-scroll")
+    .with_scroll_state(scroll.clone())
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .scrollbar(gutter_scrollbar());
+  Column::new()
     .id("task-progress")
     .flex(1.0)
-    .height(Dimension::Pct(100.0));
-  if raising {
-    return column
-      .child(scrolled(
-        content.with_children(latest).padding_bottom(SpacingSize::Section),
-      ))
-      .into();
-  }
-  let latest = latest.map(|latest| {
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding_top(ExtraSpacing::Form.role())
-      .padding_horizontal(SpacingSize::Section)
-      .padding_bottom(SpacingSize::Section)
-      .child(latest)
-  });
-  column.child(scrolled(content)).with_children(latest).into()
+    .height(Dimension::Pct(100.0))
+    .child(scrolled)
+    .into()
 }
 
 /// Raise the limit to continue (`ZUYM0`), for a run stopped at a limit.
