@@ -37,6 +37,37 @@ pub fn top_property(label: &str, value: &str, style: ValueStyle) -> Element {
   aligned_property(label, value, style, Alignment::Start)
 }
 
+/// Keep a property status visible when its preceding user value is too long for one row.
+pub fn property_with_suffix(label: &str, value: &str, suffix: &str) -> Element {
+  property_row(label, Alignment::Center)
+    .height(Dimension::Px(PROPERTY_HEIGHT))
+    .child(
+      Row::new()
+        .flex(1.0)
+        .align_items(Alignment::Center)
+        .justify(Justify::End)
+        .child(
+          Text::new(value)
+            .variant(TypographyStyle::Caption)
+            .color(PaletteColor::TextPrimary)
+            .nowrap()
+            .text_overflow(TextOverflow::Elipsis)
+            .text_align(TextAlign::Right)
+            .flex(1.0)
+            .selectable(true),
+        )
+        .child(
+          Text::new(suffix)
+            .variant(TypographyStyle::Caption)
+            .color(PaletteColor::TextPrimary)
+            .nowrap()
+            .flex_shrink(0.0)
+            .selectable(true),
+        ),
+    )
+    .into()
+}
+
 /// An MCP remote authentication value may span several lines (`J6IaSG` in `a4lm6D`).
 pub fn wrapping_top_property(label: &str, value: &str) -> Element {
   property_row(label, Alignment::Start)

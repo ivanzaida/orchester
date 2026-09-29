@@ -152,14 +152,15 @@ impl Component for TaskScreen {
     control_action(ctx);
     let focus_composer = ctx.signal(false);
     ctx.provide(conversation::ComposerFocus(focus_composer.clone()));
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav");
     Self {
       requested: ctx.signal(None),
       retry: ctx.signal(0),
       reload: ctx.signal(0),
       focus_composer,
-      nav: ctx
-        .use_context::<ProjectNav>()
-        .expect("the project shell provides ProjectNav"),
+      nav,
       runners: ctx
         .use_context::<Runners>()
         .expect("the root provides Runners before mounting screens"),
@@ -212,6 +213,9 @@ impl Component for TaskScreen {
         .child(self.topbar(ctx, &props, (None, None), &control))
         .child(centered(panel.into()));
     };
+    if let Some(run) = detail.run.as_ref() {
+      ctx.provide(self.nav.integration(run.id()));
+    }
     let online = props.runner == RunnerState::Online;
     let lost = detail.lost_its_runner(online).then(|| Lost::of(&props.runner));
     let checkpointed = self.checkpointed(ctx, &props, &detail);

@@ -216,6 +216,7 @@ fn actions(ctx: &Ctx, dialog: &Dialog) -> Element {
         .in_form()
         .height(Dimension::Px(BUTTON_HEIGHT))
         .on_click(move || cancel())
+        .enabled(!dialog.pending)
         .render(ctx),
     )
     .child(confirm.render(ctx))

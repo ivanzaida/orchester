@@ -12,12 +12,8 @@ mod dialog;
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    component::Component,
-    ctx::{Ctx, FutureAction},
-  },
+  app::{component::Component, ctx::Ctx},
   components::{Column, Modal, ModalTarget, Row},
-  core::Signal,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::integration::Leftovers;
@@ -25,13 +21,11 @@ use orchester_core::integration::Leftovers;
 use self::dialog::{Dialog, dialog};
 use super::super::{ProjectNav, page};
 use crate::{
-  activity::{Activity, operations},
-  background,
-  messages::Message,
+  activity::Activity,
   programs::Programs,
   tasks::{
     detail::TaskDetail,
-    integration::{LeftBehind, remove_in},
+    integration_jobs::{JobState, RemoveArgs, RunIntegration},
   },
   ui::{button::ActionButton, icon::Icon},
   workspace::OpenProject,
@@ -48,41 +42,24 @@ pub(super) struct RemoveWorktreeProps {
 
 impl lurq::app::component::DevtoolsInspectable for RemoveWorktreeProps {}
 
-type RemoveAction = FutureAction<LeftBehind, (), Message>;
-
-pub(super) struct RemoveWorktree {
-  open: Signal<bool>,
-  /// The person agreed to discard the uncommitted changes the dialog lists.
-  discard: Signal<bool>,
-}
+pub(super) struct RemoveWorktree;
 
 impl Component for RemoveWorktree {
   type Props = RemoveWorktreeProps;
 
-  fn create(ctx: &mut Ctx) -> Self {
-    let action = remove_action(ctx);
-    let this = Self {
-      open: ctx.signal(false),
-      discard: ctx.signal(false),
-    };
-    let nav = ctx
-      .use_context::<ProjectNav>()
-      .expect("the project shell provides ProjectNav");
-    let open = this.open.clone();
-    // Done: the dialog closes and the task page reads what is left again.
-    ctx.watch(&action.state(), move |state| {
-      if !state.is_pending() && state.data.is_some() {
-        open.set(false);
-        nav.tasks_changed();
-      }
-    });
-    this
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<RemoveWorktreeProps>().clone();
-    let action = remove_action(ctx);
-    let (open, discard) = (self.open.clone(), self.discard.clone());
+    let job = ctx
+      .use_context::<RunIntegration>()
+      .expect("the task page provides its run integration");
+    let busy = job.busy()
+      || matches!(job.merge().get(), JobState::Running)
+      || matches!(job.remove().get(), JobState::Running | JobState::Succeeded);
+    let (open, discard) = (job.dialog_open(), job.discard());
     let key = if props.leftovers.worktrees.len() == 1 {
       "runs.worktree.remove.one"
     } else {
@@ -93,37 +70,50 @@ impl Component for RemoveWorktree {
       .id("task-remove-worktree")
       .height(Dimension::Px(page::TOPBAR_BUTTON_HEIGHT))
       .on_click(move || {
+        if job.busy() || matches!(job.remove().get_untracked(), JobState::Succeeded) {
+          return;
+        }
         discard.set(false);
         open.set(true);
       })
+      .enabled(!busy)
       .render(ctx);
-    Row::new().child(button).child(self.modal(ctx, &props, &action))
+    Row::new().child(button).child(self.modal(ctx, &props))
   }
 }
 
 impl RemoveWorktree {
-  fn modal(&self, ctx: &mut Ctx, props: &RemoveWorktreeProps, action: &RemoveAction) -> Element {
-    if !self.open.get() {
+  fn modal(&self, ctx: &mut Ctx, props: &RemoveWorktreeProps) -> Element {
+    let job = ctx
+      .use_context::<RunIntegration>()
+      .expect("the task page provides its run integration");
+    if !job.dialog_open().get() {
       return Modal::new(Column::new()).open_when(false).into();
     }
-    let state = action.state().get();
-    let pending = state.is_pending();
+    let state = job.remove().get();
+    let pending = matches!(state, JobState::Running);
+    let busy = job.busy() || matches!(job.merge().get(), JobState::Running);
     let uncommitted = props.leftovers.uncommitted() > 0;
-    let confirm = (!pending && (!uncommitted || self.discard.get())).then(|| {
-      let (action, leftovers) = (action.clone(), props.leftovers.clone());
-      Arc::new(move || action.run(LeftBehind(leftovers.clone()))) as Arc<dyn Fn() + Send + Sync>
+    let confirm = (!busy && !pending && (!uncommitted || job.discard().get())).then(|| {
+      let args = remove_args(ctx, props);
+      let job = job.clone();
+      Arc::new(move || job.start_remove(args.clone())) as Arc<dyn Fn() + Send + Sync>
     });
-    let (close, discard) = (self.open.clone(), self.discard.clone());
+    let discard = job.discard();
+    let close = job.clone();
     let content = dialog(
       ctx,
       &Dialog {
         props,
-        discard: self.discard.get(),
+        discard: job.discard().get(),
         flip_discard: Arc::new(move || discard.update(|on| *on = !*on)),
         pending,
-        error: state.error.filter(|_| !pending),
+        error: match state {
+          JobState::Failed(error) => Some(error),
+          _ => None,
+        },
         confirm,
-        cancel: Arc::new(move || close.set(false)),
+        cancel: Arc::new(move || close.dismiss_remove()),
       },
     );
     Modal::new(content)
@@ -133,37 +123,32 @@ impl RemoveWorktree {
   }
 }
 
-/// Removes what the run left, as the dialog listed it, tracked in the status bar.
-fn remove_action(ctx: &mut Ctx) -> RemoveAction {
-  let props = ctx.props::<RemoveWorktreeProps>().clone();
+/// The exact worktrees and uncommitted files that the confirmation listed.
+fn remove_args(ctx: &mut Ctx, props: &RemoveWorktreeProps) -> RemoveArgs {
   let programs = ctx
     .use_context::<Programs>()
     .expect("the root provides Programs before mounting screens");
   let activity = Activity::of(ctx);
   let separator = ctx.t("common.listSeparator");
-  ctx.future_action(move |LeftBehind(confirmed): LeftBehind| {
-    let (programs, activity, separator, props) = (programs.clone(), activity.clone(), separator.clone(), props.clone());
-    async move {
-      let run = props
-        .detail
-        .run
-        .as_ref()
-        .map(|run| run.run.clone())
-        .expect("a run's worktrees are removed from its task page");
-      let task = &props.detail.task;
-      let (key, number) = (task.key().to_string(), run.number().get());
-      let running = activity.start(operations::run_cleanup(&props.open, task.id(), (&key, number)));
-      let not_done = Message::new("statusBar.operations.runCleanup.notDone")
-        .with("task", key)
-        .with("run", number.to_string());
-      let repo_root = props.open.repo_root.clone();
-      let removed = background::run(move || remove_in(&repo_root, &programs, &run, &confirmed)).await;
-      match &removed {
-        Ok(Ok(())) => running.finish(),
-        Ok(Err(problem)) => problem.end(running, not_done),
-        Err(message) => running.fail(message.clone()),
-      }
-      removed?.map_err(|problem| problem.message(&separator))
-    }
-  })
+  let nav = ctx
+    .use_context::<ProjectNav>()
+    .expect("the project shell provides ProjectNav");
+  let run = props
+    .detail
+    .run
+    .as_ref()
+    .map(|run| run.run.clone())
+    .expect("a run's worktrees are removed from its task page");
+  RemoveArgs {
+    open: props.open.clone(),
+    task: props.detail.task.id(),
+    key: props.detail.task.key().to_string(),
+    number: run.number().get(),
+    run,
+    confirmed: props.leftovers.clone(),
+    programs,
+    activity,
+    separator,
+    changed: Arc::new(move || nav.tasks_changed()),
+  }
 }

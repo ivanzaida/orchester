@@ -23,7 +23,6 @@ then the backlog by area.
 | Task | Branch | Verified progress and next gate |
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
-| U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass. Pencil now has corrected merging, removal and deleted-branch states; compare them with exact live app states and fix remaining differences. |
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; Not started, Interrupted and recipient-menu frames are now saved on `master` and need exact app comparisons. |
 | D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. Pencil now has matching error/retry frames. Same-state comparison and full runner macOS check remain; candidate unmerged. |
 
@@ -131,16 +130,6 @@ and MCP tools in the Tools library.
 
 ## U · Screens
 
-### U2 · Merge and worktree controls while work runs (UI)
-
-From the merge verification: *Remove worktree* can be pressed while a merge runs; *Cancel* stays enabled while a removal
-runs; the *Merge* button gets narrower while merging; the Working branch row still names a branch that was deleted.
-
-Pencil (drawn 2026-09-29): `d3oSWA` (02.P4, merging with Remove worktree unavailable), `g8ZALb` (02.Q3, removing with
-Cancel unavailable). Corrected: `jnagB` in `XIEn8` (Cancel unavailable while removing), `cE50X` in `HDTY5` (Merging…
-keeps 140 wide), `y6Pua` in `bMJUA` (*Working branch* reads *orc/github-auth · deleted*, where the app shows *No longer
-exists*).
-
 ### U6 · Conversation states not seen in the app (UI)
 
 The Paused, Stopped, Interrupted and Not started states of the conversation panel, and direct messages to one agent,
@@ -207,6 +196,13 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+U2 · Guard merge and worktree removal while integration runs · branch `codex/u2-merged-fix` (project/run-scoped busy
+state keeps conflicting controls unavailable, the Merging button retains its width, and a merged run shows its
+historical branch with a fully visible `· deleted` suffix. Independent real-Git integration tests passed 11/11;
+the corrected candidate passed the focused real-Git test, i18n 5/5 and `tools/check.ps1`. Exact-PID app comparisons
+to Pencil `jnagB`, `cE50X` and `bMJUA` found no blocking or major mismatch; a host watcher sampled the final app
+381 times without it taking focus. Pencil has a button specimen but no full in-flight merging page. Evidence:
+`docs/evidence/u2-merge-worktree-controls-2026-09-29.md`).
 M5 · Show who reaches a remote MCP server and wrap its Authentication value · branch `codex/m5-final-port`
 (remote inspector adds *Reached by*, aligns property rows to the top, and lets only the long Authentication row
 grow. Independent same-state 2160 × 1440 Pencil `a4lm6D` / exact-PID app comparison found no blocking or major
