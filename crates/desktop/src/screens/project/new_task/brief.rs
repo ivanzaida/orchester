@@ -8,7 +8,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, ScrollVertical, Spacer, Text, TextOverflow},
+  components::{Button, Column, Row, ScrollVertical, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -18,7 +18,7 @@ use orchester_core::{repository::RepositoryLink, task::MissingDetail};
 use super::{FOCUS_ROOM, FormState, NewTaskForm, missing_note};
 use crate::{
   display,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
     field::{styled_input, text_input, wrapping_field_error},
@@ -44,6 +44,8 @@ const PATH_CHARS: usize = 64;
 pub struct Criterion {
   id: u64,
   pub text: Signal<String>,
+  hovered: Signal<bool>,
+  remove_focused: Signal<bool>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Criterion {}
@@ -53,6 +55,8 @@ impl Criterion {
     Self {
       id,
       text: Signal::new(String::new()),
+      hovered: Signal::new(false),
+      remove_focused: Signal::new(false),
     }
   }
 }
@@ -95,6 +99,20 @@ pub fn brief_form(
 }
 
 fn preview_footer(ctx: &Ctx) -> Element {
+  let preview = Button::empty()
+    .button()
+    .id("task-preview")
+    .describe("state", "unavailable")
+    .focusable(false)
+    .cursor(CursorIcon::NotAllowed)
+    .opacity(DISABLED_OPACITY)
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Xs)
+        .align_items(Alignment::Center)
+        .child(Text::new(&ctx.t("tasks.new.preview")).variant(TypographyStyle::Link))
+        .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted)),
+    );
   Row::new()
     .id("new-task-preview-footer")
     .width(Dimension::Pct(100.0))
@@ -105,13 +123,7 @@ fn preview_footer(ctx: &Ctx) -> Element {
         .variant(TypographyStyle::Caption)
         .color(PaletteColor::TextMuted),
     )
-    .child(Spacer::new().flex(1.0))
-    .child(
-      ActionButton::new(ctx.t("tasks.new.preview"))
-        .compact()
-        .id("task-preview")
-        .render(ctx),
-    )
+    .child(preview)
     .into()
 }
 
@@ -288,20 +300,34 @@ fn criterion_row(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, criterion: &Crite
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Inline.role())
     .align_items(Alignment::Center)
+    .on_mouse_enter({
+      let hovered = criterion.hovered.clone();
+      move || hovered.set(true)
+    })
+    .on_mouse_leave({
+      let hovered = criterion.hovered.clone();
+      move || hovered.set(false)
+    })
     .child(icon(Icon::Circle, IconSize::Marker, PaletteColor::TextMuted))
     .child(input);
   if !removable {
     return row.into();
   }
   let (criteria, id) = (criteria.clone(), criterion.id);
+  let shown = criterion.hovered.get() || criterion.remove_focused.get();
+  let focused = criterion.remove_focused.clone();
+  let blurred = criterion.remove_focused.clone();
   row
     .child(
       keyboard_stop(Button::empty().button(), Ring::Inset)
         .id(Arc::<str>::from(format!("remove-criterion-{id}")))
         .align_items(Alignment::Start)
+        .opacity(if shown { 1.0 } else { 0.0 })
         .cursor(CursorIcon::Pointer)
         .rounded(RadiusSize::Sm)
         .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+        .on_focus(move || focused.set(true))
+        .on_blur(move || blurred.set(false))
         .on_click(move |_| criteria.update(|rows| rows.retain(|row| row.id != id)))
         .child(icon(Icon::X, IconSize::Dismiss, PaletteColor::TextSecondary)),
     )

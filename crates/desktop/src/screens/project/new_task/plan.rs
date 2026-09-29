@@ -356,21 +356,18 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element
         .width(Dimension::Pct(100.0))
     })
     .collect();
-  let enabled = save.is_some();
   let label = if state.saving {
     ctx.t("tasks.new.savingDraft")
   } else {
     ctx.t("tasks.new.saveDraft")
   };
-  let text = Text::new(&label).variant(TypographyStyle::Caption).color(if enabled {
-    PaletteColor::TextPrimary
-  } else {
-    PaletteColor::TextMuted
-  });
+  let text = Text::new(&label)
+    .variant(TypographyStyle::Caption)
+    .color(PaletteColor::TextMuted);
   let save_draft = Button::empty()
     .button()
     .id("save-draft")
-    .width(Dimension::Pct(100.0))
+    .padding_horizontal(SpacingSize::Xs)
     .padding_vertical(SpacingSize::Xs)
     .align_items(Alignment::Start)
     .justify(Justify::Center)
@@ -414,6 +411,11 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element
     .with_children(run_status)
     .with_children(status)
     .with_children(reasons)
-    .child(save_draft)
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .justify(Justify::Center)
+        .child(save_draft),
+    )
     .into()
 }
