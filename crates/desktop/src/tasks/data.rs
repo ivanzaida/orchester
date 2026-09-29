@@ -6,19 +6,32 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use orchester_core::{
   conversation::{Message, latest_question},
   id::{IdempotencyKey, ResourceId},
-  resource::{AgentProfile, Pipeline, ResourceKind, StepKey, VersionNumber},
+  resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, StepExecutor},
   store::{ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
+use thiserror::Error;
 
 use super::{
   detail::run_store_error,
   list::{Awaited, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, Phases},
   unreadable::Unreadable,
 };
+use crate::{
+  messages::Message as UiMessage,
+  pipelines::{data::Assignables, describe},
+};
+
+/// A step in a published pipeline a task can use.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PipelineStepChoice {
+  pub name: Arc<str>,
+  pub executor: UiMessage,
+  pub approval_gate: bool,
+}
 
 /// A pipeline a task can use: one with a published version.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,7 +40,7 @@ pub struct PipelineChoice {
   pub name: Arc<str>,
   /// The latest published version, which new runs use.
   pub version: VersionNumber,
-  pub steps: Vec<Arc<str>>,
+  pub steps: Vec<PipelineStepChoice>,
 }
 
 /// The project's tasks and the pipelines they can use, read together.
@@ -157,8 +170,9 @@ fn awaited_question(
 
 /// Pipelines with a published version, ordered by slug. Drafts that were never published
 /// cannot be run, so they are not offered.
-pub fn published_pipelines<S: ResourceStore>(store: &S) -> Result<Vec<PipelineChoice>, S::Error> {
+pub fn published_pipelines(store: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreError> {
   let mut choices = Vec::new();
+  let assignables = Assignables::load(store)?;
   for resource in store.resources(ResourceKind::Pipeline)? {
     let Some(version) = store.latest_version::<Pipeline>(resource.id())? else {
       continue;
@@ -167,15 +181,21 @@ pub fn published_pipelines<S: ResourceStore>(store: &S) -> Result<Vec<PipelineCh
       id: resource.id(),
       name: resource.name().as_str().into(),
       version: version.number(),
-      steps: version
-        .body()
-        .steps()
-        .iter()
-        .map(|step| step.name.as_str().into())
-        .collect(),
+      steps: step_choices(version.body().steps(), &assignables),
     });
   }
   Ok(choices)
+}
+
+fn step_choices(steps: &[Step], assignables: &Assignables) -> Vec<PipelineStepChoice> {
+  steps
+    .iter()
+    .map(|step| PipelineStepChoice {
+      name: step.name.as_str().into(),
+      executor: describe::executor_line(step, assignables),
+      approval_gate: step.approval_gate,
+    })
+    .collect()
 }
 
 /// Saves `details` as one draft task under `batch`, the key the form generated for this
@@ -201,8 +221,30 @@ pub fn save_draft<S: TaskStore>(
   Ok(edited)
 }
 
-/// [`save_draft`] in the project database of `repo_root`.
-pub fn save_draft_in(repo_root: &Path, batch: IdempotencyKey, details: TaskDetails) -> Result<Task, StoreError> {
+/// A Save as draft request cannot succeed when its idempotency key now names a queued task.
+#[derive(Debug, Error)]
+pub enum TaskDraftSaveError {
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  #[error("the task is no longer a draft: {0:?}")]
+  NotDraft(TaskStatus),
+  #[error("the persisted draft differs from the requested details")]
+  DetailsMismatch,
+}
+
+/// [`save_draft`] in the project database of `repo_root`, confirmed as the requested draft.
+pub fn save_draft_in(
+  repo_root: &Path,
+  batch: IdempotencyKey,
+  details: TaskDetails,
+) -> Result<TaskDetails, TaskDraftSaveError> {
   let mut db = ProjectDb::open(repo_root)?;
-  save_draft(&mut db, batch, details, Timestamp::now())
+  let saved = save_draft(&mut db, batch, details.clone(), Timestamp::now())?;
+  if saved.status() != TaskStatus::Draft {
+    return Err(TaskDraftSaveError::NotDraft(saved.status()));
+  }
+  if saved.details() != &details {
+    return Err(TaskDraftSaveError::DetailsMismatch);
+  }
+  Ok(details)
 }

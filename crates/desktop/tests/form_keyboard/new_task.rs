@@ -1,3 +1,16 @@
+use std::time::Duration;
+
+use orchester_core::{
+  id::{IdempotencyKey, ResourceId},
+  name::Name,
+  store::TaskStore,
+  task::{TaskDetails, TaskLimits, TaskStatus},
+  time::Timestamp,
+  tokens::TokenBudget,
+};
+use orchester_desktop::tasks::data::{TaskDraftSaveError, save_draft, save_draft_in};
+use orchester_store::ProjectDb;
+
 use crate::{
   github::shows,
   harness::{Desktop, expected},
@@ -105,9 +118,66 @@ fn new_task_enter_saves_only_a_valid_draft() {
   desktop.key("Backspace", "Backspace");
   desktop.tab_to(TITLE, MAX_STOPS);
   desktop.enter();
-  desktop.settle("the saved draft in the task list", |tree| {
-    tree.get_element_by_id(TITLE).is_none() && tree.get_element_by_id("tasks-new-task").is_some()
+  desktop.settle("the saved draft in the form", |tree| {
+    tree
+      .get_element_by_id("new-task-state")
+      .and_then(|state| state.text_content())
+      .is_some_and(|status| status.contains("Draft saved locally"))
   });
+  assert!(desktop.tree.get_element_by_id(TITLE).is_some());
+  let db = ProjectDb::open(&desktop.repo).expect("open project");
+  assert_eq!(db.tasks().expect("read tasks").len(), 1);
+}
+
+#[test]
+fn new_task_saved_state_tracks_edits_and_resave() {
+  let mut desktop = new_task();
+  desktop.tab_to(TITLE, MAX_STOPS);
+  desktop.type_text("Add switcher");
+  desktop.press("save-draft");
+  desktop.settle("first draft save", |tree| {
+    tree
+      .get_element_by_id("new-task-state")
+      .and_then(|state| state.text_content())
+      .is_some_and(|status| status.contains("Draft saved locally"))
+  });
+  desktop.tab_to(BRIEF, MAX_STOPS);
+  desktop.type_text("Add a switcher to the project.");
+  assert!(shows(&mut desktop, "new-task-state", "Not saved yet"));
+  desktop.press("save-draft");
+  desktop.settle("edited draft save", |tree| {
+    tree
+      .get_element_by_id("new-task-state")
+      .and_then(|state| state.text_content())
+      .is_some_and(|status| status.contains("Draft saved locally"))
+  });
+  let db = ProjectDb::open(&desktop.repo).expect("open project");
+  let tasks = db.tasks().expect("read tasks");
+  assert_eq!(tasks.len(), 1);
+  assert_eq!(tasks[0].details().brief, "Add a switcher to the project.");
+}
+
+#[test]
+fn queued_task_cannot_be_reported_as_a_saved_draft() {
+  let desktop = new_task();
+  let batch = IdempotencyKey::generate();
+  let details = TaskDetails {
+    title: Name::new("Add switcher").expect("valid title"),
+    brief: "Add a switcher.".into(),
+    acceptance_criteria: vec!["The switcher works.".into()],
+    pipeline: Some(ResourceId::generate()),
+    limits: Some(
+      TaskLimits::new(TokenBudget::new(1_400_000).expect("budget"), Duration::from_secs(1800))
+        .expect("positive limits"),
+    ),
+  };
+  let mut db = ProjectDb::open(&desktop.repo).expect("open project");
+  let mut task = save_draft(&mut db, batch, details.clone(), Timestamp::now()).expect("save draft");
+  task.queue().expect("complete task queues");
+  db.save_task(&task).expect("persist queued task");
+  assert_eq!(task.status(), TaskStatus::Queued);
+  let result = save_draft_in(&desktop.repo, batch, details);
+  assert!(matches!(result, Err(TaskDraftSaveError::NotDraft(TaskStatus::Queued))));
 }
 
 #[test]

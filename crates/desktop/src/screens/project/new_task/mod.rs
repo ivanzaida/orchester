@@ -46,7 +46,7 @@ use crate::{
   navigation::route::Page,
   runner::Runners,
   tasks::{
-    data::{PipelineChoice, save_draft_in},
+    data::{PipelineChoice, TaskDraftSaveError, save_draft_in},
     form::{FormErrors, TaskForm},
     list::missing_key,
     run::{queue_in, start_messages},
@@ -81,14 +81,14 @@ pub struct PipelineSelection(pub Option<ResourceId>);
 
 impl lurq::app::component::DevtoolsInspectable for PipelineSelection {}
 
-/// Key of the saved task, to confirm the save happened.
+/// Details of the latest draft save that completed successfully.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SavedTask(Arc<str>);
+pub struct SavedDraft(TaskDetails);
 
-impl lurq::app::component::DevtoolsInspectable for SavedTask {}
+impl lurq::app::component::DevtoolsInspectable for SavedDraft {}
 
 type SaveArgs = (PathBuf, IdempotencyKey, TaskDetails);
-type SaveAction = FutureAction<SaveArgs, SavedTask, Message>;
+type SaveAction = FutureAction<SaveArgs, SavedDraft, Message>;
 
 /// The task whose run started.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,6 +112,8 @@ struct FormState {
   missing: Vec<MissingDetail>,
   ready: Option<TaskDetails>,
   saving: bool,
+  saved: bool,
+  queued: bool,
   save_error: Option<Message>,
   /// Create & run is under way.
   starting: bool,
@@ -135,6 +137,8 @@ pub struct NewTaskForm {
   focused_input: FocusedInput,
   /// The limits were filled in from the project's defaults; they are filled in once.
   seeded: Signal<bool>,
+  /// Once this form's batch was queued, retries cannot turn it back into a draft.
+  queued: Signal<bool>,
   /// Generated once per form: every save attempt of this form uses it.
   batch: IdempotencyKey,
   /// Generated once per form: every Create & run attempt of this form starts this run.
@@ -152,12 +156,12 @@ impl Component for NewTaskForm {
     let save = save_action(ctx);
     let saved = nav.clone();
     ctx.watch(&save.state(), move |state| {
-      if state.data.is_some() {
+      if state.data.is_some() && !state.is_pending() {
         saved.tasks_changed();
-        saved.finish(Page::TASKS);
       }
     });
-    let run = run_action(ctx);
+    let queued = ctx.signal(false);
+    let run = run_action(ctx, queued.clone());
     let started = nav.clone();
     ctx.watch(&run.state(), move |state| {
       if state.is_pending() {
@@ -178,6 +182,7 @@ impl Component for NewTaskForm {
       time_limit: ctx.signal(String::new()),
       focused_input: ctx.signal(None),
       seeded: ctx.signal(false),
+      queued,
       batch: IdempotencyKey::generate(),
       run: IdempotencyKey::generate(),
       nav,
@@ -187,7 +192,7 @@ impl Component for NewTaskForm {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<NewTaskProps>().clone();
     let save = save_action(ctx);
-    let run = run_action(ctx);
+    let run = run_action(ctx, self.queued.clone());
     let link = repository_link(ctx, &props.project);
     let limits = props.limits.unwrap_or_default();
     self.seed(ctx, props.limits);
@@ -195,7 +200,7 @@ impl Component for NewTaskForm {
     let state = self.state(&save, &run, &separator, limits);
     let submit = self
       .save_handler(&save, &props.project, state.ready.clone())
-      .filter(|_| !state.saving && !state.starting);
+      .filter(|_| !state.saving && !state.starting && !state.queued);
     let start = self
       .run_handler(&run, &props.project, state.ready.clone())
       .filter(|_| !state.saving && !state.starting && state.missing.is_empty());
@@ -206,7 +211,7 @@ impl Component for NewTaskForm {
     let content = Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
-      .padding_top(SpacingSize::Sm)
+      .padding_top(ExtraSpacing::Inline.role())
       .padding_left(Dimension::Px(brief_left))
       .padding_right(ExtraSpacing::Indent.role())
       .padding_bottom(SpacingSize::Section)
@@ -275,9 +280,15 @@ impl NewTaskForm {
       Err(errors) => (None, errors),
     };
     let starting = run.state().get();
+    let queued = self.queued.get();
     FormState {
       errors,
       missing: form.missing(),
+      saved: !queued
+        && ready
+          .as_ref()
+          .is_some_and(|details| saving.data.as_ref().is_some_and(|saved| &saved.0 == details)),
+      queued,
       ready,
       saving: saving.is_pending(),
       save_error: saving.error.clone().filter(|_| !saving.is_pending()),
@@ -340,24 +351,27 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
     async move {
       let save = async move {
         let saved = background::run(move || save_draft_in(&repo_root, batch, details)).await?;
-        saved
-          .map(|task| SavedTask(task.key().to_string().into()))
-          .map_err(|error| {
-            tracing::error!(%error, "cannot save the task draft");
-            messages::store_error(&error)
-          })
+        saved.map(SavedDraft).map_err(|error| {
+          tracing::error!(%error, "cannot save the task draft");
+          match error {
+            TaskDraftSaveError::Store(error) => messages::store_error(&error),
+            TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.noLongerDraft"),
+            TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.savedDetailsDiffer"),
+          }
+        })
       };
       activity.track(spec, save).await
     }
   })
 }
 
-fn run_action(ctx: &mut Ctx) -> RunAction {
+fn run_action(ctx: &mut Ctx, queued: Signal<bool>) -> RunAction {
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting screens");
   ctx.future_action(move |(repo_root, batch, key, details): RunArgs| {
     let runners = runners.clone();
+    let queued_state = queued.clone();
     async move {
       let problems = |messages: Vec<Message>| RunProblems(messages.into());
       let queued = background::run(move || queue_in(&repo_root, batch, details))
@@ -367,6 +381,9 @@ fn run_action(ctx: &mut Ctx) -> RunAction {
         tracing::warn!(?failure, "the task was not queued for a run");
         problems(failure.messages())
       })?;
+      if !queued_state.get_untracked() {
+        queued_state.set(true);
+      }
       runners.start_run(key, task.id()).await.map_err(|error| {
         tracing::warn!(%error, "the run did not start");
         problems(start_messages(&error))
@@ -376,8 +393,7 @@ fn run_action(ctx: &mut Ctx) -> RunAction {
   })
 }
 
-/// Back to the task list, the breadcrumb and the save state (`dWjfr`). Nothing is saved until
-/// Save as draft or Create & run, so the state says so rather than claiming a saved draft.
+/// Back to the task list, the breadcrumb and the persisted task state (`dWjfr`).
 fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, form: &FormState) -> Element {
   let nav = nav.clone();
   let back = pressable(surface().id("new-task-back"), move || nav.leave(Page::TASKS))
@@ -388,6 +404,10 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, form: &FormState) -> Eleme
     ctx.t("tasks.new.starting")
   } else if form.saving {
     ctx.t("tasks.new.saving")
+  } else if form.queued {
+    ctx.t("tasks.new.queued")
+  } else if form.saved {
+    ctx.t("tasks.new.saved")
   } else {
     ctx.t("tasks.new.notSaved")
   };

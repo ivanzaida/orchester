@@ -1,5 +1,5 @@
 //! Back and forward: the mouse's side buttons (on release) and the history shortcuts move
-//! through the screens the user opened, tabs included. A submitted form is not visited again,
+//! through the screens the user opened, tabs included. A submitted run form is not visited again,
 //! no screen follows itself in history, and Alt+Left in a focused text field stays with the
 //! field.
 
@@ -60,7 +60,7 @@ fn shortcut(desktop: &mut Desktop, back: bool) {
   desktop.pass();
 }
 
-/// The saved draft "Add switcher", listed in Tasks after New task.
+/// The saved draft "Add switcher", listed in Tasks after leaving New task.
 fn saved_draft() -> Desktop {
   let mut desktop = Desktop::with_project();
   desktop.wait_for(OVERVIEW);
@@ -71,6 +71,13 @@ fn saved_draft() -> Desktop {
   desktop.tab_to(TITLE, MAX_STOPS);
   desktop.type_text("Add switcher");
   desktop.enter();
+  desktop.settle("the draft save", |tree| {
+    tree
+      .get_element_by_id("new-task-state")
+      .and_then(|state| state.text_content())
+      .is_some_and(|status| status.contains("Draft saved locally"))
+  });
+  desktop.press("new-task-back");
   desktop.wait_for("task-row-KON-1");
   desktop
 }
@@ -133,18 +140,15 @@ fn tab_selected(tree: &mut Tree, id: &str) -> bool {
 }
 
 #[test]
-fn history_submitted_form_is_not_visited_again() {
+fn history_saved_draft_stays_in_the_form_until_leaving() {
   let mut desktop = saved_draft();
-  // Save draft returned to the list the form was opened from, so the list is one entry and
-  // going back leads to the overview.
+  // Leaving after Save returns to the list; the form remains a history entry.
   side_button(&mut desktop, BACK);
   desktop.wait_for(OVERVIEW);
   side_button(&mut desktop, FORWARD);
   desktop.wait_for("task-row-KON-1");
   side_button(&mut desktop, FORWARD);
-  desktop.pass();
-  assert!(shows(&mut desktop, "task-row-KON-1"), "the list is the last entry");
-  assert!(!shows(&mut desktop, TITLE));
+  desktop.wait_for(TITLE);
 }
 
 #[test]
@@ -176,6 +180,13 @@ fn history_saved_draft_returns_to_the_tab_it_was_written_from() {
   desktop.tab_to(TITLE, MAX_STOPS);
   desktop.type_text("Second draft");
   desktop.enter();
+  desktop.settle("the second draft save", |tree| {
+    tree
+      .get_element_by_id("new-task-state")
+      .and_then(|state| state.text_content())
+      .is_some_and(|status| status.contains("Draft saved locally"))
+  });
+  desktop.press("new-task-back");
   desktop.settle("the second draft on the Drafts tab", |tree| {
     tree.get_element_by_id("task-row-KON-2").is_some() && tab_selected(tree, "tasks-tab-drafts")
   });
@@ -231,12 +242,18 @@ fn history_saved_draft_from_the_overview_follows_it() {
   desktop.tab_to(TITLE, MAX_STOPS);
   desktop.type_text("Add switcher");
   desktop.enter();
+  desktop.settle("the draft save", |tree| {
+    tree
+      .get_element_by_id("new-task-state")
+      .and_then(|state| state.text_content())
+      .is_some_and(|status| status.contains("Draft saved locally"))
+  });
+  desktop.press("new-task-back");
   desktop.wait_for("task-row-KON-1");
   side_button(&mut desktop, BACK);
-  desktop.wait_for(OVERVIEW);
+  desktop.wait_for(TITLE);
   side_button(&mut desktop, FORWARD);
   desktop.wait_for("task-row-KON-1");
-  assert!(!shows(&mut desktop, TITLE));
 }
 
 #[test]

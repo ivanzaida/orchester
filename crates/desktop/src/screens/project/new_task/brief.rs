@@ -8,7 +8,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, ScrollVertical, Text, TextOverflow},
+  components::{Button, Column, Row, ScrollVertical, Spacer, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -85,11 +85,33 @@ pub fn brief_form(
         .in_form()
         .height(Dimension::Px(CONTEXT_BUTTON_HEIGHT))
         .render(ctx),
-    ));
+    ))
+    .child(preview_footer(ctx));
   ScrollVertical::new(fields)
     .id("new-task-brief")
     .flex(1.0)
     .height(Dimension::Pct(100.0))
+    .into()
+}
+
+fn preview_footer(ctx: &Ctx) -> Element {
+  Row::new()
+    .id("new-task-preview-footer")
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Stack.role())
+    .align_items(Alignment::Center)
+    .child(
+      Text::new(&ctx.t("tasks.new.previewFooter"))
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::TextMuted),
+    )
+    .child(Spacer::new().flex(1.0))
+    .child(
+      ActionButton::new(ctx.t("tasks.new.preview"))
+        .compact()
+        .id("task-preview")
+        .render(ctx),
+    )
     .into()
 }
 

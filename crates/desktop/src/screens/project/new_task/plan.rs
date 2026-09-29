@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, Select, Spacer, Text},
+  components::{Button, Column, Row, Select, Spacer, Text, TextOverflow},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -20,13 +20,16 @@ use orchester_core::{limits::ProjectLimits, task::MissingDetail, tokens::compact
 use super::{FormState, NewTaskForm, PipelineSelection, missing_note};
 use crate::{
   budget::read_budget,
+  navigation::route::{Page, PipelineView},
+  tabs::OpenIn,
   tasks::data::PipelineChoice,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, SKIPPED_BY_TAB},
     field::{ValueTone, select_style, value_box_sized, wrapping_field_error},
     form::Submit,
-    icon::Icon,
+    icon::{Icon, IconSize, icon},
+    link::Link,
     message_text,
     pressable::{Ring, keyboard_stop},
     unit_input::UnitInput,
@@ -51,9 +54,8 @@ pub fn execution_plan(
   start: Submit,
 ) -> Element {
   let selected = form.pipeline.get().0;
-  let steps = pipelines
-    .and_then(|choices| choices.iter().find(|choice| Some(choice.id) == selected))
-    .map(|choice| pipeline_steps(&choice.steps));
+  let pipeline = pipelines.and_then(|choices| choices.iter().find(|choice| Some(choice.id) == selected));
+  let steps = pipeline.map(|choice| pipeline_steps(ctx, choice));
   Column::new()
     .id("execution-plan")
     .width(Dimension::Px(PLAN_WIDTH))
@@ -63,14 +65,53 @@ pub fn execution_plan(
     // The full-width actions at its edges keep their focus rings (`xURvJ`).
     .overflow_visible()
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(Text::new(&ctx.t("tasks.new.executionPlan")).variant(ExtraTypography::SectionHeading.role()))
+    .child(plan_heading(ctx))
     .child(pipeline_selector(ctx, &form.pipeline, pipelines))
     .with_children(steps)
+    .with_children(pipeline.map(|choice| view_pipeline(ctx, form, choice)))
     .with_children(missing_note(ctx, state, MissingDetail::Pipeline))
     .child(run_limits(ctx, form, state, limits))
+    .with_children(pipeline.map(|choice| review_policy(ctx, choice)))
     .child(Spacer::new().flex(1.0))
     .child(actions(ctx, state, save, start))
     .into()
+}
+
+fn plan_heading(ctx: &Ctx) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .align_items(Alignment::Center)
+    .child(Text::new(&ctx.t("tasks.new.executionPlan")).variant(ExtraTypography::SectionHeading.role()))
+    .child(Spacer::new().flex(1.0))
+    .into()
+}
+
+fn view_pipeline(ctx: &Ctx, form: &NewTaskForm, pipeline: &PipelineChoice) -> Element {
+  let link = keyboard_stop(
+    Button::empty()
+      .button()
+      .id("view-pipeline")
+      .padding_vertical(SpacingSize::Xs)
+      .rounded(RadiusSize::Sm)
+      .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+      .child(
+        Row::new()
+          .spacing(SpacingSize::Xs)
+          .align_items(Alignment::Center)
+          .child(Text::new(&ctx.t("tasks.new.viewPipeline")).variant(TypographyStyle::Link))
+          .child(icon(Icon::ArrowUpRight, IconSize::Small, PaletteColor::TextPrimary)),
+      ),
+    Ring::Outer,
+  );
+  let nav = form.nav.clone();
+  let page = Page::Pipeline(pipeline.id, PipelineView::Version(pipeline.version));
+  // Keep the New Task form mounted while inspecting the selected pipeline.
+  Link::new(form.nav.tabs(), move |open| {
+    let open = if open == OpenIn::Current { OpenIn::NewTab } else { open };
+    nav.open(page, open);
+  })
+  .attach(link)
+  .into()
 }
 
 /// Pipeline selector (`uhQv7`): the project's published pipelines, or an unavailable box that
@@ -112,11 +153,11 @@ fn pipeline_select(ctx: &Ctx, selection: &Signal<PipelineSelection>, choices: &[
 }
 
 /// Steps of the chosen pipeline's published version (`o9ty9`).
-fn pipeline_steps(steps: &[Arc<str>]) -> Element {
+fn pipeline_steps(ctx: &Ctx, pipeline: &PipelineChoice) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .with_children(steps.iter().enumerate().map(|(index, name)| {
+    .with_children(pipeline.steps.iter().enumerate().map(|(index, step)| {
       Row::new()
         .width(Dimension::Pct(100.0))
         .height(Dimension::Px(STEP_HEIGHT))
@@ -127,13 +168,67 @@ fn pipeline_steps(steps: &[Arc<str>]) -> Element {
             .variant(TypographyStyle::Mono)
             .color(PaletteColor::TextMuted),
         )
-        .child(
-          Text::new(name)
-            .variant(TypographyStyle::FieldLabel)
-            .color(PaletteColor::TextPrimary)
-            .nowrap(),
-        )
+        .child(step_text(ctx, step).flex(1.0))
     }))
+    .into()
+}
+
+fn step_text(ctx: &Ctx, step: &crate::tasks::data::PipelineStepChoice) -> Column {
+  Column::new()
+    .flex(1.0)
+    .spacing(SpacingSize::Xs)
+    .child(
+      Text::new(&step.name)
+        .variant(TypographyStyle::FieldLabel)
+        .color(PaletteColor::TextPrimary)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
+    .child(
+      Text::new(&step_summary(ctx, step))
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::TextMuted)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
+}
+
+fn step_summary(ctx: &Ctx, step: &crate::tasks::data::PipelineStepChoice) -> Arc<str> {
+  let executor = message_text(ctx, &step.executor);
+  if step.approval_gate {
+    ctx.t_args("tasks.new.stepSummaryApproval", [("executor", &*executor)])
+  } else {
+    executor
+  }
+}
+
+fn review_policy(ctx: &Ctx, pipeline: &PipelineChoice) -> Element {
+  let gated = pipeline
+    .steps
+    .iter()
+    .filter(|step| step.approval_gate)
+    .map(|step| &*step.name)
+    .collect::<Vec<_>>();
+  let detail = match gated.as_slice() {
+    [] => ctx.t("tasks.new.reviewPolicyNone"),
+    [step] => ctx.t_args("tasks.new.reviewPolicyOne", [("step", *step)]),
+    steps => ctx.t_args("tasks.new.reviewPolicyMany", [("steps", steps.join(", ").as_str())]),
+  };
+  Row::new()
+    .id("review-policy")
+    .width(Dimension::Pct(100.0))
+    .padding(SpacingSize::Md)
+    .spacing(ExtraSpacing::Stack.role())
+    .align_items(Alignment::Start)
+    .background(PaletteColor::SurfaceRaised)
+    .rounded(RadiusSize::Md)
+    .child(icon(Icon::Hand, IconSize::Option, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&detail)
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::TextSecondary)
+        .flex(1.0),
+    )
     .into()
 }
 
@@ -154,11 +249,7 @@ fn run_status(ctx: &Ctx, state: &FormState) -> Vec<Element> {
       .collect();
   }
   if state.missing.is_empty() {
-    return vec![
-      Text::new(&ctx.t("tasks.new.runExplanation"))
-        .variant(TypographyStyle::Caption)
-        .into(),
-    ];
+    return Vec::new();
   }
   vec![
     Text::new(&ctx.t("tasks.new.runNeedsDetails"))

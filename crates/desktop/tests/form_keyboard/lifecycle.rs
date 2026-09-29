@@ -11,9 +11,12 @@ use std::{
 };
 
 use orchester_core::{
+  connection::{CheckResult, ConnectionCheck, LastCheck},
   limits::ProjectLimits,
   run::{InterruptCause, PauseReason, RunLimit, RunStatus},
-  store::{ActivityStore, SettingsStore},
+  store::{ActivityStore, ConnectionStore, SettingsStore, TaskStore},
+  task::TaskStatus,
+  time::Timestamp,
   tokens::TokenBudget,
 };
 use orchester_desktop::tasks::changes::run_worktree;
@@ -323,6 +326,18 @@ fn lifecycle_runs_not_continued_wait_until_their_task_page_continues_them() {
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }
 
+fn mark_agent_connection_unusable(repo: &Path) {
+  let mut db = ProjectDb::open(repo).expect("open project");
+  let mut connection = db.connections().expect("connections").remove(0);
+  connection
+    .record_check(LastCheck::Agent(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::ExecutableMissing,
+    }))
+    .expect("agent check");
+  db.save_connection(&connection).expect("save failed check");
+}
+
 #[test]
 fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   let (runner, fake) = programs();
@@ -370,8 +385,34 @@ fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   // New work waits too: Create & run queues the task, and the runner refuses its run.
   desktop.click("task-breadcrumb");
   fill_new_task(&mut desktop, "Append one line to README.md.", "1400000");
+  desktop.click("save-draft");
+  desktop.wait_until("the saved draft", |desktop| {
+    text_of(desktop, "new-task-state", "Draft saved locally")
+  });
   desktop.click("create-and-run");
   desktop.wait_until("the refusal in New task", |desktop| {
     desktop.tree.root().is_some_and(|root| contains_text(root, refusal)) && has(desktop, "create-and-run")
   });
+  desktop.wait_until("the queued task status", |desktop| {
+    text_of(desktop, "new-task-state", "Task queued")
+  });
+  let tasks = ProjectDb::open(desktop.repo())
+    .expect("open project")
+    .tasks()
+    .expect("tasks");
+  assert_eq!(tasks.last().expect("new task").status(), TaskStatus::Queued);
+  mark_agent_connection_unusable(desktop.repo());
+  desktop.click("create-and-run");
+  desktop.wait_until("the retry preflight error", |desktop| {
+    text_of(desktop, "execution-plan", "connection that cannot be used now")
+  });
+  assert!(text_of(&mut desktop, "new-task-state", "Task queued"));
+  desktop.tab_to("create-and-run", 30);
+  desktop.tab();
+  assert_ne!(desktop.focused().as_deref(), Some("save-draft"));
+  let tasks = ProjectDb::open(desktop.repo())
+    .expect("open project")
+    .tasks()
+    .expect("tasks");
+  assert_eq!(tasks.last().expect("new task").status(), TaskStatus::Queued);
 }
