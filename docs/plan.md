@@ -143,7 +143,8 @@ Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
 ## L · After lurq 0.30.0
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
-select-menu width option in 0.30.2, and the verifier window focus option in 0.30.3. This workspace uses 0.30.3.
+select-menu width option in 0.30.2, and the verifier window focus option in 0.30.3. This workspace uses 0.30.4,
+which also preserves text selection after a drag on scaled displays.
 
 ## P · Product decisions waiting for the user
 
