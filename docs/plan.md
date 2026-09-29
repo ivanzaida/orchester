@@ -13,8 +13,8 @@ then the backlog by area.
 - **Non-UI** tasks need `powershell -File tools/check.ps1` and the named filtered tests.
 - **UI** tasks also need an independent design verification (`AGENTS.md` rule 15): a second agent that did not write
   the change compares Pencil and app screenshots. Inside an Orchester run that means a separate *Verify* step with its
-  own agent profile. Until D4 provides an independent *Verify* step with Pencil and app screenshots and a host-side
-  focus check, leave UI tasks to work outside Orchester.
+  own agent profile, exact-PID app capture and host-side focus check. D4 proved that verification path for an
+  already-authored UI candidate; authoring a UI change inside Orchester has not yet been demonstrated.
 - When a task is done, move it to *Done* at the end of this file in the same change, with the commit or branch.
 - Tasks marked **needs decision** wait for the user; do not start them.
 
@@ -23,7 +23,6 @@ then the backlog by area.
 | Task | Branch | Verified progress and next gate |
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
-| D4 | `codex/d4-current-port` | Run #10 reached independent Verify but failed on major New Task visual mismatches. The two fix commits are ported onto current `master` at `ec94511`; 22/22 named independent tests, code review and `check.ps1` pass on byte-identical source. Pencil now has truthful New Task states `m82tU`/`v3cdq`; a post-fix same-state comparison and a full in-run Verify pass remain. UI is unmerged. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass. Pencil now has corrected merging, removal and deleted-branch states; compare them with exact live app states and fix remaining differences. |
 | U3 | `codex/u3-final` | Shorter English copy passes current-master i18n tests and `check.ps1`; the Pencil design copy is committed on `master` at `357a745`. Independent exact-PID verification found the mechanism row matches the 300-wide design without clipping and a corrected no-focus replay passed. Full-panel parity is blocked: Claude network is locked On in the app while Pencil shows web tools removed. |
 | M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and live MCP-only/mixed functional behavior pass; the first mixed-state run had an unexplained foreground-focus incident. Persisted MCP-only and mixed *Used by* frames match the changed regions, but the archive dialog is 18 physical px shorter than Pencil, a major mismatch. Fix and recheck before merge. |
@@ -94,63 +93,6 @@ The proposed design path is in `docs/evidence/d5-design-path-2026-09-29.md`; ear
 Pencil (drawn 2026-09-29): `WOdDe` (02.09C, cannot measure), `WmW1G` (02.09D, low space), `l801hD` (02.09E, retrying the
 same run). They include D4's New Task changes (View pipeline, the approval card, the instructions footer), which the D5
 branch does not have yet; compare the header, description, pipeline box and the actions with their error.
-
-### D4 · A UI verification step inside a run (after D3)
-
-A pipeline step that verifies a UI change the way `.claude/skills/design-verification/SKILL.md` describes: Pencil
-screenshots through the Pencil MCP server (configured as a project MCP server) and app screenshots through the app's
-embedded MCP server. Use L6's no-focus startup, a writable run-owned discovery data directory for both app and client
-(`%LOCALAPPDATA%` on Windows; `$HOME/Library/Application Support` on macOS), an exact-PID client that does not print
-discovery credentials (D7), and pinned app artifacts (D6). Inside Codex's Windows
-sandbox `GetForegroundWindow` returned PID 0; verify host foreground separately instead of treating `0 -> 0` as
-evidence that the user's window stayed active. **Done when** a UI task runs end to end in Orchester with a verifier step
-whose report follows the skill. D6, D7, and the registry-backed L6 integration are complete.
-The screenshot client can save a validated PNG without putting base64 in the run transcript
-(`docs/evidence/d4-screenshot-file-2026-09-29.md`). The host-side PID watcher records sampled
-focus during launch (`docs/verification/foreground-watch.md`,
-`docs/evidence/d4-focus-watch-2026-09-29.md`). Both pass independent synthetic checks. Disposable
-run #5 passed Implement, Build and pin candidate, and Review, but Verify's pinned app exited before
-MCP discovery on both launch attempts. No Pencil/app PNG pair exists, and the final app foreground
-verdict is inconclusive; the separate host Orchester watcher passed at its sampled instants.
-Observed facts are in `docs/evidence/d4-run5-2026-09-29.md`,
-`docs/evidence/d4-run6-2026-09-29.md` and `docs/evidence/d4-run7-2026-09-29.md`.
-Run #6 fixed the child-process lifetime problem with one persistent capture command; it failed before screenshots
-because the disposable fixture used an invalid resource slug. Run #7 captured the pinned app at the intended size,
-and the host own-PID watcher passed, but in-run Pencil export was cancelled twice. The independent verifier also
-reported major saved-state, bottom-action, pipeline-subtitle and review-policy mismatches. A separate host Pencil
-export at scale 1.5 succeeded. The v9 host probe still failed to reach a saved draft: the disposable DB had no
-task, and no app PNG was produced. The helper did not retain the click response or post-click tree, so the cause
-remains unknown. Pipeline v10 is audited and published with a host Pencil export handoff.
-The independent code audit also found overpromising header/review copy and a false Save as draft success when runner
-start fails after Create & run queues a task. Code repairs on `codex/d4-new-task-fixes` passed independent static
-review and targeted tests; the UI visual gate remains open. See
-`docs/evidence/d4-v9-probe-v10-handoff-2026-09-29.md`.
-Disposable run #8 applied the reviewed nine-file candidate and passed focused New Task/history/tasks/i18n tests and
-`tools/check.ps1`, but Implement failed after two broader runner-process lifecycle tests failed and sandbox denied
-a manual commit. Both exact lifecycle tests passed 1/1 in an independent host rerun; this does not explain the
-in-run failures. Orchester created clean checkpoint `a118614`; the disposable project's `master` now points to it.
-Build+Pin, Review and Verify were skipped, so there is still no successful Pencil/app comparison or UI pass. The
-host-app foreground watcher passed at sampled instants. See `docs/evidence/d4-run8-2026-09-29.md`.
-Run #9 passed Implement's focused tests/check and Build+Pin from clean checkpoint `a118614`. The host staged a fresh
-2160 × 1440 Pencil design image and frozen helpers. Review could inspect Git, but its read-only sandbox rejected
-the agent's attempted Cargo tests, `check.ps1` and `git rev-parse` launches before execution. The agent reported
-failure before finishing review, and Verify was skipped. No verifier
-app PNG or design comparison exists; see `docs/evidence/d4-run9-2026-09-29.md`.
-Run #10 used a separate D4-only read-only Review profile. Implement, Build+Pin and Review passed. Independent Verify
-saved a New Task draft, captured the pinned app through its exact PID without focus, and compared a 2160 × 1440 app
-content crop with a fresh 2160 × 1440 live Pencil export of `l2YA4`. The sampled foreground verdict passed, but
-Verify reported major differences in the header subtitle, criteria delete controls, context chips and Preview,
-review-policy card, and Save as draft styling. The run failed at Verify. The nine-file UI candidate remains unmerged;
-see `docs/evidence/d4-run10-2026-09-29.md`.
-Follow-up New Task affordance changes at `ef6f2e8` passed independent code review, filtered `new_task_` tests 10/10
-and `tools/check.ps1`. These code checks do not close the visual gate: there is no post-fix Pencil/app comparison.
-Pencil now has truthful header, context and review states `m82tU` and `v3cdq` on `master`.
-The current-master code port `codex/d4-current-port` at `ec94511` passed independent code review, 22/22 named
-tests and `tools/check.ps1`; it has no post-fix Pencil/app visual pass. The UI branch remains unmerged.
-D4 stays open until an independent Verify run compares Pencil and app images at the same state and size and reports
-no blocking or major mismatches.
-Pencil (drawn 2026-09-29): `m82tU` (02.09A, draft saved, approval gate named) and `v3cdq` (02.09B, not saved yet, no
-approval gates, criterion remove control on hover) show the truthful header, context and review states.
 
 ## T · Tests and runner
 
@@ -299,6 +241,13 @@ select-menu width option in 0.30.2, and the verifier window focus option in 0.30
 
 ## Done
 
+D4 · Verify a UI change inside an Orchester run · branch `codex/d4-current-port` (DOS-12 passed
+Implement checks, Build+Pin, independent read-only Review and Verify. The verifier compared saved New Task design
+`m82tU` with the exact-PID app at 2160 × 1440 and found no blocking or major mismatch; the candidate's host-side
+focus watcher passed at sampled instants. The host Orchester watcher recorded a separate unexplained foreground
+episode. Implement rechecked a pre-authored UI candidate, so this does not establish self-hosted UI authoring.
+Filtered New Task/saved-draft/pipeline tests and `tools/check.ps1` passed on the integrated port. Evidence:
+`docs/evidence/d4-run12-2026-09-29.md`).
 U5 · Align the remaining task UI states with Pencil · branch `codex/u5-current-port` (independent source-matched
 verification passed 10 named tests and `tools/check.ps1`. Exact-PID app checks covered parallel waiting rows,
 pipeline and environment details, and the transition from a queued message to *Not delivered* after Remove worktree.
@@ -321,7 +270,7 @@ D3 · First real Orchester runs on an isolated clone · branches `codex/d3-first
 (Codex sandbox passed core check, two filtered runner process/pipe tests, desktop+runner MCP build and
 `tools/check.ps1`; an in-run no-focus desktop PID answered exact-PID `lurq_windows` and `lurq_read_tree`, then closed;
 separate Review passed. Sandbox foreground PID was unavailable, and follow-up host replays were inconclusive; D4
-tracks the remaining UI verification setup. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md` and
+subsequently completed the UI verification setup. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md` and
 `docs/evidence/d3-mcp-inside-run-2026-09-29.md`).
 M2 · Map imported profiles' MCP servers · branch `codex/import-mcp` (source server IDs are resolved to target servers
 or left explicit as unresolved; independent core import 20/20, store 1/1, desktop 1/1, i18n 2/2 and
