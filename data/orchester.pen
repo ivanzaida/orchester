@@ -209406,7 +209406,7 @@
                                           "fill": "$muted",
                                           "textGrowth": "fixed-width",
                                           "width": "fill_container",
-                                          "content": "edit tools removed · listed commands still run",
+                                          "content": "edit tools removed · listed cmds run",
                                           "fontFamily": "$mono",
                                           "fontSize": 10,
                                           "fontWeight": "normal"
@@ -210137,7 +210137,7 @@
                                           "fill": "$muted",
                                           "textGrowth": "fixed-width",
                                           "width": "fill_container",
-                                          "content": "edit tools removed · listed commands still run",
+                                          "content": "edit tools removed · listed cmds run",
                                           "fontFamily": "$mono",
                                           "fontSize": 10,
                                           "fontWeight": "normal"
