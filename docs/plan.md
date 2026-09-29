@@ -17,6 +17,23 @@ then the backlog by area.
   already-authored UI candidate; authoring a UI change inside Orchester has not yet been demonstrated.
 - When a task is done, move it to *Done* at the end of this file in the same change, with the commit or branch.
 - Tasks marked **needs decision** wait for the user; do not start them.
+- The open backlog is also tracked as tasks in the Orchester project itself (stable build, `ORC-1`…). Take the
+  **Next** task below first.
+
+## Next
+
+### C1 · Agent model lists come from the CLI's live catalog (non-UI + UI copy)
+
+Orchester lists Codex models with `codex debug models --bundled` (`CODEX_CATALOG_ARGS` in
+`crates/core/src/connection/adapter.rs`): the catalog baked into the installed binary, not the refreshed catalog for
+the signed-in account (`codex debug models` without `--bundled`). On Codex 0.139.0 the bundled list offered gpt-5.4,
+5.3-codex and others the account's refreshed catalog did not list, and new models (gpt-6-sol and others) reached
+Orchester only after a CLI update (0.159.0 lists them in both). **Done when** the connection check reads the refreshed
+catalog with a bounded timeout, falls back to `--bundled` with a visible "offline list" note when the refresh fails,
+offers only `visibility: list` models, the connection inspector says which source the list came from and the CLI
+version, a profile whose stored model is no longer listed says so plainly instead of silently switching, and
+*Recheck* picks up models added by a CLI update. Tests: core adapter tests with captured fixtures of both outputs
+(refreshed and bundled, including hidden models), and the connections/agents form_keyboard tests.
 
 ## Work in progress · 2026-09-29
 
