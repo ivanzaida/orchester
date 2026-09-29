@@ -156,7 +156,9 @@
       "title": "Discard changes?",
       "explanation": "This tab has changes that are not saved yet. Closing it discards them.",
       "keep": "Keep open",
-      "confirm": "Discard and close"
+      "confirm": "Discard and close",
+      "keepEditing": "Keep editing",
+      "confirmLeave": "Discard changes"
     }
   },
   "runner": {
@@ -478,6 +480,18 @@
       "starting": "Starting the run…",
       "startingDetail": "Saving the task, checking its setup and handing it to the runner.",
       "runNeedsDetails": "Add the missing details above to run the task."
+    },
+    "edit": {
+      "action": "Edit",
+      "breadcrumb": "{{project}} / Tasks / {{task}} / Edit",
+      "title": "Edit task",
+      "description": "Changes apply to draft {{task}}. Nothing runs until you choose Create & run.",
+      "unsaved": "Unsaved changes",
+      "saveChanges": "Save changes",
+      "savingChanges": "Saving changes…",
+      "leave": "Your edits to {{task}} are not saved yet. Leaving discards them; the saved draft stays as it was.",
+      "notDraft": "This task is queued for a run, so it can no longer be edited.",
+      "hasRun": "This task has a run, so it can no longer be edited."
     }
   },
   "runs": {
@@ -621,6 +635,13 @@
       "timeLimitValue": "{{minutes}} min active agent time",
       "permissions": "Permissions",
       "snapshotNote": "Configuration updates do not change this run’s saved versions.",
+      "brief": "Brief",
+      "criteria": "Acceptance criteria",
+      "thisTask": "This task",
+      "noPipeline": "No pipeline chosen",
+      "limits": "Limits",
+      "noLimits": "No limits set",
+      "taskNote": "A run keeps the pipeline version and limits it starts with.",
       "notice": {
         "draftTitle": "This task is a draft",
         "draftDetail": "A run starts from Create & run once the task has every detail.",

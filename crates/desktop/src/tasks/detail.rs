@@ -197,6 +197,13 @@ impl TaskDetail {
     TaskPhase::of(&self.task, self.run.as_ref().map(|run| &run.run), self.merge.as_ref())
   }
 
+  /// Whether the task can still be edited: a draft that no run was started for
+  /// ([`Task::check_editable`]).
+  pub fn editable(&self) -> bool {
+    let has_run = self.run.is_some() || self.latest_unreadable.is_some();
+    self.task.check_editable(has_run).is_ok()
+  }
+
   /// Whether the run is recorded as running while no runner is `online`: its agent is gone and
   /// the run is interrupted until a runner is back ([`TaskPhase::without_runner`]).
   pub fn lost_its_runner(&self, online: bool) -> bool {

@@ -98,6 +98,16 @@ pub enum QueueError {
   Incomplete(Vec<MissingDetail>),
 }
 
+/// Why a task's details cannot be changed any more: only a draft that no run was started for can
+/// be edited, since a run keeps the details it started with.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum EditError {
+  #[error("only draft tasks can be edited; this task is {0:?}")]
+  NotDraft(TaskStatus),
+  #[error("a run was started for this task")]
+  HasRun,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Task {
   id: TaskId,
@@ -148,6 +158,26 @@ impl Task {
 
   pub const fn created_at(&self) -> Timestamp {
     self.created_at
+  }
+
+  /// Whether the task's details can still be changed; `has_run` says whether a run was started
+  /// for it.
+  pub const fn check_editable(&self, has_run: bool) -> Result<(), EditError> {
+    if has_run {
+      return Err(EditError::HasRun);
+    }
+    if !matches!(self.status, TaskStatus::Draft) {
+      return Err(EditError::NotDraft(self.status));
+    }
+    Ok(())
+  }
+
+  /// Replaces the details of a draft that no run was started for, keeping its id, number and
+  /// creation time. An incomplete draft stays allowed, as it was when first saved.
+  pub fn edit(&mut self, details: TaskDetails, has_run: bool) -> Result<(), EditError> {
+    self.check_editable(has_run)?;
+    self.details = details;
+    Ok(())
   }
 
   /// Moves a complete draft to the queue; an incomplete one reports what is missing.

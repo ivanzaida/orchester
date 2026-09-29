@@ -67,29 +67,52 @@ impl TaskStore for ProjectDb {
   }
 
   fn save_task(&mut self, task: &Task) -> Result<(), StoreError> {
-    let details = task.details();
-    let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
     let transaction = self.connection.transaction()?;
-    let updated = transaction.execute(
-      "UPDATE tasks SET title = ?2, brief = ?3, pipeline_id = ?4, budget_tokens = ?5, max_duration_ms = ?6, \
-       status = ?7 WHERE id = ?1",
-      params![
-        task.id().to_string(),
-        details.title.as_str(),
-        details.brief,
-        details.pipeline.map(|id| id.to_string()),
-        budget_tokens,
-        max_duration_ms,
-        status_text(task.status()),
-      ],
-    )?;
-    if updated == 0 {
-      return Err(StoreError::TaskNotFound(task.id()));
-    }
-    write_criteria(&transaction, task.id(), &details.acceptance_criteria)?;
+    update_task(&transaction, task)?;
     transaction.commit()?;
     Ok(())
   }
+
+  fn update_draft(&mut self, id: TaskId, details: TaskDetails) -> Result<Task, StoreError> {
+    let transaction = self.connection.transaction()?;
+    let mut task = load_tasks(&transaction, self.project.key(), "WHERE id = ?1", [id.to_string()])?
+      .pop()
+      .ok_or(StoreError::TaskNotFound(id))?;
+    let has_run: bool = transaction.query_row(
+      "SELECT EXISTS (SELECT 1 FROM runs WHERE task_id = ?1)",
+      [id.to_string()],
+      |row| row.get(0),
+    )?;
+    task
+      .edit(details, has_run)
+      .map_err(|source| StoreError::TaskNotEditable { task: id, source })?;
+    update_task(&transaction, &task)?;
+    transaction.commit()?;
+    Ok(task)
+  }
+}
+
+/// Stores the details and status of `task`, which must exist.
+fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
+  let details = task.details();
+  let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
+  let updated = transaction.execute(
+    "UPDATE tasks SET title = ?2, brief = ?3, pipeline_id = ?4, budget_tokens = ?5, max_duration_ms = ?6, \
+     status = ?7 WHERE id = ?1",
+    params![
+      task.id().to_string(),
+      details.title.as_str(),
+      details.brief,
+      details.pipeline.map(|id| id.to_string()),
+      budget_tokens,
+      max_duration_ms,
+      status_text(task.status()),
+    ],
+  )?;
+  if updated == 0 {
+    return Err(StoreError::TaskNotFound(task.id()));
+  }
+  write_criteria(transaction, task.id(), &details.acceptance_criteria)
 }
 
 fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &str) -> Result<(), StoreError> {

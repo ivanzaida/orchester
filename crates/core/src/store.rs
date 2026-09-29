@@ -47,6 +47,11 @@ pub trait TaskStore {
 
   /// Persists the details and status of an existing task.
   fn save_task(&mut self, task: &Task) -> Result<(), Self::Error>;
+
+  /// Replaces the details of draft `id` in place, atomically: the task keeps its id and number.
+  /// A task that is not a draft, or that a run was started for, is refused
+  /// ([`Task::edit`]) and left unchanged.
+  fn update_draft(&mut self, id: TaskId, details: TaskDetails) -> Result<Task, Self::Error>;
 }
 
 /// Project settings. Written by the desktop; the runner reads them.

@@ -1,0 +1,255 @@
+//! A saved task's brief and acceptance criteria on its Summary, and a draft reopened in the New
+//! task form (design doc, "ORC-12 · Draft Summary and editing"): Edit fills the form, *Save changes*
+//! saves over the same task, *Create & run* starts it, leaving with changes that are not saved asks
+//! first, and a task with a run cannot be edited.
+
+use std::{path::Path, time::Duration};
+
+use lurq::app::events::MouseButton;
+use orchester_core::{
+  id::IdempotencyKey,
+  name::Name,
+  resource::ResourceKind,
+  store::{ResourceStore, TaskStore},
+  task::{TaskDetails, TaskLimits, TaskStatus},
+  time::Timestamp,
+  tokens::TokenBudget,
+};
+use orchester_store::ProjectDb;
+
+use crate::{
+  github::shows,
+  harness::Desktop,
+  tabs::{BACK, click_with, command, has, side_button},
+  task_run::{init_repository, latest_run, programs, seed, set_text},
+};
+
+const FORWARD: MouseButton = MouseButton::Other(5);
+const ROW: &str = "task-row-KON-1";
+
+fn draft(title: &str) -> TaskDetails {
+  TaskDetails {
+    title: Name::new(title).expect("title"),
+    brief: "Let users sign in with GitHub.".into(),
+    acceptance_criteria: vec!["A new user can sign in.".into(), "Email sign-in still works.".into()],
+    pipeline: None,
+    limits: None,
+  }
+}
+
+fn save(repo: &Path, details: TaskDetails) {
+  ProjectDb::open(repo)
+    .expect("open the project")
+    .create_tasks(IdempotencyKey::generate(), vec![details], Timestamp::now())
+    .expect("the draft is saved");
+}
+
+fn stored(repo: &Path) -> Vec<orchester_core::task::Task> {
+  ProjectDb::open(repo).expect("open the project").tasks().expect("tasks")
+}
+
+/// Kontur with the draft KON-1 open on its page.
+fn draft_page() -> Desktop {
+  let mut desktop = Desktop::with_seeded_project(|repo| save(repo, draft("Add GitHub authentication")));
+  open_task(&mut desktop);
+  desktop
+}
+
+fn open_task(desktop: &mut Desktop) {
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for(ROW);
+  desktop.press(ROW);
+  desktop.wait_for("task-this-run");
+}
+
+fn edit(desktop: &mut Desktop) {
+  desktop.wait_for("task-edit");
+  desktop.click("task-edit");
+  desktop.wait_for("task-title");
+}
+
+fn state_reads(desktop: &mut Desktop, text: &str) {
+  desktop.settle(text, |tree| {
+    tree
+      .get_element_by_id("new-task-state")
+      .and_then(|state| state.text_content())
+      .is_some_and(|state| state.contains(text))
+  });
+}
+
+/// Whether Save changes can be pressed: Tab skips it while it cannot.
+fn save_available(desktop: &mut Desktop) -> bool {
+  desktop.stops(20, false).contains(&Some("save-draft".to_owned()))
+}
+
+#[test]
+fn edit_task_draft_summary_shows_the_brief_criteria_and_this_task() {
+  let mut desktop = draft_page();
+  desktop.wait_for("task-brief");
+  assert!(shows(&mut desktop, "task-notice", "This task is a draft"));
+  assert!(shows(&mut desktop, "task-brief", "Let users sign in with GitHub."));
+  assert!(shows(&mut desktop, "task-criteria", "1"));
+  assert!(shows(&mut desktop, "task-criteria", "Email sign-in still works."));
+  assert!(shows(&mut desktop, "task-this-run", "This task"));
+  assert!(shows(&mut desktop, "task-this-run", "No pipeline chosen"));
+  assert!(shows(&mut desktop, "task-this-run", "No limits set"));
+  assert!(shows(&mut desktop, "task-edit", "Edit"));
+}
+
+#[test]
+fn edit_task_opens_the_filled_form_and_saves_changes_in_place() {
+  let mut desktop = draft_page();
+  edit(&mut desktop);
+  assert!(shows(&mut desktop, "task-form", "Edit task"));
+  assert!(shows(&mut desktop, "task-form", "Kontur / Tasks / KON-1 / Edit"));
+  assert!(shows(
+    &mut desktop,
+    "task-form",
+    "Changes apply to draft KON-1. Nothing runs until you choose Create & run."
+  ));
+  assert_eq!(desktop.value("task-title"), "Add GitHub authentication");
+  assert_eq!(desktop.value("task-brief"), "Let users sign in with GitHub.");
+  assert_eq!(desktop.value("criterion-0"), "A new user can sign in.");
+  assert_eq!(desktop.value("criterion-1"), "Email sign-in still works.");
+  assert_eq!(
+    desktop.value("task-budget"),
+    "",
+    "a draft without limits keeps them empty"
+  );
+  state_reads(&mut desktop, "Draft saved locally");
+  assert!(shows(&mut desktop, "save-draft", "Save changes"));
+  assert!(!save_available(&mut desktop), "nothing differs from the saved draft");
+
+  set_text(&mut desktop, "task-title", "Add GitHub sign-in");
+  state_reads(&mut desktop, "Unsaved changes");
+  assert!(save_available(&mut desktop));
+  desktop.press("save-draft");
+  state_reads(&mut desktop, "Draft saved locally");
+  assert!(!save_available(&mut desktop));
+
+  let tasks = stored(&desktop.repo);
+  assert_eq!(tasks.len(), 1, "the draft was saved over, not added");
+  assert_eq!(tasks[0].key().to_string(), "KON-1");
+  assert_eq!(tasks[0].details().title.as_str(), "Add GitHub sign-in");
+  assert_eq!(tasks[0].status(), TaskStatus::Draft);
+}
+
+#[test]
+fn edit_task_leaving_with_unsaved_changes_asks_first() {
+  let mut desktop = draft_page();
+  edit(&mut desktop);
+  // Unchanged, the form is left without asking.
+  desktop.press("new-task-back");
+  desktop.wait_for("task-page");
+  assert!(!has(&mut desktop, "discard-changes-dialog"));
+
+  edit(&mut desktop);
+  set_text(&mut desktop, "task-title", "Add GitHub sign-in");
+  desktop.press("new-task-back");
+  desktop.wait_for("discard-changes-dialog");
+  assert!(shows(&mut desktop, "discard-changes-dialog", "Discard changes?"));
+  assert!(shows(
+    &mut desktop,
+    "discard-changes-dialog",
+    "Your edits to KON-1 are not saved yet."
+  ));
+  assert!(shows(&mut desktop, "discard-changes-keep", "Keep editing"));
+  desktop.key("Escape", "Escape");
+  assert!(!has(&mut desktop, "discard-changes-dialog"), "Escape keeps editing");
+  assert_eq!(desktop.value("task-title"), "Add GitHub sign-in");
+
+  // Another page of the tab and Back ask too.
+  desktop.click("nav-overview");
+  desktop.wait_for("discard-changes-dialog");
+  desktop.press("discard-changes-keep");
+  assert!(has(&mut desktop, "task-title"));
+  side_button(&mut desktop, BACK);
+  desktop.wait_for("discard-changes-dialog");
+  assert!(shows(&mut desktop, "discard-changes-confirm", "Discard changes"));
+  desktop.press("discard-changes-confirm");
+  desktop.wait_for("task-page");
+  assert!(!has(&mut desktop, "task-title"));
+  assert_eq!(
+    stored(&desktop.repo)[0].details().title.as_str(),
+    "Add GitHub authentication",
+    "the saved draft stays as it was"
+  );
+}
+
+/// The published Delivery pipeline and the draft KON-1 on it, with a budget its run stops at.
+fn seed_runnable_draft(repo: &Path, fake: &Path) {
+  seed(repo, fake, false);
+  let db = ProjectDb::open(repo).expect("open the project");
+  let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
+  drop(db);
+  let limits = TaskLimits::new(TokenBudget::new(5_000).expect("budget"), Duration::from_secs(1_800)).expect("limits");
+  save(
+    repo,
+    TaskDetails {
+      title: Name::new("Say hello").expect("title"),
+      brief: "Work in turns.".into(),
+      acceptance_criteria: vec!["README.md ends with hello".into()],
+      pipeline: Some(pipeline),
+      limits: Some(limits),
+    },
+  );
+}
+
+#[test]
+fn edit_task_create_and_run_starts_the_same_task_which_can_no_longer_be_edited() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed_runnable_draft(repo, &fake));
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for(ROW);
+  // Tab 2 shows the draft's page too; tab 1 opens Edit task on it.
+  click_with(&mut desktop, ROW, MouseButton::Left, (true, false));
+  desktop.settle("a background tab", |tree| {
+    tree.get_element_by_id("window-tab-2").is_some()
+  });
+  desktop.press(ROW);
+  desktop.wait_for("task-this-run");
+  assert!(shows(&mut desktop, "task-this-run", "Delivery · v1"));
+  assert!(shows(&mut desktop, "task-this-run", "5k tokens"));
+  edit(&mut desktop);
+
+  command(&mut desktop, "2", "Digit2", false);
+  edit(&mut desktop);
+  set_text(&mut desktop, "task-title", "Say hello twice");
+  desktop.wait_until("the task page with its run", |desktop| {
+    if !has(desktop, "task-page") && has(desktop, "create-and-run") {
+      desktop.click("create-and-run");
+    }
+    has(desktop, "task-page")
+  });
+  desktop.wait_until("the run stopped at its limit", |desktop| has(desktop, "raise-limit"));
+  assert!(shows(&mut desktop, "task-brief", "Work in turns."));
+  assert!(shows(&mut desktop, "task-criteria", "README.md ends with hello"));
+  assert!(!has(&mut desktop, "task-edit"), "a task with a run has no Edit");
+  let tasks = stored(&desktop.repo);
+  assert_eq!(tasks.len(), 1, "Create & run started the edited draft");
+  assert_eq!(tasks[0].key().to_string(), "KON-1");
+  assert_eq!(tasks[0].details().title.as_str(), "Say hello twice");
+  assert!(latest_run(&desktop.repo).is_some());
+
+  // Tab 1 still holds the form it opened before the run; opened again, it gives way to the
+  // task's page, which says why.
+  command(&mut desktop, "1", "Digit1", false);
+  desktop.wait_for("task-title");
+  // Its fields still hold the title before the run, so leaving asks.
+  side_button(&mut desktop, BACK);
+  desktop.wait_for("discard-changes-confirm");
+  desktop.press("discard-changes-confirm");
+  desktop.wait_for("task-page");
+  side_button(&mut desktop, FORWARD);
+  desktop.wait_until("the refusal on the task page", |desktop| {
+    has(desktop, "task-page")
+      && shows(
+        desktop,
+        "task-page",
+        "This task has a run, so it can no longer be edited.",
+      )
+  });
+  assert!(!has(&mut desktop, "task-title"));
+}
