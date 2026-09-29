@@ -23,14 +23,14 @@ then the backlog by area.
 | Task | Branch | Verified progress and next gate |
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
-| D4 | `codex/d4-focus-watch` | Run #10 reached independent Verify but failed on major New Task visual mismatches. Follow-up UI fixes at `ef6f2e8` passed independent code review, filtered `new_task_` tests 10/10 and `check.ps1`; no post-fix Pencil/app pass exists. Truthful header, context and review design states remain open; U3's Pencil Save As is pending before shared design edits. UI remains unmerged. |
-| U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
-| U3 | `codex/u3-current-port` | Live Pencil/app comparison and current-master i18n/check pass. The edited `.pen` is still active in the main checkout, not saved into the U3 worktree; Pencil MCP ignored an explicit `filePath`, so Save As/open and exact editor-path confirmation are required before merge. |
-| M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and MCP-only live checks pass; the live mixed state and exact MCP/mixed *Used by* Pencil frames are unavailable. |
-| M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; an exact remote-selected inspector Pencil frame is missing. |
-| U5 | `codex/u5-small-mismatches` | Independent tests and live checks, including real parallel waiting rows, pass; the after-Remove-worktree live state was not reached and its Pencil frame is missing. |
-| U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; exact Not started, Interrupted and recipient-menu Pencil frames are missing. |
-| D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover the cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. The candidate is unmerged: exact Pencil error frames, same-state design comparison, and a full runner macOS check remain open. |
+| D4 | `codex/d4-current-port` | Run #10 reached independent Verify but failed on major New Task visual mismatches. The two fix commits are ported onto current `master` at `ec94511`; 22/22 named independent tests, code review and `check.ps1` pass on byte-identical source. Pencil now has truthful New Task states `m82tU`/`v3cdq`; a post-fix same-state comparison and a full in-run Verify pass remain. UI is unmerged. |
+| U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass. Pencil now has corrected merging, removal and deleted-branch states; compare them with exact live app states and fix remaining differences. |
+| U3 | `codex/u3-final` | Shorter English copy passes current-master i18n tests and `check.ps1`; the Pencil design copy is committed on `master` at `357a745`. Independent exact-PID verification found the mechanism row matches the 300-wide design without clipping and a corrected no-focus replay passed. Full-panel parity is blocked: Claude network is locked On in the app while Pencil shows web tools removed. |
+| M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and live MCP-only/mixed functional behavior pass; the first mixed-state run had an unexplained foreground-focus incident. Persisted MCP-only and mixed *Used by* frames match the changed regions, but the archive dialog is 18 physical px shorter than Pencil, a major mismatch. Fix and recheck before merge. |
+| M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; exact remote-selected inspector frame `a4lm6D` is saved on `master` and awaits the same-state comparison. |
+| U5 | `codex/u5-small-mismatches` | Independent tests and live checks, including real parallel waiting rows and a removed worktree, pass. Misleading participant copy is fixed and independently rechecked with `check.ps1`. After-Remove frames `PacyY`/`Y8hyj` are saved on `master`; queued Not delivered and final same-state comparison remain. |
+| U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; Not started, Interrupted and recipient-menu frames are now saved on `master` and need exact app comparisons. |
+| D5 | `codex/d5-live-repro` | Independent Windows tests, code review, and four exact-PID app runs cover cannot-measure and low-space errors, truthful queued state, same-task retry, and inert queued pipeline. Pencil now has matching error/retry frames. Same-state comparison and full runner macOS check remain; candidate unmerged. |
 
 M1's Codex evidence and parser tests are on `master`; Claude's MCP allow rule still needs a signed-in model turn.
 
@@ -87,7 +87,7 @@ absolute target on H: with 2.643 GiB free, below the cold-target 10 GiB threshol
 error, left exactly one new task queued, and created no run or worktree. Ambiguous runner replies now remain
 explicitly unconfirmed. Evidence: `docs/evidence/d5-live-reproduction-2026-09-29.md`.
 
-The candidate stays unmerged: Pencil has no exact low-space or cannot-measure error frame for a same-state comparison.
+The candidate stays unmerged: the new Pencil low-space and cannot-measure frames need a same-state app comparison.
 The macOS `fs4` dependency check passed, but a full `orchester-runner` cross-check needs macOS SDK headers or a Mac.
 The proposed design path is in `docs/evidence/d5-design-path-2026-09-29.md`; earlier checks are in
 `docs/evidence/d5-status-2026-09-29.md`.
@@ -145,8 +145,9 @@ review-policy card, and Save as draft styling. The run failed at Verify. The nin
 see `docs/evidence/d4-run10-2026-09-29.md`.
 Follow-up New Task affordance changes at `ef6f2e8` passed independent code review, filtered `new_task_` tests 10/10
 and `tools/check.ps1`. These code checks do not close the visual gate: there is no post-fix Pencil/app comparison.
-The header, context controls and review card still need a design state that reflects actual pipeline behavior;
-U3's pending Pencil Save As must be resolved before editing the shared design source. The UI branch remains unmerged.
+Pencil now has truthful header, context and review states `m82tU` and `v3cdq` on `master`.
+The current-master code port `codex/d4-current-port` at `ec94511` passed independent code review, 22/22 named
+tests and `tools/check.ps1`; it has no post-fix Pencil/app visual pass. The UI branch remains unmerged.
 D4 stays open until an independent Verify run compares Pencil and app images at the same state and size and reports
 no blocking or major mismatches.
 Pencil (drawn 2026-09-29): `m82tU` (02.09A, draft saved, approval gate named) and `v3cdq` (02.09B, not saved yet, no
@@ -225,11 +226,13 @@ exists*).
 The Claude repository mechanism line wraps onto two lines in the 300 wide panel. Check the design's wording and width.
 
 **Status 2026-09-29: In progress.** The shorter copy passed an independent live Pencil/app comparison at the
-300-wide panel, and its current-master code port passed filtered i18n tests and `tools/check.ps1`. The design edit
-has not been saved into its worktree. Pencil MCP returned nodes from the active main document even when given a
-nonexistent `filePath`; do not use that argument as a target guard. Save As/open the exact U3 worktree `.pen`, confirm
-it in `get_editor_state`, then verify and merge the persisted design and copy. The active main `.pen` is left
-untouched by this task.
+300-wide panel, and its current-master code port passed filtered i18n tests and `tools/check.ps1`. The design copy
+was committed on `master` at `357a745`. The final `codex/u3-final` code worktree passed an independent check of the
+changed mechanism row and a corrected no-focus replay. The full-panel visual gate remains open: the Claude network
+control is locked On in the running app, while Pencil shows web tools removed. With the other prefix and MCP rows
+configured, the app panel is 300 × 470 logical pixels versus Pencil's 300 × 495. Resolve the unreachable design
+state before reporting U3 done. Evidence: `.tmp/verify/u3-final/report.md`. Pencil MCP returned nodes from the
+active document even when given a nonexistent `filePath`; do not use that argument as a target guard for future edits.
 
 ### U5 · Smaller mismatches left by earlier verifications (UI)
 
@@ -241,10 +244,11 @@ untouched by this task.
   of top-aligned.
 - Tabs: the *+* button sits about 2px left of the design.
 - All projects: headings sit about 2px high.
-- After Remove worktree: the Summary card and the Conversation notice do not say the worktree was removed; the
-  explanation wraps to two lines; the permissions row still shows *view ↗*. The state is drawn now
-  (`docs/design/orchester-workspace.md`, "After Remove worktree"). Pencil (drawn 2026-09-29): `PacyY` (02.Q4,
-  Summary) and `Y8hyj` (02.Q5, Conversation).
+- After Remove worktree: the original Summary card and Conversation notice did not say the worktree was removed;
+  the explanation wrapped to two lines; the permissions row showed *view ↗*. The candidate now reaches this state
+  in a live app, shows the removal state and reports that the agent cannot continue. Pencil frames `PacyY` (02.Q4,
+  Summary) and `Y8hyj` (02.Q5, Conversation) are saved; the queued Not delivered state and final same-state comparison
+  remain (`docs/design/orchester-workspace.md`, "After Remove worktree").
 
 ### U6 · Conversation states not seen in the app (UI)
 
