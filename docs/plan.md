@@ -92,6 +92,10 @@ The macOS `fs4` dependency check passed, but a full `orchester-runner` cross-che
 The proposed design path is in `docs/evidence/d5-design-path-2026-09-29.md`; earlier checks are in
 `docs/evidence/d5-status-2026-09-29.md`.
 
+Pencil (drawn 2026-09-29): `WOdDe` (02.09C, cannot measure), `WmW1G` (02.09D, low space), `l801hD` (02.09E, retrying the
+same run). They include D4's New Task changes (View pipeline, the approval card, the instructions footer), which the D5
+branch does not have yet; compare the header, description, pipeline box and the actions with their error.
+
 ### D4 · A UI verification step inside a run (after D3)
 
 A pipeline step that verifies a UI change the way `.claude/skills/design-verification/SKILL.md` describes: Pencil
@@ -145,6 +149,8 @@ The header, context controls and review card still need a design state that refl
 U3's pending Pencil Save As must be resolved before editing the shared design source. The UI branch remains unmerged.
 D4 stays open until an independent Verify run compares Pencil and app images at the same state and size and reports
 no blocking or major mismatches.
+Pencil (drawn 2026-09-29): `m82tU` (02.09A, draft saved, approval gate named) and `v3cdq` (02.09B, not saved yet, no
+approval gates, criterion remove control on hover) show the truthful header, context and review states.
 
 ## T · Tests and runner
 
@@ -177,12 +183,19 @@ M1 remains in progress until that rule is checked in a signed-in Claude run. Evi
 
 A secret used by an MCP server variable or bearer token is not listed under its *Used by*.
 
+Pencil (drawn 2026-09-29): `wPXgW` (07.B, used by an MCP server's bearer token), `R2ImH` (07.C, a tool and an MCP
+server's variable), `RxpL1` (07.D, the mixed archive warning). Profiles are not secret users; see
+`docs/design/orchester-workspace.md`, "Used by MCP servers".
+
 ### M5 · Remote server details name who reaches it (UI)
 
 The MCP server inspector (`crates/desktop/src/screens/project/connections/mcp_inspector.rs`) shows only Type, Endpoint
 and Authentication for a remote (HTTP) server; 04.D `QdLRd` suggests a *Reached by* row as the dialog has
 (`connections.mcp.property.reachedBy`). Confirm with the drawing, then add it. Also from that verification: the
 Arguments and Variables text in the MCP dialog sit about 4px higher than drawn, and the 04.D details rows 2–4px lower.
+
+Pencil (drawn 2026-09-29): `a4lm6D` (04.D2, remote server selected, with *Reached by*). The drawing wraps a long
+Authentication value onto a second line instead of ending it with an ellipsis.
 
 ### M6 · Environment names in secret references (needs decision)
 
@@ -201,6 +214,11 @@ and MCP tools in the Tools library.
 
 From the merge verification: *Remove worktree* can be pressed while a merge runs; *Cancel* stays enabled while a removal
 runs; the *Merge* button gets narrower while merging; the Working branch row still names a branch that was deleted.
+
+Pencil (drawn 2026-09-29): `d3oSWA` (02.P4, merging with Remove worktree unavailable), `g8ZALb` (02.Q3, removing with
+Cancel unavailable). Corrected: `jnagB` in `XIEn8` (Cancel unavailable while removing), `cE50X` in `HDTY5` (Merging…
+keeps 140 wide), `y6Pua` in `bMJUA` (*Working branch* reads *orc/github-auth · deleted*, where the app shows *No longer
+exists*).
 
 ### U3 · Claude mechanism line in the enforcement panel (UI)
 
@@ -224,13 +242,17 @@ untouched by this task.
 - Tabs: the *+* button sits about 2px left of the design.
 - All projects: headings sit about 2px high.
 - After Remove worktree: the Summary card and the Conversation notice do not say the worktree was removed; the
-  explanation wraps to two lines; the permissions row still shows *view ↗*. The state is not drawn yet
-  (`docs/design/orchester-workspace.md`, "After Remove worktree").
+  explanation wraps to two lines; the permissions row still shows *view ↗*. The state is drawn now
+  (`docs/design/orchester-workspace.md`, "After Remove worktree"). Pencil (drawn 2026-09-29): `PacyY` (02.Q4,
+  Summary) and `Y8hyj` (02.Q5, Conversation).
 
 ### U6 · Conversation states not seen in the app (UI)
 
 The Paused, Stopped, Interrupted and Not started states of the conversation panel, and direct messages to one agent,
 are covered only by data tests. Verify them in the app and fix what differs from `jgqPe` / `kjsmd`.
+
+Pencil (drawn 2026-09-29): `sYuiX` (02.S3, Interrupted), `Ok14G` (02.S4, Not started), `cj2a2` (02.S5, recipient menu
+open).
 
 ### U8 · Agent profile header states need a design check (UI/design)
 
@@ -238,6 +260,10 @@ are covered only by data tests. Verify them in the app and fix what differs from
 but no published-without-draft frame. Both omit the disabled *Save draft* button shown by the app. The proposed
 resolution and same-state verification gates are in `docs/evidence/u8-header-states-2026-09-29.md`; no Pencil or app
 change has been made. Earlier app lifecycle evidence is `.tmp/verify/u3-u4/report.md`.
+
+Pencil (drawn 2026-09-29): `dWnw7` (04.03A, published without a draft), `t2wCI` (04.04A, the same on Permissions),
+`Jw98x` (04.03B, unsaved changes with Save draft). `WPmtS` and `T1rjv` stay the saved-draft state (no Save draft), which
+matches `codex/u8-header`.
 
 ## L · After lurq 0.30.0
 
