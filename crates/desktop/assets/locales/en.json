@@ -3191,7 +3191,13 @@
       "tokens": "{{used}} of {{budget}} tokens today: input + output of all runs in this project, against the daily project budget",
       "tokensUnknown": "Reading today’s token usage",
       "debugBuild": "Orchester {{version}} · development build",
-      "releaseBuild": "Orchester {{version}} · release build"
+      "releaseBuild": "Orchester {{version}} · release build",
+      "mcp": "Agents can drive this window over MCP at {{endpoint}}. Clients read the access token from this process’s discovery file, lurq/mcp/{{pid}}.json in your local app data folder.",
+      "mcpUnavailable": "The MCP server did not start, so agents cannot drive this window. The app log has the reason."
+    },
+    "mcp": {
+      "label": "MCP",
+      "unavailable": "MCP unavailable"
     },
     "version": "v{{version}}",
     "operations": {

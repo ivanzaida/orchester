@@ -2,15 +2,14 @@
 # that agents rebuild. It builds into its own target directory and copies the two programs into
 # the install directory; the application database is created next to them on first start, so the
 # installed app keeps its own project list. See docs/stable-build.md.
-#   powershell -File tools/install.ps1 [-InstallDir <dir>] [-BuildDir <dir>] [-WithMcp]
-#     [-ImportDevData] [-StartMenuShortcut]
+# Every build includes the embedded MCP server, so agents can drive the installed app.
+#   powershell -File tools/install.ps1 [-InstallDir <dir>] [-BuildDir <dir>] [-ImportDevData]
+#     [-StartMenuShortcut]
 param(
     # Where orchester.exe, orchester-runner.exe and the application database live.
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "Orchester\app"),
     # Cargo target directory of the release build; outside the repository so agent builds never touch it.
     [string]$BuildDir = (Join-Path $env:LOCALAPPDATA "Orchester\build"),
-    # Builds the desktop with its embedded MCP server so agents can drive the installed app.
-    [switch]$WithMcp,
     # Copies the dev build's application database (target/debug/orchester.db) into the install
     # directory. Refused when the install directory already has one: it is never overwritten.
     [switch]$ImportDevData,
@@ -55,11 +54,9 @@ function Assert-CanImportDevData {
 Assert-NotRunning $InstallDir "The installed Orchester"
 if ($ImportDevData) { Assert-CanImportDevData }
 
-$features = @()
-if ($WithMcp) { $features = @("--features", "orchester-desktop/mcp") }
 Push-Location $repositoryRoot
 try {
-    cargo build --release --locked --target-dir $BuildDir -p orchester-desktop -p orchester-runner @features
+    cargo build --release --locked --target-dir $BuildDir -p orchester-desktop -p orchester-runner
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $commit = git rev-parse --short HEAD
     if (git status --porcelain) { $commit = "$commit with uncommitted changes" }

@@ -1,5 +1,6 @@
 //! Hover hints of the status bar items: the full activity text when it is truncated, why a
-//! count is unknown, the build of the version. The design names them ("tooltip") without
+//! count is unknown, where the MCP server listens, the build of the
+//! version. The design names them ("tooltip") without
 //! drawing one, so the hint uses the popover's raised panel style at label size.
 
 use std::sync::Arc;
@@ -23,6 +24,7 @@ pub enum HintAnchor {
   Activity,
   Agents,
   Tokens,
+  Mcp,
   Version,
 }
 
@@ -41,6 +43,7 @@ pub struct Anchors {
   activity: ElementRef,
   agents: ElementRef,
   tokens: ElementRef,
+  mcp: ElementRef,
   version: ElementRef,
 }
 
@@ -51,6 +54,7 @@ impl Anchors {
       HintAnchor::Activity => &self.activity,
       HintAnchor::Agents => &self.agents,
       HintAnchor::Tokens => &self.tokens,
+      HintAnchor::Mcp => &self.mcp,
       HintAnchor::Version => &self.version,
     }
   }

@@ -1,6 +1,6 @@
 //! Right side of the bar (`doeZn`): the project's counts, today's tokens against the daily
-//! project budget (`Kzi83`) and the application version. Counts are plain numbers; zero stays
-//! visible in `$subtle`, and a count that is not known yet shows a dash. The tokens item is not
+//! project budget (`Kzi83`), the embedded MCP server's address and the application version. Counts are plain numbers;
+//! zero stays visible in `$subtle`, and a count that is not known yet shows a dash. The tokens item is not
 //! interactive: a usage screen does not exist, so its hint says what it counts.
 
 use lurq::{
@@ -15,9 +15,11 @@ use super::{
   ProjectBar,
   hint::{HintAnchor, Hints},
   item::{glyph, item, label, pressed, separator, value},
+  mcp_item::mcp_item,
   open::Opener,
 };
 use crate::{
+  embedded_mcp::McpStatus,
   navigation::route::Page,
   runner::state::RunnerState,
   tasks::{
@@ -27,7 +29,7 @@ use crate::{
   ui::{icon::Icon, link::Press},
 };
 
-pub fn counts(ctx: &Ctx, project: Option<&ProjectBar>, opener: &Opener, hints: &Hints) -> Element {
+pub fn counts(ctx: &Ctx, (project, mcp): (Option<&ProjectBar>, McpStatus), opener: &Opener, hints: &Hints) -> Element {
   let mut row = Row::new().height(Dimension::Pct(100.0)).align_items(Alignment::Center);
   if let Some(project) = project {
     let unknown = ctx.t("statusBar.counts.unknown");
@@ -49,7 +51,7 @@ pub fn counts(ctx: &Ctx, project: Option<&ProjectBar>, opener: &Opener, hints: &
       .child(tokens(ctx, project.usage.as_ref(), &unknown, hints))
       .child(separator());
   }
-  row.child(version(ctx, hints)).into()
+  row.child(mcp_item(ctx, mcp, hints)).child(version(ctx, hints)).into()
 }
 
 /// `F7mn6G`: agents at work of the runner's agent slots (`2/4`), a dash while the runner is not

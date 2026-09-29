@@ -1,11 +1,12 @@
 //! Window status bar (`pmOpt`, states `keJ9Z`): the 28px bar below every screen with the
-//! runner, the latest background activity and the project's counts, and the operations
-//! popover (`E1msJS`) that opens upward from the activity item.
+//! runner, the latest background activity, the project's counts and the embedded MCP server's
+//! address, and the operations popover (`E1msJS`) that opens upward from the activity item.
 
 mod activity_item;
 mod counts;
 mod hint;
 mod item;
+mod mcp_item;
 mod open;
 mod popover;
 mod runner_item;
@@ -34,6 +35,7 @@ use self::{
 };
 use crate::{
   activity::{Activity, ActivityLog, bar},
+  embedded_mcp::McpStatus,
   runner::RunnerStatus,
   tabs::feed::WindowFeed,
   tasks::usage::ProjectUsage,
@@ -90,6 +92,7 @@ impl Component for StatusBar {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<StatusBarProps>().clone();
     let log = self.log(ctx);
+    let mcp = McpStatus::of_ctx(ctx);
     let opener = Opener::new(ctx, &self.activity, props.project.as_ref(), &self.popover);
     let runner = props
       .project
@@ -129,7 +132,7 @@ impl Component for StatusBar {
       .background(PaletteColor::SurfaceBase)
       .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(left)
-      .child(counts(ctx, props.project.as_ref(), &opener, &hints))
+      .child(counts(ctx, (props.project.as_ref(), mcp), &opener, &hints))
       .with_children(popover)
       // A hint would cover the popover it belongs to.
       .with_children(hints.popup().filter(|_| !self.popover.get()))

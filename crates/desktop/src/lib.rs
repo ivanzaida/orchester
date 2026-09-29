@@ -12,6 +12,7 @@ pub mod close;
 pub mod connections;
 pub mod display;
 pub mod drafts;
+pub mod embedded_mcp;
 pub mod environment;
 mod external;
 pub mod highlight;

@@ -22,10 +22,11 @@ use orchester_core::{
 use orchester_desktop::{
   activity::Activity,
   close::Lifecycle,
+  embedded_mcp::McpStatus,
   i18n,
   programs::Programs,
   project_setup::ProjectDraft,
-  root::{Root, Startup},
+  root::{Root, RootProps, Startup},
   runner::Runners,
   secrets::Vault,
   session::AppSession,
@@ -218,7 +219,9 @@ impl Desktop {
     };
     let mut tree = Tree::new();
     tree.resize(WIDTH, HEIGHT);
-    tree.mount_root::<Root>(&mut app, startup);
+    // The harness starts no MCP server, so the status bar truthfully says it is unavailable.
+    let mcp = McpStatus::Unavailable;
+    tree.mount_root::<Root>(&mut app, RootProps { startup, mcp });
     Self {
       tree,
       repo,
