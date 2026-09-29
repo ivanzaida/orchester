@@ -24,7 +24,7 @@ then the backlog by area.
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | L6 | `codex/verifier-no-focus` | lurq 0.30.3 candidate and no-focus app checks pass; release approval is pending. |
-| D4 | `codex/d4-focus-watch` | Run #10 passed Implement, Build+Pin and a separate D4-only Review. Independent Verify captured the saved New Task draft and same-size Pencil design, then failed on major visual mismatches in the header, criteria, context controls, review card and draft action. Fix and reverify; the candidate UI remains unmerged. |
+| D4 | `codex/d4-focus-watch` | Run #10 reached independent Verify but failed on major New Task visual mismatches. Follow-up UI fixes at `ef6f2e8` passed independent code review, filtered `new_task_` tests 10/10 and `check.ps1`; no post-fix Pencil/app pass exists. Truthful header, context and review design states remain open; U3's Pencil Save As is pending before shared design edits. UI remains unmerged. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
 | U3 | `codex/claude-mechanism` | Live Pencil/app comparison passes; the edited `.pen` is not saved into the worktree yet. |
 | M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and MCP-only live checks pass; the live mixed state and exact MCP/mixed *Used by* Pencil frames are unavailable. |
@@ -133,6 +133,10 @@ content crop with a fresh 2160 × 1440 live Pencil export of `l2YA4`. The sample
 Verify reported major differences in the header subtitle, criteria delete controls, context chips and Preview,
 review-policy card, and Save as draft styling. The run failed at Verify. The nine-file UI candidate remains unmerged;
 see `docs/evidence/d4-run10-2026-09-29.md`.
+Follow-up New Task affordance changes at `ef6f2e8` passed independent code review, filtered `new_task_` tests 10/10
+and `tools/check.ps1`. These code checks do not close the visual gate: there is no post-fix Pencil/app comparison.
+The header, context controls and review card still need a design state that reflects actual pipeline behavior;
+U3's pending Pencil Save As must be resolved before editing the shared design source. The UI branch remains unmerged.
 D4 stays open until an independent Verify run compares Pencil and app images at the same state and size and reports
 no blocking or major mismatches.
 
