@@ -8,9 +8,12 @@ use std::{fmt, num::NonZeroU32};
 
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  integration::Leftovers,
   permission::{AgentPermissions, capability::PermissionProblem},
   resource::StepKey,
-  run::{InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunLimit, RunNumber},
+  run::{
+    InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunAgainBlock, RunLimit, RunNumber,
+  },
   tokens::TokenBudget,
 };
 use serde::{Deserialize, Serialize};
@@ -62,6 +65,19 @@ pub enum Command {
   /// a lost reply) answers with the run the first request created. Answered with
   /// [`Reply::RunStarted`] or [`Reply::Rejected`].
   StartRun { key: IdempotencyKey, task: TaskId },
+  /// Starts the next run of task `task`, whose latest run `after` failed or was cancelled (Run
+  /// again): from the first step, in a new worktree on a new branch from the current base, with
+  /// the latest published version of the task's pipeline and the task's limits. With
+  /// `remove_worktrees`, what a person saw `after` leave, its worktrees are removed first as
+  /// *Remove worktree* removes them. Idempotent by `key`: repeating it answers with the run the
+  /// first request started and removes nothing. Answered with [`Reply::RunStarted`] or
+  /// [`Reply::Rejected`] ([`Rejection::RunAgainBlocked`] when the task cannot run again).
+  RunAgain {
+    key: IdempotencyKey,
+    task: TaskId,
+    after: RunId,
+    remove_worktrees: Option<Leftovers>,
+  },
   /// Pauses run `run` at its next checkpoint: the active agent invocation finishes, its work is
   /// committed, then the run is paused ("Pausing…" until then, [`Event::RunChanged`] tells when).
   /// Answered with [`Reply::Accepted`] once the pause is requested; asking again is harmless.
@@ -297,6 +313,21 @@ pub enum Rejection {
   /// The run's worktree was removed, so its agent cannot continue there: a follow-up (Ask agent)
   /// is refused before the run changes, and its messages stay queued.
   WorktreeRemoved,
+  /// The task cannot run again now, as `block` says.
+  RunAgainBlocked {
+    block: RunAgainBlock,
+  },
+  /// Run again did not remove the worktree at `path` of the run before it: changes appeared in it
+  /// after the person saw it. No run was started.
+  WorktreeChanged {
+    path: String,
+  },
+  /// Git did not remove the worktree at `path` of the run before Run again (its message,
+  /// `detail`). No run was started.
+  WorktreeNotRemoved {
+    path: String,
+    detail: String,
+  },
   /// The run stopped at `limit`; it continues only with a raised limit.
   LimitNotRaised {
     limit: RunLimit,

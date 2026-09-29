@@ -200,7 +200,8 @@ locks (`orchester_core::integration`).
   other branches are kept, and so is a worktree with uncommitted changes. For a run that ended
   (succeeded, failed or cancelled) a person can remove them too (*Remove worktree*): a worktree with
   uncommitted changes goes only once the person saw the files named and agreed to discard them, and
-  only if the changes are still exactly those. A folder already deleted by hand is pruned. The
+  only if the changes are still exactly those. Run again can remove them the same way, in the
+  runner, before the task's next run starts. A folder already deleted by hand is pruned. The
   Changes tab then shows the checkpointed changes and says the worktree was removed; a run's commits
   stay reachable through the base branch or its kept branch.
 
@@ -413,7 +414,12 @@ SQLite serializes writes between the two processes; ownership keeps meaning unam
   committed. A run that reaches its token budget or time limit is paused as stopped at limit
   after its agent was ended and its work committed; raising the limit continues it. A succeeded
   run is reopened by a follow-up (Ask agent) → running → succeeded again, also when the follow-up
-  fails.
+  fails. A failed or cancelled run is final; its task starts its next run with Run again
+  (`orchester_core::run::run_again`): from the first step, in a new worktree on a new branch
+  (`…-run-<n>`) from the checkout's `HEAD`, with the latest published version of the task's pipeline
+  and the task's limits, and the project's next run number. It is refused while another run of the
+  task has not ended, while the task's pipeline has no published version and while today's budget
+  is used; a repeated request with the same key finds the run the first one started.
 - **Step execution:** pending → running → waiting (approval, plan, message) → passed / failed /
   skipped.
 - **Message:** draft (desktop only) → queued → delivered → acknowledged; failed keeps the draft.

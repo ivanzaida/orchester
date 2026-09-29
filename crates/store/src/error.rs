@@ -4,6 +4,7 @@ use orchester_core::{
   id::{ConnectionId, InvocationId, ResourceId, RunId, SecretId, TaskId},
   resource::{PublishError, ResourceKind},
   run::RunError,
+  task::EditError,
 };
 use thiserror::Error;
 
@@ -35,6 +36,9 @@ pub enum StoreError {
   Unrepresentable(&'static str),
   #[error("task {0} does not exist")]
   TaskNotFound(TaskId),
+  /// The task can no longer be edited; nothing was changed.
+  #[error("task {task} cannot be edited: {source}")]
+  TaskNotEditable { task: TaskId, source: EditError },
   #[error("a task batch must contain at least one task")]
   EmptyBatch,
   #[error("resource {0} does not exist")]

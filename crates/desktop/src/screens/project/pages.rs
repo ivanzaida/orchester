@@ -1,16 +1,26 @@
 //! The screen of each project page, rendered by the router into the shell's outlet with what the
 //! shell read about the project.
 
-use lurq::{app::ctx::Ctx, node::Element};
-use orchester_core::id::ResourceId;
+use std::sync::Arc;
+
+use lurq::{
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::Column,
+  layout::{Alignment, layout_kind::Justify},
+  node::{Element, dimension::Dimension},
+};
+use orchester_core::{
+  id::{ResourceId, TaskId},
+  limits::ProjectLimits,
+};
 use orchester_ipc::WorkSummary;
 
 use super::{
-  TasksState,
+  ProjectNav, TasksState,
   agents::AgentsScreen,
   connections::ConnectionsScreen,
   instructions::InstructionsScreen,
-  new_task::{NewTaskForm, NewTaskProps},
+  new_task::{Editing, NewTaskForm, NewTaskProps},
   overview::{OverviewProps, OverviewScreen},
   pipelines::{PipelinesProps, PipelinesScreen},
   pull_requests::{PullRequestProps, PullRequestScreen, PullRequestsScreen},
@@ -25,6 +35,7 @@ use crate::{
   navigation::route::{self, Page, PipelineView, Route},
   runner::{RunnerStatus, state::RunnerState},
   tasks::usage::ProjectUsage,
+  ui::{icon::Icon, message_text, panel::RecoveryPanel},
   workspace::OpenProject,
 };
 
@@ -84,8 +95,10 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         project: open,
         pipelines: shown.tasks.ready().map(|tasks| tasks.pipelines.clone()),
         limits,
+        editing: None,
       },
     ),
+    Page::EditTask(task) => edit_task(ctx, open, task, &shown.tasks, limits),
     Page::Task(task, tab) => ctx.mount_keyed::<TaskScreen>(
       &format!("task-{task}"),
       TaskProps {
@@ -95,6 +108,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         file,
         revision: shown.revision,
         limits,
+        pipelines: shown.tasks.ready().map(|tasks| tasks.pipelines.clone()),
         runner: shown.runner,
         runner_since: shown.status.trouble_since(),
       },
@@ -114,6 +128,67 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
     Page::Connections(..) => ctx.mount_keyed::<ConnectionsScreen>("connections", open),
     Page::Settings(_) => ctx.mount_keyed::<SettingsScreen>("settings", open),
   }
+}
+
+/// The New task form on the saved draft `task` (Edit task, `E1o77O`), once the project's tasks are
+/// read. A task that is not known leads to its page, which says it cannot be read.
+fn edit_task(
+  ctx: &mut Ctx,
+  project: OpenProject,
+  task: TaskId,
+  tasks: &TasksState,
+  limits: Option<ProjectLimits>,
+) -> Element {
+  let tasks = match tasks {
+    TasksState::Ready(tasks) => tasks,
+    TasksState::Loading => {
+      let panel = RecoveryPanel::new(
+        Icon::Loader,
+        &ctx.t("runs.page.loading"),
+        &ctx.t("runs.page.loadingDetail"),
+      );
+      return centered(panel.into());
+    }
+    TasksState::Failed(error) => {
+      let panel = RecoveryPanel::new(
+        Icon::AlertCircle,
+        &ctx.t("runs.page.loadFailed"),
+        &message_text(ctx, error),
+      );
+      return centered(panel.into());
+    }
+  };
+  let Some(saved) = tasks.tasks.iter().find(|candidate| candidate.id() == task) else {
+    ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav")
+      .replace(Page::task(task));
+    return Element::new();
+  };
+  let editing = Editing {
+    task: Arc::new(saved.clone()),
+    has_run: tasks.phases.contains_key(&task),
+  };
+  ctx.mount_keyed::<NewTaskForm>(
+    &format!("edit-task-{task}"),
+    NewTaskProps {
+      project,
+      pipelines: Some(tasks.pipelines.clone()),
+      limits,
+      editing: Some(editing),
+    },
+  )
+}
+
+fn centered(content: Element) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .padding(SpacingSize::Section)
+    .align_items(Alignment::Center)
+    .justify(Justify::Center)
+    .child(content)
+    .into()
 }
 
 /// The library, or a pipeline in its editor: one screen, so the library's state survives a

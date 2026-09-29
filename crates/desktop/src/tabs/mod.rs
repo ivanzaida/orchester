@@ -31,7 +31,7 @@ use lurq::{
 use parking_lot::Mutex;
 
 use self::{
-  dirty::Unsaved,
+  dirty::{Discard, Leaving, Unsaved},
   model::{Closed, Focus, TabId, TabSet},
   persist::Saver,
 };
@@ -99,8 +99,8 @@ struct Inner {
   /// Each open tab's router, registered by its host.
   routers: Mutex<HashMap<TabId, RouterHandle>>,
   unsaved: Unsaved,
-  /// The tab whose unsaved edits the discard question asks about.
-  discarding: Signal<Option<TabId>>,
+  /// What the discard question asks about while it is open: closing a tab, or leaving a page.
+  discarding: Signal<Option<Discard>>,
   dialogs: DialogLayer,
   saver: Saver,
   input: Mutex<PointerInput>,
@@ -155,9 +155,23 @@ impl Tabs {
     &self.inner.unsaved
   }
 
-  /// The tab the discard question asks about, while it is open.
-  pub fn discarding(&self) -> &Signal<Option<TabId>> {
+  /// What the discard question asks about, while it is open.
+  pub fn discarding(&self) -> &Signal<Option<Discard>> {
     &self.inner.discarding
+  }
+
+  /// Goes where the user asked in the active tab (`go`), after asking when its page holds edits
+  /// that ask before it is left (`kDmo9`). Only the active tab takes input, so every user
+  /// navigation is the active tab's.
+  pub fn leave_active(&self, go: impl Fn() + Send + Sync + 'static) {
+    let active = self.inner.set.get_untracked().active();
+    match self.inner.unsaved.leave_question(active) {
+      Some(explanation) => self
+        .inner
+        .discarding
+        .set(Some(Discard::Leave(Leaving::new(explanation, Arc::new(go))))),
+      None => go(),
+    }
   }
 
   fn change(&self, change: impl FnOnce(&mut TabSet) -> bool) -> bool {
@@ -189,7 +203,7 @@ impl Tabs {
     match open {
       OpenIn::Current => {
         if let Some(router) = self.active_router() {
-          entry::push(&router.navigator(), path);
+          self.leave_active(move || entry::push(&router.navigator(), path.clone()));
         }
       }
       OpenIn::Background => self.open_tab(&path, Focus::Background),
@@ -214,7 +228,7 @@ impl Tabs {
       return;
     }
     if self.inner.unsaved.any(id) {
-      self.inner.discarding.set(Some(id));
+      self.inner.discarding.set(Some(Discard::Close(id)));
       return;
     }
     self.close(id);
@@ -262,15 +276,19 @@ impl Tabs {
 
   /// Back in the active tab's history; nothing at its start.
   pub fn back(&self) {
-    if let Some(router) = self.active_router() {
-      router.back();
+    if let Some(router) = self.active_router().filter(RouterHandle::can_back) {
+      self.leave_active(move || {
+        router.back();
+      });
     }
   }
 
   /// Forward in the active tab's history; nothing at its end.
   pub fn forward(&self) {
-    if let Some(router) = self.active_router() {
-      forward(&router);
+    if let Some(router) = self.active_router().filter(RouterHandle::can_forward) {
+      self.leave_active(move || {
+        forward(&router);
+      });
     }
   }
 

@@ -1,8 +1,8 @@
 //! The Conversation tab (02.12 `jgqPe`, as built 02.S `JOG1i`): the task's active work (`FjbKY`)
 //! beside the task conversation panel (`kjsmd`, see [`panel`]). The active work repeats where the
 //! run stands — its notice, its progress per step and its working context — so a message is written
-//! with the work in view. Once no agent reads messages any more, the policy about when they do is
-//! left out; a merged run's notice says where its work went, and its permissions cannot change, so
+//! with the work in view. The current-turn policy appears only while an agent invocation runs;
+//! a merged run's notice says where its work went, and its permissions cannot change, so
 //! their row has no link (02.S2 `m3gLZ`).
 
 mod composer;
@@ -69,7 +69,7 @@ pub(super) struct TabContext<'a> {
 
 pub(super) fn conversation_tab(ctx: &mut Ctx, detail: &Arc<TaskDetail>, tab: &TabContext<'_>) -> Element {
   let conversation = Conversation::of(detail, tab.lost.is_some(), tab.leftovers);
-  let open = conversation.state.takes_messages();
+  let active_agent_turn = conversation.active_agent_turn;
   let removed = conversation.state == PanelState::WorktreeRemoved;
   let props = ConversationProps {
     repo_root: tab.repo_root.to_path_buf(),
@@ -83,15 +83,21 @@ pub(super) fn conversation_tab(ctx: &mut Ctx, detail: &Arc<TaskDetail>, tab: &Ta
     .id("task-conversation-tab")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(active_work(ctx, detail, tab, open, removed))
+    .child(active_work(ctx, detail, tab, active_agent_turn, removed))
     .child(ctx.mount_keyed::<ConversationPanel>("task-conversation", props))
     .into()
 }
 
 /// Active work (`FjbKY`): the notice, the progress rows (`qB7mj`) and the working context, in a
 /// viewport with the scroll gutter; the communication policy (`e2D1lv`) stays at the bottom while
-/// the conversation is `open`, that is, while an agent reads messages.
-fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>, open: bool, removed: bool) -> Element {
+/// an agent invocation is still running.
+fn active_work(
+  ctx: &mut Ctx,
+  detail: &TaskDetail,
+  tab: &TabContext<'_>,
+  active_agent_turn: bool,
+  removed: bool,
+) -> Element {
   let notice = match &detail.merge {
     Some(merge) => merged_notice(ctx, merge, tab.leftovers),
     None if removed => Notice::new(
@@ -123,7 +129,7 @@ fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>, open: b
         .as_ref()
         .map(|run| working_context(ctx, run, tab, detail.merge.is_some() || removed)),
     );
-  let policy = open.then(|| {
+  let policy = active_agent_turn.then(|| {
     Column::new()
       .width(Dimension::Pct(100.0))
       .padding_top(ExtraSpacing::Form.role())

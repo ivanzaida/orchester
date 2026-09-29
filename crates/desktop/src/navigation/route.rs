@@ -22,6 +22,7 @@ const ALL_PROJECTS: &str = "projects";
 const PROJECT: &str = "project";
 const TASKS: &str = "tasks";
 const NEW: &str = "new";
+const EDIT: &str = "edit";
 const PULL_REQUESTS: &str = "pull-requests";
 const PIPELINES: &str = "pipelines";
 const INSTRUCTIONS: &str = "instructions";
@@ -80,6 +81,8 @@ pub enum Page {
   NewTask,
   /// One task and its latest run, on a tab (`RD4pc`, `SfXU1`, `vpgrJ`).
   Task(TaskId, TaskPageTab),
+  /// A draft task in the New task form, to change it (`E1o77O`).
+  EditTask(TaskId),
   /// `wGtxT`.
   PullRequests,
   /// One pull request of the linked repository, by number (`Rrmhf`).
@@ -267,6 +270,7 @@ impl Page {
       [TASKS] => Self::Tasks(task_tab(tab)),
       [TASKS, NEW] => Self::NewTask,
       [TASKS, task] => Self::Task(task.parse().ok()?, task_page_tab(tab)),
+      [TASKS, task, EDIT] => Self::EditTask(task.parse().ok()?),
       [PULL_REQUESTS] => Self::PullRequests,
       [PULL_REQUESTS, number] => Self::PullRequest(number.parse().ok()?),
       [PIPELINES] => Self::Pipelines,
@@ -300,6 +304,7 @@ impl Page {
       Self::Tasks(tab) => with_tab(format!("{root}/{TASKS}"), task_query(*tab)),
       Self::NewTask => format!("{root}/{TASKS}/{NEW}"),
       Self::Task(task, tab) => with_tab(format!("{root}/{TASKS}/{task}"), task_page_query(*tab)),
+      Self::EditTask(task) => format!("{root}/{TASKS}/{task}/{EDIT}"),
       Self::PullRequests => format!("{root}/{PULL_REQUESTS}"),
       Self::PullRequest(number) => format!("{root}/{PULL_REQUESTS}/{number}"),
       Self::Pipelines => format!("{root}/{PIPELINES}"),
@@ -333,7 +338,7 @@ impl Page {
   pub const fn sidebar_item(&self) -> SidebarItem {
     match self {
       Self::Overview(_) => SidebarItem::Overview,
-      Self::Tasks(_) | Self::NewTask | Self::Task(..) => SidebarItem::Tasks,
+      Self::Tasks(_) | Self::NewTask | Self::Task(..) | Self::EditTask(_) => SidebarItem::Tasks,
       Self::PullRequests | Self::PullRequest(_) => SidebarItem::PullRequests,
       Self::Pipelines | Self::Pipeline(..) => SidebarItem::Pipelines,
       Self::Instructions(..) => SidebarItem::Instructions,

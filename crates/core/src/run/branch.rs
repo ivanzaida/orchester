@@ -46,6 +46,16 @@ impl BranchName {
     Self::new(&name).expect("a lowercase task key, digits, dashes and one slash form a valid branch name")
   }
 
+  /// The branch of the run a task with `earlier` runs (readable or not) starts next: runs of a
+  /// task are numbered on from its last one, so each has a branch of its own.
+  pub fn for_next_run(task: &TaskKey, earlier: usize) -> Self {
+    let ordinal = u32::try_from(earlier + 1)
+      .ok()
+      .and_then(NonZeroU32::new)
+      .expect("fewer than 2^32 runs of one task");
+    Self::for_run(task, ordinal)
+  }
+
   pub fn as_str(&self) -> &str {
     &self.0
   }

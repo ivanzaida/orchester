@@ -33,8 +33,8 @@ No installed Orchester build, existing project database or stored user secret wa
 - Claude Code 2.1.89 reported `loggedIn: false`. With `--strict-mcp-config --mcp-config`, `--allowedTools
   mcp__m1probe`, `--tools ""` and `--permission-mode dontAsk`, its `init` event listed `mcp__m1probe__ping` and
   `m1probe` as connected. It then returned `authentication_failed` and `Not logged in · Please run /login`, with
-  zero API tokens and no model tool call. Redacted output is `.tmp/m1/claude.stdout.redacted.jsonl`. The allow rule's
-  execution behaviour remains unverified until Claude is signed in.
+  zero API tokens and no model tool call. Redacted output was preserved as
+  `.tmp/m1/claude-auth-failed.stdout.redacted.jsonl` before the signed-in replay.
 
 The probes exercised the real CLIs with model turns where authorization allowed them. They did not start a full
 Orchester pipeline run. The fixture files contain only observed CLI events with Boolean or inert marker results;
@@ -46,11 +46,35 @@ test secret values never enter prompts, fixture text or MCP output.
 - `powershell -File tools/check.ps1`: passed (rustfmt, clippy, file size and UI literal gate).
 - No full test suite or macOS runtime was run.
 
-M1 remains open because Claude's `mcp__<name>` allow rule has not been exercised in a signed-in model turn.
+At this point M1 remained open because Claude's `mcp__<name>` allow rule had not been exercised in a signed-in model
+turn. The follow-up below closes that evidence gap.
 
 ## Claude authentication follow-up · 2026-09-29
 
 In the isolated `codex/m1-claude-mcp` worktree, Claude Code 2.1.89 `claude auth status --json` returned exit code 1
 and `loggedIn: false`. The raw authentication output was neither printed nor saved; only sanitized status fields were
-surfaced. No model turn was attempted without a signed-in session. The `mcp__<name>` allow rule remains unverified,
-and M1 stays in progress.
+surfaced. No model turn was attempted without a signed-in session. The `mcp__<name>` allow rule was unverified then.
+
+## Claude signed-in allow-rule follow-up · 2026-09-29
+
+The user signed in on the same host. `claude auth status --json` then returned exit code 0 and `loggedIn: true`;
+only those sanitized fields were printed. Claude Code 2.1.89 ran a model turn in the disposable `.tmp/m1/project`
+with `--strict-mcp-config`, the one-server `m1probe` config, `--tools ""`, `--permission-mode dontAsk` and
+`--allowedTools mcp__m1probe`. The `init` event listed `mcp__m1probe__ping` and a connected `m1probe` server.
+The assistant issued a real `tool_use` for `mcp__m1probe__ping`; its `tool_result` contained
+`M1_TOOL_OK; server_secret_present=false`. The final result reported `subtype: success`, `is_error: false` and zero
+permission denials. The process exited 0 in 8.9 seconds. Thus the server-name allow rule permitted this MCP call
+in a signed-in model turn. This probe did not test a full Orchester pipeline or a server with a real secret.
+
+The raw CLI stream stayed in ignored `.tmp/m1/claude.stdout.redacted.jsonl`; the prior signed-out stream was
+preserved separately. `crates/core/tests/mcp/fixtures/claude-signed-in-mcp.jsonl` is a trimmed observed fixture
+with synthetic IDs and only the inert marker, tool name, connected status and successful result. The parser test
+checks the session, call and completed MCP result. No authentication token or secret value was printed or saved.
+
+The implementing worktree's named `mcp_claude_signed_in_allow_rule_permits_the_probe_call` test passed 1/1 and
+`powershell -File tools/check.ps1` returned `check: OK`. A separate agent applied all three changed files to a
+detached worktree and SHA-256 matched them byte-for-byte, then repeated the named test 1/1 and `check.ps1` OK in an
+exclusive target directory. The independent agent also compared the trimmed fixture against the already redacted
+actual stream, including correlated tool IDs, exact inert result, model answer, success flag and zero permission
+denials. Its report is `.tmp/verify/m1-claude-allow-rule/report.md`. No full Orchester pipeline, full test suite or
+macOS runtime was run in this follow-up.

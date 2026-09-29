@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"m1-signed-in","tools":["mcp__m1probe__ping"],"mcp_servers":[{"name":"m1probe","status":"connected"}]}
+{"type":"assistant","message":{"id":"m1-call","content":[{"type":"tool_use","id":"m1-tool","name":"mcp__m1probe__ping","input":{}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"m1-tool","content":[{"type":"text","text":"M1_TOOL_OK; server_secret_present=false"}]}]}}
+{"type":"assistant","message":{"id":"m1-final","content":[{"type":"text","text":"The probe returned marker **`M1_TOOL_OK`** with `server_secret_present=false`."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"The probe returned marker **`M1_TOOL_OK`** with `server_secret_present=false`.","permission_denials":[]}

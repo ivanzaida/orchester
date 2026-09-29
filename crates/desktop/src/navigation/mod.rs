@@ -182,16 +182,23 @@ impl Navigation {
   }
 
   pub fn show_all_projects(&self) {
-    entry::push(&self.router.navigator(), Route::AllProjects.path());
+    self.push(Route::AllProjects.path());
   }
 
   /// Opens `route`, a screen outside any project, where `open` says: in this tab as a new
   /// history entry, or in a new tab.
   pub fn open(&self, route: Route, open: OpenIn) {
     match open {
-      OpenIn::Current => entry::push(&self.router.navigator(), route.path()),
+      OpenIn::Current => self.push(route.path()),
       OpenIn::Background | OpenIn::NewTab => self.tabs.open(route, open),
     }
+  }
+
+  /// Opens `path` in this tab as a new history entry, as a user navigation, once the page shown
+  /// may be left ([`Tabs::leave_active`]).
+  fn push(&self, path: String) {
+    let navigator = self.router.navigator();
+    self.tabs.leave_active(move || entry::push(&navigator, path.clone()));
   }
 
   /// A link to `route`, a screen outside any project (see `ui::link`).
@@ -212,7 +219,7 @@ impl Navigation {
     let route = Route::Project(project.project.id(), Page::OVERVIEW);
     self.places.add_project(project);
     match open {
-      OpenIn::Current => entry::push(&self.router.navigator(), route.path()),
+      OpenIn::Current => self.push(route.path()),
       OpenIn::Background | OpenIn::NewTab => self.tabs.open(route, open),
     }
   }

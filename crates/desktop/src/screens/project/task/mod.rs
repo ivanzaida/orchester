@@ -8,6 +8,7 @@
 //! *Remove worktree* clears it. Artifacts come in a later milestone and are shown unavailable.
 
 mod activity;
+mod brief;
 mod changes;
 mod controls;
 mod conversation;
@@ -19,6 +20,7 @@ mod plan_review;
 mod progress;
 mod ready;
 mod retry_limit;
+mod run_again;
 mod summary;
 mod tab_state;
 mod unreadable;
@@ -65,6 +67,7 @@ use crate::{
   runner::{Runners, state::RunnerState},
   tasks::{
     changes::checkpointed_in,
+    data::PipelineChoice,
     detail::{RunView, TaskDetail},
     integration::{LeftBehind, leftovers_in},
     plan::PlanReview,
@@ -104,6 +107,8 @@ pub struct TaskProps {
   pub revision: (u64, u64),
   /// The project's limits, once read: the most a raised limit may be.
   pub limits: Option<ProjectLimits>,
+  /// The project's published pipelines, once read: the one a task without a run would use.
+  pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// The project's runner, and since when it has had trouble: a run recorded as running is
   /// interrupted while it is not online, and 02.H (`EFY7I`) shows while it could not restart.
   pub runner: RunnerState,
@@ -127,6 +132,8 @@ pub struct TaskScreen {
   reload: Signal<u64>,
   /// Puts the focus in the conversation's composer (Ask agent).
   focus_composer: Signal<bool>,
+  /// Why Edit task, opened for this task, was refused and this page shown instead.
+  refused_edit: Signal<Option<Message>>,
   nav: ProjectNav,
   runners: Runners,
   scrolls: TaskScrolls,
@@ -160,6 +167,7 @@ impl Component for TaskScreen {
       retry: ctx.signal(0),
       reload: ctx.signal(0),
       focus_composer,
+      refused_edit: ctx.signal(None),
       nav,
       runners: ctx
         .use_context::<Runners>()
@@ -175,6 +183,9 @@ impl Component for TaskScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TaskProps>().clone();
+    if let Some(reason) = self.nav.take_refused_edit(props.task) {
+      self.refused_edit.set(Some(reason));
+    }
     let control = control_action(ctx);
     let deps = (
       props.project.repo_root.clone(),
@@ -210,7 +221,7 @@ impl Component for TaskScreen {
         ),
       };
       return column
-        .child(self.topbar(ctx, &props, (None, None), &control))
+        .child(self.topbar(ctx, &props, (None, Vec::new()), &control))
         .child(centered(panel.into()));
     };
     if let Some(run) = detail.run.as_ref() {
@@ -224,21 +235,24 @@ impl Component for TaskScreen {
       _ => None,
     };
     let leftovers = self.leftovers(ctx, &props, &detail);
-    let body = self.body(ctx, &props, &detail, (lost, files), (checkpointed, leftovers.clone()));
+    let again = run_again::offer(ctx, &props.project, &detail, props.revision, leftovers.as_ref());
+    let body = self.body(
+      ctx,
+      &props,
+      &detail,
+      (lost, files, again.reason),
+      (checkpointed, leftovers.clone()),
+    );
     let runner_notice = connection_notice(ctx, &props.runner, props.runner_since, &self.runners).map(padded);
-    let control_error = control
-      .state()
-      .get()
-      .error
-      .filter(|_| !control.state().get().is_pending())
-      .map(|error| control_error_row(&message_text(ctx, &error)));
+    let control_error = self.error_rows(ctx, &control);
     let removal = self.removal(ctx, &props, &detail, leftovers.as_ref());
+    let ended = removal.into_iter().chain(again.action).collect();
     let earlier_unreadable = detail
       .earlier_unreadable
       .iter()
       .map(|run| unreadable::earlier_notice(ctx, run));
     column
-      .child(self.topbar(ctx, &props, (Some(&detail), removal), &control))
+      .child(self.topbar(ctx, &props, (Some(&detail), ended), &control))
       .with_children(runner_notice)
       .child(heading::heading(ctx, &detail, lost.is_some()))
       .with_children(earlier_unreadable)
@@ -256,7 +270,7 @@ impl TaskScreen {
     ctx: &mut Ctx,
     props: &TaskProps,
     detail: &Arc<TaskDetail>,
-    (lost, files): (Option<Lost>, Option<usize>),
+    (lost, files, reason): (Option<Lost>, Option<usize>, Option<Element>),
     (checkpointed, leftovers): (Option<CheckpointedLoad>, Option<Result<Leftovers, Message>>),
   ) -> Element {
     if let Some(run) = &detail.latest_unreadable {
@@ -302,8 +316,9 @@ impl TaskScreen {
       (TaskPageTab::Summary, _) => summary::summary(
         ctx,
         detail,
-        (props.limits, lost),
+        (props.limits, lost, props.pipelines.as_deref().map(Vec::as_slice)),
         (&props.project.repo_root, &self.scrolls),
+        reason,
       ),
       (TaskPageTab::Activity, _) => ctx.mount_keyed::<ActivityTab>(
         "task-activity",
@@ -433,15 +448,27 @@ impl TaskScreen {
 }
 
 impl TaskScreen {
-  /// The breadcrumb back to the task list, then the run controls (`ctwcG`) and `removal`, *Remove
-  /// worktree* of a run that ended. A run that lost its runner has no controls: nothing can pause,
-  /// cancel or continue it until a runner is back, and the runner notice offers Restart runner. A
-  /// run that cannot be read shows Cancel run unavailable (`asPAJ`).
+  /// Why the runner did not carry out the last run control, and why Edit task, opened for this
+  /// task, was refused (`field-error` below the heading).
+  fn error_rows(&self, ctx: &Ctx, control: &ControlAction) -> Vec<Element> {
+    let state = control.state().get();
+    let control_error = if state.is_pending() { None } else { state.error };
+    control_error
+      .into_iter()
+      .chain(self.refused_edit.get())
+      .map(|error| control_error_row(&message_text(ctx, &error)))
+      .collect()
+  }
+
+  /// The breadcrumb back to the task list, then the run controls (`ctwcG`) and `ended`, the actions
+  /// of a run that ended: *Remove worktree* and *Run again*. A run that lost its runner has no
+  /// controls: nothing can pause, cancel or continue it until a runner is back, and the runner
+  /// notice offers Restart runner. A run that cannot be read shows Cancel run unavailable (`asPAJ`).
   fn topbar(
     &self,
     ctx: &Ctx,
     props: &TaskProps,
-    (detail, removal): (Option<&TaskDetail>, Option<Element>),
+    (detail, ended): (Option<&TaskDetail>, Vec<Element>),
     control: &ControlAction,
   ) -> Element {
     let key = detail.map_or_else(String::new, |detail| detail.task.key().to_string());
@@ -465,7 +492,8 @@ impl TaskScreen {
         .map(|run| control_buttons(ctx, run, control, &self.requested))
         .unwrap_or_default(),
     };
-    page::topbar_with(breadcrumb.into(), buttons.into_iter().chain(removal))
+    let edit = detail.and_then(|detail| brief::edit_button(ctx, &self.nav, detail));
+    page::topbar_with(breadcrumb.into(), buttons.into_iter().chain(ended).chain(edit))
   }
 
   /// Summary, Changes with the count of files changed up to the latest checkpoint, and Activity;

@@ -132,3 +132,18 @@ pub fn ownership_note(text: &str) -> Element {
     .child(Text::new(text).variant(ExtraTypography::Explanation.role()).flex(1.0))
     .into()
 }
+
+/// Why the actions a notice is about cannot be used: a lock beside one caption line, indented from
+/// the notice (the unreadable run's actions in 02.R `w6AfG`, Run again unavailable in ORC-16
+/// `iE8eQ`).
+pub fn lock_line(id: &'static str, text: &str) -> Element {
+  Row::new()
+    .id(id)
+    .width(Dimension::Pct(100.0))
+    .padding_horizontal(SpacingSize::Md)
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextSecondary))
+    .child(Text::new(text).variant(TypographyStyle::Caption).flex(1.0))
+    .into()
+}

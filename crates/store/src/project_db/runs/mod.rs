@@ -54,6 +54,20 @@ impl RunStore for ProjectDb {
     Ok(run)
   }
 
+  fn run_with_key(&self, key: IdempotencyKey) -> Result<Option<Run>, RunStoreError> {
+    load_runs(&self.connection, "WHERE idempotency_key = ?1", [key.to_string()])?
+      .pop()
+      .transpose()
+      .map_err(|unreadable| unreadable.error)
+  }
+
+  fn next_run_number(&self) -> Result<RunNumber, RunStoreError> {
+    let number: i64 = self
+      .connection
+      .query_row("SELECT next FROM counters WHERE name = 'run'", [], |row| row.get(0))?;
+    Ok(run_number(number)?)
+  }
+
   fn append_events(&mut self, run: &Run, events: &[RunEvent]) -> Result<(), RunStoreError> {
     self.append(run, events, None)
   }

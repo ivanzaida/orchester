@@ -112,6 +112,10 @@ required-features = ["test-agent"]
 name = "agent_files"
 required-features = ["test-agent"]
 
+[[test]]
+name = "run_again"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

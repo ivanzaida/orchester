@@ -5,6 +5,7 @@ use orchester_core::{
   name::{Name, NameError},
   resource::PublishError,
   secret::{SecretError, VaultError},
+  task::EditError,
 };
 use orchester_store::StoreError;
 
@@ -48,6 +49,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::DuplicateConnectionName(_) => Message::new("errors.connectionNameTaken"),
     StoreError::DuplicateSecretName { .. } => Message::new("errors.secretNameTaken"),
     StoreError::AlreadyMerged(_) => Message::new("runs.merge.failure.alreadyMerged"),
+    StoreError::TaskNotEditable { source, .. } => edit_error(source),
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }
@@ -77,6 +79,14 @@ pub fn store_error(error: &StoreError) -> Message {
       Message::new("agents.permissions.publish.connectionMissing")
     }
     StoreError::Publish(PublishError::Permissions(_)) => Message::new("agents.permissions.publish.notEnforceable"),
+  }
+}
+
+/// Why a task can no longer be edited.
+pub const fn edit_error(error: &EditError) -> Message {
+  match error {
+    EditError::NotDraft(_) => Message::new("tasks.edit.notDraft"),
+    EditError::HasRun => Message::new("tasks.edit.hasRun"),
   }
 }
 

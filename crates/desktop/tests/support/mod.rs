@@ -3,7 +3,11 @@
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
-use std::{collections::BTreeMap, fs, time::Duration};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  fs,
+  time::Duration,
+};
 
 use orchester_core::{
   id::{ConnectionId, IdempotencyKey, ProjectId, TaskId},
@@ -52,6 +56,88 @@ impl Fixture {
   /// [`Fixture::new`] whose step, Implement, has an approval gate.
   pub fn gated() -> Self {
     Self::with_gate(true)
+  }
+
+  /// A two-agent pipeline whose Reviewer runs after Builder.
+  pub fn reviewed() -> Self {
+    let mut fixture = Self::new();
+    let implement = fixture.snapshot.body().steps()[0].clone();
+    let StepKind::Agent {
+      profile: Some(builder), ..
+    } = &implement.kind
+    else {
+      panic!("the fixture's Implement step has a Builder profile");
+    };
+    let profile = AgentProfile::new(
+      name("Reviewer"),
+      String::new(),
+      PromptText::new("Review.").expect("prompt"),
+      ConnectionId::generate(),
+      ModelId::new("gpt-5.5").expect("valid model"),
+      ProviderSettings::default(),
+    );
+    let reviewer = fixture
+      .db
+      .create_resource(Slug::new("reviewer").expect("slug"), name("Reviewer"), &profile, at(6))
+      .expect("profile")
+      .id();
+    let profiles = BTreeMap::from([
+      (
+        *builder,
+        fixture
+          .db
+          .latest_version::<AgentProfile>(*builder)
+          .expect("read Builder")
+          .expect("Builder is published"),
+      ),
+      (
+        reviewer,
+        fixture
+          .db
+          .publish_draft::<AgentProfile>(reviewer, at(7))
+          .expect("publish Reviewer"),
+      ),
+    ]);
+    let review = Step {
+      key: StepKey::new("review").expect("key"),
+      name: name("Review"),
+      kind: StepKind::Agent {
+        profile: Some(reviewer),
+        repository: RepositoryAccess::ReadOnly,
+        model: None,
+        permissions: StepPermissions::default(),
+      },
+      instructions: PromptText::new("").expect("prompt"),
+      depends_on: BTreeSet::from([implement.key.clone()]),
+      approval_gate: false,
+      on_failure: None,
+      budget: None,
+    };
+    let pipeline = Pipeline::new(vec![implement, review]).expect("pipeline");
+    let delivery = fixture
+      .db
+      .create_resource(
+        Slug::new("review-delivery").expect("slug"),
+        name("Review delivery"),
+        &pipeline,
+        at(8),
+      )
+      .expect("pipeline")
+      .id();
+    let version = fixture.db.publish_draft::<Pipeline>(delivery, at(9)).expect("publish");
+    let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
+    fixture.snapshot = RunSnapshot::build(
+      delivery,
+      &version,
+      PublishedVersions {
+        profiles: &profiles,
+        tools: &tools,
+        instructions: &instructions,
+        skills: &BTreeMap::new(),
+      },
+    )
+    .expect("snapshot");
+    fixture
   }
 
   fn with_gate(approval_gate: bool) -> Self {

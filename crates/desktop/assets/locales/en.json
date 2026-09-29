@@ -157,7 +157,9 @@
       "title": "Discard changes?",
       "explanation": "This tab has changes that are not saved yet. Closing it discards them.",
       "keep": "Keep open",
-      "confirm": "Discard and close"
+      "confirm": "Discard and close",
+      "keepEditing": "Keep editing",
+      "confirmLeave": "Discard changes"
     }
   },
   "runner": {
@@ -479,6 +481,18 @@
       "starting": "Starting the run…",
       "startingDetail": "Saving the task, checking its setup and handing it to the runner.",
       "runNeedsDetails": "Add the missing details above to run the task."
+    },
+    "edit": {
+      "action": "Edit",
+      "breadcrumb": "{{project}} / Tasks / {{task}} / Edit",
+      "title": "Edit task",
+      "description": "Changes apply to draft {{task}}. Nothing runs until you choose Create & run.",
+      "unsaved": "Unsaved changes",
+      "saveChanges": "Save changes",
+      "savingChanges": "Saving changes…",
+      "leave": "Your edits to {{task}} are not saved yet. Leaving discards them; the saved draft stays as it was.",
+      "notDraft": "This task is queued for a run, so it can no longer be edited.",
+      "hasRun": "This task has a run, so it can no longer be edited."
     }
   },
   "runs": {
@@ -622,6 +636,13 @@
       "timeLimitValue": "{{minutes}} min active agent time",
       "permissions": "Permissions",
       "snapshotNote": "Configuration updates do not change this run’s saved versions.",
+      "brief": "Brief",
+      "criteria": "Acceptance criteria",
+      "thisTask": "This task",
+      "noPipeline": "No pipeline chosen",
+      "limits": "Limits",
+      "noLimits": "No limits set",
+      "taskNote": "A run keeps the pipeline version and limits it starts with.",
       "notice": {
         "draftTitle": "This task is a draft",
         "draftDetail": "A run starts from Create & run once the task has every detail.",
@@ -993,6 +1014,57 @@
         "notRemoved": "Git didn’t remove {{path}}: {{detail}}"
       }
     },
+    "runAgain": {
+      "action": "Run again",
+      "unavailable": {
+        "runActive": "Run again is unavailable: run #{{run}} of this task is active. A task has one active run at a time; Run again returns when it ends.",
+        "pipelineNotPublished": "Run again is unavailable: {{pipeline}} has no published version any more. Publish it again in Pipelines to run this task again.",
+        "dailyBudgetUsed": "Run again is unavailable: the daily token budget is used ({{used}} of {{budget}} today). New runs wait until tomorrow, or raise it in Project settings › Limits.",
+        "notEnded": "Run again is unavailable: the task’s latest run changed. Its page shows it now."
+      },
+      "title": "Start run #{{run}} of {{task}}?",
+      "explanation": {
+        "branch": "Run #{{run}} starts from the first step in a new worktree, on a new branch from {{base}} as it is now. Run #{{previous}} keeps its record, its branch and, unless you remove it below, its worktree.",
+        "head": "Run #{{run}} starts from the first step in a new worktree, on a new branch from your checkout’s HEAD as it is now. Run #{{previous}} keeps its record, its branch and, unless you remove it below, its worktree."
+      },
+      "property": {
+        "pipeline": "Pipeline",
+        "pipelineValue": "{{pipeline}} {{version}} · latest published",
+        "previous": "Run #{{run}} used",
+        "previousValue": "{{pipeline}} {{version}}",
+        "startsFrom": "Starts from",
+        "startsFromValue": "{{step}} · step 1 of {{count}}",
+        "base": "Base",
+        "baseValue": "{{branch}} at {{revision}}",
+        "baseDetached": "HEAD at {{revision}}",
+        "baseUnknown": "Read when the run starts",
+        "branch": "New branch",
+        "worktree": "New worktree",
+        "worktreeValue": "A new folder in {{folder}}",
+        "limits": "Limits",
+        "limitsValue": "{{budget}} tokens · {{minutes}} min · from the task"
+      },
+      "remove": {
+        "title": {
+          "one": "Remove the worktree of run #{{run}}",
+          "other": "Remove the worktrees of run #{{run}}"
+        },
+        "clean": {
+          "one": "No uncommitted changes in it.",
+          "other": "No uncommitted changes in them."
+        },
+        "cleanKept": {
+          "one": "No uncommitted changes in it. Its commits stay on {{branch}}.",
+          "other": "No uncommitted changes in them. Its commits stay on {{branch}}."
+        },
+        "uncommitted": {
+          "one": "1 file not committed would be discarded: {{files}}",
+          "other": "{{count}} files not committed would be discarded: {{files}}"
+        }
+      },
+      "start": "Start run #{{run}}",
+      "starting": "Starting…"
+    },
     "preflight": {
       "pipelineNotPublished": "The task’s pipeline has no published version.",
       "noSteps": "The pipeline has no steps.",
@@ -1112,6 +1184,9 @@
       "askingOnly": "{{agents}} asks you",
       "available": "{{available}} available",
       "cannotContinue": "{{agents}} cannot continue",
+      "paused": "{{agent}} paused · messages stay in this task",
+      "stopped": "{{agent}} stopped at the limit · messages wait in this task",
+      "interrupted": "{{agent}} interrupted · messages wait in this task",
       "none": "No agent takes part in this task yet"
     },
     "author": {
@@ -1122,7 +1197,9 @@
     "delivery": {
       "queued": "Queued · waiting for the next checkpoint",
       "queuedRunStart": "Queued · waiting for the run to start",
-      "queuedRunContinue": "Queued · waiting for the run to continue",
+      "queuedRunResume": "Queued · delivered before the next action on resume",
+      "queuedRunContinue": "Queued · delivered when the run continues",
+      "queuedAgentNextTurn": "Queued · waiting for this agent’s next turn",
       "notDelivered": "Not delivered · the run has ended",
       "notDeliveredWorktree": "Not delivered · the run’s worktree was removed",
       "delivered": "Delivered to {{agent}}",
@@ -1146,6 +1223,8 @@
       "checkpoint": "Messages arrive at a checkpoint. Pause for an urgent change.",
       "answer": "Your reply resumes {{agent}}'s session.",
       "queued": "Messages stay queued until the run continues.",
+      "paused": "You can write while paused. Resume keeps this run and its saved versions.",
+      "stopped": "You can write while the run is stopped. Continuing keeps this run and its saved versions.",
       "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
       "readyNoAgent": "No agent step of this run can be asked again.",
       "merged": "This run's work was merged. Messages no longer reach its agents.",

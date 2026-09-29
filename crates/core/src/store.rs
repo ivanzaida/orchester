@@ -52,6 +52,11 @@ pub trait TaskStore {
 
   /// Persists the details and status of an existing task.
   fn save_task(&mut self, task: &Task) -> Result<(), Self::Error>;
+
+  /// Replaces the details of draft `id` in place, atomically: the task keeps its id and number.
+  /// A task that is not a draft, or that a run was started for, is refused
+  /// ([`Task::edit`]) and left unchanged.
+  fn update_draft(&mut self, id: TaskId, details: TaskDetails) -> Result<Task, Self::Error>;
 }
 
 /// Project settings. Written by the desktop; the runner reads them.
@@ -299,6 +304,12 @@ pub trait RunStore {
   /// creation event, atomically. Repeating the call with the same `key` returns the run
   /// created the first time instead of a new one.
   fn create_run(&mut self, key: IdempotencyKey, new: NewRun, now: Timestamp) -> Result<Run, Self::Error>;
+
+  /// The run [`RunStore::create_run`] created with `key`, if one did.
+  fn run_with_key(&self, key: IdempotencyKey) -> Result<Option<Run>, Self::Error>;
+
+  /// The number the project's next run gets.
+  fn next_run_number(&self) -> Result<RunNumber, Self::Error>;
 
   /// Appends `events`, which must not be empty, and stores `run`, the state after them,
   /// atomically. The first event must directly follow the stored log; otherwise another writer

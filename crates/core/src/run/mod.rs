@@ -4,6 +4,7 @@
 //! the event log is the source of truth and the current state is derivable from it
 //! ([`Run::replay`]). See `docs/architecture/storage.md` (Execution, State machines).
 
+mod again;
 mod apply;
 mod attempt;
 mod branch;
@@ -30,6 +31,7 @@ mod unreadable;
 mod usage;
 
 pub use self::{
+  again::{RunAgainBlock, RunAgainInput, run_again},
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
   counts::RunCounts,

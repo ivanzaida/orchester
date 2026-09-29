@@ -236,6 +236,14 @@ enum Answer {
   StopIfIdle(RequestId),
 }
 
+/// The reply to a request that starts a run.
+fn started(result: Result<RunId, Rejection>) -> Reply {
+  match result {
+    Ok(run) => Reply::RunStarted { run },
+    Err(rejection) => Reply::Rejected(rejection),
+  }
+}
+
 async fn answer(
   scheduler: &Scheduler,
   (replies, in_flight): (&mpsc::UnboundedSender<Event>, &InFlight),
@@ -259,10 +267,13 @@ async fn answer(
       Reply::Continued { continued, refused }
     }
     Command::Ping { nonce } => Reply::Pong { nonce },
-    Command::StartRun { key, task } => match scheduler.start_run(key, task).await {
-      Ok(run) => Reply::RunStarted { run },
-      Err(rejection) => Reply::Rejected(rejection),
-    },
+    Command::StartRun { key, task } => started(scheduler.start_run(key, task).await),
+    Command::RunAgain {
+      key,
+      task,
+      after,
+      ref remove_worktrees,
+    } => started(scheduler.run_again(key, task, after, remove_worktrees.clone()).await),
     Command::PauseRun { run } => return later.answer(run, async move { handle.pause_run(run).await }),
     Command::CancelRun { run } => return later.answer(run, async move { handle.cancel_run(run).await }),
     Command::ResumeRun { run } => return later.answer(run, async move { handle.resume_run(run).await }),

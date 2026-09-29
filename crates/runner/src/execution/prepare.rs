@@ -4,7 +4,6 @@
 
 use std::{
   collections::BTreeMap,
-  num::NonZeroU32,
   path::{Path, PathBuf},
   time::Duration,
 };
@@ -46,6 +45,20 @@ pub(super) fn prepare(
   key: IdempotencyKey,
   task_id: TaskId,
 ) -> Result<Prepared, Rejection> {
+  let checked = check(db, root, task_id)?;
+  record(db, root, key, checked)
+}
+
+/// A queued task that passed the preflight, and the run it starts.
+pub(super) struct Checked {
+  task: Task,
+  new: NewRun,
+}
+
+/// Checks that queued task `task_id` can start its next run and pins what that run uses: the
+/// latest published version of its pipeline, the repository's `HEAD` and branch, the task's
+/// limits and the branch of its next run.
+pub(super) fn check(db: &ProjectDb, root: &Path, task_id: TaskId) -> Result<Checked, Rejection> {
   let store = |error: StoreError| failed("cannot read the project database", &error);
   let task = db.task(task_id).map_err(store)?.ok_or(Rejection::TaskNotFound)?;
   // Unreadable runs count too: each run of the task has its own branch.
@@ -77,20 +90,27 @@ pub(super) fn prepare(
     .map_err(|error| failed("cannot read the checked-out branch", &error))?;
   let snapshot = RunSnapshot::build(pipeline_id, &pipeline, published.versions())
     .map_err(|error| failed("cannot pin the run's configuration", &error))?;
-  let ordinal = u32::try_from(earlier.len() + 1)
-    .ok()
-    .and_then(NonZeroU32::new)
-    .expect("fewer than 2^32 runs of one task");
   let limits = task.details().limits.expect("a queued task has limits");
   let new = NewRun {
     task: task_id,
     snapshot,
-    branch: BranchName::for_run(task.key(), ordinal),
+    branch: BranchName::for_next_run(task.key(), earlier.len()),
     base,
     base_branch,
     budget: limits.budget(),
     max_duration: limits.max_duration(),
   };
+  Ok(Checked { task, new })
+}
+
+/// Records the run `checked` starts under `key`, creates its worktree and starts it; finds the run
+/// an earlier request with `key` created instead, and starts it only if it had not started yet.
+pub(super) fn record(
+  db: &mut ProjectDb,
+  root: &Path,
+  key: IdempotencyKey,
+  Checked { task, new }: Checked,
+) -> Result<Prepared, Rejection> {
   let mut run = db
     .create_run(key, new, Timestamp::now())
     .map_err(|error| read_failed("cannot record the run", error))?;
