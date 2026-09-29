@@ -3,6 +3,7 @@
 //! UI code styles through lurq roles (`PaletteColor`, `TypographyStyle`, `SpacingSize`,
 //! `RadiusSize`, `BorderSize`, `ShadowStyle`); design values live only in `tokens`.
 
+mod canvas_grid;
 mod form;
 mod markdown;
 mod metrics;
@@ -11,6 +12,7 @@ mod shadow;
 mod tokens;
 mod typography;
 
+pub use canvas_grid::{CANVAS_GRID_TILE, canvas_grid};
 pub use form::{gutter_scrollbar, select_menu_scrollbar};
 use lurq::app::App;
 pub use metrics::{ExtraRadius, ExtraSpacing};

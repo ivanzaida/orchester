@@ -33,11 +33,13 @@ use crate::{
   navigation::route::{Page, TaskPageTab},
   screens::project::ProjectNav,
   tasks::{
-    conversation::Conversation,
+    conversation::{Conversation, PanelState},
     detail::{RunView, TaskDetail},
   },
   theme::{ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
+    icon::Icon,
+    notice::Notice,
     pressable::surface,
     property::{ValueStyle, property, styled_property},
   },
@@ -68,6 +70,7 @@ pub(super) struct TabContext<'a> {
 pub(super) fn conversation_tab(ctx: &mut Ctx, detail: &Arc<TaskDetail>, tab: &TabContext<'_>) -> Element {
   let conversation = Conversation::of(detail, tab.lost.is_some(), tab.leftovers);
   let open = conversation.state.takes_messages();
+  let removed = conversation.state == PanelState::WorktreeRemoved;
   let props = ConversationProps {
     repo_root: tab.repo_root.to_path_buf(),
     task: detail.task.id(),
@@ -80,7 +83,7 @@ pub(super) fn conversation_tab(ctx: &mut Ctx, detail: &Arc<TaskDetail>, tab: &Ta
     .id("task-conversation-tab")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(active_work(ctx, detail, tab, open))
+    .child(active_work(ctx, detail, tab, open, removed))
     .child(ctx.mount_keyed::<ConversationPanel>("task-conversation", props))
     .into()
 }
@@ -88,9 +91,16 @@ pub(super) fn conversation_tab(ctx: &mut Ctx, detail: &Arc<TaskDetail>, tab: &Ta
 /// Active work (`FjbKY`): the notice, the progress rows (`qB7mj`) and the working context, in a
 /// viewport with the scroll gutter; the communication policy (`e2D1lv`) stays at the bottom while
 /// the conversation is `open`, that is, while an agent reads messages.
-fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>, open: bool) -> Element {
+fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>, open: bool, removed: bool) -> Element {
   let notice = match &detail.merge {
     Some(merge) => merged_notice(ctx, merge, tab.leftovers),
+    None if removed => Notice::new(
+      Icon::FolderX,
+      ctx.t("runs.changes.worktreeRemovedTitle"),
+      ctx.t("conversation.worktreeRemovedNoticeDetail"),
+    )
+    .id("task-notice")
+    .into(),
     None => notice(ctx, detail, tab.lost),
   };
   let content = Column::new()
@@ -111,7 +121,7 @@ fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>, open: b
       detail
         .run
         .as_ref()
-        .map(|run| working_context(ctx, run, tab, detail.merge.is_some())),
+        .map(|run| working_context(ctx, run, tab, detail.merge.is_some() || removed)),
     );
   let policy = open.then(|| {
     Column::new()
@@ -142,10 +152,10 @@ fn active_work(ctx: &mut Ctx, detail: &TaskDetail, tab: &TabContext<'_>, open: b
 }
 
 /// Working context (`PdgpB` and the `tfGRt` rows after it): branch, last checkpoint, changed files
-/// with the way to the Changes tab, budget and the current agent's permissions; a `merged` run's
-/// permissions are only shown (`d9SVut` in 02.S2).
-fn working_context(ctx: &mut Ctx, run: &RunView, tab: &TabContext<'_>, merged: bool) -> Element {
-  let permissions = if merged {
+/// with the way to the Changes tab, budget and the current agent's permissions. Once no agent
+/// can continue, its permissions are only shown (`d9SVut` in 02.S2).
+fn working_context(ctx: &mut Ctx, run: &RunView, tab: &TabContext<'_>, read_only: bool) -> Element {
+  let permissions = if read_only {
     run
       .current_step()
       .and_then(|step| permissions_value(ctx, step))
@@ -177,7 +187,7 @@ fn working_context(ctx: &mut Ctx, run: &RunView, tab: &TabContext<'_>, merged: b
     ))
     .child(property(&ctx.t("runs.summary.checkpoint"), &checkpoint))
     .child(changed_files(ctx, run, tab))
-    .child(property(&ctx.t("runs.summary.budget"), &budget_value(ctx, run)))
+    .child(property(&ctx.t("runs.summary.budget"), &budget_value(ctx, run)).id("task-conversation-budget"))
     .with_children(permissions)
     .into()
 }

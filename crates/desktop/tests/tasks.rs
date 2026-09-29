@@ -1,6 +1,6 @@
 mod support;
 
-use std::{fs, time::Duration};
+use std::{fs, sync::Arc, time::Duration};
 
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, ResourceId},
@@ -431,6 +431,38 @@ fn task_list_and_page_read_a_run_cancelled_before_it_started() {
     .map(|row| row.state)
     .collect();
   assert_eq!(states, [ProgressState::Cancelled]);
+}
+
+#[test]
+fn waiting_parallel_steps_keep_separate_progress_rows() {
+  let mut fixture = support::Fixture::new();
+  let task = fixture.task("Add login", support::at(10));
+  fixture.started_run(task, support::at(20));
+  let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("read task");
+  let mut run = detail.run.expect("task has a run");
+  for (number, key, name) in [(2, "checks", "Run checks"), (3, "review", "Review")] {
+    let mut step = run.steps[0].clone();
+    step.number = number;
+    step.stage = 1;
+    step.key = StepKey::new(key).expect("valid step key");
+    step.name = Arc::from(name);
+    step.execution = None;
+    step.status = None;
+    run.steps.push(step);
+  }
+
+  let rows = progress(&run, false, support::at(30));
+  assert_eq!(rows.len(), 3);
+  assert_eq!(
+    (&*rows[1].id, &*rows[1].step, rows[1].state),
+    ("checks", "Run checks", ProgressState::Waiting)
+  );
+  assert_eq!(
+    (&*rows[2].id, &*rows[2].step, rows[2].state),
+    ("review", "Review", ProgressState::Waiting)
+  );
+  assert_eq!(rows[1].agent.as_deref(), Some("Builder"));
+  assert_eq!(rows[2].agent.as_deref(), Some("Builder"));
 }
 
 /// While a run is stopped at any limit, its working step reads "Stopped at limit", never "Paused":

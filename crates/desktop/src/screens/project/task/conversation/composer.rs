@@ -10,7 +10,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::keyboard_event::KeyboardEvent,
-    theme::{BorderSize, PaletteColor},
+    theme::{BorderSize, PaletteColor, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
   core::{ElementRef, Signal},
@@ -100,7 +100,8 @@ pub(super) fn composer(ctx: &Ctx, composer: Composer<'_>) -> Element {
 fn input(ctx: &Ctx, composer: &Composer<'_>) -> Element {
   let (gained, lost) = (composer.focused.clone(), composer.focused.clone());
   let send = composer.send.clone();
-  styled_input(ctx, composer.draft.clone(), ExtraTypography::ReviewNote.role())
+  // `UXzbp` is a 12px normal field line; ReviewNote's 1.6 leading inflated the empty composer.
+  styled_input(ctx, composer.draft.clone(), TypographyStyle::FieldLabel)
     .id("conversation-input")
     .textarea()
     .rows(1, MAX_LINES)

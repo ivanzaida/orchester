@@ -85,6 +85,8 @@ pub(super) fn column_headings(ctx: &Ctx) -> Element {
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEADINGS_HEIGHT))
     .padding_horizontal(ExtraSpacing::Stack.role())
+    // The centred 11px glyphs sit 2px above the Pencil ink in `b2EGz` without this inset.
+    .padding_top(SpacingSize::Xs)
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))

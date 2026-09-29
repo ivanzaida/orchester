@@ -230,7 +230,7 @@ impl Component for ConversationPanel {
       .child(beside_gutter(heading(ctx, conversation.state)))
       .child(beside_gutter(self.recipient(ctx, conversation)))
       .child(beside_gutter(
-        Text::new(&participants(ctx, &conversation.participants))
+        Text::new(&participants(ctx, conversation.state, &conversation.participants))
           .id("conversation-participants")
           .variant(ExtraTypography::Footnote.role())
           .into(),
@@ -317,7 +317,12 @@ impl ConversationPanel {
   fn messages(&self, ctx: &Ctx, props: &ConversationProps) -> Element {
     let entries = &props.conversation.entries;
     let list: Element = if entries.is_empty() {
-      Text::new(&ctx.t("conversation.empty"))
+      let key = if props.conversation.state == PanelState::WorktreeRemoved {
+        "conversation.emptyWorktreeRemoved"
+      } else {
+        "conversation.empty"
+      };
+      Text::new(&ctx.t(key))
         .id("conversation-empty")
         .variant(ExtraTypography::Detail.role())
         .width(Dimension::Pct(100.0))
@@ -382,9 +387,15 @@ fn heading(ctx: &Ctx, state: PanelState) -> Element {
 }
 
 /// "Builder working · Planner, Reviewer available".
-fn participants(ctx: &Ctx, participants: &Participants) -> Arc<str> {
+fn participants(ctx: &Ctx, state: PanelState, participants: &Participants) -> Arc<str> {
   let separator = ctx.t("common.listSeparator");
   let join = |agents: &[Arc<str>]| agents.iter().map(|agent| &**agent).collect::<Vec<_>>().join(&separator);
+  if state == PanelState::WorktreeRemoved && !participants.available.is_empty() {
+    return ctx.t_args(
+      "conversation.participants.cannotContinue",
+      [("agents", join(&participants.available).as_str())],
+    );
+  }
   let (busy, key_with, key_alone) = if participants.asking.is_empty() {
     (
       &participants.working,

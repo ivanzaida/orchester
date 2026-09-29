@@ -19,7 +19,7 @@ use lurq::{
     events::{DragEvent, KeyboardEvent, MouseButtonMask, MouseEvent, ScrollEvent},
     theme::PaletteColor,
   },
-  components::{Column, Stack},
+  components::{Column, Stack, Svg},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, transform::Transform2D},
 };
@@ -35,9 +35,12 @@ use self::{
   input::{ZoomCommand, ZoomModifier, shortcut},
 };
 use super::Selection;
-use crate::pipelines::{
-  editor::EditorState,
-  zoom::{SessionZooms, Size, View, Zoom},
+use crate::{
+  pipelines::{
+    editor::EditorState,
+    zoom::{SessionZooms, Size, View, Zoom},
+  },
+  theme::{CANVAS_GRID_TILE, canvas_grid},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -159,6 +162,7 @@ impl Component for Canvas {
       .flex(1.0)
       .clip()
       .ref_element(self.area.clone())
+      .child(grid(ctx))
       .child(zoomed);
     let command: Arc<dyn Fn(ZoomCommand) + Send + Sync> = {
       let viewport = viewport.clone();
@@ -173,6 +177,31 @@ impl Component for Canvas {
       .child(band(ctx, view.zoom(), &command, props.just_published, &self.notice));
     self.with_input(canvas, &viewport)
   }
+}
+
+/// Four by three seamless tiles cover the canvas at desktop window sizes up to 4K.
+fn grid(ctx: &Ctx) -> Stack {
+  let dot_color = ctx.theme().palette_color(PaletteColor::Border);
+  let tile = canvas_grid(dot_color);
+  let mut grid = Stack::new()
+    .id("pipeline-canvas-grid")
+    .absolute(
+      0.0,
+      0.0,
+      Dimension::Px(4.0 * CANVAS_GRID_TILE),
+      Dimension::Px(3.0 * CANVAS_GRID_TILE),
+    )
+    .pointer_events_none();
+  for row in 0..3 {
+    for column in 0..4 {
+      grid = grid.child(
+        Svg::new(tile.clone())
+          .size(Dimension::Px(CANVAS_GRID_TILE), Dimension::Px(CANVAS_GRID_TILE))
+          .absolute_position(column as f32 * CANVAS_GRID_TILE, row as f32 * CANVAS_GRID_TILE),
+      );
+    }
+  }
+  grid
 }
 
 impl Canvas {

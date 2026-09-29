@@ -56,6 +56,8 @@ pub enum ExtraTypography {
   DialogTitle,
   /// Dialog explanation under its title (`ClBsl`).
   Explanation,
+  /// Pencil in a changed-in-draft tag (`zzOmC`), 10px.
+  IconTag,
   /// Chevrons and other 12px icons (`B1lur`, `Y9sVM2`).
   IconSmall,
   /// The lock before why an option cannot be chosen (`OoLYh`, `RuJto` in 04.B `W0Owo`), 11px.
@@ -166,7 +168,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 74] = [
+  const ALL: [Self; 75] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -189,6 +191,7 @@ impl ExtraTypography {
     Self::Brief,
     Self::DialogTitle,
     Self::Explanation,
+    Self::IconTag,
     Self::IconSmall,
     Self::IconReason,
     Self::IconMarker,
@@ -267,6 +270,7 @@ impl ExtraTypography {
       Self::Brief => "brief",
       Self::DialogTitle => "dialog-title",
       Self::Explanation => "explanation",
+      Self::IconTag => "icon-tag",
       Self::IconSmall => "icon-small",
       Self::IconReason => "icon-reason",
       Self::IconMarker => "icon-marker",
@@ -364,6 +368,7 @@ impl ExtraTypography {
   /// The size of an icon role; `None` for a text role.
   const fn icon_size(self) -> Option<f32> {
     match self {
+      Self::IconTag => Some(10.0),
       Self::IconSmall => Some(12.0),
       Self::IconReason => Some(11.0),
       Self::IconMarker => Some(13.0),

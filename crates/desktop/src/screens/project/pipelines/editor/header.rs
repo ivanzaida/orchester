@@ -222,6 +222,7 @@ pub fn version_toolbar(ctx: &Ctx, state: &EditorState, nav: &PipelinesNav, versi
       ctx,
       ActionButton::new(ctx.t("pipelines.history.backToEditor"))
         .icon(Icon::ArrowLeft)
+        .compact()
         .id("pipeline-history-back")
         .link(nav.link(id, PipelineView::Draft)),
     ))

@@ -172,12 +172,21 @@ impl RunPermissionsRow {
     } else {
       "runs.permissions.view"
     };
+    let link_style = if props.inline_link {
+      TypographyStyle::Caption
+    } else {
+      TypographyStyle::Link
+    };
     let link = pressable(surface().id("task-permissions-view"), move || {
       edit.open(&base);
       open.set(true);
     })
     .rounded(RadiusSize::Sm)
-    .child(Text::new(&ctx.t(link_key)).variant(TypographyStyle::Link));
+    .child(
+      Text::new(&ctx.t(link_key))
+        .variant(link_style)
+        .color(PaletteColor::TextPrimary),
+    );
     let text = Text::new(&value)
       .variant(TypographyStyle::Caption)
       .color(PaletteColor::TextPrimary);

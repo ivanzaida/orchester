@@ -344,7 +344,7 @@ fn changed_tag(label: &str, key: &StepKey, (x, y): (f32, f32)) -> Element {
     .background(PaletteColor::AccentMuted)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Sm)
-    .child(icon(Icon::Pencil, IconSize::Small, PaletteColor::TextPrimary))
+    .child(icon(Icon::Pencil, IconSize::Tag, PaletteColor::TextPrimary))
     .child(
       Text::new(label)
         .variant(ExtraTypography::CompactStatusLabel.role())

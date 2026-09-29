@@ -239,12 +239,24 @@ fn agent_cannot_be_asked_without_its_worktree(desktop: &mut Desktop) {
     "the run’s worktree was removed, so its agent cannot continue"
   ));
   assert!(shows(desktop, "task-ask-agent", "Ask agent"));
+  assert!(shows(desktop, "task-ready-notice", "The worktree was removed"));
   assert!(has(desktop, "task-merge"), "the run can still be merged");
   desktop.press("task-ask-agent");
   assert!(!has(desktop, "task-conversation-panel"), "pressing it does nothing");
   desktop.click("task-tab-conversation");
   desktop.wait_for("task-conversation-panel");
+  assert!(shows(desktop, "task-notice", "The run’s worktree was removed"));
+  assert!(
+    !has(desktop, "task-permissions-view"),
+    "the run's permissions are now read-only"
+  );
   assert!(shows(desktop, "conversation-status", "Ready for review"));
+  assert!(shows(desktop, "conversation-participants", "Builder cannot continue"));
+  assert!(shows(
+    desktop,
+    "conversation-empty",
+    "No messages were sent before this run’s worktree was removed."
+  ));
   assert!(has(desktop, "conversation-input-closed"));
   assert!(!has(desktop, "task-conversation-policy"));
   assert!(shows(

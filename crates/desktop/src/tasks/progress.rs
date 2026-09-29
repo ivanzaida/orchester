@@ -1,8 +1,6 @@
 //! The run's progress as the task page lists it (`qB7mj` in 02.12 `FjbKY`, `l3hyb` rows): one row
 //! per step in stage order, with where its latest execution stands, its attempt, the tokens it
-//! used and its active agent time. Steps of one stage that have not started are shown together in
-//! one row ("Checks + Review · Waiting"), as the design does for parallel steps; once they start,
-//! each has its own row, next to each other.
+//! used and its active agent time. Parallel steps each retain their own row while waiting.
 
 use std::{num::NonZeroU32, sync::Arc, time::Duration};
 
@@ -46,10 +44,10 @@ pub struct ExecutionUsage {
 /// One row of the progress list.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProgressRow {
-  /// Stable id of the row: its steps' keys.
+  /// Stable id of the row: its step key.
   pub id: Arc<str>,
-  /// "Implement · Builder", or "Checks + Review" for steps of one stage shown together.
-  pub steps: Vec<(Arc<str>, Option<Arc<str>>)>,
+  pub step: Arc<str>,
+  pub agent: Option<Arc<str>>,
   pub state: ProgressState,
   pub usage: Option<ExecutionUsage>,
 }
@@ -58,42 +56,16 @@ pub struct ProgressRow {
 pub fn progress(run: &RunView, lost: bool, now: Timestamp) -> Vec<ProgressRow> {
   let mut ordered: Vec<&StepView> = run.steps.iter().collect();
   ordered.sort_by_key(|step| (step.stage, step.number));
-  let mut rows = Vec::new();
-  let mut stage_start = 0;
-  while stage_start < ordered.len() {
-    let stage = ordered[stage_start].stage;
-    let end = ordered[stage_start..]
-      .iter()
-      .position(|step| step.stage != stage)
-      .map_or(ordered.len(), |offset| stage_start + offset);
-    let steps = &ordered[stage_start..end];
-    let waiting = steps.len() > 1
-      && steps
-        .iter()
-        .all(|step| state(run, step, lost) == ProgressState::Waiting);
-    if waiting {
-      rows.push(ProgressRow {
-        id: steps
-          .iter()
-          .map(|step| step.key.as_str())
-          .collect::<Vec<_>>()
-          .join("+")
-          .into(),
-        steps: steps.iter().map(|step| (step.name.clone(), None)).collect(),
-        state: ProgressState::Waiting,
-        usage: None,
-      });
-    } else {
-      rows.extend(steps.iter().map(|step| ProgressRow {
-        id: step.key.as_str().into(),
-        steps: vec![(step.name.clone(), step.agent.clone())],
-        state: state(run, step, lost),
-        usage: usage(run, step, now),
-      }));
-    }
-    stage_start = end;
-  }
-  rows
+  ordered
+    .into_iter()
+    .map(|step| ProgressRow {
+      id: step.key.as_str().into(),
+      step: step.name.clone(),
+      agent: step.agent.clone(),
+      state: state(run, step, lost),
+      usage: usage(run, step, now),
+    })
+    .collect()
 }
 
 fn state(run: &RunView, step: &StepView, lost: bool) -> ProgressState {
