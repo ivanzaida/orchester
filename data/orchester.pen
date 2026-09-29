@@ -8,7 +8,7 @@
       "y": 0,
       "name": "00 / Foundations",
       "width": 4896,
-      "height": 9932,
+      "height": 11762,
       "fill": "$canvas",
       "layout": "none",
       "children": [
@@ -4271,6 +4271,84 @@
                       ]
                     },
                     {
+                      "type": "frame",
+                      "id": "XCXvw",
+                      "x": 0,
+                      "y": 0,
+                      "name": "Plan limits",
+                      "enabled": false,
+                      "height": 22,
+                      "cornerRadius": 5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "NzfAs",
+                          "name": "Plan limits icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "hourglass",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "dWSzz",
+                          "name": "Plan provider 1",
+                          "fill": "$muted",
+                          "content": "Codex",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "XGOlV",
+                          "name": "Plan value 1",
+                          "fill": "$text",
+                          "content": "65%",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "e1Ipn",
+                          "name": "Plan separator",
+                          "fill": "$subtle",
+                          "content": "·",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "NAcpR",
+                          "name": "Plan provider 2",
+                          "fill": "$muted",
+                          "content": "Claude",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "v1F5O",
+                          "name": "Plan value 2",
+                          "fill": "$text",
+                          "content": "42%",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
                       "type": "rectangle",
                       "id": "x1MQW",
                       "name": "Separator right",
@@ -4831,7 +4909,7 @@
           "y": 2260,
           "name": "Window · Status bar",
           "width": 4896,
-          "height": 1300,
+          "height": 3130,
           "layout": "none",
           "children": [
             {
@@ -7256,6 +7334,2373 @@
                   ]
                 }
               ]
+            },
+            {
+              "type": "frame",
+              "id": "poPso",
+              "x": 1616,
+              "y": 1036,
+              "name": "Plan limits · status bar",
+              "width": 1488,
+              "fill": "$surface",
+              "cornerRadius": 12,
+              "layout": "vertical",
+              "gap": 32,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "t8nGQ",
+                  "name": "State M · Normal (hint open)",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Hdfbn",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "M · Plan limits known (hint open)",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "IW92k",
+                      "name": "Stage · bar with hint",
+                      "width": 1440,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "EbePe",
+                          "name": "Hint anchor",
+                          "width": "fill_container",
+                          "padding": [
+                            0,
+                            0,
+                            0,
+                            1046
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "mFTm5",
+                              "name": "Hint · Plan limits",
+                              "width": 360,
+                              "fill": "$raised",
+                              "cornerRadius": "$radius-control",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "MLZyr",
+                                  "name": "Provider · Codex",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "A8CXRj",
+                                      "name": "Provider heading",
+                                      "gap": 6,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "vRyK2",
+                                          "name": "Provider name",
+                                          "fill": "$text",
+                                          "content": "Codex",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "a4E2y",
+                                          "name": "Plan type",
+                                          "fill": "$muted",
+                                          "content": "Pro plan",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "c3u0FW",
+                                      "name": "Window · 5-hour",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "m0ugZ",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "5-hour",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "Xmwmw",
+                                          "name": "Meter",
+                                          "clip": true,
+                                          "width": 100,
+                                          "height": 4,
+                                          "fill": "$border",
+                                          "cornerRadius": 2,
+                                          "layout": "none",
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "cornerRadius": 2,
+                                              "id": "nTdkV",
+                                              "x": 0,
+                                              "y": 0,
+                                              "name": "Meter fill",
+                                              "fill": "$muted",
+                                              "width": 12,
+                                              "height": 4
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "E4Bkj",
+                                          "name": "Used",
+                                          "fill": "$text",
+                                          "textGrowth": "fixed-width",
+                                          "width": 32,
+                                          "content": "12%",
+                                          "textAlign": "right",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "uq74I",
+                                          "name": "Resets",
+                                          "fill": "$subtle",
+                                          "content": "resets in 2 h 10 min",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "B6hrT",
+                                      "name": "Window · Weekly",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "A8x5w",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "Weekly",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "D1r9HY",
+                                          "name": "Meter",
+                                          "clip": true,
+                                          "width": 100,
+                                          "height": 4,
+                                          "fill": "$border",
+                                          "cornerRadius": 2,
+                                          "layout": "none",
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "cornerRadius": 2,
+                                              "id": "b9ErMY",
+                                              "x": 0,
+                                              "y": 0,
+                                              "name": "Meter fill",
+                                              "fill": "$muted",
+                                              "width": 65,
+                                              "height": 4
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "j497v0",
+                                          "name": "Used",
+                                          "fill": "$text",
+                                          "textGrowth": "fixed-width",
+                                          "width": 32,
+                                          "content": "65%",
+                                          "textAlign": "right",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "r6aLp",
+                                          "name": "Resets",
+                                          "fill": "$subtle",
+                                          "content": "resets Mon 09:00",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "HpGXq",
+                                      "name": "Source",
+                                      "fill": "$subtle",
+                                      "content": "From the last Codex turn · 14:26, 8 min ago",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "rectangle",
+                                  "id": "fjFxw",
+                                  "name": "Divider",
+                                  "fill": "$hairline",
+                                  "width": "fill_container",
+                                  "height": 1
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "TpX44",
+                                  "name": "Provider · Claude Code",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "Vb7bw",
+                                      "name": "Provider heading",
+                                      "gap": 6,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "IFc8F",
+                                          "name": "Provider name",
+                                          "fill": "$text",
+                                          "content": "Claude Code",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "sVQDG",
+                                      "name": "Window · 5-hour",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "b4pDuJ",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "5-hour",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "AbG3M",
+                                          "name": "Window not reported",
+                                          "fill": "$subtle",
+                                          "content": "Not reported yet",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "hOzAd",
+                                      "name": "Window · Weekly",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "NUu47",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "Weekly",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "s3UKPO",
+                                          "name": "Meter",
+                                          "clip": true,
+                                          "width": 100,
+                                          "height": 4,
+                                          "fill": "$border",
+                                          "cornerRadius": 2,
+                                          "layout": "none",
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "cornerRadius": 2,
+                                              "id": "i4qKS",
+                                              "x": 0,
+                                              "y": 0,
+                                              "name": "Meter fill",
+                                              "fill": "$muted",
+                                              "width": 42,
+                                              "height": 4
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "Z1mffJ",
+                                          "name": "Used",
+                                          "fill": "$text",
+                                          "textGrowth": "fixed-width",
+                                          "width": 32,
+                                          "content": "42%",
+                                          "textAlign": "right",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "q5FKnj",
+                                          "name": "Resets",
+                                          "fill": "$subtle",
+                                          "content": "resets Thu 18:00",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "zU7ZO",
+                                      "name": "Source",
+                                      "fill": "$subtle",
+                                      "content": "From the last Claude Code turn · 14:31, 3 min ago",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "rectangle",
+                                  "id": "f09fNm",
+                                  "name": "Divider",
+                                  "fill": "$hairline",
+                                  "width": "fill_container",
+                                  "height": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "SqTkf",
+                                  "name": "Footnote",
+                                  "fill": "$subtle",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Plan limits belong to the account each CLI is signed in to and include its use outside Orchester. Tokens today is this project’s own daily budget.",
+                                  "lineHeight": 1.2,
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "pMa0F",
+                          "type": "ref",
+                          "ref": "pmOpt",
+                          "name": "Status bar · M · Normal",
+                          "descendants": {
+                            "F7mn6G": {
+                              "content": "0/4",
+                              "fill": "$subtle"
+                            },
+                            "O7DBvB": {
+                              "content": "0",
+                              "fill": "$subtle"
+                            },
+                            "w4CgvX": {
+                              "content": "1"
+                            },
+                            "XCXvw": {
+                              "enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "sJV5E",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "The plan limits item (hourglass) sits right after Tokens today, before the right separator. One entry per agent CLI that this project’s connections use: the CLI name in $muted and the used share of its fullest window in Geist Mono $text (Codex 12% and 65% → 65%). The numbers arrive with agent turns: Codex rate_limits (used_percent, window_minutes, resets_at, plan_type, credits) and Claude Code rate_limit_event (rateLimitType, utilization, resetsAt, status). The hint, in the status bar hint style (360 wide here, padding 8, gap 8), lists each window with a 100 × 4 meter ($border track, $muted fill), its reset (relative under 24 h, weekday and time beyond), and where the numbers came from and when. A window a CLI has not reported since the app started reads Not reported yet. Pointer only, no focus, no click target.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "e1TK9",
+                  "name": "State N · Near the limit (hint open)",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "DABrg",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "N · Near the limit (hint open)",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hSLWH",
+                      "name": "Stage · bar with hint",
+                      "width": 1440,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "EQe5X",
+                          "name": "Hint anchor",
+                          "width": "fill_container",
+                          "padding": [
+                            0,
+                            0,
+                            0,
+                            1046
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "pNIEg",
+                              "name": "Hint · Plan limits",
+                              "width": 360,
+                              "fill": "$raised",
+                              "cornerRadius": "$radius-control",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "MnuWh",
+                                  "name": "Provider · Codex",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "f8Xj4",
+                                      "name": "Provider heading",
+                                      "gap": 6,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "ZYtM5",
+                                          "name": "Provider name",
+                                          "fill": "$text",
+                                          "content": "Codex",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "W7Af3G",
+                                          "name": "Plan type",
+                                          "fill": "$muted",
+                                          "content": "Pro plan",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "VMX2w",
+                                      "name": "Window · 5-hour",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "vHsyy",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "5-hour",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "ffYYA",
+                                          "name": "Meter",
+                                          "clip": true,
+                                          "width": 100,
+                                          "height": 4,
+                                          "fill": "$border",
+                                          "cornerRadius": 2,
+                                          "layout": "none",
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "cornerRadius": 2,
+                                              "id": "nUTNy",
+                                              "x": 0,
+                                              "y": 0,
+                                              "name": "Meter fill",
+                                              "fill": "$muted",
+                                              "width": 12,
+                                              "height": 4
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "LfJGz",
+                                          "name": "Used",
+                                          "fill": "$text",
+                                          "textGrowth": "fixed-width",
+                                          "width": 32,
+                                          "content": "12%",
+                                          "textAlign": "right",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "m5G3FO",
+                                          "name": "Resets",
+                                          "fill": "$subtle",
+                                          "content": "resets in 2 h 10 min",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "WrEkR",
+                                      "name": "Window · Weekly",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "p7Esxu",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "Weekly",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "n2tXI",
+                                          "name": "Meter",
+                                          "clip": true,
+                                          "width": 100,
+                                          "height": 4,
+                                          "fill": "$border",
+                                          "cornerRadius": 2,
+                                          "layout": "none",
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "cornerRadius": 2,
+                                              "id": "pL1eg",
+                                              "x": 0,
+                                              "y": 0,
+                                              "name": "Meter fill",
+                                              "fill": "$muted",
+                                              "width": 65,
+                                              "height": 4
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "x4prKg",
+                                          "name": "Used",
+                                          "fill": "$text",
+                                          "textGrowth": "fixed-width",
+                                          "width": 32,
+                                          "content": "65%",
+                                          "textAlign": "right",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "F4zNf2",
+                                          "name": "Resets",
+                                          "fill": "$subtle",
+                                          "content": "resets Mon 09:00",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "J3qAz",
+                                      "name": "Source",
+                                      "fill": "$subtle",
+                                      "content": "From the last Codex turn · 14:26, 8 min ago",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "rectangle",
+                                  "id": "mQpn0",
+                                  "name": "Divider",
+                                  "fill": "$hairline",
+                                  "width": "fill_container",
+                                  "height": 1
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "uIYu9",
+                                  "name": "Provider · Claude Code",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "grxtY",
+                                      "name": "Provider heading",
+                                      "gap": 6,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "RHrx5",
+                                          "name": "Provider name",
+                                          "fill": "$text",
+                                          "content": "Claude Code",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "jUG4o",
+                                          "name": "Provider status",
+                                          "fill": "$text",
+                                          "content": "Near the weekly limit",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "Xqb8m",
+                                      "name": "Window · 5-hour",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "x5OTjl",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "5-hour",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "u56C4",
+                                          "name": "Window not reported",
+                                          "fill": "$subtle",
+                                          "content": "Not reported yet",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "y8iJmg",
+                                      "name": "Window · Weekly",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "M3wdx",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "Weekly",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "ADurK",
+                                          "name": "Meter",
+                                          "clip": true,
+                                          "width": 100,
+                                          "height": 4,
+                                          "fill": "$border",
+                                          "cornerRadius": 2,
+                                          "layout": "none",
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "cornerRadius": 2,
+                                              "id": "JJt0U",
+                                              "x": 0,
+                                              "y": 0,
+                                              "name": "Meter fill",
+                                              "fill": "$text",
+                                              "width": 96,
+                                              "height": 4
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "Y1XNS",
+                                          "name": "Used",
+                                          "fill": "$text",
+                                          "textGrowth": "fixed-width",
+                                          "width": 32,
+                                          "content": "96%",
+                                          "textAlign": "right",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "a6qkR8",
+                                          "name": "Resets",
+                                          "fill": "$text",
+                                          "content": "resets Thu 18:00",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "rN1m4",
+                                      "name": "Source",
+                                      "fill": "$subtle",
+                                      "content": "From the last Claude Code turn · 14:31, 3 min ago",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "rectangle",
+                                  "id": "KhkZc",
+                                  "name": "Divider",
+                                  "fill": "$hairline",
+                                  "width": "fill_container",
+                                  "height": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "wYDnf",
+                                  "name": "Footnote",
+                                  "fill": "$subtle",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Plan limits belong to the account each CLI is signed in to and include its use outside Orchester. Tokens today is this project’s own daily budget.",
+                                  "lineHeight": 1.2,
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "b5WjRd",
+                          "type": "ref",
+                          "ref": "pmOpt",
+                          "name": "Status bar · N · Near the limit",
+                          "descendants": {
+                            "F7mn6G": {
+                              "content": "0/4",
+                              "fill": "$subtle"
+                            },
+                            "O7DBvB": {
+                              "content": "0",
+                              "fill": "$subtle"
+                            },
+                            "w4CgvX": {
+                              "content": "1"
+                            },
+                            "XCXvw": {
+                              "enabled": true
+                            },
+                            "NzfAs": {
+                              "icon": "circle-alert",
+                              "fill": "$text"
+                            },
+                            "NAcpR": {
+                              "fill": "$text"
+                            },
+                            "v1F5O": {
+                              "content": "96%",
+                              "fontWeight": "500"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "boreC",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Near the limit: a window at 80% or more, or a CLI that says it is warning (Claude Code status allowed_warning; it crossed its own 75% threshold, surpassedThreshold). Emphasis stays grayscale, as everywhere in the app: the item icon becomes circle-alert in $text, and that CLI's name and percentage turn $text, the percentage medium weight. In the hint the full window's meter fill, percentage and reset are $text and the heading says which limit is close: Near the weekly limit. The other CLI stays as in M. Nothing else changes and nothing is blocked; Orchester does not slow or hold runs because of a plan limit.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "WuIp9",
+                  "name": "State O · Limit reached (hint open)",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "BDtYM",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "O · Limit reached (hint open)",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "nOKLM",
+                      "name": "Stage · bar with hint",
+                      "width": 1440,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "EIUYk",
+                          "name": "Hint anchor",
+                          "width": "fill_container",
+                          "padding": [
+                            0,
+                            0,
+                            0,
+                            916
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "DCH2x",
+                              "name": "Hint · Plan limits",
+                              "width": 360,
+                              "fill": "$raised",
+                              "cornerRadius": "$radius-control",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "jMuGM",
+                                  "name": "Provider · Codex",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "MYj8a",
+                                      "name": "Provider heading",
+                                      "gap": 6,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "w4kuIf",
+                                          "name": "Provider name",
+                                          "fill": "$text",
+                                          "content": "Codex",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "LgG9x",
+                                          "name": "Plan type",
+                                          "fill": "$muted",
+                                          "content": "Pro plan",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "v11fa4",
+                                          "name": "Provider status",
+                                          "fill": "$text",
+                                          "content": "· 5-hour limit reached",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "ZO3Sm",
+                                      "name": "Window · 5-hour",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "V9q3Ss",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "5-hour",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "cJQ1q",
+                                          "name": "Meter",
+                                          "clip": true,
+                                          "width": 100,
+                                          "height": 4,
+                                          "fill": "$border",
+                                          "cornerRadius": 2,
+                                          "layout": "none",
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "cornerRadius": 2,
+                                              "id": "sbsYB",
+                                              "x": 0,
+                                              "y": 0,
+                                              "name": "Meter fill",
+                                              "fill": "$text",
+                                              "width": 100,
+                                              "height": 4
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "wEMow",
+                                          "name": "Used",
+                                          "fill": "$text",
+                                          "textGrowth": "fixed-width",
+                                          "width": 32,
+                                          "content": "100%",
+                                          "textAlign": "right",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "F7aNuN",
+                                          "name": "Resets",
+                                          "fill": "$text",
+                                          "content": "resets in 1 h 52 min",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "VCl6j",
+                                      "name": "Window · Weekly",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "XWh0z",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "Weekly",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "rLp5C",
+                                          "name": "Meter",
+                                          "clip": true,
+                                          "width": 100,
+                                          "height": 4,
+                                          "fill": "$border",
+                                          "cornerRadius": 2,
+                                          "layout": "none",
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "cornerRadius": 2,
+                                              "id": "kLFk1",
+                                              "x": 0,
+                                              "y": 0,
+                                              "name": "Meter fill",
+                                              "fill": "$muted",
+                                              "width": 65,
+                                              "height": 4
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "LbHym",
+                                          "name": "Used",
+                                          "fill": "$text",
+                                          "textGrowth": "fixed-width",
+                                          "width": 32,
+                                          "content": "65%",
+                                          "textAlign": "right",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "Og9EY",
+                                          "name": "Resets",
+                                          "fill": "$subtle",
+                                          "content": "resets Mon 09:00",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "NK1Z7",
+                                      "name": "Consequence",
+                                      "fill": "$text",
+                                      "content": "Codex refuses new turns until 16:40.",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "eEJ1B",
+                                      "name": "Source",
+                                      "fill": "$subtle",
+                                      "content": "From the last Codex turn · 14:48, 1 min ago",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "rectangle",
+                                  "id": "VO0j5",
+                                  "name": "Divider",
+                                  "fill": "$hairline",
+                                  "width": "fill_container",
+                                  "height": 1
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "YYoW6",
+                                  "name": "Provider · Claude Code",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "d4SylX",
+                                      "name": "Provider heading",
+                                      "gap": 6,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "y5J45",
+                                          "name": "Provider name",
+                                          "fill": "$text",
+                                          "content": "Claude Code",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "Ml9ev",
+                                      "name": "Window · 5-hour",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "DYZ6p",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "5-hour",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "KVlny",
+                                          "name": "Window not reported",
+                                          "fill": "$subtle",
+                                          "content": "Not reported yet",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "HDOLo",
+                                      "name": "Window · Weekly",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "qZFzN",
+                                          "name": "Window label",
+                                          "fill": "$muted",
+                                          "textGrowth": "fixed-width",
+                                          "width": 44,
+                                          "content": "Weekly",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "f8GTeG",
+                                          "name": "Meter",
+                                          "clip": true,
+                                          "width": 100,
+                                          "height": 4,
+                                          "fill": "$border",
+                                          "cornerRadius": 2,
+                                          "layout": "none",
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "cornerRadius": 2,
+                                              "id": "vKnjr",
+                                              "x": 0,
+                                              "y": 0,
+                                              "name": "Meter fill",
+                                              "fill": "$muted",
+                                              "width": 42,
+                                              "height": 4
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "oF0Uo",
+                                          "name": "Used",
+                                          "fill": "$text",
+                                          "textGrowth": "fixed-width",
+                                          "width": 32,
+                                          "content": "42%",
+                                          "textAlign": "right",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "IfIaN",
+                                          "name": "Resets",
+                                          "fill": "$subtle",
+                                          "content": "resets Thu 18:00",
+                                          "fontFamily": "$mono",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "WcxTR",
+                                      "name": "Source",
+                                      "fill": "$subtle",
+                                      "content": "From the last Claude Code turn · 14:31, 3 min ago",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "rectangle",
+                                  "id": "qCsOd",
+                                  "name": "Divider",
+                                  "fill": "$hairline",
+                                  "width": "fill_container",
+                                  "height": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "OUYBX",
+                                  "name": "Footnote",
+                                  "fill": "$subtle",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Plan limits belong to the account each CLI is signed in to and include its use outside Orchester. Tokens today is this project’s own daily budget.",
+                                  "lineHeight": 1.2,
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "p25jK",
+                          "type": "ref",
+                          "ref": "pmOpt",
+                          "name": "Status bar · O · Limit reached",
+                          "descendants": {
+                            "F7mn6G": {
+                              "content": "0/4",
+                              "fill": "$subtle"
+                            },
+                            "O7DBvB": {
+                              "content": "0",
+                              "fill": "$subtle"
+                            },
+                            "w4CgvX": {
+                              "content": "1"
+                            },
+                            "XCXvw": {
+                              "fill": "$raised",
+                              "enabled": true
+                            },
+                            "NzfAs": {
+                              "icon": "octagon-pause",
+                              "fill": "$text"
+                            },
+                            "dWSzz": {
+                              "content": "Codex limit reached",
+                              "fill": "$text"
+                            },
+                            "XGOlV": {
+                              "content": "resets 16:40"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "aRknn",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "A limit is reached when the CLI says so (Codex rate_limit_reached_type set, Claude Code status rejected) or a window reads 100%. The item takes the emphasis the status bar already uses for something that blocks work (states H and I): a $raised fill, octagon-pause (the Stopped at limit icon) in $text, and the reset time in place of the percentage: Codex limit reached · resets 16:40 (weekday and time when the reset is a day or more away, resets Mon 09:00). The other CLI keeps its compact entry. The hint names the full window and says what the CLI does: Codex refuses new turns until 16:40. Orchester adds no run behaviour: a run whose agent hit the limit ends the way it does today (its task shows the stop or failure and the CLI message); the item only tells, from every screen, when work can start again. At the reset time the number is no longer known: the item shows Codex — and the hint Reset at 16:40 · read again with the next Codex turn, until a turn reports again. No colour: $danger stays reserved for Unreadable.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "mMpm5",
+                  "name": "State P · Not read yet and not signed in (hint open)",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "a9qv3N",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "P · Not read yet, not signed in (hint open)",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hqtOG",
+                      "name": "Stage · bar with hint",
+                      "width": 1440,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "uE1Hc",
+                          "name": "Hint anchor",
+                          "width": "fill_container",
+                          "padding": [
+                            0,
+                            0,
+                            0,
+                            1072
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "k7yqJ",
+                              "name": "Hint · Plan limits",
+                              "width": 360,
+                              "fill": "$raised",
+                              "cornerRadius": "$radius-control",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "gjFab",
+                                  "name": "Provider · Codex",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "k1F5zc",
+                                      "name": "Provider heading",
+                                      "gap": 6,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "SSIDN",
+                                          "name": "Provider name",
+                                          "fill": "$text",
+                                          "content": "Codex",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "MlOUr",
+                                          "name": "Provider status",
+                                          "fill": "$muted",
+                                          "content": "Not read yet",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "ljaD9",
+                                      "name": "Explanation",
+                                      "fill": "$subtle",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Codex reports its limits with each turn. They appear after the next Codex turn in any open project.",
+                                      "lineHeight": 1.2,
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "rectangle",
+                                  "id": "KMlPB",
+                                  "name": "Divider",
+                                  "fill": "$hairline",
+                                  "width": "fill_container",
+                                  "height": 1
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "MBoMQ",
+                                  "name": "Provider · Claude Code",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "YEjON",
+                                      "name": "Provider heading",
+                                      "gap": 6,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "jfwmx",
+                                          "name": "Provider name",
+                                          "fill": "$text",
+                                          "content": "Claude Code",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "pLZMd",
+                                          "name": "Provider status",
+                                          "fill": "$muted",
+                                          "content": "Not signed in",
+                                          "fontFamily": "$font",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "eGmkZ",
+                                      "name": "Explanation",
+                                      "fill": "$subtle",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Claude Code is not signed in on this computer, so it reports no limits. Sign in to it in a terminal, then test the connection in Connections.",
+                                      "lineHeight": 1.2,
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "OS4gh",
+                                      "name": "Source",
+                                      "fill": "$subtle",
+                                      "content": "Connection checked · 14:02",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "rectangle",
+                                  "id": "f0JEzQ",
+                                  "name": "Divider",
+                                  "fill": "$hairline",
+                                  "width": "fill_container",
+                                  "height": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "qjR16",
+                                  "name": "Footnote",
+                                  "fill": "$subtle",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Plan limits belong to the account each CLI is signed in to and include its use outside Orchester. Tokens today is this project’s own daily budget.",
+                                  "lineHeight": 1.2,
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "mxRJV",
+                          "type": "ref",
+                          "ref": "pmOpt",
+                          "name": "Status bar · P · Nothing known yet",
+                          "descendants": {
+                            "F7mn6G": {
+                              "content": "0/4",
+                              "fill": "$subtle"
+                            },
+                            "O7DBvB": {
+                              "content": "0",
+                              "fill": "$subtle"
+                            },
+                            "w4CgvX": {
+                              "content": "1"
+                            },
+                            "XCXvw": {
+                              "enabled": true
+                            },
+                            "XGOlV": {
+                              "content": "—",
+                              "fill": "$subtle"
+                            },
+                            "v1F5O": {
+                              "content": "—",
+                              "fill": "$subtle"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Ga8Vv",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Nothing known yet: each CLI shows a dash in $subtle, like every value the app does not know (Counts rule), and the hint says why per CLI. Not read yet: no turn of that CLI since the app started; limits are kept for the session only and are not stored, so every app start begins here. Codex may also answer outside a run through codex app-server; that is not confirmed and not drawn. Not signed in: the connection check (Connections, CLI login) found the CLI signed out; Orchester never signs in or sees tokens, so the hint sends the user to a terminal and to Test connection, and names when the check ran. A CLI without a connection in this project is not listed; a project with no agent connection has no plan limits item at all, as a window without a project has no project items.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "YlYEY",
+                  "name": "State Q · Other hint rows",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "W6t527",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "Q · Hint rows: no working connection, after a reset, credits and extra usage",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gHjje",
+                      "name": "Hint specimens",
+                      "gap": 24,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "FNywP",
+                          "name": "Hint row · No working connection",
+                          "width": 360,
+                          "fill": "$raised",
+                          "cornerRadius": "$radius-control",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "gap": 8,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "MJf5B",
+                              "name": "Provider · Claude Code",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 6,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "df61I",
+                                  "name": "Provider heading",
+                                  "gap": 6,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "c53sZa",
+                                      "name": "Provider name",
+                                      "fill": "$text",
+                                      "content": "Claude Code",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "O22DY5",
+                                      "name": "Provider status",
+                                      "fill": "$muted",
+                                      "content": "No working connection",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "FmOA1",
+                                  "name": "Explanation",
+                                  "fill": "$subtle",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Claude · Kontur could not start Claude Code when it was checked at 14:02, so no limits can be read. Connections shows why.",
+                                  "lineHeight": 1.2,
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "A6EsUV",
+                          "name": "Hint row · After a reset",
+                          "width": 360,
+                          "fill": "$raised",
+                          "cornerRadius": "$radius-control",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "gap": 8,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "dGi1r",
+                              "name": "Provider · Codex",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 6,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "ONW4d",
+                                  "name": "Provider heading",
+                                  "gap": 6,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "PMnlU",
+                                      "name": "Provider name",
+                                      "fill": "$text",
+                                      "content": "Codex",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "IBC6B",
+                                      "name": "Plan type",
+                                      "fill": "$muted",
+                                      "content": "Pro plan",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "V1XvEh",
+                                  "name": "Window · 5-hour",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "WsdPZ",
+                                      "name": "Window label",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 44,
+                                      "content": "5-hour",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "F2tYBs",
+                                      "name": "Window not reported",
+                                      "fill": "$subtle",
+                                      "content": "Reset at 16:40 · read again with the next turn",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "p6nuo",
+                                  "name": "Window · Weekly",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "uKGsV",
+                                      "name": "Window label",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 44,
+                                      "content": "Weekly",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "j1QKRr",
+                                      "name": "Meter",
+                                      "clip": true,
+                                      "width": 100,
+                                      "height": 4,
+                                      "fill": "$border",
+                                      "cornerRadius": 2,
+                                      "layout": "none",
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "cornerRadius": 2,
+                                          "id": "m5tKt",
+                                          "x": 0,
+                                          "y": 0,
+                                          "name": "Meter fill",
+                                          "fill": "$muted",
+                                          "width": 65,
+                                          "height": 4
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "l75IX",
+                                      "name": "Used",
+                                      "fill": "$text",
+                                      "textGrowth": "fixed-width",
+                                      "width": 32,
+                                      "content": "65%",
+                                      "textAlign": "right",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "eGzTq",
+                                      "name": "Resets",
+                                      "fill": "$subtle",
+                                      "content": "resets Mon 09:00",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "OACWw",
+                                  "name": "Source",
+                                  "fill": "$subtle",
+                                  "content": "From the last Codex turn · 14:48, 2 h ago",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "b3WD6",
+                          "name": "Hint row · Credits and extra usage",
+                          "width": 360,
+                          "fill": "$raised",
+                          "cornerRadius": "$radius-control",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "gap": 8,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "hUpGG",
+                              "name": "Provider · Codex",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 6,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "L5FqW",
+                                  "name": "Provider heading",
+                                  "gap": 6,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "qm0CN",
+                                      "name": "Provider name",
+                                      "fill": "$text",
+                                      "content": "Codex",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "YwafZ",
+                                      "name": "Plan type",
+                                      "fill": "$muted",
+                                      "content": "Plus plan",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "sHAA7",
+                                  "name": "Window · Weekly",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "wli7J",
+                                      "name": "Window label",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 44,
+                                      "content": "Weekly",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "JCM0u",
+                                      "name": "Meter",
+                                      "clip": true,
+                                      "width": 100,
+                                      "height": 4,
+                                      "fill": "$border",
+                                      "cornerRadius": 2,
+                                      "layout": "none",
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "cornerRadius": 2,
+                                          "id": "kh3lZ",
+                                          "x": 0,
+                                          "y": 0,
+                                          "name": "Meter fill",
+                                          "fill": "$muted",
+                                          "width": 38,
+                                          "height": 4
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "KDuKw",
+                                      "name": "Used",
+                                      "fill": "$text",
+                                      "textGrowth": "fixed-width",
+                                      "width": 32,
+                                      "content": "38%",
+                                      "textAlign": "right",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "A4bLG",
+                                      "name": "Resets",
+                                      "fill": "$subtle",
+                                      "content": "resets Mon 09:00",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "j7wN6g",
+                                  "name": "Row · Credits",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "c64aT",
+                                      "name": "Row label",
+                                      "fill": "$muted",
+                                      "content": "Credits",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "bWGtF",
+                                      "name": "Row value",
+                                      "fill": "$text",
+                                      "content": "1,250 left",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "IzAGi",
+                                  "name": "Source",
+                                  "fill": "$subtle",
+                                  "content": "From the last Codex turn · 14:26, 8 min ago",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "auXNy",
+                              "name": "Divider",
+                              "fill": "$hairline",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "frame",
+                              "id": "GqfoW",
+                              "name": "Provider · Claude Code",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 6,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "EG5i0",
+                                  "name": "Provider heading",
+                                  "gap": 6,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "aHC6Y",
+                                      "name": "Provider name",
+                                      "fill": "$text",
+                                      "content": "Claude Code",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "r9svr",
+                                  "name": "Window · 5-hour",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "FZLcG",
+                                      "name": "Window label",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 44,
+                                      "content": "5-hour",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "Wcf7Z",
+                                      "name": "Meter",
+                                      "clip": true,
+                                      "width": 100,
+                                      "height": 4,
+                                      "fill": "$border",
+                                      "cornerRadius": 2,
+                                      "layout": "none",
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "cornerRadius": 2,
+                                          "id": "g6XisC",
+                                          "x": 0,
+                                          "y": 0,
+                                          "name": "Meter fill",
+                                          "fill": "$text",
+                                          "width": 100,
+                                          "height": 4
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "RD4Xe",
+                                      "name": "Used",
+                                      "fill": "$text",
+                                      "textGrowth": "fixed-width",
+                                      "width": 32,
+                                      "content": "100%",
+                                      "textAlign": "right",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "500"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "fRQPE",
+                                      "name": "Resets",
+                                      "fill": "$text",
+                                      "content": "resets in 48 min",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "kBtsT",
+                                  "name": "Row · Extra usage",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "K59mgs",
+                                      "name": "Row label",
+                                      "fill": "$muted",
+                                      "content": "Extra usage",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "WLhVF",
+                                      "name": "Row value",
+                                      "fill": "$text",
+                                      "content": "In use: turns past the limit use it",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "tIsWN",
+                                  "name": "Source",
+                                  "fill": "$subtle",
+                                  "content": "From the last Claude Code turn · 14:31, 3 min ago",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "QrNYr",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No working connection: the project has a connection for the CLI but its last check could not start it (not found, did not answer); the hint names the connection and the check time and points to Connections. After a reset: the reset time has passed, so the used share is unknown until a turn reports again; the row keeps the window, drops the meter and says Reset at 16:40 · read again with the next turn, and the compact entry becomes a dash. Credits (Codex credits.has_credits; balance as reported, unit unverified; unlimited reads Unlimited) and extra usage (Claude Code isUsingOverage) are rows under the windows, shown only when the CLI reports them. With extra usage in use a full window does not block turns, so it gets the near-limit emphasis, not the reached one.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "VTnmr",
+                  "name": "State R · Minimum window width 960",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "K3afQ",
+                      "name": "State title",
+                      "fill": "$text",
+                      "content": "R · At the minimum window width, 960 (normal, then limit reached)",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "HvTN6",
+                      "name": "Stage · 960 bars",
+                      "width": 960,
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "id": "A3flo",
+                          "type": "ref",
+                          "ref": "pmOpt",
+                          "name": "Status bar · R · 960 normal",
+                          "width": 960,
+                          "descendants": {
+                            "F7mn6G": {
+                              "content": "0/4",
+                              "fill": "$subtle"
+                            },
+                            "O7DBvB": {
+                              "content": "0",
+                              "fill": "$subtle"
+                            },
+                            "w4CgvX": {
+                              "content": "1"
+                            },
+                            "Kzi83": {
+                              "enabled": false
+                            },
+                            "XCXvw": {
+                              "enabled": true
+                            },
+                            "jyUjc": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "ScSdZ",
+                          "type": "ref",
+                          "ref": "pmOpt",
+                          "name": "Status bar · R · 960 limit reached",
+                          "width": 960,
+                          "descendants": {
+                            "AY6v9": {
+                              "enabled": false
+                            },
+                            "F7mn6G": {
+                              "content": "0/4",
+                              "fill": "$subtle"
+                            },
+                            "R1cas": {
+                              "enabled": false
+                            },
+                            "O7DBvB": {
+                              "content": "0",
+                              "fill": "$subtle"
+                            },
+                            "YBupF": {
+                              "enabled": false
+                            },
+                            "w4CgvX": {
+                              "content": "1"
+                            },
+                            "Kzi83": {
+                              "enabled": false
+                            },
+                            "XCXvw": {
+                              "enabled": true,
+                              "fill": "$raised"
+                            },
+                            "NzfAs": {
+                              "icon": "octagon-pause",
+                              "fill": "$text"
+                            },
+                            "dWSzz": {
+                              "content": "Codex limit reached",
+                              "fill": "$text"
+                            },
+                            "XGOlV": {
+                              "content": "resets 16:40"
+                            },
+                            "jyUjc": {
+                              "enabled": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "ObxT0",
+                      "name": "State note",
+                      "fill": "$subtle",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Narrow windows drop, in order: the version, then Tokens today, then the labels of Agents, Queued and Needs you (icon and count stay). The plan limits item stays, because nothing else in the window shows plan limits, while Tokens today is also the Overview metric. At 960 the normal item fits with every label (the activity keeps about 210 px and truncates with an ellipsis); a reached item is wider, so the count labels go too. The item itself never truncates: CLI names and percentages are short and fixed.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -7263,7 +9708,7 @@
           "type": "frame",
           "id": "rOh31",
           "x": 0,
-          "y": 3656,
+          "y": 5486,
           "name": "Window · Tabs",
           "width": 4896,
           "height": 1700,
@@ -11699,7 +14144,7 @@
           "type": "frame",
           "id": "xURvJ",
           "x": 3,
-          "y": 5452,
+          "y": 7282,
           "name": "Interaction · Focus",
           "width": 4896,
           "height": 3860,
@@ -20504,7 +22949,7 @@
           "type": "frame",
           "id": "f6IhTB",
           "x": 0,
-          "y": 9352,
+          "y": 11182,
           "name": "Brand · App icon",
           "width": 4896,
           "height": 520,
