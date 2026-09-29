@@ -1,7 +1,7 @@
 # Interactive Codex tool approvals
 
-A published Codex pipeline step can opt into **Ask for each tool action**. When a selected MCP
-server asks the host for permission to run one tool call, Orchester keeps the same Codex App Server
+A published Codex pipeline step can opt into **Ask when a tool needs approval**. When Codex requires
+permission for an MCP tool call, Orchester keeps the same Codex App Server
 session alive and shows the pending agent, server, action and target. **Approve once** answers only
 that request. **Deny** ends the step with a visible failure. Other Codex steps continue to use the
 noninteractive `codex exec -a never` path. Command, file, sandbox and permission escalation are
@@ -9,15 +9,21 @@ not enabled by this setting.
 
 ## App Server requests
 
-[Codex App Server documents MCP tool-call approval requests](https://learn.chatgpt.com/docs/app-server#mcp-tool-call-approvals-apps)
-as a short Accept, Decline or Cancel question before a side-effecting app tool runs. The local
-Codex 0.159 schema names that request `item/tool/requestUserInput`; the documentation also calls
-it `tool/requestUserInput`. Orchester accepts either spelling only when it identifies one active
-MCP call and has a blocking, non-secret, single-choice approval question. It also accepts a
-`mcpServer/elicitation/request` only for an empty confirmation form correlated to exactly one
-active MCP call. Other requests fail the step. Which request Pencil `batch_design` sends, and
-whether its write completes after approval, still need a live test with a disposable active Pencil
-document.
+The verified Codex 0.159 path for an ordinary MCP tool emits `item/started` with an
+`mcpToolCall`, followed by `mcpServer/elicitation/request` with an empty confirmation form.
+Orchester correlates its thread, turn and server with exactly one active tool call. A real
+disposable write tool was independently approved and denied through the desktop and runner;
+approval resumed the same session and wrote once, while denial failed the step without writing.
+
+[Codex App Server also documents app tool approvals](https://learn.chatgpt.com/docs/app-server#mcp-tool-call-approvals-apps)
+as Accept, Decline or Cancel questions. The local schema names that request
+`item/tool/requestUserInput`; the documentation also calls it `tool/requestUserInput`.
+Orchester accepts either spelling only for one active MCP call and a blocking, non-secret,
+single-choice approval question. Other requests fail the step. Replies never select a session
+or permanent grant. No tool-specific implementation depends on Pencil. A real Pencil
+`batch_design` call also passed independent approval and denial checks: approval created one
+temporary frame and returned its node ID in the same session; denial created nothing. The
+temporary frame was removed by that exact ID, preserving the existing design.
 
 ## Codex profile
 

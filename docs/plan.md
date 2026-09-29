@@ -18,35 +18,6 @@ then the backlog by area.
 - When a task is done, move it to *Done* at the end of this file in the same change, with the commit or branch.
 - Tasks marked **needs decision** wait for the user; do not start them.
 
-## Current work · ORC-41 interactive tool approvals
-
-**Status 2026-09-29: In progress** on `codex/interactive-approvals`. The existing ORC-41 task asks for a
-pending approval of one Codex tool action during a Designer run, with Approve once or Deny returning to the
-same session. The implementation uses Codex App Server's bidirectional request path and keeps command and
-sandbox approvals under their existing policy. Its request must show the agent, server, action and available
-target details; the decision and outcome must be recorded without approving later calls. The active-time
-limit excludes time waiting for the person. Independent tests must exercise approval and denial with a
-disposable Pencil document, run affected filtered tests and `tools/check.ps1`, and compare any new UI with
-the Pencil frame.
-
-**Milestone 2026-09-29:** the opt-in App Server transport,
-project-selected MCP server check, per-request routing, durable decisions and interruption handling
-are integrated with a project-wide approval modal. The modal appears over Overview and Task detail
-in a disposable project. Independent parser, invocation, active-time, store and i18n tests and
-`tools/check.ps1` pass. A separate agent compared the Pencil modal (`ybPUT`) with exact-PID app
-screenshots at the same logical size and found no blocking or major mismatch in the changed UI;
-the full Task detail background differs because the synthetic fixture has an interrupted offline
-run. Evidence: `docs/evidence/orc41-interactive-approvals-2026-09-29.md`.
-
-The App Server uses the existing Codex sign-in and preserves the user's global MCP servers. A
-signed-out account produces a clear step error. The actual request method from Pencil
-`batch_design` and live approve/deny on a disposable active document remain unverified. The
-user objected to opening a disposable document, so that test was stopped without a Pencil write;
-the main design was restored as the active editor. The completed Pencil design changes were
-saved to `data/orchester.pen`. macOS runner cross-build
-stops in native dependencies because the Windows host lacks a macOS C toolchain; no Mac is
-available. Keep ORC-41 in progress until these acceptance checks complete.
-
 ## D · Developing Orchester inside Orchester
 
 What is already in place: runs in their own worktrees, pipelines with agent and command steps, limits, questions and
@@ -195,6 +166,19 @@ which also preserves text selection after a drag on scaled displays.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+ORC-41 · Interactive tool approvals in Codex runs · branch `codex/current-integration`
+(an opted-in pipeline step uses Codex App Server and the existing account/global MCP servers;
+Approve once resumes the same session, Deny fails the step without writing, decisions persist
+and waiting time is excluded from the active limit. Other steps keep their previous approval
+policy. Independent real runs passed with both a disposable marker tool and Pencil `batch_design`.
+At the user's direction, the Pencil smoke used the already-open main design: its one temporary
+frame was verified by returned ID and removed, restoring the original node set. Filtered parser,
+MCP readiness, invocation, time-accounting, store and i18n tests and `tools/check.ps1` passed.
+The modal and step-switch ON/OFF states passed independent Pencil/app comparison after fixing
+duplicate session-start activity and a duplicated switch label. The user saved the main design.
+macOS core cross-check passed; the runner cross-build needs the unavailable macOS native toolchain,
+and no Mac runtime test was run. Evidence: `docs/evidence/orc41-interactive-approvals-2026-09-29.md`).
 
 Edit a task after its first run starts · branch `codex/edit-started-task` (the task form saves
 future-run details in place while existing runs retain their snapshots; queued tasks remain locked
