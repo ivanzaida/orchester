@@ -23,7 +23,6 @@ then the backlog by area.
 | Task | Branch | Verified progress and next gate |
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
-| L6 | `codex/verifier-no-focus` | The user approved lurq 0.30.3; commit `6c79092` was pushed to `lurq/master`. Docs, native-window and Publish crates workflows passed; crates.io lists 0.30.3. Registry-backed Orchester build/check and independent live no-focus verification remain pending. |
 | D4 | `codex/d4-focus-watch` | Run #10 reached independent Verify but failed on major New Task visual mismatches. Follow-up UI fixes at `ef6f2e8` passed independent code review, filtered `new_task_` tests 10/10 and `check.ps1`; no post-fix Pencil/app pass exists. Truthful header, context and review design states remain open; U3's Pencil Save As is pending before shared design edits. UI remains unmerged. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
 | U3 | `codex/claude-mechanism` | Live Pencil/app comparison passes; the edited `.pen` is not saved into the worktree yet. |
@@ -95,7 +94,7 @@ embedded MCP server. Use L6's no-focus startup, a writable run-owned discovery d
 discovery credentials (D7), and pinned app artifacts (D6). Inside Codex's Windows
 sandbox `GetForegroundWindow` returned PID 0; verify host foreground separately instead of treating `0 -> 0` as
 evidence that the user's window stayed active. **Done when** a UI task runs end to end in Orchester with a verifier step
-whose report follows the skill. D6 and D7 are complete; the L6 release remains a prerequisite.
+whose report follows the skill. D6, D7, and the registry-backed L6 integration are complete.
 The screenshot client can save a validated PNG without putting base64 in the run transcript
 (`docs/evidence/d4-screenshot-file-2026-09-29.md`). The host-side PID watcher records sampled
 focus during launch (`docs/verification/foreground-watch.md`,
@@ -228,25 +227,8 @@ change has been made. Earlier app lifecycle evidence is `.tmp/verify/u3-u4/repor
 
 ## L · After lurq 0.30.0
 
-The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, and the
-select-menu width option in 0.30.2. This workspace now uses 0.30.2.
-
-### L6 · Verifier app windows take focus (lurq or test tooling)
-
-A verifier's own app instance received real keyboard input while the user worked (extra tabs opened, text typed into
-a field), probably because the window took focus when it opened. Find a way to start agent-driven app instances without
-activating them (a lurq window option such as "start without focus", or a flag the MCP build honours), so they never
-catch the user's typing.
-
-**Status 2026-09-29: In progress.** The lurq 0.30.3 candidate was based on `48be139`. A corrected
-filtered focus-reconciliation run passed 5/5; `cargo publish --dry-run --allow-dirty` packaged and verified 565 files
-without uploading. The dry run reported a yanked `chacha20` version in `Cargo.lock` and three dead-code warnings.
-Independent code/integration review found no blockers. The changelog date now reads 2026-09-29, and the repeat
-dry run passed. The user approved the release, and `6c79092` was fast-forward pushed to `lurq/master`.
-Docs deployment, native-window CI and Publish crates passed. crates.io lists 0.30.3, created at
-2026-09-29 07:35:05 UTC. Orchester still uses registry lurq 0.30.2; switch to registry 0.30.3, run the
-build/check, and repeat independent live no-focus verification before marking L6 done. Evidence:
-`docs/evidence/l6-release-readiness-2026-09-29.md`.
+The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
+select-menu width option in 0.30.2, and the verifier window focus option in 0.30.3. This workspace uses 0.30.3.
 
 ## P · Product decisions waiting for the user
 
@@ -316,3 +298,4 @@ L2 · Remove the held scroll states · branch `codex/scroll-state` (15 offstage-
 L4 · Verify text inputs after the text fixes · branch `codex/text-input-verification` (independent MCP/Pencil check of focused New Task brief, conversation composer, single- and multi-line selection, caret blink and stable line baseline: 0 blocking/major; 3 focused tests and `tools/check.ps1` passed. Minor: New Task form controls sit about 2–3 logical px above Pencil. Pencil has no explicit text-selection specimen; selection was checked against field geometry and the planned glyph-height behavior. Local evidence: `.tmp/verify/l4/report.md`).
 L3 · Outside presses only close popups · branch `codex/popup-dismiss` (lurq 0.30.1 with upstream chrome fix; tab list, project switcher, permissions popover and selects checked through headless tests and MCP on page/chrome. Two regression tests; `form_keyboard ::` 215 passed, 1 ignored; `tools/check.ps1` passed).
 L5 · Select menus wider than their trigger · branch `codex/select-menu-width` (lurq 0.30.2 adds `SelectStyle::min_menu_width`; the MCP secret menu is 260px wide and shows `NAME (environment)` on one line. Independent app/Pencil check: 0 blocking/major; registry-backed integration test 1 passed; `tools/check.ps1` passed. Minor fixture difference: stored references use canonical `@staging`, while Pencil shows `@Staging`. Local evidence: `.tmp/verify/l5/report.md`).
+L6 · Verifier app windows start without focus · branch `codex/l6-registry-0303` (lurq 0.30.3 registry build and filtered focus-related tests 11/11 passed; `tools/check.ps1` passed. Independent exact-PID MCP and host foreground verification observed no focus across 951 samples; live Pencil Welcome comparison found 0 blocking/major, 1 pre-existing minor copy difference. Evidence: `docs/evidence/l6-registry-0303-2026-09-29.md`).

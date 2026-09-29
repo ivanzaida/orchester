@@ -58,6 +58,9 @@ fn main() {
   WinitWindow::new(app, tree)
     .with_title(&title)
     .with_icon(icon)
+    .with_start_without_focus(
+      cfg!(feature = "mcp") && std::env::var_os("ORCHESTER_MCP_START_WITHOUT_FOCUS").is_some_and(|value| value == "1"),
+    )
     // A 1440x960 screen between the 32px custom title bar and the 28px status bar; the app
     // draws both bars itself.
     .with_size(1440, 1020)
