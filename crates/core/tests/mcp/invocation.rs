@@ -5,7 +5,8 @@ use orchester_core::{
   connection::{
     AgentProvider,
     invocation::{
-      ClaudeInvocation, ClaudeMcpConfig, ClaudeSession, CodexInvocation, CodexMcp, LaunchValue, McpLaunch, Platform,
+      ClaudeInvocation, ClaudeMcpConfig, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, LaunchValue,
+      McpLaunch, Platform,
     },
     mcp::{McpServerName, McpServerProblem, McpUrl},
   },
@@ -67,6 +68,7 @@ fn codex_command(mcp: &CodexMcp) -> Command {
     resume: None,
     output_schema: None,
     mcp: Some(mcp),
+    agent_files: CodexAgentFiles::Loaded,
   }
   .command("Do it.".to_owned(), Vec::new(), &CommandEnvironment::default())
   .expect("a Unicode worktree")
@@ -246,6 +248,7 @@ fn mcp_claude_gets_a_private_config_file_and_allows_only_the_servers_tools() {
     worktree: Path::new("/repo/worktree"),
     session: ClaudeSession::New(Uuid::nil()),
     mcp: Some((config_path, config.servers())),
+    skills: None,
   }
   .command("Do it.".to_owned(), Vec::new(), &CommandEnvironment::default())
   .expect("a Unicode worktree");

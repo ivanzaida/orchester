@@ -1,4 +1,4 @@
-//! Versioned configuration: agent profiles, instructions, pipelines and tools share one
+//! Versioned configuration: agent profiles, instructions, pipelines, tools and skills share one
 //! lifecycle — one editable draft and immutable published versions `v1..vN`. Runs pin
 //! versions, so publishing affects new runs only.
 
@@ -21,6 +21,7 @@ pub enum ResourceKind {
   Instruction,
   Pipeline,
   Tool,
+  Skill,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -280,6 +281,12 @@ pub enum PublishError {
   /// An instruction without text would inject nothing.
   #[error("the instruction has no text")]
   BlankInstruction,
+  /// An agent decides whether to load a skill by its description.
+  #[error("the skill has no description")]
+  BlankSkillDescription,
+  /// A skill without a body gives an agent nothing to load.
+  #[error("the skill has no body")]
+  BlankSkillBody,
   /// Pipeline steps without an agent profile or tool; a run could not execute them.
   #[error("steps {0:?} have no agent profile or tool")]
   UnassignedSteps(Vec<StepKey>),

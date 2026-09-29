@@ -53,6 +53,7 @@ fn invocation(permissions: &EnforcedPermissions) -> ClaudeInvocation<'_> {
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     session: ClaudeSession::New(SESSION),
     mcp: None,
+    skills: None,
   }
 }
 

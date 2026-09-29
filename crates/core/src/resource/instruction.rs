@@ -42,6 +42,27 @@ pub enum InstructionScope {
   Step { pipeline: ResourceId, step: StepKey },
 }
 
+impl InstructionScope {
+  /// Whether `target`'s agent is within the scope: any agent for the project, the agents of the
+  /// role, of the pipeline or of the step. Instructions and skills share it.
+  pub fn admits(&self, target: InstructionTarget<'_>) -> Result<(), Exclusion> {
+    match self {
+      Self::Project => Ok(()),
+      Self::AgentRole { role } if role == target.role => Ok(()),
+      Self::AgentRole { .. } => Err(Exclusion::OtherRole),
+      Self::Pipeline { pipeline } if *pipeline == target.pipeline => Ok(()),
+      Self::Step { pipeline, step } if *pipeline == target.pipeline => {
+        if step == target.step {
+          Ok(())
+        } else {
+          Err(Exclusion::OtherStep)
+        }
+      }
+      Self::Pipeline { .. } | Self::Step { .. } => Err(Exclusion::OtherPipeline),
+    }
+  }
+}
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum InstructionError {
   #[error("an instruction for selected agents needs at least one role or profile")]
@@ -151,18 +172,7 @@ impl Instruction {
 
   /// Whether the instruction is for `target`'s agent, whatever the event.
   pub fn reaches(&self, target: InstructionTarget<'_>) -> Result<(), Exclusion> {
-    match &self.scope {
-      InstructionScope::Project => {}
-      InstructionScope::AgentRole { role } if role == target.role => {}
-      InstructionScope::AgentRole { .. } => return Err(Exclusion::OtherRole),
-      InstructionScope::Pipeline { pipeline } if *pipeline == target.pipeline => {}
-      InstructionScope::Step { pipeline, step } if *pipeline == target.pipeline => {
-        if step != target.step {
-          return Err(Exclusion::OtherStep);
-        }
-      }
-      InstructionScope::Pipeline { .. } | InstructionScope::Step { .. } => return Err(Exclusion::OtherPipeline),
-    }
+    self.scope.admits(target)?;
     let selected = match &self.targets {
       AgentTargets::All => true,
       AgentTargets::Roles(roles) => roles.contains(target.role),

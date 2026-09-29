@@ -6,7 +6,7 @@ use std::path::Path;
 use orchester_core::{
   connection::{
     AgentProvider,
-    invocation::{CodexInvocation, Platform},
+    invocation::{CodexAgentFiles, CodexInvocation, Platform},
   },
   permission::{
     AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPermission, CommandPrefix, CommandPrefixError,
@@ -458,6 +458,7 @@ fn codex_args(permissions: &AgentPermissions, platform: Platform) -> Vec<String>
     resume: None,
     output_schema: None,
     mcp: None,
+    agent_files: CodexAgentFiles::Loaded,
   }
   .args()
   .into_iter()

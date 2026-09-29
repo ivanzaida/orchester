@@ -14,6 +14,10 @@
 //! answer to its question, a follow-up after the run finished, messages that came in while it
 //! worked), and a new session reads them in the task part.
 //!
+//! A new session is also told the skills it gets ([`SkillListing`]): each one's name, description and
+//! where its `SKILL.md` is, before the task part, so the agent reads a skill when its work needs it.
+//! A resumed session was told them when it started, and the files stay where they were.
+//!
 //! Placeholders resolve against the run; a variable without a value is an error that names it,
 //! never an empty string. A preview keeps such placeholders and lists them instead.
 
@@ -70,6 +74,14 @@ pub struct InstructionSource<'a> {
   pub name: &'a str,
   pub version: InstructionVersion,
   pub body: &'a Instruction,
+}
+
+/// A skill the agent gets: its name, what it is for, and where its `SKILL.md` was placed.
+#[derive(Clone, Copy, Debug)]
+pub struct SkillListing<'a> {
+  pub name: &'a str,
+  pub description: &'a str,
+  pub path: &'a str,
 }
 
 /// The run an agent works in and the attempt its step execution belongs to.
@@ -138,6 +150,8 @@ pub struct PromptInput<'a> {
   /// The project's instructions a run of this pipeline pinned (or, in a preview, would pin), in
   /// library order. Those that do not reach this agent at the event are left out.
   pub instructions: &'a [InstructionSource<'a>],
+  /// The skills the agent gets, if any, listed at [`InjectionEvent::Start`].
+  pub skills: &'a [SkillListing<'a>],
   /// Outputs of the steps `step` depends on, in pipeline order.
   pub dependencies: &'a [DependencyOutput<'a>],
   /// The step's plan a reviewer sent back, when this invocation revises it.

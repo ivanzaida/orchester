@@ -11,7 +11,7 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{
     AgentProvider, compare_versions,
-    invocation::{CodexInvocation, Platform, agent_environment},
+    invocation::{CodexAgentFiles, CodexInvocation, Platform, agent_environment},
     rank_installed,
   },
   permission::NetworkAccess,
@@ -33,6 +33,7 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
     resume: None,
     output_schema: None,
     mcp: None,
+    agent_files: CodexAgentFiles::Loaded,
   }
 }
 

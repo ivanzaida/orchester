@@ -9,7 +9,7 @@ use std::{
 use orchester_core::{
   connection::{
     AgentProvider,
-    invocation::{ClaudeInvocation, ClaudeSession, CodexInvocation, Platform},
+    invocation::{ClaudeInvocation, ClaudeSession, CodexAgentFiles, CodexInvocation, Platform},
   },
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, FolderBounds, NetworkAccess, RepositoryAccess,
@@ -274,6 +274,7 @@ fn codex_args(access: RepositoryAccess, resume: Option<&str>, roots: &[PathBuf])
     resume,
     output_schema: None,
     mcp: None,
+    agent_files: CodexAgentFiles::Loaded,
   }
   .args()
   .into_iter()
@@ -341,6 +342,7 @@ fn claude_args(permissions: &AgentPermissions, session: ClaudeSession<'_>, roots
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     session,
     mcp: None,
+    skills: None,
   }
   .args()
   .into_iter()

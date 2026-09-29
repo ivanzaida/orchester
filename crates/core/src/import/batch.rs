@@ -172,8 +172,9 @@ fn copy(source: &Catalog, remap: &Remap, named: &Named<'_>, now: Timestamp) -> R
     .and_then(|entry| entry.content(named.pick))
     .ok_or(ImportError::NotReady)?;
   let kind = content.kind();
-  let content =
-    Content::from_value(kind, remap.rewrite(content.to_value())).map_err(|error| ImportError::InvalidCopy {
+  let content = content
+    .with_value(remap.rewrite(content.to_value()))
+    .map_err(|error| ImportError::InvalidCopy {
       resource: named.source,
       kind,
       detail: error.to_string(),

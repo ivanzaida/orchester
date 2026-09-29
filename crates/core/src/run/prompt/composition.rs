@@ -282,6 +282,9 @@ fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[Prompt
   let mut part = None;
   for section in sections {
     let section_part = section.source.part();
+    if section_part == PromptPart::Task && part != Some(section_part) {
+      push_skills(&mut text, input);
+    }
     if part != Some(section_part) {
       if !text.is_empty() {
         if !text.ends_with('\n') {
@@ -313,6 +316,30 @@ fn heading(input: &PromptInput<'_>, part: PromptPart) -> String {
     PromptPart::Pipeline => format!("# Pipeline instructions: {}", input.pipeline.name),
     PromptPart::Step => format!("# Current step: {}", input.step.name.as_str()),
     PromptPart::Task => format!("# Task {}: {}", input.task.key(), input.task.details().title.as_str()),
+  }
+}
+
+/// What a new session is told about the skills it gets, before the task part.
+const SKILLS_LEAD: &str = "Skills are know-how for this project: each is a folder with a SKILL.md and, sometimes, \
+                           reference files beside it. When your work needs a skill, read its SKILL.md first, then \
+                           the files it points to. Read only the skills you need.";
+
+/// The skills heading, what skills are, and each skill's name, description and `SKILL.md`.
+fn push_skills(text: &mut String, input: &PromptInput<'_>) {
+  if input.skills.is_empty() {
+    return;
+  }
+  if !text.is_empty() {
+    text.push('\n');
+  }
+  text.push_str("# Skills\n");
+  push_block(text, SKILLS_LEAD);
+  text.push('\n');
+  for skill in input.skills {
+    // One line per skill, however its description is laid out.
+    let description = skill.description.split_whitespace().collect::<Vec<_>>().join(" ");
+    // Writing to a String cannot fail.
+    let _ = writeln!(text, "- {}: {description} ({})", skill.name, skill.path);
   }
 }
 

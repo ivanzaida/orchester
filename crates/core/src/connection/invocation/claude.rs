@@ -2,7 +2,7 @@
 //!
 //! `claude -p --output-format stream-json --verbose --model <model> [--effort <e>]
 //!  --strict-mcp-config --setting-sources "" --disable-slash-commands [--mcp-config <file>] <permissions>
-//!  [--add-dir <folder>]... (--session-id <new uuid> | --resume <session>)`
+//!  [--add-dir <folder>]... [--add-dir <skills>] (--session-id <new uuid> | --resume <session>)`
 //!
 //! in the worktree as the process's working directory, with the prompt on standard input.
 //!
@@ -20,6 +20,13 @@
 //!   confine them to any folder. Checked 2026-09-28 with Claude Code 2.1.89 without a model turn: the debug log shows
 //!   each existing folder added as a permission directory (`cliArg`) and a missing one left out; the folder's own
 //!   `.claude/settings.json` is looked up but, with `--setting-sources ""`, its rules were not applied.
+//! - Repository agent files ([`crate::agent_files`]): `--setting-sources ""` already keeps `CLAUDE.md` and
+//!   `.claude/skills` out (checked 2026-09-29 against the request the CLI sends), so the project's setting adds
+//!   nothing.
+//! - Orchester's skills ([`crate::resource::Skill`]) are placed in a folder outside the worktree, which `--add-dir`
+//!   lets the agent read (Claude Code asks before reading outside its working directories, and print mode denies what
+//!   it would ask). An agent that edits files may also write there; the folder is its own and written again when it
+//!   starts.
 //! - Sessions: a new session gets an id Orchester chose (`--session-id`); a continue after a pause or a limit resumes
 //!   the session the CLI reported (`--resume`), with the permissions given again. Sessions are kept on disk (no
 //!   `--no-session-persistence`) so that they can be resumed.
@@ -73,6 +80,8 @@ pub struct ClaudeInvocation<'a> {
   pub session: ClaudeSession<'a>,
   /// The MCP servers the invocation gives the agent: the file that configures them and their names.
   pub mcp: Option<(&'a Path, &'a [McpServerName])>,
+  /// The folder holding the skills the agent gets, if it gets any.
+  pub skills: Option<&'a Path>,
 }
 
 impl ClaudeInvocation<'_> {
@@ -111,6 +120,9 @@ impl ClaudeInvocation<'_> {
         args.extend(["--add-dir".to_owned(), root.to_string_lossy().into_owned()]);
       }
     }
+    if let Some(skills) = self.skills {
+      args.extend(["--add-dir".to_owned(), skills.to_string_lossy().into_owned()]);
+    }
     match self.session {
       ClaudeSession::New(id) => args.extend(["--session-id".to_owned(), id.to_string()]),
       ClaudeSession::Resume(session) => args.extend(["--resume".to_owned(), session.to_owned()]),
@@ -127,6 +139,7 @@ impl ClaudeInvocation<'_> {
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
     unicode_folders(self.writable_roots)?;
+    unicode_folders(self.skills.map(Path::to_path_buf).as_slice())?;
     agent_command(
       self.executable,
       self.args(),

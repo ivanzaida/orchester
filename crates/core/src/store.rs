@@ -4,6 +4,11 @@
 use std::collections::BTreeMap;
 
 use crate::{
+  agent_files::{
+    RepositoryAgentFiles,
+    import::{RepositoryDraft, RepositoryOrigin},
+  },
+  blob::ContentHash,
   connection::{Connection, mcp::McpServer, stream::AgentEvent},
   conversation::Message,
   diff::RevisionDiff,
@@ -64,6 +69,43 @@ pub trait SettingsStore {
 
   /// Replaces the project's environment additions with `environment`.
   fn save_project_environment(&mut self, environment: &CommandEnvironment) -> Result<(), Self::Error>;
+
+  /// Whether the project's agents may load the repository's own agent files (Project settings ›
+  /// General); on until it was changed.
+  fn repository_agent_files(&self) -> Result<RepositoryAgentFiles, Self::Error>;
+
+  fn save_repository_agent_files(&mut self, setting: RepositoryAgentFiles) -> Result<(), Self::Error>;
+}
+
+/// Content-addressed project blobs (`docs/architecture/storage.md`, "Blobs"), e.g. a skill's
+/// reference files. Equal content is stored once; blobs are never deleted.
+pub trait BlobStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Stores `content` of `media_type` unless it is stored already, and returns its hash.
+  fn put_blob(&mut self, media_type: &str, content: &[u8]) -> Result<ContentHash, Self::Error>;
+
+  /// The content of blob `hash`, checked against it.
+  fn blob(&self, hash: &ContentHash) -> Result<Vec<u8>, Self::Error>;
+}
+
+/// Drafts made from the repository's own agent files (Import from repository). Written by the
+/// desktop; the repository is only read.
+pub trait RepositoryImportStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Creates a resource for each of `drafts` whose only content is its draft, with where it came
+  /// from, atomically; each slug must be free among its kind. Repeating the call with the same
+  /// `key` returns the resources created the first time instead of new ones.
+  fn import_repository_drafts(
+    &mut self,
+    key: IdempotencyKey,
+    drafts: &[RepositoryDraft],
+    now: Timestamp,
+  ) -> Result<Vec<Resource>, Self::Error>;
+
+  /// Where `resource` was imported from, if it was made from the repository.
+  fn repository_origin(&self, resource: ResourceId) -> Result<Option<RepositoryOrigin>, Self::Error>;
 }
 
 /// Runs whose work was merged into their base branch. Written by the desktop, which merges; a run
