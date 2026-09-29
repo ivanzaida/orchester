@@ -24,7 +24,7 @@ then the backlog by area.
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | L6 | `codex/verifier-no-focus` | lurq 0.30.3 candidate and no-focus app checks pass; release approval is pending. |
-| D4 | `codex/d4-focus-watch` | Run #9 passed Implement and Build+Pin from checkpoint `a118614`; Review's read-only sandbox rejected the agent's attempted test/check launches. Review reported failed before finishing, and Verify was skipped. A fresh 2160×1440 Pencil design was staged, but no app comparison exists. Prepare Review profile v2 and rerun. |
+| D4 | `codex/d4-focus-watch` | Run #10 passed Implement, Build+Pin and a separate D4-only Review. Independent Verify captured the saved New Task draft and same-size Pencil design, then failed on major visual mismatches in the header, criteria, context controls, review card and draft action. Fix and reverify; the candidate UI remains unmerged. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
 | U3 | `codex/claude-mechanism` | Live Pencil/app comparison passes; the edited `.pen` is not saved into the worktree yet. |
 | M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and MCP-only live checks pass; the live mixed state and exact MCP/mixed *Used by* Pencil frames are unavailable. |
@@ -126,8 +126,13 @@ Run #9 passed Implement's focused tests/check and Build+Pin from clean checkpoin
 2160 × 1440 Pencil design image and frozen helpers. Review could inspect Git, but its read-only sandbox rejected
 the agent's attempted Cargo tests, `check.ps1` and `git rev-parse` launches before execution. The agent reported
 failure before finishing review, and Verify was skipped. No verifier
-app PNG or design comparison exists. Review profile v2 is being prepared; see
-`docs/evidence/d4-run9-2026-09-29.md`.
+app PNG or design comparison exists; see `docs/evidence/d4-run9-2026-09-29.md`.
+Run #10 used a separate D4-only read-only Review profile. Implement, Build+Pin and Review passed. Independent Verify
+saved a New Task draft, captured the pinned app through its exact PID without focus, and compared a 2160 × 1440 app
+content crop with a fresh 2160 × 1440 live Pencil export of `l2YA4`. The sampled foreground verdict passed, but
+Verify reported major differences in the header subtitle, criteria delete controls, context chips and Preview,
+review-policy card, and Save as draft styling. The run failed at Verify. The nine-file UI candidate remains unmerged;
+see `docs/evidence/d4-run10-2026-09-29.md`.
 D4 stays open until an independent Verify run compares Pencil and app images at the same state and size and reports
 no blocking or major mismatches.
 
