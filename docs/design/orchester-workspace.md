@@ -58,6 +58,8 @@ Canonical screens and states, in canvas order:
 | 02.06 · Run selected tasks / Sequential | `IyJ5a` | [Preview](previews/IyJ5a.png) |
 | 02.07 · Task queue / Running and waiting | `Z22wg` | [Preview](previews/Z22wg.png) |
 | 02.08 · Project overview | `Twtqc` | [Preview](previews/Twtqc.png) |
+| 02.08F · Overview / Failed tasks | `pHNfB` | not exported yet |
+| 02.08F2 · Overview / No failed tasks | `aSpMm` | not exported yet |
 | 02.09 · New task / Brief, context & limits | `l2YA4` | [Preview](previews/l2YA4.png) |
 | 02.10 · Research running | `RD4pc` | [Preview](previews/RD4pc.png) |
 | 02.11 · Review & approve plan | `x3lVC` | [Preview](previews/x3lVC.png) |
@@ -252,6 +254,9 @@ Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & r
 Colors: canvas `#101010`, sidebar `#141414`, surface `#1A1A1A`, raised `#222222`, hover/selection `#2C2C2C`, border `#363636`, hairline `#2B2B2B`, text `#EEEEEE`, muted `#A3A3A3`, subtle `#8F8F8F`, primary action `#E6E6E6` with `#181818` text, danger `#F87171` (`danger`, only the *Unreadable* status label), focus ring `#EEEEEE` with a `#101010` gap (`focus-ring`, `focus-gap`). Variables also hold fonts, spacing and 7/12px control/panel radii. Status always includes text and an icon.
 
 **Counts** (decided 2026-09-27): every count is the plain number — `2`, `12`, `0` — never zero-padded (`02`, `00`) and never a dash when it is known. This applies to the Overview metrics (`dZ2Zt`, e.g. `C95Z93`), the Overview *Needs you* heading count and the status bar. A dash (`—`) means only "not known yet" (agent slots while the runner is not online).
+
+**Overview task filters** (`i2uFe` in 02.08): *All tasks*, *Running*, *Needs you*, *Queued* and *Failed* each show their count. *Failed* lists newest tasks whose latest run failed; a cancelled run, an unreadable latest run and a task with an earlier failed run but a newer non-failed run do not appear there. An empty Failed list says *No failed tasks.*
+The selected Failed states are 02.08F `pHNfB` (two failed rows) and 02.08F2 `aSpMm` (count zero and empty message), both 1440 × 960 in `AAdQb`; titles and run data are illustrative fixtures.
 
 **Scroll gutter** (decided 2026-09-27, drawn in 04.01 `JuVaA` and 02.L2 `A7nVbK`): a side panel or column whose content can outgrow the window (connection inspectors, *This run*, the Summary column) scrolls its details in a viewport that reserves a 12px gutter at its right edge, so the bar never covers a value. The panel's right padding shrinks by the same 12px, so content still ends 24px (or 32px) from the edge. Thumb: 4px wide, `$border`, radius 2, centred in the gutter (4px from each side), 4px from the top and bottom of the viewport, length = track × visible / total and at least 24px; no track. It shows only while the content overflows. Actions pinned below the viewport (inspector buttons, the status detail) never scroll. Select menus keep their own overlay thumb (`YD8PV`).
 

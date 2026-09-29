@@ -1,5 +1,5 @@
 //! The overview's task list (`BPSF0`): the newest tasks of the chosen tab — all, running, needing
-//! the user, queued — with each tab's count (`i2uFe`), and how many tasks are active and
+//! the user, queued or failed — with each tab's count (`i2uFe`), and how many tasks are active and
 //! completed (`WV44u`). The pipeline filter is not available yet.
 
 use lurq::{
@@ -62,7 +62,14 @@ pub(super) fn task_list(ctx: &Ctx, tasks: &ProjectTasks, selected: OverviewTab, 
       Row::new()
         .width(Dimension::Pct(100.0))
         .padding_vertical(SpacingSize::Md)
-        .child(Text::new(&ctx.t("tasks.emptyTab")).variant(TypographyStyle::Caption))
+        .child(
+          Text::new(&ctx.t(if selected == OverviewTab::Failed {
+            "overview.emptyFailed"
+          } else {
+            "tasks.emptyTab"
+          }))
+          .variant(TypographyStyle::Caption),
+        )
         .into(),
     ]
   } else {
@@ -93,6 +100,7 @@ const fn tab_id(tab: OverviewTab) -> &'static str {
     OverviewTab::Running => "overview-tab-running",
     OverviewTab::NeedsYou => "overview-tab-needs-you",
     OverviewTab::Queued => "overview-tab-queued",
+    OverviewTab::Failed => "overview-tab-failed",
   }
 }
 

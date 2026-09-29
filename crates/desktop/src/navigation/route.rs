@@ -46,6 +46,7 @@ const DRAFTS: &str = "drafts";
 const RUNNING: &str = "running";
 const NEEDS_YOU: &str = "needs-you";
 const QUEUED: &str = "queued";
+const FAILED: &str = "failed";
 const ACTIVITY: &str = "activity";
 const CHANGES: &str = "changes";
 const CONVERSATION: &str = "conversation";
@@ -383,6 +384,7 @@ fn overview_tab(tab: Option<&str>) -> OverviewTab {
     Some(RUNNING) => OverviewTab::Running,
     Some(NEEDS_YOU) => OverviewTab::NeedsYou,
     Some(QUEUED) => OverviewTab::Queued,
+    Some(FAILED) => OverviewTab::Failed,
     _ => OverviewTab::All,
   }
 }
@@ -393,6 +395,7 @@ const fn overview_query(tab: OverviewTab) -> Option<&'static str> {
     OverviewTab::Running => Some(RUNNING),
     OverviewTab::NeedsYou => Some(NEEDS_YOU),
     OverviewTab::Queued => Some(QUEUED),
+    OverviewTab::Failed => Some(FAILED),
   }
 }
 

@@ -303,8 +303,10 @@
     "tabs": {
       "running": "Running",
       "needsYou": "Needs you",
-      "queued": "Queued"
+      "queued": "Queued",
+      "failed": "Failed"
     },
+    "emptyFailed": "No failed tasks.",
     "footer": {
       "one": "{{active}} active task · {{completed}} completed",
       "other": "{{active}} active tasks · {{completed}} completed"

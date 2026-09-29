@@ -133,6 +133,14 @@ and MCP tools in the Tools library.
 
 ## U · Screens
 
+### Overview · Failed task tab (UI, in progress)
+
+Add a *Failed* tab to the Overview task list. Its count and newest-first rows show tasks whose latest run failed;
+cancelled, unreadable, draft and successful tasks stay out. The selected tab has its own route and a truthful empty
+state. The 02.08F `pHNfB` and 02.08F2 `aSpMm` Pencil frames are drawn in editor memory. Independent
+same-size app comparison found no blocking or major mismatch; a coordinated Pencil save remains.
+Verification: `docs/evidence/overview-failed-2026-09-29.md`.
+
 ### U10 · Pull requests screen jumps while it loads (UI)
 
 Opening the Pull requests tab shifts its content two or three times

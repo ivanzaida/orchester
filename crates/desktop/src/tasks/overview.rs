@@ -24,12 +24,13 @@ pub enum OverviewTab {
   Running,
   NeedsYou,
   Queued,
+  Failed,
 }
 
 impl lurq::app::component::DevtoolsInspectable for OverviewTab {}
 
 impl OverviewTab {
-  pub const ALL: [Self; 4] = [Self::All, Self::Running, Self::NeedsYou, Self::Queued];
+  pub const ALL: [Self; 5] = [Self::All, Self::Running, Self::NeedsYou, Self::Queued, Self::Failed];
 
   pub const fn label_key(self) -> &'static str {
     match self {
@@ -37,6 +38,7 @@ impl OverviewTab {
       Self::Running => "overview.tabs.running",
       Self::NeedsYou => "overview.tabs.needsYou",
       Self::Queued => "overview.tabs.queued",
+      Self::Failed => "overview.tabs.failed",
     }
   }
 
@@ -48,6 +50,7 @@ impl OverviewTab {
       Self::Running => matches!(phase, Some(TaskPhase::Running)),
       Self::NeedsYou => matches!(phase, Some(TaskPhase::Waiting)),
       Self::Queued => matches!(phase, Some(TaskPhase::Queued)),
+      Self::Failed => matches!(phase, Some(TaskPhase::Failed)),
     }
   }
 

@@ -4,7 +4,7 @@
 mod support;
 
 use orchester_core::{
-  run::{PlanVersion, TaskPhase, WaitReason},
+  run::{PlanVersion, StepFailure, TaskPhase, WaitReason},
   store::RunStore,
 };
 use orchester_desktop::tasks::{
@@ -112,6 +112,55 @@ fn overview_tabs_filter_newest_first_and_count() {
     footer.args,
     vec![("active", "1".to_owned()), ("completed", "1".to_owned())]
   );
+}
+
+#[test]
+fn overview_failed_tab_counts_and_lists_only_tasks_whose_latest_run_failed() {
+  let mut fixture = support::Fixture::new();
+  let first = fixture.task("First failure", support::at(10));
+  let mut run = fixture.started_run(first, support::at(11));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run
+    .fail_step(execution, StepFailure::AgentFailed, support::at(12))
+    .expect("fail first run");
+  fixture.record(&run, &events);
+
+  let succeeded = fixture.task("Succeeded", support::at(20));
+  let mut run = fixture.started_run(succeeded, support::at(21));
+  fixture.succeed(&mut run, support::at(22));
+
+  let second = fixture.task("Second failure", support::at(30));
+  let mut run = fixture.started_run(second, support::at(31));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run
+    .fail_step(execution, StepFailure::AgentFailed, support::at(32))
+    .expect("fail second run");
+  fixture.record(&run, &events);
+
+  let third = fixture.task("Third failure", support::at(40));
+  let mut run = fixture.started_run(third, support::at(41));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run
+    .fail_step(execution, StepFailure::AgentFailed, support::at(42))
+    .expect("fail third run");
+  fixture.record(&run, &events);
+  fixture.task("Draft", support::at(50));
+
+  // A later successful run removes the task from Failed even though its first run failed.
+  let mut rerun = fixture.started_run(first, support::at(60));
+  fixture.succeed(&mut rerun, support::at(61));
+
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let failed = OverviewTab::Failed;
+  assert_eq!(failed.count(&tasks.tasks, &tasks.phases), 2);
+  let rows = failed.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 6);
+  assert_eq!(
+    rows.iter().map(|row| row.title.as_ref()).collect::<Vec<_>>(),
+    ["Third failure", "Second failure"]
+  );
+  assert_eq!(failed.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 1).len(), 1);
+  assert!(!failed.includes(Some(TaskPhase::Cancelled)));
+  assert!(!failed.includes(None));
 }
 
 #[test]

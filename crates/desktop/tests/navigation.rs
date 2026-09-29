@@ -149,6 +149,7 @@ fn pages() -> Vec<Page> {
   vec![
     Page::OVERVIEW,
     Page::Overview(OverviewTab::NeedsYou),
+    Page::Overview(OverviewTab::Failed),
     Page::TASKS,
     Page::Tasks(TaskTab::Drafts),
     Page::NewTask,
