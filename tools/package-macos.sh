@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Builds Orchester.app on a Mac: the release desktop and runner, the icon and Info.plist, signed
 # ad hoc. The app is not notarized (see docs/stable-build.md, "macOS").
-#   tools/package-macos.sh [--universal] [--with-mcp] [--build-dir <dir>] [--out-dir <dir>] [--no-sign]
+#   tools/package-macos.sh [--universal] [--build-dir <dir>] [--out-dir <dir>] [--no-sign]
 #
 #   --universal   Apple silicon and Intel in one app (needs both rustup targets; see below).
-#   --with-mcp    Include the embedded MCP server, so agents can drive the app.
 #   --build-dir   Cargo target directory (default: target/ of this checkout).
 #   --out-dir     Where Orchester.app is written (default: <build-dir>/macos).
 #   --no-sign     Leave the bundle unsigned (the linker still signs each program ad hoc on Apple
@@ -21,7 +20,6 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 build_dir="$repo/target"
 out_dir=""
 universal=0
-with_mcp=0
 sign=1
 bundle_id="dev.orchester.desktop"
 programs="orchester orchester-runner"
@@ -34,11 +32,10 @@ fail() {
 while [ $# -gt 0 ]; do
   case "$1" in
     --universal) universal=1 ;;
-    --with-mcp) with_mcp=1 ;;
     --no-sign) sign=0 ;;
     --build-dir) [ $# -ge 2 ] || fail "--build-dir needs a directory"; build_dir="$2"; shift ;;
     --out-dir) [ $# -ge 2 ] || fail "--out-dir needs a directory"; out_dir="$2"; shift ;;
-    -h | --help) sed -n '2,17p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,16p' "$0"; exit 0 ;;
     *) fail "unknown option $1 (see --help)" ;;
   esac
   shift
@@ -49,13 +46,10 @@ done
 version=$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' "$repo/Cargo.toml")
 [ -n "$version" ] || fail "cannot read the version from [workspace.package] in Cargo.toml"
 
-# cargo build for the host, or for `$1` when given.
+# cargo build for the host, or for `$1` when given. Every build includes the embedded MCP server.
 build() {
-  local features=""
-  [ "$with_mcp" = 1 ] && features="--features orchester-desktop/mcp"
-  # shellcheck disable=SC2086 # $features is empty or two words on purpose.
   (cd "$repo" && cargo build --release --locked --target-dir "$build_dir" \
-    -p orchester-desktop -p orchester-runner $features ${1:+--target "$1"})
+    -p orchester-desktop -p orchester-runner ${1:+--target "$1"})
 }
 
 staging="$out_dir/.Orchester.app.partial"

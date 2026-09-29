@@ -11,6 +11,7 @@ use crate::{
   activity::Activity,
   background,
   close::Lifecycle,
+  embedded_mcp::McpStatus,
   messages::{self, Message},
   navigation::Places,
   pipelines::zoom::SessionZooms,
@@ -51,16 +52,26 @@ pub enum Startup {
 
 impl lurq::app::component::DevtoolsInspectable for Startup {}
 
+/// What `main` hands the window: how startup went and whether the embedded MCP server listens.
+#[derive(Clone, PartialEq)]
+pub struct RootProps {
+  pub startup: Startup,
+  pub mcp: McpStatus,
+}
+
+impl lurq::app::component::DevtoolsInspectable for RootProps {}
+
 pub struct Root {
   /// What routes stand for, shared by every tab: present once the session started.
   places: Option<Places>,
 }
 
 impl Component for Root {
-  type Props = Startup;
+  type Props = RootProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let startup = ctx.props::<Startup>().clone();
+    let RootProps { startup, mcp } = ctx.props::<RootProps>().clone();
+    ctx.provide(mcp);
     // Without a session nothing reports activity; the status bar still shows the version.
     let activity = match &startup {
       Startup::Ready { activity, .. } => activity.clone(),
@@ -93,7 +104,7 @@ impl Component for Root {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let feed = ctx.mount_keyed::<WindowFeedLoader>("window-feed", ());
-    let window = match ctx.props::<Startup>().clone() {
+    let window = match ctx.props::<RootProps>().startup.clone() {
       Startup::Failed { message, path } => {
         let screen = with_status_bar(ctx, startup_failed(ctx, &message, path.as_deref()));
         bare_window(ctx, screen)

@@ -4,14 +4,12 @@
 # (tools/package-macos.sh) and moves it into ~/Applications. The installed app keeps its database
 # in ~/Library/Application Support/Orchester and its log in ~/Library/Logs/Orchester, so it has
 # its own project list. See docs/stable-build.md.
-#   tools/install-macos.sh [--install-dir <dir>] [--build-dir <dir>] [--universal] [--with-mcp]
-#     [--import-dev-data]
+#   tools/install-macos.sh [--install-dir <dir>] [--build-dir <dir>] [--universal] [--import-dev-data]
 #
 #   --install-dir      Where Orchester.app goes (default: ~/Applications).
 #   --build-dir        Cargo target directory (default: ~/Library/Application Support/Orchester/build),
 #                      outside the repository so agent builds never touch it.
 #   --universal        Apple silicon and Intel in one app.
-#   --with-mcp         Include the embedded MCP server, so agents can drive the installed app.
 #   --import-dev-data  Copy the dev build's application database (target/debug/orchester.db) to the
 #                      installed app's. Refused when that one exists: it is never overwritten.
 set -euo pipefail
@@ -35,9 +33,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --install-dir) [ $# -ge 2 ] || fail "--install-dir needs a directory"; install_dir="$2"; shift ;;
     --build-dir) [ $# -ge 2 ] || fail "--build-dir needs a directory"; build_dir="$2"; shift ;;
-    --universal | --with-mcp) package_options="$package_options $1" ;;
+    --universal) package_options="$package_options $1" ;;
     --import-dev-data) import_dev_data=1 ;;
-    -h | --help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,14p' "$0"; exit 0 ;;
     *) fail "unknown option $1 (see --help)" ;;
   esac
   shift

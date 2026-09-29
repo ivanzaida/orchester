@@ -8,10 +8,11 @@ use orchester_desktop::{
   activity::Activity,
   app_icon, app_log, app_paths,
   close::{CloseKind, Lifecycle, session_end},
+  embedded_mcp::McpStatus,
   i18n,
   messages::Message,
   programs::Programs,
-  root::{self, Startup},
+  root::{self, RootProps, Startup},
   runner::{QUIET_STOP_TIMEOUT, Runners},
   secrets::Vault,
   session::{AppSession, StartupError},
@@ -38,7 +39,10 @@ fn main() {
 
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  tree.mount_root::<root::Root>(&mut app, startup);
+  // Started before the root mounts so the status bar shows its port, or that it did not start,
+  // from the first frame.
+  let mcp = McpStatus::start(&mut tree);
+  tree.mount_root::<root::Root>(&mut app, RootProps { startup, mcp });
 
   #[cfg(feature = "devtools")]
   {
@@ -46,21 +50,13 @@ fn main() {
     tree.mount_devtools(&mut app);
   }
 
-  #[cfg(feature = "mcp")]
-  let _mcp = {
-    let mcp = tree.enable_mcp(lurq::mcp::McpConfig::new().app_name("orchester"));
-    tracing::info!("MCP server on http://127.0.0.1:{}/mcp", mcp.port());
-    mcp
-  };
-
   let title = app.i18n().t("app.name");
   let icon = app_icon::window_icon().expect("the bundled window icon is a valid PNG; covered by tests/app_icon.rs");
   WinitWindow::new(app, tree)
     .with_title(&title)
     .with_icon(icon)
-    .with_start_without_focus(
-      cfg!(feature = "mcp") && std::env::var_os("ORCHESTER_MCP_START_WITHOUT_FOCUS").is_some_and(|value| value == "1"),
-    )
+    // For agents that drive the app over MCP while the user works in other windows.
+    .with_start_without_focus(std::env::var_os("ORCHESTER_MCP_START_WITHOUT_FOCUS").is_some_and(|value| value == "1"))
     // A 1440x960 screen between the 32px custom title bar and the 28px status bar; the app
     // draws both bars itself.
     .with_size(1440, 1020)

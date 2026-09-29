@@ -1,6 +1,7 @@
 # Builds the runner and runs the desktop app. The desktop starts `orchester-runner` from its own
 # directory, and `cargo run -p orchester-desktop` alone does not build another package's binary.
-# Arguments go to `cargo run`, e.g.: powershell -File tools/run.ps1 --features mcp
+# Arguments go to `cargo run`, e.g.: powershell -File tools/run.ps1 --features devtools
+# The embedded MCP server is part of every build.
 $ErrorActionPreference = "Stop"
 
 Push-Location (Split-Path -Parent $PSScriptRoot)

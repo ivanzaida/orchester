@@ -18,8 +18,6 @@ workspace = true
 default = []
 # In-app DevTools, opened as a secondary window at startup.
 devtools = ["lurq/devtools"]
-# Embedded MCP server so agents can drive and inspect the running app.
-mcp = ["lurq/mcp"]
 perf_profile = ["lurq/perf_profile"]
 
 [dependencies]
@@ -39,6 +37,9 @@ lurq = { workspace = true, features = [
   "markdown",
   "clipboard",
   "tokio",
+  # The embedded MCP server, in every build: agents drive and inspect the running app through it
+  # (loopback only, bearer token from a per-user discovery file; see `embedded_mcp`).
+  "mcp",
 ] }
 orchester-exec.workspace = true
 orchester-ipc.workspace = true
