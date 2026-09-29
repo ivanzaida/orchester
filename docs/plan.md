@@ -24,7 +24,7 @@ then the backlog by area.
 | --- | --- | --- |
 | M1 | `codex/m1-claude-mcp` | In progress: Claude Code 2.1.89 `auth status --json` still reports `loggedIn: false` (exit 1). Check the `mcp__<name>` allow rule in a signed-in model turn. |
 | L6 | `codex/verifier-no-focus` | lurq 0.30.3 candidate and no-focus app checks pass; release approval is pending. |
-| D4 | `codex/d4-focus-watch` | v9 host probe did not reach a saved draft or produce PNGs; its click response was not retained, so the cause is unknown. Audited/published v10 host Pencil handoff is ready, with no v10 run yet. Candidate UI and independent code-audit blockers are being repaired; rerun Verify. |
+| D4 | `codex/d4-focus-watch` | Run #8 applied the reviewed New Task patch and passed focused tests/check, but Implement failed after two lifecycle tests failed in-run and manual commit was denied. Both exact tests passed in an independent host rerun; cause remains unknown. Build+Pin, Review and Verify were skipped. Rerun from disposable checkpoint. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
 | U3 | `codex/claude-mechanism` | Live Pencil/app comparison passes; the edited `.pen` is not saved into the worktree yet. |
 | M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and MCP-only live checks pass; the live mixed state and exact MCP/mixed *Used by* Pencil frames are unavailable. |
@@ -111,11 +111,17 @@ and the host own-PID watcher passed, but in-run Pencil export was cancelled twic
 reported major saved-state, bottom-action, pipeline-subtitle and review-policy mismatches. A separate host Pencil
 export at scale 1.5 succeeded. The v9 host probe still failed to reach a saved draft: the disposable DB had no
 task, and no app PNG was produced. The helper did not retain the click response or post-click tree, so the cause
-remains unknown. Pipeline v10 is audited and published with a host Pencil export handoff, but no v10 run has occurred.
+remains unknown. Pipeline v10 is audited and published with a host Pencil export handoff.
 The independent code audit also found overpromising header/review copy and a false Save as draft success when runner
-start fails after Create & run queues a task. These and the reported New Task UI blockers are under repair in
-`codex/d4-new-task-fixes`; see
+start fails after Create & run queues a task. Code repairs on `codex/d4-new-task-fixes` passed independent static
+review and targeted tests; the UI visual gate remains open. See
 `docs/evidence/d4-v9-probe-v10-handoff-2026-09-29.md`.
+Disposable run #8 applied the reviewed nine-file candidate and passed focused New Task/history/tasks/i18n tests and
+`tools/check.ps1`, but Implement failed after two broader runner-process lifecycle tests failed and sandbox denied
+a manual commit. Both exact lifecycle tests passed 1/1 in an independent host rerun; this does not explain the
+in-run failures. Orchester created clean checkpoint `a118614`; the disposable project's `master` now points to it.
+Build+Pin, Review and Verify were skipped, so there is still no successful Pencil/app comparison or UI pass. The
+host-app foreground watcher passed at sampled instants. See `docs/evidence/d4-run8-2026-09-29.md`.
 D4 stays open until an independent Verify run compares Pencil and app images at the same state and size and reports
 no blocking or major mismatches.
 
