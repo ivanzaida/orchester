@@ -7,6 +7,7 @@ mod counts;
 mod fixture;
 mod lifecycle;
 mod limits;
+mod outcome_prompt;
 mod permissions;
 mod plans;
 mod prompt;

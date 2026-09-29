@@ -19,15 +19,32 @@ use crate::{
 };
 
 /// The JSON schema of a step's final message.
-pub const STEP_RESULT_SCHEMA: &str = r#"{"type":"object","properties":{"outcome":{"type":"string","enum":["done","failed","question"]},"summary":{"type":"string"}},"required":["outcome","summary"],"additionalProperties":false}"#;
+pub const STEP_RESULT_SCHEMA: &str = r#"{
+  "type":"object",
+  "properties":{
+    "outcome":{
+      "type":"string",
+      "enum":["done","failed","question"],
+      "description":"done: current step complete. question: waiting for the person's decision, permission, access, or clarification; resumes the same session after their answer. failed: failure handled by the pipeline, no decision or action by the person would let the step continue. Incomplete work or a permission request alone is not failed."
+    },
+    "summary":{
+      "type":"string",
+      "description":"For question, explain the blocker and saved progress and ask a concrete question with available options. Otherwise summarize the completed work or failure."
+    }
+  },
+  "required":["outcome","summary"],
+  "additionalProperties":false
+}"#;
 
 /// Whether the agent says it did the step.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StepOutcome {
+  /// The current step is complete.
   Done,
+  /// Failure handled by the pipeline; no decision or action by the person would let the step continue.
   Failed,
-  /// It cannot go on without the person's answer; the summary is its question.
+  /// It needs the person's decision, permission, access, or clarification; the summary asks for it.
   Question,
 }
 

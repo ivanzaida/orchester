@@ -191,7 +191,7 @@ fn plans_a_resumed_session_is_told_what_should_change() {
   assert!(
     resumed
       .text
-      .ends_with("What should change in plan v1:\n\nKeep email sign-in.")
+      .contains("What should change in plan v1:\n\nKeep email sign-in.\n\n# When you finish\n")
   );
   assert!(resumed.sources.sources.is_empty());
 }

@@ -167,6 +167,17 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+ORC-44 follow-up · Outcome instructions distinguish user decisions from failures · branch `codex/attention-outcomes`
+
+- **Done 2026-09-29.** New and resumed turns receive the same explicit JSON contract: needed permission, access and
+  scope decisions use `question` with concrete options; genuine failures still use pipeline failure handling.
+  Schema descriptions reinforce the distinction without changing fields. Independent prompt 13/13, conversation
+  14/14, plans 10/10 and four filtered runner checks passed; final `tools/check.ps1` passed. No UI changes.
+- This improves instructions; fixture tests do not guarantee a live model's choice. It does not reopen the stored
+  ORC-44 failed run, grant permissions, complete ORC-44 command approvals, or update the stable install. Its saved
+  implementation remains at checkpoint `9b3484f1f85cdcefcdcd237984a9c0bcbbd07453`.
+  See `docs/evidence/orc44-attention-outcomes-2026-09-29.md`.
+
 ORC-41 · Interactive tool approvals in Codex runs · branch `codex/current-integration`
 (an opted-in pipeline step uses Codex App Server and the existing account/global MCP servers;
 Approve once resumes the same session, Deny fails the step without writing, decisions persist

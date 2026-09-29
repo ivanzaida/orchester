@@ -11,14 +11,26 @@ use crate::{
   resource::{Exclusion, InjectionEvent, Instruction, InstructionTarget, PromptText, Rendered, Variable},
 };
 
-/// How every new session is told to end, matching [`crate::run::STEP_RESULT_SCHEMA`].
-const RESULT_INSTRUCTIONS: &str = "End with your result: the outcome `done` when the step is complete, or `failed` \
-                                   when you could not complete it, and a short summary of what you did for the \
-                                   steps that run after this one. If you cannot go on without an answer from the \
-                                   person who gave you this task, end with the outcome `question` and your \
-                                   question as the summary instead: you continue once they answer.";
-/// How a resumed session that reads people's messages is told to end.
-const RESUMED_RESULT: &str = "Then end with your result for this step, as before.";
+/// Every turn gets this contract, including resumed CLI sessions without an output schema.
+const RESULT_INSTRUCTIONS: &str = "End with exactly one JSON object containing `outcome` and `summary`, for example \
+                                   {\"outcome\":\"question\",\"summary\":\"Which option should I implement?\"}.\n\
+                                   Use `done` when your current step is complete; summarize its result for the \
+                                   steps that follow.\n\
+                                   Use `question` when progress needs the person's decision, permission, access, \
+                                   or clarification. This includes a proposed command outside the sandbox, an \
+                                   unavailable capability, or conflicting requirements that the person can \
+                                   resolve by choosing an alternative or changing scope. Explain the blocker, \
+                                   summarize saved progress, and ask a concrete question with the available \
+                                   options. Orchester saves your work and waits for their answer, then resumes \
+                                   the same session. Requesting permission does not grant it; use only the \
+                                   permissions actually available to this session.\n\
+                                   Use `failed` only for a failure you cannot resolve within this step and for \
+                                   which no decision or action by the person would let you continue. Explain \
+                                   what failed and what work was saved. This invokes the pipeline's failure \
+                                   handling and can end the run and skip dependent steps: do not use it merely \
+                                   because work is incomplete or needs permission. \
+                                   If the person already answered the relevant question, apply their answer \
+                                   within the effective permissions instead of asking again.";
 /// What a gated step's session is told on top: a person reviews its summary as the plan.
 const GATED_RESULT_INSTRUCTIONS: &str = "A person reviews your summary before the steps after this one start: make \
                                          it the complete result of this step (for a plan, the whole plan), in \
@@ -306,6 +318,13 @@ fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[Prompt
       PromptSource::AgentProfile { .. } | PromptSource::Step { .. } => push_block(&mut text, &section.text),
     }
   }
+  if event == InjectionEvent::Resume {
+    text.push_str("\n\n# When you finish\n");
+    push_block(&mut text, RESULT_INSTRUCTIONS);
+    if input.step.approval_gate {
+      push_block(&mut text, GATED_RESULT_INSTRUCTIONS);
+    }
+  }
   text
 }
 
@@ -395,7 +414,6 @@ fn push_resumed_messages(text: &mut String, delivered: DeliveredMessages<'_>) {
   };
   text.push('\n');
   push_block(text, close);
-  push_block(text, RESUMED_RESULT);
 }
 
 /// Each message as the person wrote it, oldest first, a rule between two.

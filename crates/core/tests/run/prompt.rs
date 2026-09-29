@@ -141,12 +141,12 @@ fn prompt_assembles_role_step_and_task_in_order() {
   let expected = "# Your role: Builder\n\nImplements the approved plan.\n\nKeep commits small for ORC-12.\n\n# Current \
                   step: implement\n\nWork on orchester/orc-129, attempt 1. Literal {{task.title}}.\n\n# Task ORC-12: \
                   Add GitHub sign-in\n\nUsers sign in with GitHub.\n\n## Acceptance criteria\n- Sign-in works\n- \
-                  Cancel shows an error\n\n# When you finish\n\nEnd with your result: the outcome `done` when the \
-                  step is complete, or `failed` when you could not complete it, and a short summary of what you did \
-                  for the steps that run after this one. If you cannot go on without an answer from the person who \
-                  gave you this task, end with the outcome `question` and your question as the summary instead: you \
-                  continue once they answer.\n";
-  assert_eq!(assembled.text, expected);
+                  Cancel shows an error\n\n";
+  let (context, _) = assembled
+    .text
+    .split_once("# When you finish\n")
+    .expect("result contract");
+  assert_eq!(context, expected);
   let parts: Vec<PromptPart> = assembled.sources.sources.iter().map(PromptSource::part).collect();
   assert_eq!(parts, [PromptPart::AgentRole, PromptPart::Step, PromptPart::Task]);
   assert_eq!(assembled.sources.event, InjectionEvent::Start);
@@ -214,7 +214,9 @@ fn prompt_lists_the_outputs_of_the_steps_it_runs_after_with_their_sources() {
   assert!(text.contains("\nSources: checks (`checks`, attempt 2), review (`review`, attempt 2)\n"));
   assert!(text.contains("\n## checks (`checks`, attempt 2)\n\nAll 38 tests pass.\n"));
   assert!(text.contains("\n## review (`review`, attempt 2)\n\n(no output)\n"));
-  assert!(text.ends_with("you continue once they answer.\n"));
+  let contract = text.find("# When you finish\n").expect("result contract");
+  assert!(contract > results);
+  assert!(text[contract..].contains("resumes the same session"));
 }
 
 /// One instruction per scope, given in an order unlike assembly order.
@@ -403,7 +405,14 @@ fn prompt_for_a_resumed_session_is_the_continue_prompt_with_resume_instructions(
     .input(&[], &[], true)
     .assemble(InjectionEvent::Resume)
     .expect("no variables");
-  assert_eq!(plain.text, CONTINUE_PROMPT);
+  assert_eq!(
+    plain
+      .text
+      .split_once("\n\n# When you finish\n")
+      .expect("result contract")
+      .0,
+    CONTINUE_PROMPT
+  );
   assert!(plain.sources.sources.is_empty());
 
   let start_only = instruction(
@@ -428,7 +437,11 @@ fn prompt_for_a_resumed_session_is_the_continue_prompt_with_resume_instructions(
     .assemble(InjectionEvent::Resume)
     .expect("every variable has a value");
   assert_eq!(
-    assembled.text,
+    assembled
+      .text
+      .split_once("\n\n# When you finish\n")
+      .expect("result contract")
+      .0,
     format!(
       "{CONTINUE_PROMPT}\n\n# Project rules\n\n## Resume rule\n\nCheck `git status` on orchester/orc-129 before you \
        continue.\n"

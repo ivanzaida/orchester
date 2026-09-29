@@ -351,7 +351,7 @@ fn conversation_a_resumed_session_reads_messages_introduced_by_why() {
     follow_up.starts_with("You completed this step and the run is ready for review."),
     "{follow_up}"
   );
-  assert!(follow_up.contains("Then end with your result for this step, as before."));
+  assert!(follow_up.contains("End with exactly one JSON object containing `outcome` and `summary`"));
 }
 
 #[test]
@@ -371,7 +371,10 @@ fn conversation_a_new_session_reads_messages_in_its_task_part() {
   let heading = text.find("# Messages from the person").expect("the messages");
   assert!(text[heading..].contains("Keep email sign-in."));
   assert!(heading < text.find("# When you finish").expect("the result"), "{text}");
-  assert!(text.contains("end with the outcome `question`"), "{text}");
+  assert!(
+    text.contains("Use `question` when progress needs the person's decision"),
+    "{text}"
+  );
 }
 
 #[test]
