@@ -135,7 +135,8 @@ pub enum ExtraTypography {
   RuleTitle,
   /// Instruction prompt text, edited and resolved (`g2Tkg`, `iJdsS`): mono 12, 1.8.
   PromptText,
-  /// Name of the variable shown in the catalog (`Z69wX` in `EfTiT`): mono 20/500.
+  /// Name of the variable shown in the catalog (`Z69wX` in `EfTiT`), and of the skill being
+  /// edited (`ERFw4` in `ecJtg`): mono 20/500.
   VariableName,
   /// Execution context note of the instruction preview (`HvDGw`, `utiRC` in `TnjFo`): 9 muted.
   ContextNote,

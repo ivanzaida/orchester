@@ -10,8 +10,8 @@ use thiserror::Error;
 use crate::{
   id::{ResourceId, VersionId},
   resource::{
-    AgentProfile, Instruction, InstructionTarget, ModelId, Pipeline, Step, StepKey, StepKind, Tool, Version,
-    VersionNumber,
+    AgentProfile, Exclusion, Instruction, InstructionTarget, ModelId, Pipeline, Skill, Step, StepKey, StepKind, Tool,
+    Version, VersionNumber,
   },
 };
 
@@ -86,9 +86,10 @@ pub struct PublishedVersions<'a> {
   pub profiles: &'a BTreeMap<ResourceId, Version<AgentProfile>>,
   pub tools: &'a BTreeMap<ResourceId, Version<Tool>>,
   pub instructions: &'a BTreeMap<ResourceId, Version<Instruction>>,
+  pub skills: &'a BTreeMap<ResourceId, Version<Skill>>,
 }
 
-/// Everything a run pins: pipeline, per-step executors, and the instructions and tools that
+/// Everything a run pins: pipeline, per-step executors, and the instructions, tools and skills that
 /// apply to it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "SnapshotFields")]
@@ -98,6 +99,7 @@ pub struct RunSnapshot {
   steps: Vec<StepSnapshot>,
   instructions: Vec<PinnedVersion>,
   tools: Vec<PinnedVersion>,
+  skills: Vec<PinnedVersion>,
 }
 
 #[derive(Deserialize)]
@@ -107,6 +109,9 @@ struct SnapshotFields {
   steps: Vec<StepSnapshot>,
   instructions: Vec<PinnedVersion>,
   tools: Vec<PinnedVersion>,
+  /// Runs created before skills existed pinned none.
+  #[serde(default)]
+  skills: Vec<PinnedVersion>,
 }
 
 impl TryFrom<SnapshotFields> for RunSnapshot {
@@ -125,6 +130,7 @@ impl TryFrom<SnapshotFields> for RunSnapshot {
       steps: fields.steps,
       instructions: fields.instructions,
       tools: fields.tools,
+      skills: fields.skills,
     })
   }
 }
@@ -174,8 +180,14 @@ impl RunSnapshot {
     let instructions = published
       .instructions
       .iter()
-      .filter(|(_, instruction)| applies(instruction.body(), pipeline, body, published))
+      .filter(|(_, instruction)| applies(pipeline, body, published, |target| instruction.body().reaches(target)))
       .map(|(&id, instruction)| PinnedVersion::of(id, instruction))
+      .collect();
+    let skills = published
+      .skills
+      .iter()
+      .filter(|(_, skill)| applies(pipeline, body, published, |target| skill.body().reaches(target)))
+      .map(|(&id, skill)| PinnedVersion::of(id, skill))
       .collect();
     let tools = pinned_tools(pipeline, body, &steps, published);
     Ok(Self {
@@ -184,6 +196,7 @@ impl RunSnapshot {
       steps,
       instructions,
       tools,
+      skills,
     })
   }
 
@@ -211,6 +224,11 @@ impl RunSnapshot {
 
   pub fn tools(&self) -> &[PinnedVersion] {
     &self.tools
+  }
+
+  /// The skills that reach an agent of the run, in resource id order.
+  pub fn skills(&self) -> &[PinnedVersion] {
+    &self.skills
   }
 
   /// `key` and every step that depends on it, directly or transitively.
@@ -268,10 +286,15 @@ fn resolve_step(step: &Step, published: PublishedVersions<'_>) -> Result<StepSna
   })
 }
 
-/// Whether an instruction reaches an agent of this pipeline at some event: its scope and targets
-/// admit a step whose published profile runs it. Which event it is injected at is decided per
-/// invocation, from the pinned version.
-fn applies(instruction: &Instruction, pipeline: ResourceId, body: &Pipeline, published: PublishedVersions<'_>) -> bool {
+/// Whether an instruction or a skill reaches an agent of this pipeline (at some event): `reaches`
+/// admits a step whose published profile runs it. Which event an instruction is injected at, and
+/// which agents get a skill, is decided per invocation, from the pinned version.
+fn applies(
+  pipeline: ResourceId,
+  body: &Pipeline,
+  published: PublishedVersions<'_>,
+  reaches: impl Fn(InstructionTarget<'_>) -> Result<(), Exclusion>,
+) -> bool {
   body.steps().iter().any(|step| {
     let StepKind::Agent {
       profile: Some(profile), ..
@@ -286,7 +309,7 @@ fn applies(instruction: &Instruction, pipeline: ResourceId, body: &Pipeline, pub
         profile: *profile,
         role: version.body().role(),
       };
-      instruction.reaches(target).is_ok()
+      reaches(target).is_ok()
     })
   })
 }

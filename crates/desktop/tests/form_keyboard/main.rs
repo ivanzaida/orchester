@@ -37,6 +37,7 @@ mod run_permissions;
 mod secrets;
 mod selection_focus;
 mod sidebar;
+mod skills;
 mod tab_links;
 mod tabs;
 mod tabs_live;

@@ -6,6 +6,7 @@
 mod command;
 mod end;
 mod mcp;
+mod skills;
 pub(super) mod worker;
 
 use orchester_core::{

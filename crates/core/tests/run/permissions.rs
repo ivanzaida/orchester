@@ -99,6 +99,7 @@ fn narrowing_run() -> (Logged, ResourceId) {
       profiles: &profiles,
       tools: &tools,
       instructions: &instructions,
+      skills: &BTreeMap::new(),
     },
   )
   .expect("published");

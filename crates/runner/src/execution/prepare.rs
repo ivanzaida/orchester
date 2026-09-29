@@ -11,7 +11,7 @@ use std::{
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   integration::checked_out_branch,
-  resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Tool, Version},
+  resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool, Version},
   revision::Revision,
   run::{
     BranchName, NewRun, PreflightInput, PreflightProblem, PublishedVersions, Run, RunSnapshot, RunStatus, preflight,
@@ -192,11 +192,13 @@ fn base_revision(root: &Path) -> Result<Revision, Rejection> {
   }
 }
 
-/// The latest published version of every profile, tool and instruction, which a snapshot pins.
+/// The latest published version of every profile, tool, instruction and skill, which a snapshot
+/// pins.
 struct Published {
   profiles: BTreeMap<ResourceId, Version<AgentProfile>>,
   tools: BTreeMap<ResourceId, Version<Tool>>,
   instructions: BTreeMap<ResourceId, Version<Instruction>>,
+  skills: BTreeMap<ResourceId, Version<Skill>>,
 }
 
 impl Published {
@@ -205,6 +207,7 @@ impl Published {
       profiles: latest(db, ResourceKind::AgentProfile)?,
       tools: latest(db, ResourceKind::Tool)?,
       instructions: latest(db, ResourceKind::Instruction)?,
+      skills: latest(db, ResourceKind::Skill)?,
     })
   }
 
@@ -213,6 +216,7 @@ impl Published {
       profiles: &self.profiles,
       tools: &self.tools,
       instructions: &self.instructions,
+      skills: &self.skills,
     }
   }
 }

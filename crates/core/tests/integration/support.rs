@@ -195,6 +195,7 @@ fn snapshot() -> RunSnapshot {
     profiles: &profiles,
     tools: &BTreeMap::new(),
     instructions: &BTreeMap::new(),
+    skills: &BTreeMap::new(),
   };
   RunSnapshot::build(ResourceId::generate(), &version(pipeline), published).expect("every reference is published")
 }

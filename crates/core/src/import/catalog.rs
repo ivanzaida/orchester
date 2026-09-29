@@ -42,14 +42,14 @@ impl Content {
     value.expect("resource bodies are plain data that serializes to JSON")
   }
 
-  /// A body of `kind` from JSON, through the domain constructors: a value that breaks a rule of
-  /// the kind is an error.
-  pub(super) fn from_value(kind: ResourceKind, value: Value) -> Result<Self, serde_json::Error> {
-    Ok(match kind {
-      ResourceKind::AgentProfile => Self::AgentProfile(serde_json::from_value(value)?),
-      ResourceKind::Instruction => Self::Instruction(serde_json::from_value(value)?),
-      ResourceKind::Pipeline => Self::Pipeline(serde_json::from_value(value)?),
-      ResourceKind::Tool => Self::Tool(serde_json::from_value(value)?),
+  /// A body of this content's kind from JSON, through the domain constructors: a value that breaks
+  /// a rule of the kind is an error.
+  pub(super) fn with_value(&self, value: Value) -> Result<Self, serde_json::Error> {
+    Ok(match self {
+      Self::AgentProfile(_) => Self::AgentProfile(serde_json::from_value(value)?),
+      Self::Instruction(_) => Self::Instruction(serde_json::from_value(value)?),
+      Self::Pipeline(_) => Self::Pipeline(serde_json::from_value(value)?),
+      Self::Tool(_) => Self::Tool(serde_json::from_value(value)?),
     })
   }
 }
@@ -138,14 +138,6 @@ pub struct Catalog {
   secrets: Vec<Secret>,
 }
 
-/// The kinds in the order libraries and the import list them.
-const KINDS: [ResourceKind; 4] = [
-  ResourceKind::Pipeline,
-  ResourceKind::AgentProfile,
-  ResourceKind::Instruction,
-  ResourceKind::Tool,
-];
-
 impl Catalog {
   pub const fn new(
     project: Project,
@@ -168,15 +160,12 @@ impl Catalog {
   where
     S: ResourceStore<Error = E> + ConnectionStore<Error = E> + McpServerStore<Error = E> + SecretStore<Error = E>,
   {
-    let mut resources = Vec::new();
-    for kind in KINDS {
-      resources.extend(match kind {
-        ResourceKind::Pipeline => read_kind(store, Content::Pipeline)?,
-        ResourceKind::AgentProfile => read_kind(store, Content::AgentProfile)?,
-        ResourceKind::Instruction => read_kind(store, Content::Instruction)?,
-        ResourceKind::Tool => read_kind(store, Content::Tool)?,
-      });
-    }
+    // In the order libraries and the import list them. Skills are not copied between projects:
+    // their reference files are blobs of their own project.
+    let mut resources = read_kind(store, Content::Pipeline)?;
+    resources.extend(read_kind(store, Content::AgentProfile)?);
+    resources.extend(read_kind(store, Content::Instruction)?);
+    resources.extend(read_kind(store, Content::Tool)?);
     Ok(Self::new(
       project,
       resources,

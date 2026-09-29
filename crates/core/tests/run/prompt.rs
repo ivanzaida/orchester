@@ -107,6 +107,7 @@ impl Prompt {
         body: &self.profile,
       },
       instructions,
+      skills: &[],
       dependencies,
       revision: None,
       messages: None,

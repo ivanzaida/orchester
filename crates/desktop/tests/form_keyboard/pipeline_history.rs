@@ -122,6 +122,7 @@ fn run_of(
     profiles,
     tools: &tools,
     instructions: &instructions,
+    skills: &std::collections::BTreeMap::new(),
   };
   let new = NewRun {
     task,

@@ -133,6 +133,7 @@ impl Fixture {
         profiles: &profiles,
         tools: &tools,
         instructions: &instructions,
+        skills: &BTreeMap::new(),
       },
     )
     .expect("snapshot");
@@ -190,6 +191,7 @@ impl Fixture {
       profiles: &profiles,
       tools: &tools,
       instructions: &instructions,
+      skills: &std::collections::BTreeMap::new(),
     };
     let snapshot = RunSnapshot::build(delivery, &version, published).expect("snapshot");
     Self {

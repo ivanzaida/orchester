@@ -3,6 +3,8 @@
 //! Must stay free of UI and transport dependencies: the desktop app uses it
 //! directly today, and a future server will share it.
 
+pub mod agent_files;
+pub mod blob;
 pub mod command;
 pub mod connection;
 pub mod conversation;

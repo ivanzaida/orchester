@@ -109,6 +109,10 @@ name = "missing_worktree"
 required-features = ["test-agent"]
 
 [[test]]
+name = "agent_files"
+required-features = ["test-agent"]
+
+[[test]]
 name = "run_again"
 required-features = ["test-agent"]
 

@@ -16,11 +16,15 @@ const REPOSITORY: &str = "settings-repository";
 const CHECK: &str = "settings-check-repository";
 const USE_SIGNED_IN: &str = "settings-use-signed-in";
 const DETECT: &str = "settings-detect-repository";
+/// Repository agent files (ORC-15): its switch and Import from repository close the form.
+const AGENT_FILES: &str = "settings-agent-files";
+const IMPORT: &str = "settings-agent-files-import";
 
 fn settings(desktop: &mut Desktop) {
   desktop.wait_for("nav-settings");
   desktop.click("nav-settings");
   desktop.wait_for(REPOSITORY);
+  desktop.wait_for(AGENT_FILES);
 }
 
 /// gh is signed in as ivanzaida; the project expects `expected`.
@@ -49,11 +53,17 @@ fn project_settings_show_the_linked_repository_and_the_wrong_account() {
   ));
   assert!(shows(&mut desktop, USE_SIGNED_IN, "Use signed-in account (ivanzaida)"));
   assert!(desktop.tree.get_element_by_id("settings-expected-notice").is_some());
-  // The settings form: Check again and Use signed-in account; the tabs and the sidebar are
-  // pointer-only.
+  // The settings form: Check again, Use signed-in account and the repository agent files; the
+  // tabs and the sidebar are pointer-only.
   assert_eq!(
-    desktop.stops(3, false),
-    expected(&[Some(CHECK), Some(USE_SIGNED_IN), Some(CHECK)])
+    desktop.stops(5, false),
+    expected(&[
+      Some(CHECK),
+      Some(USE_SIGNED_IN),
+      Some(AGENT_FILES),
+      Some(IMPORT),
+      Some(CHECK)
+    ])
   );
 }
 
@@ -65,7 +75,10 @@ fn project_settings_offer_use_signed_in_only_for_another_account() {
   assert!(desktop.tree.get_element_by_id(USE_SIGNED_IN).is_none());
   // The notice explains Use signed-in account and goes with it.
   assert!(desktop.tree.get_element_by_id("settings-expected-notice").is_none());
-  assert_eq!(desktop.stops(2, false), expected(&[Some(CHECK), Some(CHECK)]));
+  assert_eq!(
+    desktop.stops(4, false),
+    expected(&[Some(CHECK), Some(AGENT_FILES), Some(IMPORT), Some(CHECK)])
+  );
 }
 
 #[test]
@@ -75,7 +88,10 @@ fn project_settings_without_a_link_offer_detection() {
   assert!(shows(&mut desktop, REPOSITORY, "Not linked"));
   assert!(desktop.tree.get_element_by_id("settings-expected-account").is_none());
   assert!(desktop.tree.get_element_by_id("github-detection").is_none());
-  assert_eq!(desktop.stops(2, false), expected(&[Some(DETECT), Some(DETECT)]));
+  assert_eq!(
+    desktop.stops(4, false),
+    expected(&[Some(DETECT), Some(AGENT_FILES), Some(IMPORT), Some(DETECT)])
+  );
 }
 
 const MAX_BUDGET: &str = "limits-max-run-budget";

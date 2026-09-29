@@ -46,7 +46,7 @@ pub use self::{
   prompt::{
     AssembledPrompt, CONTINUE_PROMPT, Composition, DeliveredMessages, DependencyOutput, ExcludedInstruction,
     InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion, PipelineInfo, PlanRevision, ProfileInfo,
-    PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource, RunContext,
+    PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource, RunContext, SkillListing,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},

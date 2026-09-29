@@ -14,6 +14,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
+  agent_files::AgentFilesMechanism,
   connection::{AgentConnection, AgentProvider, invocation::Platform},
   permission::{
     AgentPermissions, NetworkAccess,
@@ -55,6 +56,7 @@ impl ProfileEditor {
           &self.permissions.get(),
           &result,
         ));
+        rows.extend(self.agent_files_rows(ctx, connection.provider()));
         rows.extend(self.mcp_enforcement(ctx, connection.provider()));
         rows
       }
@@ -69,6 +71,35 @@ impl ProfileEditor {
         &ctx.t("agents.permissions.enforcement.stepsNarrow"),
       ))
       .into()
+  }
+}
+
+impl ProfileEditor {
+  /// Whether the CLI loads the repository's own agent files and how (`e9t1b` in `bYDCI`), and
+  /// that the project sets it, not the profile (`k9Q3LT`).
+  fn agent_files_rows(&self, ctx: &Ctx, provider: AgentProvider) -> [Element; 2] {
+    let setting = self.context.agents.agent_files;
+    let (glyph, title) = if setting.is_on() {
+      (Icon::FolderGit, "agents.permissions.enforcement.repositoryFiles.on")
+    } else {
+      (Icon::CircleCheck, "agents.permissions.enforcement.repositoryFiles.off")
+    };
+    let how = ctx.t(match setting.mechanism(provider) {
+      AgentFilesMechanism::CodexLoads => "agents.permissions.enforcement.repositoryFiles.codexLoads",
+      AgentFilesMechanism::CodexLeftOut => "agents.permissions.enforcement.repositoryFiles.codexLeftOut",
+      AgentFilesMechanism::ClaudeNoProjectSettings => "agents.permissions.enforcement.repositoryFiles.claude",
+    });
+    let project = self.context.project.project.name().as_str();
+    [
+      row(glyph, &ctx.t(title), &how),
+      line(
+        Icon::FolderGit,
+        &ctx.t_args(
+          "agents.permissions.enforcement.repositoryFiles.note",
+          [("project", project)],
+        ),
+      ),
+    ]
   }
 }
 

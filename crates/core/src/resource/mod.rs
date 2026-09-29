@@ -1,4 +1,4 @@
-//! Versioned configuration: agent profiles, instructions, pipelines and tools share one
+//! Versioned configuration: agent profiles, instructions, pipelines, tools and skills share one
 //! lifecycle — one editable draft and immutable published versions `v1..vN`. Runs pin
 //! versions, so publishing affects new runs only.
 //!
@@ -11,6 +11,7 @@ mod instruction;
 mod lifecycle;
 mod pipeline;
 mod prompt;
+mod skill;
 mod tool;
 mod variable;
 
@@ -29,6 +30,7 @@ pub use self::{
     StarterAssignments, StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, changes, feature_delivery,
   },
   prompt::{PromptError, PromptText, Rendered},
+  skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
   tool::{
     AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
     CommandEnvironment, CommandError, CommandProgram, CommandTimeout, DatabaseQuery, DeniedBehavior, ExitCodes,
@@ -131,5 +133,20 @@ impl ResourceBody for Tool {
 
   fn upgrade(schema: u32, body: serde_json::Value) -> Option<serde_json::Value> {
     (schema == 1).then(|| tool::upgrade_from_schema_1(body)).flatten()
+  }
+}
+
+impl ResourceBody for Skill {
+  const KIND: ResourceKind = ResourceKind::Skill;
+  const SCHEMA: u32 = 1;
+
+  fn check_publishable(&self) -> Result<(), PublishError> {
+    if self.description().trim().is_empty() {
+      Err(PublishError::BlankSkillDescription)
+    } else if self.body().trim().is_empty() {
+      Err(PublishError::BlankSkillBody)
+    } else {
+      Ok(())
+    }
   }
 }

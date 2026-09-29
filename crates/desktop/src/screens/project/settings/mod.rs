@@ -1,8 +1,10 @@
 //! Project settings (02.N `QV1af` General, 02.M `c7e729` Limits, 02.O `tXahd` Environment): the
 //! project's name and folder, its GitHub repository and the account it expects, with *Check
 //! again*, linking a repository detected later and *Use signed-in account*; its token budgets and
-//! default time limit; the variables its runs add to the environment of agents and tools.
+//! default time limit; the variables its runs add to the environment of agents and tools; whether
+//! agents may load the repository's own agent files (ORC-15).
 
+mod agent_files;
 mod environment;
 mod general;
 mod limits;
@@ -91,7 +93,8 @@ impl Actions {
 }
 
 pub struct SettingsScreen {
-  /// Whether the Limits and Environment tabs' changes are stored.
+  /// Whether the General, Limits and Environment tabs' changes are stored.
+  general_status: Signal<SettingsSave>,
   limits_status: Signal<SettingsSave>,
   environment_status: Signal<SettingsSave>,
   /// Bumped after a change, to read the project's connections and link again.
@@ -118,6 +121,7 @@ impl Component for SettingsScreen {
   fn create(ctx: &mut Ctx) -> Self {
     let screen = Self {
       scroll: ScrollState::new(),
+      general_status: ctx.signal(SettingsSave::Saved),
       limits_status: ctx.signal(SettingsSave::Saved),
       environment_status: ctx.signal(SettingsSave::Saved),
       revision: ctx.signal(0_u64),
@@ -265,10 +269,10 @@ impl SettingsScreen {
     }
   }
 
-  /// "All changes saved" in the topbar of the Limits (`ZtaAU`) and Environment tabs.
+  /// "All changes saved" in the topbar of every tab (`ZtaAU`, `ZnXvo`).
   fn save_status(&self, ctx: &Ctx, tab: SettingsTab) -> Option<Element> {
     let status = match tab {
-      SettingsTab::General => return None,
+      SettingsTab::General => self.general_status.get(),
       SettingsTab::Limits => self.limits_status.get(),
       SettingsTab::Environment => self.environment_status.get(),
     };

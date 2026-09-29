@@ -157,6 +157,7 @@ impl Config {
       profiles: &self.profiles,
       tools: &empty_tools,
       instructions: &empty_instructions,
+      skills: &BTreeMap::new(),
     };
     RunSnapshot::build(self.pipeline, &self.pipeline_version, published).expect("every reference is published")
   }

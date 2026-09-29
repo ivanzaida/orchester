@@ -12,6 +12,7 @@ mod plans;
 mod prompt;
 mod recovery;
 mod schedule;
+mod skills;
 mod snapshot;
 mod step_budget;
 mod steps;

@@ -106,6 +106,7 @@ fn run_of_one_step(approval_gate: bool) -> (TempDir, ProjectDb, Run, StepExecuti
     profiles: &profiles,
     tools: &tools,
     instructions: &instructions,
+    skills: &BTreeMap::new(),
   };
   let new = NewRun {
     task,

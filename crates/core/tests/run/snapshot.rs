@@ -50,6 +50,7 @@ fn build(
     profiles: &config.profiles,
     tools,
     instructions: &instructions,
+    skills: &BTreeMap::new(),
   };
   RunSnapshot::build(config.pipeline, &version(4, pipeline.clone()), published)
 }
@@ -203,6 +204,7 @@ fn run_snapshot_pins_applicable_instructions_only() {
     profiles: &config.profiles,
     tools: &tools,
     instructions: &instructions,
+    skills: &BTreeMap::new(),
   };
   let snapshot = RunSnapshot::build(config.pipeline, &config.pipeline_version, published).expect("published");
   let pinned: BTreeSet<ResourceId> = snapshot.instructions().iter().map(|pin| pin.resource).collect();
@@ -254,6 +256,7 @@ fn run_snapshot_pins_instructions_for_agents_of_the_pipeline_at_any_event() {
     profiles: &config.profiles,
     tools: &tools,
     instructions: &instructions,
+    skills: &BTreeMap::new(),
   };
   let snapshot = RunSnapshot::build(config.pipeline, &config.pipeline_version, published).expect("published");
   let pinned: BTreeSet<ResourceId> = snapshot.instructions().iter().map(|pin| pin.resource).collect();

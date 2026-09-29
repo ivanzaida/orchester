@@ -156,7 +156,7 @@ fn entries(db: &ProjectDb) -> Result<Vec<InstructionEntry>, StoreError> {
 }
 
 /// The project's profiles with the role of their draft, or else of their latest version.
-fn profiles(db: &ProjectDb) -> Result<Vec<ProfileChoice>, StoreError> {
+pub(crate) fn profiles(db: &ProjectDb) -> Result<Vec<ProfileChoice>, StoreError> {
   let mut profiles = Vec::new();
   for resource in db.resources(ResourceKind::AgentProfile)? {
     let id = resource.id();
@@ -178,7 +178,7 @@ fn profiles(db: &ProjectDb) -> Result<Vec<ProfileChoice>, StoreError> {
 }
 
 /// The project's pipelines with the steps of their draft, or else of their latest version.
-fn pipelines(db: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreError> {
+pub(crate) fn pipelines(db: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreError> {
   let mut pipelines = Vec::new();
   for resource in db.resources(ResourceKind::Pipeline)? {
     let id = resource.id();

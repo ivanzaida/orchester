@@ -13,7 +13,7 @@ use std::{
 
 pub use self::{
   claude::{ClaudeInvocation, ClaudeSession},
-  codex::CodexInvocation,
+  codex::{CodexAgentFiles, CodexInvocation},
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
 };
 use crate::{

@@ -29,6 +29,7 @@ const INSTRUCTIONS: &str = "instructions";
 const AGENT_ROLES: &str = "agent-roles";
 const PIPELINE_OVERRIDES: &str = "pipeline-overrides";
 const STEP_OVERRIDES: &str = "step-overrides";
+const SKILLS: &str = "skills";
 const AGENTS: &str = "agents";
 const TOOLS: &str = "tools";
 const SECRETS: &str = "secrets";
@@ -93,6 +94,8 @@ pub enum Page {
   /// Instructions of one scope, and the one being edited (`yRKeF`); the first of the scope
   /// without one.
   Instructions(InstructionsTab, Option<ResourceId>),
+  /// The skills library (`qO1Az`, empty `YRaLK`) or one skill in its editor (`ecJtg`).
+  Skills(Option<ResourceId>),
   /// Agent profiles and the one being edited (`WPmtS`).
   Agents(AgentSelection),
   /// The tool library (`ZFwWl`) or one tool in its editor (`YEWFo`).
@@ -175,6 +178,7 @@ pub enum SidebarItem {
   PullRequests,
   Pipelines,
   Instructions,
+  Skills,
   Agents,
   Tools,
   Secrets,
@@ -273,6 +277,8 @@ impl Page {
       [PIPELINES, pipeline] => Self::Pipeline(pipeline.parse().ok()?, PipelineView::named(query)),
       [INSTRUCTIONS] => Self::Instructions(InstructionsTab::named(tab), None),
       [INSTRUCTIONS, instruction] => Self::Instructions(InstructionsTab::named(tab), Some(instruction.parse().ok()?)),
+      [SKILLS] => Self::Skills(None),
+      [SKILLS, skill] => Self::Skills(Some(skill.parse().ok()?)),
       [AGENTS] => Self::Agents(AgentSelection::First),
       [AGENTS, NEW] => Self::Agents(AgentSelection::New),
       [AGENTS, profile] => Self::Agents(AgentSelection::Profile(profile.parse().ok()?)),
@@ -307,6 +313,8 @@ impl Page {
         let selected = selected.map_or_else(String::new, |instruction| format!("/{instruction}"));
         with_tab(format!("{root}/{INSTRUCTIONS}{selected}"), tab.query())
       }
+      Self::Skills(None) => format!("{root}/{SKILLS}"),
+      Self::Skills(Some(skill)) => format!("{root}/{SKILLS}/{skill}"),
       Self::Agents(AgentSelection::First) => format!("{root}/{AGENTS}"),
       Self::Agents(AgentSelection::New) => format!("{root}/{AGENTS}/{NEW}"),
       Self::Agents(AgentSelection::Profile(profile)) => format!("{root}/{AGENTS}/{profile}"),
@@ -334,6 +342,7 @@ impl Page {
       Self::PullRequests | Self::PullRequest(_) => SidebarItem::PullRequests,
       Self::Pipelines | Self::Pipeline(..) => SidebarItem::Pipelines,
       Self::Instructions(..) => SidebarItem::Instructions,
+      Self::Skills(_) => SidebarItem::Skills,
       Self::Agents(_) => SidebarItem::Agents,
       Self::Tools(_) => SidebarItem::Tools,
       Self::Secrets(_) => SidebarItem::Secrets,

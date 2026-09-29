@@ -3,14 +3,15 @@
 //! `codex -a never exec --json --ignore-user-config --ignore-rules -m <model>
 //!  [-c model_reasoning_effort=<e>] --sandbox <mode> [-c windows.sandbox=elevated]
 //!  [-c sandbox_workspace_write.network_access=true] [-c sandbox_workspace_write.writable_roots=[<folders>]]
-//!  [<MCP servers>] [--output-schema <file>] -C <worktree> -`
+//!  [-c project_doc_max_bytes=0 [-c skills.config=[<skills>]]] [<MCP servers>] [--output-schema <file>] -C <worktree>
+//! -`
 //!
 //! and continues a session after a pause or a limit with
 //!
 //! `codex -a never exec resume --json --ignore-user-config --ignore-rules -m <model>
 //!  [-c model_reasoning_effort=<e>] -c sandbox_mode=<mode> [-c windows.sandbox=elevated]
 //!  [-c sandbox_workspace_write.network_access=true] [-c sandbox_workspace_write.writable_roots=[<folders>]]
-//!  [<MCP servers>] <session> -`
+//!  [-c project_doc_max_bytes=0 [-c skills.config=[<skills>]]] [<MCP servers>] <session> -`
 //!
 //! in the worktree as the process's working directory.
 //!
@@ -33,6 +34,9 @@
 //! - `--ignore-user-config` and `--ignore-rules` keep the user's own configuration (MCP servers, default model,
 //!   execution rules) out of the run. The MCP servers the profile chooses are passed as configuration overrides
 //!   ([`CodexMcp`]), their secrets through the process environment only.
+//! - Repository agent files ([`crate::agent_files`]): while the project has them off, `AGENTS.md` is left out with
+//!   `project_doc_max_bytes=0` and each skill of `<worktree>/.agents/skills` is disabled by the path of its `SKILL.md`
+//!   (`{path="…",enabled=false}`), on new and resumed sessions alike.
 //! - The prompt goes on standard input (`-`); free-form text in arguments would not survive the `.cmd` launcher on
 //!   Windows.
 //! - The environment is cleaned: see [`super::agent_environment`].
@@ -45,7 +49,11 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use super::{CodexMcp, InvocationError, Platform, agent_command, mcp::toml_array, unicode_folders};
+use super::{
+  CodexMcp, InvocationError, Platform, agent_command,
+  mcp::{toml_array, toml_string},
+  unicode_folders,
+};
 use crate::{
   command::Command,
   permission::NetworkAccess,
@@ -74,6 +82,17 @@ pub struct CodexInvocation<'a> {
   pub output_schema: Option<&'a Path>,
   /// The MCP servers the invocation gives the agent, if any.
   pub mcp: Option<&'a CodexMcp>,
+  pub agent_files: CodexAgentFiles<'a>,
+}
+
+/// Whether Codex loads the repository's own agent files.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CodexAgentFiles<'a> {
+  /// `AGENTS.md` and the skills of `.agents/skills`, as Codex does by default.
+  Loaded,
+  /// Neither: `skills` are the `SKILL.md` files of `<worktree>/.agents/skills` found when the agent
+  /// starts, each disabled.
+  LeftOut { skills: &'a [PathBuf] },
 }
 
 impl CodexInvocation<'_> {
@@ -118,6 +137,18 @@ impl CodexInvocation<'_> {
       args.push("-c".into());
       args.push(format!("sandbox_workspace_write.writable_roots={}", toml_array(&roots)).into());
     }
+    if let CodexAgentFiles::LeftOut { skills } = self.agent_files {
+      args.push("-c".into());
+      args.push("project_doc_max_bytes=0".into());
+      if !skills.is_empty() {
+        let disabled: Vec<String> = skills
+          .iter()
+          .map(|skill| format!("{{path={},enabled=false}}", toml_string(&skill.to_string_lossy())))
+          .collect();
+        args.push("-c".into());
+        args.push(format!("skills.config=[{}]", disabled.join(",")).into());
+      }
+    }
     if let Some(mcp) = self.mcp {
       args.extend(mcp.args().iter().map(OsString::from));
     }
@@ -145,6 +176,9 @@ impl CodexInvocation<'_> {
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
     unicode_folders(self.writable_roots)?;
+    if let CodexAgentFiles::LeftOut { skills } = self.agent_files {
+      unicode_folders(skills)?;
+    }
     agent_command(
       self.executable,
       self.args(),

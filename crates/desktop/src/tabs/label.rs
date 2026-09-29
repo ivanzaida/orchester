@@ -121,6 +121,7 @@ const fn section_key(page: Page) -> &'static str {
     Page::PullRequests | Page::PullRequest(_) => "nav.pullRequests",
     Page::Pipelines | Page::Pipeline(..) => "nav.pipelines",
     Page::Instructions(..) => "nav.instructions",
+    Page::Skills(_) => "nav.skills",
     Page::Agents(_) => "nav.agents",
     Page::Tools(_) => "nav.tools",
     Page::Secrets(_) => "nav.secrets",
