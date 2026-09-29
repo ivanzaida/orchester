@@ -23,8 +23,9 @@ what is actually on screen.
    `get_screenshot` for the screen node, or `export_nodes` at scale 1 into
    `.tmp/verify/<screen>/design.png`. Never Read or Grep the `.pen` file.
 2. **App screenshot in the same state.** Build and run the implementation with
-   `cargo run -p orchester-desktop --features mcp`. Find the MCP discovery file of *your*
-   process (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`). Resize the window to 1440 × 1020 logical
+   `cargo run -p orchester-desktop` (every build includes the embedded MCP server; set
+   `ORCHESTER_MCP_START_WITHOUT_FOCUS=1` so the window does not take focus). Find the MCP
+   discovery file of *your* process (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`). Resize the window to 1440 × 1020 logical
    with `lurq_resize` (the 32px custom title bar from "Window chrome" in the design doc, the
    1440 × 960 screen frame and the 28px status bar from "Status bar"; composition example
    `cpoal`), drive the app into the designed state

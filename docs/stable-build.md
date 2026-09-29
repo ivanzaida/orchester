@@ -30,7 +30,6 @@ Options:
 | --- | --- |
 | `-InstallDir <dir>` | Install somewhere else. |
 | `-BuildDir <dir>` | Build somewhere else. |
-| `-WithMcp` | Include the embedded MCP server, so agents can drive the installed app. |
 | `-ImportDevData` | Copy the dev app database (see below). |
 | `-StartMenuShortcut` | Add *Orchester* to your Start menu. |
 
@@ -63,7 +62,6 @@ Options:
 | `--install-dir <dir>` | Install somewhere else. |
 | `--build-dir <dir>` | Build somewhere else. |
 | `--universal` | One app for Apple silicon and Intel (`rustup target add aarch64-apple-darwin x86_64-apple-darwin` first). |
-| `--with-mcp` | Include the embedded MCP server, so agents can drive the installed app. |
 | `--import-dev-data` | Copy the dev app database (see [Data](#data)). |
 
 `tools/package-macos.sh` alone builds `Orchester.app` into `target/macos/` (`--help` lists its
@@ -89,6 +87,28 @@ Your shell's start-up files are not read. A CLI installed elsewhere can be chose
 *Connections*; a tool an agent needs from elsewhere is not found when the app was started from
 Finder (`open` starts it the same way). Starting the program itself from a terminal,
 `~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on.
+
+## Embedded MCP server
+
+Every build, debug and release, on Windows and macOS, includes the embedded MCP server through
+which agents drive and inspect the running app (the former `-WithMcp` / `--with-mcp` options are
+gone). At start it listens on `127.0.0.1` only, on a free port the OS picks, never a fixed one.
+The status bar shows *MCP* with that address; its hint names the endpoint
+`http://127.0.0.1:<port>/mcp`. Every request needs a bearer token that the app writes, with the
+port, to a discovery file of its process in your user profile, removed when the app closes:
+`%LOCALAPPDATA%\lurq\mcp\<pid>.json` on Windows (the folder admits you, SYSTEM and
+administrators), `~/Library/Application Support/lurq/mcp/<pid>.json` on macOS (the file is
+readable only by you). Orchester never shows, copies or logs the token. If the server cannot
+start, the status bar shows *MCP unavailable* and the app's log has the reason (see
+[Logs](#logs)).
+
+What this means: any program running as your user can read the discovery file and drive the app
+as you could: read what it shows, click and type, and so start runs whose agents work in your
+projects. Other users' programs can connect to the port but cannot read the token, so the server
+refuses them; other machines cannot connect at all. Secret values stay masked on screen and in the
+element tree the MCP server reads. A program running as you can already read
+your files and start the same CLIs, so the server adds no access such a program lacks; it makes
+the app scriptable.
 
 ## Data
 

@@ -29,8 +29,10 @@ Workspace layout:
   live in components. Theme tokens live in `crates/desktop/src/theme.rs`.
 - `crates/runner` (`orchester-runner`): one process per open project, started by the desktop from the desktop's
   own directory (inside `Orchester.app` both are in `Contents/MacOS`). Run the app with
-  `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g. `--features mcp`); plain
+  `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g. `--features devtools`); plain
   `cargo run -p orchester-desktop` does not build the runner, and the app then shows the runner as unable to start.
+  Every build includes the embedded MCP server (loopback, free port, token in the per-user discovery file; see
+  `docs/stable-build.md`, "Embedded MCP server"); the status bar shows its port.
   On macOS: `cargo build -p orchester-runner && cargo run -p orchester-desktop`; `tools/package-macos.sh` builds
   `Orchester.app` and `tools/install-macos.sh` installs it (`docs/stable-build.md`).
 - `crates/exec` (`orchester-exec`): runs external programs (git, gh, agent CLIs) for the desktop and the runner,
