@@ -29,7 +29,7 @@ then the backlog by area.
 | M5 | `codex/mcp-reached-by` | Independent tests and live checks pass; an exact remote-selected inspector Pencil frame is missing. |
 | U5 | `codex/u5-small-mismatches` | Independent tests and live checks, including real parallel waiting rows, pass; the after-Remove-worktree live state was not reached and its Pencil frame is missing. |
 | U6 | `codex/u6-conversation-states` | Paused/Stopped and direct sends pass independent checks; exact Not started, Interrupted and recipient-menu Pencil frames are missing. |
-| D3 | `codex/d3-first-run` | Isolated first real Orchester run is being investigated. |
+| D3 | `codex/d3-first-run` | Isolated Implement and Review passed; desktop launch from inside a run remains to be checked. |
 
 M1 evidence and parser tests are on `master`; Claude's MCP allow rule still needs a signed-in model turn.
 
@@ -50,6 +50,8 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 4. Pipeline *Orchester change*:
    Implement → command `powershell -File tools/check.ps1` → command with the task's filtered `cargo test` lines →
    Review → Ready for review.
+   Set the Implement **step** to *Can write* as well as the profile: a new agent step starts *Read-only* and can narrow a
+   write profile. Keep Review read-only.
 5. Environment: `CARGO_TARGET_DIR=<repo>/.orchester/target`; then, in Agents › Permissions of each profile that
    builds, add it to *Extra writable folders* (the tab offers it).
    Without it every run builds its own `target/` in its worktree (several GB, several minutes the first time).
@@ -59,8 +61,8 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 
 ### D3 · Find what a run can and cannot do on this repository (first real run)
 
-No run has been made on this repository yet. The first runs should be small non-UI tasks (for example T1 below). Record
-what happens in `docs/evidence/` (dated file):
+The first two runs used an isolated clone of this repository; the stable user project has not run. Record what happens
+in `docs/evidence/` (dated file):
 
 - whether `cargo build` / `cargo test` work inside Codex's Windows sandbox (`windows.sandbox=elevated`), including the
   runner tests that start processes and named pipes (`--features test-agent`);
@@ -69,6 +71,20 @@ what happens in `docs/evidence/` (dated file):
 - token use and time per step, and anything that failed or needed the user.
 
 **Done when** the evidence file exists and every failure found has its own task in this plan.
+
+**Status 2026-09-29: In progress.** In disposable project runs, Codex's elevated Windows workspace-write sandbox passed
+`cargo check`, two filtered runner process/named-pipe tests with `--features test-agent`, the runner+desktop `--features
+mcp` build and `tools/check.ps1`; a separate read-only Review passed. The first run exposed a read-only pipeline-step
+default and declined CLI disk-space commands. Starting that built desktop *inside* a run and reaching its embedded MCP
+remain unverified until L6's no-focus startup is available in the run checkout. Evidence:
+`docs/evidence/d3-first-real-run-2026-09-29.md`.
+
+### D5 · Check free disk space outside the agent CLI (non-UI)
+
+In the first D3 run, Codex 0.139.0 with `-a never` declined `Get-PSDrive`, `fsutil volume diskfree H:` and `Get-Volume H`
+in a read-only step. A task that required that check stopped before cargo. Add an Orchester host-side free-space
+preflight for builds using a shared target, with a clear low-space result on Windows and macOS, so the agent does not
+depend on shell commands that its sandbox may decline. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md`.
 
 ### D4 · A UI verification step inside a run (after D3)
 
