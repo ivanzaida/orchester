@@ -27,7 +27,10 @@ use std::{
   time::{Duration, SystemTime},
 };
 
-use orchester_core::id::{IdempotencyKey, RunId, TaskId};
+use orchester_core::{
+  id::{IdempotencyKey, RunId, TaskId},
+  integration::Leftovers,
+};
 use orchester_ipc::{AttachSession, Command, RefusedRun, Rejection, Reply, SessionEnd, WorkState};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch};
@@ -333,6 +336,32 @@ impl Runners {
       Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
       other => {
         tracing::error!(?other, "unexpected reply to StartRun");
+        Err(RunRequestError::Request(RequestError::Lost))
+      }
+    }
+  }
+
+  /// Asks the displayed project's runner to start the next run of task `task` after its latest
+  /// run `after` failed or was cancelled (Run again), removing `remove_worktrees`, what `after`
+  /// left, first. Idempotent by `key`, like [`Runners::start_run`].
+  pub async fn run_again(
+    &self,
+    key: IdempotencyKey,
+    task: TaskId,
+    after: RunId,
+    remove_worktrees: Option<Leftovers>,
+  ) -> Result<RunId, RunRequestError> {
+    let command = Command::RunAgain {
+      key,
+      task,
+      after,
+      remove_worktrees,
+    };
+    match self.ask(self.displayed().as_deref(), command).await? {
+      Reply::RunStarted { run } => Ok(run),
+      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
+      other => {
+        tracing::error!(?other, "unexpected reply to RunAgain");
         Err(RunRequestError::Request(RequestError::Lost))
       }
     }

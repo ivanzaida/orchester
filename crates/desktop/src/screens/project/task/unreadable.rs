@@ -24,9 +24,9 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::ActionButton,
-    icon::{Icon, IconSize, icon},
+    icon::Icon,
     message_text,
-    notice::Notice,
+    notice::{Notice, lock_line},
   },
 };
 
@@ -70,18 +70,7 @@ pub(super) fn earlier_notice(ctx: &Ctx, run: &Unreadable) -> Element {
 /// The Summary of a task whose latest run `run` cannot be read, with the task's `earlier` runs,
 /// newest first (`w6AfG`); it scrolls with the scroll gutter when the runs outgrow the window.
 pub(super) fn summary(ctx: &Ctx, (run, scroll): (&Unreadable, &ScrollState), earlier: &[EarlierRun]) -> Element {
-  let actions = Row::new()
-    .id("task-unreadable-actions")
-    .width(Dimension::Pct(100.0))
-    .padding_horizontal(SpacingSize::Md)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextSecondary))
-    .child(
-      Text::new(&message_text(ctx, &run.actions()))
-        .variant(TypographyStyle::Caption)
-        .flex(1.0),
-    );
+  let actions = lock_line("task-unreadable-actions", &message_text(ctx, &run.actions()));
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Section)

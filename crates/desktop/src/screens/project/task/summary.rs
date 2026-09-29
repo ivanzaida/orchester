@@ -50,13 +50,13 @@ const PANEL_WIDTH: f32 = 336.0;
 pub(super) fn summary(
   ctx: &mut Ctx,
   detail: &TaskDetail,
-  (limits, lost): (Option<ProjectLimits>, Option<Lost>),
+  (limits, lost, reason): (Option<ProjectLimits>, Option<Lost>, Option<Element>),
   (repo_root, scrolls): (&Path, &TaskScrolls),
 ) -> Element {
   if let Some(run) = &detail.run
     && let RunStatus::Failed(RunFailure::RetriesExhausted(step)) = run.run.status()
   {
-    return retry_limit(ctx, run, step);
+    return retry_limit(ctx, run, step, reason);
   }
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
   let raising = raise.is_some();
@@ -66,7 +66,7 @@ pub(super) fn summary(
     .padding_left(SpacingSize::Section)
     .padding_right(ExtraSpacing::BesideGutter.role())
     .spacing(ExtraSpacing::Form.role())
-    .child(notice(ctx, detail, lost))
+    .child(with_reason(notice(ctx, detail, lost), reason))
     .with_children(raise)
     .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())));
   let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
@@ -80,6 +80,19 @@ pub(super) fn summary(
         .as_ref()
         .map(|run| this_run(ctx, run, (repo_root, &scrolls.this_run))),
     )
+    .into()
+}
+
+/// `notice`, with the line under it that says why its task cannot run again (`xwy6L` in `iE8eQ`).
+pub(super) fn with_reason(notice: Element, reason: Option<Element>) -> Element {
+  let Some(reason) = reason else {
+    return notice;
+  };
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Stack.role())
+    .child(notice)
+    .child(reason)
     .into()
 }
 
