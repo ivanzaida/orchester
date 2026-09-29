@@ -218,10 +218,9 @@ impl AppServerStream {
   }
 
   fn notification(&mut self, method: &str, params: &Value) -> Vec<Update> {
+    // The runner records the session from the thread/start or thread/resume response;
+    // thread/started also arrives for new threads and must not duplicate that activity.
     match method {
-      "thread/started" => string(params.get("thread").unwrap_or(&Value::Null), "id")
-        .map(|session| vec![Update::Activity(AgentEvent::SessionStarted { session })])
-        .unwrap_or_default(),
       "turn/started" => vec![Update::Activity(AgentEvent::TurnStarted)],
       "item/started" => self.item_started(params),
       "item/completed" => self.item_completed(params),

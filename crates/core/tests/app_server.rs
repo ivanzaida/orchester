@@ -133,6 +133,23 @@ fn user_input_rejects_secret_other_and_nonblocking_questions() {
 }
 
 #[test]
+fn thread_notification_does_not_duplicate_the_session_start_response() {
+  let mut stream = AppServerStream::default();
+  let started = json!({"method":"thread/started","params":{"thread":{"id":"thread-1"}}});
+  assert!(
+    stream
+      .parse(&started.to_string())
+      .expect("thread notification")
+      .is_empty()
+  );
+  let turn = json!({"method":"turn/started","params":{"threadId":"thread-1","turn":{"id":"turn-1"}}});
+  assert!(matches!(
+    stream.parse(&turn.to_string()).expect("turn notification").as_slice(),
+    [Update::Activity(AgentEvent::TurnStarted)]
+  ));
+}
+
+#[test]
 fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
   let mut stream = AppServerStream::default();
   let unknown = json!({"id":5,"method":"item/permissions/requestApproval","params":{}});
