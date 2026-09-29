@@ -23,7 +23,7 @@ then the backlog by area.
 | Task | Branch | Verified progress and next gate |
 | --- | --- | --- |
 | L6 | `codex/verifier-no-focus` | lurq 0.30.3 candidate and no-focus app checks pass; release approval is pending. |
-| D4 | `codex/d4-focus-watch` | Screenshot file handling and host-side focus watcher pass independent tests; the L6 release and an end-to-end Pencil/app Verify run remain. |
+| D4 | `codex/d4-focus-watch` | Disposable run #5 built and pinned its candidate, but Verify failed before app MCP discovery or image capture. Diagnose the early exits, rerun independent Verify, and release L6. |
 | U2 | `codex/worktree-controls` | Real merge/removal and independent tests pass; Pencil removal, merging and deleted-branch states need correction and another design check. |
 | U3 | `codex/claude-mechanism` | Live Pencil/app comparison passes; the edited `.pen` is not saved into the worktree yet. |
 | M3 | `codex/secret-mcp-uses` | Independent mixed-use tests and MCP-only live checks pass; the live mixed state and exact MCP/mixed *Used by* Pencil frames are unavailable. |
@@ -98,8 +98,12 @@ whose report follows the skill. D6 and D7 are complete; the L6 release remains a
 The screenshot client can save a validated PNG without putting base64 in the run transcript
 (`docs/evidence/d4-screenshot-file-2026-09-29.md`). The host-side PID watcher records sampled
 focus during launch (`docs/verification/foreground-watch.md`,
-`docs/evidence/d4-focus-watch-2026-09-29.md`). Both pass independent synthetic checks; D4 stays
-open until an independent Verify run compares Pencil and app images at the same state and size.
+`docs/evidence/d4-focus-watch-2026-09-29.md`). Both pass independent synthetic checks. Disposable
+run #5 passed Implement, Build and pin candidate, and Review, but Verify's pinned app exited before
+MCP discovery on both launch attempts. No Pencil/app PNG pair exists, and the final app foreground
+verdict is inconclusive; the separate host Orchester watcher passed at its sampled instants.
+Observed facts and the next capture gate are in `docs/evidence/d4-run5-2026-09-29.md`. D4 stays
+open until a fresh independent Verify run compares Pencil and app images at the same state and size.
 
 ## T · Tests and runner
 
