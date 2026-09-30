@@ -6,13 +6,14 @@
 //! CLI that ignored it), the CLI's exit decides and the message itself is the output.
 //!
 //! Claude Code runs without a schema; its prompt asks for the same result as its final message,
-//! which is read the same way. Only a final message that is exactly such a JSON document counts, so
-//! free text is never taken for a question; a question written as prose is read as the step's
-//! output.
+//! which is read the same way. A final message counts only when it is a single JSON object whose
+//! `outcome` and `summary` are valid — those two are read strictly — so free text is never taken
+//! for a question; a question written as prose is read as the step's output. Fields the schema
+//! does not name are tolerated.
 //!
 //! A result may also carry a handoff for the agents after it (what it completed, its decisions, the
-//! questions it left open and what the next agent should know), which the runner keeps as task
-//! memory ([`crate::memory::Handoff`]).
+//! questions it left open and what the next agent should know), read leniently and kept by the
+//! runner as task memory ([`crate::memory::Handoff`]).
 
 use serde::{Deserialize, Deserializer, Serialize};
 
