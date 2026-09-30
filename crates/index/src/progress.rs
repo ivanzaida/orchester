@@ -1,6 +1,7 @@
 //! What a build is doing, for a person watching the index list: `.progress/<revision>` in the index
-//! folder, written when the build moves to its next phase and removed when it ends. Only a build
-//! whose revision lock is held counts as running: a file a crashed build left says nothing.
+//! folder, written when the build moves to its next phase and removed when it ends. Each phase is
+//! written beside it and renamed over it, so a reader never sees half a record. Only a build whose
+//! revision lock is held counts as running: a file a crashed build left says nothing.
 
 use std::{
   fs,
@@ -11,6 +12,8 @@ use orchester_core::{revision::Revision, time::Timestamp};
 use serde::{Deserialize, Serialize};
 
 pub(crate) const PROGRESS: &str = ".progress";
+/// The extension of a record being written.
+const STAGED: &str = "writing";
 
 /// The phase a build is in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,11 +58,13 @@ impl ProgressFile {
       phase,
     };
     let text = serde_json::to_string(&progress).expect("progress serializes to JSON");
+    let staged = self.path.with_extension(STAGED);
     let written = self
       .path
       .parent()
       .map_or(Ok(()), fs::create_dir_all)
-      .and_then(|()| fs::write(&self.path, text));
+      .and_then(|()| fs::write(&staged, text))
+      .and_then(|()| fs::rename(&staged, &self.path));
     if let Err(error) = written {
       tracing::debug!(%error, path = %self.path.display(), "cannot record the index build's progress");
     }
