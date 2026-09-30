@@ -47,6 +47,23 @@ pub(super) struct Raw {
   revision: u32,
 }
 
+/// A row of a query that starts with [`COLUMNS`]: its record id as stored, and the record, or why
+/// it cannot be read back — a column of the wrong type or value, or a value the domain refuses.
+/// Only a failure of the database itself is an error.
+pub(super) fn read(row: &Row<'_>) -> rusqlite::Result<(String, Result<Memory, String>)> {
+  let id: String = row.get(0)?;
+  let memory = match Raw::from_row(row) {
+    Ok(raw) => raw.into_memory().map_err(|error| error.to_string()),
+    Err(
+      error @ (rusqlite::Error::FromSqlConversionFailure(..)
+      | rusqlite::Error::IntegralValueOutOfRange(..)
+      | rusqlite::Error::InvalidColumnType(..)),
+    ) => Err(error.to_string()),
+    Err(error) => return Err(error),
+  };
+  Ok((id, memory))
+}
+
 impl Raw {
   pub(super) fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
     Ok(Self {
@@ -69,10 +86,6 @@ impl Raw {
       edited_at: row.get(19)?,
       revision: row.get(20)?,
     })
-  }
-
-  pub(super) fn id(&self) -> &str {
-    &self.id
   }
 
   pub(super) fn into_memory(self) -> Result<Memory, StoreError> {

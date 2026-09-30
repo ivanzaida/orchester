@@ -545,6 +545,10 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       };
       (ctx.t("runs.activity.problem.memoryNotSaved"), Some(detail))
     }
+    RunnerProblem::MemoryScanFailed { detail } => (
+      ctx.t("runs.activity.problem.memoryScanFailed"),
+      Some(detail.as_str().into()),
+    ),
     RunnerProblem::MemoryUnreadable { records } => {
       let key = if *records == 1 {
         "runs.activity.problem.memoryUnreadable.one"

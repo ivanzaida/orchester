@@ -795,6 +795,7 @@
           "one": "{{count}} memory record could not be read",
           "other": "{{count}} memory records could not be read"
         },
+        "memoryScanFailed": "Task memory could not be checked for unreadable records; the agent started all the same",
         "memoryUnreadableDetail": "Agents get the other records. The unreadable ones stay in the project database as they are."
       },
       "unparsed": {

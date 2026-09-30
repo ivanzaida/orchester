@@ -169,6 +169,9 @@ pub enum RunnerProblem {
   MemoryNotSaved { reason: MemoryNotSavedReason },
   /// `records` task or project memory records could not be read back; agents get the others.
   MemoryUnreadable { records: u64 },
+  /// Memory could not be checked for unreadable records; `detail` is the storage error. The agent
+  /// started all the same.
+  MemoryScanFailed { detail: String },
 }
 
 /// Why a step's handoff was not kept as task memory. It names a secret, never its value.

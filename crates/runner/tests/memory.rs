@@ -301,9 +301,12 @@ fn problems(db: &ProjectDb, run: RunId) -> Vec<RunnerProblem> {
     .collect()
 }
 
-/// Adds a project record to `root`'s memory and damages its row the way an edit outside Orchester
-/// would: a key over two lines, which no record can have.
-fn damaged_record(root: &std::path::Path) {
+/// A key over two lines, which no record can have.
+const TWO_LINE_KEY: &str = "UPDATE memories SET key = 'two' || char(10) || 'lines' WHERE id = ?1";
+
+/// Adds a project record to `root`'s memory and damages its row with `damage`, the way an edit
+/// outside Orchester would.
+fn damaged_record(root: &std::path::Path, damage: &str) {
   let mut db = ProjectDb::open(root).expect("open");
   let content = SecretScreen::new(Vec::new())
     .check(MemoryContent::new(MemoryKind::Fact, "Readable.").expect("content"))
@@ -311,12 +314,7 @@ fn damaged_record(root: &std::path::Path) {
   let broken = Memory::by_person(MemoryScope::Project, content, Timestamp::now());
   db.add_memories(std::slice::from_ref(&broken)).expect("add");
   let raw = rusqlite::Connection::open(root.join(".orchester").join("orchester.db")).expect("open");
-  raw
-    .execute(
-      "UPDATE memories SET key = 'two' || char(10) || 'lines' WHERE id = ?1",
-      [broken.id().to_string()],
-    )
-    .expect("damage the row");
+  raw.execute(damage, [broken.id().to_string()]).expect("damage the row");
 }
 
 fn unreadable_reports(db: &ProjectDb, run: RunId) -> Vec<RunnerProblem> {
@@ -330,7 +328,7 @@ fn unreadable_reports(db: &ProjectDb, run: RunId) -> Vec<RunnerProblem> {
 async fn memory_an_unreadable_record_is_reported_once_and_left_out() {
   let project = project(&implement_then_review(AgentProvider::CodexCli));
   let root = project.repo.path();
-  damaged_record(root);
+  damaged_record(root, TWO_LINE_KEY);
   let run = run_to_the_end(&project).await;
   let db = ProjectDb::open(root).expect("open");
   assert_eq!(
@@ -338,6 +336,19 @@ async fn memory_an_unreadable_record_is_reported_once_and_left_out() {
     [RunnerProblem::MemoryUnreadable { records: 1 }]
   );
   assert_eq!(db.unreadable_memories().expect("listed").len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn memory_a_column_that_does_not_convert_never_stops_an_agent() {
+  let project = project(&implement_then_review(AgentProvider::CodexCli));
+  let root = project.repo.path();
+  damaged_record(root, "UPDATE memories SET revision = 1099511627776 WHERE id = ?1");
+  let run = run_to_the_end(&project).await;
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(
+    unreadable_reports(&db, run),
+    [RunnerProblem::MemoryUnreadable { records: 1 }]
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -354,7 +365,7 @@ async fn memory_is_scanned_for_unreadable_records_once_per_run_task() {
     .expect("the run starts");
   wait_for_turns(root, &mut events, run, 1).await;
   // Damaged after the first invocation's scan: the run's task does not scan again.
-  damaged_record(root);
+  damaged_record(root, TWO_LINE_KEY);
   std::fs::write(root.join(".orchester").join("fake-release"), "go").expect("release");
   let ended = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
   assert_eq!(ended.status(), &RunStatus::Succeeded);

@@ -17,7 +17,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, params};
 
-use self::rows::{COLUMNS, Raw};
+use self::rows::COLUMNS;
 use super::ProjectDb;
 use crate::{StoreError, rows::corrupt};
 
@@ -63,7 +63,7 @@ fn list(connection: &Connection, filter: &MemoryFilter) -> Result<Vec<Memory>, S
       filter.status.map(MemoryStatus::name),
       filter.pinned_only,
     ],
-    Raw::from_row,
+    rows::read,
   )?;
   readable(rows)
 }
@@ -81,10 +81,12 @@ fn commit(connection: &Connection, changes: &MemoryChanges) -> Result<(), StoreE
 
 /// The records of `rows` that can be read back; the others are left out, and
 /// [`MemoryStore::unreadable_memories`] lists them.
-fn readable(rows: impl Iterator<Item = rusqlite::Result<Raw>>) -> Result<Vec<Memory>, StoreError> {
+fn readable(
+  rows: impl Iterator<Item = rusqlite::Result<(String, Result<Memory, String>)>>,
+) -> Result<Vec<Memory>, StoreError> {
   let mut memories = Vec::new();
   for row in rows {
-    if let Ok(memory) = row?.into_memory() {
+    if let (_, Ok(memory)) = row? {
       memories.push(memory);
     }
   }
@@ -185,16 +187,11 @@ impl MemoryStore for ProjectDb {
   fn unreadable_memories(&self) -> Result<Vec<UnreadableMemory>, StoreError> {
     let sql = format!("SELECT {COLUMNS} FROM memories m ORDER BY m.seq");
     let mut statement = self.connection.prepare(&sql)?;
-    let rows = statement.query_map([], Raw::from_row)?;
+    let rows = statement.query_map([], rows::read)?;
     let mut unreadable = Vec::new();
     for row in rows {
-      let raw = row?;
-      let id = raw.id().to_owned();
-      if let Err(error) = raw.into_memory() {
-        unreadable.push(UnreadableMemory {
-          id,
-          detail: error.to_string(),
-        });
+      if let (id, Err(detail)) = row? {
+        unreadable.push(UnreadableMemory { id, detail });
       }
     }
     Ok(unreadable)

@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
-use super::rows::{COLUMN_COUNT, COLUMNS, Raw};
+use super::rows::{COLUMN_COUNT, COLUMNS, read};
 use crate::StoreError;
 
 /// Column weights of both indexes: a record's key and tags count twice its text.
@@ -86,13 +86,12 @@ fn matches(
   let limit = i64::try_from(limit).unwrap_or(i64::MAX);
   let mut statement = connection.prepare(&sql)?;
   let rows = statement.query_map(params![expression, task.to_string(), limit], |row| {
-    Ok((Raw::from_row(row)?, row.get::<_, f64>(COLUMN_COUNT)?))
+    Ok((read(row)?, row.get::<_, f64>(COLUMN_COUNT)?))
   })?;
   let mut found = Vec::new();
   for row in rows {
-    let (raw, relevance) = row?;
     // A record that cannot be read back is left out; `unreadable_memories` lists it.
-    if let Ok(memory) = raw.into_memory() {
+    if let ((_, Ok(memory)), relevance) = row? {
       found.push((memory, relevance));
     }
   }

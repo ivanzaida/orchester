@@ -35,9 +35,24 @@ impl RunTask {
       return Ok(());
     }
     self.memory_scanned = true;
-    let unreadable = self.db.unreadable_memories()?;
+    // The agent starts either way: a scan that fails is reported, never a reason to stop.
+    let unreadable = match self.db.unreadable_memories() {
+      Ok(unreadable) => unreadable,
+      Err(error) => {
+        tracing::error!(run = %self.run.id(), %error, "memory could not be checked for unreadable records");
+        let problem = RunnerProblem::MemoryScanFailed {
+          detail: error.to_string(),
+        };
+        return self.report(invocation, problem);
+      }
+    };
     for record in &unreadable {
-      tracing::warn!(run = %self.run.id(), memory = %record.id, detail = %record.detail, "a memory record cannot be read");
+      tracing::warn!(
+        run = %self.run.id(),
+        memory = %record.id,
+        detail = %record.detail,
+        "a memory record cannot be read"
+      );
     }
     if unreadable.is_empty() {
       return Ok(());
