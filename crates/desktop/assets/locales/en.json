@@ -3303,9 +3303,9 @@
       "empty": "No text.",
       "resolved": "Source {{index}} of {{count}} · {{resolved}} variables resolved at this injection event",
       "unresolved": "Source {{index}} of {{count}} · {{resolved}} variables resolved · no value yet: {{unavailable}}",
-      "note": "Preview only. Existing runs keep the instruction versions they started with.",
+      "note": "Preview only. Existing runs keep the instruction versions they started with. The skills and the code index part are added when a run starts.",
       "originDraft": "{{kind}} · {{event}} · Draft substituted for published v{{version}}",
-      "noteDraft": "Draft preview only. Existing runs keep the instruction versions they started with."
+      "noteDraft": "Draft preview only. Existing runs keep the instruction versions they started with. The skills and the code index part are added when a run starts."
     },
     "create": {
       "title": "New instruction",
