@@ -12,6 +12,8 @@ workspace = true
 [dependencies]
 orchester-core.workspace = true
 orchester-exec.workspace = true
+# Shares the running git between the reader and the watchdog that ends it when it is stuck.
+parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

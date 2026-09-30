@@ -2588,6 +2588,7 @@ version = "0.1.0"
 dependencies = [
  "orchester-core",
  "orchester-exec",
+ "parking_lot",
  "serde",
  "serde_json",
  "tempfile",

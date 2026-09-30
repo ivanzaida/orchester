@@ -4,14 +4,15 @@
 //! (`<repo>/.orchester/worktrees/<run-id>`), and removed with the last of them ([`CodebaseIndexes::prune`]).
 //!
 //! An index is built in `.building-<revision>` beside its final folder and renamed into place once
-//! complete, so an agent never reads a half-written one. Building, reusing and removing hold an
-//! exclusive lock on `.lock`, in this process and across processes (the runner builds, the desktop
-//! removes): two runs asking for the same revision build it once, the second reuses it.
+//! complete, so an agent never reads a half-written one. Each revision has its own lock
+//! ([`locks`]): two runs asking for the same revision build it once and the second reuses it, while
+//! runs of other revisions never wait for that build, and removal skips a revision that is busy.
+
+mod cleanup;
+mod locks;
 
 use std::{
-  collections::HashSet,
-  fs::{self, File, OpenOptions},
-  io,
+  fs::{self, File},
   path::{Path, PathBuf},
   time::Duration,
 };
@@ -27,7 +28,6 @@ use crate::{
 
 const USERS: &str = ".users";
 const BUILDING: &str = ".building-";
-const LOCK: &str = ".lock";
 
 /// A build that happened.
 #[derive(Clone, Debug)]
@@ -76,7 +76,7 @@ impl CodebaseIndexes {
   /// no longer have worktrees are removed afterwards.
   pub fn ensure(&self, revision: &Revision, run: RunId) -> Result<Ensured, IndexError> {
     fs::create_dir_all(&self.root).map_err(IndexError::io("create", &self.root))?;
-    let _lock = self.lock()?;
+    let lock = locks::lock(&self.root, revision)?;
     let users = self.root.join(USERS).join(revision.as_str());
     fs::create_dir_all(&users).map_err(IndexError::io("create", &users))?;
     let user = users.join(run.to_string());
@@ -87,32 +87,20 @@ impl CodebaseIndexes {
     } else {
       Outcome::Built(self.build(revision, &path)?)
     };
-    if let Err(error) = self.remove_unused() {
+    drop(lock);
+    if let Err(error) = self.prune() {
       tracing::warn!(%error, "cannot remove the codebase indexes no run uses");
     }
     Ok(Ensured { path, outcome })
   }
 
-  /// Removes the indexes of revisions whose runs all had their worktrees removed.
+  /// Removes the indexes of revisions whose runs all had their worktrees removed. It never waits:
+  /// a revision being built or reused is left for the next removal.
   pub fn prune(&self) -> Result<(), IndexError> {
     if !self.root.is_dir() {
       return Ok(());
     }
-    let _lock = self.lock()?;
-    self.remove_unused()
-  }
-
-  /// Holds the lock until the returned file is dropped.
-  fn lock(&self) -> Result<File, IndexError> {
-    let path = self.root.join(LOCK);
-    let file = OpenOptions::new()
-      .create(true)
-      .truncate(false)
-      .write(true)
-      .open(&path)
-      .map_err(IndexError::io("open", &path))?;
-    file.lock().map_err(IndexError::io("lock", path))?;
-    Ok(file)
+    cleanup::remove_unused(&self.root, &self.repo.join(WORKTREES_DIR))
   }
 
   fn build(&self, revision: &Revision, path: &Path) -> Result<BuildReport, IndexError> {
@@ -126,7 +114,7 @@ impl CodebaseIndexes {
       other => other?,
     };
     // An index of an earlier format is replaced.
-    remove_folder(path)?;
+    cleanup::discard(&self.root, path)?;
     fs::rename(&staging, path).map_err(IndexError::io("rename", &staging))?;
     Ok(BuildReport {
       mode: built.manifest.build,
@@ -138,11 +126,11 @@ impl CodebaseIndexes {
   }
 
   fn build_into(&self, revision: &Revision, base: Option<&Base>, staging: &Path) -> Result<build::Built, IndexError> {
-    remove_folder(staging)?;
+    cleanup::discard(&self.root, staging)?;
     fs::create_dir(staging).map_err(IndexError::io("create", staging))?;
     let built = build::build(&self.repo, revision, base, staging);
     if built.is_err()
-      && let Err(error) = remove_folder(staging)
+      && let Err(error) = cleanup::discard(&self.root, staging)
     {
       tracing::warn!(%error, "cannot remove a codebase index that was not finished");
     }
@@ -180,69 +168,5 @@ impl CodebaseIndexes {
     entries
       .filter_map(|entry| Revision::new(entry.ok()?.file_name().to_str()?).ok())
       .collect()
-  }
-
-  /// Removes the records of runs whose worktree is gone, then every index no run uses and any build
-  /// left unfinished.
-  fn remove_unused(&self) -> Result<(), IndexError> {
-    let used = self.used_revisions()?;
-    let entries = fs::read_dir(&self.root).map_err(IndexError::io("read", &self.root))?;
-    for entry in entries {
-      let entry = entry.map_err(IndexError::io("read", &self.root))?;
-      let name = entry.file_name();
-      let Some(name) = name.to_str() else {
-        continue;
-      };
-      let unused = Revision::new(name).is_ok_and(|revision| !used.contains(&revision));
-      if unused || name.starts_with(BUILDING) {
-        remove_folder(&entry.path())?;
-      }
-    }
-    Ok(())
-  }
-
-  /// The revisions whose index a run with a worktree uses; records of the others are removed.
-  fn used_revisions(&self) -> Result<HashSet<Revision>, IndexError> {
-    let users = self.root.join(USERS);
-    let worktrees = self.repo.join(WORKTREES_DIR);
-    let mut used = HashSet::new();
-    for revision in read_folder(&users)? {
-      let mut in_use = false;
-      for run in read_folder(&revision)? {
-        let name = run.file_name().expect("a folder entry has a name");
-        if worktrees.join(name).is_dir() {
-          in_use = true;
-        } else {
-          fs::remove_file(&run).map_err(IndexError::io("remove", &run))?;
-        }
-      }
-      let name = revision.file_name().and_then(|name| name.to_str());
-      match name.map(Revision::new) {
-        Some(Ok(revision)) if in_use => {
-          used.insert(revision);
-        }
-        _ => remove_folder(&revision)?,
-      }
-    }
-    Ok(used)
-  }
-}
-
-/// The entries of `folder`; none when it does not exist.
-fn read_folder(folder: &Path) -> Result<Vec<PathBuf>, IndexError> {
-  match fs::read_dir(folder) {
-    Ok(entries) => entries
-      .map(|entry| entry.map(|entry| entry.path()))
-      .collect::<io::Result<_>>()
-      .map_err(IndexError::io("read", folder)),
-    Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
-    Err(error) => Err(IndexError::io("read", folder)(error)),
-  }
-}
-
-fn remove_folder(folder: &Path) -> Result<(), IndexError> {
-  match fs::remove_dir_all(folder) {
-    Err(error) if error.kind() != io::ErrorKind::NotFound => Err(IndexError::io("remove", folder)(error)),
-    _ => Ok(()),
   }
 }

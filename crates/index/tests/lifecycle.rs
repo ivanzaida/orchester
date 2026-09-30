@@ -14,7 +14,7 @@ fn index_folder(repo: &Repo) -> Vec<String> {
   let mut names: Vec<String> = fs::read_dir(repo.index_root())
     .expect("read the index folder")
     .map(|entry| entry.expect("entry").file_name().to_string_lossy().into_owned())
-    .filter(|name| name != ".lock")
+    .filter(|name| name != ".locks")
     .collect();
   names.sort();
   names
@@ -122,4 +122,44 @@ fn pruning_a_repository_without_indexes_does_nothing() {
   let repo = Repo::new();
   repo.indexes().prune().expect("prune");
   assert!(!repo.index_root().exists());
+}
+
+/// Holds the lock of `revision`'s index the way a build in another process does.
+fn hold_lock(repo: &Repo, revision: &Revision) -> fs::File {
+  let locks = repo.index_root().join(".locks");
+  fs::create_dir_all(&locks).expect("create the locks folder");
+  let file = fs::File::create(locks.join(revision.as_str())).expect("open the lock");
+  file.lock().expect("lock");
+  file
+}
+
+#[test]
+fn pruning_skips_a_revision_whose_index_is_busy_instead_of_waiting() {
+  let repo = Repo::new();
+  let head = repo.head();
+  let run = repo.run_with_worktree();
+  repo.indexes().ensure(&head, run).expect("index");
+  fs::remove_dir_all(repo.worktree(run)).expect("remove the worktree");
+
+  let held = hold_lock(&repo, &head);
+  repo.indexes().prune().expect("prune");
+  assert!(repo.index_root().join(head.as_str()).is_dir(), "a busy index is left");
+
+  drop(held);
+  repo.indexes().prune().expect("prune");
+  assert!(!repo.index_root().join(head.as_str()).exists());
+}
+
+#[test]
+fn a_build_of_one_revision_does_not_wait_for_another_revision() {
+  let repo = Repo::new();
+  let first = repo.head();
+  repo.write("README.md", "# Changed\n");
+  repo.git(&["commit", "--quiet", "--all", "-m", "change"]);
+  let second = repo.head();
+
+  let _held = hold_lock(&repo, &first);
+  let ensured = repo.ensure(&second);
+
+  assert!(matches!(ensured.outcome, Outcome::Built(_)));
 }
