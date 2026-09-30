@@ -6,7 +6,8 @@ pub(super) const MIGRATION: &str = r"
 -- rowid the full-text indexes point at; an explicit INTEGER PRIMARY KEY, so VACUUM keeps it. An
 -- agent's record names its profile, run, step and execution; a person's names none. `tags` holds the
 -- record's tags separated by spaces, `source_events` a JSON array of the run transcript sequences it
--- came from, `edited_at` when a person last edited it. A key names one active record of its scope.
+-- came from, `edited_at` when a person last edited it, `revision` how many times it was changed
+-- (an update names the revision it read, so a stale copy never overwrites a newer change). A key names one active record of its scope.
 CREATE TABLE memories (
   seq INTEGER PRIMARY KEY,
   id TEXT NOT NULL UNIQUE,
@@ -31,6 +32,7 @@ CREATE TABLE memories (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   edited_at INTEGER,
+  revision INTEGER NOT NULL CHECK (revision >= 0),
   CHECK ((author = 'agent') = (profile_id IS NOT NULL)),
   CHECK ((profile_id IS NULL) = (run_id IS NULL) AND (run_id IS NULL) = (step_key IS NULL)
     AND (step_key IS NULL) = (step_execution_id IS NULL))

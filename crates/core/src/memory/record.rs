@@ -61,6 +61,7 @@ pub struct StoredMemory {
   pub created_at: Timestamp,
   pub updated_at: Timestamp,
   pub edited_at: Option<Timestamp>,
+  pub revision: u32,
 }
 
 /// One memory record.
@@ -78,6 +79,9 @@ pub struct Memory {
   created_at: Timestamp,
   updated_at: Timestamp,
   edited_at: Option<Timestamp>,
+  /// How many times the stored record was changed when this copy was read: a store refuses to
+  /// save a copy of an older revision, so a stale copy never overwrites a newer change.
+  revision: u32,
 }
 
 impl Memory {
@@ -137,6 +141,7 @@ impl Memory {
       created_at: now,
       updated_at: now,
       edited_at: None,
+      revision: 0,
     }
   }
 
@@ -173,6 +178,7 @@ impl Memory {
       created_at: stored.created_at,
       updated_at: stored.updated_at,
       edited_at: stored.edited_at,
+      revision: stored.revision,
     })
   }
 
@@ -365,6 +371,16 @@ impl Memory {
 
   pub const fn updated_at(&self) -> Timestamp {
     self.updated_at
+  }
+
+  /// The stored revision this copy was read at (0: not stored yet).
+  pub const fn revision(&self) -> u32 {
+    self.revision
+  }
+
+  /// For stores: this copy was just saved, so it is at the stored record's next revision now.
+  pub const fn saved(&mut self) {
+    self.revision += 1;
   }
 
   /// When a person last edited what it says; `None` while it says what its author wrote.

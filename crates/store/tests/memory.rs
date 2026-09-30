@@ -8,9 +8,9 @@ use orchester_core::{
   id::{IdempotencyKey, InvocationId, MemoryId, ResourceId, StepExecutionId, TaskId},
   memory::{
     AgentProvenance, AgentWrite, Confidence, Delivery, InjectedMemory, InjectionReason, Memory, MemoryAuthor,
-    MemoryContent, MemoryFilter, MemoryKey, MemoryKind, MemoryLimits, MemoryQuery, MemoryScope, MemorySettings,
-    MemoryStatus, MemoryStore, ScopeFilter, ScreenedContent, SecretScreen, StepContext, Tags, WritePolicy,
-    next_invocation_memory,
+    MemoryChanges, MemoryContent, MemoryFilter, MemoryKey, MemoryKind, MemoryLimits, MemoryQuery, MemoryScope,
+    MemorySettings, MemoryStatus, MemoryStore, ScopeFilter, ScreenedContent, SecretScreen, StepContext, Tags,
+    WritePolicy, next_invocation_memory,
   },
   resource::StepKey,
   run::Run,
@@ -104,14 +104,14 @@ fn memory_records_are_stored_superseded_edited_deprecated_and_deleted_with_their
   )
   .expect("a replacement");
   first.supersede(&mut replacement, at(20)).expect("supersede");
-  db.supersede_memory(&first, &replacement).expect("store both");
+  db.supersede_memory(&mut first, &mut replacement).expect("store both");
   assert_eq!(
     db.memory(first.id()).expect("read").map(|memory| memory.status()),
     Some(MemoryStatus::Superseded)
   );
   assert_eq!(db.memory(replacement.id()).expect("read"), Some(replacement.clone()));
   assert!(matches!(
-    db.supersede_memory(&first, &replacement),
+    db.supersede_memory(&mut first, &mut replacement),
     Err(StoreError::MemoryNotActive(id)) if id == first.id()
   ));
 
@@ -119,12 +119,12 @@ fn memory_records_are_stored_superseded_edited_deprecated_and_deleted_with_their
   current
     .edit(screened(keyed("Use SQLite with FTS5 and trigrams.")), at(25))
     .expect("edit");
-  db.save_memory(&current).expect("save");
+  db.save_memory(&mut current).expect("save");
   let stored = db.memory(current.id()).expect("read").expect("stored");
   assert_eq!(stored.edited_at(), Some(at(25)));
   assert!(matches!(stored.author(), MemoryAuthor::Agent(_)), "the author stays");
   current.deprecate(at(30)).expect("deprecate");
-  db.save_memory(&current).expect("save");
+  db.save_memory(&mut current).expect("save");
   assert_eq!(db.memory(current.id()).expect("read"), Some(current.clone()));
 
   db.delete_memory(current.id()).expect("delete");
@@ -156,11 +156,11 @@ fn memory_an_approved_replacement_supersedes_the_record_it_names() {
   let mut alone = proposal.clone();
   alone.approve(None, at(4)).expect("approve alone");
   assert!(matches!(
-    db.save_memory(&alone),
+    db.save_memory(&mut alone),
     Err(StoreError::DuplicateMemoryKey(key)) if key == "db.engine"
   ));
   proposal.approve(Some(&mut old), at(4)).expect("approve and supersede");
-  db.supersede_memory(&old, &proposal).expect("store both");
+  db.supersede_memory(&mut old, &mut proposal).expect("store both");
   let stored = db.memory(proposal.id()).expect("read").expect("stored");
   assert_eq!((stored.status(), stored.is_pinned()), (MemoryStatus::Active, true));
   assert_eq!(
@@ -200,7 +200,7 @@ fn memory_a_key_names_one_active_record_of_its_scope() {
     .expect("a deprecated record may share the key");
   deprecated.restore(at(7)).expect("restore");
   assert!(matches!(
-    db.save_memory(&deprecated),
+    db.save_memory(&mut deprecated),
     Err(StoreError::DuplicateMemoryKey(_))
   ));
 }
@@ -303,7 +303,7 @@ fn memory_search_finds_word_forms_paths_and_identifiers() {
 
   let mut stale = records[1].clone();
   stale.deprecate(at(10)).expect("deprecate");
-  db.save_memory(&stale).expect("save");
+  db.save_memory(&mut stale).expect("save");
   assert!(
     search(&db, task, "result.rs").is_empty(),
     "only active records are found"
@@ -318,7 +318,7 @@ fn memory_search_finds_word_forms_paths_and_identifiers() {
       at(11),
     )
     .expect("edit");
-  db.save_memory(&edited).expect("save");
+  db.save_memory(&mut edited).expect("save");
   assert!(
     search(&db, task, "parseStepResult").is_empty(),
     "the index follows edits"
@@ -464,7 +464,7 @@ fn memory_deleting_a_proposal_keeps_the_record_it_would_replace() {
   let mut rejected = replacing(3);
   db.add_memories(std::slice::from_ref(&rejected)).expect("add");
   rejected.reject(at(4)).expect("reject");
-  db.save_memory(&rejected).expect("save");
+  db.save_memory(&mut rejected).expect("save");
   db.delete_memory(rejected.id()).expect("delete the rejected proposal");
   assert!(
     db.memory(active.id()).expect("read").is_some(),
@@ -520,7 +520,7 @@ fn memory_deleting_a_withdrawn_proposal_keeps_every_history() {
   db.add_memories(std::slice::from_ref(&withdrawn))
     .expect("add the withdrawn one");
   approved.approve(Some(&mut first), at(4)).expect("approve");
-  db.supersede_memory(&first, &approved).expect("store both");
+  db.supersede_memory(&mut first, &mut approved).expect("store both");
   assert_eq!(withdrawn.earlier_version(), None, "a withdrawn proposal is no version");
   assert_eq!(approved.earlier_version(), Some(first.id()));
 
@@ -530,4 +530,44 @@ fn memory_deleting_a_withdrawn_proposal_keeps_every_history() {
     "the approved record's history stays"
   );
   assert!(db.memory(approved.id()).expect("read").is_some());
+}
+
+#[test]
+fn memory_a_stale_copy_never_overwrites_a_newer_change() {
+  let (_repo, mut db, ..) = started_run();
+  let record = person(MemoryScope::Project, content(MemoryKind::Fact, "Stored."), 1);
+  db.add_memories(std::slice::from_ref(&record)).expect("add");
+  let mut first = db.memory(record.id()).expect("read").expect("stored");
+  let mut stale = first.clone();
+  first.deprecate(at(2)).expect("deprecate");
+  db.save_memory(&mut first).expect("save");
+  stale.set_pinned(true, at(3)).expect("pin the stale copy");
+  assert!(matches!(
+    db.save_memory(&mut stale),
+    Err(StoreError::MemoryConflict(id)) if id == record.id()
+  ));
+  let stored = db.memory(record.id()).expect("read").expect("stored");
+  assert_eq!((stored.status(), stored.is_pinned()), (MemoryStatus::Deprecated, false));
+  assert_eq!(stored.revision(), first.revision());
+
+  // A change made from what one transaction read; its own error stores nothing.
+  let filter = filter(ScopeFilter::Project);
+  let refused: Result<(), &str> = db
+    .change_memories(&filter, |mut memories| {
+      memories[0].restore(at(4)).map_err(|_| "cannot restore")?;
+      Err("changed my mind")
+    })
+    .expect("the store works");
+  assert_eq!(refused, Err("changed my mind"));
+  db.change_memories(&filter, |mut memories| {
+    memories[0].restore(at(5)).map_err(|_| "cannot restore")?;
+    Ok::<_, &str>(MemoryChanges {
+      added: Vec::new(),
+      changed: memories,
+    })
+  })
+  .expect("the store works")
+  .expect("restored");
+  let stored = db.memory(record.id()).expect("read").expect("stored");
+  assert_eq!(stored.status(), MemoryStatus::Active);
 }

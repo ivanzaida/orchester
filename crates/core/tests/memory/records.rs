@@ -198,6 +198,7 @@ fn records_read_back_refuses_combinations_no_transition_leads_to() {
     created_at: at(5),
     updated_at: at(6),
     edited_at: None,
+    revision: 3,
   };
   assert_eq!(
     Memory::from_stored(stored.clone()).map(|memory| memory.id()),

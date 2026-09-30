@@ -62,15 +62,26 @@ pub trait MemoryStore {
 
   /// Stores `changes` atomically: the changed records first, then the added ones, under the same
   /// rules as [`MemoryStore::save_memory`] and [`MemoryStore::add_memories`].
-  fn commit_memories(&mut self, changes: &MemoryChanges) -> Result<(), Self::Error>;
+  fn commit_memories(&mut self, changes: &mut MemoryChanges) -> Result<(), Self::Error>;
 
-  /// Stores what an existing record says, its status and its pin, under the same key rule.
-  fn save_memory(&mut self, memory: &Memory) -> Result<(), Self::Error>;
+  /// Reads the records `filter` selects and stores the changes `change` makes of them, in one
+  /// transaction that holds the write lock from the read on, so no other writer comes between.
+  /// `change`'s own error comes back inside, with nothing stored.
+  fn change_memories<E>(
+    &mut self,
+    filter: &MemoryFilter,
+    change: impl FnOnce(Vec<Memory>) -> Result<MemoryChanges, E>,
+  ) -> Result<Result<(), E>, Self::Error>;
+
+  /// Stores what an existing record says, its status and its pin, under the same key rule. The
+  /// stored record must still be at `memory`'s revision; a record changed since is refused as a
+  /// conflict, with nothing stored. `memory` moves to the new revision.
+  fn save_memory(&mut self, memory: &mut Memory) -> Result<(), Self::Error>;
 
   /// Stores `superseded` and its `replacement` (new, or a proposal just approved) after
-  /// [`Memory::supersede`], atomically. Fails, changing nothing, when the stored record is no
-  /// longer active.
-  fn supersede_memory(&mut self, superseded: &Memory, replacement: &Memory) -> Result<(), Self::Error>;
+  /// [`Memory::supersede`], atomically, under the revision rule of [`MemoryStore::save_memory`].
+  /// Fails, changing nothing, when the stored record is no longer active.
+  fn supersede_memory(&mut self, superseded: &mut Memory, replacement: &mut Memory) -> Result<(), Self::Error>;
 
   /// Removes a record for good, with its history: the earlier versions it superseded. Only a
   /// person deletes records; agents are never offered this. A record that superseded it no longer

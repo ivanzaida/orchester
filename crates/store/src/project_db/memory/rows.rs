@@ -20,9 +20,10 @@ use crate::{
 /// The columns [`read`] expects, of `memories` as `m`.
 pub(super) const COLUMNS: &str = "m.id, m.task_id, m.kind, m.key, m.text, m.tags, m.importance, m.confidence, \
                                   m.status, m.pinned, m.supersedes_id, m.author, m.profile_id, m.run_id, m.step_key, \
-                                  m.step_execution_id, m.source_events, m.created_at, m.updated_at, m.edited_at";
+                                  m.step_execution_id, m.source_events, m.created_at, m.updated_at, m.edited_at, \
+                                  m.revision";
 /// How many of the first columns of a query [`COLUMNS`] are.
-pub(super) const COLUMN_COUNT: usize = 20;
+pub(super) const COLUMN_COUNT: usize = 21;
 
 /// A row as stored, before it is checked.
 pub(super) struct Raw {
@@ -43,6 +44,7 @@ pub(super) struct Raw {
   created_at: i64,
   updated_at: i64,
   edited_at: Option<i64>,
+  revision: u32,
 }
 
 impl Raw {
@@ -65,6 +67,7 @@ impl Raw {
       created_at: row.get(17)?,
       updated_at: row.get(18)?,
       edited_at: row.get(19)?,
+      revision: row.get(20)?,
     })
   }
 
@@ -104,6 +107,7 @@ impl Raw {
       created_at: Timestamp::from_unix_millis(self.created_at),
       updated_at: Timestamp::from_unix_millis(self.updated_at),
       edited_at: self.edited_at.map(Timestamp::from_unix_millis),
+      revision: self.revision,
     })
     .map_err(|error| corrupt(WHAT, error))
   }
@@ -156,11 +160,11 @@ pub(super) fn insert(connection: &Connection, memory: &Memory) -> Result<(), Sto
     INSERT INTO memories (
       id, task_id, kind, key, text, tags, importance, confidence, status, pinned, supersedes_id,
       author, profile_id, run_id, step_key, step_execution_id, source_events,
-      created_at, updated_at, edited_at
+      created_at, updated_at, edited_at, revision
     ) VALUES (
       ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
       ?12, ?13, ?14, ?15, ?16, ?17,
-      ?18, ?19, ?20
+      ?18, ?19, ?20, ?21
     )",
     params![
       memory.id().to_string(),
@@ -183,22 +187,25 @@ pub(super) fn insert(connection: &Connection, memory: &Memory) -> Result<(), Sto
       memory.created_at().unix_millis(),
       memory.updated_at().unix_millis(),
       memory.edited_at().map(Timestamp::unix_millis),
+      memory.revision(),
     ],
   )?;
   Ok(())
 }
 
 /// Stores what an existing record says, its status and pin; its scope and origin never change. Its
-/// key must not name another active record of its scope. The number of rows changed (0: no record).
-pub(super) fn update(connection: &Connection, memory: &Memory) -> Result<usize, StoreError> {
+/// key must not name another active record of its scope, and the stored record must still be at
+/// `memory`'s revision; `memory` moves to the next one.
+pub(super) fn update(connection: &Connection, memory: &mut Memory) -> Result<(), StoreError> {
   check_key(connection, memory)?;
   let content = memory.content();
   let changed = connection.execute(
     "
     UPDATE memories SET
       kind = ?2, key = ?3, text = ?4, tags = ?5, importance = ?6,
-      status = ?7, pinned = ?8, updated_at = ?9, edited_at = ?10
-    WHERE id = ?1",
+      status = ?7, pinned = ?8, updated_at = ?9, edited_at = ?10,
+      revision = revision + 1
+    WHERE id = ?1 AND revision = ?11",
     params![
       memory.id().to_string(),
       content.kind().name(),
@@ -210,9 +217,17 @@ pub(super) fn update(connection: &Connection, memory: &Memory) -> Result<usize, 
       memory.is_pinned(),
       memory.updated_at().unix_millis(),
       memory.edited_at().map(Timestamp::unix_millis),
+      memory.revision(),
     ],
   )?;
-  Ok(changed)
+  if changed == 0 {
+    return Err(match status(connection, memory.id())? {
+      Some(_) => StoreError::MemoryConflict(memory.id()),
+      None => StoreError::MemoryNotFound(memory.id()),
+    });
+  }
+  memory.saved();
+  Ok(())
 }
 
 fn task_column(scope: MemoryScope) -> Option<String> {

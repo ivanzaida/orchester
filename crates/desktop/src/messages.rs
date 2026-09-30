@@ -65,6 +65,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::SecretNotFound(_)
     | StoreError::MemoryNotFound(_)
     | StoreError::MemoryExists(_)
+    | StoreError::MemoryConflict(_)
     | StoreError::MemoryNotActive(_)
     | StoreError::DuplicateMemoryKey(_)
     | StoreError::MigrationBrokeReferences(_) => Message::new("errors.storage"),

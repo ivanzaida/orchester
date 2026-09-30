@@ -57,7 +57,6 @@ impl Keeper<'_> {
       status: None,
       pinned_only: false,
     };
-    let earlier = self.db.memories(&filter)?;
     let write = HandoffWrite {
       task: run.task(),
       provenance: &provenance,
@@ -67,8 +66,13 @@ impl Keeper<'_> {
       screen: &screen,
       now: Timestamp::now(),
     };
-    match handoff.changes(&write, earlier) {
-      Ok(changes) => self.db.commit_memories(&changes),
+    // The task's records are read and changed in one transaction: no person's decision on them
+    // comes between.
+    match self
+      .db
+      .change_memories(&filter, |earlier| handoff.changes(&write, earlier))?
+    {
+      Ok(()) => Ok(()),
       Err(error) => {
         let reason = MemoryNotSavedReason::ContainsSecret {
           secret: error.secret.to_string(),

@@ -15,7 +15,7 @@ use orchester_core::{
     MemoryStatus, MemoryStore, ScopeFilter, UnreadableMemory, WritePolicy,
   },
 };
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use self::rows::{COLUMNS, Raw};
 use super::ProjectDb;
@@ -35,6 +35,49 @@ const DELETE_WITH_HISTORY: &str = "
       WHERE older.status = 'superseded' AND newer.status IN ('active', 'superseded', 'deprecated')
   )
   DELETE FROM memories WHERE id IN (SELECT id FROM history)";
+
+/// The readable records `filter` selects, oldest first.
+fn list(connection: &Connection, filter: &MemoryFilter) -> Result<Vec<Memory>, StoreError> {
+  let (scope, task) = match filter.scope {
+    ScopeFilter::Task(task) => ("task", Some(task)),
+    ScopeFilter::Project => ("project", None),
+    ScopeFilter::TaskAndProject(task) => ("both", Some(task)),
+  };
+  let sql = format!(
+    "
+    SELECT {COLUMNS} FROM memories m
+    WHERE CASE ?1
+        WHEN 'task' THEN m.task_id = ?2
+        WHEN 'project' THEN m.task_id IS NULL
+        ELSE m.task_id = ?2 OR m.task_id IS NULL
+      END
+      AND (?3 IS NULL OR m.status = ?3)
+      AND (?4 = 0 OR m.pinned = 1)
+    ORDER BY m.created_at, m.seq"
+  );
+  let mut statement = connection.prepare(&sql)?;
+  let rows = statement.query_map(
+    params![
+      scope,
+      task.map(|task| task.to_string()),
+      filter.status.map(MemoryStatus::name),
+      filter.pinned_only,
+    ],
+    Raw::from_row,
+  )?;
+  readable(rows)
+}
+
+/// Stores `changes`: the changed records first, under the revision rule, then the added ones.
+fn commit(connection: &Connection, changes: &mut MemoryChanges) -> Result<(), StoreError> {
+  for memory in &mut changes.changed {
+    rows::update(connection, memory)?;
+  }
+  for memory in &changes.added {
+    rows::insert(connection, memory)?;
+  }
+  Ok(())
+}
 
 /// The records of `rows` that can be read back; the others are left out, and
 /// [`MemoryStore::unreadable_memories`] lists them.
@@ -60,30 +103,38 @@ impl MemoryStore for ProjectDb {
     Ok(())
   }
 
-  fn commit_memories(&mut self, changes: &MemoryChanges) -> Result<(), StoreError> {
+  fn commit_memories(&mut self, changes: &mut MemoryChanges) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
-    for memory in &changes.changed {
-      if rows::update(&transaction, memory)? == 0 {
-        return Err(StoreError::MemoryNotFound(memory.id()));
-      }
-    }
-    for memory in &changes.added {
-      rows::insert(&transaction, memory)?;
-    }
+    commit(&transaction, changes)?;
     transaction.commit()?;
     Ok(())
   }
 
-  fn save_memory(&mut self, memory: &Memory) -> Result<(), StoreError> {
+  fn change_memories<E>(
+    &mut self,
+    filter: &MemoryFilter,
+    change: impl FnOnce(Vec<Memory>) -> Result<MemoryChanges, E>,
+  ) -> Result<Result<(), E>, StoreError> {
+    // Immediate (the connection's behavior): the write lock is held from the read on.
     let transaction = self.connection.transaction()?;
-    if rows::update(&transaction, memory)? == 0 {
-      return Err(StoreError::MemoryNotFound(memory.id()));
-    }
+    let memories = list(&transaction, filter)?;
+    let mut changes = match change(memories) {
+      Ok(changes) => changes,
+      Err(error) => return Ok(Err(error)),
+    };
+    commit(&transaction, &mut changes)?;
+    transaction.commit()?;
+    Ok(Ok(()))
+  }
+
+  fn save_memory(&mut self, memory: &mut Memory) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    rows::update(&transaction, memory)?;
     transaction.commit()?;
     Ok(())
   }
 
-  fn supersede_memory(&mut self, superseded: &Memory, replacement: &Memory) -> Result<(), StoreError> {
+  fn supersede_memory(&mut self, superseded: &mut Memory, replacement: &mut Memory) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     match rows::status(&transaction, superseded.id())? {
       Some(MemoryStatus::Active) => {}
@@ -94,9 +145,7 @@ impl MemoryStore for ProjectDb {
     // A new replacement, or a proposal that was just approved.
     match rows::status(&transaction, replacement.id())? {
       None => rows::insert(&transaction, replacement)?,
-      Some(MemoryStatus::Proposed) => {
-        rows::update(&transaction, replacement)?;
-      }
+      Some(MemoryStatus::Proposed) => rows::update(&transaction, replacement)?,
       Some(_) => return Err(StoreError::MemoryNotActive(replacement.id())),
     }
     transaction.commit()?;
@@ -116,34 +165,7 @@ impl MemoryStore for ProjectDb {
   }
 
   fn memories(&self, filter: &MemoryFilter) -> Result<Vec<Memory>, StoreError> {
-    let (scope, task) = match filter.scope {
-      ScopeFilter::Task(task) => ("task", Some(task)),
-      ScopeFilter::Project => ("project", None),
-      ScopeFilter::TaskAndProject(task) => ("both", Some(task)),
-    };
-    let sql = format!(
-      "
-      SELECT {COLUMNS} FROM memories m
-      WHERE CASE ?1
-          WHEN 'task' THEN m.task_id = ?2
-          WHEN 'project' THEN m.task_id IS NULL
-          ELSE m.task_id = ?2 OR m.task_id IS NULL
-        END
-        AND (?3 IS NULL OR m.status = ?3)
-        AND (?4 = 0 OR m.pinned = 1)
-      ORDER BY m.created_at, m.seq"
-    );
-    let mut statement = self.connection.prepare(&sql)?;
-    let rows = statement.query_map(
-      params![
-        scope,
-        task.map(|task| task.to_string()),
-        filter.status.map(MemoryStatus::name),
-        filter.pinned_only,
-      ],
-      Raw::from_row,
-    )?;
-    readable(rows)
+    list(&self.connection, filter)
   }
 
   fn unreadable_memories(&self) -> Result<Vec<UnreadableMemory>, StoreError> {
