@@ -165,6 +165,8 @@ pub enum RunnerProblem {
   StepBudgetReached { budget: u64 },
   /// A command tool's `program` is no file on the `PATH` or in the worktree; it was not started.
   ProgramNotFound { program: String },
+  /// The codebase index of the run's base revision could not be built; the agent works without it.
+  CodebaseIndexUnavailable { detail: String },
 }
 
 impl AgentEvent {

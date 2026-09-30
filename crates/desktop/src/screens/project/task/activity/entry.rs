@@ -526,6 +526,10 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
       Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
     ),
+    RunnerProblem::CodebaseIndexUnavailable { detail } => (
+      ctx.t("runs.activity.problem.codebaseIndexUnavailable"),
+      Some(detail.as_str().into()),
+    ),
   }
 }
 

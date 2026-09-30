@@ -786,7 +786,8 @@
         "mergeConflict": "The step’s changes conflict with the run’s branch; they stay on {{branch}}",
         "stepBudgetReached": "The step used its budget of {{budget}} tokens and was stopped",
         "programNotFound": "{{program}} was not found",
-        "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool."
+        "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool.",
+        "codebaseIndexUnavailable": "The codebase index is unavailable; the agent works without it"
       },
       "unparsed": {
         "one": "{{count}} unparsed line",

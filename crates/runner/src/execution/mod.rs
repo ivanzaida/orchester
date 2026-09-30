@@ -18,6 +18,7 @@ mod attach;
 mod board;
 mod build_space;
 mod checkpoint;
+mod codebase_index;
 mod control;
 mod conversation;
 mod halt;

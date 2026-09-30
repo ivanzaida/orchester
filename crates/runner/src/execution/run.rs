@@ -25,6 +25,7 @@ use orchester_core::{
   task::Task,
   time::Timestamp,
 };
+use orchester_index::CodebaseIndexes;
 use orchester_ipc::{Event, Rejection};
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
@@ -33,6 +34,7 @@ use tokio::{sync::mpsc, time::Instant};
 use super::{
   Notifier,
   board::Board,
+  codebase_index,
   control::{Ack, Control, answer},
   prepare::Prepared,
   record::{RecordError, announce_ready, record},
@@ -103,6 +105,8 @@ pub(super) struct RunTask {
   pub(super) pending: Pending,
   /// Agents and command tools at work, by the execution they work on.
   pub(super) agents: HashMap<StepExecutionId, Active>,
+  /// Why the codebase index of the run's base revision is unavailable, if it is.
+  pub(super) index_problem: Option<String>,
   pub(super) worker_events: mpsc::UnboundedSender<WorkerEvent>,
   events: mpsc::UnboundedReceiver<WorkerEvent>,
 }
@@ -126,6 +130,7 @@ impl RunTask {
       settled: context.settled,
       pending: Pending::default(),
       agents: HashMap::new(),
+      index_problem: None,
       worker_events,
       events,
     }
@@ -162,6 +167,8 @@ impl RunTask {
 
   async fn steps(&mut self) -> Result<(), ExecutionError> {
     self.write_result_schema()?;
+    let indexes = CodebaseIndexes::new(&self.root);
+    self.index_problem = codebase_index::ensure(indexes, self.run.base().clone(), self.run.id()).await;
     loop {
       while let Ok(control) = self.controls.try_recv() {
         self.control(control)?;

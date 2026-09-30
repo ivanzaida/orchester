@@ -221,7 +221,9 @@ impl RunTask {
       }
     };
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
-    self.record_left_out(&invocation, std::mem::take(&mut start.mcp_left_out))?;
+    let mut unavailable = std::mem::take(&mut start.mcp_left_out);
+    unavailable.extend(self.index_unavailable());
+    self.record_left_out(&invocation, unavailable)?;
     let process = match Supervised::start(&start.command) {
       Ok(process) => process,
       Err(error) => {
@@ -239,7 +241,8 @@ impl RunTask {
     Ok(true)
   }
 
-  /// Records that the agent of `invocation` works without the MCP servers of `left_out`.
+  /// Records what the agent of `invocation` works without: the MCP servers and the codebase index
+  /// of `left_out`.
   fn record_left_out(&mut self, invocation: &Invocation, left_out: Vec<AgentEvent>) -> Result<(), ExecutionError> {
     if left_out.is_empty() {
       return Ok(());
