@@ -189,6 +189,8 @@ const CLAUDE_MODELS: &str = "-p --input-format stream-json --output-format strea
                              --setting-sources  --disable-slash-commands --no-session-persistence --tools ";
 /// The answer of Claude Code 2.1.89 to the `initialize` control request, trimmed to its models.
 const CLAUDE_INITIALIZE: &str = include_str!("fixtures/claude/initialize-models-2.1.89.jsonl");
+/// The same of Claude Code 2.1.284, which lists full ids of older models and knows `xhigh`.
+const CLAUDE_INITIALIZE_284: &str = include_str!("fixtures/claude/initialize-models-2.1.284.jsonl");
 
 fn claude_catalog(
   models: Result<CommandOutput, CommandError>,
@@ -246,6 +248,30 @@ fn check_claude_lists_current_ids_then_the_cli_models() {
 }
 
 #[test]
+fn check_claude_offers_the_efforts_a_newer_cli_accepts() {
+  let (_, catalog) = claude_catalog(Ok(ok(CLAUDE_INITIALIZE_284)));
+  assert_eq!(catalog.source(), CatalogSource::ProviderAndCurrentIds);
+  assert_eq!(
+    &ids(&catalog)[..7],
+    [
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-fable-5-1",
+      "claude-haiku-4-5-20251001",
+      "opus",
+      "sonnet",
+      "haiku"
+    ]
+  );
+  assert_eq!(ids(&catalog).iter().filter(|id| **id == "claude-fable-5-1").count(), 1);
+  assert!(!ids(&catalog).contains(&"default"));
+  let opus = catalog
+    .model(&ModelId::new("claude-opus-5-5").expect("valid model id"))
+    .expect("listed");
+  assert_eq!(opus.efforts(), ["low", "medium", "high", "xhigh", "max"]);
+}
+
+#[test]
 fn check_claude_without_a_model_list_keeps_current_ids_and_documented_aliases() {
   let (_, catalog) = claude_catalog(Err(CommandError::TimedOut));
   assert_eq!(catalog.source(), CatalogSource::DocumentedAliases);
@@ -266,10 +292,18 @@ fn check_claude_without_a_model_list_keeps_current_ids_and_documented_aliases() 
     catalog.support(&ModelId::new("opus").expect("valid model id")),
     ModelSupport::Listed
   );
+  let opus = catalog
+    .model(&ModelId::new("claude-opus-5-5").expect("valid model id"))
+    .expect("listed");
+  assert_eq!(
+    opus.efforts(),
+    ["low", "medium", "high", "max"],
+    "only what any CLI accepts"
+  );
 }
 
 #[test]
-fn claude_model_list_leaves_out_default_and_efforts_the_cli_refuses() {
+fn claude_model_list_leaves_out_default_and_keeps_the_clis_efforts() {
   let listed = parse_claude_models(CLAUDE_INITIALIZE).expect("an initialize answer");
   let ids: Vec<&str> = listed.iter().map(|model| model.id().as_str()).collect();
   assert_eq!(ids, ["sonnet", "sonnet[1m]", "haiku"]);
@@ -280,7 +314,10 @@ fn claude_model_list_leaves_out_default_and_efforts_the_cli_refuses() {
     r#"{"type":"control_response","response":{"subtype":"error","request_id":"orchester-models","error":"no"}}"#;
   assert_eq!(parse_claude_models(error), None);
   let xhigh = r#"{"type":"control_response","response":{"subtype":"success","request_id":"orchester-models","response":{"models":[{"value":"x","supportsEffort":true,"supportedEffortLevels":["high","xhigh"]}]}}}"#;
-  assert_eq!(parse_claude_models(xhigh).expect("models")[0].efforts(), ["high"]);
+  assert_eq!(
+    parse_claude_models(xhigh).expect("models")[0].efforts(),
+    ["high", "xhigh"]
+  );
 }
 
 #[test]
