@@ -18,10 +18,12 @@ mod attach;
 mod board;
 mod build_space;
 mod checkpoint;
+mod codebase_index;
 mod control;
 mod conversation;
 mod environment;
 mod halt;
+mod handoff;
 mod idle;
 mod permissions;
 mod plan;
@@ -319,7 +321,7 @@ impl Scheduler {
 
   /// "Wait for agents to save": starts no new work, asks every active run to pause at its next
   /// checkpoint and returns once each has settled. The work summary shows each run saving, then
-  /// saved.
+  /// saved. Pending tool decisions checkpoint without granting the requested action.
   pub async fn finish_at_checkpoints(&self) {
     let settling = {
       let _one_at_a_time = self.inner.continuing.lock().await;

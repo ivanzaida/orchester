@@ -9,9 +9,14 @@
 //! (`structured_output`). When it does not, its final message is searched with
 //! [`StepResult::at_end`]: the result must close the message, so free text is never taken for a
 //! question. A Claude Code turn that ends with no result at all fails
-//! (`crate::connection::stream::ClaudeStream`).
+//! (`crate::connection::stream::ClaudeStream`). A result's `outcome` and `summary` are read
+//! strictly; fields the schema does not name are tolerated.
+//!
+//! A result may also carry a handoff for the agents after it (what it completed, its decisions, the
+//! questions it left open and what the next agent should know), read leniently and kept by the
+//! runner as task memory ([`crate::memory::Handoff`]).
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
   id::{RunId, StepExecutionId},
@@ -31,9 +36,29 @@ pub const STEP_RESULT_SCHEMA: &str = r#"{
     "summary":{
       "type":"string",
       "description":"For question, explain the blocker and saved progress and ask a concrete question with available options. Otherwise summarize the completed work or failure."
+    },
+    "completed":{
+      "type":["array","null"],
+      "items":{"type":"string"},
+      "description":"Handoff: what this step completed, one item each; null when nothing is worth listing."
+    },
+    "decisions":{
+      "type":["array","null"],
+      "items":{"type":"string"},
+      "description":"Handoff: decisions made in this step that later steps must follow, one per item."
+    },
+    "open_questions":{
+      "type":["array","null"],
+      "items":{"type":"string"},
+      "description":"Handoff: questions this step left open."
+    },
+    "next_agent_should_know":{
+      "type":["array","null"],
+      "items":{"type":"string"},
+      "description":"Handoff: what the next agent should know before it starts, such as pitfalls or where things are."
     }
   },
-  "required":["outcome","summary"],
+  "required":["outcome","summary","completed","decisions","open_questions","next_agent_should_know"],
   "additionalProperties":false
 }"#;
 
@@ -49,12 +74,45 @@ pub enum StepOutcome {
   Question,
 }
 
-/// A final message that follows [`STEP_RESULT_SCHEMA`].
+/// A final message that follows [`STEP_RESULT_SCHEMA`]. `outcome` and `summary` are read strictly;
+/// the handoff is read leniently, so a malformed handoff never costs the step its outcome: a missing
+/// or `null` list is empty, a single string is one item, items that are not strings or are blank are
+/// dropped, and fields the schema does not name are ignored. The schema lists the handoff fields as
+/// required but nullable, since Codex's structured output requires every property.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct StepResult {
   pub outcome: StepOutcome,
   pub summary: String,
+  #[serde(default, deserialize_with = "list")]
+  pub completed: Vec<String>,
+  #[serde(default, deserialize_with = "list")]
+  pub decisions: Vec<String>,
+  #[serde(default, deserialize_with = "list")]
+  pub open_questions: Vec<String>,
+  #[serde(default, deserialize_with = "list")]
+  pub next_agent_should_know: Vec<String>,
+}
+
+/// A handoff list, read from whatever JSON the agent wrote for it.
+fn list<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<String>, D::Error> {
+  let items = match serde_json::Value::deserialize(deserializer)? {
+    serde_json::Value::String(item) => vec![item],
+    serde_json::Value::Array(items) => items
+      .into_iter()
+      .filter_map(|item| match item {
+        serde_json::Value::String(item) => Some(item),
+        _ => None,
+      })
+      .collect(),
+    _ => Vec::new(),
+  };
+  Ok(
+    items
+      .into_iter()
+      .map(|item| item.trim().to_owned())
+      .filter(|item| !item.is_empty())
+      .collect(),
+  )
 }
 
 impl StepResult {
@@ -64,8 +122,8 @@ impl StepResult {
   }
 
   /// The result that closes `message`: the whole message, else a fenced code block that ends it,
-  /// else a JSON object that starts a line and runs to the end. Anything else after it, or a
-  /// document with other fields, is no result.
+  /// else a JSON object that starts a line and runs to the end. Anything else after it, or an
+  /// object without a valid `outcome` and `summary`, is no result.
   pub fn at_end(message: &str) -> Option<Self> {
     let message = message.trim_end();
     Self::parse(message)

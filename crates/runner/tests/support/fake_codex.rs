@@ -11,6 +11,8 @@
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
 //! - "Report failure": works as below, but its result says it failed;
+//! - "Leave a handoff": works as below, and its step result hands off (`completed`, `decisions`, `open_questions`,
+//!   `next_agent_should_know`), with the decision "Greet in README.md from <step>";
 //! - "Fail once": the first time a step works on it, the result says it failed; later it works as below;
 //! - "Write own file": writes `<step>.txt` instead of appending to `README.md`;
 //! - "Sign the line": appends `hello from <step>` instead of `hello`;
@@ -26,8 +28,8 @@
 //! `README.md` and completes its turn, once no `fake-hold` lies next to the worktrees (a test holds a continued session
 //! at work with it). A new session works in the `-C` directory.
 //!
-//! On standard error it reports what it was given: its arguments, the names of its environment
-//! variables and the first line of the prompt, so tests can check how it was started, and the
+//! On standard error it reports what it was given: its arguments, the names of its environment variables, its `PATH`
+//! and the prompt, so tests can check how it was started, and the
 //! process ids of itself and its helper, so tests can check that ending it ends both. It reports its MCP servers as
 //! `fake_mcp` describes.
 
@@ -98,6 +100,7 @@ fn main() -> ExitCode {
     structured: args.iter().any(|arg| arg == "--output-schema"),
     failed: prompt.contains("Report failure") || (prompt.contains("Fail once") && first_time(&worktree, &prompt)),
     own_file: prompt.contains("Write own file"),
+    handoff: prompt.contains("Leave a handoff"),
   };
   if resumed {
     wait_while_held(&worktree);
@@ -144,6 +147,10 @@ fn read_prompt(args: &[String]) -> Option<String> {
   }
   eprintln!("argv: {}", args.join(" "));
   eprintln!("env: {}", names.join(","));
+  eprintln!(
+    "path: {}",
+    std::env::var_os("PATH").unwrap_or_default().to_string_lossy()
+  );
   if let Some(target) = std::env::var_os("CARGO_TARGET_DIR") {
     eprintln!("cargo target: {}", PathBuf::from(target).display());
   }
@@ -164,6 +171,7 @@ struct StepReport {
   structured: bool,
   failed: bool,
   own_file: bool,
+  handoff: bool,
 }
 
 /// Whether this is the first time a step with this prompt's step name works: a marker next to the worktrees
@@ -222,8 +230,13 @@ fn finish(worktree: &std::path::Path, line: &str, result: &StepReport) -> ExitCo
   println!("a line that is not JSON");
   let text = if result.structured {
     let outcome = if result.failed { "failed" } else { "done" };
+    let handoff = if result.handoff {
+      handoff(&result.step)
+    } else {
+      String::new()
+    };
     format!(
-      r#"{{\"outcome\":\"{outcome}\",\"summary\":\"Finished {}\"}}"#,
+      r#"{{\"outcome\":\"{outcome}\",\"summary\":\"Finished {}\"{handoff}}}"#,
       result.step
     )
   } else {
@@ -232,6 +245,17 @@ fn finish(worktree: &std::path::Path, line: &str, result: &StepReport) -> ExitCo
   println!(r#"{{"type":"item.completed","item":{{"id":"item_3","type":"agent_message","text":"{text}"}}}}"#);
   println!("{USAGE}");
   ExitCode::SUCCESS
+}
+
+/// "Leave a handoff": the handoff fields of the step result, escaped for the JSON string it is in.
+fn handoff(step: &str) -> String {
+  format!(
+    concat!(
+      r#",\"completed\":[\"Appended hello\"],\"decisions\":[\"Greet in README.md from {step}\"],"#,
+      r#"\"open_questions\":null,\"next_agent_should_know\":[\"README.md ends with hello\"]"#
+    ),
+    step = step
+  )
 }
 
 /// "Ask first": a draft, then a question as the step result.

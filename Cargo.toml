@@ -1,6 +1,15 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/desktop", "crates/exec", "crates/ipc", "crates/runner", "crates/store", "crates/vault"]
+members = [
+  "crates/core",
+  "crates/desktop",
+  "crates/exec",
+  "crates/index",
+  "crates/ipc",
+  "crates/runner",
+  "crates/store",
+  "crates/vault",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -29,6 +38,7 @@ redundant_clone = "warn"
 [workspace.dependencies]
 orchester-core = { path = "crates/core" }
 orchester-exec = { path = "crates/exec" }
+orchester-index = { path = "crates/index" }
 orchester-ipc = { path = "crates/ipc" }
 orchester-store = { path = "crates/store" }
 orchester-vault = { path = "crates/vault" }
@@ -75,8 +85,19 @@ thiserror = "2"
 # `signal`: the macOS runner ends its agents on SIGTERM/SIGINT; it builds on the signal handling
 # `process` already compiles in.
 tokio = { version = "1.53", features = ["io-util", "macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "time"] }
+# Reads package manifests (`Cargo.toml`, `pyproject.toml`) for the codebase index's repository map.
+# Already built for embed-resource on Windows; a TOML parser is not a few lines of code.
+toml = { version = "1", default-features = false, features = ["std", "parse", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Syntax trees of source files for the codebase index (`orchester-index`): outlines and symbols of
+# Rust, TypeScript/JavaScript, Python and Go. Each grammar is a C parser built by `cc`, like SQLite
+# (rusqlite `bundled`) and zstd already are, on Windows and macOS alike.
+tree-sitter = "0.27"
+tree-sitter-go = "0.25"
+tree-sitter-python = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-typescript = "0.23"
 # `v4`: the random token that lets only the relay of one Claude Code invocation reach its permission
 # prompt (`orchester_core::connection::claude_approval`); v7 ids carry a timestamp, not only random bits.
 uuid = { version = "1", features = ["v4", "v7", "serde"] }

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 pub use self::{claude::ClaudeStream, codex::parse_codex_line};
 use crate::{
+  code_index::RipgrepFallback,
   connection::{AgentProvider, mcp::McpServerProblem},
   run::TokenUsage,
 };
@@ -176,6 +177,41 @@ pub enum RunnerProblem {
     installed: String,
     required: String,
   },
+  /// The codebase index of the run's base revision could not be built; the agent works without it.
+  CodebaseIndexUnavailable { detail: String },
+  /// ripgrep was found neither on the agent's `PATH` nor with an agent CLI; `fallback` says how the
+  /// agent searches instead.
+  RipgrepNotFound {
+    #[serde(default)]
+    fallback: RipgrepFallback,
+  },
+  /// ripgrep was found but could not be copied where the agent can run it; `fallback` says how the
+  /// agent searches instead.
+  RipgrepUnavailable {
+    detail: String,
+    #[serde(default)]
+    fallback: RipgrepFallback,
+  },
+  /// The step's handoff was not kept as task memory.
+  MemoryNotSaved { reason: MemoryNotSavedReason },
+  /// `records` task or project memory records could not be read back; agents get the others.
+  MemoryUnreadable { records: u64 },
+  /// Memory could not be checked for unreadable records; `detail` is the storage error. The agent
+  /// started all the same.
+  MemoryScanFailed { detail: String },
+}
+
+/// Why a step's handoff was not kept as task memory. It names a secret, never its value.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "reason", rename_all = "snake_case")]
+pub enum MemoryNotSavedReason {
+  /// It holds the value of secret `secret`.
+  ContainsSecret { secret: String },
+  /// The keychain could not be read to check it for the value of secret `secret`.
+  KeychainUnavailable { secret: String },
+  /// The project database could not store it; `detail` is the storage error, which never holds a
+  /// record's text.
+  StorageFailed { detail: String },
 }
 
 impl AgentEvent {

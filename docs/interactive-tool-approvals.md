@@ -109,8 +109,9 @@ repeated call is denied without a prompt. A decision that does not match the wai
 after the agent ended or names an earlier invocation is refused (`ToolApprovalNotAwaited`).
 
 While a call waits, the invocation's active time stops (`waiting_since`). A cancel ends the agent
-and marks the request interrupted. A pause is recorded at once and, as for every agent, takes
-effect when the invocation has ended: the request stays open until decided. An approved call whose
+and marks the request interrupted. A pause or a graceful shutdown checkpoints the session at the
+waiting call, as for Codex: the call is not granted, the request ends interrupted, the work is saved
+and the step continues when the run does. An approved call whose
 result has not arrived when the agent ends is recorded as an interruption, so the run needs a
 person's review before it continues. Project MCP secret values are redacted from the request's
 action, target and scope and from the invocation's activity. Claude Code runs an approved command

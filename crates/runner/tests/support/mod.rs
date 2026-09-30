@@ -19,6 +19,7 @@ use std::{
 };
 
 use orchester_core::{
+  code_index::CodeIndexSetting,
   connection::{
     AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, REASONING_EFFORT,
     SignIn,
@@ -35,7 +36,9 @@ use orchester_core::{
   },
   run::Run,
   secret::Secret,
-  store::{ActivityStore, ConnectionStore, McpServerStore, ResourceStore, RunStore, SecretStore, TaskStore},
+  store::{
+    ActivityStore, ConnectionStore, McpServerStore, ResourceStore, RunStore, SecretStore, SettingsStore, TaskStore,
+  },
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
   tokens::TokenBudget,
@@ -148,6 +151,9 @@ pub struct Setup {
   pub mcp: Vec<McpServer>,
   /// Secrets of the project with their values in the keychain.
   pub secrets: Vec<(Secret, &'static str)>,
+  /// Off unless a test is about the code index: what an agent is given then depends on where
+  /// ripgrep is on the machine.
+  pub code_index: CodeIndexSetting,
 }
 
 impl Setup {
@@ -161,6 +167,7 @@ impl Setup {
       permissions: None,
       mcp: Vec::new(),
       secrets: Vec::new(),
+      code_index: CodeIndexSetting::Off,
       budget: 1_400_000,
       max_duration: Duration::from_secs(30 * 60),
     }
@@ -203,6 +210,7 @@ pub fn project(setup: &Setup) -> TestProject {
   for server in &setup.mcp {
     db.create_mcp_server(server).expect("MCP server");
   }
+  db.save_code_index(setup.code_index).expect("code index setting");
   let task = queued_task(&mut db, connection.id(), setup);
   TestProject {
     repo,

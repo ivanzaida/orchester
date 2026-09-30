@@ -99,7 +99,18 @@ fn outcome_prompt_schema_describes_attention_without_changing_the_wire_format() 
     schema["properties"]["outcome"]["enum"],
     serde_json::json!(["done", "failed", "question"])
   );
-  assert_eq!(schema["required"], serde_json::json!(["outcome", "summary"]));
+  // The handoff lists are required but nullable: Codex's structured output requires every property.
+  assert_eq!(
+    schema["required"],
+    serde_json::json!([
+      "outcome",
+      "summary",
+      "completed",
+      "decisions",
+      "open_questions",
+      "next_agent_should_know"
+    ])
+  );
   assert_eq!(schema["additionalProperties"], false);
   let description = schema["properties"]["outcome"]["description"]
     .as_str()

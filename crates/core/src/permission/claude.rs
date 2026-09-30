@@ -29,9 +29,15 @@
 //!   `Bash`: an approved command would run outside any sandbox and could write.
 //! - The disallowed list repeats what `--tools` leaves out that the permissions deny, so a tool list that grows in a
 //!   later CLI version does not widen them.
+//! - A folder the agent may read but must not change (the shared code index, which `--add-dir` makes a working
+//!   directory, where `acceptEdits` accepts edits) gets an `Edit(//<folder>/**)` deny rule, which covers every built-in
+//!   edit tool. Claude Code writes rule paths the POSIX way: `C:\x` is `//c/x`. Whether a model turn is denied is
+//!   unverified; the index files are read-only on disk as well.
 //!
 //! Never used: `--dangerously-skip-permissions`, `--permission-mode bypassPermissions`. The denial
 //! behaviour of these flags with a model turn is unverified: the probe's CLI was not signed in.
+
+use std::path::Path;
 
 use super::{CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess, capability::EnforcedPermissions};
 use crate::connection::mcp::McpServerName;
@@ -45,9 +51,9 @@ const MODE_ALLOWED: [&str; 7] = ["mkdir", "touch", "rm", "rmdir", "mv", "cp", "s
 /// Settings that make every command ask.
 const ASK_EVERY_COMMAND: &str = r#"{"permissions":{"ask":["Bash"]}}"#;
 
-/// The permission arguments of a Claude Code invocation that runs with `enforced` and gives the agent the MCP
-/// servers `mcp`.
-pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName]) -> Vec<String> {
+/// The permission arguments of a Claude Code invocation that runs with `enforced`, gives the agent the MCP
+/// servers `mcp` and must not change the files under the folders `protected`.
+pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName], protected: &[&Path]) -> Vec<String> {
   let permissions = enforced.permissions();
   let commands = match permissions.commands() {
     CommandPermission::Allowed(commands) => commands.entries(),
@@ -83,6 +89,10 @@ pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName]) ->
   } else {
     denied.extend(WEB_TOOLS.map(str::to_owned));
   }
+  if writes {
+    // Every edit tool is denied already in a read-only step.
+    denied.extend(protected.iter().filter_map(|folder| edit_rule(folder)));
+  }
   let mut args = vec![
     "--tools".to_owned(),
     offered.join(","),
@@ -114,4 +124,24 @@ fn mode_allowed_outside(commands: &[CommandPrefix]) -> impl Iterator<Item = Stri
         .all(|entry| entry.as_str().split(' ').next() != Some(*command))
     })
     .map(|command| format!("{COMMAND_TOOL}({command}:*)"))
+}
+
+/// `Edit(//<folder>/**)`, which keeps Claude Code's edit tools out of `folder`, an absolute path, in
+/// the POSIX form Claude Code matches permission paths in (`C:\repo` is `//c/repo`). `None` for a
+/// path that is no text, which the invocation refuses before it gets here, and for a network path
+/// (`\\server\share`), whose form in Claude Code's patterns is not documented: such a folder is kept
+/// from edits only by its files being read-only.
+fn edit_rule(folder: &Path) -> Option<String> {
+  let text = folder.to_str()?.replace('\\', "/");
+  let text = text.strip_prefix("//?/").unwrap_or(&text);
+  if text.starts_with("//") || text.starts_with("UNC/") {
+    return None;
+  }
+  let posix = match text.as_bytes() {
+    [drive, b':', ..] if drive.is_ascii_alphabetic() => {
+      format!("/{}{}", char::from(drive.to_ascii_lowercase()), &text[2..])
+    }
+    _ => text.to_owned(),
+  };
+  Some(format!("Edit(/{}/**)", posix.trim_end_matches('/')))
 }

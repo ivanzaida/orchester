@@ -29,6 +29,7 @@
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
+//! - "Leave a handoff": works as below, and its step result hands off like `orchester-fake-codex`'s;
 //! - anything else: edits `README.md` in its working directory (appending `hello`), runs `git status`, and ends with
 //!   the step result `{"outcome":"done","summary":"Finished <step>"}` and exit 0.
 //!
@@ -37,8 +38,8 @@
 //! session takes its id from `--session-id`.
 //!
 //! On standard error it reports its arguments, the `--json-schema` value on its own line (`json-schema: `), the names
-//! of its environment variables, the prompt (its first line, then each line), its process id and its MCP configuration
-//! (`fake_mcp`), like `orchester-fake-codex`.
+//! of its environment variables and its `PATH`, the prompt (its first line, then each line), its process id and its MCP
+//! configuration (`fake_mcp`), like `orchester-fake-codex`.
 
 #![allow(
   clippy::print_stdout,
@@ -97,6 +98,7 @@ fn main() -> ExitCode {
   let fake = Fake {
     session,
     prompt: prompt.clone(),
+    handoff: prompt.contains("Leave a handoff"),
   };
   let servers = if fake_mcp::report_claude(&args) {
     r#"[{"name":"broken","status":"failed"}]"#
@@ -170,6 +172,10 @@ fn read_prompt(args: &[String]) -> Option<String> {
     eprintln!("json-schema: {schema}");
   }
   eprintln!("env: {}", names.join(","));
+  eprintln!(
+    "path: {}",
+    std::env::var_os("PATH").unwrap_or_default().to_string_lossy()
+  );
   eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
   for line in prompt.lines() {
     eprintln!("prompt| {line}");
@@ -241,6 +247,8 @@ const DENIAL: &str =
 struct Fake {
   session: String,
   prompt: String,
+  /// Its step result hands off.
+  handoff: bool,
 }
 
 impl Fake {
@@ -425,7 +433,19 @@ impl Fake {
     );
     self.tool_result("toolu_git", " M README.md", false);
     println!("a line that is not JSON");
-    let result = format!(r#"{{\"outcome\":\"done\",\"summary\":\"Finished {step}\"}}"#);
+    let handoff = if self.handoff {
+      format!(
+        concat!(
+          r#",\"completed\":[\"Appended {line}\"],\"decisions\":[\"Greet in README.md from {step}\"],"#,
+          r#"\"open_questions\":null,\"next_agent_should_know\":[\"README.md ends with {line}\"]"#
+        ),
+        line = line,
+        step = step
+      )
+    } else {
+      String::new()
+    };
+    let result = format!(r#"{{\"outcome\":\"done\",\"summary\":\"Finished {step}\"{handoff}}}"#);
     self.assistant("msg_done", &format!(r#"{{"type":"text","text":"{result}"}}"#));
     println!(
       r#"{{"type":"result","subtype":"success","is_error":false,"num_turns":3,"result":"{result}","session_id":"{}","total_cost_usd":0.5,"usage":{{"input_tokens":0,"output_tokens":0}},"permission_denials":{denials}}}"#,

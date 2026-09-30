@@ -33,6 +33,7 @@ use tokio::{sync::mpsc, time::Instant};
 use super::{
   Notifier,
   board::Board,
+  codebase_index::{self, IndexBuild, IndexState},
   control::{Ack, Control, answer},
   prepare::Prepared,
   record::{RecordError, announce_ready, record},
@@ -106,8 +107,14 @@ pub(super) struct RunTask {
   pub(super) pending: Pending,
   /// Agents and command tools at work, by the execution they work on.
   pub(super) agents: HashMap<StepExecutionId, Active>,
+  /// The code index of the run's base revision.
+  pub(super) code_index: IndexState,
+  /// Its build in the background, while one runs.
+  pub(super) index_build: Option<IndexBuild>,
   pub(super) worker_events: mpsc::UnboundedSender<WorkerEvent>,
   events: mpsc::UnboundedReceiver<WorkerEvent>,
+  /// The memory records were scanned for unreadable ones: once per run task is enough.
+  pub(super) memory_scanned: bool,
 }
 
 impl RunTask {
@@ -130,8 +137,11 @@ impl RunTask {
       settled: context.settled,
       pending: Pending::default(),
       agents: HashMap::new(),
+      code_index: IndexState::NotBuilt,
+      index_build: None,
       worker_events,
       events,
+      memory_scanned: false,
     }
   }
 
@@ -166,12 +176,17 @@ impl RunTask {
 
   async fn steps(&mut self) -> Result<(), ExecutionError> {
     self.write_result_schema()?;
+    self.begin_code_index()?;
     loop {
       while let Ok(control) = self.controls.try_recv() {
         self.control(control)?;
       }
       if self.agents.is_empty() && self.settle()? {
         return Ok(());
+      }
+      if self.index_holds_starts() {
+        self.wait(false).await?;
+        continue;
       }
       let waiting_for_slot = self.start_ready()?;
       if self.agents.is_empty() && !waiting_for_slot {
@@ -191,7 +206,9 @@ impl RunTask {
     }
   }
 
-  /// Waits for an agent's news, a request, the time limit or a free slot.
+  /// Waits for an agent's news, a request, the time limit, a free slot or the code index build.
+  /// A task that stops executing the run (a cancel, a pause, the runner stopping) leaves a running
+  /// build to finish in the background; the next start of the task reuses it.
   async fn wait(&mut self, waiting_for_slot: bool) -> Result<(), ExecutionError> {
     let working = !self.agents.is_empty();
     let deadline = if working {
@@ -212,6 +229,10 @@ impl RunTask {
         if working {
           self.check_time()?;
         }
+        Ok(())
+      }
+      state = codebase_index::built(&mut self.index_build) => {
+        self.code_index_built(state);
         Ok(())
       }
     }

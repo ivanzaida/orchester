@@ -54,6 +54,34 @@ fn one_app_tool_decision_is_scoped_to_its_item_and_keeps_arguments_out_of_debug(
 }
 
 #[test]
+fn pending_approval_does_not_hide_other_active_tools() {
+  let mut stream = AppServerStream::default();
+  for item in ["waiting", "executing"] {
+    let started = json!({"method":"item/started","params":{"threadId":"t","turnId":"turn","item":{
+      "id":item,"type":"mcpToolCall","server":"pencil","tool":"batch_design"
+    }}});
+    stream.parse(&started.to_string()).expect("start");
+  }
+  let requested = json!({"id":42,"method":"item/tool/requestUserInput","params":{
+    "threadId":"t","turnId":"turn","itemId":"waiting","isBlocking":true,
+    "questions":[{"id":"action","options":[{"label":"Accept"},{"label":"Decline"}]}]
+  }});
+  let pending = approval(&stream.parse(&requested.to_string()).expect("approval"));
+  assert_eq!(pending.item(), "waiting");
+  assert!(stream.has_other_active_tools(&pending));
+  stream
+    .parse(
+      &json!({"method":"item/completed","params":{"item":{
+        "id":"executing","type":"mcpToolCall"
+      }}})
+      .to_string(),
+    )
+    .expect("completion");
+  assert!(stream.has_active_tools(), "the waiting item is still present");
+  assert!(!stream.has_other_active_tools(&pending));
+}
+
+#[test]
 fn empty_mcp_confirmation_accepts_once_and_required_form_fails_closed() {
   let mut stream = AppServerStream::default();
   let started = json!({"method":"item/started","params":{"threadId":"thread-2","turnId":"turn-3","item":{
@@ -179,4 +207,38 @@ fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
       Update::TurnEnded
     ]
   ));
+}
+
+#[test]
+fn a_completed_patch_reports_the_files_it_changed() {
+  use orchester_core::connection::stream::{FileChange, FileChangeKind};
+  let mut stream = AppServerStream::default();
+  let completed = json!({"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","item":{
+    "id":"patch-3","type":"fileChange","status":"completed","changes":[
+      {"path":"src/auth/github.ts","kind":{"type":"add"},"diff":"+export {}"},
+      {"path":"src/auth/providers.ts","kind":"update","diff":"-a\n+b"}
+    ]
+  }}});
+  let updates = stream.parse(&completed.to_string()).expect("item");
+  let [Update::Activity(AgentEvent::FileChanged { item, changes })] = &updates[..] else {
+    panic!("one file change expected");
+  };
+  assert_eq!(item, "patch-3");
+  assert_eq!(
+    changes,
+    &[
+      FileChange {
+        path: "src/auth/github.ts".into(),
+        kind: FileChangeKind::Added
+      },
+      FileChange {
+        path: "src/auth/providers.ts".into(),
+        kind: FileChangeKind::Modified
+      },
+    ]
+  );
+  let declined = json!({"method":"item/completed","params":{"item":{
+    "id":"patch-4","type":"fileChange","status":"declined","changes":[{"path":"a.rs","kind":"update"}]
+  }}});
+  assert!(stream.parse(&declined.to_string()).expect("item").is_empty());
 }

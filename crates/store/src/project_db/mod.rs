@@ -1,12 +1,14 @@
 mod activity;
 mod agent_files;
 mod blobs;
+mod code_index;
 mod connections;
 mod environment;
 mod import;
 mod invocation_prompts;
 mod limits;
 mod mcp_servers;
+mod memory;
 mod merges;
 mod messages;
 mod phases;

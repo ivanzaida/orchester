@@ -178,14 +178,19 @@ async fn claude_approvals_run_an_approved_command_once() {
   assert!(invocation.timing.inactive_ms() >= 60, "{:?}", invocation.timing);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn claude_approvals_pause_while_waiting_takes_effect_after_the_decision() {
-  let project = project(&Setup {
-    provider: AgentProvider::ClaudeCodeCli,
-    permissions: Some(permissions(CommandPermission::AskBefore, false)),
-    review: true,
-    ..Setup::new("Ask before publishing.")
-  });
+/// How a run is stopped while Claude Code waits for a decision.
+enum Stopping {
+  Pause,
+  Shutdown,
+}
+
+/// A pause or a graceful shutdown while a call waits checkpoints the session without granting the
+/// call, as for Codex: the run pauses with its step still running and its work saved.
+async fn stop_at_a_pending_approval(stopping: Stopping) {
+  let project = claude(
+    "Ask before publishing.",
+    permissions(CommandPermission::AskBefore, false),
+  );
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
   let id = scheduler
@@ -193,32 +198,52 @@ async fn claude_approvals_pause_while_waiting_takes_effect_after_the_decision() 
     .await
     .expect("the run starts");
   let request = pending(root, &mut events, id).await;
-  tokio::time::timeout(PATIENCE, scheduler.pause_run(id))
-    .await
-    .expect("answered in time")
-    .expect("the pause is recorded");
-  let db = ProjectDb::open(root).expect("open");
-  assert_eq!(
-    db.pending_tool_approvals(id).expect("requests").len(),
-    1,
-    "a pause lets the agent finish its invocation, so the request still waits"
-  );
-  scheduler
-    .decide_tool_approval(id, request.id, true)
-    .await
-    .expect("approved");
+  let worktree = root.join(".orchester/worktrees").join(id.to_string());
+  std::fs::write(worktree.join("progress.txt"), "keep actual progress").expect("work");
+  match stopping {
+    Stopping::Pause => tokio::time::timeout(PATIENCE, scheduler.pause_run(id))
+      .await
+      .expect("answered in time")
+      .expect("the pause is recorded"),
+    Stopping::Shutdown => tokio::time::timeout(PATIENCE, scheduler.finish_at_checkpoints())
+      .await
+      .expect("the shutdown settles"),
+  }
   let run = wait_for(root, &mut events, id, |run| {
     matches!(run.status(), RunStatus::Paused(_))
   })
   .await;
   assert_eq!(run.status(), &RunStatus::Paused(PauseReason::Requested));
-  let review = run.latest_execution(&StepKey::new("review").expect("key"));
-  assert!(
-    review.is_none_or(|review| review.status() == StepStatus::Pending),
-    "nothing starts after the pause"
+  let implement = run
+    .latest_execution(&StepKey::new("implement").expect("key"))
+    .expect("the step ran");
+  assert_eq!(implement.status(), StepStatus::Running, "the step continues later");
+  let checkpoint = run.last_checkpoint().expect("progress checkpoint");
+  assert_eq!(
+    git(root, &["show", &format!("{}:progress.txt", checkpoint.revision())]),
+    "keep actual progress"
   );
-  assert!(readme(root, id).contains("approved"));
-  assert!(!db.has_interrupted_tool_approval(id).expect("approvals"));
+  let db = ProjectDb::open(root).expect("open");
+  assert!(db.pending_tool_approvals(id).expect("requests").is_empty());
+  assert_eq!(
+    scheduler.decide_tool_approval(id, request.id, true).await,
+    Err(Rejection::ToolApprovalNotAwaited),
+    "the call was not granted and cannot be later"
+  );
+  assert!(!readme(root, id).contains("approved"));
+  let invocation = &db.invocations(id).expect("invocations")[0];
+  assert!(invocation.ended_at.is_some());
+  assert!(invocation.timing.waiting_since().is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_approvals_pause_at_a_pending_call_saves_without_granting_it() {
+  stop_at_a_pending_approval(Stopping::Pause).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_approvals_shutdown_at_a_pending_call_saves_without_granting_it() {
+  stop_at_a_pending_approval(Stopping::Shutdown).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

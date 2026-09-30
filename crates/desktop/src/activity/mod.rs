@@ -3,6 +3,7 @@
 //! work to and the status bar watches.
 
 pub mod bar;
+pub mod code_index_operations;
 mod log;
 pub mod operations;
 pub mod skill_operations;

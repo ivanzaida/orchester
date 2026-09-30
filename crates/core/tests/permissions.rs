@@ -513,7 +513,7 @@ fn permissions_map_to_claude_arguments_without_bypass_modes() {
   let claude = |permissions: &AgentPermissions, platform| {
     permissions
       .enforced_on(AgentProvider::ClaudeCodeCli, platform)
-      .map(|enforced| claude::permission_args(&enforced, &[]))
+      .map(|enforced| claude::permission_args(&enforced, &[], &[]))
   };
   let read_only = permissions(
     RepositoryAccess::ReadOnly,

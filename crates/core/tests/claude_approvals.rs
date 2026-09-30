@@ -209,6 +209,7 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
       session: ClaudeSession::Resume("s"),
       mcp: Some((Path::new("/tmp/servers.json"), &servers)),
       skills: None,
+      code_index: None,
       approvals: Some(Path::new("/tmp/approvals.json")),
     };
     let args = args(&invocation).join(" ");
@@ -232,6 +233,7 @@ fn permission_args_of(permissions: &AgentPermissions) -> Vec<String> {
     &permissions
       .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
       .expect("enforceable"),
+    &[],
     &[],
   )
 }

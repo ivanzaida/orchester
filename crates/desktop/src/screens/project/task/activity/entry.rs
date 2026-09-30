@@ -15,14 +15,15 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  connection::stream::{CommandStatus, FileChangeKind, OutputStream, RunnerProblem, ToolCommandResult},
+  connection::stream::{CommandStatus, FileChangeKind, OutputStream, ToolCommandResult},
   tokens::compact_tokens,
 };
 
 use super::{
   super::{super::ProjectNav, heading::step_state},
-  engine,
+  engine, first_edit,
   mcp::mcp_server_text,
+  problem::problem_text,
   rows::{Header, RowKind, TranscriptRow},
 };
 use crate::{
@@ -66,8 +67,9 @@ impl Component for TranscriptRowView {
   }
 }
 
-/// Disclosure, step number, step and agent, model and time span, tokens and state (`mDnc3`). A
-/// tool step names its tool and runs, and has no model and no tokens.
+/// Disclosure, step number, step and agent, model and time span, tokens with those before the
+/// first edit, and state (`mDnc3`). A tool step names its tool and runs, and has no model and no
+/// tokens.
 fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
   let meta = header_meta(ctx, header);
   let title = ctx.t_args(
@@ -79,6 +81,7 @@ fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
       "runs.tokens",
       [("count", compact_tokens(header.usage.counted()).as_str())],
     );
+    let tokens = first_edit::header_tokens(ctx, tokens, header.before_edit.as_ref(), header.ended.is_some());
     Text::new(&tokens).variant(TypographyStyle::Mono).nowrap()
   });
   let (glyph, state) = step_state(header.status);
@@ -485,67 +488,6 @@ fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
 fn tenths_of_seconds(millis: i64) -> String {
   let tenths = millis.max(0) / 100;
   format!("{}.{}", tenths / 10, tenths % 10)
-}
-
-fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
-  match problem {
-    RunnerProblem::UnavailableVariable { variable } => (
-      ctx.t_args(
-        "runs.activity.problem.unavailableVariable",
-        [("variable", variable.as_str())],
-      ),
-      None,
-    ),
-    RunnerProblem::CouldNotStart { detail } => (
-      ctx.t("runs.activity.problem.couldNotStart"),
-      Some(detail.as_str().into()),
-    ),
-    RunnerProblem::CheckpointFailed { detail } => (
-      ctx.t("runs.activity.problem.checkpointFailed"),
-      Some(detail.as_str().into()),
-    ),
-    RunnerProblem::MergeConflict { branch, files } => (
-      ctx.t_args("runs.activity.problem.mergeConflict", [("branch", branch.as_str())]),
-      Some(
-        files
-          .join(
-            "
-",
-          )
-          .into(),
-      ),
-    ),
-    RunnerProblem::StepBudgetReached { budget } => (
-      ctx.t_args(
-        "runs.activity.problem.stepBudgetReached",
-        [("budget", compact_tokens(*budget).as_str())],
-      ),
-      None,
-    ),
-    RunnerProblem::PermissionPromptUnreachable => (
-      ctx.t("runs.activity.problem.promptUnreachable"),
-      Some(ctx.t("runs.activity.problem.promptUnreachableDetail")),
-    ),
-    RunnerProblem::CliTooOld {
-      model,
-      installed,
-      required,
-    } => (
-      ctx.t_args(
-        "runs.activity.problem.cliTooOld",
-        [
-          ("model", model.as_str()),
-          ("installed", installed.as_str()),
-          ("required", required.as_str()),
-        ],
-      ),
-      Some(ctx.t("runs.activity.problem.cliTooOldDetail")),
-    ),
-    RunnerProblem::ProgramNotFound { program } => (
-      ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
-      Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
-    ),
-  }
 }
 
 /// A path the CLI reported inside the run's worktree, relative to the worktree

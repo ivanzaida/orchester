@@ -35,6 +35,16 @@ pub(super) enum Awaiting {
   },
 }
 
+impl Awaiting {
+  /// The tool item waiting for the decision; other items may still be executing.
+  pub(super) fn item(&self) -> &str {
+    match self {
+      Self::Codex(request) => request.item(),
+      Self::Claude { call, .. } => call,
+    }
+  }
+}
+
 /// What a request shows, before it is recorded.
 struct Shown {
   command: bool,
@@ -217,7 +227,8 @@ impl Worker {
     id: &str,
     approve: bool,
   ) -> Result<Result<(), Rejection>, StoreError> {
-    if watch.approval.as_ref().is_none_or(|(pending, _)| pending != id) {
+    // A stopping agent (a pause checkpointing at the decision) takes none any more.
+    if watch.stop.is_some() || watch.approval.as_ref().is_none_or(|(pending, _)| pending != id) {
       return Ok(Err(Rejection::ToolApprovalNotAwaited));
     }
     if !watch

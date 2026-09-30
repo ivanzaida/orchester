@@ -12,7 +12,7 @@ use orchester_core::{
       InvocationTracker, OutputStream,
     },
   },
-  run::TokenUsage,
+  run::{StepOutcome, StepResult, TokenUsage},
 };
 
 fn replay(fixture: &str) -> Vec<AgentEvent> {
@@ -182,18 +182,22 @@ fn result_line(text: &str, structured: Option<&str>) -> String {
   )
 }
 
-fn last_message(line: &str) -> (Vec<AgentEvent>, Option<String>) {
+/// The events of `line` and the outcome and summary of the step result the last message holds.
+fn last_message(line: &str) -> (Vec<AgentEvent>, Option<(StepOutcome, String)>) {
   let mut stream = ClaudeStream::default();
   let events = stream.parse(OutputStream::Stdout, line);
-  let message = tracked(&events).last_message().map(str::to_owned);
-  (events, message)
+  let result = tracked(&events)
+    .last_message()
+    .and_then(StepResult::parse)
+    .map(|result| (result.outcome, result.summary));
+  (events, result)
 }
 
 #[test]
 fn claude_stream_takes_the_structured_output_as_the_step_result() {
   let question = r#"{"outcome":"question","summary":"Which database?"}"#;
-  let (events, message) = last_message(&result_line("I need a decision first.", Some(question)));
-  assert_eq!(message.as_deref(), Some(question));
+  let (events, result) = last_message(&result_line("I need a decision first.", Some(question)));
+  assert_eq!(result, Some((StepOutcome::Question, "Which database?".to_owned())));
   assert!(
     !events
       .iter()
@@ -209,14 +213,17 @@ fn claude_stream_takes_the_result_that_closes_prose_or_fails_the_turn() {
     format!("The build breaks.\n\n```json\n{failed}\n```\n"),
     "Report:\n{\n  \"outcome\": \"failed\",\n  \"summary\": \"The build breaks.\"\n}".to_owned(),
   ] {
-    let (_, message) = last_message(&result_line(&text, None));
-    assert_eq!(message.as_deref(), Some(failed), "{text}");
+    let (_, result) = last_message(&result_line(&text, None));
+    assert_eq!(
+      result,
+      Some((StepOutcome::Failed, "The build breaks.".to_owned())),
+      "{text}"
+    );
   }
   for text in [
     "All done, it works.".to_owned(),
     format!("{failed}\nAnd one more thing."),
     r#"Result: {"outcome":"done","summary":"x"}"#.to_owned(),
-    r#"{"outcome":"done","summary":"x","extra":1}"#.to_owned(),
     r#"{"outcome":"maybe","summary":"x"}"#.to_owned(),
   ] {
     let (events, _) = last_message(&result_line(&text, None));
@@ -248,9 +255,13 @@ fn claude_stream_reports_permission_denials_and_goes_on() {
   assert_eq!(tracker.outcome(Some(0)), InvocationOutcome::Completed);
   assert_eq!(tracker.usage().counted(), 25 + 45);
   // The result that closes the prose becomes the last message.
+  let result = tracker
+    .last_message()
+    .and_then(StepResult::parse)
+    .expect("a step result");
   assert_eq!(
-    tracker.last_message(),
-    Some(r#"{"outcome":"done","summary":"Went on without the page."}"#)
+    (result.outcome, result.summary.as_str()),
+    (StepOutcome::Done, "Went on without the page.")
   );
 }
 

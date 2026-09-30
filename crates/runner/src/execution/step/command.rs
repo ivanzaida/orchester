@@ -8,14 +8,18 @@
 //! revision). The extra writable folders its permissions grant are resolved in the repository at
 //! each start, and those under `.orchester/` that do not exist yet are created: the CLIs ignore a
 //! folder that does not exist. The skills that reach the agent are placed and listed in its prompt, and the
-//! project's repository agent files setting is read at each start ([`super::skills`]).
+//! project's repository agent files setting is read at each start ([`super::skills`]). What the agent gets of the
+//! code index is decided before ([`AgentIndex`]): its folder and the internal skill in the prompt of new and resumed
+//! sessions (Claude Code also gets the folder with `--add-dir`), and ripgrep's folder first on the CLI's `PATH`.
 
 use std::{
   collections::BTreeSet,
+  num::NonZeroU32,
   path::{Path, PathBuf},
 };
 
 use orchester_core::{
+  code_index::CodeIndexUse,
   command::{Command, SecretVariable},
   connection::{
     AgentConnection, AgentProvider, REASONING_EFFORT,
@@ -23,18 +27,22 @@ use orchester_core::{
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
-  permission::{CommandPermission, FolderBounds, capability::EnforcedPermissions},
-  resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKind},
+  memory::{InjectedMemory, RecalledMemory},
+  permission::{AgentPermissions, CommandPermission, FolderBounds, capability::EnforcedPermissions},
+  resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKey, StepKind},
   run::{
-    AssembledPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
-    PinnedVersion, PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, Run, RunContext,
-    StepExecutor, StepOutput,
+    AssembledPrompt, CodeIndexPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion,
+    InvocationPrompt, PinnedVersion, PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput,
+    Run, RunContext, StepExecutor, StepOutput,
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, SettingsStore},
 };
 
 use super::{
-  super::run::RunTask,
+  super::{
+    codebase_index::{AgentIndex, IndexTold, with_tools_on_path},
+    run::RunTask,
+  },
   Continuation, Occasion,
   app_server::AppServerSetup,
   claude_approval::ClaudeApprovals,
@@ -43,7 +51,7 @@ use super::{
 };
 use crate::private_file::PrivateFile;
 
-fn problem(detail: String) -> RunnerProblem {
+pub(super) fn problem(detail: String) -> RunnerProblem {
   RunnerProblem::CouldNotStart { detail }
 }
 
@@ -54,14 +62,31 @@ pub(super) struct AgentStart {
   pub(super) prompt: InvocationPrompt,
   /// Claude Code's MCP configuration file, removed when this is dropped: once the CLI has ended.
   pub(super) mcp_file: Option<PrivateFile>,
-  /// An event for each MCP server the agent works without.
-  pub(super) mcp_left_out: Vec<AgentEvent>,
+  /// An event for each MCP server the agent works without, and for the code index it lacks.
+  pub(super) left_out: Vec<AgentEvent>,
+  /// What the agent gets of the code index.
+  pub(super) code_index: CodeIndexUse,
   pub(super) app_server: Option<AppServerSetup>,
   /// Claude Code's permission prompt, for a step that asks a person.
   pub(super) claude_approvals: Option<ClaudeApprovals>,
   /// Secret values of Claude Code's MCP servers, kept out of the invocation's activity.
   pub(super) mcp_secrets: Vec<SecretVariable>,
   pub(super) agent: String,
+  /// The task memory its prompt holds, to record with the invocation.
+  pub(super) memory: Vec<InjectedMemory>,
+  pub(super) permissions: AgentPermissions,
+}
+
+/// What the prompt of an agent step's invocation is made of besides the run.
+#[derive(Clone, Copy)]
+struct PromptParts<'a> {
+  execution: StepExecutionId,
+  step: &'a Step,
+  profile: ProfileInfo<'a>,
+  continuation: &'a Continuation,
+  placed: &'a PlacedSkills,
+  code_index: Option<CodeIndexPrompt<'a>>,
+  memory: &'a [RecalledMemory],
 }
 
 /// What decides the CLI's arguments besides its prompt and MCP servers.
@@ -79,64 +104,53 @@ struct Cli<'a> {
   /// The repository's skills Codex disables, when the project has its agent files off; `None` while
   /// they are on.
   repository_skills: Option<&'a [PathBuf]>,
+  /// The code index folder the agent gets, if any.
+  code_index: Option<&'a Path>,
   /// Claude Code's permission prompt configuration, when the step asks a person.
   approvals: Option<&'a Path>,
 }
 
 impl RunTask {
   /// How invocation `invocation` of `execution`'s agent starts: its command, the CLI it starts,
-  /// what its prompt is made of and its MCP servers, continuing as `continuation` says, or why it
-  /// cannot start.
+  /// what its prompt is made of and its MCP servers, continuing as `continuation` says, with what it
+  /// gets of the code index (`index`), or why it cannot start.
   pub(super) fn command(
     &self,
     execution: StepExecutionId,
     continuation: &Continuation,
     (invocation, worktree): (InvocationId, &Path),
+    index: AgentIndex,
   ) -> Result<AgentStart, RunnerProblem> {
-    let key = self
-      .run
-      .execution(execution)
-      .expect("the execution's model was found")
-      .step();
-    let step = self
-      .run
-      .snapshot()
-      .body()
-      .step(key)
-      .expect("executions name snapshot steps");
-    let (StepKind::Agent { .. }, Some(StepExecutor::Agent { profile, model, .. })) =
-      (&step.kind, self.run.snapshot().step(key).map(|step| step.executor()))
-    else {
-      return Err(problem(format!("step `{key}` is not an agent step")));
-    };
+    let (step, profile, model) = self.agent_step(execution)?;
+    let key = &step.key;
     let (body, connection) = self.profile_and_connection(profile)?;
     let info = ProfileInfo {
       id: profile.resource,
       version: profile.number,
       body: &body,
     };
-    let placed = self.place_skills(execution, step, info)?;
-    let AssembledPrompt { text: prompt, sources } = self.prompt(execution, step, info, continuation, &placed)?;
-    // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
-    // because an agent never starts with permissions that are not enforced. The run's permissions
-    // for the profile, if they were changed for it, else the profile's, narrowed by the step.
-    let enforced = self
-      .run
-      .step_permissions(key, body.permissions())
-      .expect("an agent step of the run has permissions")
-      .enforced_on(connection.provider(), Platform::current())
-      .map_err(|error| problem(error.to_string()))?;
+    let mut placed = self.place_skills(execution, step, info)?;
+    let skill = match index.folder {
+      Some(_) => Some(self.place_code_map(execution, &mut placed)?),
+      None => None,
+    };
+    let provider = connection.provider();
+    let told = IndexTold::new(&index, skill.as_deref(), provider);
+    let recalled = self.recall_memory(step, info)?;
+    let parts = PromptParts {
+      execution,
+      step,
+      profile: info,
+      continuation,
+      placed: &placed,
+      code_index: told.prompt(),
+      memory: recalled.entries(),
+    };
+    let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
+    let enforced = self.enforced(key, &body, provider)?;
     let writable_roots = self.writable_roots(&enforced)?;
     let environment = self.environment(worktree)?;
-    let provider = connection.provider();
-    let agent_files = self
-      .db
-      .repository_agent_files()
-      .map_err(|error| problem(error.to_string()))?;
-    let repository = match (agent_files.is_on(), provider) {
-      (false, AgentProvider::CodexCli) => Some(repository_skills(worktree)?),
-      _ => None,
-    };
+    let repository = self.repository_skills_left_out(provider, worktree)?;
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
     let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;
     let mcp_secrets = setup.claude_secrets();
@@ -154,6 +168,7 @@ impl RunTask {
       environment: &environment,
       skills: placed.folder.as_deref(),
       repository_skills: repository.as_deref(),
+      code_index: index.folder.as_deref(),
       approvals: claude_approvals.as_ref().map(ClaudeApprovals::config),
     };
     let interactive = enforced.permissions().asks_a_person();
@@ -164,17 +179,82 @@ impl RunTask {
       let (command, file) = self.cli_command(&cli, setup, prompt)?;
       (command, file, None)
     };
+    let command = match &index.tools {
+      Some(tools) => with_tools_on_path(command, tools),
+      None => command,
+    };
+    let mut left_out = left_out;
+    left_out.extend(index.problems(provider));
     Ok(AgentStart {
       command,
       provider,
       prompt: sources,
       mcp_file,
-      mcp_left_out: left_out,
+      left_out,
+      code_index: index.used,
       app_server,
       claude_approvals,
       mcp_secrets,
       agent: body.role().as_str().to_owned(),
+      memory: recalled.injected(),
+      permissions: enforced.permissions().clone(),
     })
+  }
+
+  /// The permissions the agent of step `key` gets on `provider`: the run's for the profile, if they
+  /// were changed for it, else the profile's, narrowed by the step. Preflight already refused steps
+  /// whose permissions the CLI cannot enforce; checked again because an agent never starts with
+  /// permissions that are not enforced.
+  fn enforced(
+    &self,
+    key: &StepKey,
+    body: &AgentProfile,
+    provider: AgentProvider,
+  ) -> Result<EnforcedPermissions, RunnerProblem> {
+    self
+      .run
+      .step_permissions(key, body.permissions())
+      .expect("an agent step of the run has permissions")
+      .enforced_on(provider, Platform::current())
+      .map_err(|error| problem(error.to_string()))
+  }
+
+  /// The repository's skills Codex disables while the project has its agent files off; `None`
+  /// while they are on, or for Claude Code.
+  fn repository_skills_left_out(
+    &self,
+    provider: AgentProvider,
+    worktree: &Path,
+  ) -> Result<Option<Vec<PathBuf>>, RunnerProblem> {
+    let agent_files = self
+      .db
+      .repository_agent_files()
+      .map_err(|error| problem(error.to_string()))?;
+    Ok(match (agent_files.is_on(), provider) {
+      (false, AgentProvider::CodexCli) => Some(repository_skills(worktree)?),
+      _ => None,
+    })
+  }
+
+  /// The agent step `execution` executes, the profile version that runs it and its model.
+  fn agent_step(&self, execution: StepExecutionId) -> Result<(&Step, &PinnedVersion, &ModelId), RunnerProblem> {
+    let key = self
+      .run
+      .execution(execution)
+      .expect("the execution's model was found")
+      .step();
+    let step = self
+      .run
+      .snapshot()
+      .body()
+      .step(key)
+      .expect("executions name snapshot steps");
+    let (StepKind::Agent { .. }, Some(StepExecutor::Agent { profile, model, .. })) =
+      (&step.kind, self.run.snapshot().step(key).map(|step| step.executor()))
+    else {
+      return Err(problem(format!("step `{key}` is not an agent step")));
+    };
+    Ok((step, profile, model))
   }
 
   fn app_server_command(
@@ -321,6 +401,7 @@ impl RunTask {
           .as_ref()
           .map(|servers| (servers.file.path(), servers.servers.as_slice())),
         skills: cli.skills,
+        code_index: cli.code_index,
         approvals: cli.approvals,
       }
       .command(prompt, std::env::vars_os(), cli.environment),
@@ -337,26 +418,23 @@ impl RunTask {
   /// variables filled in, then the outputs of the passed executions of the steps it depends on (a
   /// gated one's approved plan), and what a reviewer asked to change in its own plan, if the
   /// invocation revises it.
-  fn prompt(
-    &self,
-    execution: StepExecutionId,
-    step: &Step,
-    profile: ProfileInfo<'_>,
-    continuation: &Continuation,
-    placed: &PlacedSkills,
-  ) -> Result<AssembledPrompt, RunnerProblem> {
+  fn prompt(&self, parts: PromptParts<'_>) -> Result<AssembledPrompt, RunnerProblem> {
+    let PromptParts {
+      execution,
+      step,
+      profile,
+      continuation,
+      placed,
+      code_index,
+      memory,
+    } = parts;
     let event = if continuation.session.is_some() {
       InjectionEvent::Resume
     } else {
       InjectionEvent::Start
     };
     let pipeline = self.run.snapshot().pipeline();
-    let pipeline_name = self
-      .db
-      .resource(pipeline.resource)
-      .map_err(|error| problem(error.to_string()))?
-      .map(|resource| resource.name().as_str().to_owned())
-      .ok_or_else(|| problem("the run's pipeline no longer exists".to_owned()))?;
+    let pipeline_name = self.pipeline_name()?;
     let outputs = self
       .db
       .step_outputs(self.run.id())
@@ -377,18 +455,12 @@ impl RunTask {
       })
       .collect();
     let skills = placed.listings();
-    let attempt = self
-      .run
-      .attempts()
-      .iter()
-      .find(|attempt| attempt.execution(execution).is_some())
-      .map(|attempt| attempt.number());
     PromptInput {
       project: &self.project,
       task: &self.task,
       run: Some(RunContext {
         run: &self.run,
-        attempt,
+        attempt: self.attempt_number(execution),
       }),
       pipeline: PipelineInfo {
         id: pipeline.resource,
@@ -399,6 +471,7 @@ impl RunTask {
       profile,
       instructions: &sources,
       skills: &skills,
+      code_index,
       dependencies: &dependencies,
       revision: Plan::awaiting_revision(&plans, execution, continuation.last_started).map(|(plan, note)| {
         PlanRevision {
@@ -413,6 +486,7 @@ impl RunTask {
           messages: &continuation.messages,
         },
       ),
+      memory,
     }
     .assemble(event)
     .map_err(
@@ -420,6 +494,26 @@ impl RunTask {
         variable: variable.name().to_owned(),
       },
     )
+  }
+
+  /// The number of the attempt `execution` belongs to.
+  fn attempt_number(&self, execution: StepExecutionId) -> Option<NonZeroU32> {
+    self
+      .run
+      .attempts()
+      .iter()
+      .find(|attempt| attempt.execution(execution).is_some())
+      .map(|attempt| attempt.number())
+  }
+
+  /// The name of the run's pipeline, as prompts name it.
+  fn pipeline_name(&self) -> Result<String, RunnerProblem> {
+    self
+      .db
+      .resource(self.run.snapshot().pipeline().resource)
+      .map_err(|error| problem(error.to_string()))?
+      .map(|resource| resource.name().as_str().to_owned())
+      .ok_or_else(|| problem("the run's pipeline no longer exists".to_owned()))
   }
 
   /// The instruction versions the run pinned, with their names, in library (slug) order.

@@ -790,7 +790,28 @@
         "promptUnreachable": "Orchester approvals were unavailable to Claude Code",
         "promptUnreachableDetail": "Its permission prompt never reached the runner, so every action it asked about was denied without asking you. Nothing was approved.",
         "cliTooOld": "Claude Code {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
-        "cliTooOldDetail": "The model’s provider refused this CLI version. Update Claude Code, or point the connection at a newer one, then check the connection again."
+        "cliTooOldDetail": "The model’s provider refused this CLI version. Update Claude Code, or point the connection at a newer one, then check the connection again.",
+        "codebaseIndexUnavailable": "The codebase index is unavailable; the agent works without it",
+        "ripgrepNotFound": "ripgrep was not found",
+        "ripgrepUnavailable": "ripgrep could not be given to the agent",
+        "ripgrepUnavailableDetail": "{{fallback}}\n{{detail}}",
+        "ripgrepFallback": {
+          "unknown": "The agent searched without it.",
+          "indexWithGitGrep": "Codex still gets the code index; it searches the index and the files with git grep.",
+          "indexWithOwnTools": "Claude Code still gets the code index; it searches with its own search tools.",
+          "gitGrep": "Codex has no code index either; it searches the files with git grep.",
+          "ownTools": "Claude Code has no code index either; it searches with its own search tools."
+        },
+        "memoryNotSaved": "The step’s handoff was not saved to task memory",
+        "memoryContainsSecret": "It contains the value of the secret {{secret}}. Secret values are never kept in memory.",
+        "memoryStorageFailed": "The project database could not store it: {{detail}}",
+        "memoryKeychainUnavailable": "The system keychain could not be read to check it for the value of the secret {{secret}}.",
+        "memoryUnreadable": {
+          "one": "{{count}} memory record could not be read",
+          "other": "{{count}} memory records could not be read"
+        },
+        "memoryScanFailed": "Task memory could not be checked for unreadable records; the agent started all the same",
+        "memoryUnreadableDetail": "Agents get the other records. The unreadable ones stay in the project database as they are."
       },
       "unparsed": {
         "one": "{{count}} unparsed line",
@@ -827,8 +848,34 @@
         "output": "Output tokens",
         "counted": "Counted",
         "runTotal": "Run total",
-        "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget."
+        "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget.",
+        "noteFirstEdit": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the turns until the agent first changed a file.",
+        "noteAtMost": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the turns until the agent first changed a file; ≤ means the turn of that edit was reported whole, so its later part is counted too.",
+        "stepTitle": "{{step}} · {{agent}}",
+        "ran": "Ran",
+        "ranValue": "{{start}}–{{end}} · {{took}}",
+        "codeIndex": "Code index",
+        "codeIndexGiven": "{{revision}} · {{branch}}",
+        "codeIndexRevision": "{{revision}}",
+        "codeIndexRipgrepNotFound": "ripgrep not found",
+        "codeIndexRipgrepUnavailable": "ripgrep could not be given",
+        "codeIndexGitGrep": "{{reason}} · searches with git grep",
+        "codeIndexOwnTools": "{{reason}} · searches with its own tools",
+        "codeIndexOff": "Off · project setting",
+        "codeIndexUnavailable": "Unavailable · build failed",
+        "codeIndexBuilding": "Unavailable · still building",
+        "beforeFirstEdit": "Tokens before first edit",
+        "firstEdit": "First edit",
+        "firstEditValue": "{{time}} · {{path}}",
+        "noEditYet": "No file changed yet",
+        "noEditInStep": "No file changed in this step",
+        "soFar": "{{count}} so far",
+        "cachedSoFar": "{{count}} so far · not counted",
+        "atMost": "≤ {{count}}",
+        "cachedAtMost": "≤ {{count}} · not counted"
       },
+      "beforeEditMeta": "{{tokens}} · {{before}} before first edit",
+      "noEditMeta": "{{tokens}} · no edit",
       "stepOptionAttempt": "{{number}} · {{step}} · {{agent}} · attempt {{attempt}}",
       "mcp": {
         "title": "Working without MCP server {{server}}",
@@ -2232,7 +2279,111 @@
     "tabs": {
       "general": "General",
       "limits": "Limits",
-      "environment": "Environment"
+      "environment": "Environment",
+      "codeIndex": "Code index"
+    },
+    "codeIndex": {
+      "description": "How agents find their way around {{project}}’s code.",
+      "heading": "Code index",
+      "explanation": "Orchester indexes the repository’s tracked files at the revision a run starts from: languages and line counts, symbols, file outlines, Markdown headings and a package map. Agents get a built-in skill that searches the index with ripgrep, so they find code without reading whole files.",
+      "name": "Use code index",
+      "detail": "Agents that start after a change follow it. An agent already working keeps what it started with.",
+      "on": "On · agents search the index",
+      "off": "Off · agents get no index",
+      "offReadback": "Agents find code by listing and reading files",
+      "noneReadback": "No index yet",
+      "kept": {
+        "one": "1 index kept",
+        "other": "{{count}} indexes kept"
+      },
+      "keptBusy": "{{kept}} · {{busy}}",
+      "building": "{{count}} building",
+      "failedCount": "{{count}} failed",
+      "offTitle": "Agents get no index and no index skill",
+      "offDetail": "They find code by listing and reading files, which takes longer and uses more tokens in a large repository. No index is built while this is off.",
+      "listTitle": "Indexes",
+      "total": {
+        "one": "1 index · {{size}} in total",
+        "other": "{{count}} indexes · {{size}} in total"
+      },
+      "totalWithoutSize": {
+        "one": "1 index",
+        "other": "{{count}} indexes"
+      },
+      "noneKept": "None kept",
+      "listExplanation": "Built per revision when a run starts, shared read-only by the runs from that revision, and removed together with the worktrees that used it.",
+      "empty": "No index yet — built when the next run starts",
+      "listFailed": "Couldn’t read the kept indexes",
+      "usedByRun": "{{task}} · Run {{number}}",
+      "usedByRuns": "{{task}} · Runs {{number}}",
+      "runNumber": "Run {{number}}",
+      "usedBySeparator": " · ",
+      "state": {
+        "ready": "Ready",
+        "building": "Building",
+        "failed": "Failed",
+        "outdated": "Outdated"
+      },
+      "outdatedDetail": "Earlier index format · rebuilt when a run starts from it",
+      "readyDetail": "{{size}} · {{files}} files · {{symbols}} symbols · built {{when}} in {{took}}",
+      "builtToday": "today {{time}}",
+      "builtOn": "{{month}} {{day}} {{time}}",
+      "phase": {
+        "listing": "Listing tracked files… · started {{start}}, {{elapsed}} ago",
+        "indexing": "Indexing {{files}} files… · started {{start}}, {{elapsed}} ago",
+        "writing": "Writing the package map… · started {{start}}, {{elapsed}} ago"
+      },
+      "failed": {
+        "one": "{{reason}}. {{runs}} continues without the index; its agents search the files themselves.",
+        "other": "{{reason}}. {{runs}} continue without the index; their agents search the files themselves.",
+        "none": "{{reason}}."
+      },
+      "rebuild": "Rebuild",
+      "retry": "Retry",
+      "rebuildFailed": "The index was not rebuilt: {{reason}}",
+      "rebuildInUse": "The index was not rebuilt: a running agent is reading it. Try again when it finishes.",
+      "searchHeading": "Search tool",
+      "ripgrep": "ripgrep",
+      "ripgrepDetail": "The index skill searches with rg. Orchester copies it into .orchester/tools so it also runs inside the Codex sandbox.",
+      "checking": "Looking for ripgrep…",
+      "checkFailed": "Couldn’t look for ripgrep",
+      "found": "Found · {{version}}",
+      "foundWithoutVersion": "Found",
+      "source": {
+        "onPath": "On PATH · agents get a copy in .orchester/tools",
+        "codexCli": "Bundled with Codex CLI · agents get a copy in .orchester/tools",
+        "claudeCode": "Bundled with Claude Code · agents get a copy in .orchester/tools",
+        "winget": "Installed with winget · agents get a copy in .orchester/tools"
+      },
+      "notFound": "Not found",
+      "notFoundDetail": "Not on PATH, not bundled with Codex CLI or Claude Code",
+      "slowTitle": "Agents fall back to slower search",
+      "slowDetail": "Without ripgrep the index skill can’t run, so agents list and read files with the shell instead. That takes longer and uses more tokens.",
+      "commandLabel": "Install ripgrep runs",
+      "hint": "Nothing runs until you click. Afterwards Orchester looks for rg again and copies it into .orchester/tools.",
+      "install": "Install ripgrep",
+      "checkAgain": "Check again",
+      "tryAgain": "Try again",
+      "installing": "Installing…",
+      "installingReadback": "{{installer}} started at {{time}} · {{elapsed}}",
+      "installingTitle": "Installing ripgrep with {{installer}}",
+      "installingDetail": "Agents that start before it finishes still use slower search. You can leave this page; the install continues until it finishes, you cancel it or you close Orchester.",
+      "installingDetailContinues": "Agents that start before it finishes still use slower search. You can leave this page; the install continues until it finishes or you cancel it, also after you close Orchester.",
+      "cancelInstall": "Cancel",
+      "installCancelled": "You cancelled the install; {{installer}} was stopped. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "installTimedOut": "{{installer}} did not finish within {{minutes}} minutes and was stopped. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "running": "Running",
+      "lastOutput": "Last output: {{line}}",
+      "installFailedTitle": "ripgrep was not installed",
+      "installFailedDetail": "{{installer}} ended with exit code {{code}}: {{message}}. Nothing was installed. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "installNotStarted": "{{installer}} could not be started: {{message}}. Nothing was installed. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "installUnavailable": "Install ripgrep is unavailable: {{installer}} was not found. Install ripgrep yourself, for example from github.com/BurntSushi/ripgrep, then choose Check again.",
+      "installUnsupported": "Orchester cannot install ripgrep on this system. Install ripgrep yourself, for example from github.com/BurntSushi/ripgrep, then choose Check again.",
+      "installer": {
+        "winget": "winget",
+        "homebrew": "Homebrew",
+        "homebrewProgram": "Homebrew (brew)"
+      }
     },
     "limits": {
       "description": "Defaults and limits for {{project}}. They apply to new tasks and runs in this project.",
@@ -3327,9 +3478,9 @@
       "empty": "No text.",
       "resolved": "Source {{index}} of {{count}} · {{resolved}} variables resolved at this injection event",
       "unresolved": "Source {{index}} of {{count}} · {{resolved}} variables resolved · no value yet: {{unavailable}}",
-      "note": "Preview only. Existing runs keep the instruction versions they started with.",
+      "note": "Preview only. Existing runs keep the instruction versions they started with. The skills and the code index part are added when a run starts.",
       "originDraft": "{{kind}} · {{event}} · Draft substituted for published v{{version}}",
-      "noteDraft": "Draft preview only. Existing runs keep the instruction versions they started with."
+      "noteDraft": "Draft preview only. Existing runs keep the instruction versions they started with. The skills and the code index part are added when a run starts."
     },
     "create": {
       "title": "New instruction",
@@ -3883,6 +4034,16 @@
         "running": "Saving repository agent files",
         "done": "Repository agent files saved",
         "failed": "Could not save repository agent files"
+      },
+      "codeIndex": {
+        "running": "Saving the code index setting",
+        "done": "Code index setting saved",
+        "failed": "Could not save the code index setting"
+      },
+      "codeIndexRebuild": {
+        "running": "Rebuilding the code index of {{name}}",
+        "done": "Code index of {{name}} rebuilt",
+        "failed": "Could not rebuild the code index of {{name}}"
       }
     },
     "opens": {

@@ -132,12 +132,22 @@ required-features = ["test-agent"]
 name = "claude_prompt_relay"
 required-features = ["test-agent"]
 
+[[test]]
+name = "codebase_index"
+required-features = ["test-agent"]
+
+[[test]]
+name = "memory"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
 [dependencies]
 orchester-core.workspace = true
 orchester-exec.workspace = true
+# The codebase index of each run's base revision, built before its first step.
+orchester-index.workspace = true
 orchester-ipc.workspace = true
 orchester-store.workspace = true
 fs4.workspace = true
