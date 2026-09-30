@@ -31,7 +31,7 @@ pub(super) fn push(text: &mut String, code_index: Option<CodeIndexPrompt<'_>>) {
          symbols.tsv (definitions by name, file and line), outline/<path>.md (the items of one file with their line \
          ranges) and docs.md (Markdown headings).\n\
          Start there instead of listing folders or reading whole files: read map.md once, then search symbols.tsv \
-         and tree.txt with `rg -n`, and read only the lines you need. The codebase-map skill ({skill}) explains \
+         and tree.txt with `rg -n`, and read only the lines you need. The orchester-codebase-index skill ({skill}) explains \
          each file and the searches.\n\
          Files changed since the base revision, by you or by earlier steps, may differ from the index: read those \
          files directly."

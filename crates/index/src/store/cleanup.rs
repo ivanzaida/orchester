@@ -12,7 +12,7 @@ use std::{
   sync::atomic::{AtomicU64, Ordering},
 };
 
-use orchester_core::revision::Revision;
+use orchester_core::{revision::Revision, time::Timestamp};
 
 use super::{BUILDING, USERS, listing::FAILURES, locks};
 use crate::{IndexError, progress::PROGRESS};
@@ -85,7 +85,9 @@ fn used(root: &Path, worktrees: &Path, revision: &Revision) -> Result<bool, Inde
 /// fails is logged and retried by the next removal.
 pub(super) fn discard(root: &Path, folder: &Path) -> Result<(), IndexError> {
   let number = DISCARDED.fetch_add(1, Ordering::Relaxed);
-  let trash = root.join(format!("{TRASH}{}-{number}", std::process::id()));
+  // The time tells this process's trash from what an earlier process with the same id left.
+  let started = Timestamp::now().unix_millis();
+  let trash = root.join(format!("{TRASH}{}-{started}-{number}", std::process::id()));
   match fs::rename(folder, &trash) {
     Ok(()) => {}
     Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),

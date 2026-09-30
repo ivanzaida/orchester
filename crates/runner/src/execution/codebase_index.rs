@@ -6,7 +6,7 @@
 //!   was turned on during the run builds it then.
 //! - At each agent start the setting is read again. Off, the agent gets nothing. On, ripgrep is looked up on the
 //!   agent's `PATH` and in the agent CLIs' installs and copied into `.orchester/tools/`, which goes first on the
-//!   agent's `PATH`; the agent then gets the index folder and the internal `codebase-map` skill.
+//!   agent's `PATH`; the agent then gets the index folder and the internal `orchester-codebase-index` skill.
 //! - An index that cannot be built or a ripgrep that is not found does not stop the run: the agent gets a runner
 //!   problem in its activity saying why, and its invocation records what it got ([`CodeIndexUse`]).
 
@@ -227,7 +227,7 @@ pub(super) enum IndexTold {
 }
 
 impl IndexTold {
-  /// For an agent that gets `index`, with the `codebase-map` skill placed at `skill` when it gets
+  /// For an agent that gets `index`, with the `orchester-codebase-index` skill placed at `skill` when it gets
   /// the index.
   pub(super) fn new(index: &AgentIndex, skill: Option<&Path>) -> Self {
     match (&index.used, &index.folder, skill) {

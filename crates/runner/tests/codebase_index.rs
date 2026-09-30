@@ -1,6 +1,6 @@
 //! The codebase index of a run's base revision, end to end against `orchester-fake-codex` and
 //! `orchester-fake-claude`: built before the first step, removed with the worktree that used it, and
-//! given to new and resumed sessions with the internal `codebase-map` skill and ripgrep first on the
+//! given to new and resumed sessions with the internal `orchester-codebase-index` skill and ripgrep first on the
 //! agent's `PATH`; nothing while the project has it off; reported to the agent when it cannot be
 //! built or ripgrep is missing, while the run goes on; and the tokens used before the first edit.
 //! ripgrep is looked up on the `PATH` the project's environment gives the agent, so a test decides
@@ -195,7 +195,7 @@ async fn codebase_index_reaches_codex_on_new_and_resumed_sessions_with_ripgrep_o
       .iter()
       .all(|line| line.contains(&index.to_string_lossy().into_owned()))
   );
-  let skill = prompt_lines(root, run, "- codebase-map: ");
+  let skill = prompt_lines(root, run, "- orchester-codebase-index: ");
   assert_eq!(skill.len(), 1, "the new session lists the skill: {skill:?}");
   let document = skill[0]
     .rsplit_once(" (")
@@ -203,7 +203,7 @@ async fn codebase_index_reaches_codex_on_new_and_resumed_sessions_with_ripgrep_o
     .map(Path::new)
     .expect("the skill's path");
   let text = fs::read_to_string(document).expect("the placed skill");
-  assert!(text.starts_with("---\nname: codebase-map\n"), "{text}");
+  assert!(text.starts_with("---\nname: orchester-codebase-index\n"), "{text}");
 
   let db = ProjectDb::open(root).expect("open");
   let paths = reported(&db, run, "path: ");
@@ -235,7 +235,7 @@ async fn codebase_index_reaches_claude_code_as_a_folder_it_may_read() {
   let skills = root.join(".orchester").join("skills");
   assert!(argv.contains(&format!("--add-dir {}", skills.display())), "{argv}");
   assert_eq!(prompt_lines(root, ended.id(), "An index of this repository").len(), 1);
-  assert_eq!(prompt_lines(root, ended.id(), "- codebase-map: ").len(), 1);
+  assert_eq!(prompt_lines(root, ended.id(), "- orchester-codebase-index: ").len(), 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -250,7 +250,7 @@ async fn codebase_index_off_gives_agents_nothing_and_builds_nothing() {
   assert!(!root.join(".orchester/index").exists());
   assert!(!root.join(".orchester/tools").exists());
   assert!(prompt_lines(root, ended.id(), "# Codebase index").is_empty());
-  assert!(prompt_lines(root, ended.id(), "- codebase-map: ").is_empty());
+  assert!(prompt_lines(root, ended.id(), "- orchester-codebase-index: ").is_empty());
   assert!(problems(root, ended.id()).is_empty());
 }
 
@@ -312,6 +312,7 @@ async fn tokens_before_the_first_edit_count_the_turns_until_the_agent_changed_a_
       output: 5,
     }
   );
+  assert!(progress.at_most, "the turn that made the edit went on after it");
   let edit = progress.first_edit.expect("the agent changed a file");
   assert_eq!(edit.path, "README.md");
   assert!(edit.at >= invocation.started_at);

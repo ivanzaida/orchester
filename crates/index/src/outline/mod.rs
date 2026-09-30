@@ -19,8 +19,10 @@ use crate::language::Language;
 
 /// The longest signature kept, in characters.
 const SIGNATURE_LIMIT: usize = 200;
-/// How long one file may take to parse; a file that takes longer gets no outline.
-const PARSE_TIME: Duration = Duration::from_secs(5);
+/// How long one file may take to parse; a file that takes longer gets no outline. Only a safety net
+/// against a pathological file: the size and line caps decide what is parsed, so an index does not
+/// depend on how busy the computer is, and a file within them parses in well under a second.
+const PARSE_TIME: Duration = Duration::from_secs(30);
 
 /// What a definition is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

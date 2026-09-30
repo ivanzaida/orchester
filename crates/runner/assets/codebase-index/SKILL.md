@@ -1,5 +1,5 @@
 ---
-name: codebase-map
+name: orchester-codebase-index
 description: Use at the start of any task in a repository, before listing or searching files - how to find the right files fast with the codebase index Orchester provides and with rg, instead of dumping folders and whole files.
 ---
 
@@ -35,7 +35,16 @@ Check `docs.md` before you look for design notes, architecture docs or conventio
 
 The index shows the base revision. Anything you or earlier steps of this run changed (`git status --short`,
 `git diff --stat`) may have moved, so read those files directly. Files that are not tracked, or are
-git-ignored, are not in the index at all.
+git-ignored, are not in the index at all. The index is shared and read-only: never change its files.
+
+Not every source file has an outline or symbols. These are only in `tree.txt`, with their line count:
+
+- files over 1 MiB, and files with a line over 4 KiB (minified or generated code);
+- files whose path is not a plain file name on every system (`:`, `?`, `\`, a trailing dot, a device name like
+  `CON`), and files whose path differs from another only in upper and lower case;
+- the rare file the parser did not finish in time.
+
+For those, search the source itself with `rg`.
 
 ## 2. Search rules
 
@@ -95,5 +104,3 @@ whole tree with the shell.
 - Find the definition and its callers: `symbols.tsv` for the definition, then `rg -n -w '<name>'` in the source,
   with `-g` to leave tests out or in.
 - Find the tests that cover it: the test folders in `map.md`, then `rg -l '<name>'` over them.
-- Read the repository's own agent instructions (`AGENTS.md`, `CLAUDE.md`, contributing docs) if the prompt does
-  not already include them. Their headings are in `docs.md`.
