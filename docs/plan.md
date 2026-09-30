@@ -167,6 +167,16 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+Plan limits in the status bar · ORC-17 · run worktree
+
+- **Implementation complete 2026-09-30; independent Verify pending.** Session-only Codex/Claude
+  readings arrive live from agent turns, with the newest CLI reading across projects, hover details,
+  warnings, reached/reset states, extra usage and narrow-window priorities.
+- `tools/check.ps1` passed. Filtered core/runner plan-limit and desktop status-bar/i18n/theme checks
+  are recorded with the exact design states in the [implementation handoff](evidence/orc-17-plan-limits-implementation.md).
+- Codex outside-run reads are documented through `account/rateLimits/read`; background polling was
+  not added. macOS core cross-check passed; runner/desktop cross-check needs the target C compiler.
+
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 
 - **Done 2026-09-30.** **Send & continue** resumes the same failed run in a new attempt, preserving its branch,

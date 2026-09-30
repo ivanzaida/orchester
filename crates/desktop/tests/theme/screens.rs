@@ -15,6 +15,15 @@ use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraShadow, Extra
 use super::themed_app;
 
 #[test]
+fn plan_limits_emphasis_follows_pencil() {
+  let app = themed_app();
+  let percent = app.theme().typography_style(ExtraTypography::MonoLimit.role());
+  assert_eq!(percent.font_size, 11.0);
+  assert_eq!(percent.weight, FontWeight::Medium);
+  assert_eq!(&*percent.font_family, "Geist Mono");
+}
+
+#[test]
 fn task_screen_roles_follow_pencil() {
   let app = themed_app();
   let theme = app.theme();

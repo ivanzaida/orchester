@@ -84,6 +84,12 @@ fn main() -> ExitCode {
   };
   println!(r#"{{"type":"thread.started","thread_id":"fake-thread-1"}}"#);
   println!(r#"{{"type":"turn.started"}}"#);
+  if prompt.contains("Report plan limits") {
+    print!(
+      "{}",
+      include_str!("../../../core/tests/fixtures/codex/plan-limits.jsonl")
+    );
+  }
   let result = StepReport {
     step: prompt
       .lines()

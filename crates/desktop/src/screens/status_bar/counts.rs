@@ -17,6 +17,7 @@ use super::{
   item::{glyph, item, label, pressed, separator, value},
   mcp_item::mcp_item,
   open::Opener,
+  plan_limits,
 };
 use crate::{
   embedded_mcp::McpStatus,
@@ -29,34 +30,54 @@ use crate::{
   ui::{icon::Icon, link::Press},
 };
 
-pub fn counts(ctx: &Ctx, (project, mcp): (Option<&ProjectBar>, McpStatus), opener: &Opener, hints: &Hints) -> Element {
-  let mut row = Row::new().height(Dimension::Pct(100.0)).align_items(Alignment::Center);
+pub fn counts(
+  ctx: &mut Ctx,
+  (project, mcp): (Option<&ProjectBar>, McpStatus),
+  opener: &Opener,
+  hints: &Hints,
+  (limits, width): (&plan_limits::Props, f32),
+) -> Element {
+  // R (`VTnmr`): remove version, tokens, then count labels; limits always stay.
+  let show_labels = width >= 960.0 && !(width < 1120.0 && plan_limits::reached(limits));
+  let mut row = Row::new()
+    .flex_shrink(0.0)
+    .height(Dimension::Pct(100.0))
+    .align_items(Alignment::Center);
   if let Some(project) = project {
     let unknown = ctx.t("statusBar.counts.unknown");
-    let agents = agents(ctx, project, &unknown, hints);
+    let agents = agents(ctx, project, &unknown, hints, show_labels);
     let queued = item("status-queued")
       .child(glyph(Icon::Clock3, PaletteColor::TextSecondary))
-      .child(label(&ctx.t("statusBar.counts.queued"), PaletteColor::TextSecondary))
+      .with_children(show_labels.then(|| label(&ctx.t("statusBar.counts.queued"), PaletteColor::TextSecondary)))
       .child(count(project.queued, &unknown));
     // The Overview's *Need your input*: runs waiting for a plan decision, an answer or an
     // approval.
     let needs_you = item("status-needs-you")
       .child(glyph(Icon::MessageCircle, PaletteColor::TextSecondary))
-      .child(label(&ctx.t("statusBar.counts.needsYou"), PaletteColor::TextSecondary))
+      .with_children(show_labels.then(|| label(&ctx.t("statusBar.counts.needsYou"), PaletteColor::TextSecondary)))
       .child(count(project.needs_you, &unknown));
     row = row
       .child(opens(agents, opener, Page::TASKS))
       .child(opens(queued, opener, Page::TASKS))
-      .child(opens(needs_you, opener, Page::Overview(OverviewTab::NeedsYou)))
-      .child(tokens(ctx, project.usage.as_ref(), &unknown, hints))
-      .child(separator());
+      .child(opens(needs_you, opener, Page::Overview(OverviewTab::NeedsYou)));
+    if width >= 1120.0 {
+      row = row.child(tokens(ctx, project.usage.as_ref(), &unknown, hints));
+    }
+    if !limits.connections.is_empty() {
+      row = row.child(ctx.mount_keyed::<plan_limits::PlanLimits>("status-plan-limits-component", limits.clone()));
+    }
+    row = row.child(separator());
   }
-  row.child(mcp_item(ctx, mcp, hints)).child(version(ctx, hints)).into()
+  row = row.child(mcp_item(ctx, mcp, hints));
+  if width >= 1280.0 {
+    row = row.child(version(ctx, hints));
+  }
+  row.into()
 }
 
 /// `F7mn6G`: agents at work of the runner's agent slots (`2/4`), a dash while the runner is not
 /// online or has not reported yet (states B, E, G).
-fn agents(ctx: &Ctx, project: &ProjectBar, unknown: &str, hints: &Hints) -> Button {
+fn agents(ctx: &Ctx, project: &ProjectBar, unknown: &str, hints: &Hints, show_label: bool) -> Button {
   let work = match project.runner.state_for(&project.repo_root) {
     RunnerState::Online => project.runner.work(),
     _ => None,
@@ -86,7 +107,7 @@ fn agents(ctx: &Ctx, project: &ProjectBar, unknown: &str, hints: &Hints) -> Butt
       work.map_or_else(String::new, |work| work.agents_working().to_string()),
     )
     .child(glyph(Icon::Bot, PaletteColor::TextSecondary))
-    .child(label(&ctx.t("statusBar.counts.agents"), PaletteColor::TextSecondary))
+    .with_children(show_label.then(|| label(&ctx.t("statusBar.counts.agents"), PaletteColor::TextSecondary)))
     .child(count);
   hints.attach(row, HintAnchor::Agents, hint)
 }

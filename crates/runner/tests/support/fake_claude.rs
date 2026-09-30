@@ -59,6 +59,7 @@ fn main() -> ExitCode {
     print!("{NOT_SIGNED_IN}");
     return ExitCode::from(1);
   }
+  report_limits(&prompt);
   let after = |flag: &str| {
     args
       .iter()
@@ -129,6 +130,15 @@ fn main() -> ExitCode {
 }
 
 /// Reads the prompt from standard input and reports on standard error how the CLI was started.
+fn report_limits(prompt: &str) {
+  if prompt.contains("Report plan limits") {
+    print!(
+      "{}",
+      include_str!("../../../core/tests/fixtures/claude/plan-limits.jsonl")
+    );
+  }
+}
+
 fn read_prompt(args: &[String]) -> Option<String> {
   let mut names: Vec<String> = std::env::vars_os()
     .map(|(name, _)| name.to_string_lossy().into_owned())

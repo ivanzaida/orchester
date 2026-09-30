@@ -31,6 +31,7 @@ struct Shell;
 
 #[derive(Clone, PartialEq)]
 struct ShellProps {
+  readings: orchester_desktop::plan_limits::Readings,
   bar: StatusBarProps,
   log: ActivityLog,
   mcp: McpStatus,
@@ -53,6 +54,7 @@ impl Component for Shell {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ShellProps>().clone();
     WindowFeed::of(ctx).activity.set(props.log);
+    WindowFeed::of(ctx).limits.set(props.readings);
     ctx.mount_keyed::<StatusBar>("status-bar", props.bar)
   }
 }
@@ -68,6 +70,7 @@ fn project(needs_you: Option<usize>) -> StatusBarProps {
   );
   StatusBarProps {
     project: Some(ProjectBar {
+      connections: Vec::new(),
       repo_root: PathBuf::from("kontur"),
       runner: runners.status(),
       queued: Some(0),
@@ -92,7 +95,15 @@ fn laid_out_with(props: StatusBarProps, log: ActivityLog, mcp: McpStatus) -> (Ap
   i18n::install(&app).expect("bundled locales load");
   let mut tree = Tree::new();
   tree.resize(1440, 28);
-  tree.mount_root::<Shell>(&mut app, ShellProps { bar: props, log, mcp });
+  tree.mount_root::<Shell>(
+    &mut app,
+    ShellProps {
+      bar: props,
+      log,
+      mcp,
+      readings: Default::default(),
+    },
+  );
   tree.pass_headless(&mut app);
   (app, tree)
 }
@@ -164,6 +175,162 @@ fn hover(app: &mut App, tree: &mut Tree, id: &str) {
     .unwrap_or_else(|| panic!("{id} is laid out"));
   tree.mouse_move(bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
   tree.pass_headless(app);
+}
+
+fn cli(provider: orchester_core::connection::AgentProvider) -> orchester_core::connection::AgentConnection {
+  use orchester_core::{connection::AgentConnection, id::ConnectionId, name::Name, time::Timestamp};
+  AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new("Local agent").expect("name"),
+    provider,
+    std::env::current_dir()
+      .expect("workspace")
+      .join(provider.program_name()),
+    Timestamp::now(),
+  )
+  .expect("connection")
+}
+
+fn limits_readings(percent: f64, extra: bool, expired: bool) -> orchester_core::connection::plan_limits::PlanReadings {
+  use orchester_core::{
+    connection::{
+      AgentProvider,
+      plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
+    },
+    time::Timestamp,
+  };
+  let now = Timestamp::now();
+  let reset = Timestamp::from_unix_millis(now.unix_millis() + if expired { -1000 } else { 7_200_000 });
+  let mut readings = PlanReadings::default();
+  for provider in AgentProvider::ALL {
+    readings.observe(LimitReading {
+      provider,
+      at: now,
+      limits: PlanLimits {
+        windows: vec![
+          LimitWindow::new(
+            10080,
+            if provider == AgentProvider::CodexCli {
+              percent
+            } else {
+              100.0
+            },
+            Some(reset),
+            LimitState::Normal,
+            provider == AgentProvider::ClaudeCodeCli && extra,
+          )
+          .expect("window"),
+        ],
+        plan: None,
+        credits: None,
+      },
+    });
+  }
+  readings
+}
+
+fn with_limits(
+  width: u32,
+  readings: orchester_core::connection::plan_limits::PlanReadings,
+  connections: Vec<orchester_core::connection::AgentConnection>,
+) -> (App, Tree) {
+  let mut app = App::new();
+  theme::install(&mut app);
+  i18n::install(&app).expect("locale");
+  let mut tree = Tree::new();
+  tree.resize(width, 960);
+  let mut bar = project(Some(2));
+  bar.project.as_mut().expect("project").connections = connections;
+  tree.mount_root::<Shell>(
+    &mut app,
+    ShellProps {
+      bar,
+      log: ActivityLog::default(),
+      mcp: McpStatus::Listening {
+        port: std::num::NonZeroU16::new(47291).expect("port"),
+      },
+      readings: orchester_desktop::plan_limits::Readings(readings),
+    },
+  );
+  for _ in 0..3 {
+    tree.pass_headless(&mut app);
+  }
+  (app, tree)
+}
+
+#[test]
+fn status_bar_plan_limits_960_preserves_limits_and_drops_labels_when_reached() {
+  use orchester_core::connection::AgentProvider;
+  for reached in [false, true] {
+    let readings = limits_readings(if reached { 100.0 } else { 65.0 }, true, false);
+    let (mut app, mut tree) = with_limits(960, readings, AgentProvider::ALL.into_iter().map(cli).collect());
+    assert!(tree.get_element_by_id("status-version").is_none());
+    assert!(tree.get_element_by_id("status-tokens").is_none());
+    let limits = bounds(&mut tree, "status-plan-limits");
+    let runner = bounds(&mut tree, "status-runner");
+    let mcp = bounds(&mut tree, "status-mcp");
+    assert!(runner.x + runner.width <= limits.x);
+    assert!(limits.x + limits.width <= mcp.x);
+    assert!(mcp.x + mcp.width <= 960.0);
+    assert_eq!(
+      item_texts(&mut tree, "status-agents")
+        .iter()
+        .any(|text| text == "Agents"),
+      !reached
+    );
+    hover(&mut app, &mut tree, "status-plan-limits");
+    let hint = bounds(&mut tree, "status-plan-limits-hint");
+    assert!(hint.x >= 0.0 && hint.x + hint.width <= 960.0);
+    let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
+    assert!(copy.contains("Extra usage"));
+    assert!(copy.contains("Not reported yet"));
+    assert!(copy.contains("From the last Codex turn"));
+  }
+}
+
+#[test]
+fn status_bar_plan_limits_unknown_signed_out_and_expired() {
+  use orchester_core::{
+    connection::{AgentProvider, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
+    time::Timestamp,
+  };
+  let codex = cli(AgentProvider::CodexCli);
+  let mut claude = cli(AgentProvider::ClaudeCodeCli);
+  claude.record_check(ConnectionCheck {
+    at: Timestamp::now(),
+    result: CheckResult::Available {
+      version: "2.1.89".into(),
+      sign_in: SignIn::SignedOut,
+      catalog: ModelCatalog::new(orchester_core::connection::CatalogSource::DocumentedAliases, Vec::new()),
+    },
+  });
+  let (mut app, mut tree) = with_limits(1440, Default::default(), vec![codex, claude]);
+  assert_eq!(
+    item_texts(&mut tree, "status-plan-limits"),
+    ["Codex", "—", "·", "Claude", "—"]
+  );
+  hover(&mut app, &mut tree, "status-plan-limits");
+  let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
+  assert!(copy.contains("They appear after the next Codex turn in any open project."));
+  assert!(copy.contains("not signed in on this computer"));
+  let (mut app, mut tree) = with_limits(
+    1440,
+    limits_readings(100.0, false, true),
+    vec![cli(AgentProvider::CodexCli)],
+  );
+  assert_eq!(item_texts(&mut tree, "status-plan-limits"), ["Codex", "—"]);
+  hover(&mut app, &mut tree, "status-plan-limits");
+  assert!(
+    item_texts(&mut tree, "status-plan-limits-hint")
+      .join(" ")
+      .contains("read again with the next turn")
+  );
+}
+
+#[test]
+fn status_bar_plan_limits_absent_without_connections() {
+  let (_, mut tree) = with_limits(960, Default::default(), Vec::new());
+  assert!(tree.get_element_by_id("status-plan-limits").is_none());
 }
 
 #[test]

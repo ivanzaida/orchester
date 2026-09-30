@@ -14,6 +14,7 @@ mod discovery;
 mod github;
 pub mod invocation;
 pub mod mcp;
+pub mod plan_limits;
 pub mod stream;
 
 use std::path::{Path, PathBuf};

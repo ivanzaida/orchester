@@ -8,6 +8,7 @@ mod hint;
 mod item;
 mod mcp_item;
 mod open;
+mod plan_limits;
 mod popover;
 mod runner_item;
 mod timed;
@@ -21,7 +22,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::Row,
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -49,6 +50,7 @@ const POPOVER_GAP: f32 = 9.0;
 /// The open project, when there is one.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectBar {
+  pub connections: Vec<orchester_core::connection::AgentConnection>,
   pub repo_root: PathBuf,
   pub runner: RunnerStatus,
   /// Queued tasks; `None` while the tasks are read.
@@ -71,6 +73,8 @@ pub struct StatusBarProps {
 impl lurq::app::component::DevtoolsInspectable for StatusBarProps {}
 
 pub struct StatusBar {
+  bounds: ElementRef,
+  width: Signal<f32>,
   activity: Activity,
   popover: Signal<bool>,
   hint: Signal<Option<Hint>>,
@@ -82,10 +86,18 @@ impl Component for StatusBar {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
+      bounds: ElementRef::new(),
+      width: ctx.signal(1440.0),
       activity: Activity::of(ctx),
       popover: ctx.signal(false),
       hint: ctx.signal(None),
       anchors: Anchors::default(),
+    }
+  }
+
+  fn after_layout(&self) {
+    if self.bounds.is_attached() && (self.bounds.width() - self.width.get_untracked()).abs() > 0.5 {
+      self.width.set(self.bounds.width());
     }
   }
 
@@ -99,6 +111,15 @@ impl Component for StatusBar {
       .as_ref()
       .map(|project| project.runner.state_for(&project.repo_root));
     let hints = hint::Hints::new(&self.hint, &self.anchors);
+    let readings = WindowFeed::of(ctx).limits.get().0;
+    let limits = plan_limits::Props {
+      connections: props
+        .project
+        .as_ref()
+        .map_or_else(Vec::new, |project| project.connections.clone()),
+      readings,
+    };
+    let width = self.width.get();
     let mut left = Row::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
@@ -124,6 +145,7 @@ impl Component for StatusBar {
     let popover = shows_activity(&slot).then(|| popover::popover(ctx, &log, &opener, &self.anchors));
     Row::new()
       .id("status-bar")
+      .ref_element(self.bounds.clone())
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(STATUS_BAR_HEIGHT))
       .padding_horizontal(SpacingSize::Sm)
@@ -132,7 +154,7 @@ impl Component for StatusBar {
       .background(PaletteColor::SurfaceBase)
       .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(left)
-      .child(counts(ctx, (props.project.as_ref(), mcp), &opener, &hints))
+      .child(counts(ctx, (props.project.as_ref(), mcp), &opener, &hints, (&limits, width)))
       .with_children(popover)
       // A hint would cover the popover it belongs to.
       .with_children(hints.popup().filter(|_| !self.popover.get()))

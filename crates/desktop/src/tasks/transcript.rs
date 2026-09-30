@@ -105,7 +105,7 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       kind,
     };
     match &stored.event {
-      AgentEvent::SessionStarted { .. } | AgentEvent::TurnStarted => {}
+      AgentEvent::SessionStarted { .. } | AgentEvent::TurnStarted | AgentEvent::PlanLimits { .. } => {}
       AgentEvent::Message { text } => entries.push(entry(EntryKind::Message(text.as_str().into()))),
       AgentEvent::Reasoning { text } => entries.push(entry(EntryKind::Reasoning(text.as_str().into()))),
       AgentEvent::CommandStarted { command, .. } => entries.push(entry(EntryKind::Command(CommandEntry {

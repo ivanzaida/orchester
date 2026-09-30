@@ -1,0 +1,1 @@
+{"timestamp":"2026-09-29T11:26:00Z","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"limit_id":"codex","primary":{"used_percent":65.0,"window_minutes":10080,"resets_at":1790928000},"secondary":null,"credits":{"has_credits":false,"unlimited":false,"balance":"0"},"plan_type":"pro","rate_limit_reached_type":null}}}

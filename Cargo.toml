@@ -74,7 +74,7 @@ thiserror = "2"
 # The desktop also runs blocking work (database, native dialogs) off the UI thread through lurq futures.
 # `signal`: the macOS runner ends its agents on SIGTERM/SIGINT; it builds on the signal handling
 # `process` already compiles in.
-tokio = { version = "1.53", features = ["io-util", "macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "time"] }
+tokio = { version = "1.53", features = ["fs", "io-util", "macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v7", "serde"] }

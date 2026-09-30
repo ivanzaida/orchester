@@ -265,10 +265,14 @@ impl RunTask {
     let (stops, stopped) = mpsc::unbounded_channel();
     let (approvals, decisions) = mpsc::unbounded_channel();
     let interactive = start.app_server.is_some();
+    let limits = (start.provider == orchester_core::connection::AgentProvider::CodexCli && !interactive)
+      .then(|| crate::codex_limits::SessionLimits::for_command(&start.command, invocation.started_at))
+      .flatten();
     let worker = Worker {
       root: self.root.clone(),
       invocation: invocation.clone(),
       output,
+      limits,
       process,
       notifier: self.notifier.clone(),
       events: self.worker_events.clone(),

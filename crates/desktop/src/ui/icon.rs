@@ -87,6 +87,7 @@ icons! {
   Globe => '\u{e0e8}',
   Hand => '\u{e1d7}',
   History => '\u{e1f5}',
+  Hourglass => '\u{e296}',
   Inbox => '\u{e0f7}',
   Info => '\u{e0f9}',
   Key => '\u{e0fd}',

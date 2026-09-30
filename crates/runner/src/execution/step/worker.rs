@@ -114,6 +114,7 @@ pub(in super::super) struct Worker {
   pub(in super::super) invocation: Invocation,
   /// Reads the CLI's output with the parser of its provider.
   pub(in super::super) output: AgentStream,
+  pub(super) limits: Option<crate::codex_limits::SessionLimits>,
   pub(in super::super) process: Supervised,
   pub(in super::super) notifier: Notifier,
   pub(in super::super) events: mpsc::UnboundedSender<WorkerEvent>,
@@ -206,10 +207,13 @@ impl Worker {
               self.process.terminate();
             }
           }
-          Some(ProcessEvent::Exited(exit)) => return self.finish(watch, &exit),
+          Some(ProcessEvent::Exited(exit)) => return self.finish_with_limits(watch, exit).await,
           None => return self.finish(watch, &ProcessExit::WaitFailed { reason: String::new() }),
         },
-        _ = flush.tick() => self.flush(&mut watch)?,
+        _ = flush.tick() => {
+          self.read_limits(&mut watch).await;
+          self.flush(&mut watch)?;
+        },
         decision = self.decisions.recv(), if deciding => match decision {
           Some(decision) => self.decide(&mut watch, decision).await?,
           None => deciding = false,
@@ -261,6 +265,31 @@ impl Worker {
       self.process.terminate();
     }
     Ok(())
+  }
+
+  async fn read_limits(&mut self, watch: &mut Watch) {
+    let Some(limits) = &mut self.limits else {
+      return;
+    };
+    let Some(session) = watch.tracker.session().or(watch.invocation.session.as_deref()) else {
+      return;
+    };
+    match limits.read(session).await {
+      Ok(readings) => {
+        for reading in readings {
+          self.notifier.send(Event::PlanLimits(reading));
+        }
+      }
+      Err(error) => {
+        tracing::warn!(%error, "cannot read Codex session limits; waiting for a future invocation");
+        self.limits = None;
+      }
+    }
+  }
+
+  async fn finish_with_limits(mut self, mut watch: Watch, exit: ProcessExit) -> Result<Finished, StoreError> {
+    self.read_limits(&mut watch).await;
+    self.finish(watch, &exit)
   }
 
   fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), StoreError> {
@@ -412,6 +441,20 @@ impl Worker {
   /// Takes in one event: a turn's usage goes to the run, and a new turn after a used-up budget
   /// ends the agent.
   fn observe(&self, watch: &mut Watch, event: AgentEvent) -> Result<(), StoreError> {
+    if let AgentEvent::PlanLimits { limits } = event {
+      let provider = match self.output {
+        AgentStream::Codex => orchester_core::connection::AgentProvider::CodexCli,
+        AgentStream::Claude(_) => orchester_core::connection::AgentProvider::ClaudeCodeCli,
+      };
+      self.notifier.send(Event::PlanLimits(
+        orchester_core::connection::plan_limits::LimitReading {
+          provider,
+          at: Timestamp::now(),
+          limits,
+        },
+      ));
+      return Ok(());
+    }
     watch.tracker.observe(&event);
     let usage = match &event {
       AgentEvent::TurnCompleted { usage } => Some(*usage),

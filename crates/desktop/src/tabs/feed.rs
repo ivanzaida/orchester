@@ -44,6 +44,7 @@ pub struct ProjectFeed {
   pub tasks: Signal<TasksState>,
   /// The limits and today's usage; `None` until read.
   pub usage: Signal<Option<ProjectUsage>>,
+  pub connections: Signal<crate::plan_limits::Connections>,
   /// The project's runner; `None` while it has none.
   pub status: Signal<Option<RunnerStatus>>,
   /// Counts run and transcript changes while a tab of the project is active.
@@ -78,6 +79,7 @@ impl ProjectFeeds {
       .or_insert_with(|| ProjectFeed {
         tasks: Signal::new(TasksState::Loading),
         usage: Signal::new(None),
+        connections: Signal::new(Default::default()),
         status: Signal::new(None),
         changes: Signal::new(0),
         revision: Signal::new(0),
@@ -126,6 +128,10 @@ impl Component for FeedLoader {
     publish(&self.feed.status, status(ctx, &runners, &root));
     publish(&self.feed.changes, changes);
     let revision = self.feed.revision.get();
+    let resources = self.feed.resources.get();
+    if let Some(connections) = connections(ctx, (root.clone(), resources)) {
+      publish(&self.feed.connections, connections);
+    }
     publish(&self.feed.tasks, tasks(ctx, (root.clone(), revision, states)));
     let day_start = Timestamp::now().local_day_start();
     if let Some(usage) = usage(ctx, (root, revision, (states, changes), day_start)) {
@@ -140,6 +146,25 @@ fn publish<T: Clone + PartialEq + Send + Sync + lurq::core::SignalValue + 'stati
   if signal.get_untracked() != value {
     signal.set(value);
   }
+}
+
+/// The connections reload after a save, check, or resource import in any project tab.
+fn connections(ctx: &mut Ctx, deps: (PathBuf, u64)) -> Option<crate::plan_limits::Connections> {
+  let load = ctx.future(deps, |(root, _)| async move {
+    background::run(move || {
+      use orchester_core::store::ConnectionStore;
+      let db = orchester_store::ProjectDb::open(&root)?;
+      db.connections()
+        .map(crate::connections::data::agent_connections)
+        .map(crate::plan_limits::Connections)
+    })
+    .await?
+    .map_err(|error| {
+      tracing::error!(%error, "cannot read plan limit connections");
+      messages::store_error(&error)
+    })
+  });
+  load.state().get().data
 }
 
 /// Which of a project's change counts a loader follows.
@@ -233,6 +258,7 @@ fn usage(ctx: &mut Ctx, deps: (PathBuf, u64, (u64, u64), Timestamp)) -> Option<P
 /// Window-wide data screens in any tab read.
 #[derive(Clone)]
 pub struct WindowFeed {
+  pub limits: Signal<crate::plan_limits::Readings>,
   /// The session's background operations, for the status bar.
   pub activity: Signal<ActivityLog>,
   /// Counts the runners' reports, for All projects.
@@ -255,6 +281,7 @@ impl lurq::app::component::DevtoolsInspectable for WindowFeed {}
 impl WindowFeed {
   pub fn new(activity: &Activity) -> Self {
     Self {
+      limits: Signal::new(Default::default()),
       activity: Signal::new(activity.snapshot()),
       work: Signal::new(0),
       failures: Signal::new(Failures::of(&activity.snapshot())),
@@ -330,6 +357,21 @@ impl Component for WindowFeedLoader {
       publish(&feed.activity, log);
     }
     if let Some(runners) = ctx.use_context::<Runners>() {
+      let limits = ctx.stream(
+        runners.clone(),
+        |runners, emitter: StreamEmitter<crate::plan_limits::Readings, ()>| async move {
+          let mut updates = runners.plan_limits();
+          loop {
+            let readings = updates.borrow_and_update().clone();
+            if !emitter.emit(crate::plan_limits::Readings(readings)) || updates.changed().await.is_err() {
+              return;
+            }
+          }
+        },
+      );
+      if let Some(readings) = limits.state().get().data {
+        publish(&feed.limits, readings);
+      }
       let work = ctx.stream(runners, |runners, emitter: StreamEmitter<u64, ()>| async move {
         let mut updates = runners.work_changes();
         loop {

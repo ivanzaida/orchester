@@ -2,6 +2,7 @@
 //! the project's runner lock, serves the desktop over IPC, executes runs (worktrees, agent CLIs,
 //! checkpoints) and records them in the project database.
 
+pub mod codex_limits;
 pub mod execution;
 mod git;
 pub mod lock;

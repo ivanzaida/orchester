@@ -26,6 +26,13 @@ pub fn parse_codex_line(stream: OutputStream, line: &str) -> AgentEvent {
 }
 
 fn parse_event(value: &Value) -> Option<AgentEvent> {
+  if value.get("type")?.as_str()? == "event_msg" {
+    let payload = value.get("payload")?;
+    if payload.get("type")?.as_str()? == "token_count" {
+      return super::super::plan_limits::codex_limits(payload.get("rate_limits")?)
+        .map(|limits| AgentEvent::PlanLimits { limits });
+    }
+  }
   match value.get("type")?.as_str()? {
     "thread.started" => Some(AgentEvent::SessionStarted {
       session: text(value, "thread_id")?,

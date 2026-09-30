@@ -50,6 +50,10 @@ pub struct FileChange {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AgentEvent {
+  /// Live account limits, sent to the desktop without persisting the reading.
+  PlanLimits {
+    limits: super::plan_limits::PlanLimits,
+  },
   /// The CLI's session id, with which the session can be resumed.
   SessionStarted {
     session: String,
@@ -171,6 +175,7 @@ impl AgentEvent {
   /// Stable name of the kind, as stored.
   pub const fn name(&self) -> &'static str {
     match self {
+      Self::PlanLimits { .. } => "plan_limits",
       Self::SessionStarted { .. } => "session_started",
       Self::TurnStarted => "turn_started",
       Self::Message { .. } => "message",
