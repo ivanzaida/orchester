@@ -7,6 +7,7 @@
 mod support;
 
 use orchester_core::{
+  code_index::CodeIndexSetting,
   connection::{
     AgentProvider,
     stream::{AgentEvent, MemoryNotSavedReason, RunnerProblem},
@@ -197,6 +198,22 @@ async fn memory_handoff_of_codex_reaches_the_next_step() {
 #[tokio::test(flavor = "multi_thread")]
 async fn memory_handoff_of_claude_reaches_the_next_step() {
   handoff_reaches_the_next_step(AgentProvider::ClaudeCodeCli).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn memory_part_follows_the_codebase_index_part_before_the_task() {
+  let project = project(&Setup {
+    code_index: CodeIndexSetting::On,
+    ..implement_then_review(AgentProvider::CodexCli)
+  });
+  let run = run_to_the_end(&project).await;
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+
+  let review = &prompts(&db, run)[1];
+  let index = review.find("# Codebase index\n").expect("the index part");
+  let memory = review.find("# Task memory\n").expect("the memory part");
+  let task = review.find("# Task ORC-1:").expect("the task part");
+  assert!(index < memory && memory < task, "{review}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
