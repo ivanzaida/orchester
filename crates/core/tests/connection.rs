@@ -196,13 +196,7 @@ fn claude_catalog(
   models: Result<CommandOutput, CommandError>,
 ) -> (ConnectionStatus, orchester_core::connection::ModelCatalog) {
   let runner = Replay::new([
-    (
-      "--version",
-      Ok(ok(
-        "2.1.89 (Claude Code)
-",
-      )),
-    ),
+    ("--version", Ok(ok("2.1.89 (Claude Code)\n"))),
     ("auth status --json", Ok(failed(r#"{"loggedIn": false}"#, ""))),
     (CLAUDE_MODELS, models),
   ]);

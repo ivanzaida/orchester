@@ -160,10 +160,7 @@ fn catalog(provider: AgentProvider, cli: &Cli<'_, impl CommandRunner>) -> ModelC
       // Without the CLI's list the catalog still has the current model ids and the aliases.
       let listed = cli
         .runner
-        .run(&cli.command(MODELS_ARGS).with_stdin(format!(
-          "{MODELS_REQUEST}
-"
-        )))
+        .run(&cli.command(MODELS_ARGS).with_stdin(format!("{MODELS_REQUEST}\n")))
         .ok()
         .filter(|output| output.success())
         .and_then(|output| parse_claude_models(&output.stdout));
