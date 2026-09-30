@@ -4,10 +4,12 @@
 //! `.orchester/index` and database and from the file system; blocks, so the UI calls it off the UI
 //! thread.
 
+mod install;
+
 use std::{
   path::{Path, PathBuf},
-  sync::{Arc, LazyLock},
-  time::{Duration, SystemTime},
+  sync::Arc,
+  time::Duration,
 };
 
 use orchester_core::{
@@ -21,14 +23,14 @@ use orchester_exec::{
   ProcessRunner,
   ripgrep::{
     self, LOCAL_APP_DATA, Source,
-    install::{InstallError, InstallPlan, InstallUnavailable, Installer},
+    install::{InstallPlan, InstallUnavailable},
   },
   search_path::search_path,
 };
 use orchester_index::{CodebaseIndexes, IndexError, IndexState};
 use orchester_store::{ProjectDb, StoreError};
-use parking_lot::Mutex;
 
+pub use self::install::{Install, cancel_install, ends_with_the_app, install_state, start_install};
 use crate::messages::{self, Message};
 
 /// `rg --version` answers at once; one that does not is stuck.
@@ -185,62 +187,4 @@ fn version(program: &Path) -> Option<String> {
     (Some(name), Some(number)) => Some(format!("{name} {number}")),
     _ => None,
   }
-}
-
-/// A ripgrep install a person started: it runs on a thread of its own, so it goes on when they
-/// leave the page, and one runs at a time.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Install {
-  Running {
-    installer: Installer,
-    line: String,
-    started: SystemTime,
-    last_output: Option<String>,
-  },
-  Failed {
-    installer: Installer,
-    line: String,
-    error: InstallError,
-  },
-  Installed {
-    installer: Installer,
-  },
-}
-
-static INSTALL: LazyLock<Mutex<Option<Install>>> = LazyLock::new(Mutex::default);
-
-/// The install of this session, if one was started.
-pub fn install_state() -> Option<Install> {
-  INSTALL.lock().clone()
-}
-
-/// Starts installing with `plan` unless an install runs already; the caller checks again once it
-/// ended.
-pub fn start_install(plan: &InstallPlan) {
-  let mut install = INSTALL.lock();
-  if matches!(*install, Some(Install::Running { .. })) {
-    return;
-  }
-  let (installer, line) = (plan.installer, plan.command_line());
-  *install = Some(Install::Running {
-    installer,
-    line: line.clone(),
-    started: SystemTime::now(),
-    last_output: None,
-  });
-  let plan = plan.clone();
-  std::thread::spawn(move || {
-    let finished = plan.install(|output| {
-      if let Some(Install::Running { last_output, .. }) = INSTALL.lock().as_mut() {
-        *last_output = Some(output.to_owned());
-      }
-    });
-    *INSTALL.lock() = Some(match finished {
-      Ok(()) => Install::Installed { installer },
-      Err(error) => {
-        tracing::warn!(%error, "ripgrep was not installed");
-        Install::Failed { installer, line, error }
-      }
-    });
-  });
 }

@@ -66,7 +66,7 @@ pub fn section(
       line,
       last_output,
       ..
-    }) => Some(installing(ctx, *installer, line, last_output.as_deref())),
+    }) => Some(installing(ctx, (*installer, line, last_output.as_deref()), &started)),
     Some(Install::Failed { installer, line, error }) if missing => Some(failed(
       ctx,
       (*installer, line, error),
@@ -197,8 +197,13 @@ fn not_found(
   notice("settings-code-index-ripgrep-notice", Icon::SearchX, false, copy.into())
 }
 
-/// Installing ripgrep (`NvR7K`): the command that runs, its last output, both buttons disabled.
-fn installing(ctx: &Ctx, installer: Installer, line: &str, last_output: Option<&str>) -> Element {
+/// Installing ripgrep (`NvR7K`): the command that runs, its last output, *Install ripgrep* and
+/// *Check again* disabled, and *Cancel*, which stops the installer. `changed` shows the page again.
+fn installing(
+  ctx: &Ctx,
+  (installer, line, last_output): (Installer, &str, Option<&str>),
+  changed: &Handler,
+) -> Element {
   let installer = ctx.t(installer_key(installer));
   let running = Row::new()
     .spacing(ExtraSpacing::Tight.role())
@@ -216,6 +221,19 @@ fn installing(ctx: &Ctx, installer: Installer, line: &str, last_output: Option<&
       .enabled(false)
       .render(ctx)
   };
+  let cancel = {
+    let changed = changed.clone();
+    ActionButton::new(ctx.t("settings.codeIndex.cancelInstall"))
+      .icon(Icon::CircleX)
+      .id("settings-code-index-cancel-install")
+      .in_form()
+      .height(Dimension::Px(BUTTON_HEIGHT))
+      .on_click(move || {
+        code_index::cancel_install();
+        changed();
+      })
+      .render(ctx)
+  };
   let copy = Column::new()
     .flex(1.0)
     .spacing(ExtraSpacing::Tight.role())
@@ -223,7 +241,14 @@ fn installing(ctx: &Ctx, installer: Installer, line: &str, last_output: Option<&
       &ctx.t_args("settings.codeIndex.installingTitle", [("installer", &*installer)]),
       false,
     ))
-    .child(detail(&ctx.t("settings.codeIndex.installingDetail"), false))
+    .child(detail(
+      &ctx.t(if code_index::ends_with_the_app() {
+        "settings.codeIndex.installingDetail"
+      } else {
+        "settings.codeIndex.installingDetailContinues"
+      }),
+      false,
+    ))
     .child(spaced(command(line)))
     .child(running)
     .with_children(output)
@@ -240,7 +265,8 @@ fn installing(ctx: &Ctx, installer: Installer, line: &str, last_output: Option<&
           "settings.codeIndex.checkAgain",
           Icon::RefreshCw,
           "settings-code-index-check",
-        )),
+        ))
+        .child(cancel),
     ));
   notice("settings-code-index-ripgrep-notice", Icon::Download, false, copy.into())
 }
@@ -265,6 +291,14 @@ fn failed(
     InstallError::Run(error) => ctx.t_args(
       "settings.codeIndex.installNotStarted",
       [("installer", &*installer), ("message", error.to_string().as_str())],
+    ),
+    InstallError::Cancelled => ctx.t_args("settings.codeIndex.installCancelled", [("installer", &*installer)]),
+    InstallError::TimedOut { after } => ctx.t_args(
+      "settings.codeIndex.installTimedOut",
+      [
+        ("installer", &*installer),
+        ("minutes", (after.as_secs() / 60).to_string().as_str()),
+      ],
     ),
   };
   let copy = Column::new()
