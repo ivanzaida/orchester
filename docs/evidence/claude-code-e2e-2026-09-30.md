@@ -177,3 +177,42 @@ structured `question` was recognized, and the run asked the person instead of pa
 reported the result through its `StructuredOutput` tool, not in the text, so this checked the
 `structured_output` path. The prose-and-JSON fallback and the no-result failure were checked with
 the fake CLI (`crates/runner/tests/claude.rs`) and parser tests (`crates/core/tests/claude_stream.rs`).
+
+## Merged branch: handoff schema, task memory and code index (third real run, 2026-10-01)
+
+After master was merged (code index, memory, launch permissions), the step result schema that
+`--json-schema` sends lists the handoff fields (`completed`, `decisions`, `open_questions`,
+`next_agent_should_know`) as required and nullable (`"type":["array","null"]`). If Claude Code's
+structured output rejected that schema, every Claude step would fail, so it was run live once, in
+the same scratch setup: Claude Code 2.1.284, `claude-opus-5-5`, effort low, code index on, and a
+two-step pipeline, Implement then Review. The task was to append `hello` to README.md and record
+the lower-case choice as a decision in the handoff. The correct result is `done`.
+
+The command line (read from the process table; schema shortened) was:
+
+```text
+"…\claude-code\2.1.284\claude.exe" -p --output-format stream-json --verbose --model claude-opus-5-5 --effort low
+  --strict-mcp-config --setting-sources "" --disable-slash-commands
+  --json-schema "{\"additionalProperties\":false,\"properties\":{\"completed\":{…\"type\":[\"array\",\"null\"]},
+  \"decisions\":{…},\"next_agent_should_know\":{…},\"open_questions\":{…},\"outcome\":{…},\"summary\":{…}},
+  \"required\":[\"outcome\",\"summary\",\"completed\",\"decisions\",\"open_questions\",\"next_agent_should_know\"],…}"
+  --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash --permission-mode acceptEdits
+  --disallowedTools Bash(mkdir:*) Bash(touch:*) Bash(rm:*) Bash(rmdir:*) Bash(mv:*) Bash(cp:*) Bash(sed:*)
+    WebFetch WebSearch Edit(//h/…/.orchester/index/0970e824…/**)
+  --allowedTools Bash(git:*) --add-dir …\.orchester\skills\<execution> --add-dir …\.orchester\index\0970e824…
+  --session-id 01a0f43c-c197-718a-9849-b6590af8c943
+```
+
+Results:
+
+| Check | Result |
+| --- | --- |
+| Schema accepted | Yes. Both invocations were `Completed`, and the run `Succeeded` in 32 s. Commit `02776c3` sets README.md to `hi\nhello`. |
+| structured_output | Each step ended by calling Claude Code's `StructuredOutput` tool. The Implement result was `{"outcome":"done","summary":"Added the line \`hello\` …","completed":["Added the line 'hello' to the end of README.md"],"decisions":["Used lower case: the added line is exactly \`hello\`"],"open_questions":null,"next_agent_should_know":[…]}`. A null field (`open_questions`) came back as `null`, and the lists came back as lists. |
+| Task memory | Stored as active task memory: one `Handoff` record from Implement (summary, completed, decisions, next agent should know), one `Decision` record ("Used lower case: …"), and Review's own handoff. |
+| Next step's prompt | Review's invocation recorded the handoff and the decision as injected (`Handoff`, `Decision`, both `Given`). Its prompt, in Claude's session transcript, has `# Task memory`, `## Latest handoff, from step \`implement\``, `## Decisions and warnings` with "> Used lower case: …", then the task. Implement's prompt had no task memory. |
+| Code index | Both prompts have `# Codebase index` (base revision `0970e824…`) and list the internal `orchester-codebase-index` skill under `# Skills`. The index folder reached Claude through `--add-dir`, and its `Edit(//…/index/…/**)` deny rule sits in the same `--disallowedTools` list as the command deny rules. In this trivial task the agent read README.md directly, not the index. |
+| Tokens | Implement: input 32,128, cached 21,166, output 577. Review: input 21,873, cached 18,550, output 443. `rate_limit_event` lines were recorded as before. |
+
+The harness is kept at `.tmp/claude-e2e/claude_e2e_merged_scratch.rs`, and the raw log is in
+`.tmp/claude-e2e/out-merged/`.
