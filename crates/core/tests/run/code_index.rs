@@ -4,7 +4,7 @@
 use orchester_core::{
   connection::stream::{AgentEvent, FileChange, FileChangeKind},
   resource::InjectionEvent,
-  run::{CodeIndexPrompt, FirstEdit, FirstEditTracker, TokenUsage},
+  run::{CodeIndexPrompt, EditProgress, FirstEdit, FirstEditTracker, TokenUsage},
   time::Timestamp,
 };
 
@@ -16,7 +16,7 @@ use crate::{
 const GIVEN: CodeIndexPrompt<'static> = CodeIndexPrompt::Given {
   revision: "4d2b8e0",
   folder: "/repo/.orchester/index/4d2b8e0",
-  skill: "/repo/.orchester/skills/e1/_orchester/codebase-map/SKILL.md",
+  skill: "/repo/.orchester/skills/e1/_orchester/codebase-index/SKILL.md",
 };
 
 fn prompt() -> Prompt {
@@ -38,7 +38,7 @@ fn code_index_is_named_before_the_task_of_a_new_session() {
   let task = text.find("# Task ORC-12").expect("the task part");
   assert!(index < task, "{text}");
   assert!(text.contains("at the run's base revision 4d2b8e0 is in /repo/.orchester/index/4d2b8e0:"));
-  assert!(text.contains("The codebase-map skill (/repo/.orchester/skills/e1/_orchester/codebase-map/SKILL.md)"));
+  assert!(text.contains("The orchester-codebase-index skill (/repo/.orchester/skills/e1/_orchester/codebase-index/SKILL.md)"));
 }
 
 #[test]
@@ -123,6 +123,7 @@ fn first_edit_counts_a_codex_turn_that_edits_before_it_reports_its_usage() {
   ]);
   let progress = tracker.progress();
   assert_eq!(progress.before, usage(140, 0, 2));
+  assert!(progress.at_most, "the turn went on after the edit");
   assert_eq!(
     progress.first_edit,
     Some(FirstEdit {
@@ -146,6 +147,7 @@ fn first_edit_counts_the_claude_messages_up_to_the_edit() {
     completed(5),
   ]);
   assert_eq!(tracker.progress().before, usage(130, 0, 2));
+  assert!(!tracker.progress().at_most);
 }
 
 #[test]
@@ -158,4 +160,32 @@ fn first_edit_of_an_agent_that_changed_no_file_counts_everything() {
   ]);
   assert_eq!(tracker.progress().before, usage(120, 0, 2));
   assert_eq!(tracker.progress().first_edit, None);
+}
+
+#[test]
+fn first_edit_of_an_execution_adds_up_its_invocations_until_the_edit() {
+  let edit = FirstEdit {
+    at: Timestamp::from_unix_millis(5),
+    path: "src/a.rs".into(),
+  };
+  let parts = [
+    EditProgress {
+      before: usage(100, 10, 1),
+      ..EditProgress::default()
+    },
+    EditProgress {
+      before: usage(40, 0, 2),
+      first_edit: Some(edit.clone()),
+      at_most: true,
+    },
+    EditProgress {
+      before: usage(7, 0, 3),
+      ..EditProgress::default()
+    },
+  ];
+  let execution = EditProgress::of_execution(&parts);
+  assert_eq!(execution.before, usage(140, 10, 3));
+  assert_eq!(execution.first_edit, Some(edit));
+  assert!(execution.at_most);
+  assert_eq!(EditProgress::of_execution(&parts[..1]).first_edit, None);
 }

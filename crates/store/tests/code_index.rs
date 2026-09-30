@@ -72,6 +72,7 @@ fn edit_progress_of_an_invocation_is_replaced_as_it_grows() {
       at: at(15),
       path: "src/auth/github.ts".into(),
     }),
+    at_most: true,
   };
   db.save_edit_progress(invocation.id, &edited).expect("save");
   assert_eq!(db.edit_progress(invocation.id).expect("read"), Some(edited));

@@ -180,3 +180,37 @@ fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
     ]
   ));
 }
+
+#[test]
+fn a_completed_patch_reports_the_files_it_changed() {
+  use orchester_core::connection::stream::{FileChange, FileChangeKind};
+  let mut stream = AppServerStream::default();
+  let completed = json!({"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","item":{
+    "id":"patch-3","type":"fileChange","status":"completed","changes":[
+      {"path":"src/auth/github.ts","kind":{"type":"add"},"diff":"+export {}"},
+      {"path":"src/auth/providers.ts","kind":"update","diff":"-a\n+b"}
+    ]
+  }}});
+  let updates = stream.parse(&completed.to_string()).expect("item");
+  let [Update::Activity(AgentEvent::FileChanged { item, changes })] = &updates[..] else {
+    panic!("one file change expected");
+  };
+  assert_eq!(item, "patch-3");
+  assert_eq!(
+    changes,
+    &[
+      FileChange {
+        path: "src/auth/github.ts".into(),
+        kind: FileChangeKind::Added
+      },
+      FileChange {
+        path: "src/auth/providers.ts".into(),
+        kind: FileChangeKind::Modified
+      },
+    ]
+  );
+  let declined = json!({"method":"item/completed","params":{"item":{
+    "id":"patch-4","type":"fileChange","status":"declined","changes":[{"path":"a.rs","kind":"update"}]
+  }}});
+  assert!(stream.parse(&declined.to_string()).expect("item").is_empty());
+}
