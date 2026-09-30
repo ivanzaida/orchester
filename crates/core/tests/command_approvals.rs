@@ -53,6 +53,48 @@ fn command_approvals_reply_once_and_reject_sticky_grants() {
 }
 
 #[test]
+fn command_approvals_native_cancel_and_legacy_decline_remain_action_scoped() {
+  // Native Codex 0.159.2 rule-based requests advertise accept/cancel, not decline.
+  let request = json!({"id":7,"method":"item/commandExecution/requestApproval","params":{
+    "threadId":"thread-1","turnId":"turn-1","itemId":"item-1","startedAtMs":1,
+    "kind":"command","environmentId":"local","command":"echo harmless","cwd":"/worktree",
+    "availableDecisions":["accept","cancel"]
+  }});
+  for (decisions, denial) in [
+    (json!(["accept", "cancel"]), "cancel"),
+    (json!(["accept", "decline", "cancel", "acceptForSession"]), "decline"),
+    (Value::Null, "decline"),
+  ] {
+    let mut message = request.clone();
+    message["params"]["availableDecisions"] = decisions;
+    let updates = AppServerStream::default().parse(&message.to_string()).expect("request");
+    let [Update::Approval(approval)] = updates.as_slice() else {
+      panic!("command approval expected")
+    };
+    assert!(approval.is_command());
+    for (approve, decision) in [(true, "accept"), (false, denial)] {
+      assert_eq!(
+        serde_json::from_str::<Value>(&approval.response(approve)).expect("response"),
+        json!({"id":7,"result":{"decision":decision}})
+      );
+    }
+  }
+  for decisions in [
+    json!(["acceptForSession", "cancel"]),
+    json!(["accept"]),
+    json!(["cancel"]),
+    json!("accept"),
+  ] {
+    let mut message = request.clone();
+    message["params"]["availableDecisions"] = decisions;
+    assert_eq!(
+      AppServerStream::default().parse(&message.to_string()).err(),
+      Some(ProtocolError::InvalidApproval)
+    );
+  }
+}
+
+#[test]
 fn command_approvals_legacy_permissions_and_mcp_policy_round_trip() {
   let mut profile = AgentPermissions::new(RepositoryAccess::Write, CommandPermission::AskBefore, NetworkAccess::On);
   let legacy = serde_json::to_string(&profile).expect("serialize");
