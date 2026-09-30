@@ -20,7 +20,7 @@ use orchester_core::{
     StepKey, StepKind, VariableName,
   },
   run::RunStatus,
-  store::{ConnectionStore, ResourceStore, RunStore, SettingsStore, TaskStore},
+  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, SettingsStore, TaskStore},
   task::TaskStatus,
   time::Timestamp,
   tokens::TokenBudget,
@@ -227,6 +227,18 @@ pub(crate) fn finished_on_page(desktop: &mut Desktop) {
       && has(desktop, "task-ready-notice")
       && shows(desktop, "task-ready-notice", "Ready for your review")
   });
+}
+
+/// The run's first agent started: the code index the runner builds before it is ready, so a pause
+/// now lands at the agent's checkpoint.
+pub(crate) fn agent_started(repo: &Path) -> bool {
+  latest_run(repo).is_some_and(|run| {
+    !ProjectDb::open(repo)
+      .expect("open the project")
+      .invocations(run.id())
+      .expect("invocations")
+      .is_empty()
+  })
 }
 
 pub(crate) fn has(desktop: &mut Desktop, id: &str) -> bool {
@@ -537,7 +549,9 @@ fn run_controls_pause_at_the_checkpoint_and_resume() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, true));
   create_and_run(&mut desktop, "Work slowly.", "1400000");
-  desktop.wait_until("Pause run", |desktop| has(desktop, "task-pause-run"));
+  desktop.wait_until("Pause run while the agent works", |desktop| {
+    has(desktop, "task-pause-run") && agent_started(desktop.repo())
+  });
   desktop.click("task-pause-run");
   desktop.wait_until("Pausing", |desktop| {
     desktop
