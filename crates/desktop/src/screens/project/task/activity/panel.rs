@@ -1,6 +1,9 @@
 //! The invocation panel beside the transcript (`n0cEOG`): the step and attempt, agent, provider,
-//! model and start of the latest agent launch, its reported tokens, the run's total, and the
-//! agent's permissions. Token counts are what the CLI reported; cached input is not counted.
+//! model and start of the latest agent launch, the code index it got, its reported tokens, the
+//! run's total, the tokens before its step's first edit, and the agent's permissions. While the
+//! transcript is narrowed to a step (`F3XhQ`) the panel is about that step's latest launch, named
+//! after the step, with when it ran once it ended. Token counts are what the CLI reported; cached
+//! input is not counted.
 
 use lurq::{
   app::{
@@ -10,21 +13,38 @@ use lurq::{
   components::{Column, Row, Spacer, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{run::Invocation, tokens::compact_tokens};
+use orchester_core::{id::StepExecutionId, run::Invocation, time::Timestamp, tokens::compact_tokens};
 
-use super::{super::permissions::permissions_value, engine};
+use super::{super::permissions::permissions_value, engine, first_edit};
 use crate::{
   display,
   tasks::detail::RunView,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::property::property,
+  ui::{message_text, property::property},
 };
 
 /// Panel width and its dividers (`n0cEOG`, `ZR50O`).
 const PANEL_WIDTH: f32 = 320.0;
 const DIVIDER_HEIGHT: f32 = 1.0;
 
-pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView) -> Element {
+pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView, filter: Option<StepExecutionId>) -> Element {
+  let invocation = match filter {
+    Some(execution) => run.invocations_of(execution).last(),
+    None => run.invocations.last(),
+  };
+  let title = match (
+    filter,
+    invocation.and_then(|invocation| run.step_of(invocation.execution)),
+  ) {
+    (Some(_), Some(step)) => ctx.t_args(
+      "runs.activity.panel.stepTitle",
+      [
+        ("step", &*step.name),
+        ("agent", step.agent.as_deref().unwrap_or_default()),
+      ],
+    ),
+    _ => ctx.t("runs.activity.panel.title"),
+  };
   let panel = Column::new()
     .id("activity-invocation")
     .width(Dimension::Px(PANEL_WIDTH))
@@ -33,16 +53,32 @@ pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView) -> Element {
     .spacing(ExtraSpacing::Group.role())
     .background(PaletteColor::SurfacePanel)
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(Text::new(&ctx.t("runs.activity.panel.title")).variant(ExtraTypography::SectionHeading.role()));
-  let Some(invocation) = run.invocations.last() else {
+    .child(
+      Text::new(&title)
+        .variant(ExtraTypography::SectionHeading.role())
+        .id("activity-invocation-title"),
+    );
+  let Some(invocation) = invocation else {
     return panel
       .child(Text::new(&ctx.t("runs.activity.panel.none")).variant(ExtraTypography::Detail.role()))
       .into();
   };
+  // A tool step's command runs no model and changes no file an agent reports.
+  let before = invocation
+    .model()
+    .and_then(|_| first_edit::before_first_edit(ctx, run, invocation.execution));
+  let note = match &before {
+    None => "runs.activity.panel.note",
+    Some((_, false)) => "runs.activity.panel.noteFirstEdit",
+    Some((_, true)) => "runs.activity.panel.noteAtMost",
+  };
+  let before = before.map(|(rows, _)| rows);
   panel
-    .with_children(details(ctx, run, invocation))
+    .with_children(details(ctx, run, invocation, filter.is_some()))
     .child(divider())
     .with_children(tokens(ctx, run, invocation))
+    .with_children(before.is_some().then(divider))
+    .with_children(before.into_iter().flatten())
     .child(divider())
     .with_children(
       run
@@ -51,11 +87,13 @@ pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView) -> Element {
         .map(|value| property(&ctx.t("runs.summary.permissions"), &value)),
     )
     .child(Spacer::new().flex(1.0))
-    .child(Text::new(&ctx.t("runs.activity.panel.note")).variant(ExtraTypography::Hint.role()))
+    .child(Text::new(&ctx.t(note)).variant(ExtraTypography::Hint.role()))
     .into()
 }
 
-fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
+/// The step, agent and launch; when it started, or when a step the transcript is narrowed to ran
+/// once it ended; the code index it got.
+fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation, narrowed: bool) -> Vec<Element> {
   let Some(step) = run.step_of(invocation.execution) else {
     return Vec::new();
   };
@@ -86,14 +124,47 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
       ("engine", &*engine),
     ],
   );
-  let started = display::clock(invocation.started_at);
   let invocation_number = invocation.number.to_string();
-  vec![
+  let when = match ran(run, invocation.execution).filter(|_| narrowed) {
+    Some((start, end)) => {
+      let took =
+        std::time::Duration::from_millis(u64::try_from(end.unix_millis() - start.unix_millis()).unwrap_or_default());
+      let value = ctx.t_args(
+        "runs.activity.panel.ranValue",
+        [
+          ("start", display::clock(start).as_str()),
+          ("end", display::clock(end).as_str()),
+          ("took", &*message_text(ctx, &display::duration(took))),
+        ],
+      );
+      property(&ctx.t("runs.activity.panel.ran"), &value)
+    }
+    None => property(
+      &ctx.t("runs.activity.panel.started"),
+      &display::clock(invocation.started_at),
+    ),
+  };
+  let mut rows = vec![
     property(&ctx.t("runs.activity.panel.step"), &step_value),
     property(&ctx.t(label), &agent),
     property(&ctx.t("runs.activity.panel.invocation"), &invocation_number),
-    property(&ctx.t("runs.activity.panel.started"), &started),
-  ]
+    when,
+  ];
+  rows.extend(first_edit::code_index_row(ctx, run, invocation));
+  rows
+}
+
+/// When `execution` started and ended, once all its launches ended.
+fn ran(run: &RunView, execution: StepExecutionId) -> Option<(Timestamp, Timestamp)> {
+  let invocations: Vec<&Invocation> = run.invocations_of(execution).collect();
+  let start = invocations.first()?.started_at;
+  let end = invocations
+    .iter()
+    .map(|invocation| invocation.ended_at)
+    .collect::<Option<Vec<_>>>()?
+    .into_iter()
+    .max()?;
+  Some((start, end))
 }
 
 fn tokens(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {

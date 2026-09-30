@@ -21,7 +21,7 @@ use orchester_core::{
 
 use super::{
   super::{super::ProjectNav, heading::step_state},
-  engine,
+  engine, first_edit,
   mcp::mcp_server_text,
   rows::{Header, RowKind, TranscriptRow},
 };
@@ -66,8 +66,9 @@ impl Component for TranscriptRowView {
   }
 }
 
-/// Disclosure, step number, step and agent, model and time span, tokens and state (`mDnc3`). A
-/// tool step names its tool and runs, and has no model and no tokens.
+/// Disclosure, step number, step and agent, model and time span, tokens with those before the
+/// first edit, and state (`mDnc3`). A tool step names its tool and runs, and has no model and no
+/// tokens.
 fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
   let meta = header_meta(ctx, header);
   let title = ctx.t_args(
@@ -79,6 +80,7 @@ fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
       "runs.tokens",
       [("count", compact_tokens(header.usage.counted()).as_str())],
     );
+    let tokens = first_edit::header_tokens(ctx, tokens, header.before_edit.as_ref(), header.ended.is_some());
     Text::new(&tokens).variant(TypographyStyle::Mono).nowrap()
   });
   let (glyph, state) = step_state(header.status);

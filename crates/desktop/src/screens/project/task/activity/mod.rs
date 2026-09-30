@@ -4,6 +4,7 @@
 //! offers "Jump to latest". The states without a transcript are `hig8O`.
 
 mod entry;
+mod first_edit;
 mod footer;
 mod mcp;
 mod panel;
@@ -144,7 +145,7 @@ impl Component for ActivityTab {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(self.transcript(ctx, run, &transcript.0, props.live))
-      .child(panel::invocation_panel(ctx, run))
+      .child(panel::invocation_panel(ctx, run, self.filter.get().0))
       .into()
   }
 }

@@ -21,11 +21,7 @@ use orchester_exec::ripgrep::LOCAL_APP_DATA;
 use orchester_index::CodebaseIndexes;
 use orchester_store::ProjectDb;
 
-use crate::{
-  github::shows,
-  harness::Desktop,
-  task_run::init_repository,
-};
+use crate::{github::shows, harness::Desktop, task_run::init_repository};
 
 const TAB: &str = "settings-tab-code-index";
 const SWITCH: &str = "settings-code-index-switch";
@@ -85,7 +81,10 @@ fn code_index_tab_lists_a_ready_and_a_failed_index_and_rebuilds_them() {
     let indexes = CodebaseIndexes::new(repo);
     indexes.rebuild(&head(repo)).expect("the index of HEAD builds");
     let missing = Revision::new(MISSING).expect("a revision");
-    assert!(indexes.rebuild(&missing).is_err(), "a missing revision cannot be indexed");
+    assert!(
+      indexes.rebuild(&missing).is_err(),
+      "a missing revision cannot be indexed"
+    );
   });
   let revision = head(desktop.repo());
   let short = &revision.as_str()[..7];
@@ -153,7 +152,10 @@ fn code_index_switch_saves_off_and_on() {
   desktop.click(SWITCH);
   desktop.wait_for(OFF);
   assert_eq!(
-    ProjectDb::open(desktop.repo()).expect("open").code_index().expect("read"),
+    ProjectDb::open(desktop.repo())
+      .expect("open")
+      .code_index()
+      .expect("read"),
     CodeIndexSetting::Off
   );
   assert!(shows(&mut desktop, SWITCH, "Off · agents get no index"));
@@ -165,7 +167,10 @@ fn code_index_switch_saves_off_and_on() {
   desktop.click(SWITCH);
   desktop.wait_for(LIST);
   assert_eq!(
-    ProjectDb::open(desktop.repo()).expect("open").code_index().expect("read"),
+    ProjectDb::open(desktop.repo())
+      .expect("open")
+      .code_index()
+      .expect("read"),
     CodeIndexSetting::On
   );
 }

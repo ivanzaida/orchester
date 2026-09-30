@@ -24,6 +24,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub use super::permissions::{ChangeState, RunPermissions};
 use super::{
+  index_use::IndexUses,
   permissions::run_permissions,
   unreadable::{EarlierRun, Unreadable},
 };
@@ -74,6 +75,8 @@ pub struct RunView {
   pub outputs: Vec<StepOutput>,
   /// The plans of its gated steps, by step and version.
   pub plans: Vec<Plan>,
+  /// What its agent launches got of the code index and used before their first edit.
+  pub index: IndexUses,
 }
 
 impl RunView {
@@ -336,6 +339,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   };
   let finished_at = finished_at(db, &run)?;
   Ok(RunView {
+    index: IndexUses::read(db, &invocations)?,
     invocations,
     outputs: db.step_outputs(run.id())?,
     plans: db.plans(run.id()).map_err(run_store_error)?,
