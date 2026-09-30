@@ -185,12 +185,19 @@ fn ripgrep_is_copied_once_per_content_into_the_tools_folder() {
     entries.sort();
     entries
   };
-  let mut both = vec![folder, other.clone()];
+  let mut both = vec![folder.clone(), other.clone()];
   both.sort();
   assert_eq!(entries(&tools), both, "agents that started with the older copy keep it");
 
-  // A day after the newer copy was placed, every agent runs it: the older one goes.
-  make_older(&other, Duration::from_secs(25 * 60 * 60));
+  // Back to the older version: it is handed out again, and the newer copy, handed out a moment
+  // ago, stays for the agents running it.
+  make_older(&folder.join("selected"), Duration::from_secs(25 * 60 * 60));
+  make_older(&folder, Duration::from_secs(25 * 60 * 60));
+  assert_eq!(ripgrep::provide(&first, &tools).expect("again"), folder);
+  assert_eq!(entries(&tools), both, "the newer copy stays");
+
+  // A day after the older copy was last handed out, no agent runs it: it goes.
+  make_older(&folder.join("selected"), Duration::from_secs(25 * 60 * 60));
   assert_eq!(ripgrep::provide(&newer, &tools).expect("again"), other);
   assert_eq!(
     entries(&tools),
@@ -199,9 +206,9 @@ fn ripgrep_is_copied_once_per_content_into_the_tools_folder() {
   );
 }
 
-/// Sets when `folder` last changed to `by` ago.
-fn make_older(folder: &Path, by: Duration) {
-  open_folder(folder)
+/// Sets when `path`, a file or a folder, last changed to `by` ago.
+fn make_older(path: &Path, by: Duration) {
+  open_folder(path)
     .set_modified(SystemTime::now() - by)
     .expect("set when the folder changed");
 }

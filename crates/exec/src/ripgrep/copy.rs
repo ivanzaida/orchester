@@ -2,9 +2,10 @@
 //! stages its copy in a folder of its own and renames it into place, so agents starting together
 //! never share or delete a half-made copy. The content hash is kept per file (path, size and change
 //! time) for the life of the process, so an agent start does not read the program again. Staging
-//! folders left by a copy that stopped are removed after an hour. A copy of other content is left
-//! for agents that started with it until the current copy is a day old: every agent since started
-//! with the current one.
+//! folders left by a copy that stopped are removed after an hour. Each time a copy is handed to an
+//! agent its `selected` marker is written again; another copy is removed once it was last handed out
+//! a day ago, so agents that started with it have ended, also when the version switches back and
+//! forth.
 
 use std::{
   collections::HashMap,
@@ -28,8 +29,10 @@ const COPY: &str = "rg-";
 const STAGING: &str = ".rg-";
 /// A staging folder this old belongs to a copy that stopped.
 const STALE_STAGING: Duration = Duration::from_secs(60 * 60);
-/// Once the current copy is this old, agents that started with an earlier one have ended.
-const REPLACED_COPY: Duration = Duration::from_secs(24 * 60 * 60);
+/// A copy last handed to an agent this long ago is no longer run.
+const UNUSED_COPY: Duration = Duration::from_secs(24 * 60 * 60);
+/// The file in a copy's folder written each time the copy is handed to an agent.
+const SELECTED: &str = "selected";
 
 /// Numbers the staging folders of this process.
 static STAGED: AtomicU64 = AtomicU64::new(0);
@@ -51,6 +54,11 @@ pub fn provide(found: &Found, tools: &Path) -> Result<PathBuf, ProvideError> {
   let copy = folder.join(PROGRAM);
   if !fs::metadata(&copy).is_ok_and(|placed| placed.len() == metadata.len()) {
     place(&found.path, &folder, (tools, &hash))?;
+  }
+  let marker = folder.join(SELECTED);
+  if let Err(error) = fs::write(&marker, "") {
+    // The copy is still given; without the marker it may go a day after it was placed.
+    tracing::debug!(%error, marker = %marker.display(), "cannot mark the ripgrep copy as selected");
   }
   remove_others(tools, &folder);
   Ok(folder)
@@ -112,9 +120,9 @@ fn executable(_file: &Path) -> io::Result<()> {
   Ok(())
 }
 
-/// Removes staging folders a stopped copy left, and the copies in `tools` other than `current` once
-/// `current` is [`REPLACED_COPY`] old. A copy an agent still runs cannot be removed on Windows and is
-/// tried again next time.
+/// Removes staging folders a stopped copy left, and the copies in `tools` other than `current` last
+/// handed to an agent [`UNUSED_COPY`] ago (placed then, for one without a marker). A copy an agent
+/// still runs cannot be removed on Windows and is tried again next time.
 fn remove_others(tools: &Path, current: &Path) {
   let entries = match fs::read_dir(tools) {
     Ok(entries) => entries,
@@ -123,7 +131,6 @@ fn remove_others(tools: &Path, current: &Path) {
       return;
     }
   };
-  let replaced = age(current).is_some_and(|age| age > REPLACED_COPY);
   for entry in entries.flatten() {
     let path = entry.path();
     let name = entry.file_name();
@@ -131,7 +138,11 @@ fn remove_others(tools: &Path, current: &Path) {
     let stale = if name.starts_with(STAGING) {
       age(&path).is_some_and(|age| age > STALE_STAGING)
     } else {
-      replaced && name.starts_with(COPY) && path != current
+      name.starts_with(COPY)
+        && path != current
+        && age(&path.join(SELECTED))
+          .or_else(|| age(&path))
+          .is_some_and(|age| age > UNUSED_COPY)
     };
     if stale && let Err(error) = remove_folder(&path) {
       tracing::debug!(%error, folder = %path.display(), "cannot remove an old ripgrep copy yet");
@@ -139,12 +150,12 @@ fn remove_others(tools: &Path, current: &Path) {
   }
 }
 
-/// How long ago `folder` last changed; `None` when that cannot be read, which keeps it.
-fn age(folder: &Path) -> Option<Duration> {
-  match fs::metadata(folder).and_then(|metadata| metadata.modified()) {
+/// How long ago `path` last changed; `None` when that cannot be read.
+fn age(path: &Path) -> Option<Duration> {
+  match fs::metadata(path).and_then(|metadata| metadata.modified()) {
     Ok(modified) => modified.elapsed().ok(),
     Err(error) => {
-      tracing::debug!(%error, folder = %folder.display(), "cannot read when a ripgrep folder changed");
+      tracing::debug!(%error, path = %path.display(), "cannot read when a ripgrep file changed");
       None
     }
   }
