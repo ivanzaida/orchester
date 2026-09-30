@@ -117,6 +117,13 @@ impl ProfileEditor {
   /// What the connection's CLI enforces for the chosen servers (`kXyN7`): only they load, how
   /// their tools are allowed, and that the servers work outside these permissions.
   pub(super) fn mcp_enforcement(&self, ctx: &Ctx, provider: AgentProvider) -> Vec<Element> {
+    let permissions = self.permissions.get();
+    if provider == AgentProvider::CodexCli
+      && (permissions.interactive_tool_approvals()
+        || *permissions.commands() == orchester_core::permission::CommandPermission::AskBefore)
+    {
+      return interactive_enforcement(ctx, permissions.interactive_tool_approvals());
+    }
     let chosen = self.mcp.get();
     // The chosen servers an agent gets: those the project has, that are on and that the CLI can start.
     let count = self
@@ -182,4 +189,28 @@ fn hint(ctx: &Ctx, key: &str) -> Element {
     .variant(ExtraTypography::Hint.role())
     .color(PaletteColor::TextMuted)
     .into()
+}
+
+fn interactive_enforcement(ctx: &Ctx, tool_approvals: bool) -> Vec<Element> {
+  vec![
+    row(
+      Icon::CircleCheck,
+      &ctx.t("agents.permissions.enforcement.mcp.inherited"),
+      &ctx.t("agents.permissions.transport"),
+    ),
+    row(
+      Icon::CircleCheck,
+      &ctx.t(if tool_approvals {
+        "agents.permissions.toolApprovals"
+      } else {
+        "agents.permissions.toolApprovalsDisabled"
+      }),
+      &ctx.t("runs.toolApproval.scope"),
+    ),
+    row(
+      Icon::Unplug,
+      &ctx.t("agents.permissions.enforcement.mcp.outside"),
+      &ctx.t("agents.permissions.enforcement.mcp.outsideHow"),
+    ),
+  ]
 }

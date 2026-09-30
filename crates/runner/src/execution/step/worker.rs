@@ -106,6 +106,8 @@ pub(in super::super) struct Finished {
   pub(in super::super) stopped: Option<StopCause>,
   /// The last message the agent wrote.
   pub(in super::super) final_message: Option<String>,
+  /// A pending or delivered decision ended without a confirmed turn completion.
+  pub(in super::super) approval_interrupted: bool,
 }
 
 /// One running agent CLI and where its news goes.
@@ -202,6 +204,9 @@ impl Worker {
                 self.observe(&mut watch, event)?;
               }
             }
+            if watch.after_command.is_some() && self.checkpoint_safe(&watch) && watch.stop.is_none() {
+              watch.stop = watch.after_command.take();
+            }
             if watch.stop.is_some() {
               self.process.terminate();
             }
@@ -231,7 +236,7 @@ impl Worker {
           Some(Stop::AfterCommand(cause)) => {
             if watch.stop.is_none() && watch.over.is_none() {
               watch.after_command = Some(cause);
-              if watch.commands == 0 {
+              if self.checkpoint_safe(&watch) || watch.approval.is_some() {
                 watch.stop = watch.after_command.take();
                 self.process.terminate();
               }
@@ -263,6 +268,10 @@ impl Worker {
     Ok(())
   }
 
+  fn checkpoint_safe(&self, watch: &Watch) -> bool {
+    watch.commands == 0 && !self.app_server.as_ref().is_some_and(AppServerSession::has_active_tools)
+  }
+
   fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), StoreError> {
     match update {
       Update::Activity(event) => self.observe(watch, event),
@@ -292,9 +301,24 @@ impl Worker {
       execution: watch.invocation.execution,
       invocation: watch.invocation.id,
       agent: self.agent.clone(),
+      command: request.is_command(),
+      scope: request.scope.as_ref().map(|scope| {
+        self
+          .app_server
+          .as_ref()
+          .map_or_else(|| scope.clone(), |app| app.redact(scope))
+      }),
       server: request.server.clone(),
-      action: request.action.clone(),
-      target: request.target.clone(),
+      action: self
+        .app_server
+        .as_ref()
+        .map_or_else(|| request.action.clone(), |app| app.redact(&request.action)),
+      target: request.target.as_ref().map(|target| {
+        self
+          .app_server
+          .as_ref()
+          .map_or_else(|| target.clone(), |app| app.redact(target))
+      }),
       requested_at: Timestamp::now(),
     };
     watch.db.request_tool_approval(&approval)?;
@@ -411,7 +435,10 @@ impl Worker {
 
   /// Takes in one event: a turn's usage goes to the run, and a new turn after a used-up budget
   /// ends the agent.
-  fn observe(&self, watch: &mut Watch, event: AgentEvent) -> Result<(), StoreError> {
+  fn observe(&self, watch: &mut Watch, mut event: AgentEvent) -> Result<(), StoreError> {
+    if let Some(app) = &self.app_server {
+      event.redact(&|text| app.redact(text));
+    }
     watch.tracker.observe(&event);
     let usage = match &event {
       AgentEvent::TurnCompleted { usage } => Some(*usage),
@@ -424,9 +451,6 @@ impl Worker {
       AgentEvent::CommandStarted { .. } => watch.commands += 1,
       AgentEvent::CommandFinished { .. } => {
         watch.commands = watch.commands.saturating_sub(1);
-        if watch.commands == 0 && watch.stop.is_none() {
-          watch.stop = watch.after_command.take();
-        }
       }
       _ => {}
     }
@@ -471,8 +495,9 @@ impl Worker {
   }
 
   fn finish(&self, mut watch: Watch, exit: &ProcessExit) -> Result<Finished, StoreError> {
-    if watch.approval.is_some() {
-      watch
+    let mut approval_interrupted = false;
+    if watch.approval.is_some() || self.app_server.as_ref().is_some_and(|app| !app.complete()) {
+      approval_interrupted = watch
         .db
         .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
       watch.invocation.timing.resume(Timestamp::now());
@@ -508,6 +533,7 @@ impl Worker {
       outcome,
       stopped: watch.stop,
       final_message: watch.tracker.last_message().map(str::to_owned),
+      approval_interrupted,
     })
   }
 }

@@ -55,7 +55,7 @@ pub const fn setting_label(setting: PermissionSetting) -> &'static str {
 /// itself says it (asking before commands is marked *later*).
 pub fn unavailable(ctx: &Ctx, reason: Unavailable, provider: AgentProvider) -> Option<Arc<str>> {
   let key = match reason {
-    Unavailable::NeedsPermissionRequests => return None,
+    Unavailable::NeedsPermissionRequests => "agents.permissions.unavailable.needsPermissionRequests",
     Unavailable::CannotLimitCommands => "agents.permissions.unavailable.cannotLimitCommands",
     Unavailable::CannotConfineCommands => "agents.permissions.unavailable.cannotConfineCommands",
     Unavailable::CannotBlockNetwork => "agents.permissions.unavailable.cannotBlockNetwork",
@@ -69,6 +69,7 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexReadOnlySandbox => "agents.permissions.mechanism.codexReadOnly",
     Mechanism::CodexWorkspaceWriteSandbox => "agents.permissions.mechanism.codexWorkspaceWrite",
     Mechanism::CodexSandboxedCommands => "agents.permissions.mechanism.codexCommands",
+    Mechanism::CodexCommandApprovals => "agents.permissions.mechanism.codexCommandApprovals",
     Mechanism::CodexSandboxNetworkOff => "agents.permissions.mechanism.codexNetworkOff",
     Mechanism::CodexSandboxNetworkOn => "agents.permissions.mechanism.codexNetworkOn",
     Mechanism::ClaudeEditToolsRemoved => "agents.permissions.mechanism.claudeEditToolsRemoved",
@@ -106,14 +107,19 @@ pub enum Length {
 /// it, so it reads *Network stays on*.
 pub fn summary(ctx: &Ctx, permissions: &AgentPermissions, network_stays_on: bool, length: Length) -> Arc<str> {
   let (repository, commands, network) = parts(ctx, permissions, network_stays_on, length);
-  ctx.t_args(
+  let summary = ctx.t_args(
     "agents.permissions.summary",
     [
       ("repository", &*repository),
       ("commands", &*commands),
       ("network", &*network),
     ],
-  )
+  );
+  if permissions.interactive_tool_approvals() {
+    ctx.t_args("agents.permissions.summaryWithTools", [("permissions", &*summary)])
+  } else {
+    summary
+  }
 }
 
 /// The keys of one [`Length`].

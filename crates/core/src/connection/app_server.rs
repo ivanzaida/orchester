@@ -31,6 +31,7 @@ pub struct PendingApproval {
   pub server: String,
   pub action: String,
   pub target: Option<String>,
+  pub scope: Option<String>,
 }
 
 impl fmt::Debug for PendingApproval {
@@ -38,13 +39,15 @@ impl fmt::Debug for PendingApproval {
     f.debug_struct("PendingApproval")
       .field("thread", &self.thread)
       .field("server", &self.server)
-      .field("action", &self.action)
       .finish_non_exhaustive()
   }
 }
 
 #[derive(Clone, PartialEq)]
 enum ApprovalKind {
+  Command {
+    denial: CommandDenial,
+  },
   UserInput {
     question: String,
     accept: String,
@@ -53,7 +56,17 @@ enum ApprovalKind {
   Elicitation,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CommandDenial {
+  Decline,
+  Cancel,
+}
+
 impl PendingApproval {
+  pub fn is_command(&self) -> bool {
+    matches!(self.kind, ApprovalKind::Command { .. })
+  }
+
   /// Stable within one invocation; the invocation ID is prefixed by the runner for storage.
   pub fn request_key(&self) -> String {
     self.id.to_string()
@@ -62,6 +75,14 @@ impl PendingApproval {
   /// JSON-RPC response for exactly this request. The approval never persists to later calls.
   pub fn response(&self, approve: bool) -> String {
     let result = match &self.kind {
+      ApprovalKind::Command { denial } => {
+        let decision = match (approve, denial) {
+          (true, _) => "accept",
+          (false, CommandDenial::Decline) => "decline",
+          (false, CommandDenial::Cancel) => "cancel",
+        };
+        json!({"decision": decision})
+      }
       ApprovalKind::UserInput {
         question,
         accept,
@@ -101,6 +122,11 @@ pub struct AppServerStream {
 }
 
 impl AppServerStream {
+  /// A started MCP action remains active until its completion notification arrives.
+  pub fn has_active_tools(&self) -> bool {
+    !self.tools.is_empty()
+  }
+
   pub fn parse(&mut self, line: &str) -> Result<Vec<Update>, ProtocolError> {
     let message: Value = serde_json::from_str(line).map_err(|_| ProtocolError::InvalidJson)?;
     let Some(method) = message.get("method").and_then(Value::as_str) else {
@@ -119,10 +145,41 @@ impl AppServerStream {
     match method {
       "item/tool/requestUserInput" | "tool/requestUserInput" => self.user_input(id, params),
       "mcpServer/elicitation/request" => self.elicitation(id, params),
+      "item/commandExecution/requestApproval" => Self::command_approval(id, params),
       _ => Err(ProtocolError::UnsupportedRequest {
         method: method.to_owned(),
       }),
     }
+  }
+
+  fn command_approval(id: &Value, params: &Value) -> Result<PendingApproval, ProtocolError> {
+    // Additional permission overlays can remain sticky for later calls in a turn. Never grant them.
+    if params
+      .get("additionalPermissions")
+      .is_some_and(|value| !value.is_null())
+      || params
+        .get("environmentId")
+        .is_some_and(|value| !value.is_null() && value.as_str() != Some("local"))
+      || params
+        .get("kind")
+        .and_then(Value::as_str)
+        .is_some_and(|kind| kind != "command")
+    {
+      return Err(ProtocolError::InvalidApproval);
+    }
+    string(params, "itemId").ok_or(ProtocolError::InvalidApproval)?;
+    Ok(PendingApproval {
+      id: id.clone(),
+      kind: ApprovalKind::Command {
+        denial: command_denial(params)?,
+      },
+      thread: string(params, "threadId").ok_or(ProtocolError::InvalidApproval)?,
+      turn: Some(string(params, "turnId").ok_or(ProtocolError::InvalidApproval)?),
+      server: "command".to_owned(),
+      action: string(params, "command").ok_or(ProtocolError::InvalidApproval)?,
+      target: Some(string(params, "cwd").ok_or(ProtocolError::InvalidApproval)?),
+      scope: string(params, "reason"),
+    })
   }
 
   fn user_input(&self, id: &Value, params: &Value) -> Result<PendingApproval, ProtocolError> {
@@ -178,6 +235,7 @@ impl AppServerStream {
       server: context.server.clone(),
       action: context.action.clone(),
       target: context.target.clone(),
+      scope: None,
     })
   }
 
@@ -214,6 +272,7 @@ impl AppServerStream {
       server,
       action: tool.action.clone(),
       target: tool.target.clone(),
+      scope: None,
     })
   }
 
@@ -309,6 +368,27 @@ impl AppServerStream {
     }
     updates.push(Update::TurnEnded);
     updates
+  }
+}
+
+fn command_denial(params: &Value) -> Result<CommandDenial, ProtocolError> {
+  let decisions = match params.get("availableDecisions") {
+    None | Some(Value::Null) => return Ok(CommandDenial::Decline),
+    Some(Value::Array(decisions)) => decisions,
+    Some(_) => return Err(ProtocolError::InvalidApproval),
+  };
+  let available = |name: &str| decisions.iter().any(|decision| decision.as_str() == Some(name));
+  if !available("accept") {
+    return Err(ProtocolError::InvalidApproval);
+  }
+  // Rule-based prompts can offer cancel rather than decline. Both deny this action;
+  // cancel also interrupts the turn. Never choose a session or policy amendment grant.
+  if available("decline") {
+    Ok(CommandDenial::Decline)
+  } else if available("cancel") {
+    Ok(CommandDenial::Cancel)
+  } else {
+    Err(ProtocolError::InvalidApproval)
   }
 }
 

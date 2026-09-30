@@ -209,7 +209,7 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
     &mut desktop,
     "Unavailable on this connection: Codex CLI can’t limit commands to a list."
   ));
-  assert!(shows(&mut desktop, "Ask before running commands · later"));
+  assert!(shows(&mut desktop, "Ask before running commands"));
   let network_off_enforced = cfg!(not(windows));
   assert_eq!(
     shows(
@@ -232,12 +232,12 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
   for option in [
     "agent-permission-read-only",
     "agent-permission-edit",
+    "agent-permission-ask",
     "agent-permission-any",
   ] {
     assert!(stops.contains(&Some(option.to_owned())), "{option} is a Tab stop");
   }
   for unavailable in [
-    "agent-permission-ask",
     "agent-permission-allowed",
     "agent-tab-profile",
     "agent-tab-permissions",

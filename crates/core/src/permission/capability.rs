@@ -12,7 +12,7 @@
 //! - Claude Code removes its edit tools for read-only and limits Bash to `--allowedTools` prefix rules. It cannot
 //!   confine an arbitrary command to the worktree (its own sandbox is not supported on Windows and is not used), and it
 //!   can block its web tools but not network use by commands.
-//! - Asking before commands needs the permission-request flow, which no connection has yet.
+//! - Codex App Server routes command approvals to Orchester; Claude Code does not support that transport.
 //! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
 //!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
@@ -97,6 +97,8 @@ pub enum Mechanism {
   CodexWorkspaceWriteSandbox,
   /// Commands run inside the sandbox of the repository access.
   CodexSandboxedCommands,
+  /// Bidirectional App Server, one command decision without a persistent grant.
+  CodexCommandApprovals,
   /// The sandbox's network access stays off.
   CodexSandboxNetworkOff,
   /// `sandbox_workspace_write.network_access=true`.
@@ -153,7 +155,8 @@ pub const fn support(provider: AgentProvider, platform: Platform, option: Permis
   use Support::{Enforced, Unavailable as No};
   use Unavailable as U;
   match (provider, option) {
-    (_, O::AskBeforeCommands) => No(U::NeedsPermissionRequests),
+    (AgentProvider::CodexCli, O::AskBeforeCommands) => Enforced(M::CodexCommandApprovals),
+    (AgentProvider::ClaudeCodeCli, O::AskBeforeCommands) => No(U::NeedsPermissionRequests),
     (AgentProvider::CodexCli, O::ReadOnly) => Enforced(M::CodexReadOnlySandbox),
     (AgentProvider::CodexCli, O::EditWorktree) => Enforced(M::CodexWorkspaceWriteSandbox),
     (AgentProvider::CodexCli, O::AllowedCommands) => No(U::CannotLimitCommands),
@@ -236,6 +239,12 @@ impl AgentPermissions {
     provider: AgentProvider,
     platform: Platform,
   ) -> Result<EnforcedPermissions, PermissionProblem> {
+    if self.interactive_tool_approvals() && provider != AgentProvider::CodexCli {
+      return Err(PermissionProblem::NotEnforceable {
+        option: PermissionOption::AskBeforeCommands,
+        reason: Unavailable::NeedsPermissionRequests,
+      });
+    }
     for setting in [
       PermissionSetting::Repository,
       PermissionSetting::Commands,

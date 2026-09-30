@@ -49,6 +49,11 @@ fn app_server_keeps_normal_codex_home_and_open_stdin_without_bypass_flags() {
   assert!(command.stdin().is_none());
   assert_eq!(command.args()[..2], ["app-server", "--stdio"]);
   assert!(command.args().contains(&"windows.sandbox=elevated".to_owned()));
+  assert!(
+    command
+      .args()
+      .contains(&"sandbox_workspace_write.writable_roots=[\"/repo/.orchester/worktrees/run\"]".to_owned())
+  );
   assert!(!command.args().iter().any(|arg| arg.contains("dangerously")));
   assert_eq!(
     command
@@ -87,8 +92,32 @@ const BASE: [&str; 11] = [
 fn invocation_read_only_uses_the_read_only_sandbox_on_every_platform() {
   for platform in [Platform::Windows, Platform::MacOs] {
     let mut expected: Vec<&str> = BASE.to_vec();
-    expected.extend(["read-only", "-C", "/repo/.orchester/worktrees/run", "-"]);
+    expected.push("read-only");
+    if platform == Platform::Windows {
+      expected.extend(["-c", "windows.sandbox=elevated"]);
+    }
+    expected.extend(["-C", "/repo/.orchester/worktrees/run", "-"]);
     assert_eq!(args(&invocation(RepositoryAccess::ReadOnly, platform)), expected);
+  }
+}
+
+#[test]
+fn invocation_read_only_configures_windows_sandbox_for_resume_and_app_server() {
+  for platform in [Platform::Windows, Platform::MacOs] {
+    let mut readonly = invocation(RepositoryAccess::ReadOnly, platform);
+    readonly.resume = Some("existing-session");
+    let resumed = args(&readonly);
+    let server = readonly
+      .app_server_command(Vec::new(), &CommandEnvironment::default())
+      .expect("valid invocation");
+    for arguments in [&resumed[..], server.args()] {
+      assert_eq!(
+        arguments.contains(&"windows.sandbox=elevated".to_owned()),
+        platform == Platform::Windows
+      );
+      assert!(!arguments.iter().any(|arg| arg.contains("workspace-write")));
+    }
+    assert!(resumed.contains(&"sandbox_mode=read-only".to_owned()));
   }
 }
 

@@ -13,6 +13,8 @@ pub struct PendingToolApproval {
   pub execution: StepExecutionId,
   pub invocation: InvocationId,
   pub agent: String,
+  pub command: bool,
+  pub scope: Option<String>,
   pub server: String,
   pub action: String,
   pub target: Option<String>,

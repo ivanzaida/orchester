@@ -931,7 +931,12 @@
       "denying": "Denying…",
       "approveOnce": "Approve once",
       "approving": "Approving…",
-      "notAwaited": "This tool action no longer waits for a decision."
+      "notAwaited": "This tool action no longer waits for a decision.",
+      "commandTitle": "Approve command?",
+      "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny prevents execution and fails this step.",
+      "command": "Command",
+      "cwd": "Working directory",
+      "scope": "One requested action only; no session or permanent grant"
     },
     "ready": {
       "status": "Ready for review",
@@ -1558,8 +1563,8 @@
           "detail": "Create and change files only in this task’s worktree and the extra writable folders."
         },
         "askBefore": {
-          "title": "Ask before running commands · later",
-          "detail": "Each command waits for your decision in Needs you. Arrives with permission requests."
+          "title": "Ask before running commands",
+          "detail": "Codex commands requiring approval wait for your decision. Approve only the requested action or deny it."
         },
         "allowed": {
           "title": "Allowed commands",
@@ -1571,6 +1576,11 @@
         }
       },
       "addCommand": "Add command",
+      "toolApprovals": "Ask before MCP actions that require approval",
+      "toolApprovalsHeading": "MCP approvals",
+      "toolApprovalsDisabled": "MCP approval requests are denied",
+      "toolApprovalUnavailable": "Interactive MCP approvals require a Codex App Server connection.",
+      "transport": "Codex App Server uses your normal account and inherited global MCP servers, plus project-selected servers.",
       "commandPlaceholder": "e.g. pnpm test",
       "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
       "noCommands": "No command is allowed yet.",
@@ -1612,6 +1622,7 @@
       "networkOffDetail": "Package installs and web requests fail while network access is off.",
       "networkOnDetail": "Commands and web tools can reach the network.",
       "summary": "{{repository}} · {{commands}} · {{network}}",
+      "summaryWithTools": "{{permissions}} · MCP approvals enabled",
       "long": {
         "readOnly": "Read-only",
         "edit": "Edits files in the task worktree",
@@ -1642,6 +1653,7 @@
       },
       "unavailable": {
         "cannotLimitCommands": "Unavailable on this connection: {{cli}} can’t limit commands to a list.",
+        "needsPermissionRequests": "{{cli}} does not support interactive approvals through Orchester.",
         "cannotConfineCommands": "Unavailable on this connection: {{cli}} can’t confine commands to the worktree.",
         "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so."
       },
@@ -1660,6 +1672,7 @@
         "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
         "mcp": {
+          "inherited": "Project-selected and global MCP servers remain available",
           "none": "No MCP servers",
           "noneHow": "none chosen · user’s own ignored",
           "onlyOne": "Only the chosen MCP server loads",
@@ -1689,6 +1702,7 @@
         "codexReadOnly": "sandbox · read-only",
         "codexWorkspaceWrite": "sandbox · workspace-write",
         "codexCommands": "sandbox · commands stay in the worktree",
+        "codexCommandApprovals": "Codex App Server · one command approval",
         "codexNetworkOff": "sandbox · network access off",
         "codexNetworkOn": "sandbox · network access on",
         "codexWritableRoots": "sandbox · writable roots",
@@ -1711,7 +1725,7 @@
       "resetTitle": "Changed to what {{connection}} can enforce",
       "resetDetail": "Unavailable on this connection and replaced by the most restrictive option it enforces: {{options}}. Review before publishing.",
       "appliesTitle": "Applies to new runs after publishing",
-      "appliesDetail": "Runs keep the permissions they launched with. Changing them for a single run is not available yet.",
+      "appliesDetail": "Runs keep the permissions they launched with. You can still change them for a single run from its task page.",
       "mcp": {
         "label": "MCP servers",
         "none": "This project has no MCP servers yet.",
