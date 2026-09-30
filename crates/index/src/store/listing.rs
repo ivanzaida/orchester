@@ -49,8 +49,8 @@ pub struct IndexListing {
 }
 
 impl CodebaseIndexes {
-  /// The indexes kept for the repository: building ones first, then by when they were built,
-  /// newest first, then failed ones.
+  /// The indexes kept for the repository, as the index list shows them: ready ones by when they
+  /// were built, newest first, then building ones, then failed ones.
   pub fn list(&self) -> Result<Vec<IndexListing>, IndexError> {
     let mut listed = Vec::new();
     for revision in self.listed_revisions()? {
@@ -64,8 +64,8 @@ impl CodebaseIndexes {
       listed.push(IndexListing { revision, runs, state });
     }
     listed.sort_by_key(|listing| match &listing.state {
-      IndexState::Building(_) => (0, 0),
-      IndexState::Ready(summary) => (1, -summary.built_at.unix_millis()),
+      IndexState::Ready(summary) => (0, -summary.built_at.unix_millis()),
+      IndexState::Building(_) => (1, 0),
       IndexState::Failed { .. } => (2, 0),
     });
     Ok(listed)
