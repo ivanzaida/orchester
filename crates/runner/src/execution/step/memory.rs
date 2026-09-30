@@ -5,7 +5,7 @@
 use orchester_core::{
   connection::stream::RunnerProblem,
   id::StepExecutionId,
-  memory::{Recalled, StepContext, StepFate, next_invocation_memory},
+  memory::{MemoryStore, Recalled, StepContext, StepFate, next_invocation_memory},
   resource::Step,
   run::{ProfileInfo, StepStatus},
   time::Timestamp,
@@ -26,6 +26,22 @@ impl RunTask {
     };
     next_invocation_memory(&self.db, context, Timestamp::now())
       .map_err(|error| problem(format!("cannot read task memory: {error}")))
+  }
+
+  /// How many memory records cannot be read back, while that was not reported in this run's
+  /// transcript yet; agents get the others.
+  pub(super) fn unreadable_memory(&self) -> Result<u64, RunnerProblem> {
+    if self.unreadable_memory_reported {
+      return Ok(0);
+    }
+    let unreadable = self
+      .db
+      .unreadable_memories()
+      .map_err(|error| problem(format!("cannot read task memory: {error}")))?;
+    for record in &unreadable {
+      tracing::warn!(run = %self.run.id(), memory = %record.id, detail = %record.detail, "a memory record cannot be read");
+    }
+    Ok(u64::try_from(unreadable.len()).unwrap_or(u64::MAX))
   }
 
   /// Keeps the handoff of `execution` once it passed or failed; a step waiting for its plan's

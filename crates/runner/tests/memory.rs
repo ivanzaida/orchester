@@ -9,12 +9,12 @@ mod support;
 use orchester_core::{
   connection::{
     AgentProvider,
-    stream::{AgentEvent, RunnerProblem},
+    stream::{AgentEvent, MemoryNotSavedReason, RunnerProblem},
   },
   id::{IdempotencyKey, RunId, SecretId, TaskId},
   memory::{
-    Delivery, InjectionReason, MemoryAuthor, MemoryFilter, MemoryKind, MemoryLimits, MemorySettings, MemoryStatus,
-    MemoryStore, ScopeFilter, WritePolicy,
+    Delivery, InjectionReason, Memory, MemoryAuthor, MemoryContent, MemoryFilter, MemoryKind, MemoryLimits,
+    MemoryScope, MemorySettings, MemoryStatus, MemoryStore, ScopeFilter, SecretScreen, WritePolicy,
   },
   run::{PlanDecision, Run, RunStatus},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
@@ -278,23 +278,59 @@ async fn memory_refuses_a_handoff_holding_a_secret_value() {
   let run = run_to_the_end(&project).await;
   let db = ProjectDb::open(project.repo.path()).expect("open");
   assert!(task_memory(&db, project.task).is_empty());
-  let details: Vec<String> = db
-    .activity(run, 0)
-    .expect("activity")
+  let reasons: Vec<MemoryNotSavedReason> = problems(&db, run)
     .into_iter()
-    .filter_map(|entry| match entry.event {
-      AgentEvent::RunnerProblem {
-        problem: RunnerProblem::MemoryNotSaved { detail },
-      } => Some(detail),
+    .filter_map(|problem| match problem {
+      RunnerProblem::MemoryNotSaved { reason } => Some(reason),
       _ => None,
     })
     .collect();
-  assert_eq!(details.len(), 2, "one per step: {details:?}");
-  assert!(
-    details.iter().all(|detail| detail.contains("GREETING_TOKEN")),
-    "{details:?}"
-  );
-  assert!(!details.iter().any(|detail| detail.contains(value)), "{details:?}");
+  let refused = MemoryNotSavedReason::ContainsSecret {
+    secret: "GREETING_TOKEN".to_owned(),
+  };
+  assert_eq!(reasons, [refused.clone(), refused], "one per step");
+  assert!(!format!("{reasons:?}").contains(value));
+}
+
+fn problems(db: &ProjectDb, run: RunId) -> Vec<RunnerProblem> {
+  db.activity(run, 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::RunnerProblem { problem } => Some(problem),
+      _ => None,
+    })
+    .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn memory_an_unreadable_record_is_reported_once_and_left_out() {
+  let project = project(&implement_then_review(AgentProvider::CodexCli));
+  let root = project.repo.path();
+  {
+    let mut db = ProjectDb::open(root).expect("open");
+    let content = SecretScreen::new(Vec::new())
+      .check(MemoryContent::new(MemoryKind::Fact, "Readable.").expect("content"))
+      .expect("no secrets");
+    let broken = Memory::by_person(MemoryScope::Project, content, Timestamp::now());
+    db.add_memories(std::slice::from_ref(&broken)).expect("add");
+    // A key over two lines, which no record can have: the row was edited outside Orchester.
+    let raw = rusqlite::Connection::open(root.join(".orchester").join("orchester.db")).expect("open");
+    raw
+      .execute(
+        "UPDATE memories SET key = 'two' || char(10) || 'lines' WHERE id = ?1",
+        [broken.id().to_string()],
+      )
+      .expect("damage the row");
+  }
+  let run = run_to_the_end(&project).await;
+  let db = ProjectDb::open(root).expect("open");
+  let unreadable: Vec<RunnerProblem> = problems(&db, run)
+    .into_iter()
+    .filter(|problem| matches!(problem, RunnerProblem::MemoryUnreadable { .. }))
+    .collect();
+  assert_eq!(unreadable, [RunnerProblem::MemoryUnreadable { records: 1 }]);
+  assert_eq!(db.unreadable_memories().expect("listed").len(), 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -165,8 +165,20 @@ pub enum RunnerProblem {
   StepBudgetReached { budget: u64 },
   /// A command tool's `program` is no file on the `PATH` or in the worktree; it was not started.
   ProgramNotFound { program: String },
-  /// The step's handoff was not kept as task memory; `detail` says why (never a secret's value).
-  MemoryNotSaved { detail: String },
+  /// The step's handoff was not kept as task memory.
+  MemoryNotSaved { reason: MemoryNotSavedReason },
+  /// `records` task or project memory records could not be read back; agents get the others.
+  MemoryUnreadable { records: u64 },
+}
+
+/// Why a step's handoff was not kept as task memory. It names a secret, never its value.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "reason", rename_all = "snake_case")]
+pub enum MemoryNotSavedReason {
+  /// It holds the value of secret `secret`.
+  ContainsSecret { secret: String },
+  /// The keychain could not be read to check it for the value of secret `secret`.
+  KeychainUnavailable { secret: String },
 }
 
 impl AgentEvent {

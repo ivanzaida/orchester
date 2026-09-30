@@ -86,7 +86,10 @@ fn matches(
   let mut found = Vec::new();
   for row in rows {
     let (raw, relevance) = row?;
-    found.push((raw.into_memory()?, relevance));
+    // A record that cannot be read back is left out; `unreadable_memories` lists it.
+    if let Ok(memory) = raw.into_memory() {
+      found.push((memory, relevance));
+    }
   }
   Ok(found)
 }

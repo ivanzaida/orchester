@@ -5,7 +5,7 @@
 //! run goes on without it.
 
 use orchester_core::{
-  connection::stream::{AgentEvent, RunnerProblem},
+  connection::stream::{AgentEvent, MemoryNotSavedReason, RunnerProblem},
   id::StepExecutionId,
   memory::{AgentProvenance, Handoff, HandoffWrite, MemoryFilter, MemoryStore, ScopeFilter, SecretScreen, StepFate},
   run::{Run, StepExecutor, StepResult},
@@ -45,7 +45,12 @@ impl Keeper<'_> {
     let secrets = self.db.secrets()?;
     let screen = match SecretScreen::load(self.db.project().id(), &secrets, self.vault) {
       Ok(screen) => screen,
-      Err(error) => return self.report(run, execution, &error),
+      Err(error) => {
+        let reason = MemoryNotSavedReason::KeychainUnavailable {
+          secret: error.secret.to_string(),
+        };
+        return self.report(run, execution, reason);
+      }
     };
     let filter = MemoryFilter {
       scope: ScopeFilter::Task(run.task()),
@@ -64,12 +69,17 @@ impl Keeper<'_> {
     };
     match handoff.changes(&write, earlier) {
       Ok(changes) => self.db.commit_memories(&changes),
-      Err(error) => self.report(run, execution, &error),
+      Err(error) => {
+        let reason = MemoryNotSavedReason::ContainsSecret {
+          secret: error.secret.to_string(),
+        };
+        self.report(run, execution, reason)
+      }
     }
   }
 
   /// Reports in `execution`'s transcript, under its latest invocation, why its handoff was not kept.
-  fn report(&mut self, run: &Run, execution: StepExecutionId, error: &dyn std::error::Error) -> Result<(), StoreError> {
+  fn report(&mut self, run: &Run, execution: StepExecutionId, reason: MemoryNotSavedReason) -> Result<(), StoreError> {
     let Some(invocation) = self
       .db
       .invocations(run.id())?
@@ -79,10 +89,8 @@ impl Keeper<'_> {
     else {
       return Ok(());
     };
-    tracing::warn!(run = %run.id(), %execution, %error, "the step's handoff was not kept");
-    let problem = RunnerProblem::MemoryNotSaved {
-      detail: error.to_string(),
-    };
+    tracing::warn!(run = %run.id(), %execution, ?reason, "the step's handoff was not kept");
+    let problem = RunnerProblem::MemoryNotSaved { reason };
     let events = [(Timestamp::now(), AgentEvent::RunnerProblem { problem })];
     let sequence = self.db.append_activity(&invocation, &events)?;
     self.notifier.send(Event::AgentActivity {

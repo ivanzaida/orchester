@@ -32,6 +32,13 @@ pub struct MemoryMatch {
   pub fragments: f64,
 }
 
+/// A stored record that cannot be read back: its id as stored and what is wrong with it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnreadableMemory {
+  pub id: String,
+  pub detail: String,
+}
+
 /// A record chosen for an invocation's prompt, why, and whether the prompt got it: in prompt order,
 /// then the records the limits left out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,8 +79,12 @@ pub trait MemoryStore {
 
   fn memory(&self, id: MemoryId) -> Result<Option<Memory>, Self::Error>;
 
-  /// The records `filter` selects, oldest first.
+  /// The records `filter` selects, oldest first. A record whose stored row cannot be read back is
+  /// left out, here and in the search; [`MemoryStore::unreadable_memories`] lists them.
   fn memories(&self, filter: &MemoryFilter) -> Result<Vec<Memory>, Self::Error>;
+
+  /// The records whose stored row cannot be read back, and why.
+  fn unreadable_memories(&self) -> Result<Vec<UnreadableMemory>, Self::Error>;
 
   /// The active records of `task` and of the project that match `query`, best first, at most
   /// `limit` of them.

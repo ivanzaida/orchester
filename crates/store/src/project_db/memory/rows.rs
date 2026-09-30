@@ -68,6 +68,10 @@ impl Raw {
     })
   }
 
+  pub(super) fn id(&self) -> &str {
+    &self.id
+  }
+
   pub(super) fn into_memory(self) -> Result<Memory, StoreError> {
     const WHAT: &str = "memory record";
     let bad = |detail: &str| corrupt(WHAT, detail);

@@ -15,7 +15,9 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  connection::stream::{CommandStatus, FileChangeKind, OutputStream, RunnerProblem, ToolCommandResult},
+  connection::stream::{
+    CommandStatus, FileChangeKind, MemoryNotSavedReason, OutputStream, RunnerProblem, ToolCommandResult,
+  },
   tokens::compact_tokens,
 };
 
@@ -526,10 +528,29 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
       Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
     ),
-    RunnerProblem::MemoryNotSaved { detail } => (
-      ctx.t("runs.activity.problem.memoryNotSaved"),
-      Some(detail.as_str().into()),
-    ),
+    RunnerProblem::MemoryNotSaved { reason } => {
+      let (key, secret) = match reason {
+        MemoryNotSavedReason::ContainsSecret { secret } => ("runs.activity.problem.memoryContainsSecret", secret),
+        MemoryNotSavedReason::KeychainUnavailable { secret } => {
+          ("runs.activity.problem.memoryKeychainUnavailable", secret)
+        }
+      };
+      (
+        ctx.t("runs.activity.problem.memoryNotSaved"),
+        Some(ctx.t_args(key, [("secret", secret.as_str())])),
+      )
+    }
+    RunnerProblem::MemoryUnreadable { records } => {
+      let key = if *records == 1 {
+        "runs.activity.problem.memoryUnreadable.one"
+      } else {
+        "runs.activity.problem.memoryUnreadable.other"
+      };
+      (
+        ctx.t_args(key, [("count", records.to_string().as_str())]),
+        Some(ctx.t("runs.activity.problem.memoryUnreadableDetail")),
+      )
+    }
   }
 }
 

@@ -12,7 +12,7 @@ use orchester_core::{
   id::{InvocationId, MemoryId, TaskId},
   memory::{
     InjectedMemory, Memory, MemoryChanges, MemoryFilter, MemoryLimits, MemoryMatch, MemoryQuery, MemorySettings,
-    MemoryStatus, MemoryStore, ScopeFilter, WritePolicy,
+    MemoryStatus, MemoryStore, ScopeFilter, UnreadableMemory, WritePolicy,
   },
 };
 use rusqlite::{OptionalExtension, params};
@@ -34,6 +34,18 @@ const DELETE_WITH_HISTORY: &str = "
       WHERE older.status = 'superseded' AND newer.status NOT IN ('proposed', 'rejected')
   )
   DELETE FROM memories WHERE id IN (SELECT id FROM history)";
+
+/// The records of `rows` that can be read back; the others are left out, and
+/// [`MemoryStore::unreadable_memories`] lists them.
+fn readable(rows: impl Iterator<Item = rusqlite::Result<Raw>>) -> Result<Vec<Memory>, StoreError> {
+  let mut memories = Vec::new();
+  for row in rows {
+    if let Ok(memory) = row?.into_memory() {
+      memories.push(memory);
+    }
+  }
+  Ok(memories)
+}
 
 impl MemoryStore for ProjectDb {
   type Error = StoreError;
@@ -109,10 +121,16 @@ impl MemoryStore for ProjectDb {
       ScopeFilter::TaskAndProject(task) => ("both", Some(task)),
     };
     let sql = format!(
-      "SELECT {COLUMNS} FROM memories m WHERE \
-       CASE ?1 WHEN 'task' THEN m.task_id = ?2 WHEN 'project' THEN m.task_id IS NULL \
-       ELSE m.task_id = ?2 OR m.task_id IS NULL END \
-       AND (?3 IS NULL OR m.status = ?3) AND (?4 = 0 OR m.pinned = 1) ORDER BY m.created_at, m.seq"
+      "
+      SELECT {COLUMNS} FROM memories m
+      WHERE CASE ?1
+          WHEN 'task' THEN m.task_id = ?2
+          WHEN 'project' THEN m.task_id IS NULL
+          ELSE m.task_id = ?2 OR m.task_id IS NULL
+        END
+        AND (?3 IS NULL OR m.status = ?3)
+        AND (?4 = 0 OR m.pinned = 1)
+      ORDER BY m.created_at, m.seq"
     );
     let mut statement = self.connection.prepare(&sql)?;
     let rows = statement.query_map(
@@ -124,7 +142,25 @@ impl MemoryStore for ProjectDb {
       ],
       Raw::from_row,
     )?;
-    rows.map(|row| row?.into_memory()).collect()
+    readable(rows)
+  }
+
+  fn unreadable_memories(&self) -> Result<Vec<UnreadableMemory>, StoreError> {
+    let sql = format!("SELECT {COLUMNS} FROM memories m ORDER BY m.seq");
+    let mut statement = self.connection.prepare(&sql)?;
+    let rows = statement.query_map([], Raw::from_row)?;
+    let mut unreadable = Vec::new();
+    for row in rows {
+      let raw = row?;
+      let id = raw.id().to_owned();
+      if let Err(error) = raw.into_memory() {
+        unreadable.push(UnreadableMemory {
+          id,
+          detail: error.to_string(),
+        });
+      }
+    }
+    Ok(unreadable)
   }
 
   fn search_memories(&self, task: TaskId, query: &MemoryQuery, limit: usize) -> Result<Vec<MemoryMatch>, StoreError> {

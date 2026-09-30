@@ -471,3 +471,27 @@ fn memory_deleting_a_proposal_keeps_the_record_it_would_replace() {
     "the active record stays"
   );
 }
+
+#[test]
+fn memory_unreadable_rows_are_listed_and_left_out_of_listings_and_search() {
+  let (repo, mut db, run, _) = started_run();
+  let task = run.task();
+  let good = person(MemoryScope::Task(task), content(MemoryKind::Fact, "Readable wave."), 1);
+  let bad = person(MemoryScope::Task(task), content(MemoryKind::Fact, "Damaged wave."), 2);
+  db.add_memories(&[good, bad.clone()]).expect("add");
+  let raw = rusqlite::Connection::open(repo.path().join(".orchester").join("orchester.db")).expect("open");
+  raw
+    .execute(
+      "UPDATE memories SET key = 'two' || char(10) || 'lines' WHERE id = ?1",
+      [bad.id().to_string()],
+    )
+    .expect("damage the row");
+  assert_eq!(
+    texts(&db.memories(&filter(ScopeFilter::Task(task))).expect("list")),
+    ["Readable wave."]
+  );
+  assert_eq!(search(&db, task, "wave"), ["Readable wave."]);
+  let unreadable = db.unreadable_memories().expect("listed");
+  assert_eq!(unreadable.len(), 1);
+  assert_eq!(unreadable[0].id, bad.id().to_string());
+}

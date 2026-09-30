@@ -224,6 +224,13 @@ impl RunTask {
     };
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
     self.db.save_injected_memory(invocation.id, &start.memory)?;
+    if start.unreadable_memory > 0 {
+      let problem = RunnerProblem::MemoryUnreadable {
+        records: start.unreadable_memory,
+      };
+      self.report(&invocation, problem)?;
+      self.unreadable_memory_reported = true;
+    }
     self.record_left_out(&invocation, std::mem::take(&mut start.mcp_left_out))?;
     let process = match Supervised::start(&start.command) {
       Ok(process) => process,
