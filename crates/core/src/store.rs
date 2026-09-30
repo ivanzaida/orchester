@@ -17,6 +17,7 @@ use crate::{
   integration::RunMerge,
   limits::ProjectLimits,
   name::Name,
+  permission::AgentPermissions,
   pull_request::{PullRequest, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
   resource::{
@@ -399,6 +400,15 @@ pub trait ActivityStore {
     execution: StepExecutionId,
     now: Timestamp,
   ) -> Result<Invocation, Self::Error>;
+
+  /// Records the exact enforced policy used to prepare an open agent invocation, once, before
+  /// its process starts. Existing snapshots cannot be replaced, including by save_invocation.
+  /// Older invocations remain unknown; this method must not infer or backfill their policy.
+  fn save_invocation_permissions(
+    &mut self,
+    invocation: InvocationId,
+    permissions: &AgentPermissions,
+  ) -> Result<(), Self::Error>;
 
   /// Stores the session, usage, end and outcome of an existing invocation.
   fn save_invocation(&mut self, invocation: &Invocation) -> Result<(), Self::Error>;

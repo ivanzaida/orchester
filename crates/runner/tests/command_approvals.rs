@@ -57,8 +57,9 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
   let profile = before.profile_of(&step).expect("profile");
   let db = ProjectDb::open(root).expect("open");
   let permissions = migration_permissions(root, profile);
+  let old_policies = policies(&db, id);
   scheduler
-    .change_permissions(id, profile, permissions, PermissionsApply::NextInvocation)
+    .change_permissions(id, profile, permissions.clone(), PermissionsApply::NextInvocation)
     .await
     .expect("change");
   let worktree = root.join(".orchester/worktrees").join(id.to_string());
@@ -76,6 +77,7 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
     .expect("message");
   scheduler.deliver_messages(id).await.expect("same session continues");
   let command = pending(root, &mut events, id).await;
+  assert_migration_policies(&db, id, &old_policies, &permissions);
   assert!(command.command);
   assert_eq!(command.target.as_deref(), worktree.to_str());
   assert!(!worktree.join("command-once.txt").exists());
@@ -109,6 +111,30 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
       .expect("tool decision");
   }
   verify_progress(root, &mut events, id, &before, &message, (deny_command, deny_tool)).await;
+}
+
+fn policies(db: &ProjectDb, run: RunId) -> Vec<Option<AgentPermissions>> {
+  db.invocations(run)
+    .expect("invocations")
+    .into_iter()
+    .map(|invocation| invocation.permissions)
+    .collect()
+}
+
+fn assert_migration_policies(db: &ProjectDb, run: RunId, old: &[Option<AgentPermissions>], desired: &AgentPermissions) {
+  let actual = policies(db, run);
+  assert_eq!(&actual[..2], old);
+  let enforced = desired
+    .enforced_on(
+      orchester_core::connection::AgentProvider::CodexCli,
+      orchester_core::connection::invocation::Platform::current(),
+    )
+    .expect("actual supported policy");
+  assert_eq!(
+    actual[2].as_ref(),
+    Some(enforced.permissions()),
+    "actual App Server policy includes Ask and MCP approvals"
+  );
 }
 
 fn migration_permissions(root: &Path, profile: orchester_core::id::ResourceId) -> AgentPermissions {

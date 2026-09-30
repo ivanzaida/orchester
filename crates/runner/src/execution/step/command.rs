@@ -57,6 +57,7 @@ pub(super) struct AgentStart {
   pub(super) mcp_left_out: Vec<AgentEvent>,
   pub(super) app_server: Option<AppServerSetup>,
   pub(super) agent: String,
+  pub(super) permissions: AgentPermissions,
 }
 
 /// What decides the CLI's arguments besides its prompt and MCP servers.
@@ -162,6 +163,7 @@ impl RunTask {
       mcp_left_out: left_out,
       app_server,
       agent: body.role().as_str().to_owned(),
+      permissions: enforced.permissions().clone(),
     })
   }
 

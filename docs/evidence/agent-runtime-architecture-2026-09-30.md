@@ -293,3 +293,44 @@ The shutdown correction has a successful release build and is ready for the Root
 authorized on this turn. It is not installed. No task branch was merged. Physical Mac testing,
 the full test suite, and full desktop/runner Darwin compilation
 remain unperformed; the native C-toolchain limitation still applies.
+
+## Immutable invocation launch permissions
+
+ORC-44's independent Review found that a Next invocation change immediately appeared as the
+active policy while the running agent still enforced its earlier permissions. Its Implement
+agent identified a shared data gap: invocation records held no actual launch-policy snapshot,
+and permission-change events record desired settings. Timestamp inference would invent evidence.
+
+Root added the shared core/store/runner contract directly. `Invocation.permissions` is the
+enforced `AgentPermissions` used by the prepared launch command. The runner records it once
+before starting that process, including any network-on fallback when network-off cannot be
+enforced. Later run overrides, progress saves, completion and session continuation never
+rewrite an earlier invocation's snapshot. The store rejects another write, a command-tool
+policy, a closed invocation and a missing invocation. A database trigger protects an existing
+snapshot from direct update. The appended migration leaves older agent invocations explicitly
+unknown; neither desired settings nor event timestamps backfill them.
+
+Validation of this contract:
+
+- Three `invocation_permissions_` store tests pass: immutable round-trip/reopen despite a
+  conflicting progress record, invalid writes, and migration preserving the legacy session,
+  invocation and run without inventing a policy.
+- Six `run_permissions_` runner tests pass, including assertions that active policies remain
+  unchanged until the next launch or Apply-now checkpoint, resumed sessions get the new
+  snapshot, cancelled restarts retain their history, and Claude's unsupported network-off
+  is recorded as the actual network-on policy.
+- Four `command_approvals_` runner tests pass with assertions that migrating to App Server
+  records the actual Ask/MCP policy and preserves preceding launch snapshots.
+- Three `approval_shutdown_` tests pass with the new launch recording present.
+- `tools/check.ps1` reports `check: OK` in
+  `.tmp/agent-runtime/check-invocation-policy.log`; core Darwin clippy passes with warnings denied.
+
+Root supplied the 14 API/source/test files to the preserved ORC-44 worktree after checking every
+target. The only divergent target, `step/mod.rs`, retained its existing recovery behavior and
+received only the two launch-recording lines. Original files and hashes remain in
+`.tmp/agent-runtime/invocation-policy-handoff-v1`. Task-specific copy and evidence were preserved.
+Its Implement agent owns the current-versus-next display correction and fresh independent QA.
+
+The user authorized committing the current Root work and requires all subsequent Root source
+changes in a separate worktree. The launch-policy delta is not installed yet. Physical Mac,
+the full suite and full desktop/runner Darwin compilation remain unperformed.
