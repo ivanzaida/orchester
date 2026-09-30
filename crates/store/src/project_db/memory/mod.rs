@@ -69,8 +69,8 @@ fn list(connection: &Connection, filter: &MemoryFilter) -> Result<Vec<Memory>, S
 }
 
 /// Stores `changes`: the changed records first, under the revision rule, then the added ones.
-fn commit(connection: &Connection, changes: &mut MemoryChanges) -> Result<(), StoreError> {
-  for memory in &mut changes.changed {
+fn commit(connection: &Connection, changes: &MemoryChanges) -> Result<(), StoreError> {
+  for memory in &changes.changed {
     rows::update(connection, memory)?;
   }
   for memory in &changes.added {
@@ -107,6 +107,9 @@ impl MemoryStore for ProjectDb {
     let transaction = self.connection.transaction()?;
     commit(&transaction, changes)?;
     transaction.commit()?;
+    for memory in &mut changes.changed {
+      memory.saved();
+    }
     Ok(())
   }
 
@@ -118,11 +121,11 @@ impl MemoryStore for ProjectDb {
     // Immediate (the connection's behavior): the write lock is held from the read on.
     let transaction = self.connection.transaction()?;
     let memories = list(&transaction, filter)?;
-    let mut changes = match change(memories) {
+    let changes = match change(memories) {
       Ok(changes) => changes,
       Err(error) => return Ok(Err(error)),
     };
-    commit(&transaction, &mut changes)?;
+    commit(&transaction, &changes)?;
     transaction.commit()?;
     Ok(Ok(()))
   }
@@ -131,6 +134,7 @@ impl MemoryStore for ProjectDb {
     let transaction = self.connection.transaction()?;
     rows::update(&transaction, memory)?;
     transaction.commit()?;
+    memory.saved();
     Ok(())
   }
 
@@ -143,12 +147,22 @@ impl MemoryStore for ProjectDb {
     }
     rows::update(&transaction, superseded)?;
     // A new replacement, or a proposal that was just approved.
-    match rows::status(&transaction, replacement.id())? {
-      None => rows::insert(&transaction, replacement)?,
-      Some(MemoryStatus::Proposed) => rows::update(&transaction, replacement)?,
+    let approved = match rows::status(&transaction, replacement.id())? {
+      None => {
+        rows::insert(&transaction, replacement)?;
+        false
+      }
+      Some(MemoryStatus::Proposed) => {
+        rows::update(&transaction, replacement)?;
+        true
+      }
       Some(_) => return Err(StoreError::MemoryNotActive(replacement.id())),
-    }
+    };
     transaction.commit()?;
+    superseded.saved();
+    if approved {
+      replacement.saved();
+    }
     Ok(())
   }
 

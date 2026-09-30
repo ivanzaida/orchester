@@ -195,8 +195,10 @@ pub(super) fn insert(connection: &Connection, memory: &Memory) -> Result<(), Sto
 
 /// Stores what an existing record says, its status and pin; its scope and origin never change. Its
 /// key must not name another active record of its scope, and the stored record must still be at
-/// `memory`'s revision; `memory` moves to the next one.
-pub(super) fn update(connection: &Connection, memory: &mut Memory) -> Result<(), StoreError> {
+/// `memory`'s revision. The caller moves `memory` to the next revision once the transaction commits
+/// ([`Memory::saved`]): a transaction rolled back leaves the stored record, and so the copy, as it
+/// was.
+pub(super) fn update(connection: &Connection, memory: &Memory) -> Result<(), StoreError> {
   check_key(connection, memory)?;
   let content = memory.content();
   let changed = connection.execute(
@@ -227,7 +229,6 @@ pub(super) fn update(connection: &Connection, memory: &mut Memory) -> Result<(),
       None => StoreError::MemoryNotFound(memory.id()),
     });
   }
-  memory.saved();
   Ok(())
 }
 

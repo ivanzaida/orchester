@@ -173,3 +173,28 @@ fn memory_a_proposal_approved_after_its_target_was_replaced_names_no_earlier_ver
     "the other record's history stays"
   );
 }
+
+#[test]
+fn memory_a_rolled_back_change_leaves_the_copies_at_their_revision() {
+  let (_repo, mut db, ..) = started_run();
+  let project = MemoryScope::Project;
+  let record = person(project, content(MemoryKind::Fact, "Stored."), 1);
+  let existing = person(project, content(MemoryKind::Fact, "Also stored."), 1);
+  db.add_memories(&[record.clone(), existing.clone()]).expect("add");
+  let mut pinned = db.memory(record.id()).expect("read").expect("stored");
+  pinned.set_pinned(true, at(2)).expect("pin");
+  let mut changes = MemoryChanges {
+    changed: vec![pinned],
+    added: vec![existing],
+  };
+  assert!(matches!(
+    db.commit_memories(&mut changes),
+    Err(StoreError::MemoryExists(_))
+  ));
+  let mut pinned = changes.changed.remove(0);
+  assert_eq!(pinned.revision(), 0, "the update was rolled back");
+  db.save_memory(&mut pinned).expect("no false conflict");
+  let stored = db.memory(record.id()).expect("read").expect("stored");
+  assert_eq!((stored.is_pinned(), stored.revision()), (true, 1));
+  assert_eq!(pinned.revision(), 1);
+}
