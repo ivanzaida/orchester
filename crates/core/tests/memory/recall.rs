@@ -274,18 +274,34 @@ fn recall_caps_at_eight_records_and_three_thousand_tokens() {
 }
 
 #[test]
-fn recall_gives_no_loosely_related_match() {
+fn recall_leaves_out_loose_matches_only_when_matches_compete_for_slots() {
   let fixture = Fixture::new();
-  let request = fixture.request(MemoryLimits::DEFAULT);
-  let chosen = reasons(
-    &request,
+  let close = |text: &str| matched(fixture.by_person(MemoryKind::Fact, text, 1), 10.0, 10.0);
+  let loose = || matched(fixture.by_person(MemoryKind::Fact, "Loose.", 1), 1.0, 1.0);
+  let free = reasons(
+    &fixture.request(MemoryLimits::DEFAULT),
     Vec::new(),
-    vec![
-      matched(fixture.by_person(MemoryKind::Fact, "Close.", 1), 10.0, 10.0),
-      matched(fixture.by_person(MemoryKind::Fact, "Loose.", 1), 1.0, 1.0),
-    ],
+    vec![close("Close."), loose()],
   );
-  assert_eq!(chosen, [(InjectionReason::Match, "Close.".to_owned())]);
+  let texts: Vec<&str> = free.iter().map(|(_, text)| text.as_str()).collect();
+  assert_eq!(texts, ["Close.", "Loose."], "slots are free: the loose match is given");
+
+  let two = MemoryLimits::new(2, 3_000).expect("valid limits");
+  let recalled = recall(
+    &fixture.request(two),
+    Vec::new(),
+    vec![close("Close."), close("Also close."), loose()],
+  );
+  let texts: Vec<&str> = recalled
+    .entries()
+    .iter()
+    .map(|entry| entry.memory.content().text())
+    .collect();
+  assert_eq!(texts, ["Close.", "Also close."]);
+  assert!(
+    recalled.left_out().is_empty(),
+    "a loose match is not even a candidate then"
+  );
 }
 
 #[test]

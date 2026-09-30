@@ -9,7 +9,8 @@
 //! BM25) relevance, each divided by the best among the matches; importance and confidence are 0,
 //! 0.5 and 1 for low, normal (medium) and high; recency halves every 14 days since the record last
 //! changed; role is 1 for a record the same agent profile wrote or one tagged with the agent's
-//! role, else 0. A match whose relevance is below 0.2 is not given at all.
+//! role, else 0. When there are more matches than the other tiers leave slots for, a match whose
+//! relevance is below 0.2 is not given at all.
 //! The ranked records are then taken within the project's limits ([`super::selection`]).
 
 use super::{
@@ -26,7 +27,8 @@ const IMPORTANCE: f64 = 0.20;
 const RECENCY: f64 = 0.15;
 const ROLE: f64 = 0.15;
 const CONFIDENCE: f64 = 0.10;
-/// A match less relevant than this share of the best match is too loosely related to be given.
+/// A match less relevant than this share of the best match is too loosely related to take a slot
+/// another match competes for.
 const MIN_RELEVANCE: f64 = 0.2;
 const HALF_LIFE_DAYS: f64 = 14.0;
 const DAY_MILLIS: f64 = 86_400_000.0;
@@ -124,9 +126,12 @@ pub fn recall(request: &RecallRequest<'_>, mut candidates: Vec<Memory>, mut matc
     };
     ranked.push((reason, score(request, &memory, 0.0), memory));
   }
+  // Matches compete for the slots the other tiers leave; only then is a loose one left out.
+  let free = usize::from(request.limits.records()).saturating_sub(ranked.len());
+  let compete = matches.len() > free;
   for found in matches {
     let relevance = (ratio(found.words, best_words) + ratio(found.fragments, best_fragments)) / 2.0;
-    if relevance < MIN_RELEVANCE {
+    if compete && relevance < MIN_RELEVANCE {
       continue;
     }
     ranked.push((
