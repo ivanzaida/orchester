@@ -65,6 +65,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::SecretNotFound(_)
     | StoreError::MemoryNotFound(_)
     | StoreError::MemoryNotActive(_)
+    | StoreError::DuplicateMemoryKey(_)
     | StoreError::MigrationBrokeReferences(_) => Message::new("errors.storage"),
     StoreError::Publish(PublishError::StaleDraft { latest, .. }) => Message::new("errors.staleDraft").with(
       "version",

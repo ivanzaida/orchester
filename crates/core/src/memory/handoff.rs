@@ -6,7 +6,7 @@
 use std::fmt::Write as _;
 
 use super::{
-  AgentProvenance, Confidence, ContainsSecret, Importance, Memory, MemoryContent, MemoryKind, MemoryScope,
+  AgentProvenance, AgentWrite, Confidence, ContainsSecret, Importance, Memory, MemoryContent, MemoryKind, MemoryScope,
   MemorySettings, SecretScreen,
 };
 use crate::{
@@ -29,13 +29,8 @@ impl Handoff {
     if result.outcome == StepOutcome::Question {
       return None;
     }
-    let reported = |kind, text: &str| {
-      MemoryContent::new(kind, text).map(|content| {
-        content
-          .with_importance(Importance::HIGH)
-          .with_confidence(Confidence::REPORTED)
-      })
-    };
+    let reported =
+      |kind, text: &str| MemoryContent::new(kind, text).map(|content| content.with_importance(Importance::High));
     // Only a blank text is refused: a result that says nothing leaves no handoff.
     let handoff = reported(MemoryKind::Handoff, &text(result)).ok()?;
     let decisions = result
@@ -53,25 +48,29 @@ impl Handoff {
   }
 
   /// The task memory records of the handoff, written by the agent of `provenance` as the project's
-  /// `settings` keep task memory; `sources` are the transcript entries it came from. Refused as a
-  /// whole when any of them holds a secret's value.
+  /// `settings` keep task memory, of medium confidence (the agent's own report, unchecked);
+  /// `sources` are the transcript entries it came from. Refused as a whole when any of them holds a
+  /// secret's value.
   pub fn records(
     &self,
     task: TaskId,
-    provenance: &AgentProvenance,
-    sources: &[u64],
+    (provenance, sources): (&AgentProvenance, &[u64]),
     (settings, screen): (&MemorySettings, &SecretScreen),
     now: Timestamp,
   ) -> Result<Vec<Memory>, ContainsSecret> {
     std::iter::once(&self.handoff)
       .chain(&self.decisions)
       .map(|content| {
+        let write = AgentWrite {
+          provenance: provenance.clone(),
+          confidence: Confidence::Medium,
+          sources: sources.to_vec(),
+        };
         let screened = screen.check(content.clone())?;
         Ok(Memory::by_agent(
           MemoryScope::Task(task),
-          provenance.clone(),
+          write,
           screened,
-          sources.to_vec(),
           settings,
           now,
         ))

@@ -6,10 +6,7 @@
 use orchester_core::{
   connection::stream::{AgentEvent, RunnerProblem},
   id::StepExecutionId,
-  memory::{
-    AgentProvenance, Handoff, MemoryFilter, MemoryQuery, MemoryStatus, MemoryStore, RecallRequest, Recalled,
-    ScopeFilter, SecretScreen, recall,
-  },
+  memory::{AgentProvenance, Handoff, MemoryStore, Recalled, SecretScreen, StepContext, next_invocation_memory},
   resource::Step,
   run::{ProfileInfo, StepExecutor, StepResult},
   store::{ActivityStore, SecretStore},
@@ -19,50 +16,18 @@ use orchester_core::{
 use super::{super::run::RunTask, Active, command::problem};
 use crate::execution::run::ExecutionError;
 
-/// Matches fetched per record the prompt may get, so ranking has more than the best matches to
-/// choose from.
-const MATCHES_PER_RECORD: usize = 4;
-
 impl RunTask {
-  /// The records the next invocation of `step`, run by `profile`, gets: the task's active records,
-  /// the project's pinned ones and those matching the step's and the task's text, within the
-  /// project's limits.
+  /// The records the next invocation of `step`, run by `profile`, gets
+  /// ([`next_invocation_memory`]).
   pub(super) fn recall_memory(&self, step: &Step, profile: ProfileInfo<'_>) -> Result<Recalled, RunnerProblem> {
-    let failed = |error: orchester_store::StoreError| problem(format!("cannot read task memory: {error}"));
-    let settings = self.db.memory_settings().map_err(failed)?;
-    let active = |scope| MemoryFilter {
-      scope,
-      status: Some(MemoryStatus::Active),
-      pinned_only: false,
-    };
-    let task = self.task.id();
-    let mut candidates = self.db.memories(&active(ScopeFilter::Task(task))).map_err(failed)?;
-    let pinned = MemoryFilter {
-      pinned_only: true,
-      ..active(ScopeFilter::Project)
-    };
-    candidates.extend(self.db.memories(&pinned).map_err(failed)?);
-    let details = self.task.details();
-    let text = [
-      step.name.as_str(),
-      step.instructions.as_str(),
-      details.title.as_str(),
-      &details.brief,
-    ]
-    .join("\n");
-    let limit = usize::from(settings.limits.records.get()) * MATCHES_PER_RECORD;
-    let matches = self
-      .db
-      .search_memories(task, &MemoryQuery::from_text(&text), limit)
-      .map_err(failed)?;
-    let request = RecallRequest {
-      task,
+    let context = StepContext {
+      task: &self.task,
+      step,
       profile: profile.id,
       role: profile.body.role().as_str(),
-      limits: settings.limits,
-      now: Timestamp::now(),
     };
-    Ok(recall(&request, candidates, matches))
+    next_invocation_memory(&self.db, context, Timestamp::now())
+      .map_err(|error| problem(format!("cannot read task memory: {error}")))
   }
 
   /// Keeps the handoff of `execution`'s result, its agent's `final_message`, as task memory
@@ -91,8 +56,7 @@ impl RunTask {
     let sources = self.final_message_entry(active)?;
     let records = match handoff.records(
       self.task.id(),
-      &provenance,
-      &sources,
+      (&provenance, &sources),
       (&settings, &screen),
       Timestamp::now(),
     ) {

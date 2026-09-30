@@ -1,8 +1,6 @@
 //! Search terms and recall: which active records an agent's prompt gets, in what order, and the
 //! record and token limits. Run with `cargo test -p orchester-core --test memory recall`.
 
-use std::num::{NonZeroU16, NonZeroU32};
-
 use orchester_core::{
   id::{ResourceId, TaskId},
   memory::{
@@ -11,7 +9,7 @@ use orchester_core::{
   },
 };
 
-use super::support::{DAY, at, content, provenance, screened};
+use super::support::{DAY, at, content, screened, write};
 
 #[test]
 fn recall_query_keeps_word_stems_paths_and_identifiers() {
@@ -114,9 +112,8 @@ fn recall_fills_tiers_in_order_with_only_active_records() {
   );
   let proposal = Memory::by_agent(
     MemoryScope::Project,
-    provenance(fixture.profile),
+    write(fixture.profile),
     screened(MemoryKind::Fact, "An unapproved fact."),
-    Vec::new(),
     &MemorySettings::default(),
     at(8 * DAY),
   );
@@ -212,16 +209,13 @@ fn recall_caps_at_eight_records_and_three_thousand_tokens() {
       matched(small, 0.1, 0.1),
     ],
   );
-  let tokens: u32 = recalled.entries().iter().map(|entry| entry.tokens).sum();
+  let tokens = recalled.tokens();
   assert_eq!(recalled.entries().len(), 3);
   assert!(tokens <= 3_000, "{tokens}");
   assert_eq!(recalled.entries()[2].memory.content().text(), "Small.");
   assert_eq!(recalled.injected().len(), 3);
 
-  let one = MemoryLimits {
-    records: NonZeroU16::MIN,
-    tokens: NonZeroU32::new(3_000).expect("above zero"),
-  };
+  let one = MemoryLimits::new(1, 3_000).expect("valid limits");
   assert_eq!(
     recall(
       &fixture.request(one),

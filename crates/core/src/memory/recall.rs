@@ -6,16 +6,20 @@
 //! `score = 0.40·relevance + 0.20·importance + 0.15·recency + 0.15·role + 0.10·confidence`
 //!
 //! each term from 0 to 1: relevance is the mean of the record's word (BM25) and fragment (trigram
-//! BM25) relevance, each divided by the best among the matches; importance maps 1–5 onto 0–1;
-//! recency halves every 14 days since the record last changed; role is 1 for a record the same
-//! agent profile wrote or one tagged with the agent's role, else 0; confidence is its percentage.
+//! BM25) relevance, each divided by the best among the matches; importance and confidence are 0,
+//! 0.5 and 1 for low, normal (medium) and high; recency halves every 14 days since the record last
+//! changed; role is 1 for a record the same agent profile wrote or one tagged with the agent's
+//! role, else 0.
 //! A record already chosen, one with the key of a chosen one and one saying the same as a chosen
 //! one are left out. Records are then taken in order while the project's record limit allows,
 //! skipping any that would exceed its token limit.
 
 use std::collections::BTreeSet;
 
-use super::{InjectedMemory, Memory, MemoryAuthor, MemoryKind, MemoryLimits, MemoryMatch, MemoryScope, MemoryStatus};
+use super::{
+  Confidence, Importance, InjectedMemory, Memory, MemoryAuthor, MemoryKind, MemoryLimits, MemoryMatch, MemoryScope,
+  MemoryStatus,
+};
 use crate::{
   id::{ResourceId, TaskId},
   time::Timestamp,
@@ -115,6 +119,11 @@ impl Recalled {
     self.entries.is_empty()
   }
 
+  /// The estimated tokens of all the records.
+  pub fn tokens(&self) -> u32 {
+    self.entries.iter().map(|entry| entry.tokens).sum()
+  }
+
   /// What to record with the invocation.
   pub fn injected(&self) -> Vec<InjectedMemory> {
     self
@@ -196,7 +205,11 @@ fn ratio(value: f64, best: f64) -> f64 {
 
 fn score(request: &RecallRequest<'_>, memory: &Memory, relevance: f64) -> f64 {
   let content = memory.content();
-  let importance = f64::from(content.importance().get() - 1) / 4.0;
+  let importance = match content.importance() {
+    Importance::Low => 0.0,
+    Importance::Normal => 0.5,
+    Importance::High => 1.0,
+  };
   let age_days = (request.now.unix_millis() - memory.updated_at().unix_millis()).max(0) as f64 / DAY_MILLIS;
   let recency = 0.5_f64.powf(age_days / HALF_LIFE_DAYS);
   let role_tag = request.role.trim().to_lowercase().replace(char::is_whitespace, "-");
@@ -206,7 +219,11 @@ fn score(request: &RecallRequest<'_>, memory: &Memory, relevance: f64) -> f64 {
   } else {
     0.0
   };
-  let confidence = f64::from(content.confidence().percent()) / 100.0;
+  let confidence = match memory.confidence() {
+    Confidence::Low => 0.0,
+    Confidence::Medium => 0.5,
+    Confidence::High => 1.0,
+  };
   RELEVANCE * relevance + IMPORTANCE * importance + RECENCY * recency + ROLE * role + CONFIDENCE * confidence
 }
 
@@ -218,7 +235,7 @@ fn within_limits(limits: MemoryLimits, ranked: Vec<(InjectionReason, f64, Memory
   let mut tokens = 0_u32;
   let mut chosen = Vec::new();
   for (reason, _, memory) in ranked {
-    if chosen.len() >= usize::from(limits.records.get()) {
+    if chosen.len() >= usize::from(limits.records()) {
       break;
     }
     let same_text = memory
@@ -234,7 +251,7 @@ fn within_limits(limits: MemoryLimits, ranked: Vec<(InjectionReason, f64, Memory
     }
     let text = entry_text(&memory, reason);
     let cost = estimated_tokens(&text);
-    if tokens.saturating_add(cost) > limits.tokens.get() {
+    if tokens.saturating_add(cost) > limits.tokens() {
       continue;
     }
     tokens += cost;

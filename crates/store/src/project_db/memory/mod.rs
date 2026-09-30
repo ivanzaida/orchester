@@ -1,12 +1,11 @@
 //! Task and project memory in the project database: `memories` with its two full-text indexes,
 //! `memory_settings` (Project settings › Memory) and `invocation_memories`, what each invocation's
-//! prompt was given. The bundled SQLite is built with FTS5 (rusqlite's `bundled` feature compiles
-//! it with `SQLITE_ENABLE_FTS5`), and its trigram tokenizer exists since SQLite 3.34.
+//! prompt was given. A record's key names one active record of its scope; deleting a record deletes
+//! the earlier versions it superseded with it. The bundled SQLite is built with FTS5 (rusqlite's `bundled` feature
+//! compiles it with `SQLITE_ENABLE_FTS5`), and its trigram tokenizer exists since SQLite 3.34.
 
 mod rows;
 mod search;
-
-use std::num::{NonZeroU16, NonZeroU32};
 
 use orchester_core::{
   id::{InvocationId, MemoryId, TaskId},
@@ -27,38 +26,41 @@ impl MemoryStore for ProjectDb {
   fn add_memories(&mut self, memories: &[Memory]) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     for memory in memories {
-      rows::insert(&transaction, memory)?;
+      rows::upsert(&transaction, memory)?;
     }
     transaction.commit()?;
     Ok(())
   }
 
   fn save_memory(&mut self, memory: &Memory) -> Result<(), StoreError> {
-    if rows::update(&self.connection, memory, &MemoryStatus::ALL)? == 0 {
+    let transaction = self.connection.transaction()?;
+    if rows::status(&transaction, memory.id())?.is_none() {
       return Err(StoreError::MemoryNotFound(memory.id()));
     }
+    rows::upsert(&transaction, memory)?;
+    transaction.commit()?;
     Ok(())
   }
 
   fn supersede_memory(&mut self, superseded: &Memory, replacement: &Memory) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
-    if rows::update(&transaction, superseded, &[MemoryStatus::Active])? == 0 {
-      return Err(match rows::load(&transaction, superseded.id())? {
-        Some(_) => StoreError::MemoryNotActive(superseded.id()),
-        None => StoreError::MemoryNotFound(superseded.id()),
-      });
+    match rows::status(&transaction, superseded.id())? {
+      Some(MemoryStatus::Active) => {}
+      Some(_) => return Err(StoreError::MemoryNotActive(superseded.id())),
+      None => return Err(StoreError::MemoryNotFound(superseded.id())),
     }
-    rows::insert(&transaction, replacement)?;
+    rows::upsert(&transaction, superseded)?;
+    rows::upsert(&transaction, replacement)?;
     transaction.commit()?;
     Ok(())
   }
 
   fn delete_memory(&mut self, id: MemoryId) -> Result<(), StoreError> {
-    if self
-      .connection
-      .execute("DELETE FROM memories WHERE id = ?1", [id.to_string()])?
-      == 0
-    {
+    let deleted = self.connection.execute(
+      "WITH RECURSIVE history (id) AS (SELECT ?1 UNION SELECT m.supersedes_id FROM memories m        JOIN history h ON m.id = h.id WHERE m.supersedes_id IS NOT NULL)        DELETE FROM memories WHERE id IN (SELECT id FROM history)",
+      [id.to_string()],
+    )?;
+    if deleted == 0 {
       return Err(StoreError::MemoryNotFound(id));
     }
     Ok(())
@@ -110,19 +112,12 @@ impl MemoryStore for ProjectDb {
       return Ok(MemorySettings::DEFAULT);
     };
     let policy = |name: &str| WritePolicy::from_name(name).ok_or_else(|| corrupt("memory write policy", name));
+    let records = u16::try_from(records).map_err(|_| corrupt("memory record limit", records))?;
+    let tokens = u32::try_from(tokens).map_err(|_| corrupt("memory token limit", tokens))?;
     Ok(MemorySettings {
       task_writes: policy(&task_writes)?,
       project_writes: policy(&project_writes)?,
-      limits: MemoryLimits {
-        records: u16::try_from(records)
-          .ok()
-          .and_then(NonZeroU16::new)
-          .ok_or_else(|| corrupt("memory record limit", records))?,
-        tokens: u32::try_from(tokens)
-          .ok()
-          .and_then(NonZeroU32::new)
-          .ok_or_else(|| corrupt("memory token limit", tokens))?,
-      },
+      limits: MemoryLimits::new(records, tokens).map_err(|error| corrupt("memory limits", error))?,
     })
   }
 
@@ -135,8 +130,8 @@ impl MemoryStore for ProjectDb {
       params![
         settings.task_writes.name(),
         settings.project_writes.name(),
-        settings.limits.records.get(),
-        settings.limits.tokens.get(),
+        settings.limits.records(),
+        settings.limits.tokens(),
       ],
     )?;
     Ok(())

@@ -74,6 +74,9 @@ pub enum StoreError {
   /// The stored record is no longer active, so it cannot be superseded; nothing was changed.
   #[error("memory {0} is no longer active")]
   MemoryNotActive(MemoryId),
+  /// Another active record of the scope has the key; nothing was changed.
+  #[error("an active memory record with the key `{0}` already exists")]
+  DuplicateMemoryKey(String),
 }
 
 impl StoreError {

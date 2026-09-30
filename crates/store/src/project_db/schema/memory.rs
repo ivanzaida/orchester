@@ -6,7 +6,7 @@ pub(super) const MIGRATION: &str = r"
 -- rowid the full-text indexes point at; an explicit INTEGER PRIMARY KEY, so VACUUM keeps it. An
 -- agent's record names its profile, run, step and execution; a person's names none. `tags` holds the
 -- record's tags separated by spaces, `source_events` a JSON array of the run transcript sequences it
--- came from.
+-- came from, `edited_at` when a person last edited it. A key names one active record of its scope.
 CREATE TABLE memories (
   seq INTEGER PRIMARY KEY,
   id TEXT NOT NULL UNIQUE,
@@ -16,8 +16,8 @@ CREATE TABLE memories (
   key TEXT,
   text TEXT NOT NULL CHECK (trim(text) <> ''),
   tags TEXT NOT NULL,
-  importance INTEGER NOT NULL CHECK (importance BETWEEN 1 AND 5),
-  confidence INTEGER NOT NULL CHECK (confidence BETWEEN 0 AND 100),
+  importance TEXT NOT NULL CHECK (importance IN ('low', 'normal', 'high')),
+  confidence TEXT NOT NULL CHECK (confidence IN ('low', 'medium', 'high')),
   status TEXT NOT NULL CHECK (status IN ('proposed', 'active', 'superseded', 'deprecated')),
   pinned INTEGER NOT NULL CHECK (pinned IN (0, 1)),
   supersedes_id TEXT REFERENCES memories (id) ON DELETE SET NULL,
@@ -29,11 +29,15 @@ CREATE TABLE memories (
   source_events TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
+  edited_at INTEGER,
   CHECK ((author = 'agent') = (profile_id IS NOT NULL)),
   CHECK ((profile_id IS NULL) = (run_id IS NULL) AND (run_id IS NULL) = (step_key IS NULL)
     AND (step_key IS NULL) = (step_execution_id IS NULL))
 ) STRICT;
 CREATE INDEX memories_by_task ON memories (task_id, status);
+CREATE UNIQUE INDEX memories_active_keys ON memories (ifnull(task_id, ''), key)
+  WHERE status = 'active' AND key IS NOT NULL;
+CREATE INDEX memories_by_supersedes ON memories (supersedes_id);
 
 -- Two external-content FTS5 indexes over text, key and tags, kept in step by triggers: words with
 -- the default unicode61 tokenizer for BM25 ranking, and trigrams for other word forms, file paths
@@ -71,12 +75,13 @@ CREATE TABLE memory_settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   task_writes TEXT NOT NULL CHECK (task_writes IN ('automatic', 'after_approval')),
   project_writes TEXT NOT NULL CHECK (project_writes IN ('automatic', 'after_approval')),
-  max_records INTEGER NOT NULL CHECK (max_records BETWEEN 1 AND 65535),
-  max_tokens INTEGER NOT NULL CHECK (max_tokens BETWEEN 1 AND 4294967295)
+  max_records INTEGER NOT NULL CHECK (max_records BETWEEN 1 AND 50),
+  max_tokens INTEGER NOT NULL CHECK (max_tokens BETWEEN 500 AND 20000)
 ) STRICT;
 
--- The records each invocation's prompt was given, in prompt order, written once before its agent
--- starts. No reference to `memories`: a record a person deletes later stays listed by its id.
+-- The records each invocation's prompt was given, in prompt order, with their estimated tokens,
+-- written once before its agent starts. No reference to `memories`: a record a person deletes later
+-- stays listed by its id, which then resolves to no record.
 CREATE TABLE invocation_memories (
   invocation_id TEXT NOT NULL REFERENCES invocations (id),
   position INTEGER NOT NULL CHECK (position >= 0),

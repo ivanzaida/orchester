@@ -4,8 +4,8 @@
 use orchester_core::{
   id::{ResourceId, RunId, StepExecutionId},
   memory::{
-    AgentProvenance, Memory, MemoryKind, MemoryLimits, MemoryMatch, MemoryScope, MemorySettings, RecallRequest,
-    SecretScreen, recall,
+    AgentProvenance, AgentWrite, Confidence, Memory, MemoryKind, MemoryLimits, MemoryMatch, MemoryScope,
+    MemorySettings, RecallRequest, SecretScreen, recall,
   },
   resource::{InjectionEvent, StepKey},
   run::PromptInput,
@@ -23,11 +23,15 @@ fn records(prompt_task: orchester_core::id::TaskId) -> Vec<orchester_core::memor
       .check(orchester_core::memory::MemoryContent::new(kind, text).expect("content"))
       .expect("no secrets")
   };
-  let agent = AgentProvenance {
-    profile: ResourceId::generate(),
-    run: RunId::generate(),
-    step: StepKey::new("plan").expect("key"),
-    execution: StepExecutionId::generate(),
+  let agent = AgentWrite {
+    provenance: AgentProvenance {
+      profile: ResourceId::generate(),
+      run: RunId::generate(),
+      step: StepKey::new("plan").expect("key"),
+      execution: StepExecutionId::generate(),
+    },
+    confidence: Confidence::Medium,
+    sources: Vec::new(),
   };
   let scope = MemoryScope::Task(prompt_task);
   let settings = MemorySettings::default();
@@ -38,7 +42,6 @@ fn records(prompt_task: orchester_core::id::TaskId) -> Vec<orchester_core::memor
       MemoryKind::Handoff,
       "Planned the store.\n\nDecisions:\n- Keep memory in the project database.",
     ),
-    Vec::new(),
     &settings,
     at(10),
   );
@@ -46,7 +49,6 @@ fn records(prompt_task: orchester_core::id::TaskId) -> Vec<orchester_core::memor
     scope,
     agent,
     screened(MemoryKind::Decision, "Keep memory in the project database."),
-    Vec::new(),
     &settings,
     at(10),
   );

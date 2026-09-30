@@ -3,7 +3,10 @@
 
 use orchester_core::{
   id::{ResourceId, TaskId},
-  memory::{Handoff, MemoryAuthor, MemoryKind, MemoryScope, MemorySettings, MemoryStatus, SecretScreen, WritePolicy},
+  memory::{
+    Confidence, Handoff, Importance, MemoryAuthor, MemoryKind, MemoryScope, MemorySettings, MemoryStatus, SecretScreen,
+    WritePolicy,
+  },
   run::{STEP_RESULT_SCHEMA, StepOutcome, StepResult},
 };
 
@@ -58,7 +61,7 @@ fn handoff_becomes_task_memory_with_its_decisions() {
   let screen = SecretScreen::new(Vec::new());
   let settings = MemorySettings::default();
   let records = handoff
-    .records(task, &agent, &[12], (&settings, &screen), at(5))
+    .records(task, (&agent, &[12]), (&settings, &screen), at(5))
     .expect("no secrets");
   let kinds: Vec<MemoryKind> = records.iter().map(|record| record.content().kind()).collect();
   assert_eq!(kinds, [MemoryKind::Handoff, MemoryKind::Decision]);
@@ -67,6 +70,8 @@ fn handoff_becomes_task_memory_with_its_decisions() {
     assert_eq!(record.status(), MemoryStatus::Active);
     assert_eq!(record.author(), &MemoryAuthor::Agent(agent.clone()));
     assert_eq!(record.sources(), [12]);
+    assert_eq!(record.confidence(), Confidence::Medium);
+    assert_eq!(record.content().importance(), Importance::High);
   }
   assert_eq!(
     records[1].content().text(),
@@ -78,7 +83,7 @@ fn handoff_becomes_task_memory_with_its_decisions() {
     ..settings
   };
   let proposed = handoff
-    .records(task, &agent, &[], (&approval, &screen), at(5))
+    .records(task, (&agent, &[]), (&approval, &screen), at(5))
     .expect("no secrets");
   assert!(proposed.iter().all(|record| record.status() == MemoryStatus::Proposed));
 }
@@ -101,8 +106,7 @@ fn handoff_of_a_question_or_holding_a_secret_is_not_kept() {
     .expect("a handoff")
     .records(
       TaskId::generate(),
-      &provenance(ResourceId::generate()),
-      &[],
+      (&provenance(ResourceId::generate()), &[]),
       (&MemorySettings::default(), &screen),
       at(1),
     )

@@ -18,10 +18,6 @@ pub enum MemoryContentError {
   MultilineKey,
   #[error("a tag is one word without spaces, at most {} characters", Tags::MAX_CHARS)]
   InvalidTag,
-  #[error("importance is from 1 to 5, not {0}")]
-  Importance(u8),
-  #[error("confidence is a percentage from 0 to 100, not {0}")]
-  Confidence(u8),
 }
 
 /// What kind of knowledge a record holds.
@@ -145,51 +141,59 @@ impl Tags {
   }
 }
 
-/// How much a record matters, from 1 (minor) to 5 (critical).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Importance(u8);
+/// How much a record matters. A person sets it; an agent's records are of high importance when
+/// they hand off, of normal importance otherwise.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Importance {
+  Low,
+  Normal,
+  High,
+}
 
 impl Importance {
-  pub const NORMAL: Self = Self(3);
-  pub const HIGH: Self = Self(4);
-
-  pub const fn new(value: u8) -> Result<Self, MemoryContentError> {
-    if value >= 1 && value <= 5 {
-      Ok(Self(value))
-    } else {
-      Err(MemoryContentError::Importance(value))
+  /// Stable name, as stored.
+  pub const fn name(self) -> &'static str {
+    match self {
+      Self::Low => "low",
+      Self::Normal => "normal",
+      Self::High => "high",
     }
   }
 
-  pub const fn get(self) -> u8 {
-    self.0
+  pub fn from_name(name: &str) -> Option<Self> {
+    [Self::Low, Self::Normal, Self::High]
+      .into_iter()
+      .find(|importance| importance.name() == name)
   }
 }
 
-/// How sure the author is, in percent.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Confidence(u8);
+/// How sure the author is. An agent says so for its own records, and people cannot change it; a
+/// person's record is certain.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Confidence {
+  Low,
+  Medium,
+  High,
+}
 
 impl Confidence {
-  /// What a person states.
-  pub const CERTAIN: Self = Self(100);
-  /// What an agent reports about its own work: taken as said, not checked.
-  pub const REPORTED: Self = Self(80);
-
-  pub const fn new(percent: u8) -> Result<Self, MemoryContentError> {
-    if percent <= 100 {
-      Ok(Self(percent))
-    } else {
-      Err(MemoryContentError::Confidence(percent))
+  /// Stable name, as stored.
+  pub const fn name(self) -> &'static str {
+    match self {
+      Self::Low => "low",
+      Self::Medium => "medium",
+      Self::High => "high",
     }
   }
 
-  pub const fn percent(self) -> u8 {
-    self.0
+  pub fn from_name(name: &str) -> Option<Self> {
+    [Self::Low, Self::Medium, Self::High]
+      .into_iter()
+      .find(|confidence| confidence.name() == name)
   }
 }
 
-/// Everything a record says, validated.
+/// Everything a record says, validated: what a person may edit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MemoryContent {
   kind: MemoryKind,
@@ -197,12 +201,11 @@ pub struct MemoryContent {
   text: String,
   tags: Tags,
   importance: Importance,
-  confidence: Confidence,
 }
 
 impl MemoryContent {
-  /// A record of `kind` saying `text` (trimmed, not blank), of normal importance and certain, with
-  /// no key and no tags.
+  /// A record of `kind` saying `text` (trimmed, not blank), of normal importance, with no key and
+  /// no tags.
   pub fn new(kind: MemoryKind, text: &str) -> Result<Self, MemoryContentError> {
     let text = text.trim();
     if text.is_empty() {
@@ -213,8 +216,7 @@ impl MemoryContent {
       key: None,
       text: text.to_owned(),
       tags: Tags::default(),
-      importance: Importance::NORMAL,
-      confidence: Confidence::CERTAIN,
+      importance: Importance::Normal,
     })
   }
 
@@ -236,12 +238,6 @@ impl MemoryContent {
     self
   }
 
-  #[must_use]
-  pub const fn with_confidence(mut self, confidence: Confidence) -> Self {
-    self.confidence = confidence;
-    self
-  }
-
   pub const fn kind(&self) -> MemoryKind {
     self.kind
   }
@@ -260,9 +256,5 @@ impl MemoryContent {
 
   pub const fn importance(&self) -> Importance {
     self.importance
-  }
-
-  pub const fn confidence(&self) -> Confidence {
-    self.confidence
   }
 }

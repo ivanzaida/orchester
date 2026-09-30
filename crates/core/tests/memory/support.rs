@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use orchester_core::{
   id::{ProjectId, ResourceId, RunId, StepExecutionId},
-  memory::{AgentProvenance, MemoryContent, MemoryKind, ScreenedContent, SecretScreen},
+  memory::{AgentProvenance, AgentWrite, Confidence, MemoryContent, MemoryKind, ScreenedContent, SecretScreen},
   resource::StepKey,
   secret::{SecretName, SecretValue, SecretVault, VaultError, VaultKey},
   time::Timestamp,
@@ -26,6 +26,15 @@ pub fn screened(kind: MemoryKind, text: &str) -> ScreenedContent {
   SecretScreen::new(Vec::new())
     .check(content(kind, text))
     .expect("no secrets to hold")
+}
+
+/// What an agent of `profile` writes with: medium confidence, no sources.
+pub fn write(profile: ResourceId) -> AgentWrite {
+  AgentWrite {
+    provenance: provenance(profile),
+    confidence: Confidence::Medium,
+    sources: Vec::new(),
+  }
 }
 
 pub fn provenance(profile: ResourceId) -> AgentProvenance {

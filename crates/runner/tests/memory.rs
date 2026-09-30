@@ -6,8 +6,6 @@
 
 mod support;
 
-use std::num::{NonZeroU16, NonZeroU32};
-
 use orchester_core::{
   connection::{
     AgentProvider,
@@ -191,16 +189,22 @@ async fn memory_saved_after_approval_is_proposed_and_never_injected() {
   );
   assert!(!prompts(&db, run)[1].contains("# Task memory"));
   assert_eq!(injected(&db, run), [vec![], vec![]]);
+  // Saving automatically from now on leaves what was proposed waiting for a person.
+  let mut db = db;
+  db.save_memory_settings(&MemorySettings::DEFAULT)
+    .expect("save the setting");
+  let memory = task_memory(&db, project.task);
+  assert!(
+    memory.iter().all(|(_, status, _)| *status == MemoryStatus::Proposed),
+    "{memory:?}"
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn memory_limits_come_from_the_setting() {
   let project = project(&implement_then_review(AgentProvider::CodexCli));
   let settings = MemorySettings {
-    limits: MemoryLimits {
-      records: NonZeroU16::MIN,
-      tokens: NonZeroU32::new(3_000).expect("above zero"),
-    },
+    limits: MemoryLimits::new(1, 3_000).expect("valid limits"),
     ..MemorySettings::DEFAULT
   };
   ProjectDb::open(project.repo.path())

@@ -46,18 +46,21 @@ pub struct InjectedMemory {
 pub trait MemoryStore {
   type Error: std::error::Error + Send + Sync + 'static;
 
-  /// Stores new records, atomically.
+  /// Stores new records, atomically. A key names at most one active record of its scope: a record
+  /// whose key another active record of its scope has is refused, and nothing is stored.
   fn add_memories(&mut self, memories: &[Memory]) -> Result<(), Self::Error>;
 
-  /// Stores what an existing record says, its status and its pin.
+  /// Stores what an existing record says, its status and its pin, under the same key rule.
   fn save_memory(&mut self, memory: &Memory) -> Result<(), Self::Error>;
 
-  /// Stores `superseded`, which [`Memory::supersede`] replaced, and its `replacement`, atomically.
-  /// Fails, changing nothing, when the stored record is no longer active.
+  /// Stores `superseded` and its `replacement` (new, or a proposal just approved) after
+  /// [`Memory::supersede`], atomically. Fails, changing nothing, when the stored record is no
+  /// longer active.
   fn supersede_memory(&mut self, superseded: &Memory, replacement: &Memory) -> Result<(), Self::Error>;
 
-  /// Removes a record for good. Only a person deletes records: agents are never offered this. A
-  /// record that superseded it no longer names it; invocations that were given it keep its id.
+  /// Removes a record for good, with its history: the earlier versions it superseded. Only a
+  /// person deletes records; agents are never offered this. A record that superseded it no longer
+  /// names it; invocations that were given it keep its id, which no longer resolves.
   fn delete_memory(&mut self, id: MemoryId) -> Result<(), Self::Error>;
 
   fn memory(&self, id: MemoryId) -> Result<Option<Memory>, Self::Error>;

@@ -4,16 +4,15 @@
 
 mod support;
 
-use std::num::{NonZeroU16, NonZeroU32};
-
 use orchester_core::{
-  id::{IdempotencyKey, InvocationId, MemoryId, ResourceId, TaskId},
+  id::{IdempotencyKey, InvocationId, MemoryId, ResourceId, StepExecutionId, TaskId},
   memory::{
-    AgentProvenance, InjectedMemory, InjectionReason, Memory, MemoryContent, MemoryFilter, MemoryKey, MemoryKind,
-    MemoryLimits, MemoryQuery, MemoryScope, MemorySettings, MemoryStatus, MemoryStore, ScopeFilter, SecretScreen, Tags,
-    WritePolicy,
+    AgentProvenance, AgentWrite, Confidence, InjectedMemory, InjectionReason, Memory, MemoryAuthor, MemoryContent,
+    MemoryFilter, MemoryKey, MemoryKind, MemoryLimits, MemoryQuery, MemoryScope, MemorySettings, MemoryStatus,
+    MemoryStore, ScopeFilter, ScreenedContent, SecretScreen, StepContext, Tags, WritePolicy, next_invocation_memory,
   },
   resource::StepKey,
+  run::Run,
   store::{ActivityStore, TaskStore},
   task::TaskDetails,
 };
@@ -63,39 +62,47 @@ fn another_task(db: &mut ProjectDb) -> TaskId {
     .id()
 }
 
+fn screened(content: MemoryContent) -> ScreenedContent {
+  SecretScreen::new(Vec::new()).check(content).expect("no secrets")
+}
+
+fn agent_write(run: &Run, execution: StepExecutionId) -> AgentWrite {
+  AgentWrite {
+    provenance: AgentProvenance {
+      profile: ResourceId::generate(),
+      run: run.id(),
+      step: StepKey::new("implement").expect("key"),
+      execution,
+    },
+    confidence: Confidence::Medium,
+    sources: vec![3, 4],
+  }
+}
+
+fn keyed(text: &str) -> MemoryContent {
+  content(MemoryKind::Decision, text).with_key(MemoryKey::new("db.engine").expect("key"))
+}
+
 #[test]
-fn memory_records_are_stored_superseded_deprecated_and_deleted() {
+fn memory_records_are_stored_superseded_edited_deprecated_and_deleted_with_their_history() {
   let (_repo, mut db, run, execution) = started_run();
-  let task = run.task();
-  let agent = AgentProvenance {
-    profile: ResourceId::generate(),
-    run: run.id(),
-    step: StepKey::new("implement").expect("key"),
-    execution,
-  };
-  let rich = content(MemoryKind::Decision, "Use SQLite.")
-    .with_key(MemoryKey::new("db.engine").expect("key"))
-    .with_tags(Tags::new(["storage", "db"]).expect("tags"));
-  let screened = SecretScreen::new(Vec::new()).check(rich).expect("no secrets");
-  let mut first = Memory::by_agent(
-    MemoryScope::Task(task),
-    agent,
-    screened,
-    vec![3, 4],
-    &MemorySettings::default(),
-    at(10),
-  );
+  let scope = MemoryScope::Task(run.task());
+  let rich = keyed("Use SQLite.").with_tags(Tags::new(["storage", "db"]).expect("tags"));
+  let settings = MemorySettings::default();
+  let mut first = Memory::by_agent(scope, agent_write(&run, execution), screened(rich), &settings, at(10));
   db.add_memories(std::slice::from_ref(&first)).expect("add");
   assert_eq!(db.memory(first.id()).expect("read"), Some(first.clone()));
 
-  let replacement = first
-    .supersede(
-      SecretScreen::new(Vec::new())
-        .check(content(MemoryKind::Decision, "Use SQLite with FTS5."))
-        .expect("no secrets"),
-      at(20),
-    )
-    .expect("supersede");
+  // Task memory is saved automatically: the replacement is active at once.
+  let mut replacement = Memory::replacing(
+    &first,
+    agent_write(&run, execution),
+    screened(keyed("Use SQLite with FTS5.")),
+    &settings,
+    at(20),
+  )
+  .expect("a replacement");
+  first.supersede(&mut replacement, at(20)).expect("supersede");
   db.supersede_memory(&first, &replacement).expect("store both");
   assert_eq!(
     db.memory(first.id()).expect("read").map(|memory| memory.status()),
@@ -108,17 +115,77 @@ fn memory_records_are_stored_superseded_deprecated_and_deleted() {
   ));
 
   let mut current = replacement;
+  current
+    .edit(screened(keyed("Use SQLite with FTS5 and trigrams.")), at(25))
+    .expect("edit");
+  db.save_memory(&current).expect("save");
+  let stored = db.memory(current.id()).expect("read").expect("stored");
+  assert_eq!(stored.edited_at(), Some(at(25)));
+  assert!(matches!(stored.author(), MemoryAuthor::Agent(_)), "the author stays");
   current.deprecate(at(30)).expect("deprecate");
   db.save_memory(&current).expect("save");
   assert_eq!(db.memory(current.id()).expect("read"), Some(current.clone()));
 
-  db.delete_memory(first.id()).expect("delete");
-  assert_eq!(db.memory(first.id()).expect("read"), None);
-  let orphan = db.memory(current.id()).expect("read").expect("still stored");
-  assert_eq!(orphan.supersedes(), None, "the deleted record is no longer named");
+  db.delete_memory(current.id()).expect("delete");
+  assert_eq!(db.memory(current.id()).expect("read"), None);
+  assert_eq!(db.memory(first.id()).expect("read"), None, "its history goes with it");
   assert!(matches!(
     db.delete_memory(MemoryId::generate()),
     Err(StoreError::MemoryNotFound(_))
+  ));
+}
+
+#[test]
+fn memory_an_approved_replacement_supersedes_the_record_it_names() {
+  let (_repo, mut db, run, execution) = started_run();
+  let mut old = person(MemoryScope::Project, keyed("Use Postgres."), 1);
+  old.set_pinned(true, at(2)).expect("pin");
+  db.add_memories(std::slice::from_ref(&old)).expect("add");
+  let mut proposal = Memory::replacing(
+    &old,
+    agent_write(&run, execution),
+    screened(keyed("Use SQLite.")),
+    &MemorySettings::default(),
+    at(3),
+  )
+  .expect("a replacement");
+  assert_eq!(proposal.status(), MemoryStatus::Proposed);
+  db.add_memories(std::slice::from_ref(&proposal))
+    .expect("a proposal may share the key");
+  proposal.approve(at(4)).expect("approve");
+  assert!(matches!(
+    db.save_memory(&proposal),
+    Err(StoreError::DuplicateMemoryKey(key)) if key == "db.engine"
+  ));
+  old.supersede(&mut proposal, at(4)).expect("supersede");
+  db.supersede_memory(&old, &proposal).expect("store both");
+  let stored = db.memory(proposal.id()).expect("read").expect("stored");
+  assert_eq!((stored.status(), stored.is_pinned()), (MemoryStatus::Active, true));
+  assert_eq!(
+    db.memory(old.id()).expect("read").map(|memory| memory.status()),
+    Some(MemoryStatus::Superseded)
+  );
+}
+
+#[test]
+fn memory_a_key_names_one_active_record_of_its_scope() {
+  let (_repo, mut db, run, _) = started_run();
+  let task = MemoryScope::Task(run.task());
+  db.add_memories(&[person(task, keyed("Use SQLite."), 1)]).expect("add");
+  assert!(matches!(
+    db.add_memories(&[person(task, keyed("Use Postgres."), 2)]),
+    Err(StoreError::DuplicateMemoryKey(_))
+  ));
+  db.add_memories(&[person(MemoryScope::Project, keyed("Use Postgres."), 3)])
+    .expect("another scope may use the key");
+  let mut deprecated = person(MemoryScope::Project, keyed("Use MySQL."), 5);
+  deprecated.deprecate(at(6)).expect("deprecate");
+  db.add_memories(&[deprecated.clone()])
+    .expect("a deprecated record may share the key");
+  deprecated.restore(at(7)).expect("restore");
+  assert!(matches!(
+    db.save_memory(&deprecated),
+    Err(StoreError::DuplicateMemoryKey(_))
   ));
 }
 
@@ -250,10 +317,7 @@ fn memory_settings_are_stored_per_project() {
   let changed = MemorySettings {
     task_writes: WritePolicy::AfterApproval,
     project_writes: WritePolicy::Automatic,
-    limits: MemoryLimits {
-      records: NonZeroU16::new(4).expect("above zero"),
-      tokens: NonZeroU32::new(1_200).expect("above zero"),
-    },
+    limits: MemoryLimits::new(4, 1_200).expect("valid limits"),
   };
   db.save_memory_settings(&changed).expect("save");
   assert_eq!(db.memory_settings().expect("read"), changed);
@@ -288,4 +352,70 @@ fn memory_injected_into_an_invocation_is_recorded_in_order() {
     Err(StoreError::InvocationNotFound(_))
   ));
   assert!(db.injected_memory(InvocationId::generate()).expect("read").is_empty());
+  assert_eq!(
+    db.memory(injected[0].memory).expect("read"),
+    None,
+    "a record that is gone resolves to none"
+  );
+}
+
+#[test]
+fn memory_the_next_invocation_gets_what_recall_chooses_within_the_setting() {
+  let (_repo, mut db, run, _) = started_run();
+  let task = db.task(run.task()).expect("read").expect("task");
+  let step = run
+    .snapshot()
+    .body()
+    .step(&StepKey::new("implement").expect("key"))
+    .expect("step")
+    .clone();
+  let scope = MemoryScope::Task(task.id());
+  let decision = person(scope, content(MemoryKind::Decision, "Greet in English."), 1);
+  let hello = person(
+    MemoryScope::Project,
+    content(MemoryKind::Fact, "Say hello with a wave."),
+    2,
+  );
+  let unrelated = person(
+    MemoryScope::Project,
+    content(MemoryKind::Fact, "Deploys run on Fridays."),
+    3,
+  );
+  db.add_memories(&[decision, hello, unrelated]).expect("add");
+  let context = StepContext {
+    task: &task,
+    step: &step,
+    profile: ResourceId::generate(),
+    role: "Builder",
+  };
+  let next = next_invocation_memory(&db, context, at(10)).expect("recall");
+  let given: Vec<(InjectionReason, &str)> = next
+    .entries()
+    .iter()
+    .map(|entry| (entry.reason, entry.memory.content().text()))
+    .collect();
+  assert_eq!(
+    given,
+    [
+      (InjectionReason::Decision, "Greet in English."),
+      (InjectionReason::Match, "Say hello with a wave.")
+    ]
+  );
+  assert_eq!(
+    next.tokens(),
+    next.injected().iter().map(|entry| entry.tokens).sum::<u32>()
+  );
+
+  let one = MemorySettings {
+    limits: MemoryLimits::new(1, 500).expect("valid limits"),
+    ..MemorySettings::DEFAULT
+  };
+  db.save_memory_settings(&one).expect("save");
+  assert_eq!(
+    next_invocation_memory(&db, context, at(10))
+      .expect("recall")
+      .entries()
+      .len(),
+    1
+  );
 }

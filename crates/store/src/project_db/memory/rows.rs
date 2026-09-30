@@ -10,7 +10,7 @@ use orchester_core::{
   resource::StepKey,
   time::Timestamp,
 };
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::{
   StoreError,
@@ -20,9 +20,9 @@ use crate::{
 /// The columns [`read`] expects, of `memories` as `m`.
 pub(super) const COLUMNS: &str = "m.id, m.task_id, m.kind, m.key, m.text, m.tags, m.importance, m.confidence, \
                                   m.status, m.pinned, m.supersedes_id, m.author, m.profile_id, m.run_id, m.step_key, \
-                                  m.step_execution_id, m.source_events, m.created_at, m.updated_at";
+                                  m.step_execution_id, m.source_events, m.created_at, m.updated_at, m.edited_at";
 /// How many of the first columns of a query [`COLUMNS`] are.
-pub(super) const COLUMN_COUNT: usize = 19;
+pub(super) const COLUMN_COUNT: usize = 20;
 
 /// A row as stored, before it is checked.
 pub(super) struct Raw {
@@ -32,8 +32,8 @@ pub(super) struct Raw {
   key: Option<String>,
   text: String,
   tags: String,
-  importance: i64,
-  confidence: i64,
+  importance: String,
+  confidence: String,
   status: String,
   pinned: bool,
   supersedes: Option<String>,
@@ -42,6 +42,7 @@ pub(super) struct Raw {
   sources: String,
   created_at: i64,
   updated_at: i64,
+  edited_at: Option<i64>,
 }
 
 impl Raw {
@@ -63,6 +64,7 @@ impl Raw {
       sources: row.get(16)?,
       created_at: row.get(17)?,
       updated_at: row.get(18)?,
+      edited_at: row.get(19)?,
     })
   }
 
@@ -70,17 +72,12 @@ impl Raw {
     const WHAT: &str = "memory record";
     let bad = |detail: &str| corrupt(WHAT, detail);
     let kind = MemoryKind::from_name(&self.kind).ok_or_else(|| bad("unknown kind"))?;
-    let importance = u8::try_from(self.importance)
-      .map_err(|_| bad("importance out of range"))
-      .and_then(|value| Importance::new(value).map_err(|error| corrupt(WHAT, error)))?;
-    let confidence = u8::try_from(self.confidence)
-      .map_err(|_| bad("confidence out of range"))
-      .and_then(|value| Confidence::new(value).map_err(|error| corrupt(WHAT, error)))?;
+    let importance = Importance::from_name(&self.importance).ok_or_else(|| bad("unknown importance"))?;
+    let confidence = Confidence::from_name(&self.confidence).ok_or_else(|| bad("unknown confidence"))?;
     let mut content = MemoryContent::new(kind, &self.text)
       .map_err(|error| corrupt(WHAT, error))?
       .with_tags(Tags::new(self.tags.split_whitespace()).map_err(|error| corrupt(WHAT, error))?)
-      .with_importance(importance)
-      .with_confidence(confidence);
+      .with_importance(importance);
     if let Some(key) = self.key {
       content = content.with_key(MemoryKey::new(&key).map_err(|error| corrupt(WHAT, error))?);
     }
@@ -92,6 +89,7 @@ impl Raw {
       },
       author: author(&self.author, self.agent)?,
       content: ScreenedContent::from_stored(content),
+      confidence,
       status: MemoryStatus::from_name(&self.status).ok_or_else(|| bad("unknown status"))?,
       pinned: self.pinned,
       supersedes: self
@@ -101,6 +99,7 @@ impl Raw {
       sources: serde_json::from_str(&self.sources).map_err(|error| corrupt(WHAT, error))?,
       created_at: Timestamp::from_unix_millis(self.created_at),
       updated_at: Timestamp::from_unix_millis(self.updated_at),
+      edited_at: self.edited_at.map(Timestamp::from_unix_millis),
     }))
   }
 }
@@ -126,12 +125,12 @@ pub(super) fn load(connection: &Connection, id: MemoryId) -> Result<Option<Memor
   rows.next().transpose()?.map(Raw::into_memory).transpose()
 }
 
-pub(super) fn insert(connection: &Connection, memory: &Memory) -> Result<(), StoreError> {
+/// Stores a new record, or what an existing one says, its status and pin; its scope and origin
+/// never change. Refused when its key names another active record of its scope.
+pub(super) fn upsert(connection: &Connection, memory: &Memory) -> Result<(), StoreError> {
+  check_key(connection, memory)?;
   let content = memory.content();
-  let task = match memory.scope() {
-    MemoryScope::Task(task) => Some(task.to_string()),
-    MemoryScope::Project => None,
-  };
+  let task = task_column(memory.scope());
   let (author, [profile, run, step, execution]) = match memory.author() {
     MemoryAuthor::Person => ("person", [None, None, None, None]),
     MemoryAuthor::Agent(agent) => (
@@ -146,9 +145,7 @@ pub(super) fn insert(connection: &Connection, memory: &Memory) -> Result<(), Sto
   };
   let sources = serde_json::to_string(memory.sources()).map_err(|_| StoreError::Unrepresentable("memory sources"))?;
   connection.execute(
-    "INSERT INTO memories (id, task_id, kind, key, text, tags, importance, confidence, status, pinned, \
-     supersedes_id, author, profile_id, run_id, step_key, step_execution_id, source_events, created_at, updated_at) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+    "INSERT INTO memories (id, task_id, kind, key, text, tags, importance, confidence, status, pinned,      supersedes_id, author, profile_id, run_id, step_key, step_execution_id, source_events, created_at, updated_at,      edited_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)      ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, key = excluded.key, text = excluded.text,      tags = excluded.tags, importance = excluded.importance, status = excluded.status, pinned = excluded.pinned,      updated_at = excluded.updated_at, edited_at = excluded.edited_at",
     params![
       memory.id().to_string(),
       task,
@@ -156,8 +153,8 @@ pub(super) fn insert(connection: &Connection, memory: &Memory) -> Result<(), Sto
       content.key().map(MemoryKey::as_str),
       content.text(),
       content.tags().joined(),
-      content.importance().get(),
-      content.confidence().percent(),
+      content.importance().name(),
+      memory.confidence().name(),
       memory.status().name(),
       memory.is_pinned(),
       memory.supersedes().map(|id| id.to_string()),
@@ -169,32 +166,48 @@ pub(super) fn insert(connection: &Connection, memory: &Memory) -> Result<(), Sto
       sources,
       memory.created_at().unix_millis(),
       memory.updated_at().unix_millis(),
+      memory.edited_at().map(Timestamp::unix_millis),
     ],
   )?;
   Ok(())
 }
 
-/// Stores what `memory` says, its status and pin, if the stored record's status is one of
-/// `from`; the number of rows changed (0 or 1).
-pub(super) fn update(connection: &Connection, memory: &Memory, from: &[MemoryStatus]) -> Result<usize, StoreError> {
-  let content = memory.content();
-  let statuses: Vec<&str> = from.iter().map(|status| status.name()).collect();
-  let changed = connection.execute(
-    "UPDATE memories SET kind = ?2, key = ?3, text = ?4, tags = ?5, importance = ?6, confidence = ?7, status = ?8, \
-     pinned = ?9, updated_at = ?10 WHERE id = ?1 AND status IN (SELECT value FROM json_each(?11))",
-    params![
-      memory.id().to_string(),
-      content.kind().name(),
-      content.key().map(MemoryKey::as_str),
-      content.text(),
-      content.tags().joined(),
-      content.importance().get(),
-      content.confidence().percent(),
-      memory.status().name(),
-      memory.is_pinned(),
-      memory.updated_at().unix_millis(),
-      serde_json::to_string(&statuses).map_err(|_| StoreError::Unrepresentable("memory statuses"))?,
-    ],
-  )?;
-  Ok(changed)
+fn task_column(scope: MemoryScope) -> Option<String> {
+  match scope {
+    MemoryScope::Task(task) => Some(task.to_string()),
+    MemoryScope::Project => None,
+  }
+}
+
+/// Refuses an active `memory` whose key another active record of its scope has.
+fn check_key(connection: &Connection, memory: &Memory) -> Result<(), StoreError> {
+  let Some(key) = memory.content().key() else {
+    return Ok(());
+  };
+  if memory.status() != MemoryStatus::Active {
+    return Ok(());
+  }
+  let taken: Option<String> = connection
+    .query_row(
+      "SELECT id FROM memories WHERE key = ?1 AND status = 'active' AND task_id IS ?2 AND id <> ?3",
+      params![key.as_str(), task_column(memory.scope()), memory.id().to_string()],
+      |row| row.get(0),
+    )
+    .optional()?;
+  match taken {
+    Some(_) => Err(StoreError::DuplicateMemoryKey(key.as_str().to_owned())),
+    None => Ok(()),
+  }
+}
+
+/// The status record `id` has now, if it exists.
+pub(super) fn status(connection: &Connection, id: MemoryId) -> Result<Option<MemoryStatus>, StoreError> {
+  let status: Option<String> = connection
+    .query_row("SELECT status FROM memories WHERE id = ?1", [id.to_string()], |row| {
+      row.get(0)
+    })
+    .optional()?;
+  status
+    .map(|status| MemoryStatus::from_name(&status).ok_or_else(|| corrupt("memory status", status)))
+    .transpose()
 }
