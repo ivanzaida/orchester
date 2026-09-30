@@ -42,3 +42,23 @@ pub(super) fn entry_text(memory: &Memory, reason: InjectionReason, body: &str) -
     .unwrap_or_default();
   format!("{}{key}:\n{}", content.kind().label(), quoted(body))
 }
+
+/// `body` without the list items of section `heading` (a paragraph that starts with `heading:`)
+/// that are in `items`; a section left without items goes as a whole.
+pub(super) fn without_items(body: &str, heading: &str, items: &[&str]) -> String {
+  let start = format!("{heading}:");
+  body
+    .split("\n\n")
+    .filter_map(|section| {
+      let mut lines = section.lines();
+      if lines.next() != Some(start.as_str()) {
+        return Some(section.to_owned());
+      }
+      let kept: Vec<&str> = lines
+        .filter(|line| !line.strip_prefix("- ").is_some_and(|item| items.contains(&item.trim())))
+        .collect();
+      (!kept.is_empty()).then(|| format!("{start}\n{}", kept.join("\n")))
+    })
+    .collect::<Vec<_>>()
+    .join("\n\n")
+}

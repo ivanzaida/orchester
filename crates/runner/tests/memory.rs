@@ -170,7 +170,11 @@ async fn handoff_reaches_the_next_step(provider: AgentProvider) {
   let review = &prompts[1];
   assert!(review.contains("# Task memory"), "{review}");
   assert!(
-    review.contains("## Latest handoff, from step `implement`\n\n> Finished Implement"),
+    // Implement's summary is its result among the results of earlier steps, so it is not repeated.
+    review.contains(
+      "## Latest handoff, from step `implement`\n\n> Its summary is the step's result under \"Results of earlier \
+       steps\".\n>\n> Completed:\n> - Appended hello\n>\n> The next agent should know:"
+    ),
     "{review}"
   );
   assert!(

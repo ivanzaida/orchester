@@ -7,7 +7,11 @@
 
 use std::collections::BTreeSet;
 
-use super::{InjectedMemory, InjectionReason, Memory, MemoryLimits, estimated_tokens, render::entry_text};
+use super::{
+  InjectedMemory, InjectionReason, Memory, MemoryAuthor, MemoryLimits, estimated_tokens,
+  handoff::DECISIONS,
+  render::{entry_text, without_items},
+};
 use crate::id::MemoryId;
 
 /// What became of a record chosen for a prompt.
@@ -115,6 +119,39 @@ impl Recalled {
       delivery: left.delivery,
     });
     given.chain(left_out).collect()
+  }
+}
+
+impl Recalled {
+  /// Leaves out of the latest handoff's decisions those given as decision records of their own,
+  /// which the same execution wrote, so the prompt says each decision once.
+  pub(super) fn drop_repeated_decisions(&mut self) {
+    let Some(index) = self
+      .entries
+      .iter()
+      .position(|entry| entry.reason == InjectionReason::Handoff)
+    else {
+      return;
+    };
+    let MemoryAuthor::Agent(handoff_author) = self.entries[index].memory.author() else {
+      return;
+    };
+    let execution = handoff_author.execution;
+    let decisions: Vec<String> = self
+      .entries
+      .iter()
+      .filter(|entry| entry.reason == InjectionReason::Decision)
+      .filter(|entry| matches!(entry.memory.author(), MemoryAuthor::Agent(agent) if agent.execution == execution))
+      .map(|entry| entry.memory.content().text().to_owned())
+      .collect();
+    if decisions.is_empty() {
+      return;
+    }
+    let items: Vec<&str> = decisions.iter().map(String::as_str).collect();
+    let entry = &mut self.entries[index];
+    entry.body = without_items(&entry.body, DECISIONS, &items);
+    entry.text = entry_text(&entry.memory, InjectionReason::Handoff, &entry.body);
+    entry.tokens = estimated_tokens(&entry.text);
   }
 }
 

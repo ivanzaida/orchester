@@ -145,7 +145,9 @@ pub fn recall(request: &RecallRequest<'_>, mut candidates: Vec<Memory>, mut matc
       memory,
     })
     .collect();
-  within_limits(request.limits, ranked)
+  let mut recalled = within_limits(request.limits, ranked);
+  recalled.drop_repeated_decisions();
+  recalled
 }
 
 /// Whether `memory` may reach an agent of the request's task at all.

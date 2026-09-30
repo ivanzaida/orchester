@@ -8,7 +8,7 @@ use orchester_core::{
     MemorySettings, RecallRequest, SecretScreen, recall,
   },
   resource::{InjectionEvent, StepKey},
-  run::PromptInput,
+  run::{DependencyOutput, PromptInput},
 };
 
 use crate::{
@@ -91,13 +91,40 @@ fn memory_prompt_a_new_session_reads_task_memory_before_its_task() {
   assert!(memory < text.find("# Task ORC-12:").expect("the task"), "{text}");
   assert!(
     text.contains(
-      "## Latest handoff, from step `plan`\n\n> Planned the store.\n>\n> Decisions:\n> - Keep memory in the \
-       project database.\n\n## Decisions and warnings\n\nDecision:\n> Keep memory in the project database.\n\n\
-       ## Related records\n\nFact:\n> Tests run with a name filter.\n"
+      "## Latest handoff, from step `plan`\n\n> Planned the store.\n\n## Decisions and warnings\n\nDecision:\n\
+       > Keep memory in the project database.\n\n## Related records\n\nFact:\n> Tests run with a name filter.\n"
     ),
     "{text}"
   );
   assert!(text.contains("hand off to the agents after you"), "{text}");
+}
+
+#[test]
+fn memory_prompt_a_handoff_does_not_repeat_its_summary_among_earlier_results() {
+  let task = task("Brief.", &[]);
+  let recalled = records(task.id());
+  let step = step_with("Plan.");
+  let dependencies = [DependencyOutput {
+    step: &step,
+    attempt: std::num::NonZeroU32::MIN,
+    text: "Planned the store.",
+  }];
+  let prompt = Prompt::new(builder("Role."), step_with("Step."), task);
+  let text = PromptInput {
+    memory: &recalled,
+    ..prompt.input(&[], &dependencies, true)
+  }
+  .assemble(InjectionEvent::Start)
+  .expect("no variables")
+  .text;
+  assert!(
+    text.contains(
+      "## Latest handoff, from step `plan`\n\n> Its summary is the step's result under \"Results of earlier \
+       steps\".\n\n## Decisions"
+    ),
+    "{text}"
+  );
+  assert_eq!(text.matches("Planned the store.").count(), 1, "{text}");
 }
 
 #[test]

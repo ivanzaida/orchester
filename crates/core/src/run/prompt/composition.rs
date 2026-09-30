@@ -301,7 +301,7 @@ fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[Prompt
     let section_part = section.source.part();
     if section_part == PromptPart::Task && part != Some(section_part) {
       push_skills(&mut text, input);
-      push_memory(&mut text, input.memory);
+      push_memory(&mut text, input.memory, input.dependencies);
     }
     if part != Some(section_part) {
       if !text.is_empty() {
@@ -325,13 +325,14 @@ fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[Prompt
     }
   }
   if event == InjectionEvent::Resume {
-    if input
+    let recovery = input
       .messages
-      .is_some_and(|messages| matches!(messages.occasion, MessageOccasion::Recovery { .. }))
-    {
+      .is_some_and(|messages| matches!(messages.occasion, MessageOccasion::Recovery { .. }));
+    if recovery {
       push_dependencies(&mut text, input.dependencies);
     }
-    push_memory(&mut text, input.memory);
+    let shown = if recovery { input.dependencies } else { &[] };
+    push_memory(&mut text, input.memory, shown);
     text.push_str("\n\n# When you finish\n");
     push_block(&mut text, RESULT_INSTRUCTIONS);
     if input.step.approval_gate {
