@@ -286,6 +286,15 @@ async fn claude_approvals_leave_a_read_only_step_without_commands() {
     !argv.contains("--permission-prompt-tool") && !argv.contains("--settings"),
     "{argv}"
   );
+  // The launch permissions recorded with the invocation say what Claude Code enforced: no command.
+  let launched = db.invocations(id).expect("invocations")[0]
+    .permissions
+    .clone()
+    .expect("recorded");
+  assert_eq!(
+    *launched.commands(),
+    CommandPermission::Allowed(orchester_core::permission::AllowedCommands::default())
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]

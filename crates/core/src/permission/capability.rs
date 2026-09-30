@@ -210,7 +210,9 @@ pub struct EnforcedPermissions {
 
 impl EnforcedPermissions {
   /// The permissions the CLI runs with: the chosen ones, except network on when off cannot be
-  /// enforced (see [`Self::network_stays_on`]).
+  /// enforced (see [`Self::network_stays_on`]), and no command at all for a read-only Claude Code
+  /// step that asks before commands ([`Mechanism::ClaudeNoCommandsReadOnly`]). An invocation
+  /// records these as its launch permissions.
   pub const fn permissions(&self) -> &AgentPermissions {
     &self.permissions
   }
@@ -268,6 +270,9 @@ impl AgentPermissions {
       mechanism => mechanism,
     };
     let mut permissions = self.clone();
+    if commands == Mechanism::ClaudeNoCommandsReadOnly {
+      permissions.commands = CommandPermission::Allowed(AllowedCommands::default());
+    }
     let (network, network_stays_on) = match support(provider, platform, PermissionOption::of_network(self.network)) {
       Support::Enforced(mechanism) => (mechanism, None),
       Support::Unavailable(reason) => {

@@ -134,6 +134,14 @@ fn permissions_asking_before_commands_route_to_each_clis_approval_on_both_platfo
           .mechanism(PermissionSetting::Commands),
         expected
       );
+      if provider == AgentProvider::ClaudeCodeCli {
+        let enforced = ask.enforced_on(provider, platform).expect("supported");
+        assert_eq!(
+          *enforced.permissions().commands(),
+          CommandPermission::Allowed(orchester_core::permission::AllowedCommands::default()),
+          "the launch permissions say no command runs"
+        );
+      }
       ask.set_repository(RepositoryAccess::Write);
       let writing = ask.enforced_on(provider, platform).expect("supported");
       assert_ne!(
