@@ -17,6 +17,7 @@ use crate::{
   map, outline_file,
   parallel::{Pending, read_files},
   previous::Previous,
+  progress::{BuildPhase, ProgressFile},
   record::FileRecord,
   write,
 };
@@ -39,10 +40,16 @@ pub(crate) struct Built {
 
 /// Builds the index of `revision` of the repository at `repo` into the empty folder `out`, from
 /// `base` when given.
-pub(crate) fn build(repo: &Path, revision: &Revision, base: Option<&Base>, out: &Path) -> Result<Built, IndexError> {
+pub(crate) fn build(
+  repo: &Path,
+  revision: &Revision,
+  base: Option<&Base>,
+  (out, progress): (&Path, &ProgressFile),
+) -> Result<Built, IndexError> {
   let started = Instant::now();
   let git = Repository::new(repo);
   let entries = git.tree(revision)?;
+  progress.phase(BuildPhase::Indexing { files: entries.len() });
   let manifest_objects: Vec<(String, String)> = entries
     .iter()
     .filter(|entry| entry.kind == EntryKind::File && map::is_manifest(&entry.path))
@@ -51,6 +58,7 @@ pub(crate) fn build(repo: &Path, revision: &Revision, base: Option<&Base>, out: 
   let mut collected = collect(&git, entries, base)?;
   let manifests = read_manifests(&git, manifest_objects)?;
   let map = map::render(revision, &collected.records, &manifests);
+  progress.phase(BuildPhase::Writing);
   write::write(out, &mut collected.records, &map.text, base.map(|base| &base.revision))?;
   let counts = Counts::of(&collected.records);
   let manifest = Manifest {

@@ -14,8 +14,8 @@ use std::{
 
 use orchester_core::revision::Revision;
 
-use super::{BUILDING, USERS, locks};
-use crate::IndexError;
+use super::{BUILDING, USERS, listing::FAILURES, locks};
+use crate::{IndexError, progress::PROGRESS};
 
 const TRASH: &str = ".trash-";
 
@@ -31,6 +31,9 @@ pub(super) fn remove_unused(root: &Path, worktrees: &Path) -> Result<(), IndexEr
     if !used(root, worktrees, &revision)? {
       discard(root, &root.join(revision.as_str()))?;
       discard(root, &root.join(format!("{BUILDING}{revision}")))?;
+      for record in [FAILURES, PROGRESS] {
+        remove_file(&root.join(record).join(revision.as_str()))?;
+      }
     }
   }
   for entry in read_folder(root)? {
@@ -50,6 +53,7 @@ fn revisions(root: &Path) -> Result<BTreeSet<Revision>, IndexError> {
   let names = read_folder(root)?
     .into_iter()
     .chain(read_folder(&root.join(USERS))?)
+    .chain(read_folder(&root.join(FAILURES))?)
     .filter_map(|path| path.file_name().and_then(|name| name.to_str()).map(str::to_owned));
   Ok(
     names
@@ -108,6 +112,13 @@ fn read_folder(folder: &Path) -> Result<Vec<PathBuf>, IndexError> {
 fn remove_folder(folder: &Path) -> io::Result<()> {
   match fs::remove_dir_all(folder) {
     Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
+    _ => Ok(()),
+  }
+}
+
+fn remove_file(file: &Path) -> Result<(), IndexError> {
+  match fs::remove_file(file) {
+    Err(error) if error.kind() != io::ErrorKind::NotFound => Err(IndexError::io("remove", file)(error)),
     _ => Ok(()),
   }
 }

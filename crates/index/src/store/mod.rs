@@ -9,6 +9,7 @@
 //! runs of other revisions never wait for that build, and removal skips a revision that is busy.
 
 mod cleanup;
+mod listing;
 mod locks;
 
 use std::{
@@ -19,16 +20,27 @@ use std::{
 
 use orchester_core::{id::RunId, integration::WORKTREES_DIR, revision::Revision};
 
+pub use self::listing::{IndexListing, IndexState, IndexSummary};
 use crate::{
   IndexError,
   build::{self, Base},
   git::Repository,
   manifest::{BuildMode, Manifest},
+  progress::ProgressFile,
   write,
 };
 
 const USERS: &str = ".users";
 const BUILDING: &str = ".building-";
+
+/// Where a build starts.
+#[derive(Clone, Copy)]
+enum Start {
+  /// From the existing index closest to the revision, when there is one.
+  Closest,
+  /// From nothing.
+  Scratch,
+}
 
 /// A build that happened.
 #[derive(Clone, Debug)]
@@ -86,7 +98,7 @@ impl CodebaseIndexes {
     let outcome = if Manifest::read_current(&path).is_some() {
       Outcome::Reused
     } else {
-      Outcome::Built(self.build(revision, &path)?)
+      Outcome::Built(self.build(revision, &path, Start::Closest)?)
     };
     drop(lock);
     if let Err(error) = self.prune() {
@@ -104,18 +116,54 @@ impl CodebaseIndexes {
     cleanup::remove_unused(&self.root, &self.repo.join(WORKTREES_DIR))
   }
 
-  fn build(&self, revision: &Revision, path: &Path) -> Result<BuildReport, IndexError> {
+  /// Builds the index of `revision` again from scratch, replacing the one there is, if any (the
+  /// index list's *Rebuild* and *Retry*). The runs that use it keep using it; a run started from
+  /// the revision uses the new one.
+  pub fn rebuild(&self, revision: &Revision) -> Result<BuildReport, IndexError> {
+    fs::create_dir_all(&self.root).map_err(IndexError::io("create", &self.root))?;
+    let _lock = locks::lock(&self.root, revision)?;
+    self.build(revision, &self.root.join(revision.as_str()), Start::Scratch)
+  }
+
+  /// The folder of the index of `revision`, when it is built.
+  pub fn existing(&self, revision: &Revision) -> Option<PathBuf> {
+    let path = self.root.join(revision.as_str());
+    Manifest::read_current(&path).map(|_| path)
+  }
+
+  /// Builds the index of `revision` into `path`, holding the revision's lock, and records how it
+  /// went for the index list.
+  fn build(&self, revision: &Revision, path: &Path, start: Start) -> Result<BuildReport, IndexError> {
+    let progress = ProgressFile::start(&self.root, revision);
+    let built = self.publish(revision, path, start, &progress);
+    match &built {
+      Ok(_) => listing::clear_failure(&self.root, revision),
+      Err(error) => listing::record_failure(&self.root, revision, &error.to_string()),
+    }
+    built
+  }
+
+  fn publish(
+    &self,
+    revision: &Revision,
+    path: &Path,
+    start: Start,
+    progress: &ProgressFile,
+  ) -> Result<BuildReport, IndexError> {
     let staging = self.root.join(format!("{BUILDING}{revision}"));
-    let base = self.base(revision);
-    let built = match self.build_into(revision, base.as_ref(), &staging) {
+    let base = match start {
+      Start::Closest => self.base(revision),
+      Start::Scratch => None,
+    };
+    let built = match self.build_into(revision, base.as_ref(), (&staging, progress)) {
       Err(error @ IndexError::Previous { .. }) => {
         tracing::warn!(%error, "building the codebase index in full instead");
-        self.build_into(revision, None, &staging)?
+        self.build_into(revision, None, (&staging, progress))?
       }
       other => other?,
     };
     write::make_read_only(&staging).map_err(IndexError::io("seal", &staging))?;
-    // An index of an earlier format is replaced.
+    // The index there was, of an earlier format or rebuilt, is replaced.
     cleanup::discard(&self.root, path)?;
     fs::rename(&staging, path).map_err(IndexError::io("rename", &staging))?;
     Ok(BuildReport {
@@ -127,10 +175,15 @@ impl CodebaseIndexes {
     })
   }
 
-  fn build_into(&self, revision: &Revision, base: Option<&Base>, staging: &Path) -> Result<build::Built, IndexError> {
+  fn build_into(
+    &self,
+    revision: &Revision,
+    base: Option<&Base>,
+    (staging, progress): (&Path, &ProgressFile),
+  ) -> Result<build::Built, IndexError> {
     cleanup::discard(&self.root, staging)?;
     fs::create_dir(staging).map_err(IndexError::io("create", staging))?;
-    let built = build::build(&self.repo, revision, base, staging);
+    let built = build::build(&self.repo, revision, base, (staging, progress));
     if built.is_err()
       && let Err(error) = cleanup::discard(&self.root, staging)
     {

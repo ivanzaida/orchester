@@ -6,7 +6,7 @@ mod support;
 use std::{fs, sync::Barrier, thread};
 
 use orchester_core::revision::Revision;
-use orchester_index::{IndexError, Outcome};
+use orchester_index::{BuildPhase, BuildProgress, IndexError, IndexState, Outcome};
 use support::Repo;
 
 /// The names in the index folder that are indexes, unfinished builds or run records.
@@ -14,7 +14,7 @@ fn index_folder(repo: &Repo) -> Vec<String> {
   let mut names: Vec<String> = fs::read_dir(repo.index_root())
     .expect("read the index folder")
     .map(|entry| entry.expect("entry").file_name().to_string_lossy().into_owned())
-    .filter(|name| name != ".locks")
+    .filter(|name| ![".locks", ".progress", ".failures"].contains(&name.as_str()))
     .collect();
   names.sort();
   names
@@ -106,7 +106,7 @@ fn building_another_revision_removes_indexes_no_run_uses() {
 }
 
 #[test]
-fn a_failed_build_leaves_nothing_behind() {
+fn a_failed_build_leaves_no_index_but_its_reason_until_its_run_is_gone() {
   let repo = Repo::new();
   let unknown = Revision::new(&"0".repeat(Revision::LEN)).expect("a revision");
   let run = repo.run_with_worktree();
@@ -115,6 +115,19 @@ fn a_failed_build_leaves_nothing_behind() {
 
   assert!(matches!(error, IndexError::Git(_)), "{error}");
   assert_eq!(index_folder(&repo), [".users".to_owned()]);
+  let listed = repo.indexes().list().expect("list");
+  assert_eq!(listed.len(), 1);
+  assert_eq!(listed[0].revision, unknown);
+  assert_eq!(listed[0].runs, [run]);
+  assert!(
+    matches!(&listed[0].state, IndexState::Failed { reason } if *reason == error.to_string()),
+    "{:?}",
+    listed[0].state
+  );
+
+  fs::remove_dir_all(repo.worktree(run)).expect("remove the worktree");
+  repo.indexes().prune().expect("prune");
+  assert_eq!(repo.indexes().list().expect("list"), []);
 }
 
 #[test]
@@ -187,4 +200,57 @@ fn a_published_index_is_read_only_and_still_removed_with_its_worktree() {
   fs::remove_dir_all(repo.worktree(run)).expect("remove the worktree");
   repo.indexes().prune().expect("prune");
   assert!(!index.exists());
+}
+
+#[test]
+fn the_list_shows_ready_indexes_with_their_runs_and_rebuilds_replace_them() {
+  let repo = Repo::new();
+  let head = repo.head();
+  let run = repo.run_with_worktree();
+  let first = repo.indexes().ensure(&head, run).expect("index");
+
+  let listed = repo.indexes().list().expect("list");
+  assert_eq!(listed.len(), 1);
+  assert_eq!(listed[0].runs, [run]);
+  let IndexState::Ready(summary) = &listed[0].state else {
+    panic!("ready: {:?}", listed[0].state);
+  };
+  assert_eq!((summary.files, summary.symbols), (15, 42));
+  assert!(summary.bytes > 0);
+
+  let report = repo.indexes().rebuild(&head).expect("rebuilt");
+  assert_eq!(report.mode, orchester_index::BuildMode::Full);
+  let IndexState::Ready(rebuilt) = &repo.indexes().list().expect("list")[0].state else {
+    panic!("ready after the rebuild");
+  };
+  assert!(rebuilt.built_at >= summary.built_at);
+  assert_eq!(repo.indexes().existing(&head), Some(first.path));
+}
+
+#[test]
+fn the_list_shows_a_running_build_with_its_phase() {
+  let repo = Repo::new();
+  let head = repo.head();
+  let held = hold_lock(&repo, &head);
+  let progress = repo.index_root().join(".progress");
+  fs::create_dir_all(&progress).expect("create");
+  let building = BuildProgress {
+    started_at: orchester_core::time::Timestamp::from_unix_millis(1_000),
+    phase: BuildPhase::Indexing { files: 15 },
+  };
+  fs::write(
+    progress.join(head.as_str()),
+    serde_json::to_string(&building).expect("json"),
+  )
+  .expect("write");
+
+  let listed = repo.indexes().list().expect("list");
+  assert_eq!(listed[0].state, IndexState::Building(building));
+
+  drop(held);
+  assert_eq!(
+    repo.indexes().list().expect("list"),
+    [],
+    "a record without a build shows nothing"
+  );
 }

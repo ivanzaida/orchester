@@ -32,6 +32,7 @@ mod outline;
 mod outline_file;
 mod parallel;
 mod previous;
+mod progress;
 mod record;
 mod render;
 mod store;
@@ -44,7 +45,8 @@ use thiserror::Error;
 pub use self::{
   git::GitError,
   manifest::BuildMode,
-  store::{BuildReport, CodebaseIndexes, Ensured, Outcome},
+  progress::{BuildPhase, BuildProgress},
+  store::{BuildReport, CodebaseIndexes, Ensured, IndexListing, IndexState, IndexSummary, Outcome},
 };
 
 #[derive(Debug, Error)]
