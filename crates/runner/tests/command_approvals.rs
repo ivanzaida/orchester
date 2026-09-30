@@ -6,7 +6,7 @@ use std::path::Path;
 use orchester_core::{
   conversation::{Message, MessageBody, Recipient},
   id::{IdempotencyKey, RunId},
-  permission::{AgentPermissions, CommandPermission},
+  permission::{AgentPermissions, CommandPermission, FolderBounds, WritableFolder, WritableFolders},
   resource::{AgentProfile, StepKey},
   run::{PendingToolApproval, PermissionsApply, RunStatus},
   store::{ActivityStore, ConversationStore, ResourceStore},
@@ -56,13 +56,7 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
   let step = StepKey::new("implement").expect("key");
   let profile = before.profile_of(&step).expect("profile");
   let db = ProjectDb::open(root).expect("open");
-  let published = db
-    .latest_version::<AgentProfile>(profile)
-    .expect("version")
-    .expect("profile");
-  let mut permissions: AgentPermissions = published.body().permissions().clone();
-  permissions.set_commands(CommandPermission::AskBefore);
-  permissions.set_interactive_tool_approvals(true);
+  let permissions = migration_permissions(root, profile);
   scheduler
     .change_permissions(id, profile, permissions, PermissionsApply::NextInvocation)
     .await
@@ -115,6 +109,24 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
       .expect("tool decision");
   }
   verify_progress(root, &mut events, id, &before, &message, (deny_command, deny_tool)).await;
+}
+
+fn migration_permissions(root: &Path, profile: orchester_core::id::ResourceId) -> AgentPermissions {
+  let db = ProjectDb::open(root).expect("open");
+  let published = db
+    .latest_version::<AgentProfile>(profile)
+    .expect("version")
+    .expect("profile");
+  let mut permissions = published.body().permissions().clone();
+  permissions.set_commands(CommandPermission::AskBefore);
+  permissions.set_interactive_tool_approvals(true);
+  let bounds = FolderBounds::new(root, None).expect("folder bounds");
+  permissions.with_writable_folders(
+    WritableFolders::new(vec![
+      WritableFolder::new(".orchester/extra", &bounds).expect("extra folder"),
+    ])
+    .expect("folder list"),
+  )
 }
 
 #[tokio::test(flavor = "multi_thread")]

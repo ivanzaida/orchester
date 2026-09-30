@@ -116,16 +116,18 @@ impl CodexInvocation<'_> {
         ),
       ]);
     }
-    if self.access == RepositoryAccess::Write {
-      let roots: Vec<_> = std::iter::once(self.worktree)
+    let roots: Vec<_> = if self.access == RepositoryAccess::Write {
+      std::iter::once(self.worktree)
         .chain(self.writable_roots.iter().map(PathBuf::as_path))
         .map(Path::to_string_lossy)
-        .collect();
-      args.extend([
-        "-c".to_owned(),
-        format!("sandbox_workspace_write.writable_roots={}", toml_array(&roots)),
-      ]);
-    }
+        .collect()
+    } else {
+      Vec::new()
+    };
+    args.extend([
+      "-c".to_owned(),
+      format!("sandbox_workspace_write.writable_roots={}", toml_array(&roots)),
+    ]);
     if let CodexAgentFiles::LeftOut { skills } = self.agent_files {
       unicode_folders(skills)?;
       args.extend(["-c".to_owned(), "project_doc_max_bytes=0".to_owned()]);

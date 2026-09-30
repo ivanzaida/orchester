@@ -49,8 +49,10 @@ sandbox, including resumed `exec` invocations and App Server. Selecting that san
 read-only access into write access. Windows network restrictions retain their existing visible
 capability limitation.
 
-Every App Server turn explicitly selects the local environment with its current worktree as the
-runtime workspace root, including resumed sessions. An empty environment list disables local tools
+Every App Server turn explicitly selects the local environment with exactly the current worktree
+and, for write access, its authorized additional writable folders as runtime workspace roots,
+including resumed sessions. Read-only invocations explicitly clear configured writable roots.
+An empty environment list disables local tools
 in Codex 0.159.2 and is never sent. Startup validates the selected environment and combines its
 implicit workspace root with the extra sandbox writable roots when checking the exact grants.
 Project MCP secret values are redacted from commands, output, messages, errors and approval metadata

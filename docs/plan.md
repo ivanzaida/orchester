@@ -177,8 +177,9 @@ ORC-44 · Command approvals and current-run policy changes · branch `orchester/
   continuation preserve the run, worktree, completed steps and conversation. Run-only changes leave published
   policies intact. Unsupported approval forms fail explicitly; no persistent grant or bypass mode is offered.
 - Check, Review and Verify remain separate pipeline steps. Reuse the independent design evidence and canonical
-  refs below; native command approve/deny and native exec-session migration still require independent behavioral
-  coverage. Protocol fixtures cover those paths; native MCP approve/deny has separate recorded evidence.
+  refs below. The root reports native command approve/deny and resumed-session writes in the worktree and
+  an authorized additional folder on Codex 0.159.2. The transferred exact-root validation fix and four
+  approval regressions passed in this worktree; independent behavioral and visual steps must run again.
   The resumed implementation check results and limits are recorded in
   [runtime evidence](evidence/agent-runtime-architecture-2026-09-30.md).
 

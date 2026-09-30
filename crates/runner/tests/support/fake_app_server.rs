@@ -1,6 +1,7 @@
 //! Protocol fixture: side effects happen only after the exact one-action response.
 
 use std::{
+  collections::BTreeSet,
   fs,
   io::{self, BufRead, Write},
   path::PathBuf,
@@ -20,6 +21,7 @@ pub fn run(args: &[String]) -> ExitCode {
   let turn = "approval-turn";
   let mut stage = 0;
   let mut hold_approved = false;
+  let mut roots = BTreeSet::<String>::new();
   for line in io::stdin().lock().lines() {
     let message: Value = serde_json::from_str(&line.expect("stdin")).expect("JSON RPC");
     let params = &message["params"];
@@ -33,21 +35,13 @@ pub fn run(args: &[String]) -> ExitCode {
           .as_str()
           .unwrap_or("fake-interactive-thread")
           .to_owned();
-        let network = args
-          .iter()
-          .any(|arg| arg == "sandbox_workspace_write.network_access=true");
-        emit(&json!({"id":3,"result":{
-          "thread":{"id":thread,"environments":[{"environmentId":"local","cwd":cwd,"runtimeWorkspaceRoots":[cwd]}]},
-          "approvalPolicy":params["approvalPolicy"],
-          "approvalsReviewer":"user","model":params["model"],
-          "sandbox":{"type":"workspaceWrite","networkAccess":network,"writableRoots":[cwd]}
-        }}));
+        roots = thread_response(args, params, &cwd, &thread);
       }
       Some("mcpServerStatus/list") => emit(&json!({"id":4,"result":{"data":[],"nextCursor":null}})),
       Some("turn/start") => {
         assert_eq!(
           params["environments"],
-          json!([{"environmentId":"local","cwd":cwd,"runtimeWorkspaceRoots":[cwd]}])
+          json!([{"environmentId":"local","cwd":cwd,"runtimeWorkspaceRoots":roots}])
         );
         hold_approved = params["input"][0]["text"]
           .as_str()
@@ -88,6 +82,26 @@ pub fn run(args: &[String]) -> ExitCode {
     }
   }
   ExitCode::SUCCESS
+}
+
+fn thread_response(args: &[String], params: &Value, cwd: &std::path::Path, thread: &str) -> BTreeSet<String> {
+  let network = args
+    .iter()
+    .any(|arg| arg == "sandbox_workspace_write.network_access=true");
+  let roots: BTreeSet<String> = serde_json::from_str(
+    args
+      .iter()
+      .find_map(|arg| arg.strip_prefix("sandbox_workspace_write.writable_roots="))
+      .expect("writable roots override"),
+  )
+  .expect("fixture paths use JSON-compatible TOML strings");
+  let extra: Vec<_> = roots.iter().filter(|root| **root != cwd.to_string_lossy()).collect();
+  emit(&json!({"id":3,"result":{
+    "thread":{"id":thread,"environments":[{"environmentId":"local","cwd":cwd,"runtimeWorkspaceRoots":roots}]},
+    "approvalPolicy":params["approvalPolicy"],"approvalsReviewer":"user","model":params["model"],
+    "sandbox":{"type":"workspaceWrite","networkAccess":network,"writableRoots":extra}
+  }}));
+  roots
 }
 
 fn command_request(thread: &str, turn: &str, cwd: &std::path::Path) {

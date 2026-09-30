@@ -50,6 +50,21 @@ pub(super) struct AppServerSetup {
   pub secrets: Vec<SecretVariable>,
 }
 
+impl AppServerSetup {
+  fn runtime_roots(&self) -> BTreeSet<String> {
+    let mut roots = BTreeSet::from([self.worktree.to_string_lossy().into_owned()]);
+    if self.access == RepositoryAccess::Write {
+      roots.extend(
+        self
+          .writable_roots
+          .iter()
+          .map(|path| path.to_string_lossy().into_owned()),
+      );
+    }
+    roots
+  }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
   Initialize,
@@ -289,9 +304,13 @@ impl AppServerSession {
       return Err("Codex did not select exactly one local environment".to_owned());
     };
     let cwd = self.setup.worktree.to_string_lossy();
+    let roots: Option<BTreeSet<_>> = local
+      .get("runtimeWorkspaceRoots")
+      .and_then(Value::as_array)
+      .and_then(|roots| roots.iter().map(|root| root.as_str().map(str::to_owned)).collect());
     if local.get("environmentId").and_then(Value::as_str) != Some("local")
       || local.get("cwd").and_then(Value::as_str) != Some(cwd.as_ref())
-      || local.get("runtimeWorkspaceRoots") != Some(&json!([cwd]))
+      || roots != Some(self.setup.runtime_roots())
     {
       return Err("Codex selected an environment outside this worktree".to_owned());
     }
@@ -332,7 +351,7 @@ impl AppServerSession {
     let mut params = json!({"threadId":self.thread,"input":[{"type":"text","text":self.setup.prompt}],
     "model":self.setup.model,"environments":[{
       "environmentId":"local","cwd":self.setup.worktree,
-      "runtimeWorkspaceRoots":[self.setup.worktree]
+        "runtimeWorkspaceRoots":self.setup.runtime_roots()
     }]});
     if let Some(effort) = &self.setup.effort {
       params["effort"] = json!(effort);

@@ -172,3 +172,39 @@ The resumed implementer did not run the full test suite, rebuild/install a relea
 native model smoke tests, or perform design verification. Native MCP smoke and independent
 visual results above belong to the root's prior verification. Native command/session migration
 coverage and physical Mac runtime verification remain explicitly for independent follow-up.
+
+### Continuation after startup validation failure
+
+The root subsequently reported native Codex 0.159.2 command approve/deny coverage, startup checks
+for both access modes, and a resumed model session writing successfully in both the worktree and
+an authorized additional folder. These are root-reported live results, not new native tests by
+this implementer. The root also reports that the failed startup executed no model turn and
+preserved saved work. This supersedes the earlier native-command coverage limitation above.
+
+The implementer preserved the transferred runtime delta: read-only invocations clear inherited
+writable roots, startup validates the exact local runtime root set, and each turn supplies that
+same authorized set. Existing source retains disabled sandbox exceptions, literal/JSON-escaped
+secret redaction before persistence, and delivered-approval interruption bookkeeping.
+
+All **29 affected filtered tests passed** on this continuation:
+
+| Crate / test binary | Named filters | Passed |
+| --- | --- | --- |
+| core / agent_invocation | `invocation_`, `app_server_` | 12 |
+| core / command_approvals | `approvals`, `permissions_asking` | 3 |
+| store / tool_approvals | `request`, `claimed_approval` | 4 |
+| runner / command_approvals | `command_approvals_` | 4 |
+| runner / run_permissions | `run_permissions_` | 6 |
+
+Runner tests use `--features test-agent`. The four approval tests cover approve/migration with
+an additional writable folder, command denial, MCP-write denial, and soft-stop after approval
+delivery without automatic replay. `powershell -File tools/check.ps1` returned `check: OK`.
+Core/exec check and clippy with warnings denied passed for `aarch64-apple-darwin`.
+
+Independent Check, Review and Verify must run again, exercise native command/MCP approve and
+deny, confirm same-session migration and retained progress, and inspect exact permission roots,
+secret persistence, interruption recovery and one-action decision scoping. Verify must compare
+the documented UI states against the canonical design at matching sizes using its exact owned
+PID; it may use the authorized disposable fixture and root-provided host watcher. No new design
+writes or implementer design verification occurred. The full suite, native model tests and physical
+Mac runtime verification were not run by this implementer on this continuation.
