@@ -118,17 +118,33 @@ fn winget_installed(winget: &Path) -> Option<PathBuf> {
   if linked.is_file() {
     return Some(linked);
   }
-  let mut installed: Vec<PathBuf> = fs::read_dir(winget.join("Packages"))
-    .ok()?
+  // No Packages folder, or one that cannot be read, holds no ripgrep to use; the other places are
+  // looked in next.
+  let packages = fs::read_dir(winget.join("Packages")).ok()?;
+  packages
     .filter_map(Result::ok)
     .filter(|package| package.file_name().to_string_lossy().starts_with(WINGET_PACKAGE))
     .filter_map(|package| fs::read_dir(package.path()).ok())
     .flat_map(|versions| versions.filter_map(Result::ok))
-    .map(|version| version.path().join(PROGRAM))
-    .filter(|program| program.is_file())
-    .collect();
-  installed.sort();
-  installed.pop()
+    .map(|version| {
+      (
+        version_of(&version.file_name().to_string_lossy()),
+        version.path().join(PROGRAM),
+      )
+    })
+    .filter(|(_, program)| program.is_file())
+    .max()
+    .map(|(_, program)| program)
+}
+
+/// The version numbers in a winget version folder's name (`ripgrep-15.1.0-x86_64-pc-windows-msvc`
+/// is `[15, 1, 0]`), compared as numbers; none for a name without them.
+fn version_of(folder: &str) -> Vec<u64> {
+  folder
+    .split('-')
+    .nth(1)
+    .map(|version| version.split('.').map_while(|part| part.parse().ok()).collect())
+    .unwrap_or_default()
 }
 
 /// winget's folder under `%LOCALAPPDATA%`.

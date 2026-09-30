@@ -132,6 +132,11 @@ fn ripgrep_winget_installed_is_found_before_a_bundled_one_when_the_path_predates
     &package.join("ripgrep-15.1.0-x86_64-pc-windows-msvc").join(PROGRAM),
     "new rg",
   );
+  // Later by name, earlier by version.
+  file(
+    &package.join("ripgrep-9.1.0-x86_64-pc-windows-msvc").join(PROGRAM),
+    "oldest rg",
+  );
   file(&winget.join("Packages/Other.Tool/bin").join(PROGRAM), "other");
   let empty = dir.path().join("empty");
   fs::create_dir_all(&empty).expect("folder");
