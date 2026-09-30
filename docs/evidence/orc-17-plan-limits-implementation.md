@@ -55,9 +55,12 @@ cargo test -p orchester-desktop --test i18n every_key
 cargo test -p orchester-desktop --test theme plan_limits
 ```
 
-Builds use `CARGO_TARGET_DIR=H:\projects\orchester\.orchester\target\orc17`.
-The shared parent target initially supplied incompatible metadata from another worktree;
-isolating this task's artifacts resolved those errors.
+The resumed run passed `tools/check.ps1` and all 22 filtered tests using the
+runner-supplied absolute `CARGO_TARGET_DIR`:
+`H:\projects\orchester\.orchester\target\worktrees\01a0f184-cef3-7424-b9b1-4035e8b76926`.
+No manual target override was applied. The installed artifact-isolation fix
+supersedes the earlier shared-target workaround. The implementation is preserved;
+independent Check, Review and Verify remain pending pipeline steps.
 
 `cargo check -p orchester-core --target aarch64-apple-darwin` passed.
 Runner/desktop cross-check was attempted but stopped in native dependencies because
