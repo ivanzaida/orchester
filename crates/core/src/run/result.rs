@@ -72,11 +72,12 @@ pub enum StepOutcome {
   Question,
 }
 
-/// A final message that follows [`STEP_RESULT_SCHEMA`]. The handoff lists are optional when read,
-/// so results written before they existed (and agents that leave them out) still count; the schema
-/// lists them as required but nullable, since Codex's structured output requires every property.
+/// A final message that follows [`STEP_RESULT_SCHEMA`]. `outcome` and `summary` are read strictly;
+/// the handoff is read leniently, so a malformed handoff never costs the step its outcome: a missing
+/// or `null` list is empty, a single string is one item, items that are not strings or are blank are
+/// dropped, and fields the schema does not name are ignored. The schema lists the handoff fields as
+/// required but nullable, since Codex's structured output requires every property.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct StepResult {
   pub outcome: StepOutcome,
   pub summary: String,
@@ -90,9 +91,26 @@ pub struct StepResult {
   pub next_agent_should_know: Vec<String>,
 }
 
-/// A handoff list, `null` read as empty.
+/// A handoff list, read from whatever JSON the agent wrote for it.
 fn list<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<String>, D::Error> {
-  Ok(Option::<Vec<String>>::deserialize(deserializer)?.unwrap_or_default())
+  let items = match serde_json::Value::deserialize(deserializer)? {
+    serde_json::Value::String(item) => vec![item],
+    serde_json::Value::Array(items) => items
+      .into_iter()
+      .filter_map(|item| match item {
+        serde_json::Value::String(item) => Some(item),
+        _ => None,
+      })
+      .collect(),
+    _ => Vec::new(),
+  };
+  Ok(
+    items
+      .into_iter()
+      .map(|item| item.trim().to_owned())
+      .filter(|item| !item.is_empty())
+      .collect(),
+  )
 }
 
 impl StepResult {

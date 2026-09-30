@@ -438,12 +438,18 @@ fn memory_deleting_a_proposal_keeps_the_record_it_would_replace() {
   let proposal = replacing(2);
   db.add_memories(std::slice::from_ref(&proposal)).expect("add");
   db.delete_memory(proposal.id()).expect("delete the proposal");
-  assert!(db.memory(active.id()).expect("read").is_some(), "the active record stays");
+  assert!(
+    db.memory(active.id()).expect("read").is_some(),
+    "the active record stays"
+  );
 
   let mut rejected = replacing(3);
   db.add_memories(std::slice::from_ref(&rejected)).expect("add");
   rejected.reject(at(4)).expect("reject");
   db.save_memory(&rejected).expect("save");
   db.delete_memory(rejected.id()).expect("delete the rejected proposal");
-  assert!(db.memory(active.id()).expect("read").is_some(), "the active record stays");
+  assert!(
+    db.memory(active.id()).expect("read").is_some(),
+    "the active record stays"
+  );
 }

@@ -25,7 +25,6 @@ fn handoff_lists_are_optional_and_may_be_null() {
   let full = StepResult::parse(RESULT).expect("a result");
   assert_eq!(full.completed, ["Tables and FTS5 indexes"]);
   assert!(full.open_questions.is_empty());
-  assert_eq!(StepResult::parse(r#"{"outcome":"done","summary":"x","next":[]}"#), None);
   let schema: serde_json::Value = serde_json::from_str(STEP_RESULT_SCHEMA).expect("the schema is JSON");
   let required: Vec<&str> = schema["required"]
     .as_array()
@@ -45,6 +44,33 @@ fn handoff_lists_are_optional_and_may_be_null() {
     ],
     "Codex's structured output requires every property"
   );
+}
+
+#[test]
+fn handoff_malformed_lists_never_cost_the_outcome() {
+  let parse = |text: &str| StepResult::parse(text).expect("the outcome is read");
+  let single = parse(r#"{"outcome":"failed","summary":"Broke.","completed":"one string"}"#);
+  assert_eq!(
+    (single.outcome, single.completed),
+    (StepOutcome::Failed, vec!["one string".to_owned()])
+  );
+  let objects = parse(r#"{"outcome":"question","summary":"Which?","decisions":[{"decision":"x"}, "Keep y."]}"#);
+  assert_eq!(
+    (objects.outcome, objects.decisions),
+    (StepOutcome::Question, vec!["Keep y.".to_owned()])
+  );
+  let nulls = parse(r#"{"outcome":"failed","summary":"Broke.","open_questions":[null, " ", 3]}"#);
+  assert!(nulls.open_questions.is_empty());
+  let unknown = parse(r#"{"outcome":"failed","summary":"Broke.","next_steps":["x"]}"#);
+  assert_eq!(unknown.outcome, StepOutcome::Failed);
+  let wrong_type = parse(r#"{"outcome":"done","summary":"Done.","next_agent_should_know":{"a":1}}"#);
+  assert!(wrong_type.next_agent_should_know.is_empty());
+  assert_eq!(
+    StepResult::parse(r#"{"outcome":"done"}"#),
+    None,
+    "the summary is required"
+  );
+  assert_eq!(StepResult::parse(r#"{"outcome":"done","summary":7}"#), None);
 }
 
 #[test]
