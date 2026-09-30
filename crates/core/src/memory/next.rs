@@ -41,15 +41,14 @@ pub fn next_invocation_memory<S: MemoryStore + ?Sized>(
   };
   candidates.extend(store.memories(&pinned)?);
   let details = context.task.details();
-  let text = [
-    context.step.name.as_str(),
-    context.step.instructions.as_str(),
+  let query = MemoryQuery::for_step(
     details.title.as_str(),
     &details.brief,
-  ]
-  .join("\n");
+    context.step.name.as_str(),
+    context.step.instructions.as_str(),
+  );
   let limit = usize::from(settings.limits.records()) * MATCHES_PER_RECORD;
-  let matches = store.search_memories(task, &MemoryQuery::from_text(&text), limit)?;
+  let matches = store.search_memories(task, &query, limit)?;
   let request = RecallRequest {
     task,
     profile: context.profile,

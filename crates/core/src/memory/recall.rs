@@ -9,7 +9,7 @@
 //! BM25) relevance, each divided by the best among the matches; importance and confidence are 0,
 //! 0.5 and 1 for low, normal (medium) and high; recency halves every 14 days since the record last
 //! changed; role is 1 for a record the same agent profile wrote or one tagged with the agent's
-//! role, else 0.
+//! role, else 0. A match whose relevance is below 0.2 is not given at all.
 //! The ranked records are then taken within the project's limits ([`super::selection`]).
 
 use super::{
@@ -26,6 +26,8 @@ const IMPORTANCE: f64 = 0.20;
 const RECENCY: f64 = 0.15;
 const ROLE: f64 = 0.15;
 const CONFIDENCE: f64 = 0.10;
+/// A match less relevant than this share of the best match is too loosely related to be given.
+const MIN_RELEVANCE: f64 = 0.2;
 const HALF_LIFE_DAYS: f64 = 14.0;
 const DAY_MILLIS: f64 = 86_400_000.0;
 
@@ -124,6 +126,9 @@ pub fn recall(request: &RecallRequest<'_>, mut candidates: Vec<Memory>, mut matc
   }
   for found in matches {
     let relevance = (ratio(found.words, best_words) + ratio(found.fragments, best_fragments)) / 2.0;
+    if relevance < MIN_RELEVANCE {
+      continue;
+    }
     ranked.push((
       InjectionReason::Match,
       score(request, &found.memory, relevance),

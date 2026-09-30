@@ -33,6 +33,34 @@ fn recall_query_keeps_word_stems_paths_and_identifiers() {
 }
 
 #[test]
+fn recall_query_leaves_out_common_words_and_keeps_short_words_whole() {
+  let query = MemoryQuery::from_text("The tests and users for value, decisions щоб також міграцію");
+  assert_eq!(query.words(), ["tests", "users", "value", "decisio", "міграц"]);
+}
+
+#[test]
+fn recall_query_puts_the_task_first_and_caps_the_instructions() {
+  let instructions = (0..80)
+    .map(|n| format!("instructionword{n}"))
+    .collect::<Vec<_>>()
+    .join(" ");
+  let query = MemoryQuery::for_step(
+    "Fix the Kubernetes ingress timeout",
+    "Brief text",
+    "Implement",
+    &instructions,
+  );
+  assert_eq!(query.words()[..4], ["fix", "kubernet", "ingre", "timeo"]);
+  let from_instructions = query
+    .words()
+    .iter()
+    .filter(|word| word.starts_with("instructionwo"))
+    .count();
+  assert_eq!(from_instructions, MemoryQuery::INSTRUCTION_TERMS);
+  assert!(query.words().contains(&"impleme".to_owned()), "{query:?}");
+}
+
+#[test]
 fn recall_estimates_four_bytes_a_token() {
   assert_eq!(estimated_tokens(""), 0);
   assert_eq!(estimated_tokens("abcde"), 2);
@@ -214,7 +242,7 @@ fn recall_caps_at_eight_records_and_three_thousand_tokens() {
       matched(big(3), 1.0, 1.0),
       matched(big(2), 0.9, 0.9),
       matched(big(1), 0.8, 0.8),
-      matched(small, 0.1, 0.1),
+      matched(small, 0.5, 0.5),
     ],
   );
   let tokens = recalled.tokens();
@@ -243,6 +271,21 @@ fn recall_caps_at_eight_records_and_three_thousand_tokens() {
     .len(),
     1
   );
+}
+
+#[test]
+fn recall_gives_no_loosely_related_match() {
+  let fixture = Fixture::new();
+  let request = fixture.request(MemoryLimits::DEFAULT);
+  let chosen = reasons(
+    &request,
+    Vec::new(),
+    vec![
+      matched(fixture.by_person(MemoryKind::Fact, "Close.", 1), 10.0, 10.0),
+      matched(fixture.by_person(MemoryKind::Fact, "Loose.", 1), 1.0, 1.0),
+    ],
+  );
+  assert_eq!(chosen, [(InjectionReason::Match, "Close.".to_owned())]);
 }
 
 #[test]
