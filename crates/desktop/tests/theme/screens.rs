@@ -21,6 +21,14 @@ fn plan_limits_emphasis_follows_pencil() {
   assert_eq!(percent.font_size, 11.0);
   assert_eq!(percent.weight, FontWeight::Medium);
   assert_eq!(&*percent.font_family, "Geist Mono");
+  assert_eq!(
+    app.theme().spacing_value(ExtraSpacing::PlanRows.role()),
+    Dimension::Px(6.0)
+  );
+  assert_eq!(theme::PLAN_HINT_WIDTH, 360.0);
+  assert_eq!(theme::PLAN_WINDOW_LABEL, 44.0);
+  assert_eq!((theme::PLAN_METER_WIDTH, theme::PLAN_METER_HEIGHT), (100.0, 4.0));
+  assert_eq!(theme::PLAN_HAIRLINE, 1.0);
 }
 
 #[test]

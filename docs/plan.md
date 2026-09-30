@@ -169,7 +169,7 @@ which also preserves text selection after a drag on scaled displays.
 
 Plan limits in the status bar · ORC-17 · run worktree
 
-- **Implementation complete 2026-09-30; independent Verify pending.** Session-only Codex/Claude
+- **Implementation revised after Review/Verify; independent re-verification pending.** Session-only Codex/Claude
   readings arrive live from agent turns, with the newest CLI reading across projects, hover details,
   warnings, reached/reset states, extra usage and narrow-window priorities.
 - `tools/check.ps1` passed. Filtered core/runner plan-limit and desktop status-bar/i18n/theme checks

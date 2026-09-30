@@ -18,6 +18,8 @@ use super::tokens::{
 pub enum ExtraSpacing {
   /// Between the rows of the status bar operations popover (`E1msJS`).
   Hair,
+  /// Rows within a plan-limit provider section (`mFTm5`, `pNIEg`).
+  PlanRows,
   /// Gap between the bars of the Orchester mark (`DIMZ6`); an operation's title to its meta
   /// line in the status bar popover (`tGNly`).
   Mark,
@@ -81,8 +83,9 @@ pub enum ExtraSpacing {
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 27] = [
+  const ALL: [Self; 28] = [
     Self::Hair,
+    Self::PlanRows,
     Self::Mark,
     Self::Tight,
     Self::Indicator,
@@ -114,6 +117,7 @@ impl ExtraSpacing {
   fn name(self) -> &'static str {
     match self {
       Self::Hair => "hair",
+      Self::PlanRows => "plan-rows",
       Self::Mark => "mark",
       Self::Tight => "tight",
       Self::Indicator => "indicator",
@@ -146,6 +150,7 @@ impl ExtraSpacing {
   fn value(self) -> f32 {
     match self {
       Self::Hair => SPACE_HAIR,
+      Self::PlanRows => super::tokens::PLAN_LIMIT_ROWS_GAP,
       Self::Mark => SPACE_MARK,
       Self::Tight => SPACE_TIGHT,
       Self::Indicator => SPACE_INDICATOR,

@@ -366,6 +366,7 @@ impl Component for ProjectShell {
       usage,
     });
     let bar = ProjectBar {
+      project_name: open.project.name().as_str().to_owned(),
       connections: feed.connections.get().0,
       repo_root: open.repo_root.clone(),
       runner: status.clone(),

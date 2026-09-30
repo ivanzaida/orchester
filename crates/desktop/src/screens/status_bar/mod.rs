@@ -50,6 +50,7 @@ const POPOVER_GAP: f32 = 9.0;
 /// The open project, when there is one.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectBar {
+  pub project_name: String,
   pub connections: Vec<orchester_core::connection::AgentConnection>,
   pub repo_root: PathBuf,
   pub runner: RunnerStatus,
@@ -113,6 +114,10 @@ impl Component for StatusBar {
     let hints = hint::Hints::new(&self.hint, &self.anchors);
     let readings = WindowFeed::of(ctx).limits.get().0;
     let limits = plan_limits::Props {
+      project_name: props
+        .project
+        .as_ref()
+        .map_or_else(String::new, |project| project.project_name.clone()),
       connections: props
         .project
         .as_ref()

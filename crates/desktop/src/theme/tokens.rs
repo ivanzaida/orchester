@@ -169,3 +169,6 @@ pub const DISABLED_OPACITY: f32 = 0.4;
 /// A switch whose value is fixed fades as one row, its label with it, to 45 % (`lW7Sp` in 04.B
 /// `W0Owo`).
 pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;
+
+/// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
+pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

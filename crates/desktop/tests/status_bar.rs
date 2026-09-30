@@ -70,6 +70,7 @@ fn project(needs_you: Option<usize>) -> StatusBarProps {
   );
   StatusBarProps {
     project: Some(ProjectBar {
+      project_name: "Kontur".into(),
       connections: Vec::new(),
       repo_root: PathBuf::from("kontur"),
       runner: runners.status(),
@@ -313,6 +314,10 @@ fn status_bar_plan_limits_unknown_signed_out_and_expired() {
   let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
   assert!(copy.contains("They appear after the next Codex turn in any open project."));
   assert!(copy.contains("not signed in on this computer"));
+  assert!(copy.contains("Codex Not read yet"));
+  assert!(copy.contains("Claude Code Not signed in"));
+  assert_eq!(copy.matches("Connection checked").count(), 1);
+  assert!(bounds(&mut tree, "status-plan-limits-claude-heading").height < 20.0);
   let (mut app, mut tree) = with_limits(
     1440,
     limits_readings(100.0, false, true),
@@ -331,6 +336,133 @@ fn status_bar_plan_limits_unknown_signed_out_and_expired() {
 fn status_bar_plan_limits_absent_without_connections() {
   let (_, mut tree) = with_limits(960, Default::default(), Vec::new());
   assert!(tree.get_element_by_id("status-plan-limits").is_none());
+}
+
+#[test]
+fn status_bar_plan_limits_unavailable_names_connection_and_project() {
+  use orchester_core::{
+    connection::{AgentProvider, CheckResult, ConnectionCheck},
+    time::Timestamp,
+  };
+  let mut connection = cli(AgentProvider::ClaudeCodeCli);
+  connection.record_check(ConnectionCheck {
+    at: Timestamp::now(),
+    result: CheckResult::CouldNotRun,
+  });
+  let (mut app, mut tree) = with_limits(1440, Default::default(), vec![connection]);
+  hover(&mut app, &mut tree, "status-plan-limits");
+  let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
+  assert!(copy.contains("Claude Code No working connection"));
+  assert!(copy.contains("Local agent · Kontur could not start Claude Code when it was checked at"));
+}
+
+#[test]
+fn status_bar_plan_limits_partial_claude_keeps_window_ages() {
+  use orchester_core::{
+    connection::{
+      AgentProvider,
+      plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
+    },
+    time::Timestamp,
+  };
+  let now = Timestamp::now();
+  let old = Timestamp::from_unix_millis(now.unix_millis() - 180_000);
+  let mut readings = PlanReadings::default();
+  for (minutes, percent, at) in [(10080, 42.0, old), (300, 12.0, now)] {
+    readings.observe(LimitReading {
+      provider: AgentProvider::ClaudeCodeCli,
+      at,
+      limits: PlanLimits {
+        windows: vec![LimitWindow::new(minutes, percent, None, LimitState::Normal, false).expect("window")],
+        plan: None,
+        credits: None,
+      },
+    });
+  }
+  let (mut app, mut tree) = with_limits(1440, readings, vec![cli(AgentProvider::ClaudeCodeCli)]);
+  hover(&mut app, &mut tree, "status-plan-limits");
+  let copy = item_texts(&mut tree, "status-plan-limits-hint");
+  assert!(
+    copy
+      .iter()
+      .any(|line| line.starts_with("5-hour · From the last Claude turn") && line.ends_with("Just now"))
+  );
+  assert!(
+    copy
+      .iter()
+      .any(|line| line.starts_with("Weekly · From the last Claude turn") && line.ends_with("3m ago"))
+  );
+}
+
+#[test]
+fn status_bar_plan_limits_headers_order_and_combined_account_rows() {
+  use orchester_core::{
+    connection::{
+      AgentProvider,
+      plan_limits::{Credits, LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
+    },
+    time::Timestamp,
+  };
+  let now = Timestamp::now();
+  let mut readings = PlanReadings::default();
+  readings.observe(LimitReading {
+    provider: AgentProvider::ClaudeCodeCli,
+    at: now,
+    limits: PlanLimits {
+      windows: vec![LimitWindow::new(10080, 96.0, None, LimitState::Near, false).expect("window")],
+      plan: None,
+      credits: None,
+    },
+  });
+  let (mut app, mut tree) = with_limits(1440, readings, vec![cli(AgentProvider::ClaudeCodeCli)]);
+  hover(&mut app, &mut tree, "status-plan-limits");
+  let copy = item_texts(&mut tree, "status-plan-limits-hint");
+  assert_eq!(
+    &copy[..5],
+    [
+      "Claude Code",
+      "Near the weekly limit",
+      "5-hour",
+      "Not reported yet",
+      "Weekly"
+    ]
+  );
+
+  let mut readings = PlanReadings::default();
+  for (provider, minutes, percent, extra, plan, credits) in [
+    (
+      AgentProvider::CodexCli,
+      10080,
+      38.0,
+      false,
+      Some("plus".to_owned()),
+      Some(Credits {
+        has_credits: true,
+        unlimited: false,
+        balance: Some("1,250".into()),
+      }),
+    ),
+    (AgentProvider::ClaudeCodeCli, 300, 100.0, true, None, None),
+  ] {
+    readings.observe(LimitReading {
+      provider,
+      at: now,
+      limits: PlanLimits {
+        windows: vec![LimitWindow::new(minutes, percent, None, LimitState::Normal, extra).expect("window")],
+        plan,
+        credits,
+      },
+    });
+  }
+  let (mut app, mut tree) = with_limits(1440, readings, AgentProvider::ALL.into_iter().map(cli).collect());
+  hover(&mut app, &mut tree, "status-plan-limits");
+  let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
+  assert!(copy.contains("Codex Plus plan"));
+  assert!(copy.contains("Credits 1,250 left"));
+  assert!(copy.contains("Extra usage In use: turns past the limit use it"));
+  assert!(!copy.contains("Near the"));
+  assert!(!copy.contains("Not reported yet"));
+  assert!(!copy.contains("limit reached"));
 }
 
 #[test]

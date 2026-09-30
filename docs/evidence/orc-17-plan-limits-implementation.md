@@ -1,7 +1,9 @@
 # ORC-17 implementation handoff · 2026-09-30
 
-Implementation is complete. Independent design verification belongs to the later Verify step;
-the implementer did not perform it or take app/design screenshots.
+The implementation has been revised after independent Review and Verify.
+The earlier Verify result is FAIL; its findings are not closed until independent
+re-verification passes. The implementer did not perform design verification or
+take app/design screenshots.
 
 ## Behavior
 
@@ -100,3 +102,47 @@ Its IPC round-trip tests alone did not establish delivery from ordinary Codex ex
 the current matching-session reader and worker integration cover that missing path.
 No entire checkpoint was cherry-picked or current functionality overwritten.
 Independent Check, Review and Verify remain required pipeline steps.
+
+## Recovery after independent Verify majors
+
+Preserved `.tmp/verify/verification.md`, all original design/app captures, fixture
+programs, and host-watcher evidence. Preserved the outside-run provider information
+above. No private app was launched, no watcher was altered, and no merge or commit
+was made by the implementer.
+
+Changes addressing the findings:
+
+- Window readings retain their individual arrival timestamps through aggregation
+  and serialization. Updating Claude's five-hour window preserves the weekly
+  window's old time. Mixed-age reports display a separate, window-labelled source
+  line for each window; one-report snapshots retain the designed single source line.
+- Known and unknown Claude windows render in the same duration-ordered sequence:
+  unknown five-hour precedes weekly. A five-hour-only Claude report and Codex
+  snapshots show their reported windows, matching the combined Q specimen.
+- Near/reached descriptions appear in the provider header. Extra usage keeps its
+  explanation row without an additional warning heading. Not read yet, Not signed
+  in and No working connection have explicit header labels.
+- Hints use Claude Code, localized Pro/Plus plan presentation, the six-pixel provider
+  row gap and the existing eight-pixel outer gap. Normal percentage text and blocking
+  reset text use the primary text role; the normal hover item keeps its bar surface.
+- The unavailable body names the actual connection and project and its check time.
+  Connection-check metadata is shown for signed-out entries, without an extra row
+  for not-read-yet entries. Credits/extra-usage labels and values use separate runs.
+- Hint dimensions moved into the theme; provider-row spacing has a named theme
+  role and regression coverage.
+
+Validation after these changes: `powershell -File tools/check.ps1` passed. All
+filtered commands listed above passed: core 5, runner 3, status bar 11, locale 4,
+key coverage 1, theme 1 (**25 total**). New regressions assert retained window times
+and their displayed ages, ordered unknown rows, explicit state headers, connection/
+project provenance, a single-row state header, and combined credits/extra usage.
+These headless assertions are not a replacement for independent design verification.
+No fresh macOS check/runtime, live authenticated provider smoke test, full suite,
+or app/design screenshot comparison was performed during this recovery.
+
+Next pipeline steps must independently repeat Check, Review and Verify. Verify
+must recapture M–R and close the reported majors, including partial Claude reports
+with distinct per-window ages. The exact combined credits/extra-usage specimen
+`b3WD6` remains visually unverified despite its headless regression. Foreground
+preservation remains unverified: root must supply the longer fresh host watcher
+before the verifier launches a private app; retain its final conclusive judgment.

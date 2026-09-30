@@ -102,13 +102,34 @@ fn plan_limits_fullest_percentage_is_separate_from_the_warning_window() {
 fn plan_limits_newest_across_projects_and_partial_claude_windows() {
   let mut readings = PlanReadings::default();
   assert!(readings.observe(parsed(AgentProvider::ClaudeCodeCli, CLAUDE, now())));
-  let later = Timestamp::from_unix_millis(now().unix_millis() + 1000);
+  let later = Timestamp::from_unix_millis(now().unix_millis() + 120_000);
   let five = json!({"type":"rate_limit_event", "rate_limit_info": {"status":"allowed", "rateLimitType":"five_hour", "utilization":0.12, "resetsAt":1790928000}});
   assert!(readings.observe(parsed(AgentProvider::ClaudeCodeCli, &five.to_string(), later)));
   assert!(!readings.observe(parsed(AgentProvider::ClaudeCodeCli, CLAUDE, now())));
   let reading = readings.get(AgentProvider::ClaudeCodeCli).expect("Claude");
   assert_eq!(reading.at, later);
   assert_eq!(reading.limits.windows.len(), 2);
+  let weekly = reading
+    .limits
+    .windows
+    .iter()
+    .find(|window| window.minutes() == 10080)
+    .expect("weekly");
+  let five = reading
+    .limits
+    .windows
+    .iter()
+    .find(|window| window.minutes() == 300)
+    .expect("five-hour");
+  assert_eq!(
+    weekly.reported_at(),
+    Some(now()),
+    "retained window keeps its report time"
+  );
+  assert_eq!(five.reported_at(), Some(later), "new window has its own time");
+  let round_trip: LimitReading =
+    serde_json::from_str(&serde_json::to_string(reading).expect("serialize")).expect("deserialize");
+  assert_eq!(&round_trip, reading, "window timestamps survive IPC serialization");
   assert_eq!(reading.fullest(now()).expect("fullest").percent(), 96.0);
   assert!(readings.observe(parsed(AgentProvider::CodexCli, CODEX, later)));
   assert_eq!(readings.get(AgentProvider::CodexCli).expect("Codex").at, later);

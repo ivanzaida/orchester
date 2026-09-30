@@ -1,5 +1,6 @@
 //! Plan limits (`XCXvw`, states M–R in `poPso`): one live account entry per CLI.
 mod detail;
+mod metadata;
 mod text;
 
 use std::time::Duration;
@@ -12,7 +13,7 @@ use lurq::{
   },
   components::{Column, Popup, Text},
   core::{ElementRef, Signal},
-  node::{CursorIcon, Element, HitTestBehavior, Style},
+  node::{CursorIcon, Element, HitTestBehavior},
 };
 use orchester_core::{
   connection::{
@@ -30,6 +31,7 @@ use crate::{theme::ExtraTypography, ui::icon::Icon};
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Props {
+  pub project_name: String,
   pub connections: Vec<AgentConnection>,
   pub readings: PlanReadings,
 }
@@ -73,7 +75,6 @@ impl Component for PlanLimits {
       .flex_shrink(0.0)
       .ref_element(self.anchor.clone())
       .cursor(CursorIcon::Default)
-      .hovered_style(Style::new().background(PaletteColor::AccentMuted))
       .on_mouse_enter(move || enter.set(true))
       .on_mouse_leave(move || leave.set(false))
       .child(glyph(
@@ -128,7 +129,7 @@ fn compact(ctx: &Ctx, entry: &Entry<'_>) -> Vec<Element> {
       .into(),
       value(
         &text::reset(ctx, entry.window().and_then(|window| window.resets()), entry.now, false),
-        PaletteColor::TextMuted,
+        PaletteColor::TextPrimary,
       ),
     ];
   }
@@ -155,6 +156,7 @@ fn compact(ctx: &Ctx, entry: &Entry<'_>) -> Vec<Element> {
 
 pub(super) struct Entry<'a> {
   provider: AgentProvider,
+  project_name: &'a str,
   connection: &'a AgentConnection,
   reading: Option<&'a LimitReading>,
   now: Timestamp,
@@ -198,6 +200,7 @@ fn entries(props: &Props, now: Timestamp) -> Vec<Entry<'_>> {
       });
       Some(Entry {
         provider,
+        project_name: &props.project_name,
         connection,
         reading,
         now,

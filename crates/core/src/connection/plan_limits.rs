@@ -22,6 +22,7 @@ pub struct LimitWindow {
   resets: Option<Timestamp>,
   state: LimitState,
   extra: bool,
+  at: Option<Timestamp>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -31,6 +32,8 @@ struct WindowData {
   resets: Option<Timestamp>,
   state: LimitState,
   extra: bool,
+  #[serde(default)]
+  at: Option<Timestamp>,
 }
 
 #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
@@ -40,14 +43,16 @@ pub struct InvalidWindow;
 impl TryFrom<WindowData> for LimitWindow {
   type Error = InvalidWindow;
   fn try_from(data: WindowData) -> Result<Self, Self::Error> {
-    Self::new(
+    let mut window = Self::new(
       data.minutes,
       f64::from(data.used) / 100.0,
       data.resets,
       data.state,
       data.extra,
     )
-    .ok_or(InvalidWindow)
+    .ok_or(InvalidWindow)?;
+    window.at = data.at;
+    Ok(window)
   }
 }
 
@@ -59,6 +64,7 @@ impl From<LimitWindow> for WindowData {
       resets: window.resets,
       state: window.state,
       extra: window.extra,
+      at: window.at,
     }
   }
 }
@@ -74,6 +80,7 @@ impl LimitWindow {
       resets,
       state,
       extra,
+      at: None,
     })
   }
   pub const fn minutes(&self) -> u64 {
@@ -87,6 +94,10 @@ impl LimitWindow {
   }
   pub const fn extra(&self) -> bool {
     self.extra
+  }
+  /// Arrival time of this window, preserved when another Claude window updates.
+  pub const fn reported_at(&self) -> Option<Timestamp> {
+    self.at
   }
   pub fn expired(&self, now: Timestamp) -> bool {
     self.resets.is_some_and(|at| at <= now)
@@ -139,6 +150,9 @@ impl PlanReadings {
     self.0.iter().find(|reading| reading.provider == provider)
   }
   pub fn observe(&mut self, mut reading: LimitReading) -> bool {
+    for window in &mut reading.limits.windows {
+      window.at = Some(reading.at);
+    }
     let Some(old) = self.0.iter_mut().find(|old| old.provider == reading.provider) else {
       self.0.push(reading);
       return true;

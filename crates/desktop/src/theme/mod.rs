@@ -8,6 +8,8 @@ mod form;
 mod markdown;
 mod metrics;
 mod palette;
+mod plan_limits;
+pub use plan_limits::{PLAN_HAIRLINE, PLAN_HINT_WIDTH, PLAN_METER_HEIGHT, PLAN_METER_WIDTH, PLAN_WINDOW_LABEL};
 mod shadow;
 mod tokens;
 mod typography;

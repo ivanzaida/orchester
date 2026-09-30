@@ -11,6 +11,21 @@ pub fn name(ctx: &Ctx, provider: AgentProvider) -> Arc<str> {
   })
 }
 
+pub fn hint_name(ctx: &Ctx, provider: AgentProvider) -> Arc<str> {
+  match provider {
+    AgentProvider::CodexCli => name(ctx, provider),
+    AgentProvider::ClaudeCodeCli => ctx.t("statusBar.planLimits.claudeFull"),
+  }
+}
+
+pub fn plan(ctx: &Ctx, plan: &str) -> Arc<str> {
+  match plan {
+    "pro" => ctx.t("statusBar.planLimits.planPro"),
+    "plus" => ctx.t("statusBar.planLimits.planPlus"),
+    plan => ctx.t_args("statusBar.planLimits.planOther", [("plan", plan)]),
+  }
+}
+
 pub fn percent(ctx: &Ctx, percent: f64) -> Arc<str> {
   ctx.t_args(
     "statusBar.planLimits.percent",
