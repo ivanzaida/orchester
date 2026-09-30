@@ -8,13 +8,14 @@ use std::time::Duration;
 
 use orchester_core::{
   connection::{
-    AgentProvider,
-    stream::{AgentEvent, CommandStatus, FileChangeKind, InvocationOutcome, OutputStream},
+    AgentConnection, AgentProvider,
+    invocation::result_schema,
+    stream::{AgentEvent, CommandStatus, FileChangeKind, InvocationOutcome, OutputStream, RunnerProblem},
   },
   id::{IdempotencyKey, RunId},
-  resource::StepKey,
+  resource::{ModelId, StepKey},
   run::{PauseReason, RaisedLimits, RunLimit, RunStatus, StepFailure, StepStatus},
-  store::ActivityStore,
+  store::{ActivityStore, ConnectionStore, ConversationStore},
   tokens::{TokenBudget, TokensUsed},
 };
 use orchester_store::ProjectDb;
@@ -57,14 +58,18 @@ async fn claude_runs_a_step_and_commits_its_changes() {
 
   let db = ProjectDb::open(root).expect("open");
   let argv = reported(&db, id, "argv: ").pop().expect("argv reported");
+  let schema = result_schema();
   assert!(
-    argv.starts_with(
+    argv.starts_with(&format!(
       "-p --output-format stream-json --verbose --model haiku --effort low --strict-mcp-config --setting-sources  \
-       --disable-slash-commands --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash --permission-mode \
-       acceptEdits --disallowedTools WebFetch WebSearch --allowedTools Bash(git:*) --session-id "
-    ),
+       --disable-slash-commands --json-schema {schema} --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash \
+       --permission-mode acceptEdits --disallowedTools Bash(mkdir:*) Bash(touch:*) Bash(rm:*) Bash(rmdir:*) \
+       Bash(mv:*) Bash(cp:*) Bash(sed:*) WebFetch WebSearch --allowedTools Bash(git:*) --session-id "
+    )),
     "{argv}"
   );
+  // The schema reaches the CLI as one argument, exactly.
+  assert_eq!(reported(&db, id, "json-schema: "), [schema]);
   let environment = reported(&db, id, "env: ").pop().expect("environment reported");
   assert!(
     environment.split(',').all(|name| !name.starts_with("CARGO")
@@ -102,6 +107,95 @@ async fn claude_runs_a_step_and_commits_its_changes() {
   // The final message is the step result; its summary is the step's output.
   let outputs = db.step_outputs(id).expect("outputs");
   assert_eq!(outputs[0].text, "Finished Implement");
+}
+
+async fn finished(brief: &'static str) -> (TestProject, orchester_core::run::Run) {
+  let project = claude(brief);
+  let root = project.repo.path();
+  let (scheduler, mut events_in) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let run = wait_for(root, &mut events_in, id, |run| {
+    run.status().is_terminal() || run.waits_for_a_person()
+  })
+  .await;
+  (project, run)
+}
+
+fn implement(run: &orchester_core::run::Run) -> (StepStatus, Option<StepFailure>) {
+  let execution = run
+    .latest_execution(&StepKey::new("implement").expect("key"))
+    .expect("the step ran");
+  (execution.status(), execution.failure())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_structured_output_question_asks_the_person() {
+  let (project, run) = finished("Answer with structured output.").await;
+  assert!(run.waits_for_a_person(), "{:?}", run.status());
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  let conversation = db.messages(project.task).expect("messages");
+  let execution = db.invocations(run.id()).expect("invocations")[0].execution;
+  let question = orchester_core::conversation::latest_question(&conversation, execution).expect("a question");
+  assert_eq!(question.body().as_str(), "Which database should I use?");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_result_after_prose_fails_the_step_it_reports_failed() {
+  let (project, run) = finished("Answer in prose, then JSON.").await;
+  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert_eq!(implement(&run), (StepStatus::Failed, Some(StepFailure::ReportedFailed)));
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  assert_eq!(db.step_outputs(run.id()).expect("outputs")[0].text, "The build breaks.");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_prose_without_a_result_never_passes_the_step() {
+  let (project, run) = finished("Answer without JSON.").await;
+  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert_eq!(implement(&run), (StepStatus::Failed, Some(StepFailure::AgentFailed)));
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  assert!(matches!(
+    &db.invocations(run.id()).expect("invocations")[0].outcome,
+    Some(InvocationOutcome::TurnFailed { message }) if message.contains("without the step result")
+  ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_refused_model_names_the_version_it_needs_and_the_connection_keeps_it() {
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    model: Some("claude-opus-5-5"),
+    ..Setup::new("Refuse the model.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events_in) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let run = wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
+  assert_eq!(implement(&run), (StepStatus::Failed, Some(StepFailure::AgentFailed)));
+  let db = ProjectDb::open(root).expect("open");
+  assert!(events(&db, id).contains(&AgentEvent::RunnerProblem {
+    problem: RunnerProblem::CliTooOld {
+      model: "claude-opus-5-5".to_owned(),
+      installed: "2.1.89".to_owned(),
+      required: "2.1.280".to_owned(),
+    }
+  }));
+  let connection = AgentConnection::try_from(db.connections().expect("connections").remove(0)).expect("agent");
+  let opus = ModelId::new("claude-opus-5-5").expect("model");
+  assert_eq!(connection.model_requirements().required(&opus), Some("2.1.280"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_allowed_commands_keep_accept_edits_from_running_others() {
+  let (project, run) = finished("Remove the build.").await;
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  assert_eq!(reported(&db, run.id(), "permission: "), ["toolu_rm deny-by-rule"]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -197,6 +291,52 @@ async fn claude_stopped_at_a_limit_resumes_its_session_once_raised() {
   assert_eq!(argv.len(), 2);
   assert!(argv[1].ends_with(&format!("--resume {session}")), "{}", argv[1]);
   assert!(!argv[1].contains("--session-id"), "{}", argv[1]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_runs_the_profiles_full_model_id_in_new_and_resumed_sessions() {
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    model: Some("claude-opus-5-5"),
+    budget: 5_000,
+    ..Setup::new("Work in turns.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events_in) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events_in, id, |run| {
+    matches!(run.status(), RunStatus::Paused(_))
+  })
+  .await;
+  scheduler
+    .raise_limit(
+      id,
+      RaisedLimits {
+        budget: TokenBudget::new(2_000_000).expect("above zero"),
+        max_duration: Duration::from_secs(30 * 60),
+      },
+    )
+    .await
+    .expect("the run continues");
+  let done = wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
+  assert_eq!(done.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  let argv = reported(&db, id, "argv: ");
+  assert_eq!(argv.len(), 2);
+  for (argv, session) in argv.iter().zip(["--session-id", "--resume"]) {
+    assert!(argv.contains(" --model claude-opus-5-5 --effort low "), "{argv}");
+    assert!(argv.contains(session), "{argv}");
+  }
+  let models: Vec<String> = db
+    .invocations(id)
+    .expect("invocations")
+    .iter()
+    .map(|invocation| invocation.model().expect("an agent invocation").as_str().to_owned())
+    .collect();
+  assert_eq!(models, ["claude-opus-5-5", "claude-opus-5-5"]);
 }
 
 #[tokio::test(flavor = "multi_thread")]

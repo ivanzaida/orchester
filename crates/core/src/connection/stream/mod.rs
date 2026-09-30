@@ -167,6 +167,16 @@ pub enum RunnerProblem {
   StepBudgetReached { budget: u64 },
   /// A command tool's `program` is no file on the `PATH` or in the worktree; it was not started.
   ProgramNotFound { program: String },
+  /// Claude Code's permission prompt never reached the runner, so no action could be approved:
+  /// every call it asked about was denied as unavailable.
+  PermissionPromptUnreachable,
+  /// The provider's API refused `model` to the CLI's version `installed`: it needs `required` or
+  /// newer.
+  CliTooOld {
+    model: String,
+    installed: String,
+    required: String,
+  },
   /// The codebase index of the run's base revision could not be built; the agent works without it.
   CodebaseIndexUnavailable { detail: String },
   /// ripgrep was found neither on the agent's `PATH` nor with an agent CLI; `fallback` says how the

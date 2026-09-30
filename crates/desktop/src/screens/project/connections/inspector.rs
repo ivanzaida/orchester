@@ -18,13 +18,14 @@ use lurq::{
 use orchester_core::{
   connection::{AgentConnection, CatalogModel, CatalogSource, ConnectionStatus},
   id::ResourceId,
+  resource::ModelId,
   time::Timestamp,
 };
 use orchester_exec::launch::Launch;
 
 use super::{
   launch::launch_properties,
-  status::{CHECKING, status_detail_key, status_label, vendor_key},
+  status::{CHECKING, cli_too_old, status_detail_key, status_label, vendor_key},
 };
 use crate::{
   connections::data::ProfileUse,
@@ -182,10 +183,17 @@ fn models(ctx: &Ctx, connection: &AgentConnection) -> Element {
   let source = match catalog.source() {
     CatalogSource::Provider => "connections.modelSource.provider",
     CatalogSource::DocumentedAliases => "connections.modelSource.aliases",
+    CatalogSource::ProviderAndCurrentIds => "connections.modelSource.providerAndCurrentIds",
   };
+  let too_old = connection
+    .model_requirements()
+    .iter()
+    .filter_map(|(model, _)| ModelId::new(model).ok())
+    .filter_map(|model| cli_too_old(ctx, connection, &model));
   column
     .child(model_chips(ctx, connection.models()))
     .child(Text::new(&ctx.t(source)).variant(ExtraTypography::InspectorNote.role()))
+    .with_children(too_old.collect::<Vec<Element>>())
     .into()
 }
 

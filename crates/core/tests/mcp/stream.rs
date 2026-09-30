@@ -67,7 +67,11 @@ fn mcp_claude_signed_in_allow_rule_permits_the_probe_call() {
     AgentEvent::Message { text } if text.contains("M1_TOOL_OK")
   )));
   let done = stream.parse(OutputStream::Stdout, lines.next().expect("successful turn line"));
-  assert!(done.is_empty(), "the result repeats the already parsed model answer");
+  // The probe asked for no step result, so its answer ends the turn without one.
+  assert!(
+    matches!(done.as_slice(), [AgentEvent::TurnFailed { .. }]),
+    "the result repeats the already parsed model answer: {done:?}"
+  );
   assert!(lines.next().is_none());
 }
 

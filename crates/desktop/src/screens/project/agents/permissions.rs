@@ -89,16 +89,14 @@ impl ProfileEditor {
       ctx.t("agents.permissions.toolApprovals"),
       enabled,
     );
-    let control = if provider == Some(AgentProvider::CodexCli) || enabled {
+    // Both CLIs route approvals to Orchester; only a profile without a connection cannot choose.
+    let control = if provider.is_some() || enabled {
       let permissions = self.permissions.clone();
       switch.render(move || permissions.update(|permissions| permissions.set_interactive_tool_approvals(!enabled)))
     } else {
       switch.locked()
     };
-    let mut content = Column::new().spacing(SpacingSize::Sm).child(control);
-    if provider != Some(AgentProvider::CodexCli) {
-      content = content.child(hint(ctx, "agents.permissions.toolApprovalUnavailable"));
-    }
+    let content = Column::new().spacing(SpacingSize::Sm).child(control);
     setting(ctx, "agents.permissions.toolApprovalsHeading", content.into())
   }
 

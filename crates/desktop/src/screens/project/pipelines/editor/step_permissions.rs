@@ -17,7 +17,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{AgentProvider, invocation::Platform},
+  connection::invocation::Platform,
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess, StepCommands,
     StepNetwork, StepPermissions,
@@ -248,14 +248,14 @@ fn network_row(
     .into()
 }
 
-/// Opts this Codex step into one-call decisions for tools that ask the host for approval.
+/// Opts this step into one-call decisions for tools that ask the host for approval.
 fn tool_approvals_row(ctx: &Ctx, choice: &ProfileChoice, narrowing: &StepPermissions, edit: &StepEdit) -> Element {
   let label = ctx.t("pipelines.inspector.permissions.interactiveToolApprovals");
   let required = choice.permissions.interactive_tool_approvals();
   let enabled = required || narrowing.interactive_tool_approvals;
   let edit = edit.clone();
   let switch = Switch::new("step-tool-approvals", label.clone(), enabled).hide_label();
-  let switch = if required || choice.provider != Some(AgentProvider::CodexCli) {
+  let switch = if required || choice.provider.is_none() {
     switch.locked()
   } else {
     switch.render(move || {

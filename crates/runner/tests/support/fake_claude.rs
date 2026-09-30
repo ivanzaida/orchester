@@ -12,6 +12,20 @@
 //! - "Keep working": starts a message and waits until it is ended;
 //! - "Ask first": appends `draft` to `README.md` and ends with the step result `{"outcome":"question","summary":"Keep
 //!   email sign-in?"}` (a new session only: a resumed one works as below);
+//! - "Ask before publishing": wants to run `pnpm publish --dry-run` through Bash and asks its permission prompt
+//!   (`fake_permission_prompt`); approved, it appends `approved` to `README.md` and asks about the same call once more;
+//!   then works as below. "Ask before writing docs" does the same for the `write` tool of the `docs` MCP server, with
+//!   the secret `docs-token-value-7f3a` in the file path, and "Try an edit outside" for a `Write` outside the worktree.
+//!   Each decision is reported on standard error as `permission: <call> <behavior>` (`again` for the repeated call);
+//! - "Answer with structured output": writes prose and ends with the result's `structured_output` asking
+//!   `{"outcome":"question","summary":"Which database should I use?"}`, as the CLI does when given `--json-schema`;
+//!   "Answer in prose, then JSON" ends with prose followed by `{"outcome":"failed","summary":"The build breaks."}` and
+//!   no `structured_output`; "Answer without JSON" ends with prose only;
+//! - "Refuse the model": answers as Claude Code 2.1.89 did when the API refused Opus 5.5 to it ("version 2.1.280 or
+//!   newer is required") and exits with 1;
+//! - "Knock first" (with "Ask before publishing"): first connects to the prompt's runner end with a wrong token, and
+//!   after the decision once more with the right one, reporting `knock: ` and `second: ` (`answered` or `closed`);
+//!   "Leave while waiting" sends its call, then ends the prompt server once `fake-release` exists and waits;
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
@@ -23,8 +37,9 @@
 //! continued session at work with it), it appends `continued` to `README.md` and ends the same way. A new
 //! session takes its id from `--session-id`.
 //!
-//! On standard error it reports its arguments, the names of its environment variables and its `PATH`, the prompt (its
-//! first line, then each line), its process id and its MCP configuration (`fake_mcp`), like `orchester-fake-codex`.
+//! On standard error it reports its arguments, the `--json-schema` value on its own line (`json-schema: `), the names
+//! of its environment variables and its `PATH`, the prompt (its first line, then each line), its process id and its MCP
+//! configuration (`fake_mcp`), like `orchester-fake-codex`.
 
 #![allow(
   clippy::print_stdout,
@@ -33,7 +48,7 @@
 )]
 
 use std::{
-  fs::OpenOptions,
+  fs::{self, OpenOptions},
   io::{Read, Write},
   path::Path,
   process::ExitCode,
@@ -41,8 +56,12 @@ use std::{
   time::Duration,
 };
 
+#[path = "fake_claude_rules.rs"]
+mod fake_claude_rules;
 #[path = "fake_mcp.rs"]
 mod fake_mcp;
+#[path = "fake_permission_prompt.rs"]
+mod fake_permission_prompt;
 
 const NOT_SIGNED_IN: &str = include_str!("../../../core/tests/fixtures/claude/not-signed-in-clean-env.jsonl");
 /// Counted: 12 + 9,700 (cache writes) + 27 = 9,739; the 2,432 cache reads do not count.
@@ -78,6 +97,7 @@ fn main() -> ExitCode {
   };
   let fake = Fake {
     session,
+    prompt: prompt.clone(),
     handoff: prompt.contains("Leave a handoff"),
   };
   let servers = if fake_mcp::report_claude(&args) {
@@ -95,8 +115,7 @@ fn main() -> ExitCode {
     .unwrap_or("the step")
     .to_owned();
   if resumed.is_some() {
-    wait_while_held(&worktree);
-    return fake.finish(&worktree, "continued", &step);
+    return fake.resume(&worktree, &args, &step);
   }
   if prompt.contains("Keep working") {
     fake.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
@@ -114,20 +133,20 @@ fn main() -> ExitCode {
     fake.message("msg_more", r#"{"type":"text","text":"Going on."}"#, NO_USAGE);
     wait_to_be_ended();
   }
+  if prompt.contains("Refuse the model") {
+    return fake.refuse_the_model();
+  }
+  if let Some((text, structured)) = answer(&prompt) {
+    return fake.answer(&text, structured);
+  }
+  if let Some(ask) = Ask::of(&prompt) {
+    return fake.ask_prompt(&worktree, &args, &ask, &step);
+  }
   if prompt.contains("Wait for release") {
     fake.wait_for_release(&worktree, &prompt);
   }
   if prompt.contains("Ask for the web") {
-    fake.assistant(
-      "msg_web",
-      r#"{"type":"tool_use","id":"toolu_web","name":"Bash","input":{"command":"curl https://example.com"}}"#,
-    );
-    fake.tool_result(
-      "toolu_web",
-      "Claude requested permissions to use Bash, but you haven't granted it yet.",
-      true,
-    );
-    return fake.finish_with(&worktree, "hello", &step, DENIAL);
+    return fake.ask_for_the_web(&worktree, &step);
   }
   fake.finish(&worktree, "hello", &step)
 }
@@ -144,6 +163,13 @@ fn read_prompt(args: &[String]) -> Option<String> {
     return None;
   }
   eprintln!("argv: {}", args.join(" "));
+  if let Some(schema) = args
+    .iter()
+    .position(|arg| arg == "--json-schema")
+    .and_then(|at| args.get(at + 1))
+  {
+    eprintln!("json-schema: {schema}");
+  }
   eprintln!("env: {}", names.join(","));
   eprintln!(
     "path: {}",
@@ -157,11 +183,73 @@ fn read_prompt(args: &[String]) -> Option<String> {
   Some(prompt)
 }
 
+/// The final text and `structured_output` of an "Answer …" prompt.
+fn answer(prompt: &str) -> Option<(String, Option<serde_json::Value>)> {
+  if prompt.contains("Answer with structured output") {
+    let question = serde_json::json!({"outcome": "question", "summary": "Which database should I use?"});
+    return Some(("I need a decision before I go on.".to_owned(), Some(question)));
+  }
+  if prompt.contains("Answer in prose, then JSON") {
+    let text = "I found a problem.\n\n{\"outcome\":\"failed\",\"summary\":\"The build breaks.\"}";
+    return Some((text.to_owned(), None));
+  }
+  prompt
+    .contains("Answer without JSON")
+    .then(|| ("Everything looks fine to me.".to_owned(), None))
+}
+
+/// A tool call the fake asks its permission prompt about.
+struct Ask {
+  call: String,
+  tool: String,
+  input: serde_json::Value,
+}
+
+impl Ask {
+  fn of(prompt: &str) -> Option<Self> {
+    let (call, tool, input) = if prompt.contains("Ask before publishing") {
+      (
+        "toolu_publish",
+        "Bash",
+        serde_json::json!({"command": "pnpm publish --dry-run", "description": "Publish a dry run"}),
+      )
+    } else if prompt.contains("Ask before writing docs") {
+      (
+        "toolu_docs",
+        "mcp__docs__write",
+        serde_json::json!({"filePath": "docs/docs-token-value-7f3a.md", "text": "notes"}),
+      )
+    } else if prompt.contains("Make a folder") {
+      (
+        "toolu_mkdir",
+        "Bash",
+        serde_json::json!({"command": "mkdir build-output"}),
+      )
+    } else if prompt.contains("Remove the build") {
+      ("toolu_rm", "Bash", serde_json::json!({"command": "rm -rf build"}))
+    } else if prompt.contains("Try an edit outside") {
+      (
+        "toolu_outside",
+        "Write",
+        serde_json::json!({"file_path": "/elsewhere/notes.md", "content": "x"}),
+      )
+    } else {
+      return None;
+    };
+    Some(Self {
+      call: call.to_owned(),
+      tool: tool.to_owned(),
+      input,
+    })
+  }
+}
+
 const DENIAL: &str =
   r#"[{"tool_name":"Bash","tool_use_id":"toolu_web","tool_input":{"command":"curl https://example.com"}}]"#;
 
 struct Fake {
   session: String,
+  prompt: String,
   /// Its step result hands off.
   handoff: bool,
 }
@@ -207,6 +295,157 @@ impl Fake {
       self.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
       wait_to_be_ended();
     }
+  }
+
+  /// "Ask for the web": `curl`, which the permissions deny, then the usual work.
+  fn ask_for_the_web(&self, worktree: &Path, step: &str) -> ExitCode {
+    self.assistant(
+      "msg_web",
+      r#"{"type":"tool_use","id":"toolu_web","name":"Bash","input":{"command":"curl https://example.com"}}"#,
+    );
+    self.tool_result(
+      "toolu_web",
+      "Claude requested permissions to use Bash, but you haven't granted it yet.",
+      true,
+    );
+    self.finish_with(worktree, "hello", step, DENIAL)
+  }
+
+  /// The API's refusal of the model to an old CLI, as 2.1.89 printed it.
+  fn refuse_the_model(&self) -> ExitCode {
+    let refusal = "API Error: 400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Claude \
+                   Code 2.1.89 does not support this model; version 2.1.280 or newer is required. Run 'claude update', \
+                   or update the Claude desktop app, then try again.\"}}";
+    let message = serde_json::json!({
+      "type": "assistant", "error": "invalid_request", "session_id": self.session,
+      "message": {"id": "msg_refused", "role": "assistant", "type": "message",
+        "content": [{"type": "text", "text": refusal}], "usage": {"input_tokens": 0, "output_tokens": 0}},
+    });
+    println!("{message}");
+    let result = serde_json::json!({
+      "type": "result", "subtype": "success", "is_error": true, "result": refusal, "session_id": self.session,
+      "usage": {"input_tokens": 0, "output_tokens": 0}, "permission_denials": [],
+    });
+    println!("{result}");
+    ExitCode::from(1)
+  }
+
+  /// Ends with the message `text` and, when given, the result's `structured_output`.
+  fn answer(&self, text: &str, structured: Option<serde_json::Value>) -> ExitCode {
+    self.assistant(
+      "msg_answer",
+      &serde_json::json!({"type": "text", "text": text}).to_string(),
+    );
+    let mut result = serde_json::json!({
+      "type": "result", "subtype": "success", "is_error": false, "num_turns": 1, "result": text,
+      "session_id": self.session, "usage": {"input_tokens": 0, "output_tokens": 0}, "permission_denials": [],
+    });
+    if let Some(structured) = structured {
+      result["structured_output"] = structured;
+    }
+    println!("{result}");
+    ExitCode::SUCCESS
+  }
+
+  /// Asks the permission prompt about `ask`, carries it out when approved, then finishes.
+  fn ask_prompt(&self, worktree: &Path, args: &[String], ask: &Ask, step: &str) -> ExitCode {
+    let block = serde_json::json!({"type": "tool_use", "id": ask.call, "name": ask.tool, "input": ask.input});
+    self.assistant("msg_ask", &block.to_string());
+    let command = ask.input.get("command").and_then(serde_json::Value::as_str);
+    let rule = command.map_or(fake_claude_rules::Decision::Ask, |command| {
+      fake_claude_rules::bash(args, command)
+    });
+    if rule != fake_claude_rules::Decision::Ask {
+      eprintln!("permission: {} {}", &ask.call, rule.as_str());
+      let ran = rule != fake_claude_rules::Decision::DeniedByRule;
+      if ran && append(worktree, "ran").is_err() {
+        eprintln!("cannot write README.md");
+      }
+      self.tool_result(&ask.call, if ran { "ok" } else { "Denied by a rule." }, !ran);
+      return self.finish(worktree, "hello", step);
+    }
+    let knocks = self.prompt.contains("Knock first");
+    if knocks {
+      eprintln!("knock: {}", fake_permission_prompt::knock(args, Some("not-the-token")));
+    }
+    let Some(mut prompt) = fake_permission_prompt::Prompt::open(args) else {
+      eprintln!("no permission prompt");
+      return ExitCode::from(2);
+    };
+    if self.prompt.contains("Leave while waiting") {
+      prompt.leave_while_waiting(&ask.tool, &ask.input, &ask.call, &released(worktree));
+      wait_to_be_ended();
+    }
+    // As the real CLI's transcript would, the session keeps the call without a result while it
+    // waits: a runner that ends the CLI now leaves it unanswered for `--resume`.
+    let pending = pending_call(worktree, &self.session);
+    let kept = serde_json::json!({"call": ask.call, "tool": ask.tool, "input": ask.input});
+    if let Err(error) = fs::write(&pending, kept.to_string()) {
+      eprintln!("cannot keep the pending call: {error}");
+    }
+    let decision = prompt
+      .ask(&ask.tool, &ask.input, &ask.call)
+      .unwrap_or_else(|| "none".to_owned());
+    if fs::remove_file(&pending).is_err() {
+      eprintln!("the pending call was not kept");
+    }
+    eprintln!("permission: {} {decision}", &ask.call);
+    if decision == "allow" {
+      if let Err(error) = append(worktree, "approved") {
+        eprintln!("cannot write README.md: {error}");
+        return ExitCode::from(2);
+      }
+      self.tool_result(&ask.call, "ok", false);
+      let again = prompt
+        .ask(&ask.tool, &ask.input, &ask.call)
+        .unwrap_or_else(|| "none".to_owned());
+      eprintln!("permission again: {} {again}", &ask.call);
+      if knocks {
+        eprintln!("second: {}", fake_permission_prompt::knock(args, None));
+      }
+    } else {
+      self.tool_result(&ask.call, "Denied in Orchester.", true);
+    }
+    flush();
+    self.finish(worktree, "hello", step)
+  }
+
+  /// A continued session: it takes up a call it was ended while waiting on, else appends
+  /// `continued` once the test no longer holds it.
+  fn resume(&self, worktree: &Path, args: &[String], step: &str) -> ExitCode {
+    if let Some(interrupted) = self.interrupted_call(worktree) {
+      return self.resume_interrupted(worktree, args, interrupted, step);
+    }
+    wait_while_held(worktree);
+    self.finish(worktree, "continued", step)
+  }
+
+  /// The call the session was waiting on when the CLI was ended, if any.
+  fn interrupted_call(&self, worktree: &Path) -> Option<Ask> {
+    let pending = pending_call(worktree, &self.session);
+    let kept: serde_json::Value = serde_json::from_slice(&fs::read(&pending).ok()?).ok()?;
+    if fs::remove_file(&pending).is_err() {
+      eprintln!("cannot forget the interrupted call");
+    }
+    Some(Ask {
+      call: kept["call"].as_str()?.to_owned(),
+      tool: kept["tool"].as_str()?.to_owned(),
+      input: kept["input"].clone(),
+    })
+  }
+
+  /// `--resume` of a session whose last call has no result: Claude Code 2.1.284 gives that call the
+  /// result "[Tool call interrupted: the session ended before this call's result was recorded, so its
+  /// outcome is unknown. …]" (`Z0` in its binary), so the model sees it neither granted nor refused.
+  /// The fake then asks for the same action again, in a new call.
+  fn resume_interrupted(&self, worktree: &Path, args: &[String], interrupted: Ask, step: &str) -> ExitCode {
+    self.tool_result(&interrupted.call, INTERRUPTED, true);
+    eprintln!("resumed: {} interrupted", interrupted.call);
+    let again = Ask {
+      call: format!("{}_again", interrupted.call),
+      ..interrupted
+    };
+    self.ask_prompt(worktree, args, &again, step)
   }
 
   /// "Ask first": a draft, then a question as the step result.
@@ -272,6 +511,27 @@ fn append(worktree: &Path, line: &str) -> std::io::Result<()> {
     .append(true)
     .open(worktree.join("README.md"))
     .and_then(|mut readme| writeln!(readme, "{line}"))
+}
+
+/// What Claude Code 2.1.284 records for a call the ended session never answered.
+const INTERRUPTED: &str = "[Tool call interrupted: the session ended before this call's result was recorded, so its \
+                           outcome is unknown. Check whether it took effect before relying on it or running it again.]";
+
+/// Where the fake keeps the call its session `session` waits on, next to the worktrees.
+fn pending_call(worktree: &Path, session: &str) -> std::path::PathBuf {
+  worktree
+    .parent()
+    .and_then(Path::parent)
+    .map_or_else(|| worktree.to_path_buf(), Path::to_path_buf)
+    .join(format!("fake-pending-{session}.json"))
+}
+
+/// `fake-release` next to the worktrees, which a test creates to let the fake go on.
+fn released(worktree: &Path) -> std::path::PathBuf {
+  worktree.parent().and_then(Path::parent).map_or_else(
+    || worktree.join("fake-release"),
+    |orchester| orchester.join("fake-release"),
+  )
 }
 
 /// Waits while the test holds continued sessions with `fake-hold` next to the worktrees.

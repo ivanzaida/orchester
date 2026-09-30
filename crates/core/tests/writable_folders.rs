@@ -344,6 +344,7 @@ fn claude_args(permissions: &AgentPermissions, session: ClaudeSession<'_>, roots
     mcp: None,
     skills: None,
     code_index: None,
+    approvals: None,
   }
   .args()
   .into_iter()

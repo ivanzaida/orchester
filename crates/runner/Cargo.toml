@@ -125,6 +125,14 @@ name = "failed_recovery"
 required-features = ["test-agent"]
 
 [[test]]
+name = "claude_approvals"
+required-features = ["test-agent"]
+
+[[test]]
+name = "claude_prompt_relay"
+required-features = ["test-agent"]
+
+[[test]]
 name = "codebase_index"
 required-features = ["test-agent"]
 

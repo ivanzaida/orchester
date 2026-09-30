@@ -152,3 +152,22 @@ fn process_shim_gets_the_graphql_query_on_standard_input() {
   assert!(body.contains("repository(owner:$owner,name:$name)"), "{body}");
   assert!(body.contains("\"owner\":\"ivanzaida\""), "{body}");
 }
+
+/// Claude Code's `--json-schema` value: JSON on one line, full of quotes and braces.
+const SCHEMA: &str = r#"{"type":"object","properties":{"outcome":{"enum":["done","failed"]}},"required":["outcome"]}"#;
+
+#[test]
+fn process_shim_json_arguments_reach_a_node_launcher_and_never_cmd() {
+  let folder = tempfile::tempdir().expect("temporary directory");
+  let args = ["--json-schema".to_owned(), SCHEMA.to_owned()];
+  // npm's launcher starts Node.js directly, which gets the argument as the OS passes it.
+  let shim = installed_codex(folder.path(), true);
+  assert_eq!(launch::resolve(&shim).check_args(&args), Ok(()));
+  // Any other script would hand it to cmd.exe, which changes it: refused before it starts.
+  let script = folder.path().join("claude.cmd");
+  fs::write(&script, ECHO_SCRIPT).expect("script");
+  assert_eq!(
+    RUNNER.run(&Command::new(&script, args.iter().map(String::as_str))),
+    Err(CommandError::UnsafeScriptArgument { position: 1 })
+  );
+}

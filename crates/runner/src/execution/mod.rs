@@ -109,6 +109,9 @@ struct Inner {
   notifier: Notifier,
   /// Where the values of the secrets MCP servers use are read from when an agent starts.
   vault: Arc<dyn SecretVault>,
+  /// The runner's own program, which Claude Code starts as its permission prompt; `None` when it
+  /// cannot be found, which keeps steps that ask a person on Claude Code from starting.
+  relay: Option<PathBuf>,
   board: Arc<Board>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
   /// Serializes requests that start a task or change a run while its task may end. A fallback
@@ -117,11 +120,12 @@ struct Inner {
 }
 
 impl Scheduler {
-  pub fn new(project_root: &Path, notifier: Notifier, vault: Arc<dyn SecretVault>) -> Self {
+  pub fn new(project_root: &Path, notifier: Notifier, vault: Arc<dyn SecretVault>, relay: Option<PathBuf>) -> Self {
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
         vault,
+        relay,
         board: Arc::new(Board::new(notifier.clone())),
         notifier,
         active: Mutex::new(HashMap::new()),
@@ -470,6 +474,7 @@ impl Scheduler {
       root: self.inner.project_root.clone(),
       notifier: self.inner.notifier.clone(),
       vault: self.inner.vault.clone(),
+      relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
       controls,
       settled: settled.clone(),

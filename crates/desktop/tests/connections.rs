@@ -274,3 +274,26 @@ fn connections_know_what_their_launcher_scripts_start() {
   assert_eq!(via(launched), Some(Via::NodeScript { script }));
   assert_eq!(via(direct), Some(Via::Direct));
 }
+
+#[test]
+fn editing_or_checking_a_connection_keeps_the_versions_its_models_need() {
+  let (repo, mut db) = project_db();
+  let id = save(&mut db, draft(&repo, "Claude", signed_out()), now()).expect("saved");
+  let mut stored =
+    orchester_core::connection::AgentConnection::try_from(db.connection(id).expect("read").expect("exists"))
+      .expect("an agent connection");
+  let opus = ModelId::new("claude-opus-5-5").expect("valid model");
+  stored.record_model_requirement(&opus, "2.1.280");
+  db.save_connection(&stored).expect("recorded");
+  let mut edit = draft(&repo, "Claude · new", signed_out());
+  edit.id = Some(id);
+  save(&mut db, edit, now()).expect("edited");
+  let edited = orchester_core::connection::AgentConnection::try_from(db.connection(id).expect("read").expect("exists"))
+    .expect("an agent connection");
+  assert_eq!(edited.model_requirements().required(&opus), Some("2.1.280"));
+  assert_eq!(
+    edited.cannot_run(&opus).map(|too_old| too_old.required),
+    Some("2.1.280".to_owned()),
+    "2.1.89 is too old"
+  );
+}

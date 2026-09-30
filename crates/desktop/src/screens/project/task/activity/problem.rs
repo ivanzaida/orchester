@@ -46,6 +46,15 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
       ),
       None,
     ),
+    RunnerProblem::PermissionPromptUnreachable => (
+      ctx.t("runs.activity.problem.promptUnreachable"),
+      Some(ctx.t("runs.activity.problem.promptUnreachableDetail")),
+    ),
+    RunnerProblem::CliTooOld {
+      model,
+      installed,
+      required,
+    } => cli_too_old(ctx, model, installed, required),
     RunnerProblem::ProgramNotFound { program } => (
       ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
       Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
@@ -76,18 +85,30 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
       ctx.t("runs.activity.problem.memoryScanFailed"),
       Some(detail.as_str().into()),
     ),
-    RunnerProblem::MemoryUnreadable { records } => {
-      let key = if *records == 1 {
-        "runs.activity.problem.memoryUnreadable.one"
-      } else {
-        "runs.activity.problem.memoryUnreadable.other"
-      };
-      (
-        ctx.t_args(key, [("count", records.to_string().as_str())]),
-        Some(ctx.t("runs.activity.problem.memoryUnreadableDetail")),
-      )
-    }
+    RunnerProblem::MemoryUnreadable { records } => memory_unreadable(ctx, *records),
   }
+}
+
+/// A model the provider's API refused to the installed CLI, and the version it needs.
+fn cli_too_old(ctx: &Ctx, model: &str, installed: &str, required: &str) -> (Arc<str>, Option<Arc<str>>) {
+  let title = ctx.t_args(
+    "runs.activity.problem.cliTooOld",
+    [("model", model), ("installed", installed), ("required", required)],
+  );
+  (title, Some(ctx.t("runs.activity.problem.cliTooOldDetail")))
+}
+
+/// Memory records that could not be read back.
+fn memory_unreadable(ctx: &Ctx, records: u64) -> (Arc<str>, Option<Arc<str>>) {
+  let key = if records == 1 {
+    "runs.activity.problem.memoryUnreadable.one"
+  } else {
+    "runs.activity.problem.memoryUnreadable.other"
+  };
+  (
+    ctx.t_args(key, [("count", records.to_string().as_str())]),
+    Some(ctx.t("runs.activity.problem.memoryUnreadableDetail")),
+  )
 }
 
 /// Why a step's handoff was not kept as task memory, naming a secret but never its value.

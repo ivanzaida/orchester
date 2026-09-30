@@ -7,8 +7,8 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{
     AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionError, ConnectionStatus, ModelSupport,
-    SignIn, check, executable_candidates, parse_claude_auth_status, parse_codex_catalog, parse_codex_login_status,
-    parse_version,
+    SignIn, check, executable_candidates, parse_claude_auth_status, parse_claude_models, parse_codex_catalog,
+    parse_codex_login_status, parse_version,
   },
   id::ConnectionId,
   name::Name,
@@ -71,6 +71,14 @@ impl CommandRunner for Replay {
       "a check runs the CLI with the agent environment only"
     );
     let key = command.args().join(" ");
+    if key == CLAUDE_MODELS {
+      assert!(
+        command
+          .stdin()
+          .is_some_and(|input| input.contains(r#""subtype":"initialize""#)),
+        "the model list is asked for on standard input"
+      );
+    }
     self
       .0
       .get(&key)
@@ -176,24 +184,133 @@ fn check_codex_reads_version_sign_in_and_catalog() {
   assert_eq!(catalog.models().len(), 2);
 }
 
-#[test]
-fn check_claude_uses_documented_aliases() {
+/// The arguments of the model list request (`claude_catalog`), as the replay keys them.
+const CLAUDE_MODELS: &str = "-p --input-format stream-json --output-format stream-json --verbose --strict-mcp-config \
+                             --setting-sources  --disable-slash-commands --no-session-persistence --tools ";
+/// The answer of Claude Code 2.1.89 to the `initialize` control request, trimmed to its models.
+const CLAUDE_INITIALIZE: &str = include_str!("fixtures/claude/initialize-models-2.1.89.jsonl");
+/// The same of Claude Code 2.1.284, which lists full ids of older models and knows `xhigh`.
+const CLAUDE_INITIALIZE_284: &str = include_str!("fixtures/claude/initialize-models-2.1.284.jsonl");
+
+fn claude_catalog(
+  models: Result<CommandOutput, CommandError>,
+) -> (ConnectionStatus, orchester_core::connection::ModelCatalog) {
   let runner = Replay::new([
     ("--version", Ok(ok("2.1.89 (Claude Code)\n"))),
     ("auth status --json", Ok(failed(r#"{"loggedIn": false}"#, ""))),
+    (CLAUDE_MODELS, models),
   ]);
   let mut connection = connection(AgentProvider::ClaudeCodeCli);
   connection.record_check(check(AgentProvider::ClaudeCodeCli, &executable(), &runner, &[], now()));
-  assert_eq!(connection.status(), ConnectionStatus::SignInRequired);
-  let catalog = connection.catalog().expect("a successful check has a catalog");
+  let catalog = connection.catalog().expect("a successful check has a catalog").clone();
+  (connection.status(), catalog)
+}
+
+fn ids(catalog: &orchester_core::connection::ModelCatalog) -> Vec<&str> {
+  catalog.models().iter().map(|model| model.id().as_str()).collect()
+}
+
+#[test]
+fn check_claude_lists_current_ids_then_the_cli_models() {
+  let (status, catalog) = claude_catalog(Ok(ok(CLAUDE_INITIALIZE)));
+  assert_eq!(status, ConnectionStatus::SignInRequired);
+  assert_eq!(catalog.source(), CatalogSource::ProviderAndCurrentIds);
+  assert_eq!(
+    ids(&catalog),
+    [
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-fable-5-1",
+      "claude-haiku-4-5-20251001",
+      "sonnet",
+      "sonnet[1m]",
+      "haiku",
+      "opus"
+    ]
+  );
+  let efforts = |id: &str| {
+    catalog
+      .model(&ModelId::new(id).expect("valid model id"))
+      .expect("listed")
+      .efforts()
+      .to_vec()
+  };
+  assert_eq!(efforts("claude-opus-5-5"), ["low", "medium", "high", "max"]);
+  assert!(efforts("claude-haiku-4-5-20251001").is_empty());
+  assert_eq!(efforts("sonnet"), ["low", "medium", "high"]);
+  assert!(efforts("haiku").is_empty());
+}
+
+#[test]
+fn check_claude_offers_the_efforts_a_newer_cli_accepts() {
+  let (_, catalog) = claude_catalog(Ok(ok(CLAUDE_INITIALIZE_284)));
+  assert_eq!(catalog.source(), CatalogSource::ProviderAndCurrentIds);
+  assert_eq!(
+    &ids(&catalog)[..7],
+    [
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-fable-5-1",
+      "claude-haiku-4-5-20251001",
+      "opus",
+      "sonnet",
+      "haiku"
+    ]
+  );
+  assert_eq!(ids(&catalog).iter().filter(|id| **id == "claude-fable-5-1").count(), 1);
+  assert!(!ids(&catalog).contains(&"default"));
+  let opus = catalog
+    .model(&ModelId::new("claude-opus-5-5").expect("valid model id"))
+    .expect("listed");
+  assert_eq!(opus.efforts(), ["low", "medium", "high", "xhigh", "max"]);
+}
+
+#[test]
+fn check_claude_without_a_model_list_keeps_current_ids_and_documented_aliases() {
+  let (_, catalog) = claude_catalog(Err(CommandError::TimedOut));
   assert_eq!(catalog.source(), CatalogSource::DocumentedAliases);
-  let ids: Vec<&str> = connection.models().iter().map(|model| model.id().as_str()).collect();
-  assert_eq!(ids, ["opus", "sonnet"]);
+  assert_eq!(
+    ids(&catalog),
+    [
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-fable-5-1",
+      "claude-haiku-4-5-20251001",
+      "opus",
+      "sonnet"
+    ]
+  );
   let custom = ModelId::new("claude-sonnet-4-6").expect("valid model id");
   assert_eq!(catalog.support(&custom), ModelSupport::NotVerified);
   assert_eq!(
     catalog.support(&ModelId::new("opus").expect("valid model id")),
     ModelSupport::Listed
+  );
+  let opus = catalog
+    .model(&ModelId::new("claude-opus-5-5").expect("valid model id"))
+    .expect("listed");
+  assert_eq!(
+    opus.efforts(),
+    ["low", "medium", "high", "max"],
+    "only what any CLI accepts"
+  );
+}
+
+#[test]
+fn claude_model_list_leaves_out_default_and_keeps_the_clis_efforts() {
+  let listed = parse_claude_models(CLAUDE_INITIALIZE).expect("an initialize answer");
+  let ids: Vec<&str> = listed.iter().map(|model| model.id().as_str()).collect();
+  assert_eq!(ids, ["sonnet", "sonnet[1m]", "haiku"]);
+  let other =
+    r#"{"type":"control_response","response":{"subtype":"success","request_id":"other","response":{"models":[]}}}"#;
+  assert_eq!(parse_claude_models(other), None);
+  let error =
+    r#"{"type":"control_response","response":{"subtype":"error","request_id":"orchester-models","error":"no"}}"#;
+  assert_eq!(parse_claude_models(error), None);
+  let xhigh = r#"{"type":"control_response","response":{"subtype":"success","request_id":"orchester-models","response":{"models":[{"value":"x","supportsEffort":true,"supportedEffortLevels":["high","xhigh"]}]}}}"#;
+  assert_eq!(
+    parse_claude_models(xhigh).expect("models")[0].efforts(),
+    ["high", "xhigh"]
   );
 }
 

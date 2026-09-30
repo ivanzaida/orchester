@@ -5,11 +5,12 @@
 //! message is not such a result (a continued session, which is started without the schema, or a
 //! CLI that ignored it), the CLI's exit decides and the message itself is the output.
 //!
-//! Claude Code runs without a schema; its prompt asks for the same result as its final message,
-//! which is read the same way. A final message counts only when it is a single JSON object whose
-//! `outcome` and `summary` are valid — those two are read strictly — so free text is never taken
-//! for a question; a question written as prose is read as the step's output. Fields the schema
-//! does not name are tolerated.
+//! Claude Code gets the same schema (`--json-schema`) and reports the result apart from its text
+//! (`structured_output`). When it does not, its final message is searched with
+//! [`StepResult::at_end`]: the result must close the message, so free text is never taken for a
+//! question. A Claude Code turn that ends with no result at all fails
+//! (`crate::connection::stream::ClaudeStream`). A result's `outcome` and `summary` are read
+//! strictly; fields the schema does not name are tolerated.
 //!
 //! A result may also carry a handoff for the agents after it (what it completed, its decisions, the
 //! questions it left open and what the next agent should know), read leniently and kept by the
@@ -78,7 +79,7 @@ pub enum StepOutcome {
 /// or `null` list is empty, a single string is one item, items that are not strings or are blank are
 /// dropped, and fields the schema does not name are ignored. The schema lists the handoff fields as
 /// required but nullable, since Codex's structured output requires every property.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StepResult {
   pub outcome: StepOutcome,
   pub summary: String,
@@ -119,7 +120,39 @@ impl StepResult {
   pub fn parse(message: &str) -> Option<Self> {
     serde_json::from_str(message.trim()).ok()
   }
+
+  /// The result that closes `message`: the whole message, else a fenced code block that ends it,
+  /// else a JSON object that starts a line and runs to the end. Anything else after it, or an
+  /// object without a valid `outcome` and `summary`, is no result.
+  pub fn at_end(message: &str) -> Option<Self> {
+    let message = message.trim_end();
+    Self::parse(message)
+      .or_else(|| Self::fenced_at_end(message))
+      .or_else(|| Self::object_at_end(message))
+  }
+
+  fn fenced_at_end(message: &str) -> Option<Self> {
+    let body = message.strip_suffix(FENCE)?;
+    let (_, block) = body.rsplit_once(FENCE)?;
+    // The opening fence's line may name the language (`json`).
+    let (language, json) = block.split_once('\n')?;
+    if !language.trim().chars().all(|c| c.is_ascii_alphanumeric()) {
+      return None;
+    }
+    Self::parse(json)
+  }
+
+  fn object_at_end(message: &str) -> Option<Self> {
+    message
+      .match_indices('\n')
+      .map(|(newline, _)| &message[newline + 1..])
+      .filter(|line| line.trim_start().starts_with('{'))
+      .find_map(Self::parse)
+  }
 }
+
+/// A Markdown code fence.
+const FENCE: &str = "```";
 
 /// What one step execution produced: the summary of its structured result, else its final message.
 #[derive(Clone, Debug, PartialEq, Eq)]

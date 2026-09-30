@@ -146,7 +146,7 @@ fn permissions_capability_table() {
   let claude = [
     (O::ReadOnly, enforced(M::ClaudeEditToolsRemoved)),
     (O::EditWorktree, enforced(M::ClaudeAcceptEdits)),
-    (O::AskBeforeCommands, no(Unavailable::NeedsPermissionRequests)),
+    (O::AskBeforeCommands, enforced(M::ClaudePermissionPrompt)),
     (O::AllowedCommands, enforced(M::ClaudeAllowedTools)),
     (O::AnyCommand, no(Unavailable::CannotConfineCommands)),
     (O::NetworkOff, no(Unavailable::CannotBlockNetwork)),

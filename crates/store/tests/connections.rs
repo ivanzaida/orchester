@@ -229,3 +229,28 @@ fn damaged_github_host_is_reported() {
     })
   ));
 }
+
+#[test]
+fn connection_round_trip_keeps_the_model_requirements_a_refusal_recorded() {
+  let (repo, mut db) = project_repo();
+  let mut claude = connection(&repo, "Claude", AgentProvider::ClaudeCodeCli);
+  db.create_connection(&claude).expect("create");
+  let settings = || -> String {
+    Sqlite::open(repo.path().join(".orchester").join("orchester.db"))
+      .expect("open the database")
+      .query_row("SELECT settings FROM connections", [], |row| row.get(0))
+      .expect("settings")
+  };
+  assert!(
+    !settings().contains("model_requirements"),
+    "left out while none is recorded"
+  );
+  let opus = ModelId::new("claude-opus-5-5").expect("valid model");
+  claude.record_model_requirement(&opus, "2.1.280");
+  db.save_connection(&claude).expect("save");
+  let reopened = ProjectDb::open(repo.path()).expect("reopen");
+  let stored = AgentConnection::try_from(reopened.connection(claude.id()).expect("read").expect("exists"))
+    .expect("an agent connection");
+  assert_eq!(stored.model_requirements().required(&opus), Some("2.1.280"));
+  assert!(settings().contains(r#""model_requirements":{"claude-opus-5-5":"2.1.280"}"#));
+}

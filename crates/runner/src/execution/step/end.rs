@@ -117,6 +117,7 @@ impl RunTask {
       finished.final_message.as_deref(),
       Timestamp::now(),
     );
+    self.note_cli_too_old(execution, active, &finished.outcome)?;
     let failure = if !finished.outcome.is_success() {
       Some(StepFailure::AgentFailed)
     } else if output.outcome == Some(StepOutcome::Failed) {

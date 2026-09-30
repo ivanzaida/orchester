@@ -787,6 +787,10 @@
         "stepBudgetReached": "The step used its budget of {{budget}} tokens and was stopped",
         "programNotFound": "{{program}} was not found",
         "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool.",
+        "promptUnreachable": "Orchester approvals were unavailable to Claude Code",
+        "promptUnreachableDetail": "Its permission prompt never reached the runner, so every action it asked about was denied without asking you. Nothing was approved.",
+        "cliTooOld": "Claude Code {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
+        "cliTooOldDetail": "The model’s provider refused this CLI version. Update Claude Code, or point the connection at a newer one, then check the connection again.",
         "codebaseIndexUnavailable": "The codebase index is unavailable; the agent works without it",
         "ripgrepNotFound": "ripgrep was not found",
         "ripgrepUnavailable": "ripgrep could not be given to the agent",
@@ -981,8 +985,11 @@
       "notAwaited": "This tool action no longer waits for a decision.",
       "commandTitle": "Approve command?",
       "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationClaude": "{{agent}} requests this command in {{cwd}}. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "command": "Command",
       "cwd": "Working directory",
+      "note": "Agent’s note",
+      "arguments": "Arguments",
       "scope": "One requested action only; no session or permanent grant"
     },
     "ready": {
@@ -1557,7 +1564,8 @@
     "noConnectionChosen": "Choose the connection this role runs on.",
     "explain": {
       "provider": "{{connection}} lists these models itself.",
-      "aliases": "{{connection}} cannot list its models; these are the aliases its CLI help documents.",
+      "aliases": "{{connection}} did not list its models; these are the current model ids and the aliases its CLI help documents.",
+      "providerAndCurrentIds": "These are the current model ids, then the models {{connection}} lists itself.",
       "custom": "This model id is not verified: {{connection}} decides whether it accepts it when an agent starts.",
       "notChecked": "{{connection}} has not been checked yet, so its models are unknown. Check it on the Connections screen."
     },
@@ -1611,7 +1619,7 @@
         },
         "askBefore": {
           "title": "Ask before running commands",
-          "detail": "Codex commands requiring approval wait for your decision. Approve only the requested action or deny it."
+          "detail": "Commands requiring approval wait for your decision. Approve only the requested action or deny it."
         },
         "allowed": {
           "title": "Allowed commands",
@@ -1626,8 +1634,8 @@
       "toolApprovals": "Ask before MCP actions that require approval",
       "toolApprovalsHeading": "MCP approvals",
       "toolApprovalsDisabled": "MCP approval requests are denied",
-      "toolApprovalUnavailable": "Interactive MCP approvals require a Codex App Server connection.",
       "transport": "Codex App Server uses your normal account and inherited global MCP servers, plus project-selected servers.",
+      "claudeTransport": "Claude Code asks Orchester through its permission prompt tool. Only the project-selected MCP servers load.",
       "commandPlaceholder": "e.g. pnpm test",
       "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
       "noCommands": "No command is allowed yet.",
@@ -1700,7 +1708,6 @@
       },
       "unavailable": {
         "cannotLimitCommands": "Unavailable on this connection: {{cli}} can’t limit commands to a list.",
-        "needsPermissionRequests": "{{cli}} does not support interactive approvals through Orchester.",
         "cannotConfineCommands": "Unavailable on this connection: {{cli}} can’t confine commands to the worktree.",
         "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so."
       },
@@ -1730,6 +1737,8 @@
           "codexCallsHow": "-a never · unverified",
           "claudeCalls": "Only their tools are allowed",
           "claudeCallsHow": "--allowedTools mcp__* · unverified",
+          "claudeCallsAsk": "Each tool call waits for your decision",
+          "claudeCallsAskHow": "--permission-prompt-tool · one call each",
           "outside": "Servers work outside these limits",
           "outsideHow": "own processes · network on",
           "noneLoad": "No MCP servers load",
@@ -1754,6 +1763,7 @@
         "codexNetworkOn": "sandbox · network access on",
         "codexWritableRoots": "sandbox · writable roots",
         "claudeEditToolsRemoved": "edit tools removed · listed cmds run",
+        "claudeEditToolsRemovedNoCommands": "edit tools removed · no commands",
         "claudeAcceptEdits": "permission mode · accept edits",
         "claudeAllowedTools": {
           "one": "allowed tools · 1 prefix rule",
@@ -1761,7 +1771,10 @@
         },
         "claudeWebTools": "web tools allowed",
         "claudeWebToolsRemoved": "web tools removed · commands keep network",
-        "claudeAddDir": "--add-dir for edit tools · commands not confined"
+        "claudeAddDir": "--add-dir for edit tools · commands not confined",
+        "claudePermissionPrompt": "--permission-prompt-tool · asks each command",
+        "claudeNoCommandsReadOnly": "read-only · no commands",
+        "claudeNoCommandsReadOnlyDetail": "Claude Code would run an approved command outside any sandbox, so a read-only step gets none."
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",
@@ -1928,6 +1941,12 @@
       "description": "{{vendor}} · {{program}} {{version}}",
       "descriptionUnchecked": "{{vendor}} · {{program}}"
     },
+    "cliTooOld": {
+      "claude": "Claude Code",
+      "codex": "Codex CLI",
+      "heading": "{{cli}} {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
+      "detail": "A run found this when the model’s provider refused the CLI. Update the CLI, then check the connection again."
+    },
     "provider": {
       "codex": "Codex CLI",
       "claude": "Claude Code CLI",
@@ -1975,7 +1994,8 @@
     "noModelsListed": "The CLI listed no models. Profiles can still enter a model id, marked as not verified.",
     "modelSource": {
       "provider": "Listed by the model catalog bundled with the CLI.",
-      "aliases": "The CLI cannot list its models; these aliases are documented in its help."
+      "aliases": "The CLI did not list its models; these are the current model ids and the aliases its help documents.",
+      "providerAndCurrentIds": "The current model ids, then the models the CLI lists."
     },
     "refreshModels": "Refresh models",
     "usedBy": "Used by",

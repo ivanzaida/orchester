@@ -240,11 +240,15 @@ async fn mcp_servers_reach_claude_code_in_a_private_file_removed_after_the_run()
     serde_json::from_str(&reported(&db, run.id(), "mcp-config: ")[0]).expect("the file is JSON");
   let servers = &config["mcpServers"];
   assert_eq!(servers["files"]["command"], TEST_COMMAND);
-  assert_eq!(servers["files"]["env"]["DOCS_TOKEN"], TOKEN);
+  // The fake CLI printed the file; the run's activity keeps every secret value out, so a value
+  // shows as redacted exactly where the secret was written.
+  assert_eq!(servers["files"]["env"]["DOCS_TOKEN"], "<redacted>");
   assert_eq!(servers["files"]["env"]["LOG_LEVEL"], "debug");
-  assert_eq!(
-    servers["knowledge"]["headers"]["Authorization"],
-    format!("Bearer {BEARER}")
+  assert_eq!(servers["knowledge"]["headers"]["Authorization"], "Bearer <redacted>");
+  let activity = format!("{:?}", db.activity(run.id(), 0).expect("activity"));
+  assert!(
+    !activity.contains(TOKEN) && !activity.contains(BEARER),
+    "no secret in the activity"
   );
   assert!(servers.get("docs").is_none() && servers.get("off").is_none());
   let mut expected = expected_left_out();

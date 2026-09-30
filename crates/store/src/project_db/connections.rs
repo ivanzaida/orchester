@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use orchester_core::{
   connection::{
     AgentProvider, CheckResult, Connection, ConnectionCheck, ConnectionKind, GitHubCheck, GitHubCheckResult,
-    GitHubHost, LastCheck,
+    GitHubHost, LastCheck, ModelRequirements,
   },
   id::ConnectionId,
   name::Name,
@@ -34,6 +34,9 @@ const CHECK_SCHEMA: u32 = 1;
 #[derive(Serialize, Deserialize)]
 struct ProviderSettings {
   executable: String,
+  /// Absent before model requirements were recorded, and while none is.
+  #[serde(default, skip_serializing_if = "ModelRequirements::is_empty")]
+  model_requirements: ModelRequirements,
 }
 
 /// Settings of a GitHub connection.
@@ -134,7 +137,14 @@ impl Columns {
       ConnectionKind::Agent(provider) => (
         AGENT_PROVIDER,
         provider_text(*provider),
-        encode_json("connection settings", SETTINGS_SCHEMA, &ProviderSettings { executable })?,
+        encode_json(
+          "connection settings",
+          SETTINGS_SCHEMA,
+          &ProviderSettings {
+            executable,
+            model_requirements: connection.model_requirements().clone(),
+          },
+        )?,
       ),
       ConnectionKind::GitHub { host } => {
         let settings = GitHubSettings {
@@ -199,9 +209,9 @@ impl StoredRow {
   }
 
   fn into_connection(self) -> Result<Connection, StoreError> {
-    let (kind, executable, last_check) = match self.kind.as_str() {
+    let ((kind, executable, last_check), requirements) = match self.kind.as_str() {
       AGENT_PROVIDER => self.agent_parts()?,
-      GITHUB => self.github_parts()?,
+      GITHUB => (self.github_parts()?, ModelRequirements::default()),
       other => return Err(corrupt("connection kind", other)),
     };
     Connection::from_stored(
@@ -212,16 +222,17 @@ impl StoredRow {
       last_check,
       Timestamp::from_unix_millis(self.created_at),
     )
+    .map(|connection| connection.with_model_requirements(requirements))
     .map_err(|error| corrupt("connection", error))
   }
 
-  fn agent_parts(&self) -> Result<Parts, StoreError> {
+  fn agent_parts(&self) -> Result<(Parts, ModelRequirements), StoreError> {
     let settings: ProviderSettings = decode_json("connection settings", SETTINGS_SCHEMA, &self.settings)?;
     let last_check = self
       .check::<CheckResult>()?
       .map(|(at, result)| LastCheck::Agent(ConnectionCheck { at, result }));
     let kind = ConnectionKind::Agent(parse_provider(&self.provider)?);
-    Ok((kind, settings.executable, last_check))
+    Ok(((kind, settings.executable, last_check), settings.model_requirements))
   }
 
   fn github_parts(&self) -> Result<Parts, StoreError> {

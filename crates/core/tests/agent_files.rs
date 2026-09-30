@@ -112,6 +112,7 @@ fn claude<'a>(
     mcp: None,
     skills,
     code_index: None,
+    approvals: None,
   }
 }
 

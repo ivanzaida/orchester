@@ -266,23 +266,24 @@ fn tool_approvals(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &A
     ctx.t("agents.permissions.toolApprovals"),
     enabled,
   );
-  let control = if !required && (provider == Some(AgentProvider::CodexCli) || enabled) {
+  let control = if !required && (provider.is_some() || enabled) {
     let edit = edit.clone();
     switch.render(move || edit.change(|draft| draft.set_interactive_tool_approvals(!enabled)))
   } else {
     switch.locked()
   };
   let mut controls = vec![control];
-  if provider != Some(AgentProvider::CodexCli) {
+  let transport = match provider {
+    Some(AgentProvider::CodexCli) => Some("agents.permissions.transport"),
+    Some(AgentProvider::ClaudeCodeCli) => Some("agents.permissions.claudeTransport"),
+    None => None,
+  };
+  if let Some(transport) = transport.filter(|_| enabled || *draft.commands() == CommandPermission::AskBefore) {
     controls.push(
-      Text::new(&ctx.t("agents.permissions.toolApprovalUnavailable"))
-        .variant(TypographyStyle::Description)
-        .into(),
-    );
-  } else if enabled || *draft.commands() == CommandPermission::AskBefore {
-    controls.push(
-      Text::new(&ctx.t("agents.permissions.transport"))
-        .variant(TypographyStyle::Description)
+      // The same hint as the unavailable reasons above it (`W29Od2`).
+      Text::new(&ctx.t(transport))
+        .variant(ExtraTypography::Hint.role())
+        .color(PaletteColor::TextMuted)
         .into(),
     );
   }

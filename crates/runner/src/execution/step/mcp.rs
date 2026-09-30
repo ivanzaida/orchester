@@ -14,6 +14,7 @@ use std::{
 };
 
 use orchester_core::{
+  command::SecretVariable,
   connection::{
     AgentProvider,
     invocation::{ClaudeMcpConfig, CodexMcp, LaunchValue, McpLaunch, Platform},
@@ -38,7 +39,25 @@ type LeftOut = (String, McpServerProblem);
 pub(in super::super) enum McpSetup {
   Codex(CodexMcp),
   /// The configuration file, and the servers in it; `None` when no server is left.
-  Claude(Option<(PrivateFile, Vec<McpServerName>)>),
+  Claude(Option<ClaudeServers>),
+}
+
+impl McpSetup {
+  /// The secret values Claude Code's servers take, which its activity must not show; Codex's
+  /// App Server redacts its own.
+  pub(in super::super) fn claude_secrets(&self) -> Vec<SecretVariable> {
+    match self {
+      Self::Claude(Some(servers)) => servers.secrets.clone(),
+      Self::Claude(None) | Self::Codex(_) => Vec::new(),
+    }
+  }
+}
+
+/// The MCP configuration file of a Claude Code invocation, the servers in it and their secret values.
+pub(in super::super) struct ClaudeServers {
+  pub(in super::super) file: PrivateFile,
+  pub(in super::super) servers: Vec<McpServerName>,
+  pub(in super::super) secrets: Vec<SecretVariable>,
 }
 
 /// The servers of one invocation, and an event for each one left out.
@@ -69,7 +88,11 @@ impl RunTask {
         let file = config
           .map(|config| {
             PrivateFile::write(self.project.id(), &format!("{invocation}.json"), config.contents())
-              .map(|file| (file, config.servers().to_vec()))
+              .map(|file| ClaudeServers {
+                file,
+                servers: config.servers().to_vec(),
+                secrets: config.secrets().to_vec(),
+              })
               .map_err(|error| RunnerProblem::CouldNotStart {
                 detail: format!("cannot write the MCP server configuration: {error}"),
               })

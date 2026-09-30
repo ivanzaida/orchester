@@ -6,7 +6,7 @@ use orchester_core::{
   },
   permission::{
     AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess, StepPermissions,
-    capability::{Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Unavailable},
+    capability::{Mechanism, PermissionSetting},
   },
 };
 use serde_json::{Value, json};
@@ -113,30 +113,40 @@ fn command_approvals_legacy_permissions_and_mcp_policy_round_trip() {
 }
 
 #[test]
-fn permissions_asking_before_commands_requires_codex_on_both_platforms() {
+fn permissions_asking_before_commands_route_to_each_clis_approval_on_both_platforms() {
   for provider in AgentProvider::ALL {
     for platform in [Platform::Windows, Platform::MacOs] {
-      let ask = AgentPermissions::new(
+      let mut ask = AgentPermissions::new(
         RepositoryAccess::ReadOnly,
         CommandPermission::AskBefore,
         NetworkAccess::On,
       );
-      if provider == AgentProvider::CodexCli {
-        assert_eq!(
-          ask
-            .enforced_on(provider, platform)
-            .expect("supported")
-            .mechanism(PermissionSetting::Commands),
-          Mechanism::CodexCommandApprovals
-        );
-        continue;
-      }
+      ask.set_interactive_tool_approvals(true);
+      // Claude Code would run an approved command unsandboxed, so a read-only step gets none.
+      let expected = match provider {
+        AgentProvider::CodexCli => Mechanism::CodexCommandApprovals,
+        AgentProvider::ClaudeCodeCli => Mechanism::ClaudeNoCommandsReadOnly,
+      };
       assert_eq!(
-        ask.enforced_on(provider, platform),
-        Err(PermissionProblem::NotEnforceable {
-          option: PermissionOption::AskBeforeCommands,
-          reason: Unavailable::NeedsPermissionRequests,
-        })
+        ask
+          .enforced_on(provider, platform)
+          .expect("supported")
+          .mechanism(PermissionSetting::Commands),
+        expected
+      );
+      if provider == AgentProvider::ClaudeCodeCli {
+        let enforced = ask.enforced_on(provider, platform).expect("supported");
+        assert_eq!(
+          *enforced.permissions().commands(),
+          CommandPermission::Allowed(orchester_core::permission::AllowedCommands::default()),
+          "the launch permissions say no command runs"
+        );
+      }
+      ask.set_repository(RepositoryAccess::Write);
+      let writing = ask.enforced_on(provider, platform).expect("supported");
+      assert_ne!(
+        writing.mechanism(PermissionSetting::Commands),
+        Mechanism::ClaudeNoCommandsReadOnly
       );
     }
   }

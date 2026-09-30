@@ -24,7 +24,7 @@ use orchester_core::{
 
 use super::editor::ProfileEditor;
 use crate::{
-  agents::permissions::{mechanism, option_title, setting_label},
+  agents::permissions::{mechanism, mechanism_detail, option_title, setting_label},
   screens::project::connections::status::program_key,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::icon::{Icon, IconSize, icon},
@@ -158,6 +158,7 @@ fn setting_rows(
     .into_iter()
     .map(|(setting, name)| {
       let how = mechanism(ctx, enforced.mechanism(setting), enforced.permissions());
+      let detail = mechanism_detail(ctx, enforced.mechanism(setting));
       let (glyph, title) = if setting == PermissionSetting::Network && network_stays_on {
         (Icon::Lock, ctx.t("agents.permissions.enforcement.staysOn"))
       } else {
@@ -166,7 +167,7 @@ fn setting_rows(
           ctx.t_args("agents.permissions.enforcement.enforced", [("setting", &*name)]),
         )
       };
-      row(glyph, &title, &how)
+      row_with_detail(glyph, &title, &how, detail.as_deref())
     })
     .collect();
   // Extra writable folders, after repository access as on the tab, when the agent gets any.
@@ -196,6 +197,11 @@ fn not_enforceable(ctx: &Ctx, problem: &PermissionProblem) -> Element {
 
 /// A setting and how it is enforced (`S9nIp1`): the text over the mechanism in mono.
 pub(super) fn row(glyph: Icon, title: &str, how: &str) -> Element {
+  row_with_detail(glyph, title, how, None)
+}
+
+/// [`row`] with a line under the mechanism saying why it limits more than was chosen.
+fn row_with_detail(glyph: Icon, title: &str, how: &str, detail: Option<&str>) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Inline.role())
@@ -206,7 +212,8 @@ pub(super) fn row(glyph: Icon, title: &str, how: &str) -> Element {
         .flex(1.0)
         .spacing(SpacingSize::Xs)
         .child(Text::new(title).variant(ExtraTypography::EnforcementSetting.role()))
-        .child(Text::new(how).variant(ExtraTypography::EnforcementMechanism.role())),
+        .child(Text::new(how).variant(ExtraTypography::EnforcementMechanism.role()))
+        .with_children(detail.map(|detail| Text::new(detail).variant(ExtraTypography::Detail.role()))),
     )
     .into()
 }

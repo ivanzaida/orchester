@@ -236,6 +236,8 @@ impl CodexMcp {
 pub struct ClaudeMcpConfig {
   contents: Zeroizing<String>,
   servers: Vec<McpServerName>,
+  /// The secret values in the file, by the variable or header they fill.
+  secrets: Vec<SecretVariable>,
 }
 
 impl ClaudeMcpConfig {
@@ -276,6 +278,11 @@ impl ClaudeMcpConfig {
     let config = Self {
       contents: Zeroizing::new(contents),
       servers: kept.iter().map(|server| server.name.clone()).collect(),
+      secrets: kept
+        .iter()
+        .flat_map(|server| server.secret_variables())
+        .map(|(name, value)| SecretVariable::new(&name, value.clone()))
+        .collect(),
     };
     (Some(config), left_out)
   }
@@ -288,6 +295,11 @@ impl ClaudeMcpConfig {
   /// The servers in the file, whose tools the invocation allows.
   pub fn servers(&self) -> &[McpServerName] {
     &self.servers
+  }
+
+  /// The secret values in the file, to keep them out of what an approval shows.
+  pub fn secrets(&self) -> &[SecretVariable] {
+    &self.secrets
   }
 }
 

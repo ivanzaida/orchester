@@ -245,6 +245,11 @@ impl AgentPermissions {
     self.interactive_tool_approvals
   }
 
+  /// Whether a person decides some of the agent's actions: commands, MCP actions or both.
+  pub fn asks_a_person(&self) -> bool {
+    self.interactive_tool_approvals || self.commands == CommandPermission::AskBefore
+  }
+
   pub const fn set_interactive_tool_approvals(&mut self, enabled: bool) {
     self.interactive_tool_approvals = enabled;
   }

@@ -120,6 +120,71 @@ the Secrets decision under P.
 Tool discovery and OAuth sign-in for MCP servers, narrowing servers per pipeline step, changing a running run's servers,
 and MCP tools in the Tools library.
 
+## C · Claude Code
+
+### C0 · Claude Code parity, in progress on `claude/claude-support`
+
+Built and tested; **not done until C2's design verification passes**, and not merged (merge order with Codex's
+pause-at-approval work in `step/worker.rs` and with `claude/integration` is open).
+
+- Claude Code connections offer `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-fable-5-1` and
+  `claude-haiku-4-5-20251001`, then the models the CLI lists through the stream-json `initialize` request, then the
+  `opus` and `sonnet` aliases, with the effort levels the CLI accepts. The model reaches `--model` on new and resumed
+  sessions and is recorded per invocation.
+- *Ask before running commands* and *Ask before MCP actions* work on Claude Code through
+  `--permission-prompt-tool mcp__Orchester__approve`, served by `orchester-runner --claude-permission-prompt`, with
+  the same approval records and modal as Codex (`docs/interactive-tool-approvals.md`). Every command of a writing step
+  asks (whole-tool ask rule); a read-only step gets no commands.
+- C1: the step result comes from `--json-schema`'s `structured_output`, or strictly from the JSON that closes the final
+  message; a turn without one fails.
+- C3 (user decision): an API refusal of a model to an old CLI is reported as `CliTooOld` and recorded on the
+  connection; the Connections inspector, the profile's model field and a step's model show a notice. No documented
+  source lists these versions, so nothing is known before the first refusal.
+- Real Opus 5.5 runs on Claude Code 2.1.284: Implement and Review with one approval round trip, and a `question`
+  result. See [evidence](evidence/claude-code-e2e-2026-09-30.md).
+
+### C2 · Verify the Claude Code approval controls against the design (UI)
+
+`claude/claude-support` enables *Ask before MCP actions* and *Ask before running commands* for Claude Code profiles,
+pipeline steps and runs, and shows a "CLI too old for this model" notice (C3) in the Connections inspector, the
+profile's model field and the step inspector's model. It shows the mechanisms `--permission-prompt-tool · asks each
+command` and `read-only · no commands` (with why under it), the run popover's Claude transport note, the MCP
+enforcement row "Each tool call waits for your decision", an MCP approval's labelled *Arguments* row and a command
+approval's *Agent's note* in the approval modal, and the activity problems "Orchester approvals were unavailable to Claude Code" and
+"Claude Code … can't run …". It also changed the model source notes in the Connections inspector and the profile's
+model field. A separate agent must compare these states
+with Pencil (`AGENTS.md` rule 15): the profile Permissions tab on a Claude connection (`HnBBr`, `ossOP`), the run
+permission popover (`W29Od2`), the pipeline step switch (`wujuh`), the command approval modal for a Claude request
+(`GbNSA`) and the Connections inspector model note (`xK9v9`). **Done when** the verifier reports no blocking or major
+mismatch. Round 1 (at `6422a6d`) found two major mismatches (the transport note's role, the MCP arguments without a
+label) and five minor ones; all are fixed and wait for a re-check.
+
+### C4 · Claude Code runs read-only commands outside the allowed list (non-UI)
+
+With *Allowed commands*, Claude Code still runs commands its own classifier calls read-only (`ls`, `cat`, `grep`,
+`git log`, …) without a rule, in `dontAsk` and `acceptEdits` alike. They change no file, but "Only these commands run"
+is not exact. Its `acceptEdits` file commands are denied since `claude/claude-support`. Decide whether to ask for the
+whole tool and deny outside the list (the whole-tool ask rule precedes allow rules, so that would need the permission
+prompt to allow listed commands) or to document the exception in the option's text. **needs decision**
+
+### C5 · Follow-ups from the Claude Code review (non-UI)
+
+- The runner records a model's required CLI version (C3) by reading, changing and saving the whole connection. A
+  person who edits the same connection in the desktop at that moment wins or loses as the last writer. Record the
+  requirement with a targeted update, or merge it on save.
+- `mode_allowed_outside` (`crates/core/src/permission/claude.rs`) drops the whole `Bash(<cmd>:*)` deny rule as soon as
+  one allowed entry starts with that command. With `rm build` allowed, `acceptEdits` runs any `rm`. A narrower rule is
+  needed, if Claude Code's rule order allows one.
+
+### C6 · Tool approval layout issues found during C2 (UI)
+
+Seen by C2's verifier, older than the Claude Code work and left alone there:
+
+- The run permission popover opens at the top right of the task screen instead of at its design anchor (`W29Od2`).
+- The command approval modal (`GbNSA`) explains the request with the worktree's absolute path embedded in the
+  sentence, and cuts the working directory row short. Name the worktree the way the design does and let the row show
+  the path's end.
+
 ## U · Screens
 
 ### U10 · Pull requests screen jumps while it loads (UI)

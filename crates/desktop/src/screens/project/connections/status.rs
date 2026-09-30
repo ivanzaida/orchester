@@ -1,9 +1,13 @@
 //! Words and icons for connection providers and statuses. Status always shows an icon and a
 //! word (`DeizF`).
 
-use orchester_core::connection::{AgentProvider, ConnectionStatus};
+use lurq::{app::ctx::Ctx, node::Element};
+use orchester_core::{
+  connection::{AgentConnection, AgentProvider, ConnectionStatus},
+  resource::ModelId,
+};
 
-use crate::ui::icon::Icon;
+use crate::ui::{icon::Icon, notice::Notice};
 
 /// Name of the CLI, e.g. "Codex CLI".
 pub const fn program_key(provider: AgentProvider) -> &'static str {
@@ -11,6 +15,39 @@ pub const fn program_key(provider: AgentProvider) -> &'static str {
     AgentProvider::CodexCli => "connections.provider.codex",
     AgentProvider::ClaudeCodeCli => "connections.provider.claude",
   }
+}
+
+/// That `connection`'s CLI is too old for `model`, as a refusal recorded (`q5LzI` notice); `None`
+/// when nothing says so.
+pub fn cli_too_old(ctx: &Ctx, connection: &AgentConnection, model: &ModelId) -> Option<Element> {
+  let too_old = connection.cannot_run(model)?;
+  let model = unbroken(model.as_str());
+  let heading = ctx.t_args(
+    "connections.cliTooOld.heading",
+    [
+      (
+        "cli",
+        &*ctx.t(match connection.provider() {
+          AgentProvider::CodexCli => "connections.cliTooOld.codex",
+          AgentProvider::ClaudeCodeCli => "connections.cliTooOld.claude",
+        }),
+      ),
+      ("installed", too_old.installed.as_str()),
+      ("model", &model),
+      ("required", too_old.required.as_str()),
+    ],
+  );
+  Some(
+    Notice::new(Icon::TriangleAlert, heading, ctx.t("connections.cliTooOld.detail"))
+      .id("cli-too-old")
+      .into(),
+  )
+}
+
+/// `id` with a word joiner (U+2060) after each hyphen, so a narrow column wraps a model id as a
+/// whole instead of at a hyphen.
+fn unbroken(id: &str) -> String {
+  id.replace('-', "-\u{2060}")
 }
 
 /// Short provider name used in a suggested connection name, e.g. "Codex".

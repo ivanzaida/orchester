@@ -10,10 +10,13 @@ mod agent;
 pub mod app_server;
 pub mod app_server_mcp;
 mod catalog;
+pub mod claude_approval;
+mod claude_catalog;
 mod discovery;
 mod github;
 pub mod invocation;
 pub mod mcp;
+mod model_requirements;
 pub mod stream;
 
 use std::path::{Path, PathBuf};
@@ -28,12 +31,14 @@ pub use self::{
   },
   agent::{AgentConnection, CheckResult, ConnectionCheck},
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
+  claude_catalog::parse_claude_models,
   discovery::{Installed, compare_versions, rank_installed},
   github::{
     GH_PROGRAM, GhAdvice, GhAuthStatus, GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin,
     GitHubNameError, GitHubState, REQUIRED_SCOPE, check_github, gh_auth_status_command, gh_version_command,
     parse_gh_auth_status, parse_gh_version,
   },
+  model_requirements::{CliTooOld, ModelRequirements, parse_cli_too_old},
 };
 use crate::{id::ConnectionId, name::Name, time::Timestamp};
 
@@ -187,6 +192,8 @@ pub struct Connection {
   executable: PathBuf,
   last_check: Option<LastCheck>,
   created_at: Timestamp,
+  /// The CLI versions models need, as refusals said ([`ModelRequirements`]); agent CLIs only.
+  model_requirements: ModelRequirements,
 }
 
 impl Connection {
@@ -205,7 +212,19 @@ impl Connection {
       executable: absolute(executable)?,
       last_check: None,
       created_at,
+      model_requirements: ModelRequirements::default(),
     })
+  }
+
+  /// This connection with the model requirements it had recorded.
+  #[must_use]
+  pub fn with_model_requirements(mut self, requirements: ModelRequirements) -> Self {
+    self.model_requirements = requirements;
+    self
+  }
+
+  pub const fn model_requirements(&self) -> &ModelRequirements {
+    &self.model_requirements
   }
 
   pub fn from_stored(

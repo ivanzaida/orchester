@@ -17,7 +17,7 @@ use lurq::{
 };
 use orchester_core::{
   connection::{AgentConnection, CatalogSource, ModelSupport},
-  resource::PromptText,
+  resource::{ModelId, PromptText},
 };
 
 use super::{
@@ -27,6 +27,7 @@ use super::{
 use crate::{
   agents::form::{ModelSelection, effort_options, model_options},
   messages::Message,
+  screens::project::connections::status::cli_too_old,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     field::{FieldNote, ValueTone, field, select_style, styled_input, text_input, value_box},
@@ -73,6 +74,12 @@ impl ProfileEditor {
         .id("agent-provider-explanation")
         .into(),
     ];
+    // Full width after the model-source note (`q5LzI`), not inside the Model column.
+    fields.extend(connection.and_then(|connection| {
+      self
+        .chosen_model()
+        .and_then(|model| cli_too_old(ctx, connection, &model))
+    }));
     fields.extend(self.effort_field(ctx, connection));
     fields.push(self.instructions_field(ctx, errors.and_then(|errors| errors.instructions.as_ref())));
     fields
@@ -176,6 +183,16 @@ impl ProfileEditor {
     field(&label, column.into(), note)
   }
 
+  /// The model the fields name: the listed one, or the typed id when it is a valid one (an
+  /// invalid id has its own error under the field, so `.ok()` loses nothing).
+  fn chosen_model(&self) -> Option<ModelId> {
+    match self.model.get() {
+      ModelSelection::Listed(id) => Some(id),
+      ModelSelection::Custom => ModelId::new(self.custom_model.get().trim()).ok(),
+      ModelSelection::None => None,
+    }
+  }
+
   /// What the connection runs and where its models come from (`kwRad`).
   fn explanation(&self, ctx: &Ctx, connection: Option<&AgentConnection>) -> Arc<str> {
     let Some(connection) = connection else {
@@ -189,6 +206,7 @@ impl ProfileEditor {
       }
       (_, Some(CatalogSource::Provider)) => "agents.explain.provider",
       (_, Some(CatalogSource::DocumentedAliases)) => "agents.explain.aliases",
+      (_, Some(CatalogSource::ProviderAndCurrentIds)) => "agents.explain.providerAndCurrentIds",
     };
     ctx.t_args(key, [("connection", connection.name().as_str())])
   }

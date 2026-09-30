@@ -70,7 +70,12 @@ impl RunnerProblem {
         }
       }
       Self::MemoryNotSaved { reason } => reason.redact(redact),
-      Self::StepBudgetReached { .. } | Self::RipgrepNotFound { .. } | Self::MemoryUnreadable { .. } => {}
+      // Versions, a model id and counts, parsed as such: no text that could hold a secret.
+      Self::StepBudgetReached { .. }
+      | Self::RipgrepNotFound { .. }
+      | Self::MemoryUnreadable { .. }
+      | Self::CliTooOld { .. }
+      | Self::PermissionPromptUnreachable => {}
     }
   }
 }

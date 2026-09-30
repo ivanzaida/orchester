@@ -380,3 +380,22 @@ fn step_inspector_narrows_the_profile_commands_and_never_widens() {
       .is_some_and(|root| contains_text(root, "Reviewer v1 also allows git."))
   });
 }
+
+#[test]
+fn agent_permissions_claude_asking_read_only_runs_no_commands_and_says_why() {
+  let mut desktop = seeded();
+  permissions_of(&mut desktop, "Reviewer");
+  assert!(shows(&mut desktop, "edit tools removed · listed cmds run"));
+  // Read-only and asking: an approved command would run unsandboxed, so the step gets none.
+  desktop.press("agent-permission-ask");
+  assert!(shows(&mut desktop, "read-only · no commands"));
+  assert!(shows(
+    &mut desktop,
+    "Claude Code would run an approved command outside any sandbox, so a read-only step gets none."
+  ));
+  assert!(shows(&mut desktop, "edit tools removed · no commands"));
+  assert!(!shows(&mut desktop, "listed cmds run"));
+  desktop.press("agent-permission-edit");
+  assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
+  assert!(!shows(&mut desktop, "outside any sandbox"));
+}

@@ -55,7 +55,6 @@ pub const fn setting_label(setting: PermissionSetting) -> &'static str {
 /// itself says it (asking before commands is marked *later*).
 pub fn unavailable(ctx: &Ctx, reason: Unavailable, provider: AgentProvider) -> Option<Arc<str>> {
   let key = match reason {
-    Unavailable::NeedsPermissionRequests => "agents.permissions.unavailable.needsPermissionRequests",
     Unavailable::CannotLimitCommands => "agents.permissions.unavailable.cannotLimitCommands",
     Unavailable::CannotConfineCommands => "agents.permissions.unavailable.cannotConfineCommands",
     Unavailable::CannotBlockNetwork => "agents.permissions.unavailable.cannotBlockNetwork",
@@ -72,12 +71,18 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexCommandApprovals => "agents.permissions.mechanism.codexCommandApprovals",
     Mechanism::CodexSandboxNetworkOff => "agents.permissions.mechanism.codexNetworkOff",
     Mechanism::CodexSandboxNetworkOn => "agents.permissions.mechanism.codexNetworkOn",
+    // Read-only with asking before commands runs no command at all (see `enforced_on`).
+    Mechanism::ClaudeEditToolsRemoved if runs_no_commands(permissions) => {
+      "agents.permissions.mechanism.claudeEditToolsRemovedNoCommands"
+    }
     Mechanism::ClaudeEditToolsRemoved => "agents.permissions.mechanism.claudeEditToolsRemoved",
     Mechanism::ClaudeAcceptEdits => "agents.permissions.mechanism.claudeAcceptEdits",
     Mechanism::ClaudeWebTools => "agents.permissions.mechanism.claudeWebTools",
     Mechanism::ClaudeWebToolsRemoved => "agents.permissions.mechanism.claudeWebToolsRemoved",
     Mechanism::CodexWritableRoots => "agents.permissions.mechanism.codexWritableRoots",
     Mechanism::ClaudeAddDir => "agents.permissions.mechanism.claudeAddDir",
+    Mechanism::ClaudePermissionPrompt => "agents.permissions.mechanism.claudePermissionPrompt",
+    Mechanism::ClaudeNoCommandsReadOnly => "agents.permissions.mechanism.claudeNoCommandsReadOnly",
     Mechanism::ClaudeAllowedTools => {
       let count = match permissions.commands() {
         CommandPermission::Allowed(commands) => commands.entries().len(),
@@ -92,6 +97,16 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     }
   };
   ctx.t(key)
+}
+
+/// Why a mechanism limits more than its setting asks, as a line under it; `None` for most.
+pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism) -> Option<Arc<str>> {
+  (mechanism == Mechanism::ClaudeNoCommandsReadOnly)
+    .then(|| ctx.t("agents.permissions.mechanism.claudeNoCommandsReadOnlyDetail"))
+}
+
+fn runs_no_commands(permissions: &AgentPermissions) -> bool {
+  matches!(permissions.commands(), CommandPermission::Allowed(commands) if commands.entries().is_empty())
 }
 
 /// Words of the three settings, long (`haXji`: *Edits files in the task worktree · 3 allowed

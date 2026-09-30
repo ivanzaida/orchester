@@ -4,6 +4,9 @@
 //! or the step's earlier session continued — handed to a [`worker::Worker`] of its own.
 
 mod app_server;
+mod approval;
+mod claude_approval;
+mod cli_version;
 mod command;
 mod end;
 mod mcp;
@@ -277,7 +280,7 @@ impl RunTask {
     let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);
     let (stops, stopped) = mpsc::unbounded_channel();
     let (approvals, decisions) = mpsc::unbounded_channel();
-    let interactive = start.app_server.is_some();
+    let interactive = start.app_server.is_some() || start.claude_approvals.is_some();
     let worker = Worker {
       root: self.root.clone(),
       invocation: invocation.clone(),
@@ -288,6 +291,8 @@ impl RunTask {
       stops: stopped,
       mcp_file: start.mcp_file,
       app_server: start.app_server.map(AppServerSession::new),
+      claude_approvals: start.claude_approvals,
+      mcp_secrets: start.mcp_secrets,
       agent: start.agent,
       task: self.task.id(),
       decisions,
