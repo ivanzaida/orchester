@@ -269,6 +269,32 @@ fn folder_size(folder: &std::path::Path) -> u64 {
     .sum()
 }
 
+#[cfg(windows)]
+#[test]
+fn a_rebuild_of_an_index_a_program_holds_open_says_it_is_in_use_and_keeps_it() {
+  use std::os::windows::fs::OpenOptionsExt;
+
+  let repo = Repo::new();
+  let head = repo.head();
+  let index = repo.ensure(&head).path;
+  // A search holding a file of the index open the way Windows then refuses to rename its folder.
+  let held = fs::OpenOptions::new()
+    .read(true)
+    .share_mode(0)
+    .open(index.join("tree.txt"))
+    .expect("open a file of the index");
+
+  let refused = repo.indexes().rebuild(&head);
+  assert!(matches!(refused, Err(IndexError::InUse { .. })), "{refused:?}");
+  assert!(index.join("manifest.json").is_file(), "the index stays");
+  assert_eq!(index_folder(&repo), [".users".to_owned(), head.as_str().to_owned()]);
+  let listed = repo.indexes().list().expect("list");
+  assert!(matches!(listed[0].state, IndexState::Ready(_)), "{:?}", listed[0].state);
+
+  drop(held);
+  repo.indexes().rebuild(&head).expect("rebuilt once the file is closed");
+}
+
 #[test]
 fn the_list_is_read_from_records_while_runs_read_the_index() {
   let repo = Repo::new();

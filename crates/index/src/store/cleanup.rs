@@ -82,7 +82,8 @@ fn used(root: &Path, worktrees: &Path, revision: &Revision) -> Result<bool, Inde
 }
 
 /// Moves `folder` of the index folder `root` into the trash and deletes it there; a deletion that
-/// fails is logged and retried by the next removal.
+/// fails is logged and retried by the next removal. [`IndexError::InUse`] when a program holds one
+/// of its files open.
 pub(super) fn discard(root: &Path, folder: &Path) -> Result<(), IndexError> {
   let number = DISCARDED.fetch_add(1, Ordering::Relaxed);
   // The time tells this process's trash from what an earlier process with the same id left.
@@ -91,12 +92,34 @@ pub(super) fn discard(root: &Path, folder: &Path) -> Result<(), IndexError> {
   match fs::rename(folder, &trash) {
     Ok(()) => {}
     Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+    Err(error) if held_open(&error) => {
+      let revision = folder
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+      return Err(IndexError::InUse { revision });
+    }
     Err(error) => return Err(IndexError::io("move to the trash", folder)(error)),
   }
   if let Err(error) = remove_folder(&trash) {
     tracing::warn!(%error, folder = %trash.display(), "cannot delete a discarded codebase index yet");
   }
   Ok(())
+}
+
+/// Whether a folder could not be renamed because a program holds one of its files open: Windows
+/// refuses it (access denied, sharing violation).
+#[cfg(windows)]
+fn held_open(error: &io::Error) -> bool {
+  const ACCESS_DENIED: i32 = 5;
+  const SHARING_VIOLATION: i32 = 32;
+  matches!(error.raw_os_error(), Some(ACCESS_DENIED | SHARING_VIOLATION))
+}
+
+/// Unix renames a folder whose files are open: that never fails a removal.
+#[cfg(not(windows))]
+fn held_open(_error: &io::Error) -> bool {
+  false
 }
 
 /// The entries of `folder`; none when it does not exist.

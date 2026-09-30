@@ -38,7 +38,14 @@ use crate::{
   code_index::{self, IndexList, RipgrepCheck},
   messages::{self, Message},
   theme::ExtraTypography,
-  ui::{field::field_error, form::form, icon::Icon, message_text, notice::Notice, switch::Switch},
+  ui::{
+    field::{field_error, wrapping_field_error},
+    form::form,
+    icon::Icon,
+    message_text,
+    notice::Notice,
+    switch::Switch,
+  },
   workspace::OpenProject,
 };
 
@@ -151,9 +158,13 @@ impl Component for CodeIndexTab {
     };
     content = content.child(self.setting_row(ctx, (&open, setting), list.as_ref(), &save));
     content = if setting.is_on() {
+      let rebuild_error = rebuild.state().get().error;
       let rebuild = self.rebuild_handler(&open, &rebuild);
       content
         .child(list::panel(ctx, list.as_ref(), &rebuild))
+        // Why the last Rebuild or Retry did not replace the index (a failed build's own reason is
+        // on its row).
+        .with_children(rebuild_error.map(|error| wrapping_field_error(&message_text(ctx, &error))))
         .child(
           // The section space (`vm2Gi`) above the heading.
           Column::new()
@@ -346,15 +357,7 @@ fn rebuild_action(ctx: &mut Ctx) -> RebuildAction {
   ctx.future_action(move |(repo_root, revision, spec): (PathBuf, Revision, OperationSpec)| {
     let activity = activity.clone();
     async move {
-      let work = async move {
-        background::run(move || code_index::rebuild_in(&repo_root, &revision))
-          .await?
-          .map_err(|reason| {
-            // The status bar says it failed; the row shows the reason the list reads back.
-            tracing::debug!(%reason, "the rebuild failed");
-            Message::new("settings.codeIndex.rebuildFailed").with("reason", reason)
-          })
-      };
+      let work = async move { background::run(move || code_index::rebuild_in(&repo_root, &revision)).await? };
       activity.track(spec, work).await
     }
   })

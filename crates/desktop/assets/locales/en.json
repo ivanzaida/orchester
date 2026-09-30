@@ -2286,6 +2286,7 @@
       "rebuild": "Rebuild",
       "retry": "Retry",
       "rebuildFailed": "The index was not rebuilt: {{reason}}",
+      "rebuildInUse": "The index was not rebuilt: a running agent is reading it. Try again when it finishes.",
       "searchHeading": "Search tool",
       "ripgrep": "ripgrep",
       "ripgrepDetail": "The index skill searches with rg. Orchester copies it into .orchester/tools so it also runs inside the Codex sandbox.",

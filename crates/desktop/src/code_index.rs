@@ -105,13 +105,16 @@ pub fn list_in(repo_root: &Path) -> Result<IndexList, Message> {
 }
 
 /// Builds the index of `revision` again (*Rebuild*, *Retry*); why it failed.
-pub fn rebuild_in(repo_root: &Path, revision: &Revision) -> Result<(), String> {
+pub fn rebuild_in(repo_root: &Path, revision: &Revision) -> Result<(), Message> {
   CodebaseIndexes::new(repo_root)
     .rebuild(revision)
     .map(drop)
     .map_err(|error: IndexError| {
       tracing::warn!(%error, %revision, "the codebase index could not be rebuilt");
-      error.to_string()
+      match error {
+        IndexError::InUse { .. } => Message::new("settings.codeIndex.rebuildInUse"),
+        error => Message::new("settings.codeIndex.rebuildFailed").with("reason", error.to_string()),
+      }
     })
 }
 

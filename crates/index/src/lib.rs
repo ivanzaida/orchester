@@ -64,6 +64,10 @@ pub enum IndexError {
   /// replaces it.
   #[error("the index of {revision} cannot be reused: {detail}")]
   Previous { revision: String, detail: String },
+  /// The index of `revision` cannot be replaced while a program has one of its files open (an
+  /// agent's search, on Windows); the index stays as it was.
+  #[error("the index of {revision} is in use by a running agent; try again when it finishes")]
+  InUse { revision: String },
 }
 
 impl IndexError {

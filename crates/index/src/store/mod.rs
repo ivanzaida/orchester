@@ -173,6 +173,8 @@ impl CodebaseIndexes {
     let built = self.publish(revision, path, start, &progress);
     match &built {
       Ok(_) => listing::clear_failure(&self.root, revision),
+      // The index there is stays and is shown as it is.
+      Err(IndexError::InUse { .. }) => {}
       Err(error) => listing::record_failure(&self.root, revision, &error.to_string()),
     }
     built
@@ -199,8 +201,13 @@ impl CodebaseIndexes {
       other => other?,
     };
     write::make_read_only(&staging).map_err(IndexError::io("seal", &staging))?;
-    // The index there was, of an earlier format or rebuilt, is replaced.
-    cleanup::discard(&self.root, path)?;
+    // The index there was, of an earlier format or rebuilt, is replaced; one in use stays.
+    if let Err(error) = cleanup::discard(&self.root, path) {
+      if let Err(left) = cleanup::discard(&self.root, &staging) {
+        tracing::warn!(error = %left, "cannot remove a codebase index that was not published");
+      }
+      return Err(error);
+    }
     fs::rename(&staging, path).map_err(IndexError::io("rename", &staging))?;
     Ok(BuildReport {
       mode: built.manifest.build,
