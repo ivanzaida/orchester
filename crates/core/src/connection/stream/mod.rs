@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 pub use self::{claude::ClaudeStream, codex::parse_codex_line};
 use crate::{
+  code_index::RipgrepFallback,
   connection::{AgentProvider, mcp::McpServerProblem},
   run::TokenUsage,
 };
@@ -165,6 +166,21 @@ pub enum RunnerProblem {
   StepBudgetReached { budget: u64 },
   /// A command tool's `program` is no file on the `PATH` or in the worktree; it was not started.
   ProgramNotFound { program: String },
+  /// The codebase index of the run's base revision could not be built; the agent works without it.
+  CodebaseIndexUnavailable { detail: String },
+  /// ripgrep was found neither on the agent's `PATH` nor with an agent CLI; `fallback` says how the
+  /// agent searches instead.
+  RipgrepNotFound {
+    #[serde(default)]
+    fallback: RipgrepFallback,
+  },
+  /// ripgrep was found but could not be copied where the agent can run it; `fallback` says how the
+  /// agent searches instead.
+  RipgrepUnavailable {
+    detail: String,
+    #[serde(default)]
+    fallback: RipgrepFallback,
+  },
 }
 
 impl AgentEvent {

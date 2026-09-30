@@ -1,17 +1,20 @@
 //! Agent CLI and command tool invocations and the transcript of their events, written by the runner.
 
 use orchester_core::{
+  code_index::CodeIndexUse,
   connection::stream::{AgentEvent, InvocationOutcome},
   id::{InvocationId, RunId, StepExecutionId},
   resource::ModelId,
-  run::{ActivityEntry, Invocation, InvocationKind, InvocationPrompt, InvocationTiming, StepOutput, TokenUsage},
+  run::{
+    ActivityEntry, EditProgress, Invocation, InvocationKind, InvocationPrompt, InvocationTiming, StepOutput, TokenUsage,
+  },
   store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::{ProjectDb, invocation_prompts, step_outputs};
+use super::{ProjectDb, code_index, invocation_prompts, step_outputs};
 use crate::{
   StoreError,
   rows::{corrupt, decode_json, encode_json, parse},
@@ -94,6 +97,22 @@ impl ActivityStore for ProjectDb {
 
   fn invocation_prompt(&self, invocation: InvocationId) -> Result<Option<InvocationPrompt>, StoreError> {
     invocation_prompts::of_invocation(&self.connection, invocation)
+  }
+
+  fn save_invocation_code_index(&mut self, invocation: InvocationId, used: &CodeIndexUse) -> Result<(), StoreError> {
+    code_index::save_use(&self.connection, invocation, used)
+  }
+
+  fn invocation_code_index(&self, invocation: InvocationId) -> Result<Option<CodeIndexUse>, StoreError> {
+    code_index::load_use(&self.connection, invocation)
+  }
+
+  fn save_edit_progress(&mut self, invocation: InvocationId, progress: &EditProgress) -> Result<(), StoreError> {
+    code_index::save_progress(&self.connection, invocation, progress)
+  }
+
+  fn edit_progress(&self, invocation: InvocationId) -> Result<Option<EditProgress>, StoreError> {
+    code_index::load_progress(&self.connection, invocation)
   }
 
   fn append_activity(

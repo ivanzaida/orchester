@@ -42,6 +42,8 @@ lurq = { workspace = true, features = [
   "mcp",
 ] }
 orchester-exec.workspace = true
+# Removes the codebase indexes of run worktrees it removes.
+orchester-index.workspace = true
 orchester-ipc.workspace = true
 orchester-store.workspace = true
 orchester-vault.workspace = true

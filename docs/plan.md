@@ -167,6 +167,41 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+ORC-38 · Codebase index 2/2 (delivery, settings, activity) · branch `claude/codebase-index`
+
+- **Done 2026-09-30.** Project setting *Use code index* (default on). New and resumed Codex and Claude Code sessions
+  get the base revision's index: a prompt part, the internal `orchester-codebase-index` skill and, for Claude, the
+  folder as `--add-dir` with an `Edit` deny rule; published index files are read-only and checked against their
+  digests before reuse, handing out or building on them. ripgrep is found on the agent's `PATH`, where winget installs
+  it or bundled with the Codex CLI or Claude Code, copied into `.orchester/tools/rg-<hash>` and put first on the
+  agent's `PATH`; without it the index is still given (Codex is told to search with `git grep`) and the activity says
+  why (`RipgrepNotFound`, `RipgrepUnavailable`). Settings › Code index lists the kept indexes (runs, size, counts,
+  build time, building phase, failure reason) with Rebuild/Retry and installs ripgrep with winget or brew only on
+  click. Activity shows the code index per agent launch and the tokens before the first edit (panel block, step
+  header meta, step filter).
+- Timings (release, Windows, 32 threads): this repository full 0.6 s, incremental (41 files) 0.3 s, reuse 0.1 s;
+  60k-file synthetic repository with a committed 1 MB JS bundle full 44 s (peak 811 MB), incremental of one source
+  file 20 s and of the bundle 13 s (peak 708 MB), reuse 1.2 s (digest check), 0.2 s once the process found it intact.
+- Open: the design verifier's re-check of the regions changed after its first pass (Settings › Code index `i220W`,
+  `LC2V0`, `RkMap`, `h6yMk`, `NvR7K`; Activity `rd1Vo`, `F3XhQ`); the Claude `Edit` deny rule was not checked in a
+  live Claude Code session; Codex `exec` reports usage per whole turn, so its count before the first edit is an upper
+  bound, marked `≤`; the incremental build on very large repositories is dominated by per-file work (hard links,
+  digests); a code index on a network share gets no Claude `Edit` deny rule (its files are read-only); on macOS a
+  ripgrep install goes on after Orchester closes; macOS is only cross-checked for core and exec (C build scripts
+  need a target `cc`).
+
+ORC-37 · Codebase index 1/2 (backend) · branch `claude/codebase-index`
+
+- **Done 2026-09-30.** New crate `orchester-index` builds a per-revision index in `<repo>/.orchester/index/<revision>/`
+  from git objects with tree-sitter (Rust, TypeScript/JavaScript, Python, Go): `tree.txt`, `symbols.tsv`,
+  `outline/<path>.md`, `docs.md`, `map.md` (packages from Cargo/npm/Python/Go manifests) and `manifest.json`. Full
+  first, then incremental from the closest existing index via `git diff-tree` (equal to a full build); atomic rename
+  under a cross-process lock. The runner builds or reuses it before a run's first step; failure is a
+  `CodebaseIndexUnavailable` runner problem in each agent's activity and the run continues. Indexes go when the last
+  worktree using them is removed (desktop *Remove worktree*, merge, Run again).
+- Open: independent design verification of the new activity problem text; delivery, settings and activity are
+  ORC-38; macOS cross-check stops at C build scripts (no target `cc`).
+
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 
 - **Done 2026-09-30.** **Send & continue** resumes the same failed run in a new attempt, preserving its branch,

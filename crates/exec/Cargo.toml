@@ -12,6 +12,8 @@ workspace = true
 [dependencies]
 orchester-core.workspace = true
 sha2.workspace = true
+# The content hashes of the ripgrep programs copied for agents, shared by the runner's threads.
+parking_lot.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

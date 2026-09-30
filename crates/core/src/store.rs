@@ -9,6 +9,7 @@ use crate::{
     import::{RepositoryDraft, RepositoryOrigin},
   },
   blob::ContentHash,
+  code_index::{CodeIndexSetting, CodeIndexUse},
   connection::{Connection, mcp::McpServer, stream::AgentEvent},
   conversation::Message,
   diff::RevisionDiff,
@@ -24,8 +25,8 @@ use crate::{
   },
   revision::Revision,
   run::{
-    ActivityEntry, Checkpoint, Invocation, InvocationPrompt, ListedRun, NewRun, Plan, Run, RunEvent, RunNumber,
-    StepOutput,
+    ActivityEntry, Checkpoint, EditProgress, Invocation, InvocationPrompt, ListedRun, NewRun, Plan, Run, RunEvent,
+    RunNumber, StepOutput,
   },
   secret::Secret,
   task::{Task, TaskDetails},
@@ -79,6 +80,12 @@ pub trait SettingsStore {
   fn repository_agent_files(&self) -> Result<RepositoryAgentFiles, Self::Error>;
 
   fn save_repository_agent_files(&mut self, setting: RepositoryAgentFiles) -> Result<(), Self::Error>;
+
+  /// Whether the project's agents get the code index (Project settings › Code index); on until it
+  /// was changed.
+  fn code_index(&self) -> Result<CodeIndexSetting, Self::Error>;
+
+  fn save_code_index(&mut self, setting: CodeIndexSetting) -> Result<(), Self::Error>;
 }
 
 /// Content-addressed project blobs (`docs/architecture/storage.md`, "Blobs"), e.g. a skill's
@@ -413,6 +420,19 @@ pub trait ActivityStore {
   /// The prompt sources of `invocation`; `None` for one that never started or was recorded before
   /// prompts had sources.
   fn invocation_prompt(&self, invocation: InvocationId) -> Result<Option<InvocationPrompt>, Self::Error>;
+
+  /// Stores what `invocation` got of the code index, once, before its CLI starts.
+  fn save_invocation_code_index(&mut self, invocation: InvocationId, used: &CodeIndexUse) -> Result<(), Self::Error>;
+
+  /// What `invocation` got of the code index; `None` for one recorded before it was kept.
+  fn invocation_code_index(&self, invocation: InvocationId) -> Result<Option<CodeIndexUse>, Self::Error>;
+
+  /// Stores what `invocation` used before its agent first changed a file, replacing what was
+  /// stored.
+  fn save_edit_progress(&mut self, invocation: InvocationId, progress: &EditProgress) -> Result<(), Self::Error>;
+
+  /// What `invocation` used before its first edit; `None` for one recorded before it was kept.
+  fn edit_progress(&self, invocation: InvocationId) -> Result<Option<EditProgress>, Self::Error>;
 
   /// Appends `events` of `invocation` to its run's transcript, atomically, and returns the
   /// sequence of the last one (of the transcript so far when `events` is empty).

@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 
 use super::{
   CONTINUE_PROMPT, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
-  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource,
+  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, code_index,
 };
 use crate::{
   conversation::Message,
@@ -290,11 +290,13 @@ fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[Prompt
         None => text.push_str(CONTINUE_PROMPT),
       },
     }
+    code_index::push(&mut text, input.code_index);
   }
   let mut part = None;
   for section in sections {
     let section_part = section.source.part();
     if section_part == PromptPart::Task && part != Some(section_part) {
+      code_index::push(&mut text, input.code_index);
       push_skills(&mut text, input);
     }
     if part != Some(section_part) {

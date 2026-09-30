@@ -69,7 +69,9 @@ fn project_pages(routes: Routes) -> Routes {
       selection(routes, "/:connection")
     })
     .layout("/settings", project::page, |routes| {
-      selection(routes, "/limits").route("/environment", |_ctx| Element::new())
+      selection(routes, "/limits")
+        .route("/environment", |_ctx| Element::new())
+        .route("/code-index", |_ctx| Element::new())
     })
     .fallback(|_ctx| Element::new())
 }

@@ -15,9 +15,15 @@
 //!   without a rule, print mode denies them. The servers themselves run outside these permissions.
 //! - The disallowed list repeats what `--tools` leaves out that the permissions deny, so a tool list that grows in a
 //!   later CLI version does not widen them.
+//! - A folder the agent may read but must not change (the shared code index, which `--add-dir` makes a working
+//!   directory, where `acceptEdits` accepts edits) gets an `Edit(//<folder>/**)` deny rule, which covers every built-in
+//!   edit tool. Claude Code writes rule paths the POSIX way: `C:\x` is `//c/x`. Whether a model turn is denied is
+//!   unverified; the index files are read-only on disk as well.
 //!
 //! Never used: `--dangerously-skip-permissions`, `--permission-mode bypassPermissions`. The denial
 //! behaviour of these flags with a model turn is unverified: the probe's CLI was not signed in.
+
+use std::path::Path;
 
 use super::{CommandPermission, NetworkAccess, RepositoryAccess, capability::EnforcedPermissions};
 use crate::connection::mcp::McpServerName;
@@ -27,9 +33,9 @@ const EDIT_TOOLS: [&str; 3] = ["Edit", "Write", "NotebookEdit"];
 const WEB_TOOLS: [&str; 2] = ["WebFetch", "WebSearch"];
 const COMMAND_TOOL: &str = "Bash";
 
-/// The permission arguments of a Claude Code invocation that runs with `enforced` and gives the agent the MCP
-/// servers `mcp`.
-pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName]) -> Vec<String> {
+/// The permission arguments of a Claude Code invocation that runs with `enforced`, gives the agent the MCP
+/// servers `mcp` and must not change the files under the folders `protected`.
+pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName], protected: &[&Path]) -> Vec<String> {
   let permissions = enforced.permissions();
   let commands = match permissions.commands() {
     CommandPermission::Allowed(commands) => commands.entries(),
@@ -49,6 +55,11 @@ pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName]) ->
       "acceptEdits"
     }
   };
+  let protected_rules: Vec<String> = match permissions.repository() {
+    // Every edit tool is denied already.
+    RepositoryAccess::ReadOnly => Vec::new(),
+    RepositoryAccess::Write => protected.iter().filter_map(|folder| edit_rule(folder)).collect(),
+  };
   if commands.is_empty() {
     denied.push(COMMAND_TOOL);
   } else {
@@ -65,9 +76,10 @@ pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName]) ->
     "--permission-mode".to_owned(),
     mode.to_owned(),
   ];
-  if !denied.is_empty() {
+  if !denied.is_empty() || !protected_rules.is_empty() {
     args.push("--disallowedTools".to_owned());
     args.extend(denied.into_iter().map(str::to_owned));
+    args.extend(protected_rules);
   }
   if !commands.is_empty() || !mcp.is_empty() {
     args.push("--allowedTools".to_owned());
@@ -75,4 +87,24 @@ pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName]) ->
     args.extend(mcp.iter().map(|server| format!("mcp__{server}")));
   }
   args
+}
+
+/// `Edit(//<folder>/**)`, which keeps Claude Code's edit tools out of `folder`, an absolute path, in
+/// the POSIX form Claude Code matches permission paths in (`C:\repo` is `//c/repo`). `None` for a
+/// path that is no text, which the invocation refuses before it gets here, and for a network path
+/// (`\\server\share`), whose form in Claude Code's patterns is not documented: such a folder is kept
+/// from edits only by its files being read-only.
+fn edit_rule(folder: &Path) -> Option<String> {
+  let text = folder.to_str()?.replace('\\', "/");
+  let text = text.strip_prefix("//?/").unwrap_or(&text);
+  if text.starts_with("//") || text.starts_with("UNC/") {
+    return None;
+  }
+  let posix = match text.as_bytes() {
+    [drive, b':', ..] if drive.is_ascii_alphabetic() => {
+      format!("/{}{}", char::from(drive.to_ascii_lowercase()), &text[2..])
+    }
+    _ => text.to_owned(),
+  };
+  Some(format!("Edit(/{}/**)", posix.trim_end_matches('/')))
 }

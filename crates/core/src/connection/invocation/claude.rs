@@ -26,7 +26,7 @@
 //! - Orchester's skills ([`crate::resource::Skill`]) are placed in a folder outside the worktree, which `--add-dir`
 //!   lets the agent read (Claude Code asks before reading outside its working directories, and print mode denies what
 //!   it would ask). An agent that edits files may also write there; the folder is its own and written again when it
-//!   starts.
+//!   starts. The code index of the run's base revision (`crate::code_index`) is given the same way.
 //! - Sessions: a new session gets an id Orchester chose (`--session-id`); a continue after a pause or a limit resumes
 //!   the session the CLI reported (`--resume`), with the permissions given again. Sessions are kept on disk (no
 //!   `--no-session-persistence`) so that they can be resumed.
@@ -82,6 +82,8 @@ pub struct ClaudeInvocation<'a> {
   pub mcp: Option<(&'a Path, &'a [McpServerName])>,
   /// The folder holding the skills the agent gets, if it gets any.
   pub skills: Option<&'a Path>,
+  /// The code index folder the agent gets, if it gets one (`crate::code_index`).
+  pub code_index: Option<&'a Path>,
 }
 
 impl ClaudeInvocation<'_> {
@@ -114,14 +116,15 @@ impl ClaudeInvocation<'_> {
       args.extend(["--mcp-config".to_owned(), config.to_string_lossy().into_owned()]);
     }
     let servers = self.mcp.map_or(&[][..], |(_, servers)| servers);
-    args.extend(permission_args(self.permissions, servers));
+    let protected: Vec<&Path> = self.code_index.into_iter().collect();
+    args.extend(permission_args(self.permissions, servers, &protected));
     if self.permissions.writable_folders().is_some() {
       for root in self.writable_roots {
         args.extend(["--add-dir".to_owned(), root.to_string_lossy().into_owned()]);
       }
     }
-    if let Some(skills) = self.skills {
-      args.extend(["--add-dir".to_owned(), skills.to_string_lossy().into_owned()]);
+    for folder in [self.skills, self.code_index].into_iter().flatten() {
+      args.extend(["--add-dir".to_owned(), folder.to_string_lossy().into_owned()]);
     }
     match self.session {
       ClaudeSession::New(id) => args.extend(["--session-id".to_owned(), id.to_string()]),
@@ -139,7 +142,12 @@ impl ClaudeInvocation<'_> {
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
     unicode_folders(self.writable_roots)?;
-    unicode_folders(self.skills.map(Path::to_path_buf).as_slice())?;
+    let read_only: Vec<PathBuf> = [self.skills, self.code_index]
+      .into_iter()
+      .flatten()
+      .map(Path::to_path_buf)
+      .collect();
+    unicode_folders(&read_only)?;
     agent_command(
       self.executable,
       self.args(),

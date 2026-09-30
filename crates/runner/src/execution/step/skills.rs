@@ -7,6 +7,9 @@
 //!   each start of the execution, so what an agent changed there does not last, and kept afterwards: a resumed session
 //!   reads the paths it was told when it started. Both CLIs can read it: Codex's sandbox reads the whole disk, and
 //!   Claude Code is given the folder with `--add-dir`.
+//! - Orchester's internal `orchester-codebase-index` skill, embedded in the runner, is placed the same way for an agent
+//!   that gets the code index (`super::super::codebase_index`), under `_orchester/`, which no project skill's slug can
+//!   name. It is not a project resource and no screen lists it.
 //! - The repository's own skills: while the project has its agent files off, every `SKILL.md` under
 //!   `<worktree>/.agents/skills` (at any depth, through links, as Codex finds them) is listed for Codex to disable. A
 //!   folder that cannot be read stops the agent from starting rather than letting Codex load what it holds.
@@ -18,6 +21,7 @@ use std::{
 };
 
 use orchester_core::{
+  agent_files::frontmatter,
   connection::stream::RunnerProblem,
   id::StepExecutionId,
   resource::{InstructionTarget, SKILL_FILE, Skill, Slug, Step},
@@ -29,6 +33,10 @@ use super::super::run::RunTask;
 
 /// The Codex skills folder of a repository.
 const REPOSITORY_SKILLS: [&str; 2] = [".agents", "skills"];
+/// Where Orchester's internal skills go in an execution's skills folder: `_` starts no slug.
+const INTERNAL_SKILLS: &str = "_orchester";
+/// The internal skill that explains the code index, as agents get it.
+const CODE_INDEX_SKILL: &str = include_str!("../../../assets/codebase-index/SKILL.md");
 
 fn problem(detail: String) -> RunnerProblem {
   RunnerProblem::CouldNotStart { detail }
@@ -94,7 +102,7 @@ impl RunTask {
         reaching.push((resource.slug().clone(), version.body().clone()));
       }
     }
-    let folder = self.root.join(".orchester").join("skills").join(execution.to_string());
+    let folder = self.skills_folder(execution);
     remove_folder(&folder).map_err(|error| problem(format!("cannot clear {}: {error}", folder.display())))?;
     if reaching.is_empty() {
       return Ok(PlacedSkills::default());
@@ -115,6 +123,38 @@ impl RunTask {
       folder: Some(folder),
       skills,
     })
+  }
+
+  /// The skills folder of `execution`, outside every worktree.
+  fn skills_folder(&self, execution: StepExecutionId) -> PathBuf {
+    self.root.join(".orchester").join("skills").join(execution.to_string())
+  }
+
+  /// Places the internal `orchester-codebase-index` skill for `execution`, beside what `placed` holds, and lists
+  /// it; its `SKILL.md`.
+  pub(super) fn place_code_map(
+    &self,
+    execution: StepExecutionId,
+    placed: &mut PlacedSkills,
+  ) -> Result<PathBuf, RunnerProblem> {
+    let folder = self.skills_folder(execution);
+    let skill = folder.join(INTERNAL_SKILLS).join("codebase-index");
+    let document = skill.join(SKILL_FILE);
+    fs::create_dir_all(&skill)
+      .and_then(|()| fs::write(&document, CODE_INDEX_SKILL))
+      .map_err(|error| problem(format!("cannot place the orchester-codebase-index skill: {error}")))?;
+    let markdown = frontmatter::parse(CODE_INDEX_SKILL);
+    placed.skills.push(PlacedSkill {
+      name: markdown
+        .name
+        .expect("the embedded orchester-codebase-index skill has a name"),
+      description: markdown
+        .description
+        .expect("the embedded orchester-codebase-index skill has a description"),
+      path: document.to_string_lossy().into_owned(),
+    });
+    placed.folder = Some(folder);
+    Ok(document)
   }
 
   /// Writes `skill`'s `SKILL.md` and reference files into `folder`; the `SKILL.md` written.

@@ -5,6 +5,7 @@
 
 pub mod agent_files;
 pub mod blob;
+pub mod code_index;
 pub mod command;
 pub mod connection;
 pub mod conversation;

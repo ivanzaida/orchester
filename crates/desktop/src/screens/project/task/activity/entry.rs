@@ -15,13 +15,14 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
+  code_index::RipgrepFallback,
   connection::stream::{CommandStatus, FileChangeKind, OutputStream, RunnerProblem, ToolCommandResult},
   tokens::compact_tokens,
 };
 
 use super::{
   super::{super::ProjectNav, heading::step_state},
-  engine,
+  engine, first_edit,
   mcp::mcp_server_text,
   rows::{Header, RowKind, TranscriptRow},
 };
@@ -66,8 +67,9 @@ impl Component for TranscriptRowView {
   }
 }
 
-/// Disclosure, step number, step and agent, model and time span, tokens and state (`mDnc3`). A
-/// tool step names its tool and runs, and has no model and no tokens.
+/// Disclosure, step number, step and agent, model and time span, tokens with those before the
+/// first edit, and state (`mDnc3`). A tool step names its tool and runs, and has no model and no
+/// tokens.
 fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
   let meta = header_meta(ctx, header);
   let title = ctx.t_args(
@@ -79,6 +81,7 @@ fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
       "runs.tokens",
       [("count", compact_tokens(header.usage.counted()).as_str())],
     );
+    let tokens = first_edit::header_tokens(ctx, tokens, header.before_edit.as_ref(), header.ended.is_some());
     Text::new(&tokens).variant(TypographyStyle::Mono).nowrap()
   });
   let (glyph, state) = step_state(header.status);
@@ -526,6 +529,35 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
       Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
     ),
+    RunnerProblem::CodebaseIndexUnavailable { detail } => (
+      ctx.t("runs.activity.problem.codebaseIndexUnavailable"),
+      Some(detail.as_str().into()),
+    ),
+    RunnerProblem::RipgrepNotFound { fallback } => (
+      ctx.t("runs.activity.problem.ripgrepNotFound"),
+      Some(ctx.t(fallback_key(*fallback))),
+    ),
+    RunnerProblem::RipgrepUnavailable { detail, fallback } => (
+      ctx.t("runs.activity.problem.ripgrepUnavailable"),
+      Some(ctx.t_args(
+        "runs.activity.problem.ripgrepUnavailableDetail",
+        [
+          ("fallback", &*ctx.t(fallback_key(*fallback))),
+          ("detail", detail.as_str()),
+        ],
+      )),
+    ),
+  }
+}
+
+/// How an agent without ripgrep searched: with or without the code index, by its CLI.
+const fn fallback_key(fallback: RipgrepFallback) -> &'static str {
+  match fallback {
+    RipgrepFallback::Unknown => "runs.activity.problem.ripgrepFallback.unknown",
+    RipgrepFallback::IndexWithGitGrep => "runs.activity.problem.ripgrepFallback.indexWithGitGrep",
+    RipgrepFallback::IndexWithOwnTools => "runs.activity.problem.ripgrepFallback.indexWithOwnTools",
+    RipgrepFallback::GitGrep => "runs.activity.problem.ripgrepFallback.gitGrep",
+    RipgrepFallback::OwnTools => "runs.activity.problem.ripgrepFallback.ownTools",
   }
 }
 

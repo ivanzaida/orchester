@@ -26,8 +26,8 @@
 //! `README.md` and completes its turn, once no `fake-hold` lies next to the worktrees (a test holds a continued session
 //! at work with it). A new session works in the `-C` directory.
 //!
-//! On standard error it reports what it was given: its arguments, the names of its environment
-//! variables and the first line of the prompt, so tests can check how it was started, and the
+//! On standard error it reports what it was given: its arguments, the names of its environment variables, its `PATH`
+//! and the prompt, so tests can check how it was started, and the
 //! process ids of itself and its helper, so tests can check that ending it ends both. It reports its MCP servers as
 //! `fake_mcp` describes.
 
@@ -139,6 +139,10 @@ fn read_prompt(args: &[String]) -> Option<String> {
   }
   eprintln!("argv: {}", args.join(" "));
   eprintln!("env: {}", names.join(","));
+  eprintln!(
+    "path: {}",
+    std::env::var_os("PATH").unwrap_or_default().to_string_lossy()
+  );
   eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
   for line in prompt.lines() {
     eprintln!("prompt| {line}");

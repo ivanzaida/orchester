@@ -11,7 +11,9 @@ use orchester_core::run::RunStatus;
 use crate::{
   github::{contains_text, shows},
   harness::Desktop,
-  task_run::{create_and_run, finished_on_page, has, init_repository, latest_run, programs, run_finished, seed},
+  task_run::{
+    agent_started, create_and_run, finished_on_page, has, init_repository, latest_run, programs, run_finished, seed,
+  },
 };
 
 /// Whether `id` is shown and holds `text`.
@@ -27,7 +29,9 @@ fn changes_tab_follows_new_checkpoints_and_lists_work_not_checkpointed() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, true));
   create_and_run(&mut desktop, "Work slowly.", "1400000");
-  desktop.wait_until("Pause run", |desktop| has(desktop, "task-pause-run"));
+  desktop.wait_until("Pause run while the agent works", |desktop| {
+    has(desktop, "task-pause-run") && agent_started(desktop.repo())
+  });
   desktop.click("task-pause-run");
   desktop.wait_until("Resume run", |desktop| has(desktop, "task-resume-run"));
   // Paused at Implement's checkpoint; a file written in the run's worktree since is not in it.
