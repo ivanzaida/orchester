@@ -37,14 +37,16 @@ The index shows the base revision. Anything you or earlier steps of this run cha
 `git diff --stat`) may have moved, so read those files directly. Files that are not tracked, or are
 git-ignored, are not in the index at all. The index is shared and read-only: never change its files.
 
-Not every source file has an outline or symbols. These are only in `tree.txt`, with their line count:
+Not every source file has an outline or symbols:
 
-- files over 1 MiB, and files with a line over 4 KiB (minified or generated code);
+- files over 1 MiB, files with a line over 4 KiB (minified or generated code), and the rare file the parser
+  did not finish in time have neither: they are only in `tree.txt`, with their line count;
 - files whose path is not a plain file name on every system (`:`, `?`, `\`, a trailing dot, a device name like
-  `CON`), and files whose path differs from another only in upper and lower case;
-- the rare file the parser did not finish in time.
+  `CON`), and files whose path differs from another only in upper and lower case, keep their symbols in
+  `symbols.tsv` but have no `outline/` file.
 
-For those, search the source itself with `rg`.
+For files without symbols, search the source itself with `rg`; for files without an outline, read the lines
+`symbols.tsv` points to.
 
 ## 2. Search rules
 
