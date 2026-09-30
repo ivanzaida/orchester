@@ -231,6 +231,52 @@ fn conversation_recovery_intent_round_trips_and_cannot_be_rewritten() {
   );
 }
 
+/// The migrations before the recovery migration; migrations are append-only, so this stays.
+const BEFORE_RECOVERY: u32 = 27;
+
+/// A project database at schema version `version` in a repository of its own, holding the rows of
+/// `current` (a database at the latest schema) in the columns that version has.
+fn copied_at_version(current: &std::path::Path, version: u32) -> tempfile::TempDir {
+  let repo = tempfile::tempdir().expect("temporary directory");
+  std::fs::create_dir(repo.path().join(".git")).expect("create .git");
+  let old = ProjectDb::create_at_version(repo.path(), version).expect("an old database");
+  old
+    .execute(
+      "ATTACH DATABASE ?1 AS current",
+      [current.to_str().expect("a UTF-8 path")],
+    )
+    .expect("attach");
+  old
+    .pragma_update(None, "foreign_keys", false)
+    .expect("no references while copying");
+  let tables: Vec<String> = old
+    .prepare("SELECT name FROM main.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+    .expect("tables")
+    .query_map([], |row| row.get(0))
+    .expect("tables")
+    .collect::<Result<_, _>>()
+    .expect("tables");
+  for table in tables {
+    let columns: Vec<String> = old
+      .prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))
+      .expect("columns")
+      .query_map([], |row| row.get(0))
+      .expect("columns")
+      .collect::<Result<_, _>>()
+      .expect("columns");
+    let columns = columns.join(", ");
+    // Replacing: the migrations seed some rows themselves, such as the counters.
+    old
+      .execute(
+        &format!("INSERT OR REPLACE INTO main.{table} ({columns}) SELECT {columns} FROM current.{table}"),
+        [],
+      )
+      .expect("copy the rows");
+  }
+  drop(old);
+  repo
+}
+
 #[test]
 fn conversation_recovery_migration_preserves_existing_failed_run_and_messages() {
   let (repo, mut db, mut run, execution, _) = working();
@@ -246,42 +292,10 @@ fn conversation_recovery_migration_preserves_existing_failed_run_and_messages() 
     at(19),
   );
   db.send_message(IdempotencyKey::generate(), &message).expect("stored");
-  let connection = raw(db, repo.path());
-  let version: u32 = connection
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("version");
-  // Restore the preceding schema's two changed tables, retaining genuine stored run records, and
-  // remove what the migration after it (memory) created, so both are applied again.
-  connection
-    .execute_batch(
-      r"
-    PRAGMA foreign_keys = OFF;
-    DROP TABLE invocation_memories;
-    DROP TABLE memory_settings;
-    DROP TABLE memories_words;
-    DROP TABLE memories_trigrams;
-    DROP TABLE memories;
-    DROP TRIGGER messages_recovery_immutable;
-    ALTER TABLE messages DROP COLUMN recovery_sequence;
-    CREATE TABLE attempts_previous (
-      id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id),
-      number INTEGER NOT NULL CHECK(number > 0),
-      reason TEXT NOT NULL CHECK(reason IN ('initial', 'retry', 'follow_up')),
-      failed_step TEXT, return_to TEXT,
-      status TEXT NOT NULL CHECK(status IN ('active', 'routed_back', 'succeeded', 'failed', 'cancelled')),
-      UNIQUE(run_id, number), CHECK((reason = 'retry') = (failed_step IS NOT NULL)),
-      CHECK((reason = 'initial') = (return_to IS NULL))
-    ) STRICT;
-    INSERT INTO attempts_previous SELECT * FROM attempts;
-    DROP TABLE attempts;
-    ALTER TABLE attempts_previous RENAME TO attempts;
-  ",
-    )
-    .expect("preceding schema");
-  connection
-    .pragma_update(None, "user_version", version - 2)
-    .expect("previous version");
-  drop(connection);
+  drop(db);
+  // The same rows in a database as it was before the recovery migration.
+  let current = repo.path().join(".orchester").join("orchester.db");
+  let repo = copied_at_version(&current, BEFORE_RECOVERY);
   let mut db = ProjectDb::open(repo.path()).expect("migrate existing project");
   assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
   assert_eq!(db.messages(run.task()).expect("messages"), [message]);
