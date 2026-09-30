@@ -242,20 +242,10 @@ fn records_read_back_refuses_combinations_no_transition_leads_to() {
 #[test]
 fn records_content_is_validated() {
   assert_eq!(
-    MemoryContent::new(
-      MemoryKind::Fact,
-      "  
-"
-    ),
+    MemoryContent::new(MemoryKind::Fact, "  \n"),
     Err(MemoryContentError::BlankText)
   );
-  assert_eq!(
-    MemoryKey::new(
-      "a
-b"
-    ),
-    Err(MemoryContentError::MultilineKey)
-  );
+  assert_eq!(MemoryKey::new("a\nb"), Err(MemoryContentError::MultilineKey));
   assert!(MemoryKey::new(&"k".repeat(121)).is_err());
   assert_eq!(Tags::new(["two words"]), Err(MemoryContentError::InvalidTag));
   let tags = Tags::new(["Auth", "auth", "db"]).expect("tags");

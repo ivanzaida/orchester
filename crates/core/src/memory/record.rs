@@ -197,6 +197,12 @@ impl Memory {
     self.decide(MemoryStatus::Active, now)
   }
 
+  /// A proposal that a newer record of its author replaced before any person decided on it: it is
+  /// superseded and waits for no one.
+  pub fn withdraw(&mut self, now: Timestamp) -> Result<(), MemoryError> {
+    self.decide(MemoryStatus::Superseded, now)
+  }
+
   /// A person rejects a proposed record: it never reaches an agent and cannot be restored.
   pub fn reject(&mut self, now: Timestamp) -> Result<(), MemoryError> {
     self.decide(MemoryStatus::Rejected, now)

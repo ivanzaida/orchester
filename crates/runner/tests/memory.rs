@@ -16,14 +16,14 @@ use orchester_core::{
     InjectionReason, MemoryAuthor, MemoryFilter, MemoryKind, MemoryLimits, MemorySettings, MemoryStatus, MemoryStore,
     ScopeFilter, WritePolicy,
   },
-  run::RunStatus,
+  run::{PlanDecision, Run, RunStatus},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
-  store::ActivityStore,
+  store::{ActivityStore, RunStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, TestProject, project, scheduler_with, wait_for};
+use self::support::{Setup, StepSpec, TestProject, project, scheduler_with, wait_for};
 
 const BRIEF: &str = "Leave a handoff.";
 
@@ -36,6 +36,12 @@ fn implement_then_review(provider: AgentProvider) -> Setup {
 }
 
 async fn run_to_the_end(project: &TestProject) -> RunId {
+  let (run, status) = run_until_it_ends(project).await;
+  assert_eq!(status, RunStatus::Succeeded);
+  run
+}
+
+async fn run_until_it_ends(project: &TestProject) -> (RunId, RunStatus) {
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
   let run = scheduler
@@ -43,8 +49,14 @@ async fn run_to_the_end(project: &TestProject) -> RunId {
     .await
     .expect("the run starts");
   let ended = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
-  assert_eq!(ended.status(), &RunStatus::Succeeded);
-  run
+  (run, ended.status().clone())
+}
+
+fn graph(steps: Vec<StepSpec>) -> TestProject {
+  project(&Setup {
+    steps,
+    ..Setup::new(BRIEF)
+  })
 }
 
 /// The prompt each invocation's CLI read, in launch order.
@@ -253,4 +265,82 @@ async fn memory_refuses_a_handoff_holding_a_secret_value() {
     "{details:?}"
   );
   assert!(!details.iter().any(|detail| detail.contains(value)), "{details:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn memory_a_failed_step_leaves_a_failed_attempt_without_decisions() {
+  let project = graph(vec![StepSpec::new("implement", "Implement", "Report failure.", &[])]);
+  let (_, status) = run_until_it_ends(&project).await;
+  assert!(matches!(status, RunStatus::Failed(_)), "{status:?}");
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  let memory = task_memory(&db, project.task);
+  assert_eq!(memory.len(), 1, "{memory:?}");
+  assert_eq!((memory[0].0, memory[0].1), (MemoryKind::Handoff, MemoryStatus::Active));
+  assert!(memory[0].2.starts_with("This attempt failed;"), "{memory:?}");
+  assert!(!memory[0].2.contains("Decisions:"), "{memory:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn memory_retries_keep_one_handoff_and_the_current_decisions_per_step() {
+  let project = graph(vec![
+    StepSpec::new("implement", "Implement", "Sign the line.", &[]),
+    StepSpec::new("review", "Review", "Fail once.", &["implement"]).retry("implement", 2),
+  ]);
+  run_to_the_end(&project).await;
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  let memory = task_memory(&db, project.task);
+  let mut active: Vec<(MemoryKind, String)> = memory
+    .iter()
+    .filter(|(_, status, _)| *status == MemoryStatus::Active)
+    .map(|(kind, _, text)| (*kind, text.lines().next().unwrap_or_default().to_owned()))
+    .collect();
+  active.sort();
+  assert_eq!(
+    active,
+    [
+      (MemoryKind::Decision, "Greet in README.md from Implement".to_owned()),
+      (MemoryKind::Decision, "Greet in README.md from Review".to_owned()),
+      (MemoryKind::Handoff, "Finished Implement".to_owned()),
+      (MemoryKind::Handoff, "Finished Review".to_owned()),
+    ],
+    "{memory:?}"
+  );
+  assert!(
+    memory.len() > active.len(),
+    "the earlier executions' records are kept, replaced"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn memory_an_approved_plan_keeps_its_handoff_only_then() {
+  let project = graph(vec![
+    StepSpec::new("plan", "Plan", "Propose a plan.", &[]).gate(),
+    StepSpec::new("implement", "Implement", "Follow the plan.", &["plan"]),
+  ]);
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let run = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, run, Run::waits_for_a_person).await;
+  let db = ProjectDb::open(root).expect("open");
+  assert!(
+    task_memory(&db, project.task).is_empty(),
+    "a proposed plan keeps nothing"
+  );
+  let plan = db.plans(run).expect("plans").pop().expect("a plan");
+  scheduler
+    .decide_plan(run, plan.execution, plan.version, PlanDecision::Approved)
+    .await
+    .expect("approved");
+  wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
+  let memory = task_memory(&db, project.task);
+  assert!(
+    memory.iter().any(|(kind, status, text)| *kind == MemoryKind::Handoff
+      && *status == MemoryStatus::Active
+      && text.starts_with("Finished Plan")),
+    "{memory:?}"
+  );
+  assert!(prompts(&db, run)[1].contains("## Latest handoff, from step `plan`"));
 }

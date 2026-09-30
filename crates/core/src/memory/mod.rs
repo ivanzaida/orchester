@@ -22,7 +22,7 @@ use std::fmt;
 
 pub use self::{
   content::{Confidence, Importance, MemoryContent, MemoryContentError, MemoryKey, MemoryKind, Tags},
-  handoff::Handoff,
+  handoff::{Handoff, HandoffWrite, MemoryChanges, StepFate},
   next::{StepContext, next_invocation_memory},
   query::MemoryQuery,
   recall::{InjectionReason, RecallRequest, Recalled, RecalledMemory, estimated_tokens, recall},

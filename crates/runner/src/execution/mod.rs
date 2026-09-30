@@ -21,6 +21,7 @@ mod checkpoint;
 mod control;
 mod conversation;
 mod halt;
+mod handoff;
 mod idle;
 mod permissions;
 mod plan;

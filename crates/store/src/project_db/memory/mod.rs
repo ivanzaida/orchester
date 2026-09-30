@@ -10,8 +10,8 @@ mod search;
 use orchester_core::{
   id::{InvocationId, MemoryId, TaskId},
   memory::{
-    InjectedMemory, InjectionReason, Memory, MemoryFilter, MemoryLimits, MemoryMatch, MemoryQuery, MemorySettings,
-    MemoryStatus, MemoryStore, ScopeFilter, WritePolicy,
+    InjectedMemory, InjectionReason, Memory, MemoryChanges, MemoryFilter, MemoryLimits, MemoryMatch, MemoryQuery,
+    MemorySettings, MemoryStatus, MemoryStore, ScopeFilter, WritePolicy,
   },
 };
 use rusqlite::{OptionalExtension, params};
@@ -40,6 +40,20 @@ impl MemoryStore for ProjectDb {
   fn add_memories(&mut self, memories: &[Memory]) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     for memory in memories {
+      rows::insert(&transaction, memory)?;
+    }
+    transaction.commit()?;
+    Ok(())
+  }
+
+  fn commit_memories(&mut self, changes: &MemoryChanges) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    for memory in &changes.changed {
+      if rows::update(&transaction, memory)? == 0 {
+        return Err(StoreError::MemoryNotFound(memory.id()));
+      }
+    }
+    for memory in &changes.added {
       rows::insert(&transaction, memory)?;
     }
     transaction.commit()?;

@@ -425,6 +425,10 @@ pub trait ActivityStore {
   /// Transcript entries of a run after sequence `after` (0: from the start), in order.
   fn activity(&self, run: RunId, after: u64) -> Result<Vec<ActivityEntry>, Self::Error>;
 
+  /// The last message the agent of `execution` wrote in `run`'s transcript, with its sequence: its
+  /// final message once its latest invocation ended.
+  fn last_agent_message(&self, run: RunId, execution: StepExecutionId) -> Result<Option<(u64, String)>, Self::Error>;
+
   /// Tokens that counted toward budgets in every run of the project since `since`, from the
   /// usage each completed turn reported.
   fn tokens_used_since(&self, since: Timestamp) -> Result<TokensUsed, Self::Error>;

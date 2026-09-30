@@ -2,11 +2,12 @@
 //! step's handoff leaves. Run with `cargo test -p orchester-core --test memory handoff`.
 
 use orchester_core::{
-  id::{ResourceId, TaskId},
+  id::{ResourceId, StepExecutionId, TaskId},
   memory::{
-    Confidence, Handoff, Importance, MemoryAuthor, MemoryKind, MemoryScope, MemorySettings, MemoryStatus, SecretScreen,
-    WritePolicy,
+    AgentProvenance, Confidence, Handoff, HandoffWrite, Importance, Memory, MemoryAuthor, MemoryChanges, MemoryKind,
+    MemoryScope, MemorySettings, MemoryStatus, SecretScreen, StepFate, WritePolicy,
   },
+  resource::StepKey,
   run::{STEP_RESULT_SCHEMA, StepOutcome, StepResult},
 };
 
@@ -73,45 +74,164 @@ fn handoff_malformed_lists_never_cost_the_outcome() {
   assert_eq!(StepResult::parse(r#"{"outcome":"done","summary":7}"#), None);
 }
 
+struct Keeping {
+  task: TaskId,
+  screen: SecretScreen,
+  settings: MemorySettings,
+}
+
+impl Keeping {
+  fn new() -> Self {
+    Self {
+      task: TaskId::generate(),
+      screen: SecretScreen::new(Vec::new()),
+      settings: MemorySettings::default(),
+    }
+  }
+
+  fn changes(&self, text: &str, (agent, fate): (&AgentProvenance, StepFate), earlier: Vec<Memory>) -> MemoryChanges {
+    let result = StepResult::parse(text).expect("a result");
+    let write = HandoffWrite {
+      task: self.task,
+      provenance: agent,
+      sources: &[12],
+      fate,
+      settings: &self.settings,
+      screen: &self.screen,
+      now: at(5),
+    };
+    Handoff::from_result(&result)
+      .expect("a handoff")
+      .changes(&write, earlier)
+      .expect("no secrets")
+  }
+}
+
+/// A later execution of the same step as `agent`.
+fn again(agent: &AgentProvenance) -> AgentProvenance {
+  AgentProvenance {
+    execution: StepExecutionId::generate(),
+    ..agent.clone()
+  }
+}
+
+fn kinds(records: &[Memory]) -> Vec<(MemoryKind, MemoryStatus)> {
+  records
+    .iter()
+    .map(|record| (record.content().kind(), record.status()))
+    .collect()
+}
+
 #[test]
-fn handoff_becomes_task_memory_with_its_decisions() {
-  let result = StepResult::parse(RESULT).expect("a result");
-  let handoff = Handoff::from_result(&result).expect("a handoff");
+fn handoff_of_a_passed_step_becomes_task_memory_with_its_decisions() {
+  let keeping = Keeping::new();
+  let agent = provenance(ResourceId::generate());
+  let added = keeping.changes(RESULT, (&agent, StepFate::Passed), Vec::new()).added;
   assert_eq!(
-    handoff.text(),
+    added[0].content().text(),
     "Added the memory store.\n\nCompleted:\n- Tables and FTS5 indexes\n\nDecisions:\n- Use the trigram tokenizer \
      for identifiers.\n\nThe next agent should know:\n- Run the store tests with a name filter."
   );
-  let task = TaskId::generate();
-  let agent = provenance(ResourceId::generate());
-  let screen = SecretScreen::new(Vec::new());
-  let settings = MemorySettings::default();
-  let records = handoff
-    .records(task, (&agent, &[12]), (&settings, &screen), at(5))
-    .expect("no secrets");
-  let kinds: Vec<MemoryKind> = records.iter().map(|record| record.content().kind()).collect();
-  assert_eq!(kinds, [MemoryKind::Handoff, MemoryKind::Decision]);
-  for record in &records {
-    assert_eq!(record.scope(), MemoryScope::Task(task));
-    assert_eq!(record.status(), MemoryStatus::Active);
+  assert_eq!(
+    kinds(&added),
+    [
+      (MemoryKind::Handoff, MemoryStatus::Active),
+      (MemoryKind::Decision, MemoryStatus::Active)
+    ]
+  );
+  for record in &added {
+    assert_eq!(record.scope(), MemoryScope::Task(keeping.task));
     assert_eq!(record.author(), &MemoryAuthor::Agent(agent.clone()));
     assert_eq!(record.sources(), [12]);
     assert_eq!(record.confidence(), Confidence::Medium);
     assert_eq!(record.content().importance(), Importance::High);
   }
-  assert_eq!(
-    records[1].content().text(),
-    "Use the trigram tokenizer for identifiers."
-  );
+  assert_eq!(added[1].content().text(), "Use the trigram tokenizer for identifiers.");
 
-  let approval = MemorySettings {
-    task_writes: WritePolicy::AfterApproval,
-    ..settings
+  let approval = Keeping {
+    settings: MemorySettings {
+      task_writes: WritePolicy::AfterApproval,
+      ..MemorySettings::default()
+    },
+    ..Keeping::new()
   };
-  let proposed = handoff
-    .records(task, (&agent, &[]), (&approval, &screen), at(5))
-    .expect("no secrets");
+  let proposed = approval.changes(RESULT, (&agent, StepFate::Passed), Vec::new()).added;
   assert!(proposed.iter().all(|record| record.status() == MemoryStatus::Proposed));
+}
+
+#[test]
+fn handoff_of_a_failed_step_is_a_failed_attempt_without_decisions() {
+  let keeping = Keeping::new();
+  let added = keeping
+    .changes(
+      RESULT,
+      (&provenance(ResourceId::generate()), StepFate::Failed),
+      Vec::new(),
+    )
+    .added;
+  assert_eq!(kinds(&added), [(MemoryKind::Handoff, MemoryStatus::Active)]);
+  let text = added[0].content().text();
+  assert!(text.starts_with("This attempt failed;"), "{text}");
+  assert!(!text.contains("Decisions:"), "{text}");
+}
+
+#[test]
+fn handoff_replaces_the_steps_earlier_handoff_and_decisions() {
+  let keeping = Keeping::new();
+  let first = provenance(ResourceId::generate());
+  let earlier = keeping.changes(RESULT, (&first, StepFate::Passed), Vec::new()).added;
+  let other_step = AgentProvenance {
+    step: StepKey::new("review").expect("key"),
+    ..again(&first)
+  };
+  let other = keeping
+    .changes(RESULT, (&other_step, StepFate::Passed), Vec::new())
+    .added;
+  let mut all = earlier.clone();
+  all.extend(other);
+
+  let retried = keeping.changes(RESULT, (&again(&first), StepFate::Passed), all.clone());
+  assert_eq!(
+    kinds(&retried.changed),
+    [
+      (MemoryKind::Handoff, MemoryStatus::Superseded),
+      (MemoryKind::Decision, MemoryStatus::Deprecated)
+    ],
+    "only the step's own earlier records change"
+  );
+  assert_eq!(retried.changed[0].id(), earlier[0].id());
+  assert_eq!(retried.added[0].supersedes(), Some(earlier[0].id()));
+
+  // A failed attempt replaces the handoff but keeps the decisions of the step's last pass.
+  let failed = keeping.changes(RESULT, (&again(&first), StepFate::Failed), all);
+  assert_eq!(
+    kinds(&failed.changed),
+    [(MemoryKind::Handoff, MemoryStatus::Superseded)]
+  );
+  assert_eq!(kinds(&failed.added), [(MemoryKind::Handoff, MemoryStatus::Active)]);
+}
+
+#[test]
+fn handoff_proposals_wait_and_earlier_proposals_are_withdrawn() {
+  let keeping = Keeping {
+    settings: MemorySettings {
+      task_writes: WritePolicy::AfterApproval,
+      ..MemorySettings::default()
+    },
+    ..Keeping::new()
+  };
+  let first = provenance(ResourceId::generate());
+  let mut earlier = keeping.changes(RESULT, (&first, StepFate::Passed), Vec::new()).added;
+  // The person approved the first handoff only; its decision still waits.
+  earlier[0].approve(None, at(6)).expect("approve");
+  let next = keeping.changes(RESULT, (&again(&first), StepFate::Passed), earlier.clone());
+  assert_eq!(
+    kinds(&next.changed),
+    [(MemoryKind::Decision, MemoryStatus::Superseded)],
+    "the waiting decision is withdrawn; the active handoff stays until the new one is approved"
+  );
+  assert_eq!(next.added[0].status(), MemoryStatus::Proposed);
+  assert_eq!(next.added[0].supersedes(), Some(earlier[0].id()));
 }
 
 #[test]
@@ -128,14 +248,20 @@ fn handoff_of_a_question_or_holding_a_secret_is_not_kept() {
   )
   .expect("a result");
   let screen = SecretScreen::new(vec![(secret_name("DEPLOY_PASSWORD"), secret_value("fake-pass-31337"))]);
+  let agent = provenance(ResourceId::generate());
+  let settings = MemorySettings::default();
+  let write = HandoffWrite {
+    task: TaskId::generate(),
+    provenance: &agent,
+    sources: &[],
+    fate: StepFate::Passed,
+    settings: &settings,
+    screen: &screen,
+    now: at(1),
+  };
   let refused = Handoff::from_result(&leaked)
     .expect("a handoff")
-    .records(
-      TaskId::generate(),
-      (&provenance(ResourceId::generate()), &[]),
-      (&MemorySettings::default(), &screen),
-      at(1),
-    )
+    .changes(&write, Vec::new())
     .expect_err("the secret is refused");
   assert_eq!(refused.secret, secret_name("DEPLOY_PASSWORD"));
   assert!(!refused.to_string().contains("31337"));

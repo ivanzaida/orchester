@@ -1,7 +1,7 @@
 //! Where memory records are kept. The project database implements it today (SQLite with full-text
 //! indexes); a server will implement it with a store of its own.
 
-use super::{InjectionReason, Memory, MemoryQuery, MemorySettings, MemoryStatus};
+use super::{InjectionReason, Memory, MemoryChanges, MemoryQuery, MemorySettings, MemoryStatus};
 use crate::id::{InvocationId, MemoryId, TaskId};
 
 /// Which scopes a listing covers.
@@ -46,9 +46,14 @@ pub struct InjectedMemory {
 pub trait MemoryStore {
   type Error: std::error::Error + Send + Sync + 'static;
 
-  /// Stores new records, atomically. A key names at most one active record of its scope: a record
-  /// whose key another active record of its scope has is refused, and nothing is stored.
+  /// Stores new records, atomically; a record whose id is stored already is refused. A key names at most one active
+  /// record of its scope: a record whose key another active record of its scope has is refused, and nothing is
+  /// stored.
   fn add_memories(&mut self, memories: &[Memory]) -> Result<(), Self::Error>;
+
+  /// Stores `changes` atomically: the changed records first, then the added ones, under the same
+  /// rules as [`MemoryStore::save_memory`] and [`MemoryStore::add_memories`].
+  fn commit_memories(&mut self, changes: &MemoryChanges) -> Result<(), Self::Error>;
 
   /// Stores what an existing record says, its status and its pin, under the same key rule.
   fn save_memory(&mut self, memory: &Memory) -> Result<(), Self::Error>;

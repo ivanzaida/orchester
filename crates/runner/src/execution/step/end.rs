@@ -2,7 +2,8 @@
 //! worked beside others is merged back into the run's branch (for command tools as well, see
 //! `tool::end`). Its final message becomes its output for the steps after it; the step then passes
 //! — a gated one proposes the output as its next plan and waits for a decision — or fails for a
-//! reason its failure route handles. A failed step ends the attempt, so agents of the same attempt
+//! reason its failure route handles; once its fate is known, its handoff is kept as task memory
+//! (`super::memory`). A failed step ends the attempt, so agents of the same attempt
 //! still at work are ended. An agent whose turn ends reads what people wrote first (see
 //! `conversation`): its question makes the step wait for the answer, and messages queued for it
 //! keep the step going.
@@ -124,13 +125,14 @@ impl RunTask {
     }
     if (output.outcome.is_some() || !output.text.is_empty()) && !self.run.is_follow_up(execution) {
       self.db.save_step_output(&output)?;
-      self.remember_handoff(execution, active, finished.final_message.as_deref())?;
     }
     if let Some(failure) = failure {
       self.save(execution, active, "step failed")?;
-      return self.fail(execution, failure);
+      self.fail(execution, failure)?;
+    } else {
+      self.pass(execution, active, output.text)?;
     }
-    self.pass(execution, active, output.text)
+    self.keep_handoff(execution)
   }
 
   /// A step its agent or command finished with `output`: its work joins the run's branch and the

@@ -125,6 +125,31 @@ impl ActivityStore for ProjectDb {
     Ok(last)
   }
 
+  fn last_agent_message(&self, run: RunId, execution: StepExecutionId) -> Result<Option<(u64, String)>, StoreError> {
+    let row: Option<(i64, String)> = self
+      .connection
+      .query_row(
+        "
+        SELECT sequence, payload FROM agent_events
+        WHERE run_id = ?1 AND step_execution_id = ?2 AND kind = 'message'
+        ORDER BY sequence DESC LIMIT 1",
+        params![run.to_string(), execution.to_string()],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+      )
+      .optional()?;
+    let Some((sequence, payload)) = row else {
+      return Ok(None);
+    };
+    let sequence = u64::try_from(sequence).map_err(|_| corrupt("agent event sequence", sequence))?;
+    match decode_json("agent event", EVENT_SCHEMA, &payload)? {
+      AgentEvent::Message { text } => Ok(Some((sequence, text))),
+      other => Err(corrupt(
+        "agent event",
+        format!("kind `message` holds a `{}` payload", other.name()),
+      )),
+    }
+  }
+
   fn activity(&self, run: RunId, after: u64) -> Result<Vec<ActivityEntry>, StoreError> {
     let mut statement = self.connection.prepare(
       "SELECT sequence, step_execution_id, invocation_id, at, kind, payload FROM agent_events \

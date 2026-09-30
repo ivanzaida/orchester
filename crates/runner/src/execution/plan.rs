@@ -7,17 +7,20 @@
 
 use orchester_core::{
   id::{RunId, StepExecutionId},
+  memory::StepFate,
   run::{Plan, PlanDecision, PlanVersion, Run, RunError},
   store::RunStore,
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ProjectDb, RunStoreError};
+use orchester_store::RunStoreError;
 
 use super::{
-  Notifier, Scheduler,
+  Scheduler,
   control::{Ack, Control, answer},
-  failed, idle,
+  failed,
+  handoff::Keeper,
+  idle,
   prepare::Prepared,
   record::{RecordError, announce_ready},
   run::{ExecutionError, RunTask},
@@ -70,7 +73,12 @@ impl Scheduler {
     let mut db = self.open()?;
     // A run that cannot continue refuses the decision before it is recorded.
     let mut prepared = Prepared::continuing(&db, &self.inner.project_root, idle::load(&db, run)?)?;
-    record(&mut db, &self.inner.notifier, &mut prepared.run, request)?;
+    let keeper = Keeper {
+      db: &mut db,
+      notifier: &self.inner.notifier,
+      vault: self.inner.vault.as_ref(),
+    };
+    record(keeper, &mut prepared.run, request)?;
     self.spawn(db, prepared)
   }
 }
@@ -104,7 +112,12 @@ impl RunTask {
 
   /// Records a decision that came while other steps of the run work; the run goes on from it.
   pub(super) fn decide_plan(&mut self, request: PlanRequest, ack: Ack) -> Result<(), ExecutionError> {
-    let result = record(&mut self.db, &self.notifier, &mut self.run, request);
+    let keeper = Keeper {
+      db: &mut self.db,
+      notifier: &self.notifier,
+      vault: self.vault.as_ref(),
+    };
+    let result = record(keeper, &mut self.run, request);
     answer(ack, result);
     Ok(())
   }
@@ -112,8 +125,9 @@ impl RunTask {
 
 /// Applies `request` to `run`: the plan must be the latest of its execution and still undecided,
 /// and the run running with the step waiting for it. Stores the decision with its events and
-/// announces the change.
-fn record(db: &mut ProjectDb, notifier: &Notifier, run: &mut Run, request: PlanRequest) -> Result<(), Rejection> {
+/// announces the change; an approved plan's handoff is then kept as task memory.
+fn record(keeper: Keeper<'_>, run: &mut Run, request: PlanRequest) -> Result<(), Rejection> {
+  let Keeper { db, notifier, vault } = keeper;
   let plans = db
     .plans(run.id())
     .map_err(|error| failed("cannot read the run's plans", &error))?;
@@ -121,6 +135,7 @@ fn record(db: &mut ProjectDb, notifier: &Notifier, run: &mut Run, request: PlanR
     .filter(|plan| plan.version == request.version && plan.review.is_none())
     .cloned()
     .ok_or(Rejection::PlanNotAwaited)?;
+  let approved = request.decision == PlanDecision::Approved;
   let events = run
     .decide_plan(&mut plan, request.decision, Timestamp::now())
     .map_err(rejection)?;
@@ -133,6 +148,14 @@ fn record(db: &mut ProjectDb, notifier: &Notifier, run: &mut Run, request: PlanR
   });
   // Approving the plan of the last step finishes the run.
   announce_ready(notifier, run);
+  if approved {
+    let mut keeper = Keeper { db, notifier, vault };
+    // The decision is recorded and the run goes on; a handoff the database could not take is logged
+    // rather than turning the recorded decision into a rejection.
+    if let Err(error) = keeper.keep(run, request.execution, StepFate::Passed) {
+      tracing::error!(run = %run.id(), execution = %request.execution, %error, "the approved plan's handoff was not kept");
+    }
+  }
   Ok(())
 }
 
