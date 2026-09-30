@@ -78,6 +78,16 @@ pub enum InstallError {
   TimedOut { after: Duration },
 }
 
+/// An installer's exit code as people look it up: a small code in decimal, an HRESULT-style one
+/// (winget's `0x8A150011`, negative as a signed number) in hexadecimal.
+pub fn exit_code_text(code: i32) -> String {
+  if (0..=0xFFFF).contains(&code) {
+    code.to_string()
+  } else {
+    format!("0x{:08X}", code.cast_unsigned())
+  }
+}
+
 /// How ripgrep is installed here: the installer and its program.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstallPlan {

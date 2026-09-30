@@ -14,7 +14,7 @@ use std::{
 use orchester_core::command::Command;
 use orchester_exec::ripgrep::{
   self, Found, PROGRAM, Source,
-  install::{InstallError, InstallPlan, InstallUnavailable, Installer, Installing},
+  install::{InstallError, InstallPlan, InstallUnavailable, Installer, Installing, exit_code_text},
 };
 
 /// The Codex CLI package's target folder on this platform.
@@ -364,4 +364,11 @@ fn installing_with_homebrew_does_not_update_homebrew_first() {
       .iter()
       .any(|(name, value)| name == "HOMEBREW_NO_AUTO_UPDATE" && value == "1")
   );
+}
+
+#[test]
+fn installer_exit_codes_read_as_the_installer_documents_them() {
+  assert_eq!(exit_code_text(1), "1");
+  assert_eq!(exit_code_text(0x8A15_0011_u32.cast_signed()), "0x8A150011");
+  assert_eq!(exit_code_text(-1), "0xFFFFFFFF");
 }
