@@ -7,9 +7,10 @@ mod support;
 use orchester_core::{
   id::{IdempotencyKey, InvocationId, MemoryId, ResourceId, StepExecutionId, TaskId},
   memory::{
-    AgentProvenance, AgentWrite, Confidence, InjectedMemory, InjectionReason, Memory, MemoryAuthor, MemoryContent,
-    MemoryFilter, MemoryKey, MemoryKind, MemoryLimits, MemoryQuery, MemoryScope, MemorySettings, MemoryStatus,
-    MemoryStore, ScopeFilter, ScreenedContent, SecretScreen, StepContext, Tags, WritePolicy, next_invocation_memory,
+    AgentProvenance, AgentWrite, Confidence, Delivery, InjectedMemory, InjectionReason, Memory, MemoryAuthor,
+    MemoryContent, MemoryFilter, MemoryKey, MemoryKind, MemoryLimits, MemoryQuery, MemoryScope, MemorySettings,
+    MemoryStatus, MemoryStore, ScopeFilter, ScreenedContent, SecretScreen, StepContext, Tags, WritePolicy,
+    next_invocation_memory,
   },
   resource::StepKey,
   run::Run,
@@ -349,11 +350,13 @@ fn memory_injected_into_an_invocation_is_recorded_in_order() {
       memory: MemoryId::generate(),
       reason: InjectionReason::Handoff,
       tokens: 120,
+      delivery: Delivery::Truncated,
     },
     InjectedMemory {
       memory: MemoryId::generate(),
       reason: InjectionReason::Match,
       tokens: 8,
+      delivery: Delivery::OverTokenLimit,
     },
   ];
   db.save_injected_memory(invocation.id, &injected).expect("save");

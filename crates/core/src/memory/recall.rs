@@ -10,15 +10,11 @@
 //! 0.5 and 1 for low, normal (medium) and high; recency halves every 14 days since the record last
 //! changed; role is 1 for a record the same agent profile wrote or one tagged with the agent's
 //! role, else 0.
-//! A record already chosen, one with the key of a chosen one and one saying the same as a chosen
-//! one are left out. Records are then taken in order while the project's record limit allows,
-//! skipping any that would exceed its token limit.
-
-use std::collections::BTreeSet;
+//! The ranked records are then taken within the project's limits ([`super::selection`]).
 
 use super::{
-  Confidence, Importance, InjectedMemory, Memory, MemoryAuthor, MemoryKind, MemoryLimits, MemoryMatch, MemoryScope,
-  MemoryStatus, render::entry_text,
+  Confidence, Importance, Memory, MemoryAuthor, MemoryKind, MemoryLimits, MemoryMatch, MemoryScope, MemoryStatus,
+  selection::{Ranked, Recalled, within_limits},
 };
 use crate::{
   id::{ResourceId, TaskId},
@@ -95,49 +91,6 @@ pub struct RecallRequest<'a> {
   pub now: Timestamp,
 }
 
-/// A record chosen for a prompt, why, and the text the prompt shows for it ([`super::render`]).
-#[derive(Clone, Debug, PartialEq)]
-pub struct RecalledMemory {
-  pub memory: Memory,
-  pub reason: InjectionReason,
-  pub text: String,
-  pub tokens: u32,
-}
-
-/// The records a prompt gets, in prompt order.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Recalled {
-  entries: Vec<RecalledMemory>,
-}
-
-impl Recalled {
-  pub fn entries(&self) -> &[RecalledMemory] {
-    &self.entries
-  }
-
-  pub fn is_empty(&self) -> bool {
-    self.entries.is_empty()
-  }
-
-  /// The estimated tokens of all the records.
-  pub fn tokens(&self) -> u32 {
-    self.entries.iter().map(|entry| entry.tokens).sum()
-  }
-
-  /// What to record with the invocation.
-  pub fn injected(&self) -> Vec<InjectedMemory> {
-    self
-      .entries
-      .iter()
-      .map(|entry| InjectedMemory {
-        memory: entry.memory.id(),
-        reason: entry.reason,
-        tokens: entry.tokens,
-      })
-      .collect()
-  }
-}
-
 /// The records for `request` from `candidates` (the task's active records and the project's pinned
 /// ones) and the search's `matches`, as the module describes.
 pub fn recall(request: &RecallRequest<'_>, mut candidates: Vec<Memory>, mut matches: Vec<MemoryMatch>) -> Recalled {
@@ -184,9 +137,15 @@ pub fn recall(request: &RecallRequest<'_>, mut candidates: Vec<Memory>, mut matc
       .then(right_score.total_cmp(left_score))
       .then(right.updated_at().cmp(&left.updated_at()))
   });
-  Recalled {
-    entries: within_limits(request.limits, ranked),
-  }
+  let ranked = ranked
+    .into_iter()
+    .map(|(reason, _, memory)| Ranked {
+      reason,
+      body: memory.content().text().to_owned(),
+      memory,
+    })
+    .collect();
+  within_limits(request.limits, ranked)
 }
 
 /// Whether `memory` may reach an agent of the request's task at all.
@@ -225,45 +184,4 @@ fn score(request: &RecallRequest<'_>, memory: &Memory, relevance: f64) -> f64 {
     Confidence::High => 1.0,
   };
   RELEVANCE * relevance + IMPORTANCE * importance + RECENCY * recency + ROLE * role + CONFIDENCE * confidence
-}
-
-/// The ranked records, each once, within the record and token limits.
-fn within_limits(limits: MemoryLimits, ranked: Vec<(InjectionReason, f64, Memory)>) -> Vec<RecalledMemory> {
-  let mut ids = BTreeSet::new();
-  let mut keys = BTreeSet::new();
-  let mut texts = BTreeSet::new();
-  let mut tokens = 0_u32;
-  let mut chosen = Vec::new();
-  for (reason, _, memory) in ranked {
-    if chosen.len() >= usize::from(limits.records()) {
-      break;
-    }
-    let same_text = memory
-      .content()
-      .text()
-      .split_whitespace()
-      .collect::<Vec<_>>()
-      .join(" ")
-      .to_lowercase();
-    let key = memory.content().key().cloned();
-    if ids.contains(&memory.id()) || key.as_ref().is_some_and(|key| keys.contains(key)) || texts.contains(&same_text) {
-      continue;
-    }
-    let text = entry_text(&memory, reason, memory.content().text());
-    let cost = estimated_tokens(&text);
-    if tokens.saturating_add(cost) > limits.tokens() {
-      continue;
-    }
-    tokens += cost;
-    ids.insert(memory.id());
-    keys.extend(key);
-    texts.insert(same_text);
-    chosen.push(RecalledMemory {
-      memory,
-      reason,
-      text,
-      tokens: cost,
-    });
-  }
-  chosen
 }

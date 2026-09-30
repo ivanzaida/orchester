@@ -1,7 +1,7 @@
 //! Where memory records are kept. The project database implements it today (SQLite with full-text
 //! indexes); a server will implement it with a store of its own.
 
-use super::{InjectionReason, Memory, MemoryChanges, MemoryQuery, MemorySettings, MemoryStatus};
+use super::{Delivery, InjectionReason, Memory, MemoryChanges, MemoryQuery, MemorySettings, MemoryStatus};
 use crate::id::{InvocationId, MemoryId, TaskId};
 
 /// Which scopes a listing covers.
@@ -32,13 +32,15 @@ pub struct MemoryMatch {
   pub fragments: f64,
 }
 
-/// A record an invocation's prompt held, and why it was chosen, in prompt order.
+/// A record chosen for an invocation's prompt, why, and whether the prompt got it: in prompt order,
+/// then the records the limits left out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InjectedMemory {
   pub memory: MemoryId,
   pub reason: InjectionReason,
-  /// Its estimated tokens ([`super::estimated_tokens`]) as injected.
+  /// Its estimated tokens ([`super::estimated_tokens`]) as given, or as it would have been.
   pub tokens: u32,
+  pub delivery: Delivery,
 }
 
 /// Memory records, the project's memory setting and what each invocation was given. Agents' writes

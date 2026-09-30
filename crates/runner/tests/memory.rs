@@ -13,8 +13,8 @@ use orchester_core::{
   },
   id::{IdempotencyKey, RunId, SecretId, TaskId},
   memory::{
-    InjectionReason, MemoryAuthor, MemoryFilter, MemoryKind, MemoryLimits, MemorySettings, MemoryStatus, MemoryStore,
-    ScopeFilter, WritePolicy,
+    Delivery, InjectionReason, MemoryAuthor, MemoryFilter, MemoryKind, MemoryLimits, MemorySettings, MemoryStatus,
+    MemoryStore, ScopeFilter, WritePolicy,
   },
   run::{PlanDecision, Run, RunStatus},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
@@ -100,7 +100,22 @@ fn task_memory(db: &ProjectDb, task: TaskId) -> Vec<(MemoryKind, MemoryStatus, S
     .collect()
 }
 
+/// Why each record an invocation's prompt was given was chosen, per invocation.
 fn injected(db: &ProjectDb, run: RunId) -> Vec<Vec<InjectionReason>> {
+  recorded(db, run)
+    .into_iter()
+    .map(|entries| {
+      entries
+        .into_iter()
+        .filter(|(_, delivery)| delivery.is_given())
+        .map(|(reason, _)| reason)
+        .collect()
+    })
+    .collect()
+}
+
+/// Every record chosen for each invocation's prompt and what became of it.
+fn recorded(db: &ProjectDb, run: RunId) -> Vec<Vec<(InjectionReason, Delivery)>> {
   db.invocations(run)
     .expect("invocations")
     .iter()
@@ -108,7 +123,7 @@ fn injected(db: &ProjectDb, run: RunId) -> Vec<Vec<InjectionReason>> {
       db.injected_memory(invocation.id)
         .expect("injected")
         .into_iter()
-        .map(|entry| entry.reason)
+        .map(|entry| (entry.reason, entry.delivery))
         .collect()
     })
     .collect()
@@ -227,7 +242,16 @@ async fn memory_limits_come_from_the_setting() {
     .expect("save the setting");
   let run = run_to_the_end(&project).await;
   let db = ProjectDb::open(project.repo.path()).expect("open");
-  assert_eq!(injected(&db, run), [vec![], vec![InjectionReason::Handoff]]);
+  assert_eq!(
+    recorded(&db, run),
+    [
+      vec![],
+      vec![
+        (InjectionReason::Handoff, Delivery::Given),
+        (InjectionReason::Decision, Delivery::OverRecordLimit)
+      ]
+    ]
+  );
   assert!(!prompts(&db, run)[1].contains("Decision:\n>"));
 }
 

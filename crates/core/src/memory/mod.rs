@@ -16,6 +16,7 @@ mod recall;
 mod record;
 mod render;
 mod screen;
+mod selection;
 mod settings;
 mod store;
 
@@ -26,10 +27,11 @@ pub use self::{
   handoff::{Handoff, HandoffWrite, MemoryChanges, StepFate},
   next::{StepContext, next_invocation_memory},
   query::MemoryQuery,
-  recall::{InjectionReason, RecallRequest, Recalled, RecalledMemory, estimated_tokens, recall},
+  recall::{InjectionReason, RecallRequest, estimated_tokens, recall},
   record::{AgentWrite, Memory, MemoryError, StoredMemory, StoredMemoryError},
   render::quoted,
   screen::{ContainsSecret, ScreenUnavailable, ScreenedContent, SecretScreen},
+  selection::{Delivery, LeftOut, Recalled, RecalledMemory},
   settings::{MemoryLimits, MemoryLimitsError, MemorySettings, WritePolicy},
   store::{InjectedMemory, MemoryFilter, MemoryMatch, MemoryStore, ScopeFilter},
 };

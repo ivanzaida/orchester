@@ -4,14 +4,15 @@
 //! the earlier versions it superseded with it. The bundled SQLite is built with FTS5 (rusqlite's `bundled` feature
 //! compiles it with `SQLITE_ENABLE_FTS5`), and its trigram tokenizer exists since SQLite 3.34.
 
+mod injected;
 mod rows;
 mod search;
 
 use orchester_core::{
   id::{InvocationId, MemoryId, TaskId},
   memory::{
-    InjectedMemory, InjectionReason, Memory, MemoryChanges, MemoryFilter, MemoryLimits, MemoryMatch, MemoryQuery,
-    MemorySettings, MemoryStatus, MemoryStore, ScopeFilter, WritePolicy,
+    InjectedMemory, Memory, MemoryChanges, MemoryFilter, MemoryLimits, MemoryMatch, MemoryQuery, MemorySettings,
+    MemoryStatus, MemoryStore, ScopeFilter, WritePolicy,
   },
 };
 use rusqlite::{OptionalExtension, params};
@@ -169,47 +170,10 @@ impl MemoryStore for ProjectDb {
   }
 
   fn save_injected_memory(&mut self, invocation: InvocationId, injected: &[InjectedMemory]) -> Result<(), StoreError> {
-    let transaction = self.connection.transaction()?;
-    for (position, entry) in injected.iter().enumerate() {
-      let changed = transaction.execute(
-        "INSERT INTO invocation_memories (invocation_id, position, memory_id, reason, tokens) \
-         SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM invocations WHERE id = ?1)",
-        params![
-          invocation.to_string(),
-          i64::try_from(position).map_err(|_| StoreError::Unrepresentable("memory position"))?,
-          entry.memory.to_string(),
-          entry.reason.name(),
-          entry.tokens,
-        ],
-      )?;
-      if changed == 0 {
-        return Err(StoreError::InvocationNotFound(invocation));
-      }
-    }
-    transaction.commit()?;
-    Ok(())
+    injected::save(&mut self.connection, invocation, injected)
   }
 
   fn injected_memory(&self, invocation: InvocationId) -> Result<Vec<InjectedMemory>, StoreError> {
-    let mut statement = self.connection.prepare(
-      "SELECT memory_id, reason, tokens FROM invocation_memories WHERE invocation_id = ?1 ORDER BY position",
-    )?;
-    let rows = statement.query_map([invocation.to_string()], |row| {
-      Ok((
-        row.get::<_, String>(0)?,
-        row.get::<_, String>(1)?,
-        row.get::<_, u32>(2)?,
-      ))
-    })?;
-    rows
-      .map(|row| {
-        let (memory, reason, tokens) = row?;
-        Ok(InjectedMemory {
-          memory: crate::rows::parse("injected memory id", &memory)?,
-          reason: InjectionReason::from_name(&reason).ok_or_else(|| corrupt("injection reason", &reason))?,
-          tokens,
-        })
-      })
-      .collect()
+    injected::load(&self.connection, invocation)
   }
 }

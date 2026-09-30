@@ -79,8 +79,9 @@ CREATE TABLE memory_settings (
   max_tokens INTEGER NOT NULL CHECK (max_tokens BETWEEN 500 AND 20000)
 ) STRICT;
 
--- The records each invocation's prompt was given, in prompt order, with their estimated tokens,
--- written once before its agent starts. No reference to `memories`: a record a person deletes later
+-- The records chosen for each invocation's prompt, with their estimated tokens: those it was given
+-- (whole, or cut to fit) in prompt order, then those the limits left out; written once before its
+-- agent starts. No reference to `memories`: a record a person deletes later
 -- stays listed by its id, which then resolves to no record.
 CREATE TABLE invocation_memories (
   invocation_id TEXT NOT NULL REFERENCES invocations (id),
@@ -88,6 +89,7 @@ CREATE TABLE invocation_memories (
   memory_id TEXT NOT NULL,
   reason TEXT NOT NULL CHECK (reason IN ('handoff', 'pinned', 'decision', 'warning', 'match')),
   tokens INTEGER NOT NULL CHECK (tokens >= 0),
+  delivery TEXT NOT NULL CHECK (delivery IN ('given', 'truncated', 'over_record_limit', 'over_token_limit')),
   PRIMARY KEY (invocation_id, position)
 ) STRICT;
 ";

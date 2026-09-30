@@ -4,7 +4,7 @@
 use orchester_core::{
   id::{ResourceId, TaskId},
   memory::{
-    InjectionReason, Memory, MemoryKey, MemoryKind, MemoryLimits, MemoryMatch, MemoryQuery, MemoryScope,
+    Delivery, InjectionReason, Memory, MemoryKey, MemoryKind, MemoryLimits, MemoryMatch, MemoryQuery, MemoryScope,
     MemorySettings, RecallRequest, SecretScreen, Tags, estimated_tokens, recall,
   },
 };
@@ -194,7 +194,15 @@ fn recall_caps_at_eight_records_and_three_thousand_tokens() {
       )
     })
     .collect();
-  assert_eq!(recall(&request, Vec::new(), many).entries().len(), 8);
+  let recalled = recall(&request, Vec::new(), many);
+  assert_eq!(recalled.entries().len(), 8);
+  assert_eq!(recalled.left_out().len(), 4);
+  assert!(
+    recalled
+      .left_out()
+      .iter()
+      .all(|left| left.delivery == Delivery::OverRecordLimit)
+  );
 
   // Just over 1,000 tokens each: a third would pass 3,000, so the small one comes third.
   let big = |n: i64| fixture.by_person(MemoryKind::Fact, &format!("{n}{}", "x".repeat(4_000)), n);
@@ -213,7 +221,16 @@ fn recall_caps_at_eight_records_and_three_thousand_tokens() {
   assert_eq!(recalled.entries().len(), 3);
   assert!(tokens <= 3_000, "{tokens}");
   assert_eq!(recalled.entries()[2].memory.content().text(), "Small.");
-  assert_eq!(recalled.injected().len(), 3);
+  let deliveries: Vec<Delivery> = recalled.injected().iter().map(|entry| entry.delivery).collect();
+  assert_eq!(
+    deliveries,
+    [
+      Delivery::Given,
+      Delivery::Given,
+      Delivery::Given,
+      Delivery::OverTokenLimit
+    ]
+  );
 
   let one = MemoryLimits::new(1, 3_000).expect("valid limits");
   assert_eq!(
@@ -225,6 +242,43 @@ fn recall_caps_at_eight_records_and_three_thousand_tokens() {
     .entries()
     .len(),
     1
+  );
+}
+
+#[test]
+fn recall_always_gives_the_latest_handoff_cut_to_fit() {
+  let fixture = Fixture::new();
+  let request = fixture.request(MemoryLimits::DEFAULT);
+  let big = "План:\n".to_owned() + &"міграція бази даних\n".repeat(400);
+  let old = fixture.by_person(MemoryKind::Handoff, "Old small handoff.", 1);
+  let latest = fixture.by_person(MemoryKind::Handoff, &big, 2);
+  let decision = fixture.by_person(MemoryKind::Decision, "Keep the index.", 3);
+  let recalled = recall(&request, vec![old, latest.clone(), decision], Vec::new());
+  let first = &recalled.entries()[0];
+  assert_eq!(
+    (first.reason, first.memory.id()),
+    (InjectionReason::Handoff, latest.id())
+  );
+  assert!(first.truncated);
+  assert!(first.tokens <= 3_000, "{}", first.tokens);
+  assert!(first.body.starts_with("План:\nміграція бази даних"), "{}", first.body);
+  assert!(
+    first
+      .body
+      .ends_with(&format!("of {} characters shown.]", big.trim().chars().count())),
+    "{}",
+    first.body
+  );
+  assert_eq!(recalled.injected()[0].delivery, Delivery::Truncated);
+  let left: Vec<(InjectionReason, Delivery)> = recalled
+    .left_out()
+    .iter()
+    .map(|left| (left.reason, left.delivery))
+    .collect();
+  assert!(recalled.tokens() <= 3_000);
+  assert!(
+    left.is_empty() || left == [(InjectionReason::Decision, Delivery::OverTokenLimit)],
+    "{left:?}"
   );
 }
 
