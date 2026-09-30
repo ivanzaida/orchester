@@ -20,6 +20,7 @@ use orchester_store::ProjectDb;
 use crate::{
   github::shows,
   harness::Desktop,
+  new_task::{close, ends},
   tabs::{BACK, click_with, command, has, side_button},
   task_run::{init_repository, latest_run, programs, seed, set_text},
 };
@@ -240,6 +241,10 @@ fn edit_task_create_and_run_keeps_the_run_snapshot_when_edited_again() {
     "Changes to KON-1 apply to future runs. Existing runs keep the task details they started with."
   ));
   assert!(!has(&mut desktop, "create-and-run"));
+  // Save changes is the plan's last line, its label at the column's foot (`lYOiy` in `dRN4m`).
+  let (_, save_bottom) = ends(&mut desktop, "save-draft");
+  let (_, plan_bottom) = ends(&mut desktop, "execution-plan");
+  assert!(close(save_bottom, plan_bottom), "{save_bottom} vs {plan_bottom}");
   set_text(&mut desktop, "task-title", "Say hello three times");
   set_text(&mut desktop, "task-brief", "Work in future turns.");
   desktop.press("save-draft");

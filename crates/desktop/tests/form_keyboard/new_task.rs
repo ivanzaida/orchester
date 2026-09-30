@@ -220,3 +220,32 @@ fn new_task_budget_starts_at_the_project_default_and_groups_digits_while_typing(
     "Use digits only, for example 1,400,000."
   ));
 }
+
+/// Right and bottom edges of an element.
+pub(crate) fn ends(desktop: &mut Desktop, id: &str) -> (f32, f32) {
+  let bounds = desktop.bounds(id);
+  (bounds.x + bounds.width, bounds.y + bounds.height)
+}
+
+pub(crate) fn close(actual: f32, expected: f32) -> bool {
+  (actual - expected).abs() < 0.5
+}
+
+#[test]
+fn new_task_layout_ends_the_plan_with_its_actions_and_pins_the_footer() {
+  let mut desktop = new_task();
+  // The plan's details end where Create & run does; their scroll gutter is beside them
+  // (`HVSv5` in `WOdDe`).
+  let (selector_right, _) = ends(&mut desktop, "pipeline-selector");
+  let (run_right, _) = ends(&mut desktop, "create-and-run");
+  assert!(close(selector_right, run_right), "{selector_right} vs {run_right}");
+  let (readback_right, _) = ends(&mut desktop, "task-budget-readback");
+  assert!(close(readback_right, run_right), "{readback_right} vs {run_right}");
+  // The instructions footer sits at the foot of the brief column, level with the plan's, with
+  // Preview at its right (`MoDET`).
+  let (footer_right, footer_bottom) = ends(&mut desktop, "new-task-preview-footer");
+  let (_, plan_bottom) = ends(&mut desktop, "execution-plan");
+  assert!(close(footer_bottom, plan_bottom), "{footer_bottom} vs {plan_bottom}");
+  let (preview_right, _) = ends(&mut desktop, "task-preview");
+  assert!(close(preview_right, footer_right), "{preview_right} vs {footer_right}");
+}

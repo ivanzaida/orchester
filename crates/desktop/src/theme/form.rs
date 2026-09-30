@@ -81,3 +81,10 @@ pub fn gutter_scrollbar() -> ScrollBarStyle {
   }
   .insets(GUTTER_SCROLLBAR_INSET, GUTTER_SCROLLBAR_INSET)
 }
+
+/// Width of the gutter `gutter_scrollbar` reserves: the thumb and the inset on each side of it.
+/// A column that ends where the design does puts the gutter in the padding beside it.
+pub fn gutter_width() -> f32 {
+  let gutter = gutter_scrollbar();
+  gutter.width + gutter.resolved_edge_inset() * 2.0
+}

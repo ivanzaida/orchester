@@ -8,7 +8,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, ScrollVertical, Text, TextInput, TextOverflow},
+  components::{Button, Column, Row, ScrollVertical, Spacer, Text, TextInput, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -96,15 +96,24 @@ pub fn brief_form(
         .in_form()
         .height(Dimension::Px(CONTEXT_BUTTON_HEIGHT))
         .render(ctx),
-    ))
-    .child(preview_footer(ctx));
-  ScrollVertical::new(fields)
-    .id("new-task-brief")
+    ));
+  // The footer stays at the column's foot under the fields, which scroll (`MoDET` after the
+  // flexible space `i2EEy`).
+  Column::new()
     .flex(1.0)
     .height(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Lg)
+    .child(
+      ScrollVertical::new(fields)
+        .id("new-task-brief")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0),
+    )
+    .child(preview_footer(ctx))
     .into()
 }
 
+/// What the task's prompt also includes, with *Preview* unavailable at the right (`MoDET`).
 fn preview_footer(ctx: &Ctx) -> Element {
   let preview = Button::empty()
     .button()
@@ -113,6 +122,7 @@ fn preview_footer(ctx: &Ctx) -> Element {
     .focusable(false)
     .cursor(CursorIcon::NotAllowed)
     .opacity(DISABLED_OPACITY)
+    .padding_vertical(SpacingSize::Xs)
     .child(
       Row::new()
         .spacing(SpacingSize::Xs)
@@ -123,6 +133,8 @@ fn preview_footer(ctx: &Ctx) -> Element {
   Row::new()
     .id("new-task-preview-footer")
     .width(Dimension::Pct(100.0))
+    // In line with the fields, which keep this room for focus rings (see `brief_form`).
+    .padding_left(FOCUS_ROOM)
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .child(
@@ -130,6 +142,7 @@ fn preview_footer(ctx: &Ctx) -> Element {
         .variant(TypographyStyle::Caption)
         .color(PaletteColor::TextMuted),
     )
+    .child(Spacer::new().flex(1.0))
     .child(preview)
     .into()
 }

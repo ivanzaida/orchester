@@ -57,7 +57,7 @@ use crate::{
     list::missing_key,
     run::StartOutcome,
   },
-  theme::ExtraSpacing,
+  theme::{ExtraSpacing, gutter_width},
   ui::{
     form::{Submit, form},
     icon::{Icon, IconSize, icon},
@@ -290,14 +290,16 @@ impl Component for NewTaskForm {
       .filter(|_| !state.saving && !state.starting && (state.queued_task.is_some() || state.missing.is_empty()));
     // The brief's scroll viewport starts `FOCUS_ROOM` early and its content is padded by the
     // same amount, so the content stays at the designed inset and keeps room for focus rings.
-    let brief_left = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0)
-      - ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
+    let indent = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0);
+    let brief_left = indent - ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .padding_top(ExtraSpacing::Inline.role())
       .padding_left(Dimension::Px(brief_left))
-      .padding_right(ExtraSpacing::Indent.role())
+      // The plan's scroll gutter sits in the right padding, so its content ends at the designed
+      // inset (`HVSv5`).
+      .padding_right(Dimension::Px(indent - gutter_width()))
       .padding_bottom(SpacingSize::Section)
       .spacing(ExtraSpacing::Indent.role())
       .child(brief::brief_form(ctx, self, &props.project, link.as_deref(), &state))
