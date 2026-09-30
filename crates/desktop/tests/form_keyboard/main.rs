@@ -24,6 +24,7 @@ mod integration;
 mod lifecycle;
 mod mcp_servers;
 mod modal_layer;
+mod multiline_command;
 mod new_task;
 mod pipeline_editor;
 mod pipeline_history;

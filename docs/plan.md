@@ -167,6 +167,27 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+ORC-45 · Multiline command rendering · branch `orchester/orc-45-run-1`
+
+- **Implementation 2026-09-30; independent Review and Verify pending.** Command event headers use a single-line
+  LF/CRLF preview with ellipsis. Every agent/tool command can expand, including commands without output; details
+  retain the original command and offer the shared exact-copy action. Command chips use the same preview.
+- Verify against canonical `H:/projects/orchester/data/orchester.pen`: Activity/transcript (`SfXU1`, `N4SlQq`),
+  shared command details (`LBSz7`, `s4DoJ`), and Conversation (`jgqPe`, `JOG1i`). This worktree's Conversation tab
+  contains messages/progress, rather than command-event rows; confirm the reported stable-build state and affected
+  shared controls. Compare LF/CRLF collapsed/expanded commands at 1440 and the supported minimum width 960;
+  check timestamp/icon/exit/duration alignment, blank lines/indentation/quotes/long lines, scrolling/wrapping,
+  exact clipboard bytes, one-line commands, running/completed/failed states and unchanged output presentation.
+- Filtered regressions: `cargo test -p orchester-desktop --test form_keyboard multiline_command`,
+  `cargo test -p orchester-desktop --test command_presentation multiline_command`,
+  `cargo test -p orchester-desktop --test transcript transcript`,
+  `cargo test -p orchester-desktop --test i18n locale`,
+  `cargo test -p orchester-desktop --test i18n every_key`,
+  `cargo test -p orchester-desktop --test theme mono_text`. The OS clipboard action test is explicitly opt-in
+  (`--test command_presentation multiline_command_copy_action -- --ignored`), requiring restorable clipboard text.
+  Automated copy-feedback coverage runs without accessing the clipboard. Implementation checks also include
+  `powershell -File tools/check.ps1`; app/Pencil screenshots and macOS execution belong to later verification.
+
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 
 - **Done 2026-09-30.** **Send & continue** resumes the same failed run in a new attempt, preserving its branch,
