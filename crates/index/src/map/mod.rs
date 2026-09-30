@@ -6,7 +6,7 @@
 mod packages;
 
 use std::{
-  collections::{BTreeMap, BTreeSet, HashSet},
+  collections::{BTreeMap, BTreeSet, HashMap, HashSet},
   fmt::Write as _,
 };
 
@@ -33,9 +33,14 @@ pub(crate) fn is_manifest(path: &str) -> bool {
 
 /// The map of `records`, the files of `revision`, whose manifests are `manifests` (by path).
 pub(crate) fn render(revision: &Revision, records: &[FileRecord], manifests: &BTreeMap<String, String>) -> Map {
-  let files: HashSet<&str> = records.iter().map(|record| record.path.as_str()).collect();
+  let files: BTreeSet<&str> = records.iter().map(|record| record.path.as_str()).collect();
+  let folders: HashSet<&str> = files
+    .iter()
+    .flat_map(|path| path.match_indices('/').map(|(at, _)| &path[..at]))
+    .collect();
   let context = Context {
     files: &files,
+    folders: &folders,
     manifests,
   };
   let mut found = Vec::new();
@@ -50,8 +55,12 @@ pub(crate) fn render(revision: &Revision, records: &[FileRecord], manifests: &BT
   found.sort_by(|left, right| (&left.dir, left.ecosystem).cmp(&(&right.dir, right.ecosystem)));
   let mut owned: Vec<Vec<&FileRecord>> = found.iter().map(|_| Vec::new()).collect();
   let mut outside = Vec::new();
+  let mut by_dir: HashMap<&str, usize> = HashMap::new();
+  for (index, package) in found.iter().enumerate() {
+    by_dir.entry(package.dir.as_str()).or_insert(index);
+  }
   for record in records {
-    match owner(&found, &record.path) {
+    match owner(&by_dir, &record.path) {
       Some(package) => owned[package].push(record),
       None => outside.push(record),
     }
@@ -83,14 +92,13 @@ pub(crate) fn render(revision: &Revision, records: &[FileRecord], manifests: &BT
   }
 }
 
-/// The package of the deepest folder holding `path`.
-fn owner(packages: &[Package], path: &str) -> Option<usize> {
-  packages
-    .iter()
-    .enumerate()
-    .filter(|(_, package)| package.dir.is_empty() || path.starts_with(&format!("{}/", package.dir)))
-    .max_by_key(|(index, package)| (package.dir.len(), std::cmp::Reverse(*index)))
-    .map(|(index, _)| index)
+/// The package of the deepest folder holding `path`, of the packages by folder `by_dir`.
+fn owner(by_dir: &HashMap<&str, usize>, path: &str) -> Option<usize> {
+  path
+    .rmatch_indices('/')
+    .map(|(at, _)| &path[..at])
+    .chain([""])
+    .find_map(|folder| by_dir.get(folder).copied())
 }
 
 fn package_section(text: &mut String, package: &Package, files: &[&FileRecord]) {

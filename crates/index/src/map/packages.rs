@@ -2,7 +2,10 @@
 //! (`package.json`), Python projects (`pyproject.toml` with a `[project]` or Poetry table) and Go
 //! modules (`go.mod`).
 
-use std::collections::{BTreeMap, HashSet};
+use std::{
+  collections::{BTreeMap, BTreeSet, HashSet},
+  ops::Bound,
+};
 
 use serde_json::Value as Json;
 use toml::{Table, Value as Toml};
@@ -23,21 +26,33 @@ pub(super) struct Package {
   pub(super) source_root: Option<String>,
 }
 
-/// What a package reads besides its manifest: the tracked files and the other manifests.
+/// What a package reads besides its manifest: the tracked files, their folders and the other
+/// manifests.
 pub(super) struct Context<'a> {
-  pub(super) files: &'a HashSet<&'a str>,
+  pub(super) files: &'a BTreeSet<&'a str>,
+  /// Every folder that holds a tracked file, at any depth.
+  pub(super) folders: &'a HashSet<&'a str>,
   pub(super) manifests: &'a BTreeMap<String, String>,
 }
 
-impl Context<'_> {
+impl<'a> Context<'a> {
   fn has(&self, dir: &str, path: &str) -> bool {
     self.files.contains(join(dir, path).as_str())
   }
 
   /// Whether the package in `dir` has tracked files under its folder `folder`.
   fn has_folder(&self, dir: &str, folder: &str) -> bool {
-    let prefix = format!("{}/", join(dir, folder));
-    self.files.iter().any(|file| file.starts_with(&prefix))
+    self.folders.contains(join(dir, folder).as_str())
+  }
+
+  /// The tracked files under `folder` (relative to the repository), relative to it.
+  fn under(&self, folder: &str) -> Vec<&'a str> {
+    let prefix = format!("{folder}/");
+    self
+      .files
+      .range::<str, _>((Bound::Included(prefix.as_str()), Bound::Unbounded))
+      .map_while(|file| file.strip_prefix(prefix.as_str()))
+      .collect()
   }
 }
 
@@ -120,14 +135,11 @@ fn cargo_bins(dir: &str, manifest: &Table, package: &str, context: &Context<'_>)
   if context.has(dir, "src/main.rs") && !listed(&bins, "src/main.rs") {
     bins.push((package.to_owned(), "src/main.rs".to_owned()));
   }
-  let prefix = format!("{}/", join(dir, "src/bin"));
-  let mut automatic: Vec<&str> = context
-    .files
-    .iter()
-    .filter_map(|file| file.strip_prefix(&prefix))
+  let automatic: Vec<&str> = context
+    .under(&join(dir, "src/bin"))
+    .into_iter()
     .filter(|file| !file.contains('/') && file.ends_with(".rs"))
     .collect();
-  automatic.sort_unstable();
   for file in automatic {
     let path = format!("src/bin/{file}");
     if !listed(&bins, &path) {
@@ -226,15 +238,12 @@ fn go(dir: &str, text: &str, context: &Context<'_>) -> Option<Package> {
     .find_map(|line| line.trim().strip_prefix("module "))?
     .trim()
     .to_owned();
-  let prefix = format!("{}/", join(dir, "cmd"));
   let mut entries: Vec<String> = context
-    .files
-    .iter()
-    .filter_map(|file| file.strip_prefix(&prefix))
+    .under(&join(dir, "cmd"))
+    .into_iter()
     .filter(|file| file.ends_with("/main.go") && file.matches('/').count() == 1)
     .map(|file| format!("cmd/{file} (main)"))
     .collect();
-  entries.sort_unstable();
   if context.has(dir, "main.go") {
     entries.insert(0, "main.go (main)".to_owned());
   }
