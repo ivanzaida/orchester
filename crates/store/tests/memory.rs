@@ -419,3 +419,31 @@ fn memory_the_next_invocation_gets_what_recall_chooses_within_the_setting() {
     1
   );
 }
+
+#[test]
+fn memory_deleting_a_proposal_keeps_the_record_it_would_replace() {
+  let (_repo, mut db, run, execution) = started_run();
+  let active = person(MemoryScope::Project, content(MemoryKind::Fact, "Use Postgres."), 1);
+  db.add_memories(std::slice::from_ref(&active)).expect("add");
+  let replacing = |millis| {
+    Memory::replacing(
+      &active,
+      agent_write(&run, execution),
+      screened(content(MemoryKind::Fact, "Use SQLite.")),
+      &MemorySettings::default(),
+      at(millis),
+    )
+    .expect("a replacement")
+  };
+  let proposal = replacing(2);
+  db.add_memories(std::slice::from_ref(&proposal)).expect("add");
+  db.delete_memory(proposal.id()).expect("delete the proposal");
+  assert!(db.memory(active.id()).expect("read").is_some(), "the active record stays");
+
+  let mut rejected = replacing(3);
+  db.add_memories(std::slice::from_ref(&rejected)).expect("add");
+  rejected.reject(at(4)).expect("reject");
+  db.save_memory(&rejected).expect("save");
+  db.delete_memory(rejected.id()).expect("delete the rejected proposal");
+  assert!(db.memory(active.id()).expect("read").is_some(), "the active record stays");
+}
