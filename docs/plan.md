@@ -173,7 +173,10 @@ Tasks list selection and scheduling review · ORC-30 · branch `orchester/orc-30
   draft-only published pipeline assignment, combined search/pipeline/sort/tab queries, and parallel/sequential
   scheduling review with editable order, task limits and aggregate token cap. Atomic persisted groups and stable
   first-run keys make retries idempotent; the runner enforces reviewed concurrency and existing agent slots.
-- Checks: `powershell -File tools/check.ps1` passed. 47 filtered tests passed: core/store/runner `task_group`,
+- Reconciled prior checkpoint `fb42bdc`: retained compatible list behavior and reused its mounted Drafts-tab
+  selection/search regression. The older shared-feed changes were not transplanted; current async actions refresh
+  through the existing project revision, and draft assignment stays atomic in the store.
+- Checks: `powershell -File tools/check.ps1` passed. 48 filtered tests passed: core/store/runner `task_group`,
   desktop tasks/form_keyboard `task_bulk`, task tab counts, i18n `locale`/`every_key`, and theme `pencil`.
   Headless review tests include drag reordering, keyboard fields, persisted pipeline assignment and both start modes.
   Full suites, macOS execution and independent design verification were not run by the implementer.

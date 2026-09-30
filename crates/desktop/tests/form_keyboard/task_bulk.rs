@@ -205,3 +205,41 @@ fn task_bulk_sequential_review_queues_once_and_runner_completes_each_task() {
 fn task_bulk_parallel_review_queues_once_and_runner_completes_each_task() {
   run_review("tasks-review-parallel");
 }
+
+#[test]
+fn task_bulk_select_all_and_search_combine_with_drafts_tab() {
+  let mut desktop = Desktop::with_project();
+  desktop.wait_for("nav-tasks");
+  desktop.press("nav-tasks");
+  desktop.wait_for("tasks-new-task");
+  add_draft(&mut desktop, "Add search", 1);
+  add_draft(&mut desktop, "Improve filters", 2);
+  desktop.press("task-select-KON-1");
+  assert!(shows(&mut desktop, "task-selection", "1 selected"));
+  desktop.press("tasks-select-all");
+  assert!(shows(&mut desktop, "task-selection", "2 selected"));
+  desktop.press("tasks-tab-drafts");
+  desktop.wait_for("task-row-KON-1");
+  desktop.press("tasks-search");
+  desktop.type_text("filters");
+  desktop.settle("the task search", |tree| {
+    tree.get_element_by_id("task-row-KON-1").is_none() && tree.get_element_by_id("task-row-KON-2").is_some()
+  });
+  assert!(shows(&mut desktop, "task-selection", "2 selected"));
+}
+
+fn add_draft(desktop: &mut Desktop, title: &str, number: usize) {
+  desktop.press("tasks-new-task");
+  desktop.wait_for("task-title");
+  desktop.tab_to("task-title", 30);
+  desktop.type_text(title);
+  desktop.enter();
+  desktop.settle("the draft save", |tree| {
+    tree
+      .get_element_by_id("new-task-state")
+      .and_then(|state| state.text_content())
+      .is_some_and(|status| status.contains("Draft saved locally"))
+  });
+  desktop.press("new-task-back");
+  desktop.wait_for(&format!("task-row-KON-{number}"));
+}
