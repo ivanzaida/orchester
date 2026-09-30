@@ -119,6 +119,9 @@ fn organization_bulk_status_priority_and_filters() {
       .iter()
       .all(|task| task.organization().priority() == Priority::Urgent)
   });
+  desktop.wait_until("priority visible after bulk save", |desktop| {
+    crate::github::shows(desktop, "task-row-KON-1", "Urgent")
+  });
   desktop.press("filter-status");
   desktop.wait_for("filter-status-Todo");
   desktop.press("filter-status-Todo");

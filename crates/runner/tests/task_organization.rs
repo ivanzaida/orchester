@@ -195,3 +195,73 @@ fn queue_restart(db: &mut ProjectDb, ended: &orchester_core::run::Run) -> Vec<or
     .expect("message queued");
   db.messages(ended.task()).expect("messages")
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn organization_attach_keeps_blocked_answer_waiting_and_resumes_other_runs() {
+  use std::num::NonZeroU32;
+
+  use orchester_core::store::ConversationStore;
+  use orchester_ipc::AttachSession;
+  use support::{queue_another_task, wait_for, wait_for_idle};
+  let project = project(&Setup::new("Ask first."));
+  let root = project.repo.path();
+  let other = queue_another_task(root);
+  let (old, mut events) = scheduler(root);
+  let blocked_id = old
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("start");
+  let waiting = wait_for(root, &mut events, blocked_id, |run| run.waits_for_a_person()).await;
+  wait_for_idle(&old).await;
+  let other_id = old
+    .start_run(IdempotencyKey::generate(), other)
+    .await
+    .expect("start other");
+  let other_waiting = wait_for(root, &mut events, other_id, |run| run.waits_for_a_person()).await;
+  wait_for_idle(&old).await;
+  drop(old);
+  let mut db = ProjectDb::open(root).expect("open");
+  let linked = link_blocker(&mut db, project.task);
+  let blocked_messages = queue_restart(&mut db, &waiting);
+  queue_restart(&mut db, &other_waiting);
+  let original_events = db.events(blocked_id).expect("events");
+  let original_history = db.task_organization_history(project.task).expect("history");
+  let path = root.join(".orchester/worktrees").join(blocked_id.to_string());
+  std::fs::write(path.join("keep.txt"), "retain work").expect("work");
+  let (next, mut next_events) = scheduler(root);
+  next
+    .attach(AttachSession::Reconnect, NonZeroU32::MIN)
+    .await
+    .expect("attachment must succeed");
+  let done = wait_for(root, &mut next_events, other_id, |run| run.status().is_terminal()).await;
+  wait_for_idle(&next).await;
+  assert_eq!(done.status(), &orchester_core::run::RunStatus::Succeeded);
+  assert_eq!(db.run(blocked_id).expect("read").expect("run"), waiting);
+  assert_eq!(db.messages(project.task).expect("messages"), blocked_messages);
+  assert_eq!(db.events(blocked_id).expect("events"), original_events);
+  assert_eq!(
+    db.task_organization_history(project.task).expect("history"),
+    original_history
+  );
+  assert_eq!(
+    std::fs::read_to_string(path.join("keep.txt")).expect("work"),
+    "retain work"
+  );
+  let informational = TaskOrganization::new(
+    linked.status(),
+    linked.priority(),
+    linked.blocked_reason().map(str::to_owned),
+    vec![],
+    vec![],
+  )
+  .expect("organization");
+  db.set_task_organization(project.task, &informational, ChangeActor::Person, Timestamp::now())
+    .expect("unlink");
+  next
+    .deliver_messages(blocked_id)
+    .await
+    .expect("answer resumes after resolution");
+  let done = wait_for(root, &mut next_events, blocked_id, |run| run.status().is_terminal()).await;
+  assert_eq!(done.status(), &orchester_core::run::RunStatus::Succeeded);
+  next.stop_all(InterruptCause::QuitNow).await;
+}

@@ -330,6 +330,7 @@ impl TagManager {
     };
     let cancel = self.editing.clone();
     let apply = action.clone();
+    let can_confirm = request.is_some() && !pending;
     column
       .child(
         Row::new()
@@ -347,12 +348,12 @@ impl TagManager {
               .id("tag-editor-confirm")
               .in_form()
               .primary()
-              .enabled(request.is_some() && !pending)
               .on_click(move || {
                 if let Some(request) = &request {
                   apply.run(request.clone());
                 }
               })
+              .enabled(can_confirm)
               .render(ctx),
           ),
       )

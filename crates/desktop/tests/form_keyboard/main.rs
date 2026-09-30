@@ -26,6 +26,7 @@ mod mcp_servers;
 mod modal_layer;
 mod new_task;
 mod organization;
+mod organization_tag_manager;
 mod pipeline_editor;
 mod pipeline_history;
 mod plan_review;

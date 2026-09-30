@@ -91,7 +91,16 @@ impl Scheduler {
         continue;
       }
       tracing::info!(run = %run.id(), "a question was answered while no runner was attached");
-      let prepared = Prepared::continuing(db, &self.inner.project_root, run)?;
+      let prepared = match Prepared::continuing(db, &self.inner.project_root, run) {
+        Ok(prepared) => prepared,
+        Err(Rejection::RunAgainBlocked {
+          block: orchester_core::run::RunAgainBlock::TaskBlocked,
+        }) => {
+          tracing::info!("answered run remains waiting for its blocking tasks");
+          continue;
+        }
+        Err(rejection) => return Err(rejection),
+      };
       self.spawn(self.open()?, prepared)?;
     }
     Ok(())
