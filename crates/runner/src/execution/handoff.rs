@@ -28,7 +28,22 @@ pub(super) struct Keeper<'a> {
 impl Keeper<'_> {
   /// Keeps the handoff of `execution` of `run`, which ended as `fate`. A follow-up leaves none: its
   /// answer is its reply in the conversation.
-  pub(super) fn keep(&mut self, run: &Run, execution: StepExecutionId, fate: StepFate) -> Result<(), StoreError> {
+  /// [`Keeper::keep`], where the step goes on whatever happens: a handoff the database could not
+  /// take is logged and reported in the transcript, and a report that fails as well is logged.
+  pub(super) fn keep_or_report(&mut self, run: &Run, execution: StepExecutionId, fate: StepFate) {
+    let Err(error) = self.keep(run, execution, fate) else {
+      return;
+    };
+    tracing::error!(run = %run.id(), %execution, %error, "the step's handoff was not kept");
+    let reason = MemoryNotSavedReason::StorageFailed {
+      detail: error.to_string(),
+    };
+    if let Err(error) = self.report(run, execution, reason) {
+      tracing::error!(run = %run.id(), %execution, %error, "the failed handoff could not be reported");
+    }
+  }
+
+  fn keep(&mut self, run: &Run, execution: StepExecutionId, fate: StepFate) -> Result<(), StoreError> {
     if run.is_follow_up(execution) {
       return Ok(());
     }

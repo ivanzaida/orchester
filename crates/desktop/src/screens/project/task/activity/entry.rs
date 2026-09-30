@@ -529,16 +529,21 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
     ),
     RunnerProblem::MemoryNotSaved { reason } => {
-      let (key, secret) = match reason {
-        MemoryNotSavedReason::ContainsSecret { secret } => ("runs.activity.problem.memoryContainsSecret", secret),
-        MemoryNotSavedReason::KeychainUnavailable { secret } => {
-          ("runs.activity.problem.memoryKeychainUnavailable", secret)
-        }
+      let detail = match reason {
+        MemoryNotSavedReason::ContainsSecret { secret } => ctx.t_args(
+          "runs.activity.problem.memoryContainsSecret",
+          [("secret", secret.as_str())],
+        ),
+        MemoryNotSavedReason::KeychainUnavailable { secret } => ctx.t_args(
+          "runs.activity.problem.memoryKeychainUnavailable",
+          [("secret", secret.as_str())],
+        ),
+        MemoryNotSavedReason::StorageFailed { detail } => ctx.t_args(
+          "runs.activity.problem.memoryStorageFailed",
+          [("detail", detail.as_str())],
+        ),
       };
-      (
-        ctx.t("runs.activity.problem.memoryNotSaved"),
-        Some(ctx.t_args(key, [("secret", secret.as_str())])),
-      )
+      (ctx.t("runs.activity.problem.memoryNotSaved"), Some(detail))
     }
     RunnerProblem::MemoryUnreadable { records } => {
       let key = if *records == 1 {

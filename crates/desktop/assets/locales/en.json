@@ -789,6 +789,7 @@
         "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool.",
         "memoryNotSaved": "The step’s handoff was not saved to task memory",
         "memoryContainsSecret": "It contains the value of the secret {{secret}}. Secret values are never kept in memory.",
+        "memoryStorageFailed": "The project database could not store it: {{detail}}",
         "memoryKeychainUnavailable": "The system keychain could not be read to check it for the value of the secret {{secret}}.",
         "memoryUnreadable": {
           "one": "{{count}} memory record could not be read",

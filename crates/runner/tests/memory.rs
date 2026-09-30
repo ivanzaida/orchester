@@ -488,3 +488,32 @@ async fn memory_a_plan_approved_while_the_run_works_keeps_its_handoff_before_the
     "the last step's handoff is kept before the run is announced as ended: {memory:?}"
   );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn memory_a_handoff_the_database_refuses_never_blocks_the_step() {
+  let project = graph(vec![StepSpec::new("implement", "Implement", "Do it.", &[])]);
+  let root = project.repo.path();
+  let raw = rusqlite::Connection::open(root.join(".orchester").join("orchester.db")).expect("open");
+  raw
+    .execute_batch("CREATE TRIGGER refuse BEFORE INSERT ON memories BEGIN SELECT RAISE(ABORT, 'disk full'); END;")
+    .expect("a trigger that refuses every record");
+  drop(raw);
+  let (run, status) = run_until_it_ends(&project).await;
+  assert_eq!(
+    status,
+    RunStatus::Succeeded,
+    "the step passed although its handoff was not kept"
+  );
+  let db = ProjectDb::open(root).expect("open");
+  let reasons: Vec<MemoryNotSavedReason> = problems(&db, run)
+    .into_iter()
+    .filter_map(|problem| match problem {
+      RunnerProblem::MemoryNotSaved { reason } => Some(reason),
+      _ => None,
+    })
+    .collect();
+  assert!(
+    matches!(reasons.as_slice(), [MemoryNotSavedReason::StorageFailed { detail }] if detail.contains("disk full")),
+    "{reasons:?}"
+  );
+}

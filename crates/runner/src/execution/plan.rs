@@ -144,12 +144,9 @@ fn record(keeper: Keeper<'_>, run: &mut Run, request: PlanRequest) -> Result<(),
   tracing::info!(run = %run.id(), execution = %request.execution, version = %plan.version, "plan decided");
   if approved {
     // Kept before the decision is announced, so whoever sees it finds the handoff. The decision is
-    // recorded and the run goes on; a handoff the database could not take is logged rather than
+    // recorded and the run goes on; a handoff the database could not take is reported rather than
     // turning the recorded decision into a rejection.
-    let mut keeper = Keeper { db, notifier, vault };
-    if let Err(error) = keeper.keep(run, request.execution, StepFate::Passed) {
-      tracing::error!(run = %run.id(), execution = %request.execution, %error, "the approved plan's handoff was not kept");
-    }
+    Keeper { db, notifier, vault }.keep_or_report(run, request.execution, StepFate::Passed);
   }
   notifier.send(Event::RunChanged {
     run: run.id(),

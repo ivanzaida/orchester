@@ -179,6 +179,9 @@ pub enum MemoryNotSavedReason {
   ContainsSecret { secret: String },
   /// The keychain could not be read to check it for the value of secret `secret`.
   KeychainUnavailable { secret: String },
+  /// The project database could not store it; `detail` is the storage error, which never holds a
+  /// record's text.
+  StorageFailed { detail: String },
 }
 
 impl AgentEvent {

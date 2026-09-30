@@ -49,17 +49,12 @@ impl RunTask {
   /// Keeps the handoff of `execution`, which is about to pass or fail as `fate` says: before the
   /// transition is recorded and announced, so whoever sees the step end finds its handoff. A step
   /// waiting for its plan's approval keeps it when the plan is approved.
-  pub(in super::super) fn keep_handoff(
-    &mut self,
-    execution: StepExecutionId,
-    fate: StepFate,
-  ) -> Result<(), ExecutionError> {
+  pub(in super::super) fn keep_handoff(&mut self, execution: StepExecutionId, fate: StepFate) {
     let mut keeper = Keeper {
       db: &mut self.db,
       notifier: &self.notifier,
       vault: self.vault.as_ref(),
     };
-    keeper.keep(&self.run, execution, fate)?;
-    Ok(())
+    keeper.keep_or_report(&self.run, execution, fate);
   }
 }
