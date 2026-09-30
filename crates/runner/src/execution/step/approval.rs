@@ -5,7 +5,8 @@
 //! waiting call is refused, so a stale one never approves a later action.
 
 use orchester_core::{
-  connection::{app_server::PendingApproval, claude_approval::ClaudeApprovalRequest, stream::AgentEvent},
+  command::redact_secrets,
+  connection::{app_server::PendingApproval, stream::AgentEvent},
   run::{PendingToolApproval, ToolApprovalDecision},
   store::ActivityStore,
   time::Timestamp,
@@ -68,7 +69,7 @@ impl Worker {
     let first = self
       .claude_approvals
       .as_mut()
-      .is_some_and(|approvals| approvals.first_ask(&request.call));
+      .is_some_and(|approvals| approvals.first_ask(request.call()));
     if !first {
       // The relay reads the denial; a closed relay has nothing to deny.
       if reply.send(false).is_err() {
@@ -76,36 +77,51 @@ impl Worker {
       }
       return Ok(());
     }
-    let ClaudeApprovalRequest {
-      call,
-      command,
-      server,
-      action,
-      target,
-      scope,
-    } = request;
     let worktree = self
       .claude_approvals
       .as_ref()
       .map(|approvals| approvals.worktree().to_string_lossy().into_owned());
+    let command = request.is_command();
     let shown = Shown {
       command,
-      server,
-      action,
+      server: request.server().to_owned(),
+      action: request.action().to_owned(),
       // A command runs in the session's working folder, the worktree.
-      target: if command { worktree } else { target },
-      scope,
+      target: if command {
+        worktree
+      } else {
+        request.target().map(str::to_owned)
+      },
+      scope: request.scope().map(str::to_owned),
     };
+    let call = request.call().to_owned();
     let key = call.clone();
     self.await_person(watch, &key, shown, Awaiting::Claude { call, reply })
   }
 
-  fn redact(&self, text: &str) -> String {
-    match (&self.app_server, &self.claude_approvals) {
-      (Some(app), _) => app.redact(text),
-      (None, Some(approvals)) => approvals.redact(text),
-      (None, None) => text.to_owned(),
+  pub(super) fn redact(&self, text: &str) -> String {
+    match &self.app_server {
+      Some(app) => app.redact(text),
+      None => redact_secrets(text, &self.mcp_secrets),
     }
+  }
+
+  /// Claude Code's permission prompt closed its connection while a call waited: the call can no
+  /// longer be answered, so the request is interrupted and a later decision is refused.
+  pub(super) fn prompt_closed(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+    watch.approval = None;
+    watch
+      .db
+      .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
+    self.end_approval_wait(watch)?;
+    self.observe(
+      watch,
+      AgentEvent::TurnFailed {
+        message: "Claude Code's permission prompt closed before the decision".to_owned(),
+      },
+    )?;
+    self.process.terminate();
+    Ok(())
   }
 
   fn await_person(&mut self, watch: &mut Watch, key: &str, shown: Shown, awaiting: Awaiting) -> Result<(), StoreError> {
@@ -233,7 +249,7 @@ impl Worker {
   }
 
   /// Hands the decision to the call that asked. An approved Claude Code call is then running
-  /// until its result arrives ([`Watch::approved_call`]).
+  /// until its result arrives ([`Watch::approved_calls`]).
   async fn deliver(&self, watch: &mut Watch, awaiting: Awaiting, approve: bool) -> Result<(), String> {
     match awaiting {
       Awaiting::Codex(request) => self
@@ -246,7 +262,7 @@ impl Worker {
           .send(approve)
           .map_err(|_| "its permission prompt has closed".to_owned())?;
         if approve {
-          watch.approved_call = Some(call);
+          watch.approved_calls.insert(call);
         }
         Ok(())
       }

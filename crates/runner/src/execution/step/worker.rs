@@ -5,14 +5,16 @@
 //! and starting another turn ends it at once.
 
 use std::{
+  collections::HashSet,
   path::{Path, PathBuf},
   time::Duration,
 };
 
 use orchester_core::{
+  command::SecretVariable,
   connection::{
     app_server::Update,
-    stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker},
+    stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker, RunnerProblem},
   },
   id::{StepExecutionId, TaskId},
   run::{Invocation, RunLimit},
@@ -123,6 +125,8 @@ pub(in super::super) struct Worker {
   pub(super) app_server: Option<AppServerSession>,
   /// The runner's end of Claude Code's permission prompt, when the step asks a person.
   pub(super) claude_approvals: Option<ClaudeApprovals>,
+  /// Secret values of a Claude Code invocation's MCP servers, kept out of its activity and approvals.
+  pub(super) mcp_secrets: Vec<SecretVariable>,
   pub(in super::super) agent: String,
   pub(in super::super) task: TaskId,
   pub(in super::super) decisions: mpsc::UnboundedReceiver<ApprovalDecision>,
@@ -142,9 +146,19 @@ pub(super) struct Watch {
   after_command: Option<StopCause>,
   /// The approval waiting for a person, by its id.
   pub(super) approval: Option<(String, Awaiting)>,
-  /// A Claude Code call a person approved whose result has not arrived: if the agent ends before
-  /// it does, the action may have run, and the run is not resumed on its own.
-  pub(super) approved_call: Option<String>,
+  /// Claude Code calls a person approved whose results have not arrived: if the agent ends before
+  /// they do, the actions may have run, and the run is not resumed on its own.
+  pub(super) approved_calls: HashSet<String>,
+}
+
+impl Watch {
+  /// Ready once the Claude Code call waiting for a person can no longer be answered.
+  async fn prompt_closed(&mut self) {
+    match &mut self.approval {
+      Some((_, Awaiting::Claude { reply, .. })) => reply.closed().await,
+      _ => std::future::pending().await,
+    }
+  }
 }
 
 impl Watch {
@@ -159,7 +173,7 @@ impl Watch {
       commands: 0,
       after_command: None,
       approval: None,
-      approved_call: None,
+      approved_calls: HashSet::new(),
     })
   }
 }
@@ -225,6 +239,7 @@ impl Worker {
           None => deciding = false,
         },
         Some(asked) = ClaudeApprovals::next(self.claude_approvals.as_mut()) => self.request_claude_approval(&mut watch, asked)?,
+        () = watch.prompt_closed() => self.prompt_closed(&mut watch)?,
         stop = self.stops.recv(), if listening => match stop {
           Some(Stop::Now(cause)) => {
             if watch.stop.is_none() {
@@ -292,10 +307,8 @@ impl Worker {
   /// Takes in one event: a turn's usage goes to the run, and a new turn after a used-up budget
   /// ends the agent.
   pub(super) fn observe(&self, watch: &mut Watch, mut event: AgentEvent) -> Result<(), StoreError> {
-    if let Some(app) = &self.app_server {
-      event.redact(&|text| app.redact(text));
-    } else if let Some(approvals) = &self.claude_approvals {
-      event.redact(&|text| approvals.redact(text));
+    if self.app_server.is_some() || !self.mcp_secrets.is_empty() {
+      event.redact(&|text| self.redact(text));
     }
     watch.tracker.observe(&event);
     let usage = match &event {
@@ -309,9 +322,7 @@ impl Worker {
       AgentEvent::CommandStarted { .. } => watch.commands += 1,
       AgentEvent::CommandFinished { item, .. } => {
         watch.commands = watch.commands.saturating_sub(1);
-        if watch.approved_call.as_ref() == Some(item) {
-          watch.approved_call = None;
-        }
+        watch.approved_calls.remove(item);
       }
       _ => {}
     }
@@ -357,8 +368,16 @@ impl Worker {
 
   fn finish(&self, mut watch: Watch, exit: &ProcessExit) -> Result<Finished, StoreError> {
     let mut approval_interrupted = false;
+    if self
+      .claude_approvals
+      .as_ref()
+      .is_some_and(|approvals| !approvals.reached())
+    {
+      let problem = RunnerProblem::PermissionPromptUnreachable;
+      self.observe(&mut watch, AgentEvent::RunnerProblem { problem })?;
+    }
     if watch.approval.is_some()
-      || watch.approved_call.is_some()
+      || !watch.approved_calls.is_empty()
       || self.app_server.as_ref().is_some_and(|app| !app.complete())
     {
       approval_interrupted = watch

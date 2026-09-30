@@ -522,6 +522,10 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       ),
       None,
     ),
+    RunnerProblem::PermissionPromptUnreachable => (
+      ctx.t("runs.activity.problem.promptUnreachable"),
+      Some(ctx.t("runs.activity.problem.promptUnreachableDetail")),
+    ),
     RunnerProblem::CliTooOld {
       model,
       installed,

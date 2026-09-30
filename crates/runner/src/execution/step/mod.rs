@@ -279,6 +279,7 @@ impl RunTask {
       mcp_file: start.mcp_file,
       app_server: start.app_server.map(AppServerSession::new),
       claude_approvals: start.claude_approvals,
+      mcp_secrets: start.mcp_secrets,
       agent: start.agent,
       task: self.task.id(),
       decisions,

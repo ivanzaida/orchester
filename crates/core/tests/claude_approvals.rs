@@ -48,21 +48,30 @@ fn claude_approvals_route_only_what_the_permissions_leave_to_a_person() {
   let ClaudeAsk::Person(command) = scope(true, false).classify(&bash) else {
     panic!("a command goes to a person");
   };
-  assert!(command.command);
+  assert!(command.is_command());
   assert_eq!(
-    (command.call.as_str(), command.server.as_str(), command.action.as_str()),
+    (command.call(), command.server(), command.action()),
     ("toolu_1", "command", "pnpm publish")
   );
-  assert_eq!(command.scope.as_deref(), Some("Publish"));
+  assert_eq!(command.scope(), Some("Publish"));
   assert_eq!(scope(false, true).classify(&bash), ClaudeAsk::Refused);
 
   let write = call("mcp__docs__v2__write", &json!({"filePath": "notes.md", "text": "x"}));
   let ClaudeAsk::Person(tool) = scope(false, true).classify(&write) else {
     panic!("a tool of an invocation server goes to a person");
   };
-  assert!(!tool.command);
-  assert_eq!((tool.server.as_str(), tool.action.as_str()), ("docs__v2", "write"));
-  assert_eq!(tool.target.as_deref(), Some("notes.md"));
+  assert!(!tool.is_command());
+  assert_eq!((tool.server(), tool.action()), ("docs__v2", "write"));
+  assert_eq!(tool.target(), Some("notes.md"));
+  // The person sees the arguments too, cut when they are long.
+  assert_eq!(tool.scope(), Some(r#"{"filePath":"notes.md","text":"x"}"#));
+  let long = call("mcp__docs__write", &json!({"text": "y".repeat(2_000)}));
+  let ClaudeAsk::Person(long) = scope(false, true).classify(&long) else {
+    panic!("a tool of an invocation server goes to a person");
+  };
+  let shown = long.scope().expect("arguments");
+  assert_eq!(shown.chars().count(), 601);
+  assert!(shown.ends_with('…'));
   assert_eq!(scope(true, false).classify(&write), ClaudeAsk::Refused);
   assert_eq!(
     scope(true, true).classify(&call("mcp__other__write", &json!({}))),

@@ -23,6 +23,9 @@
 //!   no `structured_output`; "Answer without JSON" ends with prose only;
 //! - "Refuse the model": answers as Claude Code 2.1.89 did when the API refused Opus 5.5 to it ("version 2.1.280 or
 //!   newer is required") and exits with 1;
+//! - "Knock first" (with "Ask before publishing"): first connects to the prompt's runner end with a wrong token, and
+//!   after the decision once more with the right one, reporting `knock: ` and `second: ` (`answered` or `closed`);
+//!   "Leave while waiting" sends its call, then ends the prompt server once `fake-release` exists and waits;
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
@@ -91,7 +94,10 @@ fn main() -> ExitCode {
     eprintln!("no working directory");
     return ExitCode::from(2);
   };
-  let fake = Fake { session };
+  let fake = Fake {
+    session,
+    prompt: prompt.clone(),
+  };
   let servers = if fake_mcp::report_claude(&args) {
     r#"[{"name":"broken","status":"failed"}]"#
   } else {
@@ -234,6 +240,7 @@ const DENIAL: &str =
 
 struct Fake {
   session: String,
+  prompt: String,
 }
 
 impl Fake {
@@ -346,10 +353,18 @@ impl Fake {
       self.tool_result(ask.call, if ran { "ok" } else { "Denied by a rule." }, !ran);
       return self.finish(worktree, "hello", step);
     }
+    let knocks = self.prompt.contains("Knock first");
+    if knocks {
+      eprintln!("knock: {}", fake_permission_prompt::knock(args, Some("not-the-token")));
+    }
     let Some(mut prompt) = fake_permission_prompt::Prompt::open(args) else {
       eprintln!("no permission prompt");
       return ExitCode::from(2);
     };
+    if self.prompt.contains("Leave while waiting") {
+      prompt.leave_while_waiting(ask.tool, &ask.input, ask.call, &released(worktree));
+      wait_to_be_ended();
+    }
     let decision = prompt
       .ask(ask.tool, &ask.input, ask.call)
       .unwrap_or_else(|| "none".to_owned());
@@ -364,6 +379,9 @@ impl Fake {
         .ask(ask.tool, &ask.input, ask.call)
         .unwrap_or_else(|| "none".to_owned());
       eprintln!("permission again: {} {again}", ask.call);
+      if knocks {
+        eprintln!("second: {}", fake_permission_prompt::knock(args, None));
+      }
     } else {
       self.tool_result(ask.call, "Denied in Orchester.", true);
     }
@@ -422,6 +440,14 @@ fn append(worktree: &Path, line: &str) -> std::io::Result<()> {
     .append(true)
     .open(worktree.join("README.md"))
     .and_then(|mut readme| writeln!(readme, "{line}"))
+}
+
+/// `fake-release` next to the worktrees, which a test creates to let the fake go on.
+fn released(worktree: &Path) -> std::path::PathBuf {
+  worktree.parent().and_then(Path::parent).map_or_else(
+    || worktree.join("fake-release"),
+    |orchester| orchester.join("fake-release"),
+  )
 }
 
 /// Waits while the test holds continued sessions with `fake-hold` next to the worktrees.

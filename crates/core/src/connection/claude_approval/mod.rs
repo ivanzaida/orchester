@@ -56,6 +56,9 @@ const COMMAND_TOOL: &str = "Bash";
 /// What an approval's server is called when it is a command, as for Codex.
 const COMMAND_SERVER: &str = "command";
 const DENIED: &str = "Denied in Orchester.";
+/// How much of an MCP call's arguments an approval shows.
+const SHOWN_ARGUMENTS: usize = 600;
+const UNAVAILABLE: &str = "Orchester approvals are unavailable; nothing was approved.";
 const NOT_ASKABLE: &str = "This step's permissions do not allow this action, and it cannot be approved in Orchester.";
 
 /// The secret that lets only the relay of one invocation reach its runner: 244 random bits.
@@ -71,9 +74,10 @@ impl ApprovalToken {
     )))
   }
 
-  /// Whether `text` is this token.
+  /// Whether `text` is this token, compared in constant time for texts of its length.
   pub fn matches(&self, text: &str) -> bool {
-    self.0.as_str() == text
+    let (token, text) = (self.0.as_bytes(), text.as_bytes());
+    token.len() == text.len() && token.iter().zip(text).fold(0, |differ, (a, b)| differ | (a ^ b)) == 0
   }
 
   /// The value, for the configuration file the relay starts with.
@@ -186,7 +190,7 @@ impl ClaudeApprovalScope {
       server: server.to_string(),
       action: action.to_owned(),
       target: text("filePath"),
-      scope: None,
+      scope: Some(shown_arguments(input)),
     })
   }
 
@@ -218,13 +222,53 @@ pub enum ClaudeAsk {
 /// the target, which carry what the agent wrote.
 #[derive(Clone, PartialEq, Eq)]
 pub struct ClaudeApprovalRequest {
+  call: String,
+  command: bool,
+  server: String,
+  action: String,
+  target: Option<String>,
+  scope: Option<String>,
+}
+
+impl ClaudeApprovalRequest {
   /// The tool use the CLI asks about, unique within its session.
-  pub call: String,
-  pub command: bool,
-  pub server: String,
-  pub action: String,
-  pub target: Option<String>,
-  pub scope: Option<String>,
+  pub fn call(&self) -> &str {
+    &self.call
+  }
+
+  pub const fn is_command(&self) -> bool {
+    self.command
+  }
+
+  /// `command` for a command, else the MCP server.
+  pub fn server(&self) -> &str {
+    &self.server
+  }
+
+  /// The command, or the MCP tool.
+  pub fn action(&self) -> &str {
+    &self.action
+  }
+
+  /// The file an MCP tool names as `filePath`; the runner shows the worktree for a command.
+  pub fn target(&self) -> Option<&str> {
+    self.target.as_deref()
+  }
+
+  /// What the agent says the command is for, or an MCP tool's arguments ([`shown_arguments`]).
+  pub fn scope(&self) -> Option<&str> {
+    self.scope.as_deref()
+  }
+}
+
+/// An MCP call's arguments as the approval shows them: JSON on one line, cut after
+/// [`SHOWN_ARGUMENTS`] characters. The runner removes secret values before it is stored.
+fn shown_arguments(input: &Value) -> String {
+  let text = input.to_string();
+  match text.char_indices().nth(SHOWN_ARGUMENTS) {
+    Some((end, _)) => format!("{}…", &text[..end]),
+    None => text,
+  }
 }
 
 impl fmt::Debug for ClaudeApprovalRequest {
@@ -243,6 +287,11 @@ pub fn prompt_result(approve: bool) -> String {
   } else {
     json!({"behavior": "deny", "message": DENIED}).to_string()
   }
+}
+
+/// The answer to a call the relay could not hand to Orchester: denied, and not by a person.
+pub fn unavailable() -> String {
+  json!({"behavior": "deny", "message": UNAVAILABLE}).to_string()
 }
 
 /// The answer to a call no person may decide.

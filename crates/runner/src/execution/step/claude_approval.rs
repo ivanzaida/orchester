@@ -3,8 +3,14 @@
 //! own; the relay Claude Code starts (`crate::approval_relay`) connects with the invocation's
 //! token and hands over each call. What the step's permissions do not leave to a person is denied
 //! here at once; the rest goes to the invocation's worker, which records it and answers the call
-//! with one person's decision ([`super::approval`]). The listener and every connection end with
+//! with one person's decision ([`super::approval`]). The listener and its connection end with
 //! the worker.
+//!
+//! Only one relay is served: connections are taken one at a time, each must show the token on a
+//! short first line within [`HANDSHAKE`] (compared in constant time), and after the first that
+//! does, or after [`ATTEMPTS`] that do not, nothing more is accepted. While a call waits, the
+//! connection is watched: a relay that goes away ends the wait, so a later decision cannot be
+//! recorded as delivered.
 
 use std::{
   collections::HashSet,
@@ -12,12 +18,14 @@ use std::{
   io,
   net::{Ipv4Addr, SocketAddr},
   path::{Path, PathBuf},
-  sync::Arc,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
   time::Duration,
 };
 
 use orchester_core::{
-  command::{SecretVariable, redact_secrets},
   connection::{
     claude_approval::{
       ApprovalToken, ClaudeApprovalConfig, ClaudeApprovalRequest, ClaudeApprovalScope, ClaudeAsk, prompt_result,
@@ -30,10 +38,13 @@ use orchester_core::{
 };
 use serde_json::Value;
 use tokio::{
-  io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-  net::{TcpListener, TcpStream},
+  io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Lines},
+  net::{
+    TcpListener,
+    tcp::{OwnedReadHalf, OwnedWriteHalf},
+  },
   sync::{mpsc, oneshot},
-  task::{JoinHandle, JoinSet},
+  task::JoinHandle,
   time::timeout,
 };
 
@@ -44,6 +55,10 @@ use crate::{approval_relay::RELAY_FLAG, private_file::PrivateFile};
 const HANDSHAKE: Duration = Duration::from_secs(10);
 /// How long the listener waits after a failed accept before the next.
 const ACCEPT_RETRY: Duration = Duration::from_millis(100);
+/// Connections without the token before the listener gives up.
+const ATTEMPTS: usize = 8;
+/// The longest first line read: the token is 64 characters.
+const TOKEN_LINE: u64 = 128;
 
 /// A call waiting for a person, and where the decision goes.
 pub(in super::super) struct Asked {
@@ -57,8 +72,8 @@ pub(in super::super) struct ClaudeApprovals {
   listener: JoinHandle<()>,
   /// Holds the token; removed with the approvals, once the CLI has ended.
   config: PrivateFile,
-  /// Secret values of the invocation's MCP servers, kept out of what the approvals show.
-  secrets: Vec<SecretVariable>,
+  /// Set once the relay showed the token.
+  reached: Arc<AtomicBool>,
   worktree: PathBuf,
   /// Calls asked about so far: each is asked once.
   asked: HashSet<String>,
@@ -70,7 +85,6 @@ impl ClaudeApprovals {
   pub(super) fn listen(
     scope: ClaudeApprovalScope,
     relay: &Path,
-    secrets: Vec<SecretVariable>,
     worktree: &Path,
     (project, invocation): (ProjectId, InvocationId),
   ) -> io::Result<Self> {
@@ -85,12 +99,19 @@ impl ClaudeApprovals {
     let config = ClaudeApprovalConfig::new(program, &[RELAY_FLAG], &address, &token);
     let config = PrivateFile::write(project, &format!("{invocation}-approvals.json"), config.contents())?;
     let (sender, requests) = mpsc::unbounded_channel();
-    let listener = tokio::spawn(accept(listener, Arc::new(token), Arc::new(scope), sender));
+    let reached = Arc::new(AtomicBool::new(false));
+    let relay = Relay {
+      token,
+      scope,
+      requests: sender,
+      reached: reached.clone(),
+    };
+    let listener = tokio::spawn(relay.accept(listener));
     Ok(Self {
       requests,
       listener,
       config,
-      secrets,
+      reached,
       worktree: worktree.to_path_buf(),
       asked: HashSet::new(),
     })
@@ -117,8 +138,9 @@ impl ClaudeApprovals {
     self.asked.insert(call.to_owned())
   }
 
-  pub(super) fn redact(&self, text: &str) -> String {
-    redact_secrets(text, &self.secrets)
+  /// Whether the relay reached the runner: without it, Claude Code has no permission prompt.
+  pub(super) fn reached(&self) -> bool {
+    self.reached.load(Ordering::Acquire)
   }
 
   pub(super) fn worktree(&self) -> &Path {
@@ -132,70 +154,81 @@ impl Drop for ClaudeApprovals {
   }
 }
 
-/// Serves each connection until the worker is gone; aborting this ends them all.
-async fn accept(
-  listener: TcpListener,
-  token: Arc<ApprovalToken>,
-  scope: Arc<ClaudeApprovalScope>,
+/// What one invocation's listener serves.
+struct Relay {
+  token: ApprovalToken,
+  scope: ClaudeApprovalScope,
   requests: mpsc::UnboundedSender<Asked>,
-) {
-  let mut connections = JoinSet::new();
-  loop {
-    tokio::select! {
-      accepted = listener.accept() => match accepted {
-        Ok((stream, _)) => {
-          connections.spawn(serve(stream, token.clone(), scope.clone(), requests.clone()));
-        }
-        Err(error) => {
-          tracing::warn!(%error, "the permission prompt cannot accept its relay");
-          // Without a pause, an accept that keeps failing would spin.
-          tokio::time::sleep(ACCEPT_RETRY).await;
-        }
-      },
-      Some(ended) = connections.join_next() => {
-        if let Err(error) = ended {
-          tracing::debug!(%error, "a permission prompt connection ended abnormally");
-        }
+  reached: Arc<AtomicBool>,
+}
+
+impl Relay {
+  /// Takes connections one at a time until one shows the token, then serves only that one.
+  async fn accept(self, listener: TcpListener) {
+    for _ in 0..ATTEMPTS {
+      let stream = tokio::select! {
+        accepted = listener.accept() => match accepted {
+          Ok((stream, _)) => stream,
+          Err(error) => {
+            tracing::warn!(%error, "the permission prompt cannot accept its relay");
+            // Without a pause, an accept that keeps failing would spin.
+            tokio::time::sleep(ACCEPT_RETRY).await;
+            continue;
+          }
+        },
+        () = self.requests.closed() => return,
+      };
+      let (read, write) = stream.into_split();
+      let mut reader = BufReader::new(read);
+      if !self.shows_token(&mut reader).await {
+        tracing::warn!("a connection to the permission prompt did not show the invocation's token");
+        continue;
       }
-      () = requests.closed() => return,
+      self.reached.store(true, Ordering::Release);
+      // No other connection is taken while or after this one is served.
+      drop(listener);
+      return self.serve(reader.lines(), write).await;
     }
+    tracing::warn!("the permission prompt stopped listening after {ATTEMPTS} connections without its token");
   }
-}
 
-/// One relay connection: the token first, then one call per line, each answered on one line.
-async fn serve(
-  stream: TcpStream,
-  token: Arc<ApprovalToken>,
-  scope: Arc<ClaudeApprovalScope>,
-  requests: mpsc::UnboundedSender<Asked>,
-) {
-  let (read, mut write) = stream.into_split();
-  let mut lines = BufReader::new(read).lines();
-  match timeout(HANDSHAKE, lines.next_line()).await {
-    Ok(Ok(Some(shown))) if token.matches(&shown) => {}
-    _ => {
-      tracing::warn!("a connection to the permission prompt did not show the invocation's token");
-      return;
-    }
+  async fn shows_token(&self, reader: &mut BufReader<OwnedReadHalf>) -> bool {
+    let mut line = String::new();
+    let read = timeout(HANDSHAKE, reader.take(TOKEN_LINE).read_line(&mut line)).await;
+    matches!(read, Ok(Ok(length)) if length > 0) && self.token.matches(line.trim_end())
   }
-  while let Ok(Some(line)) = lines.next_line().await {
-    let decision = match serde_json::from_str::<Value>(&line).map(|arguments| scope.classify(&arguments)) {
-      Ok(ClaudeAsk::Person(request)) => ask(request, &requests).await,
-      Ok(ClaudeAsk::Refused) | Err(_) => refusal(),
-    };
-    if write.write_all(format!("{decision}\n").as_bytes()).await.is_err() {
-      return;
-    }
-  }
-}
 
-/// The person's decision on `request`; a denial when the worker has ended without one.
-async fn ask(request: ClaudeApprovalRequest, requests: &mpsc::UnboundedSender<Asked>) -> String {
-  let (reply, decision) = oneshot::channel();
-  if requests.send(Asked { request, reply }).is_err() {
-    return prompt_result(false);
+  /// One call per line, each answered on one line.
+  async fn serve(&self, mut lines: Lines<BufReader<OwnedReadHalf>>, mut write: OwnedWriteHalf) {
+    while let Ok(Some(line)) = lines.next_line().await {
+      let decision = match serde_json::from_str::<Value>(&line).map(|arguments| self.scope.classify(&arguments)) {
+        Ok(ClaudeAsk::Person(request)) => match self.ask(request, &mut lines).await {
+          Some(decision) => decision,
+          // The relay went away while the call waited: the worker's wait ends with it.
+          None => return,
+        },
+        Ok(ClaudeAsk::Refused) | Err(_) => refusal(),
+      };
+      if write.write_all(format!("{decision}\n").as_bytes()).await.is_err() {
+        return;
+      }
+    }
   }
-  prompt_result(decision.await.unwrap_or(false))
+
+  /// The person's decision on `request`; a denial when the worker ended without one; `None` when
+  /// the relay closed its connection or broke the protocol while the call waited.
+  async fn ask(&self, request: ClaudeApprovalRequest, lines: &mut Lines<BufReader<OwnedReadHalf>>) -> Option<String> {
+    let (reply, decision) = oneshot::channel();
+    if self.requests.send(Asked { request, reply }).is_err() {
+      return Some(prompt_result(false));
+    }
+    tokio::select! {
+      // A dropped sender is a worker that ended without a decision: the call is denied.
+      decision = decision => Some(prompt_result(decision.unwrap_or(false))),
+      // The relay sends nothing while it waits; anything, or the end of the stream, ends the wait.
+      _ = lines.next_line() => None,
+    }
+  }
 }
 
 impl RunTask {
@@ -212,16 +245,17 @@ impl RunTask {
       return Ok(None);
     };
     let problem = |detail: String| RunnerProblem::CouldNotStart { detail };
-    let (names, secrets) = servers.as_ref().map_or_else(Default::default, |servers| {
-      (servers.servers.clone(), servers.secrets.clone())
-    });
+    let names = servers
+      .as_ref()
+      .map(|servers| servers.servers.clone())
+      .unwrap_or_default();
     let Some(scope) = ClaudeApprovalScope::of(permissions, &names) else {
       return Ok(None);
     };
     let relay = self.relay.as_deref().ok_or_else(|| {
       problem("Orchester cannot find its runner program, which answers Claude Code's permission prompts".to_owned())
     })?;
-    ClaudeApprovals::listen(scope, relay, secrets, worktree, (self.project.id(), invocation))
+    ClaudeApprovals::listen(scope, relay, worktree, (self.project.id(), invocation))
       .map(Some)
       .map_err(|error| problem(format!("cannot open the permission prompt: {error}")))
   }

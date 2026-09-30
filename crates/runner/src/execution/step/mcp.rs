@@ -42,6 +42,17 @@ pub(in super::super) enum McpSetup {
   Claude(Option<ClaudeServers>),
 }
 
+impl McpSetup {
+  /// The secret values Claude Code's servers take, which its activity must not show; Codex's
+  /// App Server redacts its own.
+  pub(in super::super) fn claude_secrets(&self) -> Vec<SecretVariable> {
+    match self {
+      Self::Claude(Some(servers)) => servers.secrets.clone(),
+      Self::Claude(None) | Self::Codex(_) => Vec::new(),
+    }
+  }
+}
+
 /// The MCP configuration file of a Claude Code invocation, the servers in it and their secret values.
 pub(in super::super) struct ClaudeServers {
   pub(in super::super) file: PrivateFile,

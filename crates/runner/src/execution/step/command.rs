@@ -16,7 +16,7 @@ use std::{
 };
 
 use orchester_core::{
-  command::Command,
+  command::{Command, SecretVariable},
   connection::{
     AgentConnection, AgentProvider, REASONING_EFFORT,
     invocation::{ClaudeInvocation, ClaudeSession, CodexAgentFiles, CodexInvocation, InvocationError, Platform},
@@ -59,6 +59,8 @@ pub(super) struct AgentStart {
   pub(super) app_server: Option<AppServerSetup>,
   /// Claude Code's permission prompt, for a step that asks a person.
   pub(super) claude_approvals: Option<ClaudeApprovals>,
+  /// Secret values of Claude Code's MCP servers, kept out of the invocation's activity.
+  pub(super) mcp_secrets: Vec<SecretVariable>,
   pub(super) agent: String,
 }
 
@@ -137,6 +139,7 @@ impl RunTask {
     };
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
     let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;
+    let mcp_secrets = setup.claude_secrets();
     let cli = Cli {
       connection: &connection,
       model,
@@ -169,6 +172,7 @@ impl RunTask {
       mcp_left_out: left_out,
       app_server,
       claude_approvals,
+      mcp_secrets,
       agent: body.role().as_str().to_owned(),
     })
   }

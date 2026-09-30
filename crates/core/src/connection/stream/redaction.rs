@@ -66,7 +66,7 @@ impl RunnerProblem {
         }
       }
       // Versions and a model id, parsed as such: no text that could hold a secret.
-      Self::StepBudgetReached { .. } | Self::CliTooOld { .. } => {}
+      Self::StepBudgetReached { .. } | Self::CliTooOld { .. } | Self::PermissionPromptUnreachable => {}
     }
   }
 }

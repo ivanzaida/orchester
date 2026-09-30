@@ -113,3 +113,57 @@ fn configs(args: &[String]) -> Vec<Value> {
     .filter_map(|text| serde_json::from_str(&text).ok())
     .collect()
 }
+
+impl Prompt {
+  /// Sends a call for `tool` without waiting for its answer, then ends the server once `release`
+  /// exists: a relay that goes away while a person decides.
+  pub fn leave_while_waiting(mut self, tool: &str, input: &Value, call: &str, release: &std::path::Path) {
+    let arguments = json!({"tool_name": tool, "input": input, "tool_use_id": call});
+    let name = self.tool.clone();
+    self.next += 1;
+    let request = json!({"jsonrpc": "2.0", "id": self.next, "method": "tools/call",
+      "params": {"name": name, "arguments": arguments}});
+    if self.send(&request).is_none() {
+      eprintln!("cannot send the call");
+    }
+    while !release.exists() {
+      std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+  }
+}
+
+/// Connects to the runner end of the `--permission-prompt-tool` server the way its relay would,
+/// showing `token` (the configured one when `None`) and one call; `answered` when the runner
+/// answered it, else `closed`.
+pub fn knock(args: &[String], token: Option<&str>) -> &'static str {
+  let env = configs(args)
+    .into_iter()
+    .find_map(|config| config.pointer("/mcpServers/Orchester/env").cloned());
+  let Some(env) = env else {
+    return "no server";
+  };
+  let (Some(address), Some(configured)) = (
+    env["ORCHESTER_APPROVAL_ADDRESS"].as_str(),
+    env["ORCHESTER_APPROVAL_TOKEN"].as_str(),
+  ) else {
+    return "no server";
+  };
+  let Ok(mut stream) = std::net::TcpStream::connect(address) else {
+    return "closed";
+  };
+  if stream
+    .set_read_timeout(Some(std::time::Duration::from_secs(3)))
+    .is_err()
+  {
+    return "closed";
+  }
+  let call = json!({"tool_name": "Bash", "input": {"command": "ls"}, "tool_use_id": "toolu_knock"});
+  if writeln!(stream, "{}\n{call}", token.unwrap_or(configured)).is_err() {
+    return "closed";
+  }
+  let mut answer = String::new();
+  match BufReader::new(stream).read_line(&mut answer) {
+    Ok(length) if length > 0 => "answered",
+    _ => "closed",
+  }
+}
