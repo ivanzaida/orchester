@@ -130,3 +130,50 @@ TurnCompleted …
   needs `claude update` or pointing the connection at a CLI of version 2.1.280 or later.
 - Denial, cancel, pause and stale decisions were covered by the fake-CLI runner tests
   (`crates/runner/tests/claude_approvals.rs`), not with the real CLI.
+
+## Structured result (C1), second real turn
+
+Change: every Claude Code invocation, new or resumed, now gets `--json-schema` with the step
+result schema on one line. The stream parser takes the result event's `structured_output`, and
+otherwise the result that closes the final message: the whole message, a fenced block that ends it,
+or a JSON object that starts a line and runs to the end, with exactly `outcome` and `summary`. A
+successful turn with neither now fails (`TurnFailed`: "Claude Code ended its turn without the step
+result …", step failure `AgentFailed`). Prose alone never passes a step.
+
+Quoting: 2.1.284 reads `--json-schema` only as inline JSON (`--json-schema is not valid JSON`
+otherwise); it has no file form. A native `claude.exe` and npm's Node.js launcher are started
+directly, and Rust passes the argument through `CreateProcess` quoting unchanged. The fake CLI's
+tests show the exact schema arriving as one argument. Any other `.cmd` script would go through
+`cmd.exe`, which could change it, so Orchester refuses to start it (`UnsafeScriptArgument`). The
+empty `--setting-sources` value was already refused the same way.
+
+One real turn on 2.1.284 with `claude-opus-5-5` (effort low) ran in the same scratch setup, with
+one Implement step. The task asked the agent to translate README.md's line into "the language our
+customers prefer", which is written nowhere and must not be guessed. The correct result is
+`question`. The command line was read from the process table:
+
+```text
+"C:\Users\lurkm\AppData\Roaming\Claude\claude-code\2.1.284\claude.exe" -p --output-format stream-json
+  --verbose --model claude-opus-5-5 --effort low --strict-mcp-config --setting-sources ""
+  --disable-slash-commands --json-schema "{\"additionalProperties\":false,\"properties\":{\"outcome\":…,
+  \"summary\":…},\"required\":[\"outcome\",\"summary\"],\"type\":\"object\"}"
+  --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash --permission-mode acceptEdits
+  --disallowedTools WebFetch WebSearch --allowedTools Bash(git:*) --add-dir …\skills\<execution>
+  --session-id 01a0f3e7-b82b-76a1-a6c8-481a66a71044
+```
+
+Trimmed events:
+
+```text
+SessionStarted { session: "01a0f3e7-b82b-76a1-a6c8-481a66a71044" }
+Message "Need to ask which language."
+CommandStarted/Finished "StructuredOutput" -> "Structured output provided successfully"
+Raw rate_limit_event {… "five_hour" utilization 0.03 …}
+Message {"outcome":"question","summary":"I haven't made any changes yet. … Which language should I use (for example Spanish, French or German)? …"}
+```
+
+Result: invocation `Completed` (input 9,564, output 242). The step was `Waiting(Message)`: the
+structured `question` was recognized, and the run asked the person instead of passing. The CLI
+reported the result through its `StructuredOutput` tool, not in the text, so this checked the
+`structured_output` path. The prose-and-JSON fallback and the no-result failure were checked with
+the fake CLI (`crates/runner/tests/claude.rs`) and parser tests (`crates/core/tests/claude_stream.rs`).

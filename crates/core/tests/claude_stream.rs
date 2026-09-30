@@ -167,8 +167,67 @@ fn claude_stream_counts_what_only_the_result_reports() {
         }
       },
       AgentEvent::Message { text: "Done.".into() },
+      AgentEvent::TurnFailed {
+        message: "Claude Code ended its turn without the step result: a JSON object with outcome and summary".into()
+      },
     ]
   );
+}
+
+fn result_line(text: &str, structured: Option<&str>) -> String {
+  let structured = structured.map_or_else(String::new, |output| format!(r#","structured_output":{output}"#));
+  format!(
+    r#"{{"type":"result","subtype":"success","is_error":false,"result":{},"usage":{{"input_tokens":0,"output_tokens":0}},"permission_denials":[]{structured}}}"#,
+    serde_json::to_string(text).expect("JSON")
+  )
+}
+
+fn last_message(line: &str) -> (Vec<AgentEvent>, Option<String>) {
+  let mut stream = ClaudeStream::default();
+  let events = stream.parse(OutputStream::Stdout, line);
+  let message = tracked(&events).last_message().map(str::to_owned);
+  (events, message)
+}
+
+#[test]
+fn claude_stream_takes_the_structured_output_as_the_step_result() {
+  let question = r#"{"outcome":"question","summary":"Which database?"}"#;
+  let (events, message) = last_message(&result_line("I need a decision first.", Some(question)));
+  assert_eq!(message.as_deref(), Some(question));
+  assert!(
+    !events
+      .iter()
+      .any(|event| matches!(event, AgentEvent::TurnFailed { .. }))
+  );
+}
+
+#[test]
+fn claude_stream_takes_the_result_that_closes_prose_or_fails_the_turn() {
+  let failed = r#"{"outcome":"failed","summary":"The build breaks."}"#;
+  for text in [
+    format!("The build breaks at step 3.\n\n{failed}"),
+    format!("The build breaks.\n\n```json\n{failed}\n```\n"),
+    "Report:\n{\n  \"outcome\": \"failed\",\n  \"summary\": \"The build breaks.\"\n}".to_owned(),
+  ] {
+    let (_, message) = last_message(&result_line(&text, None));
+    assert_eq!(message.as_deref(), Some(failed), "{text}");
+  }
+  for text in [
+    "All done, it works.".to_owned(),
+    format!("{failed}\nAnd one more thing."),
+    r#"Result: {"outcome":"done","summary":"x"}"#.to_owned(),
+    r#"{"outcome":"done","summary":"x","extra":1}"#.to_owned(),
+    r#"{"outcome":"maybe","summary":"x"}"#.to_owned(),
+  ] {
+    let (events, _) = last_message(&result_line(&text, None));
+    assert!(
+      events
+        .iter()
+        .any(|event| matches!(event, AgentEvent::TurnFailed { .. })),
+      "{text} must not pass"
+    );
+    assert!(!tracked(&events).outcome(Some(0)).is_success(), "{text}");
+  }
 }
 
 #[test]
@@ -188,6 +247,11 @@ fn claude_stream_reports_permission_denials_and_goes_on() {
   let tracker = tracked(&events);
   assert_eq!(tracker.outcome(Some(0)), InvocationOutcome::Completed);
   assert_eq!(tracker.usage().counted(), 25 + 45);
+  // The result that closes the prose becomes the last message.
+  assert_eq!(
+    tracker.last_message(),
+    Some(r#"{"outcome":"done","summary":"Went on without the page."}"#)
+  );
 }
 
 #[test]

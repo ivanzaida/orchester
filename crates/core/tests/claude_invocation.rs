@@ -7,13 +7,14 @@ use std::{collections::BTreeMap, ffi::OsString, path::Path};
 use orchester_core::{
   connection::{
     AgentProvider,
-    invocation::{ClaudeInvocation, ClaudeSession, Platform},
+    invocation::{ClaudeInvocation, ClaudeSession, Platform, result_schema},
   },
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     capability::EnforcedPermissions,
   },
   resource::{CommandEnvironment, VariableName},
+  run::STEP_RESULT_SCHEMA,
 };
 use uuid::Uuid;
 
@@ -81,14 +82,39 @@ const BASE: [&str; 12] = [
   "--disable-slash-commands",
 ];
 
-/// [`BASE`], `permissions`, then the new session.
+/// [`BASE`], the result schema, `permissions`, then the new session.
 fn expected(permissions: &[&str]) -> Vec<String> {
+  let schema = result_schema();
   BASE
     .iter()
+    .chain(&["--json-schema", schema.as_str()])
     .chain(permissions)
     .chain(&["--session-id", "0199a0a0-0000-7000-8000-000000000001"])
     .map(|arg| (*arg).to_owned())
     .collect()
+}
+
+#[test]
+fn claude_invocation_passes_the_step_result_schema_as_one_json_argument() {
+  let permissions = enforced(
+    RepositoryAccess::Write,
+    allowed(&["git"]),
+    NetworkAccess::On,
+    Platform::current(),
+  );
+  for session in [ClaudeSession::New(SESSION), ClaudeSession::Resume("5f0c2a1e")] {
+    let mut current = invocation(&permissions);
+    current.session = session;
+    let args = args(&current);
+    let at = args
+      .iter()
+      .position(|arg| arg == "--json-schema")
+      .expect("the schema flag");
+    let schema: serde_json::Value = serde_json::from_str(&args[at + 1]).expect("one JSON argument");
+    let original: serde_json::Value = serde_json::from_str(STEP_RESULT_SCHEMA).expect("JSON");
+    assert_eq!(schema, original);
+    assert!(!args[at + 1].contains('\n'));
+  }
 }
 
 #[test]

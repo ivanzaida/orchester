@@ -9,12 +9,13 @@ use std::time::Duration;
 use orchester_core::{
   connection::{
     AgentProvider,
+    invocation::result_schema,
     stream::{AgentEvent, CommandStatus, FileChangeKind, InvocationOutcome, OutputStream},
   },
   id::{IdempotencyKey, RunId},
   resource::StepKey,
   run::{PauseReason, RaisedLimits, RunLimit, RunStatus, StepFailure, StepStatus},
-  store::ActivityStore,
+  store::{ActivityStore, ConversationStore},
   tokens::{TokenBudget, TokensUsed},
 };
 use orchester_store::ProjectDb;
@@ -57,14 +58,17 @@ async fn claude_runs_a_step_and_commits_its_changes() {
 
   let db = ProjectDb::open(root).expect("open");
   let argv = reported(&db, id, "argv: ").pop().expect("argv reported");
+  let schema = result_schema();
   assert!(
-    argv.starts_with(
+    argv.starts_with(&format!(
       "-p --output-format stream-json --verbose --model haiku --effort low --strict-mcp-config --setting-sources  \
-       --disable-slash-commands --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash --permission-mode \
-       acceptEdits --disallowedTools WebFetch WebSearch --allowedTools Bash(git:*) --session-id "
-    ),
+       --disable-slash-commands --json-schema {schema} --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash \
+       --permission-mode acceptEdits --disallowedTools WebFetch WebSearch --allowedTools Bash(git:*) --session-id "
+    )),
     "{argv}"
   );
+  // The schema reaches the CLI as one argument, exactly.
+  assert_eq!(reported(&db, id, "json-schema: "), [schema]);
   let environment = reported(&db, id, "env: ").pop().expect("environment reported");
   assert!(
     environment.split(',').all(|name| !name.starts_with("CARGO")
@@ -102,6 +106,60 @@ async fn claude_runs_a_step_and_commits_its_changes() {
   // The final message is the step result; its summary is the step's output.
   let outputs = db.step_outputs(id).expect("outputs");
   assert_eq!(outputs[0].text, "Finished Implement");
+}
+
+async fn finished(brief: &'static str) -> (TestProject, orchester_core::run::Run) {
+  let project = claude(brief);
+  let root = project.repo.path();
+  let (scheduler, mut events_in) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let run = wait_for(root, &mut events_in, id, |run| {
+    run.status().is_terminal() || run.waits_for_a_person()
+  })
+  .await;
+  (project, run)
+}
+
+fn implement(run: &orchester_core::run::Run) -> (StepStatus, Option<StepFailure>) {
+  let execution = run
+    .latest_execution(&StepKey::new("implement").expect("key"))
+    .expect("the step ran");
+  (execution.status(), execution.failure())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_structured_output_question_asks_the_person() {
+  let (project, run) = finished("Answer with structured output.").await;
+  assert!(run.waits_for_a_person(), "{:?}", run.status());
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  let conversation = db.messages(project.task).expect("messages");
+  let execution = db.invocations(run.id()).expect("invocations")[0].execution;
+  let question = orchester_core::conversation::latest_question(&conversation, execution).expect("a question");
+  assert_eq!(question.body().as_str(), "Which database should I use?");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_result_after_prose_fails_the_step_it_reports_failed() {
+  let (project, run) = finished("Answer in prose, then JSON.").await;
+  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert_eq!(implement(&run), (StepStatus::Failed, Some(StepFailure::ReportedFailed)));
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  assert_eq!(db.step_outputs(run.id()).expect("outputs")[0].text, "The build breaks.");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_prose_without_a_result_never_passes_the_step() {
+  let (project, run) = finished("Answer without JSON.").await;
+  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert_eq!(implement(&run), (StepStatus::Failed, Some(StepFailure::AgentFailed)));
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  assert!(matches!(
+    &db.invocations(run.id()).expect("invocations")[0].outcome,
+    Some(InvocationOutcome::TurnFailed { message }) if message.contains("without the step result")
+  ));
 }
 
 #[tokio::test(flavor = "multi_thread")]

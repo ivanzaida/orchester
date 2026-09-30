@@ -122,16 +122,6 @@ and MCP tools in the Tools library.
 
 ## C · Claude Code
 
-### C1 · Structured step result for Claude Code (non-UI)
-
-Codex ends a new session with `--output-schema`, so its final message is exactly the step result. Claude Code runs
-without a schema. In the real Opus 5.5 run (`docs/evidence/claude-code-e2e-2026-09-30.md`) both final messages put
-prose before the JSON, so `StepResult::parse` read no outcome: a `question` or `failed` written that way would pass as
-done. Pass the step result schema with `--json-schema` on new sessions and read the `result` event's
-`structured_output`. First check with one model turn how 2.1.284 reports it, and how an npm `.cmd` launcher takes the
-inline JSON (`orchester-exec` refuses unsafe script arguments). **Done when** a Claude step's `question` and `failed`
-results are recognized on new sessions, with a real-CLI fixture and parser and runner tests.
-
 ### C2 · Verify the Claude Code approval controls against the design (UI)
 
 `claude/claude-support` enables *Ask before MCP actions* and *Ask before running commands* for Claude Code profiles,
@@ -207,8 +197,10 @@ Claude Code parity: current models and interactive approvals · branch `claude/c
   Code through `--permission-prompt-tool mcp__Orchester__approve`, served by `orchester-runner
   --claude-permission-prompt`, with the same approval records and modal as Codex (`docs/interactive-tool-approvals.md`).
 - A real Opus 5.5 run (Implement, Review) with one approval round trip passed with Claude Code 2.1.284. See
-  [evidence](evidence/claude-code-e2e-2026-09-30.md). The structured result gap is C1, and design verification of
-  the changed controls is C2.
+  [evidence](evidence/claude-code-e2e-2026-09-30.md). Design verification of the changed controls is C2.
+- C1, done the same day: Claude Code gets the step result schema through `--json-schema` and its
+  `structured_output` is read, with a strict fallback to a result closing the final message. A turn
+  without a result fails. A real Opus 5.5 `question` turn was recognized (same evidence).
 
 Agent runtime architecture · effective approvals, Windows sandbox and Cargo isolation · root `master`
 

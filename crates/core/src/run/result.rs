@@ -5,10 +5,11 @@
 //! message is not such a result (a continued session, which is started without the schema, or a
 //! CLI that ignored it), the CLI's exit decides and the message itself is the output.
 //!
-//! Claude Code runs without a schema; its prompt asks for the same result as its final message,
-//! which is read the same way. Only a final message that is exactly such a JSON document counts, so
-//! free text is never taken for a question; a question written as prose is read as the step's
-//! output.
+//! Claude Code gets the same schema (`--json-schema`) and reports the result apart from its text
+//! (`structured_output`). When it does not, its final message is searched with
+//! [`StepResult::at_end`]: the result must close the message, so free text is never taken for a
+//! question. A Claude Code turn that ends with no result at all fails
+//! (`crate::connection::stream::ClaudeStream`).
 
 use serde::{Deserialize, Serialize};
 
@@ -61,7 +62,39 @@ impl StepResult {
   pub fn parse(message: &str) -> Option<Self> {
     serde_json::from_str(message.trim()).ok()
   }
+
+  /// The result that closes `message`: the whole message, else a fenced code block that ends it,
+  /// else a JSON object that starts a line and runs to the end. Anything else after it, or a
+  /// document with other fields, is no result.
+  pub fn at_end(message: &str) -> Option<Self> {
+    let message = message.trim_end();
+    Self::parse(message)
+      .or_else(|| Self::fenced_at_end(message))
+      .or_else(|| Self::object_at_end(message))
+  }
+
+  fn fenced_at_end(message: &str) -> Option<Self> {
+    let body = message.strip_suffix(FENCE)?;
+    let (_, block) = body.rsplit_once(FENCE)?;
+    // The opening fence's line may name the language (`json`).
+    let (language, json) = block.split_once('\n')?;
+    if !language.trim().chars().all(|c| c.is_ascii_alphanumeric()) {
+      return None;
+    }
+    Self::parse(json)
+  }
+
+  fn object_at_end(message: &str) -> Option<Self> {
+    message
+      .match_indices('\n')
+      .map(|(newline, _)| &message[newline + 1..])
+      .filter(|line| line.trim_start().starts_with('{'))
+      .find_map(Self::parse)
+  }
 }
+
+/// A Markdown code fence.
+const FENCE: &str = "```";
 
 /// What one step execution produced: the summary of its structured result, else its final message.
 #[derive(Clone, Debug, PartialEq, Eq)]

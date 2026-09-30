@@ -17,6 +17,10 @@
 //!   then works as below. "Ask before writing docs" does the same for the `write` tool of the `docs` MCP server, with
 //!   the secret `docs-token-value-7f3a` in the file path, and "Try an edit outside" for a `Write` outside the worktree.
 //!   Each decision is reported on standard error as `permission: <call> <behavior>` (`again` for the repeated call);
+//! - "Answer with structured output": writes prose and ends with the result's `structured_output` asking
+//!   `{"outcome":"question","summary":"Which database should I use?"}`, as the CLI does when given `--json-schema`;
+//!   "Answer in prose, then JSON" ends with prose followed by `{"outcome":"failed","summary":"The build breaks."}` and
+//!   no `structured_output`; "Answer without JSON" ends with prose only;
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
@@ -27,8 +31,9 @@
 //! continued session at work with it), it appends `continued` to `README.md` and ends the same way. A new
 //! session takes its id from `--session-id`.
 //!
-//! On standard error it reports its arguments, the names of its environment variables, the prompt (its first line, then
-//! each line), its process id and its MCP configuration (`fake_mcp`), like `orchester-fake-codex`.
+//! On standard error it reports its arguments, the `--json-schema` value on its own line (`json-schema: `), the names
+//! of its environment variables, the prompt (its first line, then each line), its process id and its MCP configuration
+//! (`fake_mcp`), like `orchester-fake-codex`.
 
 #![allow(
   clippy::print_stdout,
@@ -117,6 +122,9 @@ fn main() -> ExitCode {
     fake.message("msg_more", r#"{"type":"text","text":"Going on."}"#, NO_USAGE);
     wait_to_be_ended();
   }
+  if let Some((text, structured)) = answer(&prompt) {
+    return fake.answer(&text, structured);
+  }
   if let Some(ask) = Ask::of(&prompt) {
     return fake.ask_prompt(&worktree, &args, &ask, &step);
   }
@@ -124,16 +132,7 @@ fn main() -> ExitCode {
     fake.wait_for_release(&worktree, &prompt);
   }
   if prompt.contains("Ask for the web") {
-    fake.assistant(
-      "msg_web",
-      r#"{"type":"tool_use","id":"toolu_web","name":"Bash","input":{"command":"curl https://example.com"}}"#,
-    );
-    fake.tool_result(
-      "toolu_web",
-      "Claude requested permissions to use Bash, but you haven't granted it yet.",
-      true,
-    );
-    return fake.finish_with(&worktree, "hello", &step, DENIAL);
+    return fake.ask_for_the_web(&worktree, &step);
   }
   fake.finish(&worktree, "hello", &step)
 }
@@ -150,6 +149,13 @@ fn read_prompt(args: &[String]) -> Option<String> {
     return None;
   }
   eprintln!("argv: {}", args.join(" "));
+  if let Some(schema) = args
+    .iter()
+    .position(|arg| arg == "--json-schema")
+    .and_then(|at| args.get(at + 1))
+  {
+    eprintln!("json-schema: {schema}");
+  }
   eprintln!("env: {}", names.join(","));
   eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
   for line in prompt.lines() {
@@ -157,6 +163,21 @@ fn read_prompt(args: &[String]) -> Option<String> {
   }
   eprintln!("pid: {}", std::process::id());
   Some(prompt)
+}
+
+/// The final text and `structured_output` of an "Answer …" prompt.
+fn answer(prompt: &str) -> Option<(String, Option<serde_json::Value>)> {
+  if prompt.contains("Answer with structured output") {
+    let question = serde_json::json!({"outcome": "question", "summary": "Which database should I use?"});
+    return Some(("I need a decision before I go on.".to_owned(), Some(question)));
+  }
+  if prompt.contains("Answer in prose, then JSON") {
+    let text = "I found a problem.\n\n{\"outcome\":\"failed\",\"summary\":\"The build breaks.\"}";
+    return Some((text.to_owned(), None));
+  }
+  prompt
+    .contains("Answer without JSON")
+    .then(|| ("Everything looks fine to me.".to_owned(), None))
 }
 
 /// A tool call the fake asks its permission prompt about.
@@ -241,6 +262,37 @@ impl Fake {
       self.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
       wait_to_be_ended();
     }
+  }
+
+  /// "Ask for the web": `curl`, which the permissions deny, then the usual work.
+  fn ask_for_the_web(&self, worktree: &Path, step: &str) -> ExitCode {
+    self.assistant(
+      "msg_web",
+      r#"{"type":"tool_use","id":"toolu_web","name":"Bash","input":{"command":"curl https://example.com"}}"#,
+    );
+    self.tool_result(
+      "toolu_web",
+      "Claude requested permissions to use Bash, but you haven't granted it yet.",
+      true,
+    );
+    self.finish_with(worktree, "hello", step, DENIAL)
+  }
+
+  /// Ends with the message `text` and, when given, the result's `structured_output`.
+  fn answer(&self, text: &str, structured: Option<serde_json::Value>) -> ExitCode {
+    self.assistant(
+      "msg_answer",
+      &serde_json::json!({"type": "text", "text": text}).to_string(),
+    );
+    let mut result = serde_json::json!({
+      "type": "result", "subtype": "success", "is_error": false, "num_turns": 1, "result": text,
+      "session_id": self.session, "usage": {"input_tokens": 0, "output_tokens": 0}, "permission_denials": [],
+    });
+    if let Some(structured) = structured {
+      result["structured_output"] = structured;
+    }
+    println!("{result}");
+    ExitCode::SUCCESS
   }
 
   /// Asks the permission prompt about `ask`, carries it out when approved, then finishes.

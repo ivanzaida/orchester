@@ -34,8 +34,11 @@
 //! - Sessions: a new session gets an id Orchester chose (`--session-id`); a continue after a pause or a limit resumes
 //!   the session the CLI reported (`--resume`), with the permissions given again. Sessions are kept on disk (no
 //!   `--no-session-persistence`) so that they can be resumed.
-//! - No `--json-schema`: its result shape could not be verified (the probe's CLI was not signed in). The prompt asks
-//!   for the step result as the final message, and the CLI's `is_error` decides when it is not one.
+//! - The step result: `--json-schema` with [`STEP_RESULT_SCHEMA`] on every session, new or resumed (the prompt asks for
+//!   the result in both). The CLI then reports the result as `structured_output`; 2.1.284 verified with Opus 5.5
+//!   (`docs/evidence/claude-code-e2e-2026-09-30.md`). The schema is one argument of JSON: a native `claude.exe` and
+//!   npm's Node.js launcher (started through Node.js, `orchester_exec::launch`) get it unchanged; any other `.cmd`
+//!   script is refused before it starts, as it already is for the empty `--setting-sources` value.
 
 use std::{
   ffi::OsString,
@@ -50,7 +53,15 @@ use crate::{
   connection::{claude_approval::PROMPT_TOOL, mcp::McpServerName},
   permission::{capability::EnforcedPermissions, claude::permission_args},
   resource::CommandEnvironment,
+  run::STEP_RESULT_SCHEMA,
 };
+
+/// [`STEP_RESULT_SCHEMA`] on one line, as `--json-schema` takes it.
+pub fn result_schema() -> String {
+  let schema: serde_json::Value =
+    serde_json::from_str(STEP_RESULT_SCHEMA).expect("the static step result schema is valid JSON");
+  schema.to_string()
+}
 
 /// Which session an invocation works in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -116,6 +127,7 @@ impl ClaudeInvocation<'_> {
       ]
       .map(str::to_owned),
     );
+    args.extend(["--json-schema".to_owned(), result_schema()]);
     let configs: Vec<&Path> = self
       .mcp
       .map(|(config, _)| config)
