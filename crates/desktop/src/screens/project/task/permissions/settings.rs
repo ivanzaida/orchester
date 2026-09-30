@@ -216,29 +216,36 @@ fn commands(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPe
   let ask_why = reason(ctx, provider, PermissionOption::AskBeforeCommands);
   let ask_edit = edit.clone();
   let (allowed_edit, any_edit) = (edit.clone(), edit.clone());
-  let mut content = vec![options(vec![
-    radio(
-      ctx,
-      ("task-permissions-ask", PermissionOption::AskBeforeCommands),
-      *draft.commands() == CommandPermission::AskBefore,
-      ask_why.is_none(),
-      move || ask_edit.change(|draft| draft.set_commands(CommandPermission::AskBefore)),
-    ),
-    radio(
-      ctx,
-      ("task-permissions-allowed", PermissionOption::AllowedCommands),
-      listed.is_some(),
-      allowed_why.is_none(),
-      move || allowed_edit.change(|draft| draft.set_commands(CommandPermission::Allowed(kept.clone()))),
-    ),
-    radio(
-      ctx,
-      ("task-permissions-any", PermissionOption::AnyCommand),
-      *draft.commands() == CommandPermission::AnyInWorktree,
-      any_why.is_none(),
-      move || any_edit.change(|draft| draft.set_commands(CommandPermission::AnyInWorktree)),
-    ),
-  ])];
+  let mut content = vec![
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .overflow_visible()
+      .with_children(vec![
+        radio(
+          ctx,
+          ("task-permissions-ask", PermissionOption::AskBeforeCommands),
+          *draft.commands() == CommandPermission::AskBefore,
+          ask_why.is_none(),
+          move || ask_edit.change(|draft| draft.set_commands(CommandPermission::AskBefore)),
+        ),
+        radio(
+          ctx,
+          ("task-permissions-allowed", PermissionOption::AllowedCommands),
+          listed.is_some(),
+          allowed_why.is_none(),
+          move || allowed_edit.change(|draft| draft.set_commands(CommandPermission::Allowed(kept.clone()))),
+        ),
+        radio(
+          ctx,
+          ("task-permissions-any", PermissionOption::AnyCommand),
+          *draft.commands() == CommandPermission::AnyInWorktree,
+          any_why.is_none(),
+          move || any_edit.change(|draft| draft.set_commands(CommandPermission::AnyInWorktree)),
+        ),
+      ])
+      .into(),
+  ];
   content.extend(reasons([ask_why, allowed_why, any_why]));
   if let Some(list) = listed {
     content.push(command_entries(ctx, edit, &list, props));
@@ -279,7 +286,7 @@ fn tool_approvals(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &A
         .into(),
     );
   }
-  group(ctx, "agents.permissions.toolApprovals", controls)
+  group(ctx, "agents.permissions.toolApprovalsHeading", controls)
 }
 
 /// The profile version's allowed commands; none when it allows no list.

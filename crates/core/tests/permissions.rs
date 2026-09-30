@@ -458,10 +458,12 @@ fn permissions_map_to_codex_sandbox_arguments_per_platform() {
     NetworkAccess::Off,
   );
   for platform in PLATFORMS {
-    assert_eq!(
-      tail(&codex_args(&read_only, platform)),
-      ["--sandbox", "read-only", "-C", "/w", "-"]
-    );
+    let mut expected = vec!["--sandbox", "read-only"];
+    if platform == Platform::Windows {
+      expected.extend(["-c", "windows.sandbox=elevated"]);
+    }
+    expected.extend(["-C", "/w", "-"]);
+    assert_eq!(tail(&codex_args(&read_only, platform)), expected);
   }
   let offline = permissions(
     RepositoryAccess::Write,

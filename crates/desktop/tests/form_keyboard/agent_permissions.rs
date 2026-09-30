@@ -232,12 +232,12 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
   for option in [
     "agent-permission-read-only",
     "agent-permission-edit",
+    "agent-permission-ask",
     "agent-permission-any",
   ] {
     assert!(stops.contains(&Some(option.to_owned())), "{option} is a Tab stop");
   }
   for unavailable in [
-    "agent-permission-ask",
     "agent-permission-allowed",
     "agent-tab-profile",
     "agent-tab-permissions",

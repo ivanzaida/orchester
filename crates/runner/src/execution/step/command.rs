@@ -120,10 +120,7 @@ impl RunTask {
       .enforced_on(connection.provider(), Platform::current())
       .map_err(|error| problem(error.to_string()))?;
     let writable_roots = self.writable_roots(&enforced)?;
-    let environment = self
-      .db
-      .project_environment()
-      .map_err(|error| problem(error.to_string()))?;
+    let environment = self.environment(worktree)?;
     let provider = connection.provider();
     let agent_files = self
       .db

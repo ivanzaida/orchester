@@ -144,6 +144,9 @@ fn read_prompt(args: &[String]) -> Option<String> {
   }
   eprintln!("argv: {}", args.join(" "));
   eprintln!("env: {}", names.join(","));
+  if let Some(target) = std::env::var_os("CARGO_TARGET_DIR") {
+    eprintln!("cargo target: {}", PathBuf::from(target).display());
+  }
   eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
   for line in prompt.lines() {
     eprintln!("prompt| {line}");

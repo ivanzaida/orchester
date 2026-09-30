@@ -16,10 +16,10 @@ use std::{path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::Component,
-    ctx::{Ctx, FutureAction, Placement},
+    ctx::{CollisionStrategy, Ctx, FutureAction, Placement},
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Popup, Row, Text},
+  components::{Column, Popup, Row, ScrollVertical, Spacer, Text},
   core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension},
@@ -47,6 +47,7 @@ use crate::{
     detail::{ChangeState, RunPermissions, StepView},
     run::control_message,
   },
+  theme::{STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT},
   ui::{
     button::ActionButton,
     field::field_error,
@@ -143,10 +144,22 @@ impl Component for RunPermissionsRow {
     let props = ctx.props::<RunPermissionsProps>().clone();
     let apply = apply_action(ctx);
     let keep = keep_action(ctx);
-    let popover = Popup::new(self.anchor.clone(), self.popover(ctx, &props, &apply))
+    let available = (ctx.window().info().logical_height() - TITLE_BAR_HEIGHT - STATUS_BAR_HEIGHT).max(0.0);
+    // Popup collision bounds cover the whole window. Reserve its chrome and status bar,
+    // and scroll long permission lists within the remaining workspace height.
+    let content = Column::new()
+      .child(Spacer::new().height(Dimension::Px(TITLE_BAR_HEIGHT)))
+      .child(
+        ScrollVertical::new(self.popover(ctx, &props, &apply))
+          .id("task-permissions-scroll")
+          .max_height(Dimension::Px(available)),
+      )
+      .child(Spacer::new().height(Dimension::Px(STATUS_BAR_HEIGHT)));
+    let popover = Popup::new(self.anchor.clone(), content)
       .open(self.open.clone())
       .placement(Placement::TopEnd)
-      .offset(0.0, POPOVER_GAP);
+      .collision(CollisionStrategy::Clamp)
+      .offset(0.0, POPOVER_GAP - STATUS_BAR_HEIGHT);
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)

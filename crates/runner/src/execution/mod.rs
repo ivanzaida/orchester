@@ -20,6 +20,7 @@ mod build_space;
 mod checkpoint;
 mod control;
 mod conversation;
+mod environment;
 mod halt;
 mod idle;
 mod permissions;

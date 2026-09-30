@@ -18,8 +18,8 @@
 //! - `-a never` is a top-level flag: after `exec` it is an error. With it nothing ever waits for an approval; whatever
 //!   the sandbox does not allow is declined and the agent is told.
 //! - Permissions are enforced by Codex's own sandbox; bypass modes are never used. Read-only steps run in `read-only`;
-//!   writing steps in `workspace-write`, which on Windows only confines writes with `windows.sandbox=elevated` (without
-//!   it every command is declined).
+//!   writing steps in `workspace-write`. Both modes need `windows.sandbox=elevated` on Windows; without a Windows
+//!   sandbox even read-only shell commands are declined.
 //! - The mode and network access come from the step's enforced permissions
 //!   ([`crate::permission::AgentPermissions::enforced_on`]); commands are always those the sandbox allows, since Codex
 //!   cannot enforce a command list. Network access is a setting of the `workspace-write` sandbox only; the `read-only`
@@ -104,7 +104,7 @@ impl CodexInvocation<'_> {
   ) -> Result<Command, InvocationError> {
     unicode_folders(self.writable_roots)?;
     let mut args = vec!["app-server".to_owned(), "--stdio".to_owned()];
-    if self.access == RepositoryAccess::Write && self.platform == Platform::Windows {
+    if self.platform == Platform::Windows {
       args.extend(["-c".to_owned(), "windows.sandbox=elevated".to_owned()]);
     }
     if self.access == RepositoryAccess::Write {
@@ -177,7 +177,7 @@ impl CodexInvocation<'_> {
       args.push("--sandbox".into());
       args.push(mode.into());
     }
-    if (self.access, self.platform) == (RepositoryAccess::Write, Platform::Windows) {
+    if self.platform == Platform::Windows {
       args.push("-c".into());
       args.push("windows.sandbox=elevated".into());
     }

@@ -39,8 +39,11 @@ Environment variables, project MCP servers, tabs, and the installed stable build
    Set the Implement **step** to *Can write* as well as the profile: a new agent step starts *Read-only* and can narrow a
    write profile. Keep Review read-only.
 5. Environment: `CARGO_TARGET_DIR=<repo>/.orchester/target`; then, in Agents › Permissions of each profile that
-   builds, add it to *Extra writable folders* (the tab offers it).
-   Without it every run builds its own `target/` in its worktree (several GB, several minutes the first time).
+   builds, add this build root to *Extra writable folders* (the tab offers it).
+   The runner scopes absolute targets to `<root>/worktrees/<worktree-directory>` for agents and command tools.
+   Sequential steps and resumed invocations reuse their worktree's artifacts; parallel worktrees cannot mix
+   artifacts from different revisions. Relative targets already belong to their worktree and are kept.
+   A new worktree starts cold (several GB, several minutes), with a 10 GiB host-side free-space reserve.
 6. Limits: start at about 3M tokens and 45 minutes of active agent time per run.
 7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
    merge from Orchester while another agent is merging branches into `master` by hand.
@@ -166,6 +169,33 @@ which also preserves text selection after a drag on scaled displays.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+ORC-44 · Command approvals and current-run policy changes · branch `orchester/orc-44-run-2`
+
+- **Implementation complete.** The saved checkpoint and the root's applied runtime/UI delta use effective
+  permissions to select bidirectional Codex transport. One-action command/MCP decisions and existing-session
+  continuation preserve the run, worktree, completed steps and conversation. Run-only changes leave published
+  policies intact. Unsupported approval forms fail explicitly; no persistent grant or bypass mode is offered.
+- Check, Review and Verify remain separate pipeline steps. Reuse the independent design evidence and canonical
+  refs below; native command approve/deny and native exec-session migration still require independent behavioral
+  coverage. Protocol fixtures cover those paths; native MCP approve/deny has separate recorded evidence.
+  The resumed implementation check results and limits are recorded in
+  [runtime evidence](evidence/agent-runtime-architecture-2026-09-30.md).
+
+Agent runtime architecture · effective approvals, Windows sandbox and Cargo isolation · root `master`
+
+- **Done 2026-09-30 as a Windows release candidate, uncommitted.** Effective profile, pipeline and run
+  permissions choose the interactive Codex transport. Commands and MCP actions can receive one-action
+  decisions, and a waiting exec session can resume through App Server with its worktree and progress preserved.
+  Windows read-only invocations select the native sandbox; absolute Cargo targets are scoped per worktree
+  for agents and command tools. The expanded run popup scrolls inside the workspace.
+- Named-filter regressions, native signed-in gpt-6.1-sol MCP approve/deny runs, `tools/check.ps1`, and the
+  paired release build passed. Independent Pencil/app comparison found no blocking or major mismatch in
+  the changed profile, pipeline, popup and approval-dialog regions. Command approval and transport migration
+  used protocol fixtures. Core/exec macOS checks passed; runner/desktop cross-check lacks a target C compiler,
+  and no physical Mac test was run. The user's later resume message reports the release was installed;
+  this worktree's Implement step does not reinstall it or operate on stable processes.
+  See [evidence](evidence/agent-runtime-architecture-2026-09-30.md).
 
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 

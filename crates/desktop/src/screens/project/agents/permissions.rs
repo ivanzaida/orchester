@@ -99,7 +99,7 @@ impl ProfileEditor {
     if provider != Some(AgentProvider::CodexCli) {
       content = content.child(hint(ctx, "agents.permissions.toolApprovalUnavailable"));
     }
-    setting(ctx, "agents.permissions.toolApprovals", content.into())
+    setting(ctx, "agents.permissions.toolApprovalsHeading", content.into())
   }
 
   /// An option card for `option`, chosen by `choose`, or disabled with the reason when the

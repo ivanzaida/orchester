@@ -1577,6 +1577,7 @@
       },
       "addCommand": "Add command",
       "toolApprovals": "Ask before MCP actions that require approval",
+      "toolApprovalsHeading": "MCP approvals",
       "toolApprovalsDisabled": "MCP approval requests are denied",
       "toolApprovalUnavailable": "Interactive MCP approvals require a Codex App Server connection.",
       "transport": "Codex App Server uses your normal account and inherited global MCP servers, plus project-selected servers.",
