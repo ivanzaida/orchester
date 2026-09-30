@@ -24,7 +24,7 @@ use orchester_core::{
   store::{ActivityStore, SettingsStore},
 };
 use orchester_exec::{ProcessRunner, ripgrep};
-use orchester_ipc::AttachSession;
+use orchester_ipc::{AttachSession, Command, Event, Reply, Request, RequestId, RunnerClient, SessionEnd, ShutdownMode};
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
 
@@ -407,6 +407,86 @@ async fn turning_the_code_index_on_mid_run_builds_it_in_the_background() {
   // Still being built is not a problem for the agent's activity.
   assert!(problems(root, run).is_empty());
   drop(held);
+}
+
+/// Sends `command` as request `id` and reads events until its answer.
+async fn ask(client: &mut RunnerClient, id: u64, command: Command) -> Event {
+  let id = RequestId::new(id);
+  client.send(&Request { id, command }).await.expect("send");
+  loop {
+    let event = tokio::time::timeout(Duration::from_secs(10), client.next_event())
+      .await
+      .expect("an event in time")
+      .expect("read")
+      .expect("the runner answers");
+    if matches!(&event, Event::Reply { id: answered, .. } if *answered == id) || matches!(event, Event::Stopped { .. })
+    {
+      return event;
+    }
+  }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_runner_asked_to_quit_does_not_wait_for_an_index_build() {
+  let project = project(&indexed("Say hello."));
+  let root = project.repo.path();
+  let _path = agent_path(root, true);
+  // Another build of the revision holds its lock: this run's build waits for it.
+  let held = hold_index_lock(root);
+  let mut client = tokio::time::timeout(
+    Duration::from_secs(10),
+    RunnerClient::launch(Path::new(env!("CARGO_BIN_EXE_orchester-runner")), root),
+  )
+  .await
+  .expect("launch in time")
+  .expect("launch");
+  let attach = Command::Attach {
+    session: AttachSession::Fresh {
+      previous_end: SessionEnd::Clean,
+    },
+    agent_slots: NonZeroU32::new(1).expect("above zero"),
+  };
+  ask(&mut client, 1, attach).await;
+  let start = Command::StartRun {
+    key: IdempotencyKey::generate(),
+    task: project.task,
+  };
+  let started = ask(&mut client, 2, start).await;
+  assert!(
+    matches!(
+      started,
+      Event::Reply {
+        reply: Reply::RunStarted { .. },
+        ..
+      }
+    ),
+    "{started:?}"
+  );
+  // The build is waiting for the lock by now.
+  tokio::time::sleep(Duration::from_millis(500)).await;
+
+  let stopped = ask(
+    &mut client,
+    3,
+    Command::Shutdown {
+      mode: ShutdownMode::Immediate,
+    },
+  )
+  .await;
+  assert!(matches!(stopped, Event::Stopped { .. }), "{stopped:?}");
+  let (commands, events, mut process) = client.into_parts();
+  drop((commands, events));
+  let status = tokio::time::timeout(Duration::from_secs(10), process.wait())
+    .await
+    .expect("the runner exits without waiting for the build")
+    .expect("wait");
+  assert!(status.success(), "runner exit status {status}");
+  drop(held);
+  let index = root
+    .join(".orchester")
+    .join("index")
+    .join(git(root, &["rev-parse", "HEAD"]));
+  assert!(!index.exists(), "an abandoned build publishes nothing");
 }
 
 #[tokio::test(flavor = "multi_thread")]
