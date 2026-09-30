@@ -261,3 +261,26 @@ fn edit_task_create_and_run_keeps_the_run_snapshot_when_edited_again() {
   assert_eq!(original.details().title.as_str(), "Say hello twice");
   assert_eq!(original.details().brief, "Work in turns.");
 }
+
+#[test]
+fn edit_task_create_and_run_the_runner_refuses_offers_retry_run() {
+  // No runner program exists here, so the start request fails once the task is queued.
+  let mut desktop = Desktop::with_seeded_project(|repo| seed_runnable_draft(repo, &repo.join("codex.exe")));
+  open_task(&mut desktop);
+  edit(&mut desktop);
+  desktop.wait_until("Create & run", |desktop| {
+    has(desktop, "create-and-run") && shows(desktop, "create-and-run", "Create & run")
+  });
+  desktop.click("create-and-run");
+  state_reads(&mut desktop, "Queued · run not started");
+  assert_eq!(stored(&desktop.repo)[0].status(), TaskStatus::Queued);
+  // Once the project's tasks are read again with KON-1 queued, the form still offers the retry:
+  // no run was started that the form could only edit for future runs.
+  desktop.wait_until("the queued task counted", |desktop| {
+    shows(desktop, "status-queued", "1")
+  });
+  assert!(has(&mut desktop, "create-and-run"));
+  assert!(shows(&mut desktop, "create-and-run", "Retry run"));
+  assert!(shows(&mut desktop, "execution-plan", "The runner is not connected."));
+  assert!(!has(&mut desktop, "save-draft"));
+}

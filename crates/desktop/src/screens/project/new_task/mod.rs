@@ -34,7 +34,7 @@ use orchester_core::{
   limits::ProjectLimits,
   repository::RepositoryLink,
   store::RepositoryStore,
-  task::{MissingDetail, Task, TaskDetails, TaskStatus},
+  task::{MissingDetail, Task, TaskDetails},
   tokens::grouped,
 };
 use orchester_store::ProjectDb;
@@ -264,10 +264,11 @@ impl Component for NewTaskForm {
     let link = repository_link(ctx, &props.project);
     let limits = props.limits.unwrap_or_default();
     self.seed(ctx, props.limits, props.editing.as_ref(), props.recovering.as_ref());
-    let editing = props.editing.as_ref().map(|editing| &*editing.task);
+    let edited = props.editing.as_ref();
+    let editing = edited.map(|editing| &*editing.task);
     let recovered = props.recovering.as_ref().map(|recovering| &*recovering.task);
     let separator = ctx.t("number.groupSeparator");
-    let state = self.state(&save, &run, &separator, (limits, editing), recovered.is_some());
+    let state = self.state(&save, &run, &separator, (limits, edited), recovered.is_some());
     self.mark_unsaved(&state, editing);
     let target = self.target(editing.or(recovered));
     let submit = self
@@ -374,7 +375,7 @@ impl NewTaskForm {
     save: &SaveAction,
     run: &RunAction,
     separator: &str,
-    (limits, editing): (ProjectLimits, Option<&Task>),
+    (limits, editing): (ProjectLimits, Option<&Editing>),
     recovered: bool,
   ) -> FormState {
     let criteria: Vec<String> = self
@@ -411,13 +412,15 @@ impl NewTaskForm {
       .data
       .as_ref()
       .map(|saved| &saved.0)
-      .or_else(|| editing.map(Task::details));
+      .or_else(|| editing.map(|editing| editing.task.details()));
     FormState {
       errors,
       missing: form.missing(),
       saved: !queued && ready.as_ref().is_some_and(|details| stored == Some(details)),
       editing: editing.is_some(),
-      started: editing.is_some_and(|task| task.status() == TaskStatus::Queued),
+      // A task this form queued has no run until the runner starts one; until then it keeps
+      // Retry run.
+      started: editing.is_some_and(|editing| editing.has_run),
       queued,
       recovered,
       ready,
