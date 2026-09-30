@@ -140,3 +140,36 @@ fn memory_approving_a_replacement_changes_every_record_in_one_transaction() {
   assert_eq!(status(old.id()), Some((MemoryStatus::Superseded, false)));
   assert_eq!(status(proposal.id()), Some((MemoryStatus::Active, true)));
 }
+
+#[test]
+fn memory_a_proposal_approved_after_its_target_was_replaced_names_no_earlier_version() {
+  let (_repo, mut db, run, execution) = started_run();
+  let settings = MemorySettings::default();
+  let target = person(MemoryScope::Project, content(MemoryKind::Fact, "X."), 1);
+  db.add_memories(std::slice::from_ref(&target)).expect("add");
+  let proposing = |text: &str, millis| {
+    Memory::replacing(
+      &target,
+      agent_write(&run, execution),
+      screened(content(MemoryKind::Fact, text)),
+      &settings,
+      at(millis),
+    )
+    .expect("a replacement")
+  };
+  let (late, first) = (proposing("P.", 2), proposing("Z.", 3));
+  db.add_memories(&[late.clone(), first.clone()]).expect("add");
+  let project = filter(ScopeFilter::Project);
+  for (id, millis) in [(first.id(), 4), (late.id(), 5)] {
+    db.change_memories(&project, |records| approval(id, records, at(millis)))
+      .expect("the store works")
+      .expect("approved");
+  }
+  let late = db.memory(late.id()).expect("read").expect("stored");
+  assert_eq!((late.status(), late.earlier_version()), (MemoryStatus::Active, None));
+  db.delete_memory(late.id()).expect("delete the late one");
+  assert!(
+    db.memory(target.id()).expect("read").is_some(),
+    "the other record's history stays"
+  );
+}

@@ -203,7 +203,7 @@ pub(super) fn update(connection: &Connection, memory: &mut Memory) -> Result<(),
     "
     UPDATE memories SET
       kind = ?2, key = ?3, text = ?4, tags = ?5, importance = ?6,
-      status = ?7, pinned = ?8, updated_at = ?9, edited_at = ?10,
+      status = ?7, pinned = ?8, updated_at = ?9, edited_at = ?10, supersedes_id = ?12,
       revision = revision + 1
     WHERE id = ?1 AND revision = ?11",
     params![
@@ -218,6 +218,7 @@ pub(super) fn update(connection: &Connection, memory: &mut Memory) -> Result<(),
       memory.updated_at().unix_millis(),
       memory.edited_at().map(Timestamp::unix_millis),
       memory.revision(),
+      memory.supersedes().map(|id| id.to_string()),
     ],
   )?;
   if changed == 0 {

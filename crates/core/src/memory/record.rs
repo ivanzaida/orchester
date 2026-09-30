@@ -187,7 +187,8 @@ impl Memory {
   /// A person approves a proposed record: it becomes active and reaches the next agents. A
   /// replacement supersedes the record it names in the same step: pass that record as `replaced`
   /// while it is active, `None` once it no longer is (store both with
-  /// [`super::MemoryStore::supersede_memory`]).
+  /// [`super::MemoryStore::supersede_memory`]). Approved without the record it names, it replaced
+  /// nothing: it no longer names it, so that record never counts as its earlier version.
   pub fn approve(&mut self, replaced: Option<&mut Self>, now: Timestamp) -> Result<(), MemoryError> {
     self.require_proposed()?;
     if let Some(replaced) = replaced {
@@ -202,7 +203,9 @@ impl Memory {
       replaced.superseded_by(self, now);
       return Ok(());
     }
-    self.decide(MemoryStatus::Active, now)
+    self.decide(MemoryStatus::Active, now)?;
+    self.supersedes = None;
+    Ok(())
   }
 
   /// A proposal that a newer proposal of its author replaced before any person decided on it: it
