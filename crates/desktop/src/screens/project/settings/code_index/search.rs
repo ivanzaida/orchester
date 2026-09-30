@@ -104,7 +104,7 @@ fn ripgrep_row(ctx: &Ctx, check: Option<&Result<RipgrepCheck, Message>>, install
         ctx.t(source_key(*source)),
       ),
       SearchTool::NotFound => (
-        Icon::SearchX,
+        Icon::AlertCircle,
         ctx.t("settings.codeIndex.notFound"),
         ctx.t("settings.codeIndex.notFoundDetail"),
       ),
@@ -187,10 +187,19 @@ fn not_found(
         check_again,
       ))),
     Err(unavailable) => copy
-      .child(hint(&unavailable_text(ctx, unavailable)))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding_top(SpacingSize::Md)
+          .child(
+            Text::new(&unavailable_text(ctx, unavailable))
+              .variant(ExtraTypography::Explanation.role())
+              .width(Dimension::Pct(100.0)),
+          ),
+      )
       .child(spaced(actions(
         ctx,
-        install_button(ctx, ("settings.codeIndex.install", Icon::Download), None, started),
+        install_button(ctx, ("settings.codeIndex.install", Icon::Lock), None, started),
         check_again,
       ))),
   };
@@ -355,8 +364,8 @@ fn install_button(ctx: &Ctx, (label, glyph): (&str, Icon), plan: Option<&Install
         })
         .render(ctx)
     }
-    // Without `on_click` the button renders as unavailable.
-    None => button.render(ctx),
+    // Unavailable: the lock leads the label (`NvR7K`).
+    None => button.on_click(|| {}).enabled(false).render(ctx),
   }
 }
 
@@ -444,11 +453,11 @@ fn command(line: &str) -> Element {
     .into()
 }
 
-/// `element` a little further from what comes before it (the 4px spaces of `h6yMk`).
+/// `element` further from what comes before it (the spaces of `h6yMk`).
 fn spaced(element: impl Into<Element>) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
-    .padding_top(SpacingSize::Xs)
+    .padding_top(ExtraSpacing::Inline.role())
     .child(element)
     .into()
 }

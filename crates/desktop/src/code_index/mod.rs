@@ -7,6 +7,7 @@
 mod install;
 
 use std::{
+  collections::HashMap,
   path::{Path, PathBuf},
   sync::Arc,
   time::Duration,
@@ -33,6 +34,8 @@ use orchester_store::{ProjectDb, StoreError};
 pub use self::install::{Install, cancel_install, ends_with_the_app, install_state, start_install};
 use crate::messages::{self, Message};
 
+/// `git rev-parse` answers at once; one that does not is stuck.
+const GIT_TIMEOUT: Duration = Duration::from_secs(10);
 /// `rg --version` answers at once; one that does not is stuck.
 const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -72,13 +75,15 @@ pub fn save_setting_in(repo_root: &Path, setting: CodeIndexSetting) -> Result<()
   ProjectDb::open(repo_root)?.save_code_index(setting)
 }
 
-/// The indexes kept for the project at `repo_root`, with the runs that use them.
+/// The indexes kept for the project at `repo_root`, with the runs that use them. A run's branch is
+/// named only while it still points at the index's revision.
 pub fn list_in(repo_root: &Path) -> Result<IndexList, Message> {
   let listed = CodebaseIndexes::new(repo_root).list().map_err(|error| {
     tracing::error!(%error, "cannot list the codebase indexes");
     Message::new("settings.codeIndex.listFailed")
   })?;
   let db = ProjectDb::open(repo_root).map_err(|error| messages::store_error(&error))?;
+  let mut heads = BranchHeads::new(repo_root);
   let mut rows = Vec::with_capacity(listed.len());
   for listing in listed {
     let mut used_by = Vec::new();
@@ -91,8 +96,12 @@ pub fn list_in(repo_root: &Path) -> Result<IndexList, Message> {
         .task(run.task())
         .map_err(|error| messages::store_error(&error))?
         .map_or_else(|| Arc::from(""), |task| Arc::from(task.key().to_string()));
+      let branch = run
+        .base_branch()
+        .filter(|branch| heads.points_at(branch.as_str(), &listing.revision))
+        .map(|branch| Arc::from(branch.as_str()));
       used_by.push(UsedBy {
-        branch: run.base_branch().map(|branch| Arc::from(branch.as_str())),
+        branch,
         task,
         run: run.number().get(),
       });
@@ -104,6 +113,43 @@ pub fn list_in(repo_root: &Path) -> Result<IndexList, Message> {
     });
   }
   Ok(IndexList(Arc::new(rows)))
+}
+
+/// The commits branches of a repository point at, each read once.
+struct BranchHeads<'a> {
+  repo_root: &'a Path,
+  read: HashMap<String, Option<String>>,
+}
+
+impl<'a> BranchHeads<'a> {
+  fn new(repo_root: &'a Path) -> Self {
+    Self {
+      repo_root,
+      read: HashMap::new(),
+    }
+  }
+
+  /// Whether `branch` points at `revision`; not when it is gone or cannot be read.
+  fn points_at(&mut self, branch: &str, revision: &Revision) -> bool {
+    let repo_root = self.repo_root;
+    let head = self.read.entry(branch.to_owned()).or_insert_with(|| {
+      let reference = format!("refs/heads/{branch}^{{commit}}");
+      let command = Command::new(
+        Path::new("git"),
+        ["rev-parse", "--verify", "--quiet", reference.as_str()],
+      )
+      .with_current_dir(repo_root);
+      match ProcessRunner::new(GIT_TIMEOUT).run(&command) {
+        Ok(output) if output.code == Some(0) => Some(output.stdout.trim().to_owned()),
+        Ok(_) => None,
+        Err(error) => {
+          tracing::debug!(%error, branch, "cannot read where a branch points");
+          None
+        }
+      }
+    });
+    head.as_deref() == Some(revision.as_str())
+  }
 }
 
 /// Builds the index of `revision` again (*Rebuild*, *Retry*); why it failed.

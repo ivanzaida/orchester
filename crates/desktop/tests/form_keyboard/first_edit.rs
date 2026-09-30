@@ -46,6 +46,16 @@ fn activity_shows_the_code_index_and_the_tokens_before_the_first_edit() {
   assert!(shows(&mut desktop, PANEL, "README.md"));
   assert!(shows(&mut desktop, PANEL, "Before first edit adds up the turns"));
   assert!(shows(&mut desktop, "activity-invocation-title", "Current invocation"));
+  // The note ends the panel's content above its padding, at the bottom of the panel or, when the
+  // content is taller, where the panel scrolls to.
+  let (panel, content, note) = (
+    desktop.bounds(PANEL),
+    desktop.bounds("activity-invocation-content"),
+    desktop.bounds("activity-invocation-note"),
+  );
+  let under = (content.y + content.height) - (note.y + note.height);
+  assert!((19.0..=21.0).contains(&under), "{under} px under the note");
+  assert!(content.y + content.height >= panel.y + panel.height - 0.5);
 
   // Narrowed to the step, the panel is named after it and says when it ran.
   desktop

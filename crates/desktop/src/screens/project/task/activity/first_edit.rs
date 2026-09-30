@@ -17,7 +17,7 @@ use crate::{
   display,
   tasks::detail::RunView,
   theme::ExtraTypography,
-  ui::property::{ValueStyle, property, styled_property},
+  ui::property::{ValueStyle, noted_property, property, styled_property},
 };
 
 /// *Code index* (`rh5gb`): the revision and branch the agent's index is of, or why it had none;
@@ -35,13 +35,12 @@ pub(super) fn code_index_row(ctx: &Ctx, run: &RunView, invocation: &Invocation) 
         ),
         None => ctx.t_args("runs.activity.panel.codeIndexRevision", [("revision", short)]),
       };
-      let value = match ripgrep {
-        None => index,
-        Some(RipgrepMissing::NotFound | RipgrepMissing::Unavailable { .. }) => {
-          ctx.t_args("runs.activity.panel.codeIndexWithoutRipgrep", [("index", &*index)])
-        }
+      let note = match ripgrep {
+        None => return Some(styled_property(&label, &index, ValueStyle::Mono)),
+        Some(RipgrepMissing::NotFound) => ctx.t("runs.activity.panel.codeIndexRipgrepNotFound"),
+        Some(RipgrepMissing::Unavailable { .. }) => ctx.t("runs.activity.panel.codeIndexRipgrepUnavailable"),
       };
-      (value, ValueStyle::Mono)
+      return Some(noted_property(&label, &index, &note));
     }
     CodeIndexUse::Off => (ctx.t("runs.activity.panel.codeIndexOff"), ValueStyle::Text),
     CodeIndexUse::Unavailable {

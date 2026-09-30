@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Spacer, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{id::StepExecutionId, run::Invocation, time::Timestamp, tokens::compact_tokens};
@@ -46,22 +46,18 @@ pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView, filter: Option<StepExec
     _ => ctx.t("runs.activity.panel.title"),
   };
   let panel = Column::new()
-    .id("activity-invocation")
-    .width(Dimension::Px(PANEL_WIDTH))
-    .height(Dimension::Pct(100.0))
+    .id("activity-invocation-content")
+    .width(Dimension::Pct(100.0))
+    .min_height(Dimension::Pct(100.0))
     .padding(ExtraSpacing::Step.role())
     .spacing(ExtraSpacing::Group.role())
-    .background(PaletteColor::SurfacePanel)
-    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(
       Text::new(&title)
         .variant(ExtraTypography::SectionHeading.role())
         .id("activity-invocation-title"),
     );
   let Some(invocation) = invocation else {
-    return panel
-      .child(Text::new(&ctx.t("runs.activity.panel.none")).variant(ExtraTypography::Detail.role()))
-      .into();
+    return frame(panel.child(Text::new(&ctx.t("runs.activity.panel.none")).variant(ExtraTypography::Detail.role())));
   };
   // A tool step's command runs no model and changes no file an agent reports.
   let before = invocation
@@ -73,7 +69,7 @@ pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView, filter: Option<StepExec
     Some((_, true)) => "runs.activity.panel.noteAtMost",
   };
   let before = before.map(|(rows, _)| rows);
-  panel
+  let panel = panel
     .with_children(details(ctx, run, invocation, filter.is_some()))
     .child(divider())
     .with_children(tokens(ctx, run, invocation))
@@ -87,7 +83,24 @@ pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView, filter: Option<StepExec
         .map(|value| property(&ctx.t("runs.summary.permissions"), &value)),
     )
     .child(Spacer::new().flex(1.0))
-    .child(Text::new(&ctx.t(note)).variant(ExtraTypography::Hint.role()))
+    .child(
+      Text::new(&ctx.t(note))
+        .variant(ExtraTypography::Hint.role())
+        .id("activity-invocation-note"),
+    );
+  frame(panel)
+}
+
+/// The panel's fill and edge around `content`, which scrolls when it is taller than the panel, so
+/// the note keeps the padding under it.
+fn frame(content: Column) -> Element {
+  Column::new()
+    .id("activity-invocation")
+    .width(Dimension::Px(PANEL_WIDTH))
+    .height(Dimension::Pct(100.0))
+    .background(PaletteColor::SurfacePanel)
+    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .child(ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0))
     .into()
 }
 

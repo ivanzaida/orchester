@@ -169,7 +169,7 @@ impl Component for CodeIndexTab {
           // The section space (`vm2Gi`) above the heading.
           Column::new()
             .width(Dimension::Pct(100.0))
-            .padding_top(SpacingSize::Sm)
+            .padding_top(SpacingSize::Lg)
             .child(
               Text::new(&ctx.t("settings.codeIndex.searchHeading")).variant(ExtraTypography::SectionHeading.role()),
             ),
@@ -184,7 +184,7 @@ impl Component for CodeIndexTab {
       content.child(
         Column::new()
           .width(Dimension::Pct(100.0))
-          .padding_top(SpacingSize::Sm)
+          .padding_top(SpacingSize::Md)
           .child(
             Notice::new(
               Icon::CircleOff,

@@ -788,8 +788,8 @@
         "programNotFound": "{{program}} was not found",
         "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool.",
         "codebaseIndexUnavailable": "The codebase index is unavailable; the agent works without it",
-        "ripgrepNotFound": "ripgrep was not found; the agent gets no codebase index and searches with git grep",
-        "ripgrepUnavailable": "ripgrep could not be given to the agent; it gets no codebase index and searches with git grep"
+        "ripgrepNotFound": "ripgrep was not found. The agent still gets the codebase index; it searches the index and the files with git grep (Codex) or with its own search tools (Claude Code).",
+        "ripgrepUnavailable": "ripgrep could not be given to the agent. It still gets the codebase index; it searches the index and the files with git grep (Codex) or with its own search tools (Claude Code)."
       },
       "unparsed": {
         "one": "{{count}} unparsed line",
@@ -835,7 +835,8 @@
         "codeIndex": "Code index",
         "codeIndexGiven": "{{revision}} · {{branch}}",
         "codeIndexRevision": "{{revision}}",
-        "codeIndexWithoutRipgrep": "{{index}} · ripgrep not found",
+        "codeIndexRipgrepNotFound": "ripgrep not found · searches with git grep or the CLI's own tools",
+        "codeIndexRipgrepUnavailable": "ripgrep could not be given · searches with git grep or the CLI's own tools",
         "codeIndexOff": "Off · project setting",
         "codeIndexUnavailable": "Unavailable · build failed",
         "codeIndexBuilding": "Unavailable · still building",
@@ -2263,6 +2264,7 @@
       "empty": "No index yet — built when the next run starts",
       "listFailed": "Couldn’t read the kept indexes",
       "usedByRun": "{{task}} · Run {{number}}",
+      "usedByRuns": "{{task}} · Runs {{number}}",
       "runNumber": "Run {{number}}",
       "usedBySeparator": " · ",
       "state": {

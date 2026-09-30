@@ -231,7 +231,8 @@ fn index_row(ctx: &Ctx, row: &IndexRow, rebuild: &Rebuild) -> Element {
     .into()
 }
 
-/// `main · ORC-38 · Run 2`: the branches the runs started from, then each run.
+/// `main · ORC-38 · Run 2`, `KON-1 · Runs 4, 5, 7`: the branches the runs started from that still
+/// point at the revision, then the runs of each task.
 fn used_by(ctx: &Ctx, runs: &[UsedBy]) -> String {
   let mut parts: Vec<String> = Vec::new();
   for branch in runs.iter().filter_map(|run| run.branch.as_deref()) {
@@ -239,14 +240,26 @@ fn used_by(ctx: &Ctx, runs: &[UsedBy]) -> String {
       parts.push(branch.to_owned());
     }
   }
-  let named: Vec<String> = runs
+  let mut tasks: Vec<(&str, Vec<String>)> = Vec::new();
+  for run in runs {
+    let number = run.run.to_string();
+    match tasks.iter_mut().find(|(task, _)| *task == &*run.task) {
+      Some((_, numbers)) => numbers.push(number),
+      None => tasks.push((&run.task, vec![number])),
+    }
+  }
+  let named: Vec<String> = tasks
     .iter()
-    .map(|run| {
+    .map(|(task, numbers)| {
+      let (key, number) = match numbers.as_slice() {
+        [one] => ("settings.codeIndex.usedByRun", one.clone()),
+        many => (
+          "settings.codeIndex.usedByRuns",
+          many.join(&ctx.t("common.listSeparator")),
+        ),
+      };
       ctx
-        .t_args(
-          "settings.codeIndex.usedByRun",
-          [("task", &*run.task), ("number", run.run.to_string().as_str())],
-        )
+        .t_args(key, [("task", *task), ("number", number.as_str())])
         .to_string()
     })
     .collect();
