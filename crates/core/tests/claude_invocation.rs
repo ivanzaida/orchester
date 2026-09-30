@@ -349,3 +349,26 @@ fn claude_invocation_reads_the_code_index_but_may_not_edit_it() {
     );
   }
 }
+
+#[test]
+fn claude_invocation_gets_no_edit_rule_for_a_code_index_on_a_network_share() {
+  // How Claude Code writes a network path in its patterns is not documented: the index's files
+  // are read-only instead.
+  for folder in [
+    r"\\server\share\repo\.orchester\index\4d2b8e0",
+    r"\\?\UNC\server\share\repo\.orchester\index\4d2b8e0",
+  ] {
+    let writing = enforced(
+      RepositoryAccess::Write,
+      allowed(&["git"]),
+      NetworkAccess::On,
+      Platform::Windows,
+    );
+    let given = ClaudeInvocation {
+      code_index: Some(Path::new(folder)),
+      ..invocation(&writing)
+    };
+    let given_args = args(&given);
+    assert!(!given_args.iter().any(|arg| arg.starts_with("Edit(")), "{given_args:?}");
+  }
+}

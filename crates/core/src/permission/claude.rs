@@ -89,11 +89,17 @@ pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName], pr
   args
 }
 
-/// `Edit(//<folder>/**)`, which keeps Claude Code's edit tools out of `folder`, an absolute path; `None`
-/// for a path that is no text, which the invocation refuses before it gets here.
+/// `Edit(//<folder>/**)`, which keeps Claude Code's edit tools out of `folder`, an absolute path, in
+/// the POSIX form Claude Code matches permission paths in (`C:\repo` is `//c/repo`). `None` for a
+/// path that is no text, which the invocation refuses before it gets here, and for a network path
+/// (`\\server\share`), whose form in Claude Code's patterns is not documented: such a folder is kept
+/// from edits only by its files being read-only.
 fn edit_rule(folder: &Path) -> Option<String> {
   let text = folder.to_str()?.replace('\\', "/");
   let text = text.strip_prefix("//?/").unwrap_or(&text);
+  if text.starts_with("//") || text.starts_with("UNC/") {
+    return None;
+  }
   let posix = match text.as_bytes() {
     [drive, b':', ..] if drive.is_ascii_alphabetic() => {
       format!("/{}{}", char::from(drive.to_ascii_lowercase()), &text[2..])
