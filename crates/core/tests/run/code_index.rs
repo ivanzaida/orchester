@@ -17,6 +17,7 @@ const GIVEN: CodeIndexPrompt<'static> = CodeIndexPrompt::Given {
   revision: "4d2b8e0",
   folder: "/repo/.orchester/index/4d2b8e0",
   skill: "/repo/.orchester/skills/e1/_orchester/codebase-index/SKILL.md",
+  git_grep: false,
 };
 
 fn prompt() -> Prompt {
@@ -38,7 +39,9 @@ fn code_index_is_named_before_the_task_of_a_new_session() {
   let task = text.find("# Task ORC-12").expect("the task part");
   assert!(index < task, "{text}");
   assert!(text.contains("at the run's base revision 4d2b8e0 is in /repo/.orchester/index/4d2b8e0:"));
-  assert!(text.contains("The orchester-codebase-index skill (/repo/.orchester/skills/e1/_orchester/codebase-index/SKILL.md)"));
+  assert!(
+    text.contains("The orchester-codebase-index skill (/repo/.orchester/skills/e1/_orchester/codebase-index/SKILL.md)")
+  );
 }
 
 #[test]
@@ -62,6 +65,21 @@ fn without_ripgrep_the_prompt_says_to_search_with_git_grep() {
   assert!(text.contains("# Searching the repository\n"), "{text}");
   assert!(text.contains("`git grep -n`"));
   assert!(!text.contains("# Codebase index"));
+}
+
+#[test]
+fn code_index_without_ripgrep_names_git_grep_for_the_index_and_the_repository() {
+  let prompt = prompt();
+  let mut input = prompt.input(&[], &[], true);
+  input.code_index = Some(CodeIndexPrompt::Given {
+    revision: "4d2b8e0",
+    folder: "/repo/.orchester/index/4d2b8e0",
+    skill: "/repo/.orchester/skills/e1/_orchester/codebase-index/SKILL.md",
+    git_grep: true,
+  });
+  let text = input.assemble(InjectionEvent::Start).expect("assembled").text;
+  assert!(text.contains("# Codebase index\n"), "{text}");
+  assert!(text.contains("`git grep --no-index -n`"));
 }
 
 #[test]

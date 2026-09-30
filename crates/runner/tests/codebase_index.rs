@@ -12,7 +12,7 @@ mod support;
 use std::{collections::BTreeMap, fs, num::NonZeroU32, path::Path, time::Duration};
 
 use orchester_core::{
-  code_index::{CodeIndexSetting, CodeIndexUnavailable, CodeIndexUse},
+  code_index::{CodeIndexSetting, CodeIndexUnavailable, CodeIndexUse, RipgrepMissing},
   connection::{
     AgentProvider,
     stream::{AgentEvent, RunnerProblem},
@@ -185,6 +185,7 @@ async fn codebase_index_reaches_codex_on_new_and_resumed_sessions_with_ripgrep_o
 
   let given = CodeIndexUse::Given {
     revision: ended.base().clone(),
+    ripgrep: None,
   };
   assert_eq!(uses(root, run), [given.clone(), given]);
   let index = index_of(root, &ended);
@@ -255,20 +256,39 @@ async fn codebase_index_off_gives_agents_nothing_and_builds_nothing() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn without_ripgrep_the_agent_is_told_to_search_with_git_grep() {
+async fn without_ripgrep_codex_gets_the_index_and_is_told_to_search_with_git_grep() {
   let project = project(&indexed("Say hello."));
   let root = project.repo.path();
   let _path = agent_path(root, false);
   let ended = run_to_the_end(root, project.task).await;
   assert_eq!(ended.status(), &RunStatus::Succeeded);
 
-  let missing = CodeIndexUse::Unavailable {
-    reason: CodeIndexUnavailable::RipgrepNotFound,
+  let given = CodeIndexUse::Given {
+    revision: ended.base().clone(),
+    ripgrep: Some(RipgrepMissing::NotFound),
   };
-  assert_eq!(uses(root, ended.id()), [missing]);
+  assert_eq!(uses(root, ended.id()), [given]);
   assert_eq!(problems(root, ended.id()), [RunnerProblem::RipgrepNotFound]);
-  assert_eq!(prompt_lines(root, ended.id(), "# Searching the repository").len(), 1);
-  assert!(prompt_lines(root, ended.id(), "# Codebase index").is_empty());
+  assert_eq!(prompt_lines(root, ended.id(), "# Codebase index").len(), 1);
+  assert_eq!(
+    prompt_lines(root, ended.id(), "ripgrep (`rg`) is not available").len(),
+    1
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn without_ripgrep_claude_code_gets_the_index_and_is_not_steered_to_git_grep() {
+  let setup = Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    ..indexed("Append one line.")
+  };
+  let project = project(&setup);
+  let root = project.repo.path();
+  let _path = agent_path(root, false);
+  let ended = run_to_the_end(root, project.task).await;
+
+  assert_eq!(prompt_lines(root, ended.id(), "# Codebase index").len(), 1);
+  assert!(prompt_lines(root, ended.id(), "ripgrep (`rg`) is not available").is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -374,9 +394,13 @@ async fn a_ripgrep_that_cannot_be_copied_is_reported_with_the_reason() {
   assert!(detail.contains("tools"), "{detail}");
   assert!(matches!(
     &uses(root, ended.id())[..],
-    [CodeIndexUse::Unavailable {
-      reason: CodeIndexUnavailable::RipgrepUnavailable { .. }
+    [CodeIndexUse::Given {
+      ripgrep: Some(RipgrepMissing::Unavailable { .. }),
+      ..
     }]
   ));
-  assert_eq!(prompt_lines(root, ended.id(), "# Searching the repository").len(), 1);
+  assert_eq!(
+    prompt_lines(root, ended.id(), "ripgrep (`rg`) is not available").len(),
+    1
+  );
 }

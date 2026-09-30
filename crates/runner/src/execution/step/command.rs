@@ -110,7 +110,7 @@ impl RunTask {
       Some(_) => Some(self.place_code_map(execution, &mut placed)?),
       None => None,
     };
-    let told = IndexTold::new(&index, skill.as_deref());
+    let told = IndexTold::new(&index, skill.as_deref(), connection.provider());
     let AssembledPrompt { text: prompt, sources } =
       self.prompt(execution, step, info, continuation, (&placed, told.prompt()))?;
     // Preflight already refused steps whose permissions the CLI cannot enforce; checked again

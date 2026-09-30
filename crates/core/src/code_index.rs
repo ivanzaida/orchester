@@ -6,8 +6,9 @@
 //! - Project settings › Code index › *Use code index* ([`CodeIndexSetting`]) is read when an agent starts: agents that
 //!   start after a change follow it. It is on by default. Off, nothing is built and no agent gets an index or the
 //!   skill.
-//! - Each agent invocation records what it got ([`CodeIndexUse`]): the index of the run's base revision, nothing
-//!   because the setting was off, or nothing because the index could not be built or ripgrep was not found.
+//! - Each agent invocation records what it got ([`CodeIndexUse`]): the index of the run's base revision (with or
+//!   without ripgrep, whose absence the skill's `git grep` fallback covers), nothing because the setting was off, or
+//!   nothing because the index could not be built.
 
 use serde::{Deserialize, Serialize};
 
@@ -32,8 +33,13 @@ impl CodeIndexSetting {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum CodeIndexUse {
-  /// The index of the run's base `revision` and the skill to search it.
-  Given { revision: Revision },
+  /// The index of the run's base `revision` and the skill to search it; `ripgrep` says why the
+  /// agent had no ripgrep to search with, if it had none.
+  Given {
+    revision: Revision,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ripgrep: Option<RipgrepMissing>,
+  },
   /// The project has the code index off.
   Off,
   /// The setting is on, but the agent got no index.
@@ -46,10 +52,14 @@ pub enum CodeIndexUse {
 pub enum CodeIndexUnavailable {
   /// The index of the run's base revision could not be built; `detail` says why.
   BuildFailed { detail: String },
-  /// ripgrep, which the index skill searches with, was found neither on the agent's `PATH` nor with
-  /// an agent CLI.
-  RipgrepNotFound,
-  /// ripgrep was found but could not be given to the agent (copied into the project's tools
-  /// folder); `detail` says why.
-  RipgrepUnavailable { detail: String },
+}
+
+/// Why an agent has no ripgrep, which the index skill searches with.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "reason", rename_all = "snake_case")]
+pub enum RipgrepMissing {
+  /// Found neither on the agent's `PATH` nor with an agent CLI.
+  NotFound,
+  /// Found but not given to the agent (copied into the project's tools folder); `detail` says why.
+  Unavailable { detail: String },
 }

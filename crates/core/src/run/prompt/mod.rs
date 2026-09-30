@@ -94,11 +94,13 @@ pub struct SkillListing<'a> {
 #[derive(Clone, Copy, Debug)]
 pub enum CodeIndexPrompt<'a> {
   /// The index of the run's base `revision` is in `folder`; the skill whose `SKILL.md` is `skill`
-  /// explains how to search it.
+  /// explains how to search it. `git_grep`: the agent has no ripgrep and searches with `git grep`
+  /// (not said to an agent with a search tool of its own).
   Given {
     revision: &'a str,
     folder: &'a str,
     skill: &'a str,
+    git_grep: bool,
   },
   /// ripgrep is not available to the agent: it searches tracked files with `git grep -n`.
   WithoutRipgrep,

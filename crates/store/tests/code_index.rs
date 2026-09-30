@@ -4,7 +4,7 @@
 mod support;
 
 use orchester_core::{
-  code_index::{CodeIndexSetting, CodeIndexUnavailable, CodeIndexUse},
+  code_index::{CodeIndexSetting, CodeIndexUnavailable, CodeIndexUse, RipgrepMissing},
   id::InvocationId,
   revision::Revision,
   run::{EditProgress, FirstEdit, TokenUsage},
@@ -34,7 +34,10 @@ fn code_index_use_of_an_invocation_round_trips() {
     .start_invocation(run.id(), execution, &model(), at(20))
     .expect("start");
   let revision = Revision::new(&"4".repeat(Revision::LEN)).expect("revision");
-  let used = CodeIndexUse::Given { revision };
+  let used = CodeIndexUse::Given {
+    revision,
+    ripgrep: Some(RipgrepMissing::NotFound),
+  };
   db.save_invocation_code_index(given.id, &used).expect("save");
   let unavailable = CodeIndexUse::Unavailable {
     reason: CodeIndexUnavailable::BuildFailed {

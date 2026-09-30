@@ -7,9 +7,9 @@
 //!   each start of the execution, so what an agent changed there does not last, and kept afterwards: a resumed session
 //!   reads the paths it was told when it started. Both CLIs can read it: Codex's sandbox reads the whole disk, and
 //!   Claude Code is given the folder with `--add-dir`.
-//! - Orchester's internal `orchester-codebase-index` skill, embedded in the runner, is placed the same way for an agent that gets
-//!   the code index (`super::super::codebase_index`), under `_orchester/`, which no project skill's slug can name. It
-//!   is not a project resource and no screen lists it.
+//! - Orchester's internal `orchester-codebase-index` skill, embedded in the runner, is placed the same way for an agent
+//!   that gets the code index (`super::super::codebase_index`), under `_orchester/`, which no project skill's slug can
+//!   name. It is not a project resource and no screen lists it.
 //! - The repository's own skills: while the project has its agent files off, every `SKILL.md` under
 //!   `<worktree>/.agents/skills` (at any depth, through links, as Codex finds them) is listed for Codex to disable. A
 //!   folder that cannot be read stops the agent from starting rather than letting Codex load what it holds.
@@ -145,7 +145,9 @@ impl RunTask {
       .map_err(|error| problem(format!("cannot place the orchester-codebase-index skill: {error}")))?;
     let markdown = frontmatter::parse(CODE_INDEX_SKILL);
     placed.skills.push(PlacedSkill {
-      name: markdown.name.expect("the embedded orchester-codebase-index skill has a name"),
+      name: markdown
+        .name
+        .expect("the embedded orchester-codebase-index skill has a name"),
       description: markdown
         .description
         .expect("the embedded orchester-codebase-index skill has a description"),

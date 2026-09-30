@@ -16,10 +16,10 @@ use std::{
 };
 
 use orchester_core::{
-  code_index::{CodeIndexUnavailable, CodeIndexUse},
+  code_index::{CodeIndexUnavailable, CodeIndexUse, RipgrepMissing},
   command::Command,
   connection::{
-    AgentConnection,
+    AgentConnection, AgentProvider,
     stream::{AgentEvent, RunnerProblem},
   },
   id::RunId,
@@ -115,33 +115,34 @@ impl RunTask {
       return Ok(AgentIndex::off());
     }
     let index = self.index_folder();
-    let ripgrep = self.provide_ripgrep()?;
-    let tools = match &ripgrep {
-      Ok(folder) => Some(folder.clone()),
-      Err(_) => None,
+    let (tools, missing) = match self.provide_ripgrep()? {
+      Ok(folder) => (Some(folder), None),
+      Err((missing, problem)) => (None, Some((missing, problem))),
     };
-    let (reason, problem) = match (index, ripgrep) {
-      (Ok(folder), Ok(_)) => {
-        return Ok(AgentIndex {
-          used: CodeIndexUse::Given {
-            revision: self.run.base().clone(),
-          },
-          folder: Some(folder),
-          tools,
-          problems: Vec::new(),
-        });
-      }
-      (Err(detail), _) => (
-        CodeIndexUnavailable::BuildFailed { detail: detail.clone() },
-        RunnerProblem::CodebaseIndexUnavailable { detail },
+    let mut problems = Vec::new();
+    let (used, folder) = match index {
+      Ok(folder) => (
+        CodeIndexUse::Given {
+          revision: self.run.base().clone(),
+          ripgrep: missing.as_ref().map(|(missing, _)| missing.clone()),
+        },
+        Some(folder),
       ),
-      (Ok(_), Err(missing)) => missing,
+      Err(detail) => {
+        problems.push(RunnerProblem::CodebaseIndexUnavailable { detail: detail.clone() });
+        let reason = CodeIndexUnavailable::BuildFailed { detail };
+        (CodeIndexUse::Unavailable { reason }, None)
+      }
     };
+    problems.extend(missing.map(|(_, problem)| problem));
     Ok(AgentIndex {
-      used: CodeIndexUse::Unavailable { reason },
-      folder: None,
+      used,
+      folder,
       tools,
-      problems: vec![AgentEvent::RunnerProblem { problem }],
+      problems: problems
+        .into_iter()
+        .map(|problem| AgentEvent::RunnerProblem { problem })
+        .collect(),
     })
   }
 
@@ -164,7 +165,7 @@ impl RunTask {
   /// The folder holding the copy of ripgrep for an agent; else why the agent has none: none was
   /// found on the `PATH` the agent starts with (the project's, else the runner's) or with an agent
   /// CLI, or the one found could not be copied.
-  fn provide_ripgrep(&self) -> Result<Result<PathBuf, (CodeIndexUnavailable, RunnerProblem)>, String> {
+  fn provide_ripgrep(&self) -> Result<Result<PathBuf, (RipgrepMissing, RunnerProblem)>, String> {
     let environment = self.db.project_environment().map_err(|error| error.to_string())?;
     let path = environment.get("PATH").map(OsString::from).or_else(search_path);
     let executables: Vec<PathBuf> = self
@@ -178,17 +179,14 @@ impl RunTask {
       .collect();
     let clis: Vec<&Path> = executables.iter().map(PathBuf::as_path).collect();
     let Some(found) = ripgrep::locate(path.as_deref(), &clis) else {
-      return Ok(Err((
-        CodeIndexUnavailable::RipgrepNotFound,
-        RunnerProblem::RipgrepNotFound,
-      )));
+      return Ok(Err((RipgrepMissing::NotFound, RunnerProblem::RipgrepNotFound)));
     };
     Ok(
       ripgrep::provide(&found, &self.root.join(".orchester").join("tools")).map_err(|error| {
         tracing::warn!(%error, found = %found.path.display(), "ripgrep cannot be given to agents");
         let detail = error.to_string();
         (
-          CodeIndexUnavailable::RipgrepUnavailable { detail: detail.clone() },
+          RipgrepMissing::Unavailable { detail: detail.clone() },
           RunnerProblem::RipgrepUnavailable { detail },
         )
       }),
@@ -221,6 +219,7 @@ pub(super) enum IndexTold {
     revision: String,
     folder: String,
     skill: String,
+    git_grep: bool,
   },
   WithoutRipgrep,
   Nothing,
@@ -229,19 +228,17 @@ pub(super) enum IndexTold {
 impl IndexTold {
   /// For an agent that gets `index`, with the `orchester-codebase-index` skill placed at `skill` when it gets
   /// the index.
-  pub(super) fn new(index: &AgentIndex, skill: Option<&Path>) -> Self {
+  /// Claude Code (`provider`) has a search tool of its own: it is not steered to `git grep`.
+  pub(super) fn new(index: &AgentIndex, skill: Option<&Path>, provider: AgentProvider) -> Self {
+    let codex_without_ripgrep = index.tools.is_none() && provider == AgentProvider::CodexCli;
     match (&index.used, &index.folder, skill) {
-      (CodeIndexUse::Given { revision }, Some(folder), Some(skill)) => Self::Given {
+      (CodeIndexUse::Given { revision, .. }, Some(folder), Some(skill)) => Self::Given {
         revision: revision.to_string(),
         folder: folder.to_string_lossy().into_owned(),
         skill: skill.to_string_lossy().into_owned(),
+        git_grep: codex_without_ripgrep,
       },
-      (
-        CodeIndexUse::Unavailable {
-          reason: CodeIndexUnavailable::RipgrepNotFound | CodeIndexUnavailable::RipgrepUnavailable { .. },
-        },
-        ..,
-      ) => Self::WithoutRipgrep,
+      (CodeIndexUse::Unavailable { .. }, ..) if codex_without_ripgrep => Self::WithoutRipgrep,
       _ => Self::Nothing,
     }
   }
@@ -252,10 +249,12 @@ impl IndexTold {
         revision,
         folder,
         skill,
+        git_grep,
       } => Some(CodeIndexPrompt::Given {
         revision,
         folder,
         skill,
+        git_grep: *git_grep,
       }),
       Self::WithoutRipgrep => Some(CodeIndexPrompt::WithoutRipgrep),
       Self::Nothing => None,

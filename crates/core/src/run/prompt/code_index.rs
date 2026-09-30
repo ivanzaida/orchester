@@ -21,6 +21,7 @@ pub(super) fn push(text: &mut String, code_index: Option<CodeIndexPrompt<'_>>) {
       revision,
       folder,
       skill,
+      git_grep,
     } => {
       text.push_str("# Codebase index\n");
       // Writing to a String cannot fail.
@@ -36,6 +37,12 @@ pub(super) fn push(text: &mut String, code_index: Option<CodeIndexPrompt<'_>>) {
          Files changed since the base revision, by you or by earlier steps, may differ from the index: read those \
          files directly."
       );
+      if git_grep {
+        text.push_str(
+          "ripgrep (`rg`) is not available to you: search the index with `git grep --no-index -n` and the \
+           repository with `git grep -n` on the narrowest path instead.\n",
+        );
+      }
     }
     CodeIndexPrompt::WithoutRipgrep => {
       text.push_str("# Searching the repository\n");
