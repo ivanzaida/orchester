@@ -57,6 +57,39 @@ fn a_changed_index_is_neither_built_on_nor_handed_out_again() {
 }
 
 #[test]
+fn an_index_found_intact_before_is_still_checked_when_a_file_changes() {
+  let repo = Repo::new();
+  let head = repo.head();
+  let index = repo.ensure(&head).path;
+  // Reused once: found intact, and remembered as it is.
+  assert!(matches!(repo.ensure(&head).outcome, Outcome::Reused));
+  let name = "outline/crates/app/src/lib.rs.md";
+  let original = read(&index, name);
+  // The same size, other content.
+  let replaced: String = original
+    .chars()
+    .map(|character| if character == 'L' { 'X' } else { character })
+    .collect();
+  assert_eq!(replaced.len(), original.len());
+  let file = index.join(name);
+  let mut permissions = fs::metadata(&file).expect("metadata").permissions();
+  #[allow(
+    clippy::permissions_set_readonly_false,
+    reason = "the test plays an agent that makes the file writable"
+  )]
+  permissions.set_readonly(false);
+  fs::set_permissions(&file, permissions).expect("make writable");
+  std::thread::sleep(std::time::Duration::from_millis(20));
+  fs::write(&file, replaced).expect("tamper");
+
+  assert!(
+    matches!(repo.ensure(&head).outcome, Outcome::Built(_)),
+    "the changed index is built again"
+  );
+  assert_eq!(read(&index, name), original);
+}
+
+#[test]
 fn an_earlier_index_with_files_without_an_outline_is_still_built_on() {
   let repo = Repo::new();
   repo.write("web/min.js", &format!("{}\n", "function a(){return 1};".repeat(300)));
