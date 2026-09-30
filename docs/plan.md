@@ -122,13 +122,37 @@ and MCP tools in the Tools library.
 
 ## C · Claude Code
 
+### C0 · Claude Code parity, in progress on `claude/claude-support`
+
+Built and tested; **not done until C2's design verification passes**, and not merged (merge order with Codex's
+pause-at-approval work in `step/worker.rs` and with `claude/integration` is open).
+
+- Claude Code connections offer `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-fable-5-1` and
+  `claude-haiku-4-5-20251001`, then the models the CLI lists through the stream-json `initialize` request, then the
+  `opus` and `sonnet` aliases, with the effort levels the CLI accepts. The model reaches `--model` on new and resumed
+  sessions and is recorded per invocation.
+- *Ask before running commands* and *Ask before MCP actions* work on Claude Code through
+  `--permission-prompt-tool mcp__Orchester__approve`, served by `orchester-runner --claude-permission-prompt`, with
+  the same approval records and modal as Codex (`docs/interactive-tool-approvals.md`). Every command of a writing step
+  asks (whole-tool ask rule); a read-only step gets no commands.
+- C1: the step result comes from `--json-schema`'s `structured_output`, or strictly from the JSON that closes the final
+  message; a turn without one fails.
+- C3 (user decision): an API refusal of a model to an old CLI is reported as `CliTooOld` and recorded on the
+  connection; the Connections inspector, the profile's model field and a step's model show a notice. No documented
+  source lists these versions, so nothing is known before the first refusal.
+- Real Opus 5.5 runs on Claude Code 2.1.284: Implement and Review with one approval round trip, and a `question`
+  result. See [evidence](evidence/claude-code-e2e-2026-09-30.md).
+
 ### C2 · Verify the Claude Code approval controls against the design (UI)
 
 `claude/claude-support` enables *Ask before MCP actions* and *Ask before running commands* for Claude Code profiles,
 pipeline steps and runs, and shows a "CLI too old for this model" notice (C3) in the Connections inspector, the
-profile's model field and the step inspector's model. It shows the mechanism `--permission-prompt-tool · one command approval`, the run popover's
-Claude transport note, and the MCP enforcement row "Each tool call waits for your decision". It also changed the model
-source notes in the Connections inspector and the profile's model field. A separate agent must compare these states
+profile's model field and the step inspector's model. It shows the mechanisms `--permission-prompt-tool · every command
+asks you` and `read-only · no commands: an approved one would run unsandboxed`, the run popover's Claude transport
+note, the MCP enforcement row "Each tool call waits for your decision", an MCP approval's arguments under its scope
+line in the approval modal, and the activity problems "Orchester approvals were unavailable to Claude Code" and
+"Claude Code … can't run …". It also changed the model source notes in the Connections inspector and the profile's
+model field. A separate agent must compare these states
 with Pencil (`AGENTS.md` rule 15): the profile Permissions tab on a Claude connection (`HnBBr`, `ossOP`), the run
 permission popover (`W29Od2`), the pipeline step switch (`wujuh`), the command approval modal for a Claude request
 (`GbNSA`) and the Connections inspector model note (`xK9v9`). **Done when** the verifier reports no blocking or major
@@ -191,25 +215,6 @@ which also preserves text selection after a drag on scaled displays.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
-
-Claude Code parity: current models and interactive approvals · branch `claude/claude-support`
-
-- **Done 2026-09-30.** Claude Code connections offer `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-fable-5-1` and
-  `claude-haiku-4-5-20251001`, then the models the CLI lists through the stream-json `initialize` request, then the
-  `opus` and `sonnet` aliases, with the effort levels the CLI accepts. The model reaches `--model` on new and resumed
-  sessions and is recorded per invocation. *Ask before running commands* and *Ask before MCP actions* work on Claude
-  Code through `--permission-prompt-tool mcp__Orchester__approve`, served by `orchester-runner
-  --claude-permission-prompt`, with the same approval records and modal as Codex (`docs/interactive-tool-approvals.md`).
-- A real Opus 5.5 run (Implement, Review) with one approval round trip passed with Claude Code 2.1.284. See
-  [evidence](evidence/claude-code-e2e-2026-09-30.md). Design verification of the changed controls is C2.
-- C3, done the same day (user decision): when the API refuses a model to an old CLI ("version X or newer is
-  required"), the run reports `CliTooOld` with the model and both versions instead of a bare failure, and the
-  connection records X for that model. The Connections inspector, the profile's model field and a step's model
-  show a notice while the checked CLI is older. No documented source lists these versions (Claude Code's
-  changelog names added models only), so nothing is known before the first refusal.
-- C1, done the same day: Claude Code gets the step result schema through `--json-schema` and its
-  `structured_output` is read, with a strict fallback to a result closing the final message. A turn
-  without a result fails. A real Opus 5.5 `question` turn was recognized (same evidence).
 
 Agent runtime architecture · effective approvals, Windows sandbox and Cargo isolation · root `master`
 
