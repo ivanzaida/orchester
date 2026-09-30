@@ -1725,7 +1725,7 @@
       "resetTitle": "Changed to what {{connection}} can enforce",
       "resetDetail": "Unavailable on this connection and replaced by the most restrictive option it enforces: {{options}}. Review before publishing.",
       "appliesTitle": "Applies to new runs after publishing",
-      "appliesDetail": "Runs keep the permissions they launched with. Changing them for a single run is not available yet.",
+      "appliesDetail": "Runs keep the permissions they launched with. You can still change them for a single run from its task page.",
       "mcp": {
         "label": "MCP servers",
         "none": "This project has no MCP servers yet.",
