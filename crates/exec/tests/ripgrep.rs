@@ -11,9 +11,10 @@ use std::{
   time::{Duration, SystemTime},
 };
 
+use orchester_core::command::Command;
 use orchester_exec::ripgrep::{
   self, Found, PROGRAM, Source,
-  install::{InstallPlan, InstallUnavailable, Installer},
+  install::{InstallError, InstallPlan, InstallUnavailable, Installer, Installing},
 };
 
 /// The Codex CLI package's target folder on this platform.
@@ -283,4 +284,77 @@ fn installing_ripgrep_runs_the_exact_installer_command() {
     "brew install ripgrep"
   };
   assert_eq!(plan.command_line(), shown);
+}
+
+/// A stand-in installer: a shell running `script` (PowerShell on Windows, `sh` elsewhere).
+fn installer(windows: &str, unix: &str) -> Command {
+  if cfg!(windows) {
+    Command::new(
+      Path::new("powershell.exe"),
+      ["-NoProfile", "-NonInteractive", "-Command", windows],
+    )
+  } else {
+    Command::new(Path::new("sh"), ["-c", unix])
+  }
+}
+
+#[test]
+fn installing_hands_over_progress_lines_and_the_reason_it_failed() {
+  let command = installer(
+    "[Console]::Out.Write(\"10%`r20%`rdone`n\"); [Console]::Error.WriteLine('no network'); exit 3",
+    "printf '10%%\\r20%%\\rdone\\n'; echo 'no network' >&2; exit 3",
+  );
+  let mut lines = Vec::new();
+
+  let ended = Installing::start(&command).expect("started").wait(
+    |line| lines.push(line.to_owned()),
+    || false,
+    Duration::from_secs(60),
+  );
+
+  assert_eq!(lines, ["10%", "20%", "done"]);
+  assert_eq!(
+    ended,
+    Err(InstallError::Failed {
+      code: Some(3),
+      message: "no network".into()
+    })
+  );
+}
+
+#[test]
+fn installing_stops_when_cancelled_or_out_of_time() {
+  let long = || installer("Start-Sleep -Seconds 60", "sleep 60");
+  let started = std::time::Instant::now();
+
+  let cancelled = Installing::start(&long())
+    .expect("started")
+    .wait(|_| {}, || true, Duration::from_secs(60));
+  let timed_out = Installing::start(&long())
+    .expect("started")
+    .wait(|_| {}, || false, Duration::from_millis(300));
+
+  assert_eq!(cancelled, Err(InstallError::Cancelled));
+  assert_eq!(
+    timed_out,
+    Err(InstallError::TimedOut {
+      after: Duration::from_millis(300)
+    })
+  );
+  assert!(started.elapsed() < Duration::from_secs(30), "both were stopped");
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn installing_with_homebrew_does_not_update_homebrew_first() {
+  let dir = tempfile::tempdir().expect("temp");
+  file(&dir.path().join("brew"), "installer");
+  let plan = InstallPlan::find(Some(&path_of(&[dir.path()]))).expect("an installer");
+  assert!(
+    plan
+      .command()
+      .env()
+      .iter()
+      .any(|(name, value)| name == "HOMEBREW_NO_AUTO_UPDATE" && value == "1")
+  );
 }

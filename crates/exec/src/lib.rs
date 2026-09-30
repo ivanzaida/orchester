@@ -128,13 +128,13 @@ fn wait(child: &mut Child, command: &Command, timeout: Duration) -> Result<ExitS
 
 /// Ends a program that ran too long.
 #[cfg(windows)]
-fn stop(child: &mut Child) -> io::Result<()> {
+pub(crate) fn stop(child: &mut Child) -> io::Result<()> {
   child.kill()
 }
 
 /// Ends a program that ran too long with everything it started, and reaps it.
 #[cfg(unix)]
-fn stop(child: &mut Child) -> io::Result<()> {
+pub(crate) fn stop(child: &mut Child) -> io::Result<()> {
   let group = process_group::ProcessGroup::led_by(child.id())
     .ok_or_else(|| io::Error::other(format!("invalid process id {}", child.id())))?;
   group.kill()?;

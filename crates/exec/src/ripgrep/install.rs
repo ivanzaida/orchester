@@ -1,18 +1,24 @@
 //! Installing ripgrep when a person asks for it (Project settings › Code index › *Install ripgrep*):
 //! `winget install --id BurntSushi.ripgrep.MSVC --exact` on Windows, `brew install ripgrep` on macOS.
 //! Nothing runs without that request. Without the installer on the search path the install is
-//! unavailable and says which installer is missing.
+//! unavailable and says which installer is missing. A running install can be cancelled and is
+//! stopped after a time limit, with the processes it started.
 
 use std::{
   ffi::OsStr,
-  io::{self, BufRead, BufReader, Read},
+  io::{self, BufReader, Read},
   path::{Path, PathBuf},
-  process::Stdio,
+  process::Child,
+  sync::mpsc,
   thread,
+  time::{Duration, Instant},
 };
 
 use orchester_core::command::{Command, CommandError};
 use thiserror::Error;
+
+/// How often a running installer is looked at.
+const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// The package manager that installs ripgrep on this platform.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,6 +70,12 @@ pub enum InstallError {
   /// The installer ran and failed; `message` is the last line it printed.
   #[error("the installer exited with {code:?}: {message}")]
   Failed { code: Option<i32>, message: String },
+  /// A person cancelled the install; the installer was stopped.
+  #[error("the install was cancelled")]
+  Cancelled,
+  /// The installer did not end within `after` and was stopped.
+  #[error("the installer did not finish within {after:?}")]
+  TimedOut { after: Duration },
 }
 
 /// How ripgrep is installed here: the installer and its program.
@@ -87,9 +99,14 @@ impl InstallPlan {
     Ok(Self { installer, program })
   }
 
-  /// The command that installs ripgrep.
+  /// The command that installs ripgrep. Homebrew does not update itself first: that can take
+  /// minutes and is not what a person asked for.
   pub fn command(&self) -> Command {
-    Command::new(&self.program, self.installer.args().iter().copied())
+    let command = Command::new(&self.program, self.installer.args().iter().copied());
+    match self.installer {
+      Installer::Winget => command,
+      Installer::Homebrew => command.with_env("HOMEBREW_NO_AUTO_UPDATE", "1"),
+    }
   }
 
   pub fn program(&self) -> &Path {
@@ -108,38 +125,82 @@ impl InstallPlan {
       .join(" ")
   }
 
-  /// Runs the install and waits for it, handing each line the installer prints (a progress line
-  /// that rewrites itself counts as a line) to `line`.
-  pub fn install(&self, mut line: impl FnMut(&str)) -> Result<(), InstallError> {
-    let mut process = crate::prepare(&self.command()).map_err(InstallError::Run)?;
-    let mut child = process
-      .stdin(Stdio::null())
+  /// Starts installing ripgrep.
+  pub fn start(&self) -> Result<Installing, InstallError> {
+    Installing::start(&self.command())
+  }
+}
+
+/// An installer that runs. Its output is read line by line as it comes; a progress line that
+/// rewrites itself (ending in a carriage return) counts as a line.
+pub struct Installing {
+  child: Child,
+  lines: mpsc::Receiver<String>,
+  errors: thread::JoinHandle<io::Result<String>>,
+}
+
+impl Installing {
+  /// Starts `command`, an installer.
+  pub fn start(command: &Command) -> Result<Self, InstallError> {
+    let mut child = crate::prepare(command)
+      .map_err(InstallError::Run)?
       .spawn()
       .map_err(|error| InstallError::Run(CommandError::Failed(error.to_string())))?;
-    let failed = |error: io::Error| InstallError::Run(CommandError::Failed(error.to_string()));
+    let stdout = child.stdout.take().expect("prepare pipes standard output");
     let stderr = child.stderr.take().expect("prepare pipes standard error");
+    let (sender, lines) = mpsc::channel();
+    thread::spawn(move || forward_lines(stdout, &sender));
     let errors = thread::spawn(move || {
       let mut text = String::new();
       BufReader::new(stderr).read_to_string(&mut text).map(|_| text)
     });
+    Ok(Self { child, lines, errors })
+  }
+
+  /// The installer's process, for a caller that ends its process tree with its own (a Job Object).
+  pub const fn process(&self) -> &Child {
+    &self.child
+  }
+
+  /// Waits for the installer to end, handing each line it prints to `line`. It is stopped, with
+  /// what it started, once `cancelled` says so or after `timeout`.
+  pub fn wait(
+    mut self,
+    mut line: impl FnMut(&str),
+    cancelled: impl Fn() -> bool,
+    timeout: Duration,
+  ) -> Result<(), InstallError> {
+    let failed = |error: io::Error| InstallError::Run(CommandError::Failed(error.to_string()));
+    let deadline = Instant::now() + timeout;
     let mut last = String::new();
-    if let Some(stdout) = child.stdout.take() {
-      let mut reader = BufReader::new(stdout);
-      let mut buffer = Vec::new();
-      // A progress line ends with a carriage return, a finished line with a line feed.
-      while reader.read_until(b'\n', &mut buffer).map_err(failed)? > 0 {
-        for part in String::from_utf8_lossy(&buffer).split('\r') {
-          let part = part.trim();
-          if !part.is_empty() {
-            part.clone_into(&mut last);
-            line(part);
-          }
-        }
-        buffer.clear();
+    let status = loop {
+      while let Ok(text) = self.lines.try_recv() {
+        line(&text);
+        last = text;
       }
+      if let Some(status) = self.child.try_wait().map_err(failed)? {
+        break status;
+      }
+      let stop = if cancelled() {
+        Some(InstallError::Cancelled)
+      } else if Instant::now() >= deadline {
+        Some(InstallError::TimedOut { after: timeout })
+      } else {
+        None
+      };
+      if let Some(stop) = stop {
+        self.stop();
+        return Err(stop);
+      }
+      thread::sleep(POLL_INTERVAL);
+    };
+    // The rest of the output, up to where the installer closed it.
+    for text in self.lines.iter() {
+      line(&text);
+      last = text;
     }
-    let status = child.wait().map_err(failed)?;
-    let errors = errors
+    let errors = self
+      .errors
       .join()
       .expect("the error reader does not panic")
       .map_err(failed)?;
@@ -156,5 +217,45 @@ impl InstallPlan {
       code: status.code(),
       message,
     })
+  }
+
+  /// Ends the installer and reaps it: on macOS with the process group it leads, on Windows the
+  /// installer itself, while the caller's Job Object ([`Installing::process`]) ends what it started.
+  fn stop(&mut self) {
+    if let Err(error) = crate::stop(&mut self.child) {
+      tracing::warn!(%error, "cannot stop the ripgrep installer");
+    }
+    if let Err(error) = self.child.wait() {
+      tracing::warn!(%error, "cannot confirm that the ripgrep installer ended");
+    }
+  }
+}
+
+/// Sends every line `output` prints to `lines`, split at line feeds and carriage returns, until
+/// it closes or no one takes the lines.
+fn forward_lines(mut output: impl Read, lines: &mpsc::Sender<String>) {
+  let mut pending = Vec::new();
+  let mut chunk = [0_u8; 4096];
+  loop {
+    let read = match output.read(&mut chunk) {
+      Ok(0) => break,
+      Ok(read) => read,
+      Err(error) => {
+        tracing::debug!(%error, "cannot read the ripgrep installer's output");
+        break;
+      }
+    };
+    pending.extend_from_slice(&chunk[..read]);
+    while let Some(end) = pending.iter().position(|byte| matches!(byte, b'\n' | b'\r')) {
+      let text = String::from_utf8_lossy(&pending[..end]).trim().to_owned();
+      pending.drain(..=end);
+      if !text.is_empty() && lines.send(text).is_err() {
+        return;
+      }
+    }
+  }
+  let text = String::from_utf8_lossy(&pending).trim().to_owned();
+  if !text.is_empty() && lines.send(text).is_err() {
+    tracing::debug!("the ripgrep installer's last line came after its wait ended");
   }
 }
