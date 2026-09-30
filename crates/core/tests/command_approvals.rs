@@ -6,7 +6,7 @@ use orchester_core::{
   },
   permission::{
     AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess, StepPermissions,
-    capability::{Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Unavailable},
+    capability::{Mechanism, PermissionSetting},
   },
 };
 use serde_json::{Value, json};
@@ -113,30 +113,25 @@ fn command_approvals_legacy_permissions_and_mcp_policy_round_trip() {
 }
 
 #[test]
-fn permissions_asking_before_commands_requires_codex_on_both_platforms() {
+fn permissions_asking_before_commands_route_to_each_clis_approval_on_both_platforms() {
   for provider in AgentProvider::ALL {
     for platform in [Platform::Windows, Platform::MacOs] {
-      let ask = AgentPermissions::new(
+      let mut ask = AgentPermissions::new(
         RepositoryAccess::ReadOnly,
         CommandPermission::AskBefore,
         NetworkAccess::On,
       );
-      if provider == AgentProvider::CodexCli {
-        assert_eq!(
-          ask
-            .enforced_on(provider, platform)
-            .expect("supported")
-            .mechanism(PermissionSetting::Commands),
-          Mechanism::CodexCommandApprovals
-        );
-        continue;
-      }
+      ask.set_interactive_tool_approvals(true);
+      let expected = match provider {
+        AgentProvider::CodexCli => Mechanism::CodexCommandApprovals,
+        AgentProvider::ClaudeCodeCli => Mechanism::ClaudePermissionPrompt,
+      };
       assert_eq!(
-        ask.enforced_on(provider, platform),
-        Err(PermissionProblem::NotEnforceable {
-          option: PermissionOption::AskBeforeCommands,
-          reason: Unavailable::NeedsPermissionRequests,
-        })
+        ask
+          .enforced_on(provider, platform)
+          .expect("supported")
+          .mechanism(PermissionSetting::Commands),
+        expected
       );
     }
   }

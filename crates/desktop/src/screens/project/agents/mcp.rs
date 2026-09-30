@@ -153,7 +153,14 @@ impl ProfileEditor {
     if count == 0 {
       return rows;
     }
+    // Asking before MCP actions leaves Claude Code's MCP tools to its permission prompt.
+    let asks = provider == AgentProvider::ClaudeCodeCli && permissions.interactive_tool_approvals();
     rows.push(match support.calls {
+      McpCalls::ClaudeAllowedTools if asks => row(
+        Icon::CircleCheck,
+        &ctx.t("agents.permissions.enforcement.mcp.claudeCallsAsk"),
+        &ctx.t("agents.permissions.enforcement.mcp.claudeCallsAskHow"),
+      ),
       McpCalls::CodexNeverAsks => row(
         Icon::TriangleAlert,
         &ctx.t("agents.permissions.enforcement.mcp.codexCalls"),

@@ -13,6 +13,11 @@
 //!   Windows), so network stays on; when off was chosen the web tools are still removed.
 //! - The tools of the MCP servers the invocation gives the agent are allowed with one `mcp__<server>` rule per server;
 //!   without a rule, print mode denies them. The servers themselves run outside these permissions.
+//! - Asking a person (*Ask before running commands*, *Ask before MCP actions*): the invocation gets Orchester's
+//!   permission prompt tool (`crate::connection::claude_approval`), and what the rules leave open goes to it instead of
+//!   being denied. `Bash` is then offered without prefix rules, the MCP servers' tools without `mcp__<server>` rules,
+//!   and a read-only step runs in `default` rather than `dontAsk`, which would deny before asking. The edit tools stay
+//!   removed, and the prompt denies whatever else the CLI asks about.
 //! - The disallowed list repeats what `--tools` leaves out that the permissions deny, so a tool list that grows in a
 //!   later CLI version does not widen them.
 //!
@@ -33,27 +38,36 @@ pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName]) ->
   let permissions = enforced.permissions();
   let commands = match permissions.commands() {
     CommandPermission::Allowed(commands) => commands.entries(),
+    // A person decides each command.
+    CommandPermission::AskBefore => &[],
     // Refused by `enforced_on` for Claude Code; nothing runs without a rule.
-    CommandPermission::AnyInWorktree | CommandPermission::AskBefore => &[],
+    CommandPermission::AnyInWorktree => &[],
   };
+  let ask_commands = *permissions.commands() == CommandPermission::AskBefore;
+  let ask_tools = permissions.interactive_tool_approvals();
   let network = permissions.network() == NetworkAccess::On && enforced.network_stays_on().is_none();
   let mut offered: Vec<&str> = READ_TOOLS.to_vec();
   let mut denied: Vec<&str> = Vec::new();
   let mode = match permissions.repository() {
     RepositoryAccess::ReadOnly => {
       denied.extend(EDIT_TOOLS);
-      "dontAsk"
+      if ask_commands || ask_tools {
+        "default"
+      } else {
+        "dontAsk"
+      }
     }
     RepositoryAccess::Write => {
       offered.extend(EDIT_TOOLS);
       "acceptEdits"
     }
   };
-  if commands.is_empty() {
+  if commands.is_empty() && !ask_commands {
     denied.push(COMMAND_TOOL);
   } else {
     offered.push(COMMAND_TOOL);
   }
+  let mcp = if ask_tools { &[] } else { mcp };
   if network {
     offered.extend(WEB_TOOLS);
   } else {

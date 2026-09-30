@@ -54,6 +54,7 @@ fn invocation(permissions: &EnforcedPermissions) -> ClaudeInvocation<'_> {
     session: ClaudeSession::New(SESSION),
     mcp: None,
     skills: None,
+    approvals: None,
   }
 }
 

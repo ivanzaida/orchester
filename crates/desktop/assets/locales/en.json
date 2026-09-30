@@ -1565,7 +1565,7 @@
         },
         "askBefore": {
           "title": "Ask before running commands",
-          "detail": "Codex commands requiring approval wait for your decision. Approve only the requested action or deny it."
+          "detail": "Commands requiring approval wait for your decision. Approve only the requested action or deny it."
         },
         "allowed": {
           "title": "Allowed commands",
@@ -1580,8 +1580,8 @@
       "toolApprovals": "Ask before MCP actions that require approval",
       "toolApprovalsHeading": "MCP approvals",
       "toolApprovalsDisabled": "MCP approval requests are denied",
-      "toolApprovalUnavailable": "Interactive MCP approvals require a Codex App Server connection.",
       "transport": "Codex App Server uses your normal account and inherited global MCP servers, plus project-selected servers.",
+      "claudeTransport": "Claude Code asks Orchester through its permission prompt tool. Only the project-selected MCP servers load.",
       "commandPlaceholder": "e.g. pnpm test",
       "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
       "noCommands": "No command is allowed yet.",
@@ -1654,7 +1654,6 @@
       },
       "unavailable": {
         "cannotLimitCommands": "Unavailable on this connection: {{cli}} can’t limit commands to a list.",
-        "needsPermissionRequests": "{{cli}} does not support interactive approvals through Orchester.",
         "cannotConfineCommands": "Unavailable on this connection: {{cli}} can’t confine commands to the worktree.",
         "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so."
       },
@@ -1684,6 +1683,8 @@
           "codexCallsHow": "-a never · unverified",
           "claudeCalls": "Only their tools are allowed",
           "claudeCallsHow": "--allowedTools mcp__* · unverified",
+          "claudeCallsAsk": "Each tool call waits for your decision",
+          "claudeCallsAskHow": "--permission-prompt-tool · one call at a time",
           "outside": "Servers work outside these limits",
           "outsideHow": "own processes · network on",
           "noneLoad": "No MCP servers load",
@@ -1715,7 +1716,8 @@
         },
         "claudeWebTools": "web tools allowed",
         "claudeWebToolsRemoved": "web tools removed · commands keep network",
-        "claudeAddDir": "--add-dir for edit tools · commands not confined"
+        "claudeAddDir": "--add-dir for edit tools · commands not confined",
+        "claudePermissionPrompt": "--permission-prompt-tool · one command approval"
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",

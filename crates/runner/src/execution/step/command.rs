@@ -23,7 +23,7 @@ use orchester_core::{
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
-  permission::{AgentPermissions, CommandPermission, FolderBounds, capability::EnforcedPermissions},
+  permission::{CommandPermission, FolderBounds, capability::EnforcedPermissions},
   resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKind},
   run::{
     AssembledPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
@@ -37,6 +37,7 @@ use super::{
   super::run::RunTask,
   Continuation, Occasion,
   app_server::AppServerSetup,
+  claude_approval::ClaudeApprovals,
   mcp::{McpServers, McpSetup},
   skills::{PlacedSkills, repository_skills},
 };
@@ -56,6 +57,8 @@ pub(super) struct AgentStart {
   /// An event for each MCP server the agent works without.
   pub(super) mcp_left_out: Vec<AgentEvent>,
   pub(super) app_server: Option<AppServerSetup>,
+  /// Claude Code's permission prompt, for a step that asks a person.
+  pub(super) claude_approvals: Option<ClaudeApprovals>,
   pub(super) agent: String,
 }
 
@@ -74,6 +77,8 @@ struct Cli<'a> {
   /// The repository's skills Codex disables, when the project has its agent files off; `None` while
   /// they are on.
   repository_skills: Option<&'a [PathBuf]>,
+  /// Claude Code's permission prompt configuration, when the step asks a person.
+  approvals: Option<&'a Path>,
 }
 
 impl RunTask {
@@ -131,6 +136,7 @@ impl RunTask {
       _ => None,
     };
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
+    let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;
     let cli = Cli {
       connection: &connection,
       model,
@@ -145,8 +151,9 @@ impl RunTask {
       environment: &environment,
       skills: placed.folder.as_deref(),
       repository_skills: repository.as_deref(),
+      approvals: claude_approvals.as_ref().map(ClaudeApprovals::config),
     };
-    let interactive = interactive_mode(enforced.permissions(), provider)?;
+    let interactive = enforced.permissions().asks_a_person();
     let (command, mcp_file, app_server) = if interactive && provider == AgentProvider::CodexCli {
       let (command, app) = self.app_server_command(&cli, setup, prompt)?;
       (command, None, Some(app))
@@ -161,6 +168,7 @@ impl RunTask {
       mcp_file,
       mcp_left_out: left_out,
       app_server,
+      claude_approvals,
       agent: body.role().as_str().to_owned(),
     })
   }
@@ -294,7 +302,7 @@ impl RunTask {
           .map_or(CodexAgentFiles::Loaded, |skills| CodexAgentFiles::LeftOut { skills }),
       }
       .command(prompt, std::env::vars_os(), cli.environment),
-      McpSetup::Claude(file) => ClaudeInvocation {
+      McpSetup::Claude(servers) => ClaudeInvocation {
         executable: cli.connection.executable(),
         model: cli.model.as_str(),
         effort: cli.effort,
@@ -302,14 +310,17 @@ impl RunTask {
         writable_roots: cli.writable_roots,
         worktree: cli.worktree,
         session: ClaudeSession::continuing(cli.resume),
-        mcp: file.as_ref().map(|(file, servers)| (file.path(), servers.as_slice())),
+        mcp: servers
+          .as_ref()
+          .map(|servers| (servers.file.path(), servers.servers.as_slice())),
         skills: cli.skills,
+        approvals: cli.approvals,
       }
       .command(prompt, std::env::vars_os(), cli.environment),
     };
     let command = command.map_err(|error: InvocationError| problem(error.to_string()))?;
     let file = match setup {
-      McpSetup::Claude(file) => file.map(|(file, _)| file),
+      McpSetup::Claude(servers) => servers.map(|servers| servers.file),
       McpSetup::Codex(_) => None,
     };
     Ok((command, file))
@@ -426,16 +437,6 @@ impl RunTask {
     pinned.sort_by(|(left, _), (right, _)| left.cmp(right));
     Ok(pinned.into_iter().map(|(_, instruction)| instruction).collect())
   }
-}
-
-fn interactive_mode(permissions: &AgentPermissions, provider: AgentProvider) -> Result<bool, RunnerProblem> {
-  let interactive = permissions.interactive_tool_approvals() || *permissions.commands() == CommandPermission::AskBefore;
-  if interactive && provider != AgentProvider::CodexCli {
-    return Err(problem(
-      "interactive tool approvals require a Codex agent profile".to_owned(),
-    ));
-  }
-  Ok(interactive)
 }
 
 /// The outputs of the passed executions of the steps `step` depends on, in pipeline order: a gated

@@ -12,7 +12,9 @@
 //! - Claude Code removes its edit tools for read-only and limits Bash to `--allowedTools` prefix rules. It cannot
 //!   confine an arbitrary command to the worktree (its own sandbox is not supported on Windows and is not used), and it
 //!   can block its web tools but not network use by commands.
-//! - Codex App Server routes command approvals to Orchester; Claude Code does not support that transport.
+//! - Asking before commands or MCP actions routes each request to a person in Orchester: Codex through App Server,
+//!   Claude Code through its permission prompt tool (`crate::connection::claude_approval`). Claude Code runs an
+//!   approved command outside any sandbox, as it runs every command; the person sees the whole command first.
 //! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
 //!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
@@ -111,6 +113,8 @@ pub enum Mechanism {
   ClaudeAcceptEdits,
   /// `--add-dir <folder>`: the edit tools may also write there; commands were never confined.
   ClaudeAddDir,
+  /// `--permission-prompt-tool`: a person decides each command no rule allows, one call at a time.
+  ClaudePermissionPrompt,
   /// `--allowedTools "Bash(<prefix>:*)"`, one rule per command.
   ClaudeAllowedTools,
   /// WebFetch and WebSearch stay available.
@@ -124,8 +128,6 @@ pub enum Mechanism {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Unavailable {
-  /// Needs permission requests, which are not available yet.
-  NeedsPermissionRequests,
   /// The CLI cannot deny every command outside a list.
   CannotLimitCommands,
   /// The CLI cannot keep arbitrary commands inside the worktree.
@@ -156,7 +158,7 @@ pub const fn support(provider: AgentProvider, platform: Platform, option: Permis
   use Unavailable as U;
   match (provider, option) {
     (AgentProvider::CodexCli, O::AskBeforeCommands) => Enforced(M::CodexCommandApprovals),
-    (AgentProvider::ClaudeCodeCli, O::AskBeforeCommands) => No(U::NeedsPermissionRequests),
+    (AgentProvider::ClaudeCodeCli, O::AskBeforeCommands) => Enforced(M::ClaudePermissionPrompt),
     (AgentProvider::CodexCli, O::ReadOnly) => Enforced(M::CodexReadOnlySandbox),
     (AgentProvider::CodexCli, O::EditWorktree) => Enforced(M::CodexWorkspaceWriteSandbox),
     (AgentProvider::CodexCli, O::AllowedCommands) => No(U::CannotLimitCommands),
@@ -239,12 +241,6 @@ impl AgentPermissions {
     provider: AgentProvider,
     platform: Platform,
   ) -> Result<EnforcedPermissions, PermissionProblem> {
-    if self.interactive_tool_approvals() && provider != AgentProvider::CodexCli {
-      return Err(PermissionProblem::NotEnforceable {
-        option: PermissionOption::AskBeforeCommands,
-        reason: Unavailable::NeedsPermissionRequests,
-      });
-    }
     for setting in [
       PermissionSetting::Repository,
       PermissionSetting::Commands,

@@ -1,0 +1,191 @@
+//! Claude Code's permission prompt: what reaches a person, what the prompt answers, the relay's MCP
+//! side, and how an invocation that asks a person starts.
+
+use std::path::Path;
+
+use orchester_core::{
+  connection::{
+    AgentProvider,
+    claude_approval::{
+      ApprovalToken, ClaudeApprovalConfig, ClaudeApprovalScope, ClaudeAsk, PROMPT_TOOL, prompt_result, refusal,
+      relay::{RelayStep, ask_result, relay_step},
+    },
+    invocation::{ClaudeInvocation, ClaudeSession, InvocationError, Platform},
+    mcp::McpServerName,
+  },
+  permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
+  resource::CommandEnvironment,
+};
+use serde_json::{Value, json};
+
+fn server(name: &str) -> McpServerName {
+  McpServerName::new(name).expect("valid server name")
+}
+
+fn permissions(commands: CommandPermission, tools: bool) -> AgentPermissions {
+  let mut permissions = AgentPermissions::new(RepositoryAccess::ReadOnly, commands, NetworkAccess::On);
+  permissions.set_interactive_tool_approvals(tools);
+  permissions
+}
+
+fn scope(commands: bool, tools: bool) -> ClaudeApprovalScope {
+  let commands = if commands {
+    CommandPermission::AskBefore
+  } else {
+    CommandPermission::Allowed(AllowedCommands::default())
+  };
+  ClaudeApprovalScope::of(&permissions(commands, tools), &[server("docs"), server("docs__v2")])
+    .expect("the permissions ask a person")
+}
+
+fn call(tool: &str, input: &Value) -> Value {
+  json!({"tool_name": tool, "input": input, "tool_use_id": "toolu_1"})
+}
+
+#[test]
+fn claude_approvals_route_only_what_the_permissions_leave_to_a_person() {
+  let bash = call("Bash", &json!({"command": "pnpm publish", "description": "Publish"}));
+  let ClaudeAsk::Person(command) = scope(true, false).classify(&bash) else {
+    panic!("a command goes to a person");
+  };
+  assert!(command.command);
+  assert_eq!(
+    (command.call.as_str(), command.server.as_str(), command.action.as_str()),
+    ("toolu_1", "command", "pnpm publish")
+  );
+  assert_eq!(command.scope.as_deref(), Some("Publish"));
+  assert_eq!(scope(false, true).classify(&bash), ClaudeAsk::Refused);
+
+  let write = call("mcp__docs__v2__write", &json!({"filePath": "notes.md", "text": "x"}));
+  let ClaudeAsk::Person(tool) = scope(false, true).classify(&write) else {
+    panic!("a tool of an invocation server goes to a person");
+  };
+  assert!(!tool.command);
+  assert_eq!((tool.server.as_str(), tool.action.as_str()), ("docs__v2", "write"));
+  assert_eq!(tool.target.as_deref(), Some("notes.md"));
+  assert_eq!(scope(true, false).classify(&write), ClaudeAsk::Refused);
+  assert_eq!(
+    scope(true, true).classify(&call("mcp__other__write", &json!({}))),
+    ClaudeAsk::Refused
+  );
+  for tool in ["Write", "Edit", "Read", "WebFetch", "mcp__Orchester__approve"] {
+    assert_eq!(
+      scope(true, true).classify(&call(tool, &json!({"file_path": "/etc/hosts"}))),
+      ClaudeAsk::Refused,
+      "{tool}"
+    );
+  }
+  let anonymous = json!({"tool_name": "Bash", "input": {"command": "ls"}});
+  assert_eq!(scope(true, true).classify(&anonymous), ClaudeAsk::Refused);
+  let asks_nothing = permissions(CommandPermission::Allowed(AllowedCommands::default()), false);
+  assert_eq!(ClaudeApprovalScope::of(&asks_nothing, &[]), None);
+}
+
+#[test]
+fn claude_approvals_answer_one_call_without_grants_or_its_input() {
+  let allow: Value = serde_json::from_str(&prompt_result(true)).expect("JSON");
+  assert_eq!(allow, json!({"behavior": "allow", "updatedInput": {}}));
+  let deny: Value = serde_json::from_str(&prompt_result(false)).expect("JSON");
+  assert_eq!(deny["behavior"], "deny");
+  assert!(deny.get("updatedPermissions").is_none() && deny.get("interrupt").is_none());
+  let refused: Value = serde_json::from_str(&refusal()).expect("JSON");
+  assert_eq!(refused["behavior"], "deny");
+}
+
+#[test]
+fn claude_approvals_relay_answers_the_handshake_and_hands_over_calls() {
+  let RelayStep::Reply(init) =
+    relay_step(r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}"#)
+  else {
+    panic!("initialize is answered");
+  };
+  let init: Value = serde_json::from_str(&init).expect("JSON");
+  assert_eq!(init["result"]["protocolVersion"], "2025-03-26");
+  assert_eq!(init["id"], 0);
+  assert_eq!(
+    relay_step(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#),
+    RelayStep::Ignore
+  );
+  let RelayStep::Reply(list) = relay_step(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#) else {
+    panic!("the tool list is answered");
+  };
+  let list: Value = serde_json::from_str(&list).expect("JSON");
+  assert_eq!(list["result"]["tools"][0]["name"], "approve");
+  let arguments = json!({"tool_name": "Bash", "input": {"command": "ls"}, "tool_use_id": "toolu_1"});
+  let request = json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"approve","arguments":arguments}});
+  assert_eq!(
+    relay_step(&request.to_string()),
+    RelayStep::Ask {
+      id: json!(2),
+      arguments
+    }
+  );
+  let RelayStep::Reply(unknown) = relay_step(r#"{"jsonrpc":"2.0","id":3,"method":"resources/list"}"#) else {
+    panic!("an unknown request is answered");
+  };
+  assert!(unknown.contains("-32601"));
+  let answer: Value = serde_json::from_str(&ask_result(&json!(2), &prompt_result(true))).expect("JSON");
+  assert_eq!(answer["id"], 2);
+  assert_eq!(answer["result"]["content"][0]["text"], prompt_result(true));
+}
+
+#[test]
+fn claude_approvals_config_starts_the_relay_and_keeps_the_token_out_of_debug() {
+  let token = ApprovalToken::generate();
+  assert_eq!(token.expose().len(), 64);
+  assert!(!ApprovalToken::generate().matches(token.expose()));
+  assert!(token.matches(token.expose()));
+  let config = ClaudeApprovalConfig::new("/bin/orchester-runner", &["--relay"], "127.0.0.1:4000", &token);
+  let file: Value = serde_json::from_str(config.contents()).expect("JSON");
+  let relay = &file["mcpServers"]["Orchester"];
+  assert_eq!(relay["type"], "stdio");
+  assert_eq!(relay["command"], "/bin/orchester-runner");
+  assert_eq!(relay["args"], json!(["--relay"]));
+  assert_eq!(relay["env"]["ORCHESTER_APPROVAL_ADDRESS"], "127.0.0.1:4000");
+  assert_eq!(relay["env"]["ORCHESTER_APPROVAL_TOKEN"], token.expose());
+  assert!(!format!("{config:?}{token:?}").contains(token.expose()));
+  assert_eq!(PROMPT_TOOL, "mcp__Orchester__approve");
+}
+
+fn args(invocation: &ClaudeInvocation<'_>) -> Vec<String> {
+  invocation
+    .args()
+    .into_iter()
+    .map(|arg| arg.into_string().expect("unicode"))
+    .collect()
+}
+
+#[test]
+fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_decides() {
+  for platform in [Platform::Windows, Platform::MacOs] {
+    let enforced = permissions(CommandPermission::AskBefore, true)
+      .enforced_on(AgentProvider::ClaudeCodeCli, platform)
+      .expect("enforceable");
+    let servers = [server("docs")];
+    let mut invocation = ClaudeInvocation {
+      executable: Path::new("/bin/claude"),
+      model: "claude-opus-5-5",
+      effort: None,
+      permissions: &enforced,
+      writable_roots: &[],
+      worktree: Path::new("/repo/.orchester/worktrees/run"),
+      session: ClaudeSession::Resume("s"),
+      mcp: Some((Path::new("/tmp/servers.json"), &servers)),
+      skills: None,
+      approvals: Some(Path::new("/tmp/approvals.json")),
+    };
+    let args = args(&invocation).join(" ");
+    assert!(
+      args.contains(
+        "--mcp-config /tmp/servers.json /tmp/approvals.json --permission-prompt-tool mcp__Orchester__approve \
+         --tools Read,Glob,Grep,TodoWrite,Bash,WebFetch,WebSearch --permission-mode default --disallowedTools Edit Write NotebookEdit "
+      ),
+      "{args}"
+    );
+    assert!(!args.contains("--allowedTools"), "{args}");
+    assert!(args.ends_with("--resume s"), "{args}");
+    invocation.approvals = None;
+    let command = invocation.command(String::new(), Vec::new(), &CommandEnvironment::default());
+    assert_eq!(command.err(), Some(InvocationError::NoPermissionPrompt));
+  }
+}

@@ -10,6 +10,7 @@ mod agent;
 pub mod app_server;
 pub mod app_server_mcp;
 mod catalog;
+pub mod claude_approval;
 mod claude_catalog;
 mod discovery;
 mod github;

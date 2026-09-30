@@ -12,6 +12,11 @@
 //! - "Keep working": starts a message and waits until it is ended;
 //! - "Ask first": appends `draft` to `README.md` and ends with the step result `{"outcome":"question","summary":"Keep
 //!   email sign-in?"}` (a new session only: a resumed one works as below);
+//! - "Ask before publishing": wants to run `pnpm publish --dry-run` through Bash and asks its permission prompt
+//!   (`fake_permission_prompt`); approved, it appends `approved` to `README.md` and asks about the same call once more;
+//!   then works as below. "Ask before writing docs" does the same for the `write` tool of the `docs` MCP server, with
+//!   the secret `docs-token-value-7f3a` in the file path, and "Try an edit outside" for a `Write` outside the worktree.
+//!   Each decision is reported on standard error as `permission: <call> <behavior>` (`again` for the repeated call);
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
@@ -42,6 +47,8 @@ use std::{
 
 #[path = "fake_mcp.rs"]
 mod fake_mcp;
+#[path = "fake_permission_prompt.rs"]
+mod fake_permission_prompt;
 
 const NOT_SIGNED_IN: &str = include_str!("../../../core/tests/fixtures/claude/not-signed-in-clean-env.jsonl");
 /// Counted: 12 + 9,700 (cache writes) + 27 = 9,739; the 2,432 cache reads do not count.
@@ -110,6 +117,9 @@ fn main() -> ExitCode {
     fake.message("msg_more", r#"{"type":"text","text":"Going on."}"#, NO_USAGE);
     wait_to_be_ended();
   }
+  if let Some(ask) = Ask::of(&prompt) {
+    return fake.ask_prompt(&worktree, &args, &ask, &step);
+  }
   if prompt.contains("Wait for release") {
     fake.wait_for_release(&worktree, &prompt);
   }
@@ -147,6 +157,40 @@ fn read_prompt(args: &[String]) -> Option<String> {
   }
   eprintln!("pid: {}", std::process::id());
   Some(prompt)
+}
+
+/// A tool call the fake asks its permission prompt about.
+struct Ask {
+  call: &'static str,
+  tool: &'static str,
+  input: serde_json::Value,
+}
+
+impl Ask {
+  fn of(prompt: &str) -> Option<Self> {
+    let (call, tool, input) = if prompt.contains("Ask before publishing") {
+      (
+        "toolu_publish",
+        "Bash",
+        serde_json::json!({"command": "pnpm publish --dry-run", "description": "Publish a dry run"}),
+      )
+    } else if prompt.contains("Ask before writing docs") {
+      (
+        "toolu_docs",
+        "mcp__docs__write",
+        serde_json::json!({"filePath": "docs/docs-token-value-7f3a.md", "text": "notes"}),
+      )
+    } else if prompt.contains("Try an edit outside") {
+      (
+        "toolu_outside",
+        "Write",
+        serde_json::json!({"file_path": "/elsewhere/notes.md", "content": "x"}),
+      )
+    } else {
+      return None;
+    };
+    Some(Self { call, tool, input })
+  }
 }
 
 const DENIAL: &str =
@@ -197,6 +241,35 @@ impl Fake {
       self.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
       wait_to_be_ended();
     }
+  }
+
+  /// Asks the permission prompt about `ask`, carries it out when approved, then finishes.
+  fn ask_prompt(&self, worktree: &Path, args: &[String], ask: &Ask, step: &str) -> ExitCode {
+    let Some(mut prompt) = fake_permission_prompt::Prompt::open(args) else {
+      eprintln!("no permission prompt");
+      return ExitCode::from(2);
+    };
+    let block = serde_json::json!({"type": "tool_use", "id": ask.call, "name": ask.tool, "input": ask.input});
+    self.assistant("msg_ask", &block.to_string());
+    let decision = prompt
+      .ask(ask.tool, &ask.input, ask.call)
+      .unwrap_or_else(|| "none".to_owned());
+    eprintln!("permission: {} {decision}", ask.call);
+    if decision == "allow" {
+      if let Err(error) = append(worktree, "approved") {
+        eprintln!("cannot write README.md: {error}");
+        return ExitCode::from(2);
+      }
+      self.tool_result(ask.call, "ok", false);
+      let again = prompt
+        .ask(ask.tool, &ask.input, ask.call)
+        .unwrap_or_else(|| "none".to_owned());
+      eprintln!("permission again: {} {again}", ask.call);
+    } else {
+      self.tool_result(ask.call, "Denied in Orchester.", true);
+    }
+    flush();
+    self.finish(worktree, "hello", step)
   }
 
   /// "Ask first": a draft, then a question as the step result.

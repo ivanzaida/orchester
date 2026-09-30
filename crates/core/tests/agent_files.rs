@@ -111,6 +111,7 @@ fn claude<'a>(
     session,
     mcp: None,
     skills,
+    approvals: None,
   }
 }
 

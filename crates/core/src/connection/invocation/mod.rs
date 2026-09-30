@@ -113,6 +113,9 @@ pub fn is_agent_variable(name: &str) -> bool {
 pub enum InvocationError {
   #[error("the path {0} is not valid Unicode")]
   NotUnicode(PathBuf),
+  /// The permissions ask a person, but the invocation has no way to ask.
+  #[error("the step asks a person before some actions, but the agent was not given the permission prompt")]
+  NoPermissionPrompt,
 }
 
 /// Refuses a folder the CLI would get mangled, before its arguments are built.

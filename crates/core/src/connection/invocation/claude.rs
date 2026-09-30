@@ -1,8 +1,9 @@
 //! How an agent step starts the Claude Code CLI (`.tmp/cli-probe/REPORT.md`, "Recommended argv"):
 //!
 //! `claude -p --output-format stream-json --verbose --model <model> [--effort <e>]
-//!  --strict-mcp-config --setting-sources "" --disable-slash-commands [--mcp-config <file>] <permissions>
-//!  [--add-dir <folder>]... [--add-dir <skills>] (--session-id <new uuid> | --resume <session>)`
+//!  --strict-mcp-config --setting-sources "" --disable-slash-commands [--mcp-config <file> [<approvals>]]
+//!  [--permission-prompt-tool mcp__Orchester__approve] <permissions> [--add-dir <folder>]... [--add-dir <skills>]
+//!  (--session-id <new uuid> | --resume <session>)`
 //!
 //! in the worktree as the process's working directory, with the prompt on standard input.
 //!
@@ -13,6 +14,9 @@
 //!   run hooks, and in a writing step the agent could edit that file for the invocations after it.
 //! - MCP servers: only those the profile chooses, from a file the runner writes for the invocation
 //!   ([`super::ClaudeMcpConfig`]); their tools are allowed with `--allowedTools mcp__<server>` rules.
+//! - Approvals: a step that asks a person before commands or MCP actions also gets the configuration file of
+//!   Orchester's permission prompt relay and `--permission-prompt-tool` naming its tool
+//!   ([`crate::connection::claude_approval`]); on a resumed session too, as the prompt is not part of the session.
 //! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
 //!   offered, permission mode, denied tools, allowed command prefixes). Bypass modes are never used.
 //! - Extra writable folders ([`crate::permission::writable`]), for an agent that edits files: one `--add-dir` each, so
@@ -43,7 +47,7 @@ use uuid::Uuid;
 use super::{InvocationError, agent_command, unicode_folders};
 use crate::{
   command::Command,
-  connection::mcp::McpServerName,
+  connection::{claude_approval::PROMPT_TOOL, mcp::McpServerName},
   permission::{capability::EnforcedPermissions, claude::permission_args},
   resource::CommandEnvironment,
 };
@@ -82,6 +86,8 @@ pub struct ClaudeInvocation<'a> {
   pub mcp: Option<(&'a Path, &'a [McpServerName])>,
   /// The folder holding the skills the agent gets, if it gets any.
   pub skills: Option<&'a Path>,
+  /// The configuration file of the permission prompt relay, for permissions that ask a person.
+  pub approvals: Option<&'a Path>,
 }
 
 impl ClaudeInvocation<'_> {
@@ -110,8 +116,18 @@ impl ClaudeInvocation<'_> {
       ]
       .map(str::to_owned),
     );
-    if let Some((config, _)) = self.mcp {
-      args.extend(["--mcp-config".to_owned(), config.to_string_lossy().into_owned()]);
+    let configs: Vec<&Path> = self
+      .mcp
+      .map(|(config, _)| config)
+      .into_iter()
+      .chain(self.approvals)
+      .collect();
+    if !configs.is_empty() {
+      args.push("--mcp-config".to_owned());
+      args.extend(configs.iter().map(|config| config.to_string_lossy().into_owned()));
+    }
+    if self.approvals.is_some() {
+      args.extend(["--permission-prompt-tool".to_owned(), PROMPT_TOOL.to_owned()]);
     }
     let servers = self.mcp.map_or(&[][..], |(_, servers)| servers);
     args.extend(permission_args(self.permissions, servers));
@@ -138,6 +154,9 @@ impl ClaudeInvocation<'_> {
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
+    if self.permissions.permissions().asks_a_person() && self.approvals.is_none() {
+      return Err(InvocationError::NoPermissionPrompt);
+    }
     unicode_folders(self.writable_roots)?;
     unicode_folders(self.skills.map(Path::to_path_buf).as_slice())?;
     agent_command(

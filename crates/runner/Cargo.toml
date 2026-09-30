@@ -124,6 +124,10 @@ required-features = ["test-agent"]
 name = "failed_recovery"
 required-features = ["test-agent"]
 
+[[test]]
+name = "claude_approvals"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

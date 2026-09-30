@@ -77,7 +77,9 @@ thiserror = "2"
 tokio = { version = "1.53", features = ["io-util", "macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1", features = ["v7", "serde"] }
+# `v4`: the random token that lets only the relay of one Claude Code invocation reach its permission
+# prompt (`orchester_core::connection::claude_approval`); v7 ids carry a timestamp, not only random bits.
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
 win32job = "2"
 # Windows Credential Manager store of the keyring crates, for `orchester-vault`. Without the
 # `search` feature: nothing searches credentials, and it would pull in regex.

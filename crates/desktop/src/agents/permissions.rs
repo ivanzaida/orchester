@@ -55,7 +55,6 @@ pub const fn setting_label(setting: PermissionSetting) -> &'static str {
 /// itself says it (asking before commands is marked *later*).
 pub fn unavailable(ctx: &Ctx, reason: Unavailable, provider: AgentProvider) -> Option<Arc<str>> {
   let key = match reason {
-    Unavailable::NeedsPermissionRequests => "agents.permissions.unavailable.needsPermissionRequests",
     Unavailable::CannotLimitCommands => "agents.permissions.unavailable.cannotLimitCommands",
     Unavailable::CannotConfineCommands => "agents.permissions.unavailable.cannotConfineCommands",
     Unavailable::CannotBlockNetwork => "agents.permissions.unavailable.cannotBlockNetwork",
@@ -78,6 +77,7 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::ClaudeWebToolsRemoved => "agents.permissions.mechanism.claudeWebToolsRemoved",
     Mechanism::CodexWritableRoots => "agents.permissions.mechanism.codexWritableRoots",
     Mechanism::ClaudeAddDir => "agents.permissions.mechanism.claudeAddDir",
+    Mechanism::ClaudePermissionPrompt => "agents.permissions.mechanism.claudePermissionPrompt",
     Mechanism::ClaudeAllowedTools => {
       let count = match permissions.commands() {
         CommandPermission::Allowed(commands) => commands.entries().len(),
