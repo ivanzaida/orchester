@@ -185,10 +185,11 @@ ORC-38 · Codebase index 2/2 (delivery, settings, activity) · branch `claude/co
 - Timings (release, Windows, 32 threads): this repository full 0.6 s, incremental (41 files) 0.3 s, reuse 0.1 s;
   60k-file synthetic repository with a committed 1 MB JS bundle full 44 s (peak 811 MB), incremental of one source
   file 20 s and of the bundle 13 s (peak 708 MB), reuse 1.2 s (digest check), 0.2 s once the process found it intact.
-- Open: the design verifier's re-check of the regions changed after its first pass (Settings › Code index `i220W`,
-  `LC2V0`, `RkMap`, `h6yMk`, `NvR7K`; Activity `rd1Vo`, `F3XhQ`); the Claude `Edit` deny rule was not checked in a
-  live Claude Code session; Codex `exec` reports usage per whole turn, so its count before the first edit is an upper
-  bound, marked `≤`; the incremental build on very large repositories is dominated by per-file work (hard links,
+- Independent design verification passed after three rounds (Settings › Code index `i220W`, `LC2V0`, `RkMap`,
+  `h6yMk`, `NvR7K`; Activity `rd1Vo`, `F3XhQ`; the activity problem texts).
+- Open: before/after measurement on a real task (index on vs off) — scheduled after merge and stable reinstall; the
+  Claude `Edit` deny rule was not checked in a live Claude Code session; Codex `exec` reports usage per whole turn,
+  so its count before the first edit is an upper bound, marked `≤`; the incremental build on very large repositories is dominated by per-file work (hard links,
   digests); a code index on a network share gets no Claude `Edit` deny rule (its files are read-only); on macOS a
   ripgrep install goes on after Orchester closes; macOS is only cross-checked for core and exec (C build scripts
   need a target `cc`).
@@ -202,8 +203,8 @@ ORC-37 · Codebase index 1/2 (backend) · branch `claude/codebase-index`
   under a cross-process lock. The runner builds or reuses it before a run's first step; failure is a
   `CodebaseIndexUnavailable` runner problem in each agent's activity and the run continues. Indexes go when the last
   worktree using them is removed (desktop *Remove worktree*, merge, Run again).
-- Open: independent design verification of the new activity problem text; delivery, settings and activity are
-  ORC-38; macOS cross-check stops at C build scripts (no target `cc`).
+- Open: delivery, settings and activity are ORC-38 (its design verification, which covered this crate's activity
+  problem text, passed); macOS cross-check stops at C build scripts (no target `cc`).
 
 Agent runtime architecture · effective approvals, Windows sandbox and Cargo isolation · root `master`
 
