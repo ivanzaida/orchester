@@ -7,6 +7,7 @@ mod app_server;
 mod command;
 mod end;
 mod mcp;
+mod memory;
 mod skills;
 pub(super) mod worker;
 
@@ -14,6 +15,7 @@ use orchester_core::{
   connection::stream::{AgentEvent, AgentStream, InvocationOutcome, RunnerProblem},
   conversation::{Message, latest_question},
   id::StepExecutionId,
+  memory::MemoryStore,
   resource::ModelId,
   run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
   store::{ActivityStore, ConversationStore, RunStore},
@@ -227,6 +229,8 @@ impl RunTask {
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
     self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
     self.db.save_edit_progress(invocation.id, &EditProgress::default())?;
+    self.db.save_injected_memory(invocation.id, &start.memory)?;
+    self.report_unreadable_memory(&invocation)?;
     self.record_left_out(&invocation, std::mem::take(&mut start.left_out))?;
     let process = match Supervised::start(&start.command) {
       Ok(process) => process,

@@ -181,6 +181,26 @@ pub enum RunnerProblem {
     #[serde(default)]
     fallback: RipgrepFallback,
   },
+  /// The step's handoff was not kept as task memory.
+  MemoryNotSaved { reason: MemoryNotSavedReason },
+  /// `records` task or project memory records could not be read back; agents get the others.
+  MemoryUnreadable { records: u64 },
+  /// Memory could not be checked for unreadable records; `detail` is the storage error. The agent
+  /// started all the same.
+  MemoryScanFailed { detail: String },
+}
+
+/// Why a step's handoff was not kept as task memory. It names a secret, never its value.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "reason", rename_all = "snake_case")]
+pub enum MemoryNotSavedReason {
+  /// It holds the value of secret `secret`.
+  ContainsSecret { secret: String },
+  /// The keychain could not be read to check it for the value of secret `secret`.
+  KeychainUnavailable { secret: String },
+  /// The project database could not store it; `detail` is the storage error, which never holds a
+  /// record's text.
+  StorageFailed { detail: String },
 }
 
 impl AgentEvent {

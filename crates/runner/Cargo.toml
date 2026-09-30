@@ -124,6 +124,10 @@ required-features = ["test-agent"]
 name = "codebase_index"
 required-features = ["test-agent"]
 
+[[test]]
+name = "memory"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

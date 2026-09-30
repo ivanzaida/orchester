@@ -15,6 +15,7 @@ pub mod id;
 pub mod import;
 pub mod integration;
 pub mod limits;
+pub mod memory;
 pub mod name;
 pub mod permission;
 pub mod project;

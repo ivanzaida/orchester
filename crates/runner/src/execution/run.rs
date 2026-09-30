@@ -110,6 +110,8 @@ pub(super) struct RunTask {
   pub(super) index_build: Option<IndexBuild>,
   pub(super) worker_events: mpsc::UnboundedSender<WorkerEvent>,
   events: mpsc::UnboundedReceiver<WorkerEvent>,
+  /// The memory records were scanned for unreadable ones: once per run task is enough.
+  pub(super) memory_scanned: bool,
 }
 
 impl RunTask {
@@ -135,6 +137,7 @@ impl RunTask {
       index_build: None,
       worker_events,
       events,
+      memory_scanned: false,
     }
   }
 

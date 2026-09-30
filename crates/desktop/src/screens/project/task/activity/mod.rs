@@ -8,6 +8,7 @@ mod first_edit;
 mod footer;
 mod mcp;
 mod panel;
+mod problem;
 mod rows;
 
 use std::{path::PathBuf, sync::Arc};

@@ -14,6 +14,7 @@
 
 use std::{
   collections::BTreeSet,
+  num::NonZeroU32,
   path::{Path, PathBuf},
 };
 
@@ -26,8 +27,9 @@ use orchester_core::{
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
+  memory::{InjectedMemory, RecalledMemory},
   permission::{FolderBounds, capability::EnforcedPermissions},
-  resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKind},
+  resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKey, StepKind},
   run::{
     AssembledPrompt, CodeIndexPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion,
     InvocationPrompt, PinnedVersion, PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput,
@@ -48,7 +50,7 @@ use super::{
 };
 use crate::private_file::PrivateFile;
 
-fn problem(detail: String) -> RunnerProblem {
+pub(super) fn problem(detail: String) -> RunnerProblem {
   RunnerProblem::CouldNotStart { detail }
 }
 
@@ -65,6 +67,20 @@ pub(super) struct AgentStart {
   pub(super) code_index: CodeIndexUse,
   pub(super) app_server: Option<AppServerSetup>,
   pub(super) agent: String,
+  /// The task memory its prompt holds, to record with the invocation.
+  pub(super) memory: Vec<InjectedMemory>,
+}
+
+/// What the prompt of an agent step's invocation is made of besides the run.
+#[derive(Clone, Copy)]
+struct PromptParts<'a> {
+  execution: StepExecutionId,
+  step: &'a Step,
+  profile: ProfileInfo<'a>,
+  continuation: &'a Continuation,
+  placed: &'a PlacedSkills,
+  code_index: Option<CodeIndexPrompt<'a>>,
+  memory: &'a [RecalledMemory],
 }
 
 /// What decides the CLI's arguments besides its prompt and MCP servers.
@@ -110,32 +126,26 @@ impl RunTask {
       Some(_) => Some(self.place_code_map(execution, &mut placed)?),
       None => None,
     };
-    let told = IndexTold::new(&index, skill.as_deref(), connection.provider());
-    let AssembledPrompt { text: prompt, sources } =
-      self.prompt(execution, step, info, continuation, (&placed, told.prompt()))?;
-    // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
-    // because an agent never starts with permissions that are not enforced. The run's permissions
-    // for the profile, if they were changed for it, else the profile's, narrowed by the step.
-    let enforced = self
-      .run
-      .step_permissions(key, body.permissions())
-      .expect("an agent step of the run has permissions")
-      .enforced_on(connection.provider(), Platform::current())
-      .map_err(|error| problem(error.to_string()))?;
+    let provider = connection.provider();
+    let told = IndexTold::new(&index, skill.as_deref(), provider);
+    let recalled = self.recall_memory(step, info)?;
+    let parts = PromptParts {
+      execution,
+      step,
+      profile: info,
+      continuation,
+      placed: &placed,
+      code_index: told.prompt(),
+      memory: recalled.entries(),
+    };
+    let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
+    let enforced = self.enforced(key, &body, provider)?;
     let writable_roots = self.writable_roots(&enforced)?;
     let environment = self
       .db
       .project_environment()
       .map_err(|error| problem(error.to_string()))?;
-    let provider = connection.provider();
-    let agent_files = self
-      .db
-      .repository_agent_files()
-      .map_err(|error| problem(error.to_string()))?;
-    let repository = match (agent_files.is_on(), provider) {
-      (false, AgentProvider::CodexCli) => Some(repository_skills(worktree)?),
-      _ => None,
-    };
+    let repository = self.repository_skills_left_out(provider, worktree)?;
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
     let cli = Cli {
       connection: &connection,
@@ -176,6 +186,42 @@ impl RunTask {
       code_index: index.used,
       app_server,
       agent: body.role().as_str().to_owned(),
+      memory: recalled.injected(),
+    })
+  }
+
+  /// The permissions the agent of step `key` gets on `provider`: the run's for the profile, if they
+  /// were changed for it, else the profile's, narrowed by the step. Preflight already refused steps
+  /// whose permissions the CLI cannot enforce; checked again because an agent never starts with
+  /// permissions that are not enforced.
+  fn enforced(
+    &self,
+    key: &StepKey,
+    body: &AgentProfile,
+    provider: AgentProvider,
+  ) -> Result<EnforcedPermissions, RunnerProblem> {
+    self
+      .run
+      .step_permissions(key, body.permissions())
+      .expect("an agent step of the run has permissions")
+      .enforced_on(provider, Platform::current())
+      .map_err(|error| problem(error.to_string()))
+  }
+
+  /// The repository's skills Codex disables while the project has its agent files off; `None`
+  /// while they are on, or for Claude Code.
+  fn repository_skills_left_out(
+    &self,
+    provider: AgentProvider,
+    worktree: &Path,
+  ) -> Result<Option<Vec<PathBuf>>, RunnerProblem> {
+    let agent_files = self
+      .db
+      .repository_agent_files()
+      .map_err(|error| problem(error.to_string()))?;
+    Ok(match (agent_files.is_on(), provider) {
+      (false, AgentProvider::CodexCli) => Some(repository_skills(worktree)?),
+      _ => None,
     })
   }
 
@@ -352,26 +398,23 @@ impl RunTask {
   /// variables filled in, then the outputs of the passed executions of the steps it depends on (a
   /// gated one's approved plan), and what a reviewer asked to change in its own plan, if the
   /// invocation revises it.
-  fn prompt(
-    &self,
-    execution: StepExecutionId,
-    step: &Step,
-    profile: ProfileInfo<'_>,
-    continuation: &Continuation,
-    (placed, code_index): (&PlacedSkills, Option<CodeIndexPrompt<'_>>),
-  ) -> Result<AssembledPrompt, RunnerProblem> {
+  fn prompt(&self, parts: PromptParts<'_>) -> Result<AssembledPrompt, RunnerProblem> {
+    let PromptParts {
+      execution,
+      step,
+      profile,
+      continuation,
+      placed,
+      code_index,
+      memory,
+    } = parts;
     let event = if continuation.session.is_some() {
       InjectionEvent::Resume
     } else {
       InjectionEvent::Start
     };
     let pipeline = self.run.snapshot().pipeline();
-    let pipeline_name = self
-      .db
-      .resource(pipeline.resource)
-      .map_err(|error| problem(error.to_string()))?
-      .map(|resource| resource.name().as_str().to_owned())
-      .ok_or_else(|| problem("the run's pipeline no longer exists".to_owned()))?;
+    let pipeline_name = self.pipeline_name()?;
     let outputs = self
       .db
       .step_outputs(self.run.id())
@@ -392,18 +435,12 @@ impl RunTask {
       })
       .collect();
     let skills = placed.listings();
-    let attempt = self
-      .run
-      .attempts()
-      .iter()
-      .find(|attempt| attempt.execution(execution).is_some())
-      .map(|attempt| attempt.number());
     PromptInput {
       project: &self.project,
       task: &self.task,
       run: Some(RunContext {
         run: &self.run,
-        attempt,
+        attempt: self.attempt_number(execution),
       }),
       pipeline: PipelineInfo {
         id: pipeline.resource,
@@ -429,6 +466,7 @@ impl RunTask {
           messages: &continuation.messages,
         },
       ),
+      memory,
     }
     .assemble(event)
     .map_err(
@@ -436,6 +474,26 @@ impl RunTask {
         variable: variable.name().to_owned(),
       },
     )
+  }
+
+  /// The number of the attempt `execution` belongs to.
+  fn attempt_number(&self, execution: StepExecutionId) -> Option<NonZeroU32> {
+    self
+      .run
+      .attempts()
+      .iter()
+      .find(|attempt| attempt.execution(execution).is_some())
+      .map(|attempt| attempt.number())
+  }
+
+  /// The name of the run's pipeline, as prompts name it.
+  fn pipeline_name(&self) -> Result<String, RunnerProblem> {
+    self
+      .db
+      .resource(self.run.snapshot().pipeline().resource)
+      .map_err(|error| problem(error.to_string()))?
+      .map(|resource| resource.name().as_str().to_owned())
+      .ok_or_else(|| problem("the run's pipeline no longer exists".to_owned()))
   }
 
   /// The instruction versions the run pinned, with their names, in library (slug) order.

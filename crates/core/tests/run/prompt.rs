@@ -112,6 +112,7 @@ impl Prompt {
       dependencies,
       revision: None,
       messages: None,
+      memory: &[],
     }
   }
 }

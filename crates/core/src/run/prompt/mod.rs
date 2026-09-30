@@ -23,11 +23,14 @@
 //! searches instead. A resumed session is told again because the index may be new to it: the setting or ripgrep can
 //! have changed since it started.
 //!
+//! Every invocation, new or resumed, reads the task memory recalled for it ([`memory`]).
+//!
 //! Placeholders resolve against the run; a variable without a value is an error that names it,
 //! never an empty string. A preview keeps such placeholders and lists them instead.
 
 mod code_index;
 mod composition;
+mod memory;
 mod source;
 
 use std::num::NonZeroU32;
@@ -45,6 +48,7 @@ use super::{
 use crate::{
   conversation::Message,
   id::ResourceId,
+  memory::RecalledMemory,
   project::Project,
   resource::{AgentProfile, InjectionEvent, Instruction, Step, Variable, VersionNumber},
   task::Task,
@@ -185,6 +189,8 @@ pub struct PromptInput<'a> {
   pub revision: Option<PlanRevision<'a>>,
   /// People's messages this invocation delivers, if any.
   pub messages: Option<DeliveredMessages<'a>>,
+  /// The task and project memory recalled for this invocation, in prompt order.
+  pub memory: &'a [RecalledMemory],
 }
 
 impl PromptInput<'_> {

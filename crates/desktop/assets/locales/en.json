@@ -797,7 +797,17 @@
           "indexWithOwnTools": "Claude Code still gets the code index; it searches with its own search tools.",
           "gitGrep": "Codex has no code index either; it searches the files with git grep.",
           "ownTools": "Claude Code has no code index either; it searches with its own search tools."
-        }
+        },
+        "memoryNotSaved": "The step’s handoff was not saved to task memory",
+        "memoryContainsSecret": "It contains the value of the secret {{secret}}. Secret values are never kept in memory.",
+        "memoryStorageFailed": "The project database could not store it: {{detail}}",
+        "memoryKeychainUnavailable": "The system keychain could not be read to check it for the value of the secret {{secret}}.",
+        "memoryUnreadable": {
+          "one": "{{count}} memory record could not be read",
+          "other": "{{count}} memory records could not be read"
+        },
+        "memoryScanFailed": "Task memory could not be checked for unreadable records; the agent started all the same",
+        "memoryUnreadableDetail": "Agents get the other records. The unreadable ones stay in the project database as they are."
       },
       "unparsed": {
         "one": "{{count}} unparsed line",

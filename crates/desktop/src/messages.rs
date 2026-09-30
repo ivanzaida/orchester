@@ -63,6 +63,11 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::NotAGitHubConnection(_)
     | StoreError::InvocationNotFound(_)
     | StoreError::SecretNotFound(_)
+    | StoreError::MemoryNotFound(_)
+    | StoreError::MemoryExists(_)
+    | StoreError::MemoryConflict(_)
+    | StoreError::MemoryNotActive(_)
+    | StoreError::DuplicateMemoryKey(_)
     | StoreError::MigrationBrokeReferences(_) => Message::new("errors.storage"),
     StoreError::Publish(PublishError::StaleDraft { latest, .. }) => Message::new("errors.staleDraft").with(
       "version",

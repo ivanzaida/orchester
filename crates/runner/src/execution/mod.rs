@@ -22,6 +22,7 @@ mod codebase_index;
 mod control;
 mod conversation;
 mod halt;
+mod handoff;
 mod idle;
 mod permissions;
 mod plan;

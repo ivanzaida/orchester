@@ -15,8 +15,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  code_index::RipgrepFallback,
-  connection::stream::{CommandStatus, FileChangeKind, OutputStream, RunnerProblem, ToolCommandResult},
+  connection::stream::{CommandStatus, FileChangeKind, OutputStream, ToolCommandResult},
   tokens::compact_tokens,
 };
 
@@ -24,6 +23,7 @@ use super::{
   super::{super::ProjectNav, heading::step_state},
   engine, first_edit,
   mcp::mcp_server_text,
+  problem::problem_text,
   rows::{Header, RowKind, TranscriptRow},
 };
 use crate::{
@@ -488,77 +488,6 @@ fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
 fn tenths_of_seconds(millis: i64) -> String {
   let tenths = millis.max(0) / 100;
   format!("{}.{}", tenths / 10, tenths % 10)
-}
-
-fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
-  match problem {
-    RunnerProblem::UnavailableVariable { variable } => (
-      ctx.t_args(
-        "runs.activity.problem.unavailableVariable",
-        [("variable", variable.as_str())],
-      ),
-      None,
-    ),
-    RunnerProblem::CouldNotStart { detail } => (
-      ctx.t("runs.activity.problem.couldNotStart"),
-      Some(detail.as_str().into()),
-    ),
-    RunnerProblem::CheckpointFailed { detail } => (
-      ctx.t("runs.activity.problem.checkpointFailed"),
-      Some(detail.as_str().into()),
-    ),
-    RunnerProblem::MergeConflict { branch, files } => (
-      ctx.t_args("runs.activity.problem.mergeConflict", [("branch", branch.as_str())]),
-      Some(
-        files
-          .join(
-            "
-",
-          )
-          .into(),
-      ),
-    ),
-    RunnerProblem::StepBudgetReached { budget } => (
-      ctx.t_args(
-        "runs.activity.problem.stepBudgetReached",
-        [("budget", compact_tokens(*budget).as_str())],
-      ),
-      None,
-    ),
-    RunnerProblem::ProgramNotFound { program } => (
-      ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
-      Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
-    ),
-    RunnerProblem::CodebaseIndexUnavailable { detail } => (
-      ctx.t("runs.activity.problem.codebaseIndexUnavailable"),
-      Some(detail.as_str().into()),
-    ),
-    RunnerProblem::RipgrepNotFound { fallback } => (
-      ctx.t("runs.activity.problem.ripgrepNotFound"),
-      Some(ctx.t(fallback_key(*fallback))),
-    ),
-    RunnerProblem::RipgrepUnavailable { detail, fallback } => (
-      ctx.t("runs.activity.problem.ripgrepUnavailable"),
-      Some(ctx.t_args(
-        "runs.activity.problem.ripgrepUnavailableDetail",
-        [
-          ("fallback", &*ctx.t(fallback_key(*fallback))),
-          ("detail", detail.as_str()),
-        ],
-      )),
-    ),
-  }
-}
-
-/// How an agent without ripgrep searched: with or without the code index, by its CLI.
-const fn fallback_key(fallback: RipgrepFallback) -> &'static str {
-  match fallback {
-    RipgrepFallback::Unknown => "runs.activity.problem.ripgrepFallback.unknown",
-    RipgrepFallback::IndexWithGitGrep => "runs.activity.problem.ripgrepFallback.indexWithGitGrep",
-    RipgrepFallback::IndexWithOwnTools => "runs.activity.problem.ripgrepFallback.indexWithOwnTools",
-    RipgrepFallback::GitGrep => "runs.activity.problem.ripgrepFallback.gitGrep",
-    RipgrepFallback::OwnTools => "runs.activity.problem.ripgrepFallback.ownTools",
-  }
 }
 
 /// A path the CLI reported inside the run's worktree, relative to the worktree

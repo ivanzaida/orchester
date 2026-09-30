@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 
 use super::{
   CONTINUE_PROMPT, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
-  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, code_index,
+  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, code_index, memory::push_memory,
 };
 use crate::{
   conversation::Message,
@@ -30,7 +30,12 @@ const RESULT_INSTRUCTIONS: &str = "End with exactly one JSON object containing `
                                    handling and can end the run and skip dependent steps: do not use it merely \
                                    because work is incomplete or needs permission. \
                                    If the person already answered the relevant question, apply their answer \
-                                   within the effective permissions instead of asking again.";
+                                   within the effective permissions instead of asking again.\n\
+                                   With `done` or `failed`, hand off to the agents after you in the same object: \
+                                   `completed` (what you completed), `decisions` (decisions later steps must \
+                                   follow), `open_questions` and `next_agent_should_know`, each a list of short \
+                                   strings, or null when you have nothing for it. Orchester keeps the handoff as \
+                                   task memory; never put secret values in it.";
 /// What a gated step's session is told on top: a person reviews its summary as the plan.
 const GATED_RESULT_INSTRUCTIONS: &str = "A person reviews your summary before the steps after this one start: make \
                                          it the complete result of this step (for a plan, the whole plan), in \
@@ -298,6 +303,7 @@ fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[Prompt
     if section_part == PromptPart::Task && part != Some(section_part) {
       code_index::push(&mut text, input.code_index);
       push_skills(&mut text, input);
+      push_memory(&mut text, input.memory, input.dependencies);
     }
     if part != Some(section_part) {
       if !text.is_empty() {
@@ -321,12 +327,14 @@ fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[Prompt
     }
   }
   if event == InjectionEvent::Resume {
-    if input
+    let recovery = input
       .messages
-      .is_some_and(|messages| matches!(messages.occasion, MessageOccasion::Recovery { .. }))
-    {
+      .is_some_and(|messages| matches!(messages.occasion, MessageOccasion::Recovery { .. }));
+    if recovery {
       push_dependencies(&mut text, input.dependencies);
     }
+    let shown = if recovery { input.dependencies } else { &[] };
+    push_memory(&mut text, input.memory, shown);
     text.push_str("\n\n# When you finish\n");
     push_block(&mut text, RESULT_INSTRUCTIONS);
     if input.step.approval_gate {

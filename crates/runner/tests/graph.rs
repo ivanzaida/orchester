@@ -109,7 +109,14 @@ async fn graph_parallel_steps_work_in_their_own_worktrees_and_merge_back() {
       .any(|line| line == "Sources: Implement (`implement`, attempt 1)"),
     "{prompts:?}"
   );
-  assert_eq!(prompts.iter().filter(|line| *line == "Finished Implement").count(), 2);
+  // Once each: the latest handoff in task memory does not repeat it.
+  assert_eq!(
+    prompts
+      .iter()
+      .filter(|line| line.contains("Finished Implement"))
+      .count(),
+    2
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
