@@ -145,6 +145,21 @@ fn place(file: &Path, outline: &Outline) -> io::Result<()> {
   }
 }
 
+/// The bytes of the files under `folder`.
+pub(crate) fn size(folder: &Path) -> io::Result<u64> {
+  let mut total = 0;
+  for entry in fs::read_dir(folder)? {
+    let entry = entry?;
+    let metadata = entry.metadata()?;
+    total += if metadata.is_dir() {
+      size(&entry.path())?
+    } else {
+      metadata.len()
+    };
+  }
+  Ok(total)
+}
+
 /// Marks every file under `folder` read-only: an index is shared by the runs of its revision, its
 /// outline files also by later indexes that link them, and it never changes once written. Agents
 /// that may write outside their worktree (Claude Code writes in the folders it is given) cannot

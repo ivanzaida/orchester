@@ -64,6 +64,7 @@ pub(crate) fn build(
   progress.phase(BuildPhase::Writing);
   let digests = write::write(out, &mut collected.records, &map.text, base.map(|base| &base.revision))?;
   let counts = Counts::of(&collected.records);
+  let bytes = write::size(out).map_err(IndexError::io("measure", out))?;
   let manifest = Manifest {
     format: manifest::FORMAT,
     generator: manifest::generator(),
@@ -84,6 +85,7 @@ pub(crate) fn build(
     doc_headings: counts.doc_headings,
     packages: map.packages,
     languages: counts.languages,
+    bytes,
     digests,
   };
   manifest.write(out)?;

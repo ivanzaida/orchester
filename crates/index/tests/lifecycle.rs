@@ -254,6 +254,40 @@ fn a_published_index_is_read_only_and_still_removed_with_its_worktree() {
   assert!(!index.exists());
 }
 
+fn folder_size(folder: &std::path::Path) -> u64 {
+  fs::read_dir(folder)
+    .expect("read")
+    .map(|entry| {
+      let entry = entry.expect("entry");
+      let metadata = entry.metadata().expect("metadata");
+      if metadata.is_dir() {
+        folder_size(&entry.path())
+      } else {
+        metadata.len()
+      }
+    })
+    .sum()
+}
+
+#[test]
+fn the_list_is_read_from_records_while_runs_read_the_index() {
+  let repo = Repo::new();
+  let head = repo.head();
+  repo.ensure(&head);
+  // A run reusing the index shares its lock; a stale progress record is no build.
+  let _reading = hold_shared_lock(&repo, &head);
+  let progress = repo.index_root().join(".progress");
+  fs::create_dir_all(&progress).expect("progress folder");
+  fs::write(
+    progress.join(head.as_str()),
+    r#"{"started_at":0,"phase":{"kind":"writing"}}"#,
+  )
+  .expect("a stale record");
+
+  let listed = repo.indexes().list().expect("list");
+  assert!(matches!(listed[0].state, IndexState::Ready(_)), "{:?}", listed[0].state);
+}
+
 #[test]
 fn the_list_shows_ready_indexes_with_their_runs_and_rebuilds_replace_them() {
   let repo = Repo::new();
@@ -268,7 +302,9 @@ fn the_list_shows_ready_indexes_with_their_runs_and_rebuilds_replace_them() {
     panic!("ready: {:?}", listed[0].state);
   };
   assert_eq!((summary.files, summary.symbols), (15, 42));
-  assert!(summary.bytes > 0);
+  // The size of the index's files, recorded when it was built, not measured by the list.
+  let manifest = fs::metadata(first.path.join("manifest.json")).expect("manifest").len();
+  assert_eq!(summary.bytes, folder_size(&first.path) - manifest);
 
   let report = repo.indexes().rebuild(&head).expect("rebuilt");
   assert_eq!(report.mode, orchester_index::BuildMode::Full);

@@ -21,7 +21,7 @@ pub(super) const FAILURES: &str = ".failures";
 pub struct IndexSummary {
   pub files: usize,
   pub symbols: usize,
-  /// The size of its folder.
+  /// The size of its files.
   pub bytes: u64,
   pub built_at: Timestamp,
   pub build_time: Duration,
@@ -88,21 +88,23 @@ impl CodebaseIndexes {
     Ok(found)
   }
 
-  /// The state of `revision`'s index; `None` when there is nothing to show of it.
+  /// The state of `revision`'s index; `None` when there is nothing to show of it. Only records
+  /// are read, never the index's folder: a removal renaming it away is not held up, and an index
+  /// that went meanwhile is simply not shown.
   fn state(&self, revision: &Revision) -> Result<Option<IndexState>, IndexError> {
     let building = progress::read(&self.root, revision);
+    // A build holds the revision's lock exclusively; runs reading the index share it.
     if let Some(progress) = building
-      && locks::try_lock(&self.root, revision)?.is_none()
+      && locks::try_lock_shared(&self.root, revision)?.is_none()
     {
       return Ok(Some(IndexState::Building(progress)));
     }
     let folder = self.root.join(revision.as_str());
     if let Some(manifest) = Manifest::read_current(&folder) {
-      let bytes = size(&folder).map_err(IndexError::io("measure", &folder))?;
       return Ok(Some(IndexState::Ready(IndexSummary {
         files: manifest.files,
         symbols: manifest.symbols,
-        bytes,
+        bytes: manifest.bytes,
         built_at: manifest.built_at,
         build_time: Duration::from_millis(manifest.build_ms),
       })));
@@ -148,19 +150,4 @@ fn names(folder: &Path) -> Result<Vec<String>, IndexError> {
     }
   }
   Ok(names)
-}
-
-/// The bytes of the files under `folder`.
-fn size(folder: &Path) -> io::Result<u64> {
-  let mut total = 0;
-  for entry in fs::read_dir(folder)? {
-    let entry = entry?;
-    let metadata = entry.metadata()?;
-    total += if metadata.is_dir() {
-      size(&entry.path())?
-    } else {
-      metadata.len()
-    };
-  }
-  Ok(total)
 }
