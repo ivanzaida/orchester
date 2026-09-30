@@ -242,3 +242,140 @@ fn organization_invalid_form_save_and_bulk_cancel_leave_content_unchanged() {
   );
   assert!(db.task_organization_history(other).expect("history").is_empty());
 }
+
+#[derive(Clone, Copy)]
+enum Restart {
+  FollowUp,
+  Recovery,
+  Resume,
+  Continue,
+  Reconnect,
+}
+
+#[test]
+fn organization_restarts_validate_readiness_atomically_and_record_history() {
+  use orchester_core::run::RunEventKind;
+  for (restart, status) in [
+    (Restart::FollowUp, WorkflowStatus::InReview),
+    (Restart::Recovery, WorkflowStatus::Done),
+    (Restart::Resume, WorkflowStatus::Done),
+    (Restart::Continue, WorkflowStatus::Done),
+    (Restart::Reconnect, WorkflowStatus::Done),
+  ] {
+    let (_repo, mut db, mut run, execution) = started_run();
+    prepare_restart(&mut db, &mut run, execution, restart);
+    let details = db.task(run.task()).expect("read").expect("task").details().clone();
+    let blocker = db
+      .create_tasks(IdempotencyKey::generate(), vec![details], at(20))
+      .expect("blocker")[0]
+      .id();
+    let linked = TaskOrganization::new(
+      status,
+      Priority::High,
+      Some("Needs integration".into()),
+      vec![BlockingTask {
+        task: blocker,
+        gate: DependencyGate::Merge,
+      }],
+      vec![],
+    )
+    .expect("organization");
+    db.set_task_organization(run.task(), &linked, ChangeActor::Person, at(21))
+      .expect("link");
+    let stored = run.clone();
+    let before_events = db.events(run.id()).expect("events");
+    let before_history = db.task_organization_history(run.task()).expect("history");
+    let events = match restart {
+      Restart::FollowUp => run.follow_up(&run.follow_up_step(None).expect("step"), at(22)),
+      Restart::Recovery => run.recover(&run.recovery_step(None).expect("step"), at(22)),
+      Restart::Resume => run.resume(at(22)),
+      Restart::Continue => run.continue_run(at(22)),
+      Restart::Reconnect => run.continue_after_reconnect(at(22)),
+    }
+    .expect("restart");
+    assert!(matches!(
+      events[0].kind(),
+      RunEventKind::Reopened | RunEventKind::RecoveryRequested | RunEventKind::Resumed | RunEventKind::Continued { .. }
+    ));
+    assert!(
+      db.append_events(&run, &events).is_err(),
+      "unfinished link rejects restart"
+    );
+    assert_eq!(db.run(run.id()).expect("read").expect("run"), stored);
+    assert_eq!(db.events(run.id()).expect("events"), before_events);
+    assert_eq!(
+      db.task_organization_history(run.task()).expect("history"),
+      before_history
+    );
+    assert_eq!(db.task_organization(run.task()).expect("organization"), linked);
+    let informational = TaskOrganization::new(status, Priority::High, Some("Needs integration".into()), vec![], vec![])
+      .expect("organization");
+    db.set_task_organization(run.task(), &informational, ChangeActor::Person, at(23))
+      .expect("unlink");
+    db.append_events(&run, &events).expect("reason-only permits restart");
+    assert_eq!(
+      db.task_organization(run.task()).expect("organization"),
+      informational.with_status(WorkflowStatus::InProgress)
+    );
+    let history = db.task_organization_history(run.task()).expect("history");
+    let change = history.last().expect("automatic change");
+    assert_eq!(change.actor, ChangeActor::Orchester);
+    assert_eq!(change.at, at(22));
+    assert_eq!(change.from.status(), status);
+    assert_eq!(change.to.status(), WorkflowStatus::InProgress);
+  }
+}
+
+fn prepare_restart(
+  db: &mut orchester_store::ProjectDb,
+  run: &mut orchester_core::run::Run,
+  execution: orchester_core::id::StepExecutionId,
+  restart: Restart,
+) {
+  use orchester_core::run::StepFailure;
+  if matches!(restart, Restart::Resume) {
+    let events = run.pause(at(10)).expect("pause");
+    db.append_events(run, &events).expect("pause persisted");
+    return;
+  }
+  if matches!(restart, Restart::Continue | Restart::Reconnect) {
+    let events = run
+      .interrupt(orchester_core::run::InterruptCause::RunnerLost, at(10))
+      .expect("interrupt");
+    db.append_events(run, &events).expect("interrupt persisted");
+    return;
+  }
+  let events = run.start_step(execution, at(10)).expect("start step");
+  db.append_events(run, &events).expect("persist start");
+  let events = match restart {
+    Restart::FollowUp => run.complete_step(execution, at(11)),
+    Restart::Recovery => run.fail_step(execution, StepFailure::ReportedFailed, at(11)),
+    Restart::Resume | Restart::Continue | Restart::Reconnect => unreachable!("continuations returned above"),
+  }
+  .expect("finish step");
+  db.append_events(run, &events).expect("persist finish");
+}
+
+#[test]
+fn organization_failed_follow_up_restores_review_and_retains_transition_history() {
+  use orchester_core::run::StepFailure;
+  let (_repo, mut db, mut run, execution) = started_run();
+  prepare_restart(&mut db, &mut run, execution, Restart::FollowUp);
+  let events = run
+    .follow_up(&run.follow_up_step(None).expect("step"), at(30))
+    .expect("follow up");
+  db.append_events(&run, &events).expect("restart");
+  let follow_up = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run.start_step(follow_up, at(31)).expect("start step");
+  db.append_events(&run, &events).expect("start");
+  let events = run
+    .fail_step(follow_up, StepFailure::ReportedFailed, at(32))
+    .expect("failed follow up");
+  db.append_events(&run, &events).expect("persist failure");
+  let history = db.task_organization_history(run.task()).expect("history");
+  let change = history.last().expect("review change");
+  assert_eq!(change.from.status(), WorkflowStatus::InProgress);
+  assert_eq!(change.to.status(), WorkflowStatus::InReview);
+  assert_eq!(change.actor, ChangeActor::Orchester);
+  assert_eq!(change.at, at(32));
+}

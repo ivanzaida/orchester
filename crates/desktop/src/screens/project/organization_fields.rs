@@ -374,7 +374,6 @@ impl DependencyFields {
         ActionButton::new(ctx.t("tasks.blocked.addLink"))
           .in_form()
           .id("task-add-blocking-link")
-          .enabled(self.choice.get().0.is_some() && !cycle)
           .on_click(move || {
             if let Some(task) = choice.get().0 {
               value.update(|value| {
@@ -398,6 +397,7 @@ impl DependencyFields {
               choice.set(DependencyChoice(None));
             }
           })
+          .enabled(self.choice.get().0.is_some() && !cycle)
           .render(ctx),
       )
       .into()

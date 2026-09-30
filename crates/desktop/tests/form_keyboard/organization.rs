@@ -450,3 +450,77 @@ fn seed_readiness(repo: &Path) {
   db.set_task_organization(tasks[1].id(), &organization, ChangeActor::Person, at(13))
     .expect("link");
 }
+
+#[test]
+fn organization_add_link_skips_empty_and_cyclic_choices() {
+  use orchester_core::task::organization::{BlockingTask, DependencyGate};
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let mut db = ProjectDb::open(repo).expect("open");
+    let details = TaskDetails {
+      title: Name::new("Dependency").expect("title"),
+      brief: String::new(),
+      acceptance_criteria: vec![],
+      pipeline: None,
+      limits: None,
+    };
+    let tasks = db
+      .create_tasks(
+        IdempotencyKey::generate(),
+        vec![details.clone(), details.clone(), details],
+        Timestamp::now(),
+      )
+      .expect("tasks");
+    let linked = TaskOrganization::new(
+      WorkflowStatus::Todo,
+      Priority::None,
+      None,
+      vec![BlockingTask {
+        task: tasks[0].id(),
+        gate: DependencyGate::Merge,
+      }],
+      vec![],
+    )
+    .expect("organization");
+    db.set_task_organization(tasks[1].id(), &linked, ChangeActor::Person, Timestamp::now())
+      .expect("link");
+  });
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  desktop.press("task-row-KON-1");
+  desktop.wait_for("task-edit");
+  desktop.click("task-edit");
+  desktop.wait_for("task-blocked-field");
+  desktop.press("task-blocked-field");
+  desktop.wait_for("task-blocked-reason");
+  set_text(&mut desktop, "task-blocked-reason", "Needs a dependency");
+  desktop.wait_for("task-blocking-picker");
+  assert!(
+    !desktop
+      .stops(40, false)
+      .contains(&Some("task-add-blocking-link".into()))
+  );
+  choose(&mut desktop, "task-blocking-picker", "KON-2 · Dependency");
+  assert!(
+    !desktop
+      .stops(40, false)
+      .contains(&Some("task-add-blocking-link".into()))
+  );
+  desktop.press("task-add-blocking-link");
+  assert!(desktop.tree.get_element_by_id("task-add-blocking-link").is_some());
+  choose(&mut desktop, "task-blocking-picker", "KON-3 · Dependency");
+  assert!(
+    desktop
+      .stops(40, false)
+      .contains(&Some("task-add-blocking-link".into()))
+  );
+  desktop.tab_to("task-add-blocking-link", 40);
+  desktop.enter();
+  desktop.tab_to("save-draft", 40);
+  desktop.enter();
+  desktop.wait_until("valid dependency saved", |desktop| {
+    tasks(&desktop.repo)[0].organization().dependencies().len() == 1
+  });
+  let stored = tasks(&desktop.repo);
+  assert_eq!(stored[0].organization().dependencies()[0].task, stored[2].id());
+}

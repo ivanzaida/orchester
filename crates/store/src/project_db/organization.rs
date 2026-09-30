@@ -106,11 +106,7 @@ impl ProjectDb {
   }
 
   pub fn check_task_readiness(&self, task: TaskId) -> Result<(), StoreError> {
-    let blocking = self.unfinished_blocking_tasks(task)?;
-    if !blocking.is_empty() {
-      return Err(OrganizationError::Blocked(blocking).into());
-    }
-    Ok(())
+    check_readiness(&self.connection, task)
   }
 
   /// List organization never writes task queue or run ordering.
@@ -271,4 +267,13 @@ fn tag_names(connection: &Connection, value: &TaskOrganization) -> Result<String
     names.push(name);
   }
   encode_json("tag history names", 1, &names)
+}
+
+pub(super) fn check_readiness(connection: &Connection, task: TaskId) -> Result<(), StoreError> {
+  let blocking = unfinished(connection, task)?;
+  if blocking.is_empty() {
+    Ok(())
+  } else {
+    Err(OrganizationError::Blocked(blocking).into())
+  }
 }

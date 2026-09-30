@@ -174,9 +174,10 @@ fn follow_up(db: &mut ProjectDb, root: &Path, mut run: Run) -> Result<Option<Pre
   // with no agent at work.
   prepare::existing_worktree(root, run.id())?;
   let events = run.follow_up(&step, Timestamp::now()).map_err(idle::rejection)?;
-  idle::store(db, &run, &events)?;
-  tracing::info!(run = %run.id(), %step, "follow-up started");
-  Prepared::continuing(db, root, run).map(Some)
+  let prepared = Prepared::continuing(db, root, run)?;
+  idle::store(db, &prepared.run, &events)?;
+  tracing::info!(run = %prepared.run.id(), %step, "follow-up started");
+  Ok(Some(prepared))
 }
 
 impl RunTask {

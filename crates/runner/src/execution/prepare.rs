@@ -207,6 +207,7 @@ fn check_readiness(db: &ProjectDb, task: TaskId) -> Result<(), Rejection> {
 impl Prepared {
   /// A recorded run that continues in its existing worktree: resumed or with raised limits.
   pub(super) fn continuing(db: &ProjectDb, root: &Path, run: Run) -> Result<Self, Rejection> {
+    check_readiness(db, run.task())?;
     let task = db
       .task_for_run(run.task(), run.id())
       .map_err(|error| failed("cannot read the run's task", &error))?

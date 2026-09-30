@@ -33,6 +33,30 @@ All commands use worktree-local `CARGO_TARGET_DIR=.tmp/orc39-check/target`. Ever
 
 The desktop/runner macOS cross-check was attempted with `cargo check -p orchester-desktop -p orchester-runner --target aarch64-apple-darwin`; native dependency compilation stopped because the cross C compiler `cc` is unavailable. It did not complete. No Mac runtime test, complete workspace test suite, or implementer app screenshots were run. Some test builds emitted incremental-cache access warnings; the Windows quality gate itself passed with warnings denied.
 
+## Corrections after independent Review
+
+The same run/worktree and approved design were retained. Independent Check passed the previous candidate; Review then identified two major restart defects and one Add link interaction defect. All three are corrected:
+
+- Core `RunEventKind::starts_execution` identifies Started, Resumed, Continued (explicit and reconnect), Reopened and RecoveryRequested. Store uses this common rule to record In progress with Orchester/when/from/to history. A failed follow-up returns to In review because its original result remains ready for review.
+- Store checks dependency readiness inside the run-event transaction before updating run state, attempts, events or organization history. Run creation uses the same readiness function. Runner continuation preparation checks readiness too, and follow-up validates preparation before persisting its restart. This preserves typed unavailable behavior and avoids committing a restart before a preparation failure.
+- Add link applies `enabled` after its click handler. Empty and cyclic choices are skipped by keyboard focus and cannot add a link; a valid choice can be added and saved.
+
+Fresh implementation checks passed:
+
+- `powershell -File tools/check.ps1`: passed after the final source corrections.
+- `cargo test -p orchester-core --test task_organization organization_`: 5 passed.
+- `cargo test -p orchester-store --test task_organization organization_`: 7 passed. Restart coverage includes follow-up, recovery, pause/resume, explicit continuation and reconnect; blocked persistence leaves run/events/history unchanged. Successful restarts preserve priority/manual reason and record transitions. Failed follow-up restores review with history.
+- `cargo test -p orchester-runner --features test-agent --test task_organization organization_`: 2 passed. Both follow-up and recovery refuse new unfinished blockers without changing durable run state, queued messages, history or uncommitted worktree files. Removing links permits continued work on the same branch and preserves informational Blocked/priority.
+- `cargo test -p orchester-runner --features test-agent --test failed_recovery failed_recovery_`: 6 passed.
+- `cargo test -p orchester-runner --features test-agent --test conversation conversation_ask_agent_`: 3 passed, including Codex/Claude follow-ups and removed-worktree refusal.
+- `cargo test -p orchester-desktop --test form_keyboard organization_`: 8 passed, including empty/cyclic Add link unavailable behavior and valid keyboard add/save.
+- `cargo check -p orchester-core --target aarch64-apple-darwin`: passed.
+- `git diff --check`: passed.
+
+No full workspace test run, desktop/runner macOS cross-check or app/Pencil verification was repeated in this correction step. The prior desktop/runner cross-compiler limitation remains. No commits, merges, root task recreation or stable runtime changes were made.
+
+Fresh independent Check, Review and Verify must run on these corrections. In addition to the 24 frame states below, inspect restart history from In review/manually Done, refusal after a linked unfinished blocker is added to a succeeded/failed run, retained work/messages after refusal, and the empty/cyclic Add link states in `tUwII`.
+
 ## Required next steps
 
 Run fresh Check and independent Review. The independent Verify step must launch its pinned app when ready and compare it to canonical Pencil frames at 1440 x 960, region by region. Host PNG exports were authoritative design input only.
