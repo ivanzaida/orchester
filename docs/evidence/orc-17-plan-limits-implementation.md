@@ -87,3 +87,13 @@ and `status-plan-limits-hint`.
   its status must refresh without reopening the project.
 
 All verification is pending; no screenshot comparison is claimed here.
+
+## Previous checkpoint comparison
+
+Compared checkpoint `006bf23` (`orchester/orc-17-run-1`) from this worktree.
+Its correct provider parsing, hover information, connection-based visibility and
+session-only aggregation behavior are retained in the current implementation.
+Its IPC round-trip tests alone did not establish delivery from ordinary Codex exec;
+the current matching-session reader and worker integration cover that missing path.
+No entire checkpoint was cherry-picked or current functionality overwritten.
+Independent Check, Review and Verify remain required pipeline steps.
