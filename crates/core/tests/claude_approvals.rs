@@ -295,3 +295,43 @@ fn claude_approvals_allowed_commands_deny_what_accept_edits_would_run() {
     "dontAsk runs nothing by mode"
   );
 }
+
+#[test]
+fn claude_approvals_keep_the_code_index_read_only_beside_the_ask_rule() {
+  let enforced = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AskBefore,
+    NetworkAccess::Off,
+  )
+  .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
+  .expect("enforceable");
+  let invocation = ClaudeInvocation {
+    executable: Path::new("/bin/claude"),
+    model: "claude-opus-5-5",
+    effort: None,
+    permissions: &enforced,
+    writable_roots: &[],
+    worktree: Path::new("/repo/.orchester/worktrees/run"),
+    session: ClaudeSession::New(uuid::Uuid::nil()),
+    mcp: None,
+    skills: None,
+    code_index: Some(Path::new("/repo/.orchester/index/abc")),
+    approvals: Some(Path::new("/tmp/approvals.json")),
+  };
+  let args = args(&invocation);
+  let at = |flag: &str| args.iter().position(|arg| arg == flag).expect(flag);
+  assert_eq!(args[at("--settings") + 1], r#"{"permissions":{"ask":["Bash"]}}"#);
+  let denied = &args[at("--disallowedTools") + 1..];
+  assert!(
+    denied.contains(&"Edit(//repo/.orchester/index/abc/**)".to_owned()),
+    "{args:?}"
+  );
+  assert!(
+    args
+      .windows(2)
+      .any(|pair| pair == ["--add-dir", "/repo/.orchester/index/abc"]),
+    "{args:?}"
+  );
+  assert_eq!(args[at("--permission-prompt-tool") + 1], PROMPT_TOOL);
+  assert_eq!(args.iter().filter(|arg| *arg == "--disallowedTools").count(), 1);
+}
