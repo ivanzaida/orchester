@@ -222,6 +222,48 @@ async fn claude_approvals_pause_while_waiting_takes_effect_after_the_decision() 
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn claude_approvals_ask_even_for_a_command_accept_edits_would_run() {
+  let project = claude("Make a folder.", permissions(CommandPermission::AskBefore, false));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let request = pending(root, &mut events, id).await;
+  assert_eq!(request.action, "mkdir build-output");
+  scheduler
+    .decide_tool_approval(id, request.id, true)
+    .await
+    .expect("approved");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(reported(&db, id, "permission: "), ["toolu_mkdir allow"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_approvals_leave_a_read_only_step_without_commands() {
+  let mut read_only = permissions(CommandPermission::AskBefore, false);
+  read_only.set_repository(RepositoryAccess::ReadOnly);
+  let project = claude("Make a folder.", read_only);
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(reported(&db, id, "permission: "), ["toolu_mkdir deny-by-rule"]);
+  let argv = reported(&db, id, "argv: ").pop().expect("argv");
+  assert!(
+    !argv.contains("--permission-prompt-tool") && !argv.contains("--settings"),
+    "{argv}"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn claude_approvals_denial_fails_the_step_without_the_action() {
   let project = claude(
     "Ask before publishing.",

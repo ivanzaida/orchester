@@ -134,6 +134,14 @@ permission popover (`W29Od2`), the pipeline step switch (`wujuh`), the command a
 (`GbNSA`) and the Connections inspector model note (`xK9v9`). **Done when** the verifier reports no blocking or major
 mismatch.
 
+### C4 · Claude Code runs read-only commands outside the allowed list (non-UI)
+
+With *Allowed commands*, Claude Code still runs commands its own classifier calls read-only (`ls`, `cat`, `grep`,
+`git log`, …) without a rule, in `dontAsk` and `acceptEdits` alike. They change no file, but "Only these commands run"
+is not exact. Its `acceptEdits` file commands are denied since `claude/claude-support`. Decide whether to ask for the
+whole tool and deny outside the list (the whole-tool ask rule precedes allow rules, so that would need the permission
+prompt to allow listed commands) or to document the exception in the option's text. **needs decision**
+
 ## U · Screens
 
 ### U10 · Pull requests screen jumps while it loads (UI)

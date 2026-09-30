@@ -1719,7 +1719,8 @@
         "claudeWebTools": "web tools allowed",
         "claudeWebToolsRemoved": "web tools removed · commands keep network",
         "claudeAddDir": "--add-dir for edit tools · commands not confined",
-        "claudePermissionPrompt": "--permission-prompt-tool · one command approval"
+        "claudePermissionPrompt": "--permission-prompt-tool · every command asks you",
+        "claudeNoCommandsReadOnly": "read-only · no commands: an approved one would run unsandboxed"
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",

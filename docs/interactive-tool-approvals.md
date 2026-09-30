@@ -87,9 +87,15 @@ token; the configuration file holding the token is private and removed when the 
 
 What reaches a person is decided by `ClaudeApprovalScope` in core: a `Bash` command when the step
 asks before commands, and a tool of one of the invocation's own MCP servers when it asks before
-MCP actions. For these, the invocation offers `Bash` without prefix rules and leaves out the
-`mcp__<server>` allow rules; a read-only step runs in permission mode `default` instead of
-`dontAsk`, which would deny before asking. Everything else Claude Code asks about (edits or reads
+MCP actions. For commands, a writing step gets `--settings {"permissions":{"ask":["Bash"]}}`: a
+rule asking for the whole `Bash` tool is checked before the tool's own check (both 2.1.89 and
+2.1.284), so every command reaches the prompt, including the `mkdir`, `touch`, `rm`, `rmdir`, `mv`,
+`cp` and `sed` that `acceptEdits` would otherwise run, and the commands Claude Code classifies as
+read-only. That is stricter than Codex, whose known-safe read-only commands run without asking. A
+read-only step gets no `Bash` at all: Claude Code would run an approved command outside any
+sandbox, where it could write. For MCP actions the `mcp__<server>` allow rules are left out, and a
+read-only step runs in permission mode `default` instead of `dontAsk`, which would deny before
+asking. Everything else Claude Code asks about (edits or reads
 outside the working folders, web fetches, the approval tool itself) is denied at once, as print mode
 denies it without the prompt. Every MCP tool call of a server asks; Claude Code does not pass the
 server's own approval hints to the prompt.
@@ -109,3 +115,7 @@ result has not arrived when the agent ends is recorded as an interruption, so th
 person's review before it continues. Project MCP secret values are redacted from the request's
 action, target and scope and from the invocation's activity. Claude Code runs an approved command
 without a sandbox, as it runs every command; the person sees the whole command first.
+
+With *Allowed commands* instead, a writing step denies the commands `acceptEdits` would run
+without a rule (`Bash(<command>:*)` deny rules, unless an allowed command starts with one). Commands
+Claude Code classifies as read-only still run without being listed (`docs/plan.md`, C4).

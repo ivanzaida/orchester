@@ -13,8 +13,8 @@
 //!   confine an arbitrary command to the worktree (its own sandbox is not supported on Windows and is not used), and it
 //!   can block its web tools but not network use by commands.
 //! - Asking before commands or MCP actions routes each request to a person in Orchester: Codex through App Server,
-//!   Claude Code through its permission prompt tool (`crate::connection::claude_approval`). Claude Code runs an
-//!   approved command outside any sandbox, as it runs every command; the person sees the whole command first.
+//!   Claude Code through its permission prompt tool (`crate::connection::claude_approval`), where every command asks.
+//!   Claude Code runs an approved command outside any sandbox, so a read-only step gets no command tool at all.
 //! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
 //!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
@@ -113,8 +113,11 @@ pub enum Mechanism {
   ClaudeAcceptEdits,
   /// `--add-dir <folder>`: the edit tools may also write there; commands were never confined.
   ClaudeAddDir,
-  /// `--permission-prompt-tool`: a person decides each command no rule allows, one call at a time.
+  /// `--permission-prompt-tool` with a rule asking before every command: a person decides each one.
   ClaudePermissionPrompt,
+  /// A read-only step gets no command tool: Claude Code would run an approved command outside any
+  /// sandbox, where it could write.
+  ClaudeNoCommandsReadOnly,
   /// `--allowedTools "Bash(<prefix>:*)"`, one rule per command.
   ClaudeAllowedTools,
   /// WebFetch and WebSearch stay available.
@@ -258,7 +261,12 @@ impl AgentPermissions {
       Support::Unavailable(reason) => Err(PermissionProblem::NotEnforceable { option, reason }),
     };
     let repository = enforced(PermissionOption::of_repository(self.repository))?;
-    let commands = enforced(PermissionOption::of_commands(&self.commands))?;
+    let commands = match enforced(PermissionOption::of_commands(&self.commands))? {
+      Mechanism::ClaudePermissionPrompt if self.repository == RepositoryAccess::ReadOnly => {
+        Mechanism::ClaudeNoCommandsReadOnly
+      }
+      mechanism => mechanism,
+    };
     let mut permissions = self.clone();
     let (network, network_stays_on) = match support(provider, platform, PermissionOption::of_network(self.network)) {
       Support::Enforced(mechanism) => (mechanism, None),

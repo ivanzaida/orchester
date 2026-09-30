@@ -50,7 +50,10 @@ use uuid::Uuid;
 use super::{InvocationError, agent_command, unicode_folders};
 use crate::{
   command::Command,
-  connection::{claude_approval::PROMPT_TOOL, mcp::McpServerName},
+  connection::{
+    claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
+    mcp::McpServerName,
+  },
   permission::{capability::EnforcedPermissions, claude::permission_args},
   resource::CommandEnvironment,
   run::STEP_RESULT_SCHEMA,
@@ -166,7 +169,7 @@ impl ClaudeInvocation<'_> {
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
-    if self.permissions.permissions().asks_a_person() && self.approvals.is_none() {
+    if ClaudeApprovalScope::of(self.permissions.permissions(), &[]).is_some() && self.approvals.is_none() {
       return Err(InvocationError::NoPermissionPrompt);
     }
     unicode_folders(self.writable_roots)?;

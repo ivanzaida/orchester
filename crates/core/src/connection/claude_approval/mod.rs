@@ -38,7 +38,7 @@ use zeroize::Zeroizing;
 
 use crate::{
   connection::mcp::McpServerName,
-  permission::{AgentPermissions, CommandPermission},
+  permission::{AgentPermissions, CommandPermission, RepositoryAccess},
 };
 
 /// The MCP server that serves the permission prompt.
@@ -139,10 +139,12 @@ pub struct ClaudeApprovalScope {
 impl ClaudeApprovalScope {
   /// The scope of an invocation with `permissions` and the MCP servers `servers`; `None` when it
   /// asks a person for nothing and so needs no permission prompt.
+  /// A read-only step never asks about commands: it gets no `Bash` (`crate::permission::claude`).
   pub fn of(permissions: &AgentPermissions, servers: &[McpServerName]) -> Option<Self> {
-    let commands = *permissions.commands() == CommandPermission::AskBefore;
+    let commands =
+      *permissions.commands() == CommandPermission::AskBefore && permissions.repository() == RepositoryAccess::Write;
     let tools = permissions.interactive_tool_approvals();
-    permissions.asks_a_person().then(|| Self {
+    (commands || tools).then(|| Self {
       commands,
       tools,
       servers: servers.to_vec(),

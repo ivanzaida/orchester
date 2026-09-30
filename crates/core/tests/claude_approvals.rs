@@ -23,7 +23,7 @@ fn server(name: &str) -> McpServerName {
 }
 
 fn permissions(commands: CommandPermission, tools: bool) -> AgentPermissions {
-  let mut permissions = AgentPermissions::new(RepositoryAccess::ReadOnly, commands, NetworkAccess::On);
+  let mut permissions = AgentPermissions::new(RepositoryAccess::Write, commands, NetworkAccess::On);
   permissions.set_interactive_tool_approvals(tools);
   permissions
 }
@@ -178,7 +178,7 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
     assert!(
       args.contains(
         "--mcp-config /tmp/servers.json /tmp/approvals.json --permission-prompt-tool mcp__Orchester__approve \
-         --tools Read,Glob,Grep,TodoWrite,Bash,WebFetch,WebSearch --permission-mode default --disallowedTools Edit Write NotebookEdit "
+         --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash,WebFetch,WebSearch --permission-mode acceptEdits --settings {\"permissions\":{\"ask\":[\"Bash\"]}} "
       ),
       "{args}"
     );
@@ -188,4 +188,71 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
     let command = invocation.command(String::new(), Vec::new(), &CommandEnvironment::default());
     assert_eq!(command.err(), Some(InvocationError::NoPermissionPrompt));
   }
+}
+
+fn permission_args_of(permissions: &AgentPermissions) -> Vec<String> {
+  orchester_core::permission::claude::permission_args(
+    &permissions
+      .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
+      .expect("enforceable"),
+    &[],
+  )
+}
+
+#[test]
+fn claude_approvals_ask_before_every_command_and_never_in_read_only_steps() {
+  let mut write = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AskBefore,
+    NetworkAccess::Off,
+  );
+  let args = permission_args_of(&write);
+  let settings = args.iter().position(|arg| arg == "--settings").expect("settings");
+  assert_eq!(args[settings + 1], r#"{"permissions":{"ask":["Bash"]}}"#);
+  assert!(args.contains(&"acceptEdits".to_owned()));
+  assert!(!args.iter().any(|arg| arg.starts_with("Bash(")), "{args:?}");
+  write.set_repository(RepositoryAccess::ReadOnly);
+  let args = permission_args_of(&write);
+  assert!(!args.contains(&"--settings".to_owned()), "{args:?}");
+  let tools = args.iter().position(|arg| arg == "--tools").expect("tools");
+  assert!(!args[tools + 1].contains("Bash"), "{args:?}");
+  let denied = args.iter().position(|arg| arg == "--disallowedTools").expect("denied");
+  assert!(args[denied + 1..].contains(&"Bash".to_owned()), "{args:?}");
+  assert_eq!(ClaudeApprovalScope::of(&write, &[]), None, "nothing is left to ask");
+}
+
+#[test]
+fn claude_approvals_allowed_commands_deny_what_accept_edits_would_run() {
+  let list = |entries: &[&str]| {
+    CommandPermission::Allowed(
+      AllowedCommands::new(
+        entries
+          .iter()
+          .map(|entry| orchester_core::permission::CommandPrefix::new(entry).expect("prefix"))
+          .collect(),
+      )
+      .expect("list"),
+    )
+  };
+  let args = permission_args_of(&AgentPermissions::new(
+    RepositoryAccess::Write,
+    list(&["git", "rm build"]),
+    NetworkAccess::Off,
+  ));
+  for command in ["mkdir", "touch", "rmdir", "mv", "cp", "sed"] {
+    assert!(args.contains(&format!("Bash({command}:*)")), "{command}: {args:?}");
+  }
+  assert!(
+    !args.contains(&"Bash(rm:*)".to_owned()),
+    "an allowed command starts with rm"
+  );
+  let read_only = permission_args_of(&AgentPermissions::new(
+    RepositoryAccess::ReadOnly,
+    list(&["git"]),
+    NetworkAccess::Off,
+  ));
+  assert!(
+    !read_only.contains(&"Bash(mkdir:*)".to_owned()),
+    "dontAsk runs nothing by mode"
+  );
 }

@@ -52,6 +52,8 @@ use std::{
   time::Duration,
 };
 
+#[path = "fake_claude_rules.rs"]
+mod fake_claude_rules;
 #[path = "fake_mcp.rs"]
 mod fake_mcp;
 #[path = "fake_permission_prompt.rs"]
@@ -206,6 +208,14 @@ impl Ask {
         "mcp__docs__write",
         serde_json::json!({"filePath": "docs/docs-token-value-7f3a.md", "text": "notes"}),
       )
+    } else if prompt.contains("Make a folder") {
+      (
+        "toolu_mkdir",
+        "Bash",
+        serde_json::json!({"command": "mkdir build-output"}),
+      )
+    } else if prompt.contains("Remove the build") {
+      ("toolu_rm", "Bash", serde_json::json!({"command": "rm -rf build"}))
     } else if prompt.contains("Try an edit outside") {
       (
         "toolu_outside",
@@ -321,12 +331,25 @@ impl Fake {
 
   /// Asks the permission prompt about `ask`, carries it out when approved, then finishes.
   fn ask_prompt(&self, worktree: &Path, args: &[String], ask: &Ask, step: &str) -> ExitCode {
+    let block = serde_json::json!({"type": "tool_use", "id": ask.call, "name": ask.tool, "input": ask.input});
+    self.assistant("msg_ask", &block.to_string());
+    let command = ask.input.get("command").and_then(serde_json::Value::as_str);
+    let rule = command.map_or(fake_claude_rules::Decision::Ask, |command| {
+      fake_claude_rules::bash(args, command)
+    });
+    if rule != fake_claude_rules::Decision::Ask {
+      eprintln!("permission: {} {}", ask.call, rule.as_str());
+      let ran = rule != fake_claude_rules::Decision::DeniedByRule;
+      if ran && append(worktree, "ran").is_err() {
+        eprintln!("cannot write README.md");
+      }
+      self.tool_result(ask.call, if ran { "ok" } else { "Denied by a rule." }, !ran);
+      return self.finish(worktree, "hello", step);
+    }
     let Some(mut prompt) = fake_permission_prompt::Prompt::open(args) else {
       eprintln!("no permission prompt");
       return ExitCode::from(2);
     };
-    let block = serde_json::json!({"type": "tool_use", "id": ask.call, "name": ask.tool, "input": ask.input});
-    self.assistant("msg_ask", &block.to_string());
     let decision = prompt
       .ask(ask.tool, &ask.input, ask.call)
       .unwrap_or_else(|| "none".to_owned());

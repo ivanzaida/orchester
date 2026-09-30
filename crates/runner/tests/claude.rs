@@ -63,7 +63,8 @@ async fn claude_runs_a_step_and_commits_its_changes() {
     argv.starts_with(&format!(
       "-p --output-format stream-json --verbose --model haiku --effort low --strict-mcp-config --setting-sources  \
        --disable-slash-commands --json-schema {schema} --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash \
-       --permission-mode acceptEdits --disallowedTools WebFetch WebSearch --allowedTools Bash(git:*) --session-id "
+       --permission-mode acceptEdits --disallowedTools Bash(mkdir:*) Bash(touch:*) Bash(rm:*) Bash(rmdir:*) \
+       Bash(mv:*) Bash(cp:*) Bash(sed:*) WebFetch WebSearch --allowedTools Bash(git:*) --session-id "
     )),
     "{argv}"
   );
@@ -188,6 +189,13 @@ async fn claude_refused_model_names_the_version_it_needs_and_the_connection_keep
   let connection = AgentConnection::try_from(db.connections().expect("connections").remove(0)).expect("agent");
   let opus = ModelId::new("claude-opus-5-5").expect("model");
   assert_eq!(connection.model_requirements().required(&opus), Some("2.1.280"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_allowed_commands_keep_accept_edits_from_running_others() {
+  let (project, run) = finished("Remove the build.").await;
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  assert_eq!(reported(&db, run.id(), "permission: "), ["toolu_rm deny-by-rule"]);
 }
 
 #[tokio::test(flavor = "multi_thread")]

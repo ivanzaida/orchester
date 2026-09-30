@@ -78,6 +78,7 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexWritableRoots => "agents.permissions.mechanism.codexWritableRoots",
     Mechanism::ClaudeAddDir => "agents.permissions.mechanism.claudeAddDir",
     Mechanism::ClaudePermissionPrompt => "agents.permissions.mechanism.claudePermissionPrompt",
+    Mechanism::ClaudeNoCommandsReadOnly => "agents.permissions.mechanism.claudeNoCommandsReadOnly",
     Mechanism::ClaudeAllowedTools => {
       let count = match permissions.commands() {
         CommandPermission::Allowed(commands) => commands.entries().len(),

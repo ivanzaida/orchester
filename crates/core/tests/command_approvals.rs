@@ -122,9 +122,10 @@ fn permissions_asking_before_commands_route_to_each_clis_approval_on_both_platfo
         NetworkAccess::On,
       );
       ask.set_interactive_tool_approvals(true);
+      // Claude Code would run an approved command unsandboxed, so a read-only step gets none.
       let expected = match provider {
         AgentProvider::CodexCli => Mechanism::CodexCommandApprovals,
-        AgentProvider::ClaudeCodeCli => Mechanism::ClaudePermissionPrompt,
+        AgentProvider::ClaudeCodeCli => Mechanism::ClaudeNoCommandsReadOnly,
       };
       assert_eq!(
         ask
@@ -132,6 +133,12 @@ fn permissions_asking_before_commands_route_to_each_clis_approval_on_both_platfo
           .expect("supported")
           .mechanism(PermissionSetting::Commands),
         expected
+      );
+      ask.set_repository(RepositoryAccess::Write);
+      let writing = ask.enforced_on(provider, platform).expect("supported");
+      assert_ne!(
+        writing.mechanism(PermissionSetting::Commands),
+        Mechanism::ClaudeNoCommandsReadOnly
       );
     }
   }
