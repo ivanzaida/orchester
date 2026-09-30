@@ -9,6 +9,7 @@ mod console;
 pub mod launch;
 #[cfg(unix)]
 pub mod process_group;
+pub mod ripgrep;
 pub mod search_path;
 pub mod verifier_app;
 
