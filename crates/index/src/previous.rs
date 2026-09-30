@@ -14,7 +14,7 @@ use crate::{
   language::Language,
   markdown::Heading,
   outline::Kind,
-  outline_file::outline_path,
+  outline_file::{self, outline_path},
   record::{FileRecord, Outline, Symbol},
   render::NO_LINES,
   write,
@@ -23,6 +23,8 @@ use crate::{
 pub(crate) struct Previous {
   dir: PathBuf,
   records: HashMap<String, FileRecord>,
+  /// The paths that have an outline file in this index, by the rule it was written with.
+  outlined: HashSet<String>,
 }
 
 impl Previous {
@@ -59,9 +61,19 @@ impl Previous {
         .headings
         .push(heading);
     }
+    let outlined = outline_file::outlined(
+      records
+        .values()
+        .filter(|record| record.language.has_grammar())
+        .map(|record| record.path.as_str()),
+    )
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
     Ok(Self {
       dir: dir.to_path_buf(),
       records,
+      outlined,
     })
   }
 
@@ -71,11 +83,10 @@ impl Previous {
   pub(crate) fn take(&mut self, path: &str, outlined: bool) -> Option<FileRecord> {
     let mut record = self.records.remove(path)?;
     if outlined {
-      let file = outline_path(&self.dir, path);
-      if !file.is_file() {
+      if !self.outlined.contains(path) {
         return None;
       }
-      record.outline = Some(Outline::Previous(file));
+      record.outline = Some(Outline::Previous(outline_path(&self.dir, path)));
     }
     Some(record)
   }
