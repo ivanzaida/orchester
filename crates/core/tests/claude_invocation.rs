@@ -227,6 +227,25 @@ fn claude_invocation_resume_continues_the_reported_session() {
 }
 
 #[test]
+fn claude_invocation_passes_a_full_model_id_to_new_and_resumed_sessions() {
+  let permissions = enforced(
+    RepositoryAccess::Write,
+    allowed(&["git"]),
+    NetworkAccess::On,
+    Platform::current(),
+  );
+  for session in [ClaudeSession::New(SESSION), ClaudeSession::Resume("5f0c2a1e")] {
+    let mut current = invocation(&permissions);
+    current.model = "claude-opus-5-5";
+    current.effort = Some("max");
+    current.session = session;
+    let args = args(&current);
+    assert_eq!(&args[4..8], ["--model", "claude-opus-5-5", "--effort", "max"]);
+    assert_eq!(args.iter().filter(|arg| *arg == "--model").count(), 1);
+  }
+}
+
+#[test]
 fn claude_invocation_without_an_effort_leaves_the_default() {
   let permissions = enforced(
     RepositoryAccess::ReadOnly,

@@ -10,6 +10,7 @@ mod agent;
 pub mod app_server;
 pub mod app_server_mcp;
 mod catalog;
+mod claude_catalog;
 mod discovery;
 mod github;
 pub mod invocation;
@@ -28,6 +29,7 @@ pub use self::{
   },
   agent::{AgentConnection, CheckResult, ConnectionCheck},
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
+  claude_catalog::parse_claude_models,
   discovery::{Installed, compare_versions, rank_installed},
   github::{
     GH_PROGRAM, GhAdvice, GhAuthStatus, GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin,

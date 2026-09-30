@@ -189,6 +189,7 @@ impl ProfileEditor {
       }
       (_, Some(CatalogSource::Provider)) => "agents.explain.provider",
       (_, Some(CatalogSource::DocumentedAliases)) => "agents.explain.aliases",
+      (_, Some(CatalogSource::ProviderAndCurrentIds)) => "agents.explain.providerAndCurrentIds",
     };
     ctx.t_args(key, [("connection", connection.name().as_str())])
   }

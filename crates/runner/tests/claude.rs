@@ -200,6 +200,52 @@ async fn claude_stopped_at_a_limit_resumes_its_session_once_raised() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn claude_runs_the_profiles_full_model_id_in_new_and_resumed_sessions() {
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    model: Some("claude-opus-5-5"),
+    budget: 5_000,
+    ..Setup::new("Work in turns.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events_in) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events_in, id, |run| {
+    matches!(run.status(), RunStatus::Paused(_))
+  })
+  .await;
+  scheduler
+    .raise_limit(
+      id,
+      RaisedLimits {
+        budget: TokenBudget::new(2_000_000).expect("above zero"),
+        max_duration: Duration::from_secs(30 * 60),
+      },
+    )
+    .await
+    .expect("the run continues");
+  let done = wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
+  assert_eq!(done.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  let argv = reported(&db, id, "argv: ");
+  assert_eq!(argv.len(), 2);
+  for (argv, session) in argv.iter().zip(["--session-id", "--resume"]) {
+    assert!(argv.contains(" --model claude-opus-5-5 --effort low "), "{argv}");
+    assert!(argv.contains(session), "{argv}");
+  }
+  let models: Vec<String> = db
+    .invocations(id)
+    .expect("invocations")
+    .iter()
+    .map(|invocation| invocation.model().expect("an agent invocation").as_str().to_owned())
+    .collect();
+  assert_eq!(models, ["claude-opus-5-5", "claude-opus-5-5"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn claude_cancel_ends_the_agent() {
   let project = claude("Keep working.");
   let root = project.repo.path();

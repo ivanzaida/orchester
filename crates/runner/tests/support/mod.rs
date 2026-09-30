@@ -140,6 +140,8 @@ pub struct Setup {
   pub steps: Vec<StepSpec>,
   /// The CLI the Builder profile runs on.
   pub provider: AgentProvider,
+  /// The Builder profile's model; `None` for the provider's usual test model.
+  pub model: Option<&'static str>,
   /// MCP servers of the project, all chosen by the Builder profile.
   pub mcp: Vec<McpServer>,
   /// Secrets of the project with their values in the keychain.
@@ -153,6 +155,7 @@ impl Setup {
       review: false,
       steps: Vec::new(),
       provider: AgentProvider::CodexCli,
+      model: None,
       mcp: Vec::new(),
       secrets: Vec::new(),
       budget: 1_400_000,
@@ -284,10 +287,10 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     "Implements tasks.".into(),
     PromptText::new("Work carefully.").expect("prompt"),
     connection,
-    ModelId::new(match setup.provider {
+    ModelId::new(setup.model.unwrap_or(match setup.provider {
       AgentProvider::CodexCli => "gpt-5.5",
       AgentProvider::ClaudeCodeCli => "haiku",
-    })
+    }))
     .expect("model"),
     settings,
   )

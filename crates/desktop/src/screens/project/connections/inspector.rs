@@ -182,6 +182,7 @@ fn models(ctx: &Ctx, connection: &AgentConnection) -> Element {
   let source = match catalog.source() {
     CatalogSource::Provider => "connections.modelSource.provider",
     CatalogSource::DocumentedAliases => "connections.modelSource.aliases",
+    CatalogSource::ProviderAndCurrentIds => "connections.modelSource.providerAndCurrentIds",
   };
   column
     .child(model_chips(ctx, connection.models()))

@@ -1510,7 +1510,8 @@
     "noConnectionChosen": "Choose the connection this role runs on.",
     "explain": {
       "provider": "{{connection}} lists these models itself.",
-      "aliases": "{{connection}} cannot list its models; these are the aliases its CLI help documents.",
+      "aliases": "{{connection}} did not list its models; these are the current model ids and the aliases its CLI help documents.",
+      "providerAndCurrentIds": "These are the current model ids, then the models {{connection}} lists itself.",
       "custom": "This model id is not verified: {{connection}} decides whether it accepts it when an agent starts.",
       "notChecked": "{{connection}} has not been checked yet, so its models are unknown. Check it on the Connections screen."
     },
@@ -1928,7 +1929,8 @@
     "noModelsListed": "The CLI listed no models. Profiles can still enter a model id, marked as not verified.",
     "modelSource": {
       "provider": "Listed by the model catalog bundled with the CLI.",
-      "aliases": "The CLI cannot list its models; these aliases are documented in its help."
+      "aliases": "The CLI did not list its models; these are the current model ids and the aliases its help documents.",
+      "providerAndCurrentIds": "The current model ids, then the models the CLI lists."
     },
     "refreshModels": "Refresh models",
     "usedBy": "Used by",
