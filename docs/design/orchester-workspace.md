@@ -856,6 +856,13 @@ entry. The person's scope decision retains existing global navigation and record
 design/state difference, consistent with runtime UI verification. Fresh independent Verify compares the changed
 task-list and scheduling-review regions against their references; ORC-30 does not remove Skills navigation.
 
+**Scheduling-review recheck corrections:** settings keep the 32px inset after the divider and 508px controls
+width at 1440px. Their reserved 12px scrollbar gutter occupies part of the page's right padding, preserving
+the controls' right edge. Execution-mode cards use the drawn 88px height and 12px gap (`YZcH2`, `jPX6u`).
+Order titles keep the 12px field typography with primary text color; subtitles remain muted. These corrections
+apply to both W1Dq6 and IyJ5a and require a fresh independent visual comparison. The original evidence in
+`.tmp/verify/recheck/report.md` remains preserved.
+
 **Task rows by run state (`r2al55`, drawn 2026-09-27 from the app).** A task with a run shows the run's state as the status label and, in the last column (and after the key in the Overview list `zemhy`), what that means for the task now:
 
 | Status (icon) | Last column |

@@ -130,6 +130,7 @@ fn task_bulk_selection_search_pipeline_assignment_and_review_keyboard() {
 }
 
 fn review_readbacks(desktop: &mut Desktop) {
+  review_geometry(desktop);
   assert!(shows(desktop, "tasks-review-summary", "2 tasks · up to 2 at once"));
   assert!(shows(desktop, "tasks-review-pipeline", "Delivery · v1"));
   assert!(shows(desktop, "tasks-review-cap-readback", "2.8M tokens"));
@@ -147,6 +148,22 @@ fn review_readbacks(desktop: &mut Desktop) {
   desktop.type_text("45");
   desktop.click("tasks-review-time-done");
   assert!(shows(desktop, "tasks-review-time-readback", "45 min active agent time"));
+}
+
+fn review_geometry(desktop: &mut Desktop) {
+  let rail = desktop.bounds("tasks-review-settings");
+  let parallel = desktop.bounds("tasks-review-parallel");
+  let sequential = desktop.bounds("tasks-review-sequential");
+  assert!(
+    (parallel.x - rail.x - 32.0).abs() < 1.0,
+    "settings must inset controls after the divider"
+  );
+  assert!(
+    (sequential.x + sequential.width - parallel.x - 508.0).abs() < 1.0,
+    "controls must retain their full width beside the reserved gutter"
+  );
+  assert!((parallel.height - 88.0).abs() < 1.0 && (sequential.height - 88.0).abs() < 1.0);
+  assert!((sequential.x - parallel.x - parallel.width - 12.0).abs() < 1.0);
 }
 
 #[test]
@@ -219,6 +236,7 @@ fn run_review(mode: &str) {
   desktop.click("run-selected");
   desktop.wait_for("tasks-review-sequential");
   desktop.click(mode);
+  review_geometry(&mut desktop);
   reorder(&mut desktop);
   desktop.wait_until("the runner online", |desktop| {
     shows(desktop, "status-runner", "Runner online")

@@ -193,6 +193,12 @@ Tasks list selection and scheduling review · ORC-30 · branch `orchester/orc-30
   or implementer design verification. Scope decision: retain existing Skills navigation. Its omission from the
   older Tasks frames is a pre-existing design/state difference; fresh Verify compares the changed task-list and
   scheduling-review regions against their references while retaining existing global navigation.
+- Latest recheck corrections: settings use an outer 32px inset with 508px controls and a reserved gutter in page
+  padding; both mode cards are 88px with a 12px gap; order titles use primary text. Existing list controls and
+  global navigation are preserved. `tools/check.ps1` passed; named desktop form_keyboard `task_bulk` (5) and
+  theme `pencil` (27) passed. Headless regressions cover the inset/control width and card geometry in both modes.
+  No unchanged core/store tests, full suites, macOS execution or implementer visual verification were repeated.
+  Fresh independent Check, Review and Verify remain required; prior verification evidence is preserved.
 
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 
