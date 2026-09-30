@@ -48,15 +48,19 @@ fn left_by(root: &Path, run: &Run) -> Leftovers {
   leftovers(&git, Path::new("git"), root, run).expect("what the run left")
 }
 
-/// Gives the project's agents a `PATH` of one folder, holding a ripgrep when `with_ripgrep`.
+/// Gives the project's agents a `PATH` of one folder, holding a ripgrep when `with_ripgrep`, and
+/// that folder as `%LOCALAPPDATA%`, so a ripgrep winget installed on the machine is not found.
 fn agent_path(root: &Path, with_ripgrep: bool) -> TempDir {
   let folder = tempfile::tempdir().expect("a folder for the PATH");
   if with_ripgrep {
     fs::write(folder.path().join(ripgrep::PROGRAM), FAKE_RIPGREP).expect("a ripgrep");
   }
   let path = folder.path().to_str().expect("a Unicode temporary path").to_owned();
-  let environment = CommandEnvironment::new(BTreeMap::from([(VariableName::new("PATH").expect("name"), path)]))
-    .expect("valid variables");
+  let environment = CommandEnvironment::new(BTreeMap::from([
+    (VariableName::new("PATH").expect("name"), path.clone()),
+    (VariableName::new(ripgrep::LOCAL_APP_DATA).expect("name"), path),
+  ]))
+  .expect("valid variables");
   ProjectDb::open(root)
     .expect("open")
     .save_project_environment(&environment)

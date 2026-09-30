@@ -1,6 +1,7 @@
-//! Finding ripgrep for agents (on the `PATH`, then bundled with the Codex CLI or Claude Code),
+//! Finding ripgrep for agents (on the `PATH`, then where winget links it, then bundled with the Codex CLI or Claude Code),
 //! copying it into the project's tools folder by content, and the install plan, which is unavailable
-//! without its installer.
+//! without its installer. The tests give their own `%LOCALAPPDATA%`, or none: a ripgrep
+//! winget installed on the machine running them would be found first.
 
 use std::{
   env,
@@ -66,7 +67,7 @@ fn ripgrep_on_the_path_comes_before_a_bundled_one() {
   let empty = dir.path().join("empty");
   fs::create_dir_all(&empty).expect("folder");
 
-  let found = ripgrep::locate(Some(&path_of(&[&empty, &bin])), &[&codex]);
+  let found = ripgrep::locate(Some(&path_of(&[&empty, &bin])), None, &[&codex]);
 
   assert_eq!(
     found,
@@ -82,7 +83,7 @@ fn ripgrep_bundled_with_the_codex_cli_is_found_from_its_script() {
   let dir = tempfile::tempdir().expect("temp");
   let (codex, rg) = codex_install(&dir.path().join("npm"));
 
-  let found = ripgrep::locate(Some(&path_of(&[dir.path()])), &[&codex]).expect("found");
+  let found = ripgrep::locate(Some(&path_of(&[dir.path()])), None, &[&codex]).expect("found");
 
   assert_eq!(found.source, Source::CodexCli);
   assert_eq!(
@@ -101,7 +102,7 @@ fn ripgrep_bundled_with_claude_code_is_found_from_its_script() {
     "claude rg",
   );
 
-  let found = ripgrep::locate(None, &[&script]).expect("found");
+  let found = ripgrep::locate(None, None, &[&script]).expect("found");
 
   assert_eq!(found.source, Source::ClaudeCode);
   assert_eq!(fs::read_to_string(found.path).expect("read"), "claude rg");
@@ -111,7 +112,39 @@ fn ripgrep_bundled_with_claude_code_is_found_from_its_script() {
 fn ripgrep_is_not_found_without_one() {
   let dir = tempfile::tempdir().expect("temp");
   let cli = file(&dir.path().join("native/claude"), "native");
-  assert_eq!(ripgrep::locate(Some(&path_of(&[dir.path()])), &[&cli]), None);
+  assert_eq!(
+    ripgrep::locate(Some(&path_of(&[dir.path()])), None, &[&cli]),
+    None
+  );
+}
+
+#[cfg(windows)]
+#[test]
+fn ripgrep_winget_installed_is_found_before_a_bundled_one_when_the_path_predates_it() {
+  let dir = tempfile::tempdir().expect("temp");
+  let (codex, _) = codex_install(&dir.path().join("npm"));
+  let local = dir.path().join("Local");
+  let winget = local.join("Microsoft/WinGet");
+  let package = winget.join("Packages/BurntSushi.ripgrep.MSVC_Microsoft.Winget.Source_8wekyb3d8bbwe");
+  file(&package.join("ripgrep-14.1.1-x86_64-pc-windows-msvc").join(PROGRAM), "old rg");
+  let newest = file(&package.join("ripgrep-15.1.0-x86_64-pc-windows-msvc").join(PROGRAM), "new rg");
+  file(&winget.join("Packages/Other.Tool/bin").join(PROGRAM), "other");
+  let empty = dir.path().join("empty");
+  fs::create_dir_all(&empty).expect("folder");
+
+  let found = ripgrep::locate(Some(&path_of(&[&empty])), Some(local.as_os_str()), &[&codex]);
+  assert_eq!(
+    found,
+    Some(Found {
+      path: newest,
+      source: Source::Winget
+    })
+  );
+
+  // A program winget links comes first.
+  let linked = file(&winget.join("Links").join(PROGRAM), "linked rg");
+  let found = ripgrep::locate(Some(&path_of(&[&empty])), Some(local.as_os_str()), &[&codex]);
+  assert_eq!(found.map(|found| found.path), Some(linked));
 }
 
 #[test]

@@ -27,7 +27,10 @@ use orchester_core::{
   run::CodeIndexPrompt,
   store::{ConnectionStore, SettingsStore},
 };
-use orchester_exec::{ripgrep, search_path::search_path};
+use orchester_exec::{
+  ripgrep::{self, LOCAL_APP_DATA},
+  search_path::search_path,
+};
 use orchester_index::{CodebaseIndexes, IndexError, Outcome};
 
 use super::run::RunTask;
@@ -163,11 +166,15 @@ impl RunTask {
   }
 
   /// The folder holding the copy of ripgrep for an agent; else why the agent has none: none was
-  /// found on the `PATH` the agent starts with (the project's, else the runner's) or with an agent
-  /// CLI, or the one found could not be copied.
+  /// found on the `PATH` the agent starts with (the project's, else the runner's), where winget
+  /// installs for the agent's user or with an agent CLI, or the one found could not be copied.
   fn provide_ripgrep(&self) -> Result<Result<PathBuf, (RipgrepMissing, RunnerProblem)>, String> {
     let environment = self.db.project_environment().map_err(|error| error.to_string())?;
     let path = environment.get("PATH").map(OsString::from).or_else(search_path);
+    let local_app_data = environment
+      .get(LOCAL_APP_DATA)
+      .map(OsString::from)
+      .or_else(|| std::env::var_os(LOCAL_APP_DATA));
     let executables: Vec<PathBuf> = self
       .db
       .connections()
@@ -178,7 +185,7 @@ impl RunTask {
       .map(|connection| connection.executable().to_path_buf())
       .collect();
     let clis: Vec<&Path> = executables.iter().map(PathBuf::as_path).collect();
-    let Some(found) = ripgrep::locate(path.as_deref(), &clis) else {
+    let Some(found) = ripgrep::locate(path.as_deref(), local_app_data.as_deref(), &clis) else {
       return Ok(Err((RipgrepMissing::NotFound, RunnerProblem::RipgrepNotFound)));
     };
     Ok(
