@@ -270,22 +270,52 @@ fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
     .iter()
     .map(|criterion| criterion_row(ctx, &form.criteria, criterion, removable, locked))
     .collect();
-  let signal = form.criteria.clone();
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Stack.role())
+    .child(Text::new(&ctx.t("tasks.new.criteria")).variant(ExtraTypography::FormLabel.role()))
+    .with_children(rows)
+    .child(add_criterion(ctx, &form.criteria, locked))
+    .with_children(missing_note(ctx, state, MissingDetail::AcceptanceCriteria))
+    // Add criterion may be last; its focus ring reaches past the column.
+    .overflow_visible()
+    .into()
+}
+
+/// *+ Add criterion* (`Sc8e9`). The locked form keeps it in its place (`fblW6` in `WOdDe`,
+/// `T6bVyU`), unavailable like the form's other controls that cannot be used there.
+fn add_criterion(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, locked: bool) -> Element {
   // The link's padding keeps its focus ring off the text, and an equal shift back keeps the text
   // in line with the criterion markers (`Sc8e9` in `l2YA4`). The ring reaches into the room the
   // form's scroll content keeps on its left.
   let padding = ctx.theme().spacing_value(SpacingSize::Xs).resolve(0.0);
-  let add = keyboard_stop(Button::empty().button(), Ring::Outer)
-    .id("add-criterion")
-    .padding_horizontal(SpacingSize::Xs)
-    .offset(-padding, 0.0)
-    .rounded(RadiusSize::Sm)
-    .spacing(SpacingSize::Xs)
-    .align_items(Alignment::Center)
+  let label = Text::new(&ctx.t("tasks.new.addCriterion"))
+    .variant(TypographyStyle::Caption)
+    .color(PaletteColor::TextPrimary);
+  let add = |button: Button| {
+    button
+      .id("add-criterion")
+      .padding_horizontal(SpacingSize::Xs)
+      .offset(-padding, 0.0)
+      .rounded(RadiusSize::Sm)
+      .spacing(SpacingSize::Xs)
+      .align_items(Alignment::Center)
+      .child(label)
+  };
+  if locked {
+    return add(Button::empty().button())
+      .describe("state", "unavailable")
+      .focusable(false)
+      .cursor(CursorIcon::NotAllowed)
+      .opacity(DISABLED_OPACITY)
+      .into();
+  }
+  let criteria = criteria.clone();
+  add(keyboard_stop(Button::empty().button(), Ring::Outer))
     .cursor(CursorIcon::Pointer)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .on_click(move |_| {
-      signal.update(|criteria| {
+      criteria.update(|criteria| {
         let next = criteria
           .iter()
           .map(|criterion| criterion.id + 1)
@@ -294,20 +324,6 @@ fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
         criteria.push(Criterion::new(next));
       });
     })
-    .child(
-      Text::new(&ctx.t("tasks.new.addCriterion"))
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary),
-    );
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Stack.role())
-    .child(Text::new(&ctx.t("tasks.new.criteria")).variant(ExtraTypography::FormLabel.role()))
-    .with_children(rows)
-    .with_children((!locked).then_some(add))
-    .with_children(missing_note(ctx, state, MissingDetail::AcceptanceCriteria))
-    // Add criterion may be last; its focus ring reaches past the column.
-    .overflow_visible()
     .into()
 }
 

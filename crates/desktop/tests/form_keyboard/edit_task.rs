@@ -293,4 +293,7 @@ fn edit_task_create_and_run_the_runner_refuses_offers_retry_run() {
   assert!(shows(&mut desktop, "task-form", "Kontur / Tasks / KON-1 / Retry run"));
   assert!(!shows(&mut desktop, "task-form", "Edit task"));
   assert!(!shows(&mut desktop, "task-form", "KON-1 / Edit"));
+  // Add criterion keeps its place, unavailable: Tab passes it by.
+  assert!(has(&mut desktop, "add-criterion"));
+  assert!(!desktop.stops(20, false).contains(&Some("add-criterion".to_owned())));
 }
