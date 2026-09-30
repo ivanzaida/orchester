@@ -1,4 +1,5 @@
 //! Scheduling review W1Dq6/IyJ5a; cancel returns to the unchanged selection.
+mod readback;
 mod settings;
 use std::{num::NonZeroU32, path::PathBuf, sync::Arc};
 
@@ -37,7 +38,7 @@ use crate::{
   },
   ui::{
     button::ActionButton,
-    field::{FieldNote, field, field_error, select_style, text_input},
+    field::{FieldNote, field, field_error, select_style},
     form::form,
     icon::{Icon, IconSize, icon},
     message_text,
@@ -54,6 +55,7 @@ pub struct ReviewProps {
   pub selected: Vec<TaskId>,
   pub close: Signal<bool>,
   pub runner_online: bool,
+  pub agent_slots: Option<NonZeroU32>,
 }
 impl PartialEq for ReviewProps {
   fn eq(&self, other: &Self) -> bool {
@@ -62,6 +64,7 @@ impl PartialEq for ReviewProps {
       && self.tasks == other.tasks
       && self.selected == other.selected
       && self.runner_online == other.runner_online
+      && self.agent_slots == other.agent_slots
   }
 }
 impl lurq::app::component::DevtoolsInspectable for ReviewProps {}
@@ -85,6 +88,9 @@ pub struct SchedulingReview {
   cap: Signal<String>,
   budget: Signal<String>,
   minutes: Signal<String>,
+  editing_time: Signal<bool>,
+  focused: crate::ui::unit_input::FocusedInput,
+  fixed_policy: Signal<u8>,
   key: IdempotencyKey,
   queue: FutureAction<(PathBuf, TaskGroup, TaskLimits), (), Vec<Message>>,
 }
@@ -109,6 +115,9 @@ impl Component for SchedulingReview {
       cap: ctx.signal(String::new()),
       budget: ctx.signal(String::new()),
       minutes: ctx.signal(String::new()),
+      editing_time: ctx.signal(false),
+      focused: ctx.signal(None),
+      fixed_policy: ctx.signal(0),
       key: IdempotencyKey::generate(),
       queue,
     }
@@ -146,7 +155,7 @@ impl Component for SchedulingReview {
           .padding_horizontal(SpacingSize::Section)
           .spacing(ExtraSpacing::Rail.role())
           .child(self.task_order(ctx, &props, pending || completed))
-          .child(self.settings(ctx, pending || completed)),
+          .child(self.settings(ctx, &props, pending || completed)),
       )
       .with_children(parsed.err().map(|e| field_error(&message_text(ctx, &e))))
       .with_children((!props.runner_online).then(|| field_error(&ctx.t("runs.start.runnerUnavailable"))))
@@ -278,7 +287,7 @@ impl SchedulingReview {
             Column::new()
               .flex(1.0)
               .spacing(ExtraSpacing::Indicator.role())
-              .child(Text::new(&task.title).variant(TypographyStyle::Body))
+              .child(Text::new(&task.title).variant(TypographyStyle::FieldLabel))
               .child(
                 Text::new(&ctx.t_args(
                   "tasks.bulk.taskPipeline",
@@ -287,7 +296,7 @@ impl SchedulingReview {
                     ("pipeline", message_text(ctx, &task.pipeline.message()).to_string()),
                   ],
                 ))
-                .variant(TypographyStyle::Caption),
+                .variant(ExtraTypography::Hint.role()),
               ),
           )
           .child(Text::new(&(index + 1).to_string()).variant(TypographyStyle::Mono))
@@ -323,8 +332,6 @@ impl SchedulingReview {
     let handle = surface()
       .id(format!("tasks-review-order-{task}"))
       .size(Dimension::Px(ORDER_HANDLE_SIZE), Dimension::Px(ORDER_HANDLE_SIZE))
-      .background(lurq::app::theme::PaletteColor::SurfaceRaised)
-      .rounded(lurq::app::theme::RadiusSize::Sm)
       .align_items(lurq::layout::Alignment::Center)
       .justify(lurq::layout::layout_kind::Justify::Center)
       .cursor(lurq::node::CursorIcon::Grab)
@@ -370,6 +377,10 @@ impl SchedulingReview {
       ActionButton::new(ctx.t_args("tasks.bulk.queue", [("count", self.order.get().0.len().to_string())]))
         .primary()
         .icon(Icon::Play)
+        .size(
+          Dimension::Px(crate::theme::TASK_REVIEW_QUEUE_WIDTH),
+          Dimension::Px(crate::theme::TASK_REVIEW_ACTION_HEIGHT),
+        )
         .id("tasks-review-queue")
         .in_form();
     queue = match submit {
@@ -378,12 +389,17 @@ impl SchedulingReview {
     };
     Row::new()
       .width(Dimension::Pct(100.0))
-      .padding(SpacingSize::Section)
+      .height(Dimension::Px(crate::theme::TASK_REVIEW_FOOTER_HEIGHT))
+      .padding_horizontal(SpacingSize::Section)
+      .align_items(lurq::layout::Alignment::Center)
       .spacing(SpacingSize::Sm)
       .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+      .child(Element::from(Text::new(&self.summary(ctx)).variant(TypographyStyle::Caption)).id("tasks-review-summary"))
       .child(Spacer::new().flex(1.0))
       .child(
         ActionButton::new(ctx.t(if complete { "tasks.bulk.back" } else { "common.cancel" }))
+          .icon(if complete { Icon::ArrowLeft } else { Icon::X })
+          .height(Dimension::Px(crate::theme::TASK_REVIEW_ACTION_HEIGHT))
           .id("tasks-review-cancel")
           .in_form()
           .on_click(move || close.set(false))

@@ -5,7 +5,7 @@ use lurq::app::events::MouseButton;
 use orchester_core::{
   id::IdempotencyKey,
   name::Name,
-  resource::{Pipeline, ResourceKind},
+  resource::{Pipeline, ResourceKind, Slug},
   run::RunStatus,
   store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
@@ -107,9 +107,14 @@ fn task_bulk_selection_search_pipeline_assignment_and_review_keyboard() {
   assert!(shows(&mut desktop, "task-selection", "2 selected"));
   desktop.click("run-selected");
   desktop.wait_for("tasks-review-parallel");
+  review_readbacks(&mut desktop);
   desktop.tab_to("tasks-review-sequential", 30);
   desktop.enter();
   assert!(shows(&mut desktop, "tasks-review-parallel", "Run ready tasks together"));
+  assert!(shows(&mut desktop, "tasks-review-summary", "2 tasks · one at a time"));
+  desktop.tab_to("tasks-review-gate", 30);
+  desktop.enter();
+  desktop.enter();
   desktop.tab_to("tasks-review-cap", 30);
   assert_eq!(desktop.value("tasks-review-cap"), "2,800,000");
   desktop.type_text("0");
@@ -122,6 +127,75 @@ fn task_bulk_selection_search_pipeline_assignment_and_review_keyboard() {
       .expect("groups")
       .is_empty()
   );
+}
+
+fn review_readbacks(desktop: &mut Desktop) {
+  assert!(shows(desktop, "tasks-review-summary", "2 tasks · up to 2 at once"));
+  assert!(shows(desktop, "tasks-review-pipeline", "Delivery · v1"));
+  assert!(shows(desktop, "tasks-review-cap-readback", "2.8M tokens"));
+  assert!(shows(desktop, "tasks-review-budget-readback", "1.4M tokens"));
+  assert!(shows(desktop, "tasks-review-time-readback", "30 min active agent time"));
+  desktop.tab_to("tasks-review-failure", 30);
+  desktop.enter();
+  desktop.enter();
+  desktop.tab_to("tasks-review-time-readback", 30);
+  desktop.enter();
+  desktop.tab_to("tasks-review-time", 30);
+  desktop.key("End", "End");
+  desktop.key("Backspace", "Backspace");
+  desktop.key("Backspace", "Backspace");
+  desktop.type_text("45");
+  desktop.click("tasks-review-time-done");
+  assert!(shows(desktop, "tasks-review-time-readback", "45 min active agent time"));
+}
+
+#[test]
+fn task_bulk_review_lists_mixed_published_pipeline_versions() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed(repo, &fake, false);
+    drafts(repo);
+    let mut db = ProjectDb::open(repo).expect("db");
+    let tasks = db.tasks().expect("tasks");
+    let first = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
+    let version = db
+      .latest_version::<Pipeline>(first)
+      .expect("version")
+      .expect("published");
+    let second = db
+      .create_resource(
+        Slug::new("alternate").expect("slug"),
+        Name::new("Alternate").expect("name"),
+        version.body(),
+        Timestamp::now(),
+      )
+      .expect("pipeline");
+    db.publish_draft::<Pipeline>(second.id(), Timestamp::now())
+      .expect("publish");
+    let mut details = tasks[1].details().clone();
+    details.pipeline = Some(second.id());
+    db.update_task(tasks[1].id(), details).expect("assign");
+  });
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  let tasks = ProjectDb::open(desktop.repo()).expect("db").tasks().expect("tasks");
+  for task in &tasks[..2] {
+    desktop.wait_for(&format!("task-select-{}", task.key()));
+    desktop.click(&format!("task-select-{}", task.key()));
+  }
+  let last = desktop.bounds(&format!("task-row-{}", tasks[2].key()));
+  let footer = desktop.bounds("tasks-footer");
+  assert!(footer.y >= last.y + last.height && footer.y < last.y + last.height + 24.0);
+  assert!(shows(&mut desktop, "tasks-footer", "Open a task to edit"));
+  desktop.click("run-selected");
+  desktop.wait_for("tasks-review-pipeline");
+  assert!(shows(
+    &mut desktop,
+    "tasks-review-pipeline",
+    "Alternate · v1; Delivery · v1"
+  ));
+  desktop.click("tasks-review-cancel");
+  assert!(shows(&mut desktop, "task-selection", "2 selected"));
 }
 
 fn run_review(mode: &str) {

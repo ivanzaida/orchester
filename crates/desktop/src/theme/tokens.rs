@@ -175,3 +175,8 @@ pub const TASK_REVIEW_ROW_HEIGHT: f32 = 50.0;
 pub const TASK_REVIEW_RAIL_WIDTH: f32 = 540.0;
 pub const TASK_REVIEW_FIELD_HEIGHT: f32 = 38.0;
 pub const TASK_REVIEW_HANDLE_SIZE: f32 = 32.0;
+/// Scheduling review action strip and compact properties (W1Dq6/IyJ5a).
+pub const TASK_REVIEW_FOOTER_HEIGHT: f32 = 76.0;
+pub const TASK_REVIEW_ACTION_HEIGHT: f32 = 40.0;
+pub const TASK_REVIEW_QUEUE_WIDTH: f32 = 154.0;
+pub const TASK_REVIEW_PROPERTY_HEIGHT: f32 = 22.0;

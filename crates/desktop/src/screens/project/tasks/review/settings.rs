@@ -2,27 +2,22 @@
 use super::*;
 
 impl SchedulingReview {
-  pub(super) fn settings(&self, ctx: &Ctx, locked: bool) -> Element {
+  pub(super) fn settings(&self, ctx: &Ctx, props: &ReviewProps, locked: bool) -> Element {
     let fields = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
       .child(Text::new(&ctx.t("tasks.bulk.executionMode")).variant(ExtraTypography::SectionHeading.role()))
       .child(self.mode_options(ctx, locked))
       .child(self.scheduling_field(ctx, locked))
-      .child(Text::new(&ctx.t("tasks.bulk.capacityNote")).variant(TypographyStyle::Caption))
+      .child(Text::new(&self.capacity_note(ctx, props)).variant(TypographyStyle::Caption))
       .child(field(
         &ctx.t("tasks.bulk.failure"),
-        Text::new(&ctx.t("tasks.bulk.pauseRemaining"))
-          .variant(TypographyStyle::Body)
-          .into(),
+        self.fixed_select(ctx, "tasks-review-failure", "tasks.bulk.pauseRemaining", locked),
         FieldNote::None,
       ))
       .child(self.limit_fields(ctx, locked))
-      .child(crate::ui::notice::Notice::new(
-        Icon::Hand,
-        ctx.t("tasks.bulk.approvalHeading"),
-        ctx.t("tasks.bulk.approvalNote"),
-      ))
+      .child(self.pipeline_readback(ctx, props))
+      .child(self.approval_notice(ctx, props))
       .child(Text::new(&ctx.t("tasks.bulk.branchNote")).variant(TypographyStyle::Caption));
     ScrollVertical::new(fields)
       .width(Dimension::Px(REVIEW_RAIL_WIDTH))
@@ -68,48 +63,26 @@ impl SchedulingReview {
     if self.mode.get() == Mode::Sequential {
       return field(
         &ctx.t("tasks.bulk.nextWhen"),
-        Text::new(&ctx.t("tasks.bulk.reviewGate"))
-          .variant(TypographyStyle::Body)
-          .into(),
+        self.fixed_select(ctx, "tasks-review-gate", "tasks.bulk.reviewGate", locked),
         FieldNote::None,
       );
     }
-    let control: Element = if locked {
-      Text::new(&ctx.t_args(
-        "tasks.bulk.concurrentCount",
-        [("count", self.concurrent.get().to_string())],
-      ))
-      .variant(TypographyStyle::Body)
-      .into()
-    } else {
-      let choices = (1..=self.order.get().0.len().max(1) as u32)
-        .map(|n| (n, ctx.t_args("tasks.bulk.concurrentCount", [("count", n.to_string())])));
-      Element::from(
-        Select::new(self.concurrent.clone())
-          .options(choices)
-          .width(Dimension::Pct(100.0))
-          .height(Dimension::Px(REVIEW_FIELD_HEIGHT))
-          .style(select_style(ctx, REVIEW_FIELD_HEIGHT)),
-      )
-      .id("tasks-review-concurrent")
-    };
+    let choices = (1..=self.order.get().0.len().max(1) as u32)
+      .filter(|n| !locked || *n == self.concurrent.get())
+      .map(|n| (n, ctx.t_args("tasks.bulk.concurrentCount", [("count", n.to_string())])));
+    let control = Element::from(
+      Select::new(self.concurrent.clone())
+        .options(choices)
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(REVIEW_FIELD_HEIGHT))
+        .focusable(!locked)
+        .style(select_style(ctx, REVIEW_FIELD_HEIGHT)),
+    )
+    .id("tasks-review-concurrent");
     field(&ctx.t("tasks.bulk.concurrent"), control, FieldNote::None)
   }
 
   fn limit_fields(&self, ctx: &Ctx, locked: bool) -> Element {
-    let input = |id, label, value: Signal<String>| {
-      field(
-        &ctx.t(label),
-        text_input(ctx, id, value, false, TypographyStyle::Body)
-          .on_input(move |event: lurq::app::events::TextInputEvent| {
-            if locked {
-              event.prevent_default();
-            }
-          })
-          .into(),
-        FieldNote::None,
-      )
-    };
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
@@ -117,18 +90,36 @@ impl SchedulingReview {
         Row::new()
           .width(Dimension::Pct(100.0))
           .spacing(SpacingSize::Md)
-          .child(
-            Column::new()
-              .flex(1.0)
-              .child(input("tasks-review-cap", "tasks.bulk.groupCap", self.cap.clone())),
-          )
-          .child(Column::new().flex(1.0).child(input(
+          .child(Column::new().flex(1.0).child(self.token_field(
+            ctx,
+            "tasks-review-cap",
+            ("tasks.bulk.groupCap", "tasks.bulk.totalTokens"),
+            self.cap.clone(),
+            locked,
+          )))
+          .child(Column::new().flex(1.0).child(self.token_field(
+            ctx,
             "tasks-review-budget",
-            "tasks.bulk.perTask",
+            ("tasks.bulk.perTask", "tasks.bulk.eachTokens"),
             self.budget.clone(),
+            locked,
           ))),
       )
-      .child(input("tasks-review-time", "tasks.bulk.timeLimit", self.minutes.clone()))
+      .child(self.time_readback(ctx, locked))
       .into()
+  }
+
+  /// The scheduler currently supports one gate and one failure policy. Keep the select
+  /// composition, with only truthful choices rather than offering unsupported behavior.
+  fn fixed_select(&self, ctx: &Ctx, id: &'static str, key: &str, locked: bool) -> Element {
+    Element::from(
+      Select::new(self.fixed_policy.clone())
+        .options([(0, ctx.t(key))])
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(REVIEW_FIELD_HEIGHT))
+        .focusable(!locked)
+        .style(select_style(ctx, REVIEW_FIELD_HEIGHT)),
+    )
+    .id(id)
   }
 }

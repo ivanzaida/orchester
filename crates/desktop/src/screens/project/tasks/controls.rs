@@ -25,22 +25,42 @@ use crate::{
   theme::ExtraSpacing,
   ui::{
     button::ActionButton,
-    field::{field_error, select_style, text_input},
-    icon::Icon,
+    field::{field_error, select_style, styled_input},
+    icon::{Icon, IconSize, icon},
     message_text,
   },
 };
 
+fn search(ctx: &Ctx, screen: &TasksScreen) -> Row {
+  let input = ctx.theme().form().input.clone();
+  let border = if screen.search_focused.get() {
+    lurq::node::border::Border::inside(lurq::app::theme::BorderSize::Md, input.border_focus)
+  } else {
+    lurq::node::border::Border::inside(lurq::app::theme::BorderSize::Sm, input.border)
+  };
+  let (focus, blur) = (screen.search_focused.clone(), screen.search_focused.clone());
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(FILTER_HEIGHT))
+    .padding_custom(input.padding)
+    .spacing(SpacingSize::Sm)
+    .align_items(lurq::layout::Alignment::Center)
+    .background(input.background)
+    .border(border)
+    .rounded(input.radius)
+    .child(
+      styled_input(ctx, screen.search.clone(), TypographyStyle::FieldLabel)
+        .id("tasks-search")
+        .on_focus(move || focus.set(true))
+        .on_blur(move || blur.set(false))
+        .single_line()
+        .flex(1.0)
+        .placeholder(&ctx.t("tasks.filters.search")),
+    )
+    .child(icon(Icon::Search, IconSize::Dismiss, PaletteColor::TextSecondary))
+}
+
 pub fn filters(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Element {
-  let search = text_input(
-    ctx,
-    "tasks-search",
-    screen.search.clone(),
-    false,
-    TypographyStyle::FieldLabel,
-  )
-  .height(Dimension::Px(FILTER_HEIGHT))
-  .placeholder(&ctx.t("tasks.filters.search"));
   let pipelines = std::iter::once((PipelineFilter(None), ctx.t("tasks.filters.allPipelines"))).chain(
     tasks
       .pipelines
@@ -50,7 +70,7 @@ pub fn filters(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Element
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Stack.role())
-    .child(Column::new().flex(1.0).child(search))
+    .child(Column::new().flex(1.0).child(search(ctx, screen)))
     .child(
       Element::from(
         Select::new(screen.pipeline.clone())

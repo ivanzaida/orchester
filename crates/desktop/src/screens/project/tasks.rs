@@ -66,6 +66,7 @@ pub struct TasksProps {
   pub project: Arc<str>,
   pub root: Arc<PathBuf>,
   pub runner_online: bool,
+  pub agent_slots: Option<std::num::NonZeroU32>,
   pub tab: TaskTab,
   pub tasks: TasksState,
 }
@@ -76,6 +77,7 @@ pub struct TasksScreen {
   nav: ProjectNav,
   selected: Signal<Selection>,
   search: Signal<String>,
+  search_focused: Signal<bool>,
   pipeline: Signal<PipelineFilter>,
   sort: Signal<TaskSort>,
   reviewing: Signal<bool>,
@@ -102,6 +104,7 @@ impl Component for TasksScreen {
       nav,
       selected: ctx.signal(Selection::default()),
       search: ctx.signal(String::new()),
+      search_focused: ctx.signal(false),
       pipeline: ctx.signal(PipelineFilter::default()),
       sort: ctx.signal(TaskSort::default()),
       reviewing: ctx.signal(false),
@@ -126,6 +129,7 @@ impl Component for TasksScreen {
           selected: self.selected.get().0.iter().copied().collect(),
           close: self.reviewing.clone(),
           runner_online: props.runner_online,
+          agent_slots: props.agent_slots,
         },
       );
     }
@@ -287,15 +291,16 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
       .child(Text::new(&ctx.t("tasks.emptyTab")).variant(TypographyStyle::Caption))
       .into()
   } else {
-    VirtualizedList::new_shared(ctx, rows)
+    VirtualizedList::new_shared(ctx, rows.clone())
       .list_key("task-rows")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
+      .max_height(Dimension::Px(super::task_rows::TABLE_ROW_HEIGHT * rows.len() as f32))
       .mount_keyed::<QueueRow, _, _, _>(|row| row.id, Clone::clone)
   };
   let content = body()
     .child(controls::filters(ctx, screen, tasks))
-    .child(controls::selection_bar(ctx, screen, tasks, visible))
+    .child(controls::selection_bar(ctx, screen, tasks, visible.clone()))
     .with_children(
       screen
         .assigning
@@ -307,6 +312,9 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
       Column::new()
         .width(Dimension::Pct(100.0))
         .flex(1.0)
+        .max_height(Dimension::Px(
+          super::task_rows::HEADING_HEIGHT + super::task_rows::TABLE_ROW_HEIGHT * visible.len().max(1) as f32,
+        ))
         .child(table_heading(ctx))
         .child(table),
     )
@@ -324,5 +332,7 @@ fn footer(ctx: &Ctx, tasks: &ProjectTasks) -> Element {
     .child(
       Text::new(&message_text(ctx, &list::footer(tasks.tasks.len(), tasks.runs))).variant(TypographyStyle::Caption),
     )
+    .child(Spacer::new().flex(1.0))
+    .child(Text::new(&ctx.t("tasks.editingHint")).variant(TypographyStyle::Caption))
     .into()
 }

@@ -37,8 +37,8 @@ const PIPELINE_WIDTH: f32 = 136.0;
 const STATUS_WIDTH: f32 = 128.0;
 const READINESS_WIDTH: f32 = 184.0;
 const OPEN_WIDTH: f32 = 14.0;
-const HEADING_HEIGHT: f32 = 28.0;
-const TABLE_ROW_HEIGHT: f32 = 48.0;
+pub(super) const HEADING_HEIGHT: f32 = 28.0;
+pub(super) const TABLE_ROW_HEIGHT: f32 = 48.0;
 /// Overview row: row height, state tile and the width of the time column (`s0gWDM`, `aqRNL`,
 /// `XY1PR`).
 const LIST_ROW_HEIGHT: f32 = 78.0;

@@ -169,7 +169,7 @@ which also preserves text selection after a drag on scaled displays.
 
 Tasks list selection and scheduling review · ORC-30 · branch `orchester/orc-30-run-2`
 
-- **Implementation complete 2026-09-30; independent Verify pending.** Row/select-all selection, readiness reasons,
+- **Implementation revised 2026-09-30 after failed Verify; shared navigation reconciliation and fresh Verify pending.** Row/select-all selection, readiness reasons,
   draft-only published pipeline assignment, combined search/pipeline/sort/tab queries, and parallel/sequential
   scheduling review with editable order, task limits and aggregate token cap. Atomic persisted groups and stable
   first-run keys make retries idempotent; the runner enforces reviewed concurrency and existing agent slots.
@@ -183,6 +183,15 @@ Tasks list selection and scheduling review · ORC-30 · branch `orchester/orc-30
 - Verify J9467, W1Dq6 and IyJ5a, including checkbox focus, mixed readiness, skipped assignment reasons,
   combined filters, reordered tasks, settings validation, queued success and queue waiting reasons.
 - Assignment and non-fixture review/queue states are documented as implemented, not drawn yet in the design handoff.
+- Addressed the task-specific findings in `.tmp/verify/report.md`: selects for supported gate/failure policies,
+  token units/readbacks, compact editable time property, single/mixed published pipeline versions, scheduling
+  summaries, 76px action footer with 154×40 Queue button, and table-following list footer with editing hint.
+  Added the search icon/focus stroke, unframed drag handles, compact row text and actual runner-slot hint.
+- This retry: `tools/check.ps1` passed; 39 affected named desktop tests passed (tasks/form_keyboard `task_bulk`,
+  i18n `locale`/`every_key`, theme `pencil`). The existing core/store/runner group tests passed in the preceding
+  continuation and were not rerun because their implementation is unchanged. No full suites, macOS execution
+  or implementer design verification. The shared Skills sidebar major remains explicitly unresolved; preserve
+  its existing functionality until the design baseline/navigation decision is made.
 
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 

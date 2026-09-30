@@ -844,6 +844,16 @@ task prerequisites remain separate backlog work; this change does not introduce 
 enforcement. Shared-cap recovery is unavailable in the per-run raise-limit panel because raising one run's limit
 cannot raise a group cap. The independent verifier must compare J9467/W1Dq6/IyJ5a and these reachable states.
 
+**After the failed 2026-09-30 visual review:** scheduling reviews now show the task-count/concurrency footer,
+token units and compact readbacks, the selected published pipeline versions, and compact active-time properties.
+Activating the time property opens a minutes field and Done button (implemented, not drawn yet). Mixed pipeline
+versions are listed explicitly in a wrapping property; pipelines without plan gates keep the generic approvals
+notice. Gate and failure selects offer only the scheduler's supported policy. Actual runner slots appear when
+reported. The footer follows the visible task rows, including the draft-editing hint. Independent re-verification
+is still required. Order counts stay unpadded under the shared counts rule. Create multiple and Orchestrator remain
+visibly unavailable; their implementation is outside ORC-30. The older frames omit the existing Skills sidebar
+entry: that shared navigation discrepancy requires design reconciliation and is not removed by this task.
+
 **Task rows by run state (`r2al55`, drawn 2026-09-27 from the app).** A task with a run shows the run's state as the status label and, in the last column (and after the key in the Overview list `zemhy`), what that means for the task now:
 
 | Status (icon) | Last column |
