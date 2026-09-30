@@ -170,6 +170,9 @@ pub enum RunnerProblem {
   /// ripgrep was found neither on the agent's `PATH` nor with an agent CLI: the agent gets no code
   /// index and searches with `git grep`.
   RipgrepNotFound,
+  /// ripgrep was found but could not be copied where the agent can run it: the agent gets no code
+  /// index and searches with `git grep`.
+  RipgrepUnavailable { detail: String },
 }
 
 impl AgentEvent {

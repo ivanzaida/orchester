@@ -355,3 +355,27 @@ async fn a_run_waiting_for_its_codebase_index_can_be_cancelled() {
   assert_eq!(ended.status(), &RunStatus::Cancelled);
   drop(held);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_ripgrep_that_cannot_be_copied_is_reported_with_the_reason() {
+  let project = project(&indexed("Say hello."));
+  let root = project.repo.path();
+  let _path = agent_path(root, true);
+  // A file where the tools folder belongs: the copy cannot be made.
+  fs::write(root.join(".orchester/tools"), "not a folder\n").expect("block the tools folder");
+  let ended = run_to_the_end(root, project.task).await;
+  assert_eq!(ended.status(), &RunStatus::Succeeded);
+
+  let problems = problems(root, ended.id());
+  let [RunnerProblem::RipgrepUnavailable { detail }] = &problems[..] else {
+    panic!("one ripgrep problem: {problems:?}");
+  };
+  assert!(detail.contains("tools"), "{detail}");
+  assert!(matches!(
+    &uses(root, ended.id())[..],
+    [CodeIndexUse::Unavailable {
+      reason: CodeIndexUnavailable::RipgrepUnavailable { .. }
+    }]
+  ));
+  assert_eq!(prompt_lines(root, ended.id(), "# Searching the repository").len(), 1);
+}

@@ -115,9 +115,13 @@ impl RunTask {
       return Ok(AgentIndex::off());
     }
     let index = self.index_folder();
-    let tools = self.provide_ripgrep()?;
-    let (reason, problem) = match (index, &tools) {
-      (Ok(folder), Some(_)) => {
+    let ripgrep = self.provide_ripgrep()?;
+    let tools = match &ripgrep {
+      Ok(folder) => Some(folder.clone()),
+      Err(_) => None,
+    };
+    let (reason, problem) = match (index, ripgrep) {
+      (Ok(folder), Ok(_)) => {
         return Ok(AgentIndex {
           used: CodeIndexUse::Given {
             revision: self.run.base().clone(),
@@ -131,7 +135,7 @@ impl RunTask {
         CodeIndexUnavailable::BuildFailed { detail: detail.clone() },
         RunnerProblem::CodebaseIndexUnavailable { detail },
       ),
-      (Ok(_), None) => (CodeIndexUnavailable::RipgrepNotFound, RunnerProblem::RipgrepNotFound),
+      (Ok(_), Err(missing)) => missing,
     };
     Ok(AgentIndex {
       used: CodeIndexUse::Unavailable { reason },
@@ -157,10 +161,10 @@ impl RunTask {
     }
   }
 
-  /// The folder holding the copy of ripgrep for an agent; `None` when none was found on the `PATH`
-  /// the agent starts with (the project's, else the runner's) or with an agent CLI, or it could not
-  /// be copied, which is logged.
-  fn provide_ripgrep(&self) -> Result<Option<PathBuf>, String> {
+  /// The folder holding the copy of ripgrep for an agent; else why the agent has none: none was
+  /// found on the `PATH` the agent starts with (the project's, else the runner's) or with an agent
+  /// CLI, or the one found could not be copied.
+  fn provide_ripgrep(&self) -> Result<Result<PathBuf, (CodeIndexUnavailable, RunnerProblem)>, String> {
     let environment = self.db.project_environment().map_err(|error| error.to_string())?;
     let path = environment.get("PATH").map(OsString::from).or_else(search_path);
     let executables: Vec<PathBuf> = self
@@ -174,15 +178,21 @@ impl RunTask {
       .collect();
     let clis: Vec<&Path> = executables.iter().map(PathBuf::as_path).collect();
     let Some(found) = ripgrep::locate(path.as_deref(), &clis) else {
-      return Ok(None);
+      return Ok(Err((
+        CodeIndexUnavailable::RipgrepNotFound,
+        RunnerProblem::RipgrepNotFound,
+      )));
     };
-    match ripgrep::provide(&found, &self.root.join(".orchester").join("tools")) {
-      Ok(folder) => Ok(Some(folder)),
-      Err(error) => {
+    Ok(
+      ripgrep::provide(&found, &self.root.join(".orchester").join("tools")).map_err(|error| {
         tracing::warn!(%error, found = %found.path.display(), "ripgrep cannot be given to agents");
-        Ok(None)
-      }
-    }
+        let detail = error.to_string();
+        (
+          CodeIndexUnavailable::RipgrepUnavailable { detail: detail.clone() },
+          RunnerProblem::RipgrepUnavailable { detail },
+        )
+      }),
+    )
   }
 }
 
@@ -228,7 +238,7 @@ impl IndexTold {
       },
       (
         CodeIndexUse::Unavailable {
-          reason: CodeIndexUnavailable::RipgrepNotFound,
+          reason: CodeIndexUnavailable::RipgrepNotFound | CodeIndexUnavailable::RipgrepUnavailable { .. },
         },
         ..,
       ) => Self::WithoutRipgrep,

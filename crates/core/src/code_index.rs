@@ -49,4 +49,7 @@ pub enum CodeIndexUnavailable {
   /// ripgrep, which the index skill searches with, was found neither on the agent's `PATH` nor with
   /// an agent CLI.
   RipgrepNotFound,
+  /// ripgrep was found but could not be given to the agent (copied into the project's tools
+  /// folder); `detail` says why.
+  RipgrepUnavailable { detail: String },
 }

@@ -531,6 +531,10 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       Some(detail.as_str().into()),
     ),
     RunnerProblem::RipgrepNotFound => (ctx.t("runs.activity.problem.ripgrepNotFound"), None),
+    RunnerProblem::RipgrepUnavailable { detail } => (
+      ctx.t("runs.activity.problem.ripgrepUnavailable"),
+      Some(detail.as_str().into()),
+    ),
   }
 }
 
