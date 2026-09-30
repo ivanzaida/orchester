@@ -119,3 +119,5 @@ without a sandbox, as it runs every command; the person sees the whole command f
 With *Allowed commands* instead, a writing step denies the commands `acceptEdits` would run
 without a rule (`Bash(<command>:*)` deny rules, unless an allowed command starts with one). Commands
 Claude Code classifies as read-only still run without being listed (`docs/plan.md`, C4).
+
+A managed policy with `allowManagedPermissionRulesOnly` makes Claude Code ignore every rule Orchester passes (`--allowedTools`, `--disallowedTools`, the `--settings` ask rule), so none of the above is enforced on such a machine.
