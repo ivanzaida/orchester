@@ -14,6 +14,7 @@ mod next;
 mod query;
 mod recall;
 mod record;
+mod render;
 mod screen;
 mod settings;
 mod store;
@@ -27,6 +28,7 @@ pub use self::{
   query::MemoryQuery,
   recall::{InjectionReason, RecallRequest, Recalled, RecalledMemory, estimated_tokens, recall},
   record::{AgentWrite, Memory, MemoryError, StoredMemory, StoredMemoryError},
+  render::quoted,
   screen::{ContainsSecret, ScreenUnavailable, ScreenedContent, SecretScreen},
   settings::{MemoryLimits, MemoryLimitsError, MemorySettings, WritePolicy},
   store::{InjectedMemory, MemoryFilter, MemoryMatch, MemoryStore, ScopeFilter},

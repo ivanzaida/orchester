@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 
 use super::{
   Confidence, Importance, InjectedMemory, Memory, MemoryAuthor, MemoryKind, MemoryLimits, MemoryMatch, MemoryScope,
-  MemoryStatus,
+  MemoryStatus, render::entry_text,
 };
 use crate::{
   id::{ResourceId, TaskId},
@@ -95,7 +95,7 @@ pub struct RecallRequest<'a> {
   pub now: Timestamp,
 }
 
-/// A record chosen for a prompt, why, and the text the prompt shows for it.
+/// A record chosen for a prompt, why, and the text the prompt shows for it ([`super::render`]).
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecalledMemory {
   pub memory: Memory,
@@ -249,7 +249,7 @@ fn within_limits(limits: MemoryLimits, ranked: Vec<(InjectionReason, f64, Memory
     if ids.contains(&memory.id()) || key.as_ref().is_some_and(|key| keys.contains(key)) || texts.contains(&same_text) {
       continue;
     }
-    let text = entry_text(&memory, reason);
+    let text = entry_text(&memory, reason, memory.content().text());
     let cost = estimated_tokens(&text);
     if tokens.saturating_add(cost) > limits.tokens() {
       continue;
@@ -266,19 +266,4 @@ fn within_limits(limits: MemoryLimits, ranked: Vec<(InjectionReason, f64, Memory
     });
   }
   chosen
-}
-
-/// How the prompt shows a record: a handoff as its text under its own heading, any other record as
-/// a list item with its kind and key.
-fn entry_text(memory: &Memory, reason: InjectionReason) -> String {
-  let content = memory.content();
-  if reason == InjectionReason::Handoff {
-    return content.text().to_owned();
-  }
-  let key = content
-    .key()
-    .map(|key| format!(" ({})", key.as_str()))
-    .unwrap_or_default();
-  let text = content.text().lines().collect::<Vec<_>>().join("\n  ");
-  format!("- {}{key}: {text}", content.kind().label())
 }

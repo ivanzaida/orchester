@@ -23,7 +23,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, StepSpec, TestProject, project, scheduler_with, wait_for};
+use self::support::{Setup, StepSpec, TestProject, project, scheduler_with, wait_for, wait_for_idle};
 
 const BRIEF: &str = "Leave a handoff.";
 
@@ -49,6 +49,8 @@ async fn run_until_it_ends(project: &TestProject) -> (RunId, RunStatus) {
     .await
     .expect("the run starts");
   let ended = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
+  // The last step's handoff is kept once the run has ended.
+  wait_for_idle(&scheduler).await;
   (run, ended.status().clone())
 }
 
@@ -153,11 +155,11 @@ async fn handoff_reaches_the_next_step(provider: AgentProvider) {
   let review = &prompts[1];
   assert!(review.contains("# Task memory"), "{review}");
   assert!(
-    review.contains("## Latest handoff, from step `implement`\nFinished Implement"),
+    review.contains("## Latest handoff, from step `implement`\n\n> Finished Implement"),
     "{review}"
   );
   assert!(
-    review.contains("## Decisions and warnings\n- Decision: Greet in README.md from Implement"),
+    review.contains("## Decisions and warnings\n\nDecision:\n> Greet in README.md from Implement"),
     "{review}"
   );
   assert!(
@@ -226,7 +228,7 @@ async fn memory_limits_come_from_the_setting() {
   let run = run_to_the_end(&project).await;
   let db = ProjectDb::open(project.repo.path()).expect("open");
   assert_eq!(injected(&db, run), [vec![], vec![InjectionReason::Handoff]]);
-  assert!(!prompts(&db, run)[1].contains("- Decision:"));
+  assert!(!prompts(&db, run)[1].contains("Decision:\n>"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -335,6 +337,7 @@ async fn memory_an_approved_plan_keeps_its_handoff_only_then() {
     .await
     .expect("approved");
   wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
+  wait_for_idle(&scheduler).await;
   let memory = task_memory(&db, project.task);
   assert!(
     memory.iter().any(|(kind, status, text)| *kind == MemoryKind::Handoff

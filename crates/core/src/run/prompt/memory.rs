@@ -1,6 +1,6 @@
 //! The "Task memory" part of a prompt: the records recalled for the invocation
-//! ([`crate::memory::recall`]), grouped by why each was chosen. A new session reads it before the
-//! task part, a resumed one before how to finish.
+//! ([`crate::memory::recall`]), grouped by why each was chosen, each record's body quoted. A new session reads it
+//! before the task part, a resumed one before how to finish.
 
 use std::fmt::Write as _;
 
@@ -34,7 +34,9 @@ pub(super) fn push_memory(text: &mut String, memory: &[RecalledMemory]) {
       let _ = writeln!(text, "\n## {heading}");
       group = Some(heading);
     }
-    text.push_str(entry.text.trim());
+    // A blank line before each record, so two quoted records never run together.
+    text.push('\n');
+    text.push_str(&entry.text);
     text.push('\n');
   }
 }
