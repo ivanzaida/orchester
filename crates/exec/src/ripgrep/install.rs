@@ -5,10 +5,13 @@
 
 use std::{
   ffi::OsStr,
+  io::{self, BufRead, BufReader, Read},
   path::{Path, PathBuf},
+  process::Stdio,
+  thread,
 };
 
-use orchester_core::command::{Command, CommandError, CommandRunner};
+use orchester_core::command::{Command, CommandError};
 use thiserror::Error;
 
 /// The package manager that installs ripgrep on this platform.
@@ -93,19 +96,64 @@ impl InstallPlan {
     &self.program
   }
 
-  /// Runs the install with `runner` and waits for it.
-  pub fn install(&self, runner: &impl CommandRunner) -> Result<(), InstallError> {
-    let output = runner.run(&self.command()).map_err(InstallError::Run)?;
-    if output.success() {
+  /// The command line a person reads: `winget install --id BurntSushi.ripgrep.MSVC --exact`.
+  pub fn command_line(&self) -> String {
+    let name = match self.installer {
+      Installer::Winget => "winget",
+      Installer::Homebrew => "brew",
+    };
+    std::iter::once(name)
+      .chain(self.installer.args().iter().copied())
+      .collect::<Vec<_>>()
+      .join(" ")
+  }
+
+  /// Runs the install and waits for it, handing each line the installer prints (a progress line
+  /// that rewrites itself counts as a line) to `line`.
+  pub fn install(&self, mut line: impl FnMut(&str)) -> Result<(), InstallError> {
+    let mut process = crate::prepare(&self.command()).map_err(InstallError::Run)?;
+    let mut child = process
+      .stdin(Stdio::null())
+      .spawn()
+      .map_err(|error| InstallError::Run(CommandError::Failed(error.to_string())))?;
+    let failed = |error: io::Error| InstallError::Run(CommandError::Failed(error.to_string()));
+    let stderr = child.stderr.take().expect("prepare pipes standard error");
+    let errors = thread::spawn(move || {
+      let mut text = String::new();
+      BufReader::new(stderr).read_to_string(&mut text).map(|_| text)
+    });
+    let mut last = String::new();
+    if let Some(stdout) = child.stdout.take() {
+      let mut reader = BufReader::new(stdout);
+      let mut buffer = Vec::new();
+      // A progress line ends with a carriage return, a finished line with a line feed.
+      while reader.read_until(b'\n', &mut buffer).map_err(failed)? > 0 {
+        for part in String::from_utf8_lossy(&buffer).split('\r') {
+          let part = part.trim();
+          if !part.is_empty() {
+            part.clone_into(&mut last);
+            line(part);
+          }
+        }
+        buffer.clear();
+      }
+    }
+    let status = child.wait().map_err(failed)?;
+    let errors = errors
+      .join()
+      .expect("the error reader does not panic")
+      .map_err(failed)?;
+    if status.success() {
       return Ok(());
     }
-    let message = [&output.stderr, &output.stdout]
-      .into_iter()
-      .find_map(|text| text.lines().rev().map(str::trim).find(|line| !line.is_empty()))
-      .unwrap_or_default()
-      .to_owned();
+    let message = errors
+      .lines()
+      .rev()
+      .map(str::trim)
+      .find(|line| !line.is_empty())
+      .map_or(last, str::to_owned);
     Err(InstallError::Failed {
-      code: output.code,
+      code: status.code(),
       message,
     })
   }

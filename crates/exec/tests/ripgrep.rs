@@ -196,4 +196,10 @@ fn installing_ripgrep_runs_the_exact_installer_command() {
 
   assert_eq!(plan.program(), installer);
   assert_eq!(plan.command().args(), args);
+  let shown = if cfg!(windows) {
+    "winget install --id BurntSushi.ripgrep.MSVC --exact"
+  } else {
+    "brew install ripgrep"
+  };
+  assert_eq!(plan.command_line(), shown);
 }
