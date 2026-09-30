@@ -169,7 +169,7 @@ which also preserves text selection after a drag on scaled displays.
 
 Tasks list selection and scheduling review · ORC-30 · branch `orchester/orc-30-run-2`
 
-- **Implementation revised 2026-09-30 after failed Verify; shared navigation reconciliation and fresh Verify pending.** Row/select-all selection, readiness reasons,
+- **Implementation complete 2026-09-30 after failed Verify; fresh independent Check, Review and Verify pending.** Row/select-all selection, readiness reasons,
   draft-only published pipeline assignment, combined search/pipeline/sort/tab queries, and parallel/sequential
   scheduling review with editable order, task limits and aggregate token cap. Atomic persisted groups and stable
   first-run keys make retries idempotent; the runner enforces reviewed concurrency and existing agent slots.
@@ -190,8 +190,9 @@ Tasks list selection and scheduling review · ORC-30 · branch `orchester/orc-30
 - This retry: `tools/check.ps1` passed; 39 affected named desktop tests passed (tasks/form_keyboard `task_bulk`,
   i18n `locale`/`every_key`, theme `pencil`). The existing core/store/runner group tests passed in the preceding
   continuation and were not rerun because their implementation is unchanged. No full suites, macOS execution
-  or implementer design verification. The shared Skills sidebar major remains explicitly unresolved; preserve
-  its existing functionality until the design baseline/navigation decision is made.
+  or implementer design verification. Scope decision: retain existing Skills navigation. Its omission from the
+  older Tasks frames is a pre-existing design/state difference; fresh Verify compares the changed task-list and
+  scheduling-review regions against their references while retaining existing global navigation.
 
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 
