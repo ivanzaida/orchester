@@ -250,11 +250,17 @@ fn conversation_recovery_migration_preserves_existing_failed_run_and_messages() 
   let version: u32 = connection
     .pragma_query_value(None, "user_version", |row| row.get(0))
     .expect("version");
-  // Restore the preceding schema's two changed tables, retaining genuine stored run records.
+  // Restore the preceding schema's two changed tables, retaining genuine stored run records, and
+  // remove what the migration after it (memory) created, so both are applied again.
   connection
     .execute_batch(
       r"
     PRAGMA foreign_keys = OFF;
+    DROP TABLE invocation_memories;
+    DROP TABLE memory_settings;
+    DROP TABLE memories_words;
+    DROP TABLE memories_trigrams;
+    DROP TABLE memories;
     DROP TRIGGER messages_recovery_immutable;
     ALTER TABLE messages DROP COLUMN recovery_sequence;
     CREATE TABLE attempts_previous (
@@ -273,7 +279,7 @@ fn conversation_recovery_migration_preserves_existing_failed_run_and_messages() 
     )
     .expect("preceding schema");
   connection
-    .pragma_update(None, "user_version", version - 1)
+    .pragma_update(None, "user_version", version - 2)
     .expect("previous version");
   drop(connection);
   let mut db = ProjectDb::open(repo.path()).expect("migrate existing project");

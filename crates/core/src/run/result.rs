@@ -9,8 +9,12 @@
 //! which is read the same way. Only a final message that is exactly such a JSON document counts, so
 //! free text is never taken for a question; a question written as prose is read as the step's
 //! output.
+//!
+//! A result may also carry a handoff for the agents after it (what it completed, its decisions, the
+//! questions it left open and what the next agent should know), which the runner keeps as task
+//! memory ([`crate::memory::Handoff`]).
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
   id::{RunId, StepExecutionId},
@@ -30,9 +34,29 @@ pub const STEP_RESULT_SCHEMA: &str = r#"{
     "summary":{
       "type":"string",
       "description":"For question, explain the blocker and saved progress and ask a concrete question with available options. Otherwise summarize the completed work or failure."
+    },
+    "completed":{
+      "type":["array","null"],
+      "items":{"type":"string"},
+      "description":"Handoff: what this step completed, one item each; null when nothing is worth listing."
+    },
+    "decisions":{
+      "type":["array","null"],
+      "items":{"type":"string"},
+      "description":"Handoff: decisions made in this step that later steps must follow, one per item."
+    },
+    "open_questions":{
+      "type":["array","null"],
+      "items":{"type":"string"},
+      "description":"Handoff: questions this step left open."
+    },
+    "next_agent_should_know":{
+      "type":["array","null"],
+      "items":{"type":"string"},
+      "description":"Handoff: what the next agent should know before it starts, such as pitfalls or where things are."
     }
   },
-  "required":["outcome","summary"],
+  "required":["outcome","summary","completed","decisions","open_questions","next_agent_should_know"],
   "additionalProperties":false
 }"#;
 
@@ -48,12 +72,27 @@ pub enum StepOutcome {
   Question,
 }
 
-/// A final message that follows [`STEP_RESULT_SCHEMA`].
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// A final message that follows [`STEP_RESULT_SCHEMA`]. The handoff lists are optional when read,
+/// so results written before they existed (and agents that leave them out) still count; the schema
+/// lists them as required but nullable, since Codex's structured output requires every property.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StepResult {
   pub outcome: StepOutcome,
   pub summary: String,
+  #[serde(default, deserialize_with = "list")]
+  pub completed: Vec<String>,
+  #[serde(default, deserialize_with = "list")]
+  pub decisions: Vec<String>,
+  #[serde(default, deserialize_with = "list")]
+  pub open_questions: Vec<String>,
+  #[serde(default, deserialize_with = "list")]
+  pub next_agent_should_know: Vec<String>,
+}
+
+/// A handoff list, `null` read as empty.
+fn list<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<String>, D::Error> {
+  Ok(Option::<Vec<String>>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 impl StepResult {

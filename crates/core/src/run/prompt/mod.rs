@@ -18,10 +18,13 @@
 //! where its `SKILL.md` is, before the task part, so the agent reads a skill when its work needs it.
 //! A resumed session was told them when it started, and the files stay where they were.
 //!
+//! Every invocation, new or resumed, reads the task memory recalled for it ([`memory`]).
+//!
 //! Placeholders resolve against the run; a variable without a value is an error that names it,
 //! never an empty string. A preview keeps such placeholders and lists them instead.
 
 mod composition;
+mod memory;
 mod source;
 
 use std::num::NonZeroU32;
@@ -39,6 +42,7 @@ use super::{
 use crate::{
   conversation::Message,
   id::ResourceId,
+  memory::RecalledMemory,
   project::Project,
   resource::{AgentProfile, InjectionEvent, Instruction, Step, Variable, VersionNumber},
   task::Task,
@@ -160,6 +164,8 @@ pub struct PromptInput<'a> {
   pub revision: Option<PlanRevision<'a>>,
   /// People's messages this invocation delivers, if any.
   pub messages: Option<DeliveredMessages<'a>>,
+  /// The task and project memory recalled for this invocation, in prompt order.
+  pub memory: &'a [RecalledMemory],
 }
 
 impl PromptInput<'_> {

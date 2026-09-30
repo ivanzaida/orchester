@@ -8,6 +8,7 @@ mod failed_recovery;
 mod fixture;
 mod lifecycle;
 mod limits;
+mod memory_prompt;
 mod outcome_prompt;
 mod permissions;
 mod plans;

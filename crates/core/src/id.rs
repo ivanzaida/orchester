@@ -99,3 +99,7 @@ define_id!(
   /// One message of a task conversation, a person's or an agent's.
   MessageId
 );
+define_id!(
+  /// One record of task or project memory.
+  MemoryId
+);

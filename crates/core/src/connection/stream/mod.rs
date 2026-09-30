@@ -165,6 +165,8 @@ pub enum RunnerProblem {
   StepBudgetReached { budget: u64 },
   /// A command tool's `program` is no file on the `PATH` or in the worktree; it was not started.
   ProgramNotFound { program: String },
+  /// The step's handoff was not kept as task memory; `detail` says why (never a secret's value).
+  MemoryNotSaved { detail: String },
 }
 
 impl AgentEvent {

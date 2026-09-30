@@ -124,6 +124,7 @@ impl RunTask {
     }
     if (output.outcome.is_some() || !output.text.is_empty()) && !self.run.is_follow_up(execution) {
       self.db.save_step_output(&output)?;
+      self.remember_handoff(execution, active, finished.final_message.as_deref())?;
     }
     if let Some(failure) = failure {
       self.save(execution, active, "step failed")?;

@@ -23,6 +23,7 @@ use orchester_core::{
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
+  memory::{InjectedMemory, RecalledMemory},
   permission::{FolderBounds, capability::EnforcedPermissions},
   resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKind},
   run::{
@@ -42,7 +43,7 @@ use super::{
 };
 use crate::private_file::PrivateFile;
 
-fn problem(detail: String) -> RunnerProblem {
+pub(super) fn problem(detail: String) -> RunnerProblem {
   RunnerProblem::CouldNotStart { detail }
 }
 
@@ -57,6 +58,8 @@ pub(super) struct AgentStart {
   pub(super) mcp_left_out: Vec<AgentEvent>,
   pub(super) app_server: Option<AppServerSetup>,
   pub(super) agent: String,
+  /// The task memory its prompt holds, to record with the invocation.
+  pub(super) memory: Vec<InjectedMemory>,
 }
 
 /// What decides the CLI's arguments besides its prompt and MCP servers.
@@ -109,7 +112,9 @@ impl RunTask {
       body: &body,
     };
     let placed = self.place_skills(execution, step, info)?;
-    let AssembledPrompt { text: prompt, sources } = self.prompt(execution, step, info, continuation, &placed)?;
+    let recalled = self.recall_memory(step, info)?;
+    let AssembledPrompt { text: prompt, sources } =
+      self.prompt(execution, (step, info), continuation, &placed, recalled.entries())?;
     // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
     // because an agent never starts with permissions that are not enforced. The run's permissions
     // for the profile, if they were changed for it, else the profile's, narrowed by the step.
@@ -165,6 +170,7 @@ impl RunTask {
       mcp_left_out: left_out,
       app_server,
       agent: body.role().as_str().to_owned(),
+      memory: recalled.injected(),
     })
   }
 
@@ -322,10 +328,10 @@ impl RunTask {
   fn prompt(
     &self,
     execution: StepExecutionId,
-    step: &Step,
-    profile: ProfileInfo<'_>,
+    (step, profile): (&Step, ProfileInfo<'_>),
     continuation: &Continuation,
     placed: &PlacedSkills,
+    memory: &[RecalledMemory],
   ) -> Result<AssembledPrompt, RunnerProblem> {
     let event = if continuation.session.is_some() {
       InjectionEvent::Resume
@@ -395,6 +401,7 @@ impl RunTask {
           messages: &continuation.messages,
         },
       ),
+      memory,
     }
     .assemble(event)
     .map_err(

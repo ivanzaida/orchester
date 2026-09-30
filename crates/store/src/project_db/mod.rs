@@ -7,6 +7,7 @@ mod import;
 mod invocation_prompts;
 mod limits;
 mod mcp_servers;
+mod memory;
 mod merges;
 mod messages;
 mod phases;

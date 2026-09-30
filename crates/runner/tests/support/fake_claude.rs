@@ -15,6 +15,7 @@
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
+//! - "Leave a handoff": works as below, and its step result hands off like `orchester-fake-codex`'s;
 //! - anything else: edits `README.md` in its working directory (appending `hello`), runs `git status`, and ends with
 //!   the step result `{"outcome":"done","summary":"Finished <step>"}` and exit 0.
 //!
@@ -75,7 +76,10 @@ fn main() -> ExitCode {
     eprintln!("no working directory");
     return ExitCode::from(2);
   };
-  let fake = Fake { session };
+  let fake = Fake {
+    session,
+    handoff: prompt.contains("Leave a handoff"),
+  };
   let servers = if fake_mcp::report_claude(&args) {
     r#"[{"name":"broken","status":"failed"}]"#
   } else {
@@ -154,6 +158,8 @@ const DENIAL: &str =
 
 struct Fake {
   session: String,
+  /// Its step result hands off.
+  handoff: bool,
 }
 
 impl Fake {
@@ -235,7 +241,14 @@ impl Fake {
     );
     self.tool_result("toolu_git", " M README.md", false);
     println!("a line that is not JSON");
-    let result = format!(r#"{{\"outcome\":\"done\",\"summary\":\"Finished {step}\"}}"#);
+    let handoff = if self.handoff {
+      format!(
+        r#",\"completed\":[\"Appended {line}\"],\"decisions\":[\"Greet in README.md from {step}\"],\"open_questions\":null,\"next_agent_should_know\":[\"README.md ends with {line}\"]"#
+      )
+    } else {
+      String::new()
+    };
+    let result = format!(r#"{{\"outcome\":\"done\",\"summary\":\"Finished {step}\"{handoff}}}"#);
     self.assistant("msg_done", &format!(r#"{{"type":"text","text":"{result}"}}"#));
     println!(
       r#"{{"type":"result","subtype":"success","is_error":false,"num_turns":3,"result":"{result}","session_id":"{}","total_cost_usd":0.5,"usage":{{"input_tokens":0,"output_tokens":0}},"permission_denials":{denials}}}"#,

@@ -115,6 +115,10 @@ fn schedule_step_result_reads_the_structured_final_message() {
     Some(StepResult {
       outcome: StepOutcome::Failed,
       summary: "Tests fail.".into(),
+      completed: Vec::new(),
+      decisions: Vec::new(),
+      open_questions: Vec::new(),
+      next_agent_should_know: Vec::new(),
     })
   );
   assert_eq!(StepResult::parse("Done."), None);
