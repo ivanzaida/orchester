@@ -2208,7 +2208,100 @@
     "tabs": {
       "general": "General",
       "limits": "Limits",
-      "environment": "Environment"
+      "environment": "Environment",
+      "codeIndex": "Code index"
+    },
+    "codeIndex": {
+      "description": "How agents find their way around {{project}}’s code.",
+      "heading": "Code index",
+      "explanation": "Orchester indexes the repository’s tracked files at the revision a run starts from: languages and line counts, symbols, file outlines, Markdown headings and a package map. Agents get a built-in skill that searches the index with ripgrep, so they find code without reading whole files.",
+      "name": "Use code index",
+      "detail": "Agents that start after a change follow it. An agent already working keeps what it started with.",
+      "on": "On · agents search the index",
+      "off": "Off · agents get no index",
+      "offReadback": "Agents find code by listing and reading files",
+      "noneReadback": "No index yet",
+      "kept": {
+        "one": "1 index kept",
+        "other": "{{count}} indexes kept"
+      },
+      "keptBusy": "{{kept}} · {{busy}}",
+      "building": "{{count}} building",
+      "failedCount": "{{count}} failed",
+      "offTitle": "Agents get no index and no index skill",
+      "offDetail": "They find code by listing and reading files, which takes longer and uses more tokens in a large repository. No index is built while this is off.",
+      "listTitle": "Indexes",
+      "total": {
+        "one": "1 index · {{size}} in total",
+        "other": "{{count}} indexes · {{size}} in total"
+      },
+      "noneKept": "None kept",
+      "listExplanation": "Built per revision when a run starts, shared read-only by the runs from that revision, and removed together with the worktrees that used it.",
+      "empty": "No index yet — built when the next run starts",
+      "listFailed": "Couldn’t read the kept indexes",
+      "usedByRun": "{{task}} · Run {{number}}",
+      "runNumber": "Run {{number}}",
+      "usedBySeparator": " · ",
+      "state": {
+        "ready": "Ready",
+        "building": "Building",
+        "failed": "Failed"
+      },
+      "readyDetail": "{{size}} · {{files}} files · {{symbols}} symbols · built {{when}} in {{took}}",
+      "builtToday": "today {{time}}",
+      "builtOn": "{{month}} {{day}} {{time}}",
+      "phase": {
+        "listing": "Listing tracked files… · started {{start}}, {{elapsed}} ago",
+        "indexing": "Indexing {{files}} files… · started {{start}}, {{elapsed}} ago",
+        "writing": "Writing the package map… · started {{start}}, {{elapsed}} ago"
+      },
+      "failed": {
+        "one": "{{reason}}. {{runs}} continues without the index; its agents search the files themselves.",
+        "other": "{{reason}}. {{runs}} continue without the index; their agents search the files themselves.",
+        "none": "{{reason}}."
+      },
+      "rebuild": "Rebuild",
+      "retry": "Retry",
+      "rebuildFailed": "The index was not rebuilt: {{reason}}",
+      "searchHeading": "Search tool",
+      "ripgrep": "ripgrep",
+      "ripgrepDetail": "The index skill searches with rg. Orchester copies it into .orchester/tools so it also runs inside the Codex sandbox.",
+      "checking": "Looking for ripgrep…",
+      "checkFailed": "Couldn’t look for ripgrep",
+      "found": "Found · {{version}}",
+      "foundWithoutVersion": "Found",
+      "source": {
+        "onPath": "On PATH · copied to .orchester/tools",
+        "codexCli": "Bundled with Codex CLI · copied to .orchester/tools",
+        "claudeCode": "Bundled with Claude Code · copied to .orchester/tools",
+        "winget": "Installed with winget · copied to .orchester/tools"
+      },
+      "notFound": "Not found",
+      "notFoundDetail": "Not on PATH, not bundled with Codex CLI or Claude Code",
+      "notCopied": "Found, not copied",
+      "slowTitle": "Agents fall back to slower search",
+      "slowDetail": "Without ripgrep the index skill can’t run, so agents list and read files with the shell instead. That takes longer and uses more tokens.",
+      "commandLabel": "Install ripgrep runs",
+      "hint": "Nothing runs until you click. Afterwards Orchester looks for rg again and copies it into .orchester/tools.",
+      "install": "Install ripgrep",
+      "checkAgain": "Check again",
+      "tryAgain": "Try again",
+      "installing": "Installing…",
+      "installingReadback": "{{installer}} started at {{time}} · {{elapsed}}",
+      "installingTitle": "Installing ripgrep with {{installer}}",
+      "installingDetail": "Agents that start before it finishes still use slower search. You can leave this page; the install continues.",
+      "running": "Running",
+      "lastOutput": "Last output: {{line}}",
+      "installFailedTitle": "ripgrep was not installed",
+      "installFailedDetail": "{{installer}} ended with exit code {{code}}: {{message}}. Nothing was installed. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "installNotStarted": "{{installer}} could not be started: {{message}}. Nothing was installed. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "installUnavailable": "Install ripgrep is unavailable: {{installer}} was not found. Install ripgrep yourself, for example from github.com/BurntSushi/ripgrep, then choose Check again.",
+      "installUnsupported": "Orchester cannot install ripgrep on this system. Install ripgrep yourself, for example from github.com/BurntSushi/ripgrep, then choose Check again.",
+      "installer": {
+        "winget": "winget",
+        "homebrew": "Homebrew",
+        "homebrewProgram": "Homebrew (brew)"
+      }
     },
     "limits": {
       "description": "Defaults and limits for {{project}}. They apply to new tasks and runs in this project.",
@@ -3859,6 +3952,16 @@
         "running": "Saving repository agent files",
         "done": "Repository agent files saved",
         "failed": "Could not save repository agent files"
+      },
+      "codeIndex": {
+        "running": "Saving the code index setting",
+        "done": "Code index setting saved",
+        "failed": "Could not save the code index setting"
+      },
+      "codeIndexRebuild": {
+        "running": "Rebuilding the code index of {{name}}",
+        "done": "Code index of {{name}} rebuilt",
+        "failed": "Could not rebuild the code index of {{name}}"
       }
     },
     "opens": {
