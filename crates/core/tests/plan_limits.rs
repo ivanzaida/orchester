@@ -158,3 +158,78 @@ fn plan_limits_app_server_notifications_and_invalid_unknown_events() {
     "unreadable data stays raw"
   );
 }
+
+#[test]
+fn plan_limits_malformed_newer_codex_event_preserves_state_age_and_expiry() {
+  let later = Timestamp::from_unix_millis(now().unix_millis() + 120_000);
+  let reset = Timestamp::from_unix_millis(now().unix_millis() + 3_600_000);
+  for (percent, reached, state) in [
+    (65.0, None, LimitState::Normal),
+    (85.0, None, LimitState::Near),
+    (70.0, Some("primary"), LimitState::Reached),
+  ] {
+    let valid = json!({"primary":{"used_percent":percent,"window_minutes":300,"resets_at":reset.unix_millis()/1000},"rate_limit_reached_type":reached});
+    let mut readings = PlanReadings::default();
+    readings.observe(LimitReading {
+      provider: AgentProvider::CodexCli,
+      at: now(),
+      limits: codex_limits(&valid).expect("valid window"),
+    });
+    let retained = readings.get(AgentProvider::CodexCli).expect("reading").clone();
+    for payload in [
+      json!(null),
+      json!(true),
+      json!(12),
+      json!("unknown"),
+      json!([]),
+      json!({}),
+      json!({"primary":null,"secondary":null}),
+      json!({"primary":{}}),
+      json!({"credits":{"has_credits":true,"unlimited":false,"balance":"50"}}),
+      json!({"primary":{"used_percent":10,"window_minutes":300,"resets_at":"bad"}}),
+      json!({"primary":{"used_percent":10,"window_minutes":300},"credits":false}),
+      json!({"primary":{"used_percent":10,"window_minutes":300},"rate_limit_reached_type":true}),
+      json!({"primary":{"used_percent":10,"window_minutes":300},"plan_type":[]}),
+    ] {
+      assert!(codex_limits(&payload).is_none(), "malformed payload: {payload}");
+      let event = json!({"timestamp":"2026-09-29T11:28:00Z","type":"event_msg",
+        "payload":{"type":"token_count","rate_limits":payload}});
+      for event in AgentStream::new(AgentProvider::CodexCli).parse(OutputStream::Stdout, &event.to_string()) {
+        if let AgentEvent::PlanLimits { limits } = event {
+          readings.observe(LimitReading {
+            provider: AgentProvider::CodexCli,
+            at: later,
+            limits,
+          });
+        }
+      }
+      let reading = readings.get(AgentProvider::CodexCli).expect("retained reading");
+      assert_eq!(reading, &retained, "a newer malformed event is not a snapshot");
+      let window = reading.fullest(later).expect("unexpired window");
+      assert_eq!(
+        (window.percent(), window.state(later), window.resets()),
+        (percent, state, Some(reset))
+      );
+      assert_eq!(window.reported_at(), Some(now()));
+      assert_eq!(
+        later.unix_millis() - reading.at.unix_millis(),
+        120_000,
+        "age keeps advancing"
+      );
+      assert!(
+        reading.fullest(reset).is_none(),
+        "the original reset still expires the reading"
+      );
+      assert_eq!(reading.limits.windows[0].state(reset), LimitState::Normal);
+    }
+    assert!(
+      AgentStream::new(AgentProvider::CodexCli)
+        .parse(
+          OutputStream::Stdout,
+          r#"{"type":"event_msg","payload":{"type":"token_count"}}"#
+        )
+        .iter()
+        .all(|event| !matches!(event, AgentEvent::PlanLimits { .. }))
+    );
+  }
+}

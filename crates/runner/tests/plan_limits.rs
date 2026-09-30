@@ -64,9 +64,14 @@ async fn plan_limits_runner_sends_both_cli_readings_without_storing_them() {
   for provider in AgentProvider::ALL {
     let project = support::project(&support::Setup {
       provider,
-      ..support::Setup::new("Report plan limits")
+      ..support::Setup::new(if provider == AgentProvider::CodexCli {
+        "Report plan limits. Wait for release."
+      } else {
+        "Report plan limits"
+      })
     });
     let root = project.repo.path();
+    let home = codex_home(root);
     let (scheduler, mut events) = support::scheduler(root);
     let run = scheduler
       .start_run(IdempotencyKey::generate(), project.task)
@@ -79,10 +84,25 @@ async fn plan_limits_runner_sends_both_cli_readings_without_storing_them() {
         }
       }
     })
-    .await
-    .expect("live reading");
+    .await;
+    if provider == AgentProvider::CodexCli {
+      let live = ProjectDb::open(root)
+        .expect("database")
+        .run(run)
+        .expect("run")
+        .expect("exists");
+      fs::write(root.join(".orchester/fake-release"), "release").expect("release the fake CLI");
+      assert!(
+        !live.status().is_terminal(),
+        "the session reader publishes while exec is still running"
+      );
+    }
+    let received = received.expect("live reading");
     assert_eq!(received.provider, provider);
     assert_eq!(received.limits.windows.len(), 1);
+    if provider == AgentProvider::CodexCli {
+      verify_session_reading(&home, &received);
+    }
     support::wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
     let db = ProjectDb::open(root).expect("database");
     assert!(db.run(run).expect("run").expect("exists").status().is_terminal());
@@ -90,7 +110,55 @@ async fn plan_limits_runner_sends_both_cli_readings_without_storing_them() {
       db.activity(run, 0)
         .expect("transcript")
         .iter()
-        .all(|entry| entry.event.name() != "plan_limits")
+        .all(|entry| entry.event.name() != "plan_limits"
+          && !matches!(&entry.event,
+          orchester_core::connection::stream::AgentEvent::Raw { line, .. } if line.contains("rate_limits")))
     );
   }
+}
+
+fn codex_home(root: &std::path::Path) -> std::path::PathBuf {
+  use std::collections::BTreeMap;
+
+  use orchester_core::{
+    resource::{CommandEnvironment, VariableName},
+    store::SettingsStore,
+  };
+  let home = root.join(".orchester/test-codex-home");
+  let environment = CommandEnvironment::new(BTreeMap::from([(
+    VariableName::new("CODEX_HOME").expect("name"),
+    home.to_str().expect("Unicode test path").to_owned(),
+  )]))
+  .expect("environment");
+  orchester_store::ProjectDb::open(root)
+    .expect("database")
+    .save_project_environment(&environment)
+    .expect("test-only Codex home");
+  home
+}
+
+fn verify_session_reading(home: &std::path::Path, reading: &orchester_core::connection::plan_limits::LimitReading) {
+  let today = chrono::Utc::now().format("%Y/%m/%d").to_string();
+  let folder = home.join("sessions").join(today);
+  let file = fs::read_dir(folder)
+    .expect("session folder")
+    .next()
+    .expect("session file")
+    .expect("entry")
+    .path();
+  assert!(
+    file
+      .file_name()
+      .expect("filename")
+      .to_string_lossy()
+      .ends_with(&format!("-{SESSION}.jsonl"))
+  );
+  let log = fs::read_to_string(file).expect("session log");
+  let event: serde_json::Value = serde_json::from_str(log.lines().next().expect("first event")).expect("event");
+  assert_eq!(
+    reading.at,
+    Timestamp::parse_utc(event["timestamp"].as_str().expect("timestamp")).expect("UTC")
+  );
+  assert_eq!(reading.limits.windows[0].percent(), 65.0);
+  assert_eq!(reading.limits.plan.as_deref(), Some("pro"));
 }

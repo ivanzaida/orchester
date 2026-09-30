@@ -146,3 +146,44 @@ with distinct per-window ages. The exact combined credits/extra-usage specimen
 `b3WD6` remains visually unverified despite its headless regression. Foreground
 preservation remains unverified: root must supply the longer fresh host watcher
 before the verifier launches a private app; retain its final conclusive judgment.
+
+## Recovery after malformed Codex snapshot Review finding
+
+The saved implementation, earlier UI/order/per-window-timestamp fixes, and all
+Review/Verify evidence were preserved. This recovery does not close an independent
+Review or Verify verdict by itself.
+
+`codex_limits` now requires an object containing at least one validated window.
+Absent/null/scalar/array/empty payloads, empty window snapshots, malformed windows,
+and malformed optional reset/state/credits/plan fields produce no quota reading.
+A newer such event therefore cannot replace the last valid snapshot or refresh its
+source time. A credits-only payload is not treated as a replacement quota snapshot.
+The new core regression exercises normal, warning and blocked states, retains the
+percentage/reset/report time, asserts that age still advances, and verifies expiry
+at the original reset. Missing `rate_limits` also produces no reading.
+
+The fake Codex exec no longer emits session quota events on stdout. It writes a
+fresh quota event and a newer null-payload event to the matching UUID session log
+under a disposable project's explicit `CODEX_HOME`. The production scheduler/worker
+is held running until the test receives the file-sourced IPC reading, then released.
+The test checks the matching filename, exact report timestamp and percentage, and
+that quota metadata is absent from the persisted transcript. This tests the actual
+worker/session-file-reader/IPC path with a fake CLI; it is not an authenticated
+Codex model turn. The captured genuine payload reader test remains in place.
+
+The runner's optional `chrono` workspace dependency is enabled only by `test-agent`,
+so the fake CLI can format fresh UTC session timestamps rather than frozen/future
+fixture times. The normal runner build does not enable this optional dependency.
+
+Validation: `powershell -File tools/check.ps1` passed; the listed filtered commands
+passed core 6, runner 3, desktop status bar 11, locale 4, key coverage 1, theme 1
+(**26 total**), using the supplied worktree-scoped Cargo target without overrides.
+No new live provider/profile changes, full test suite, macOS runtime test, or design
+verification were performed. No source reset, merge or implementer commit was made.
+
+Outside-run account capability remains documentation-confirmed only, as recorded
+above; no live account RPC or polling is claimed. Next steps must independently run
+fresh Check, Review and Verify, including M–R, distinct Claude window ages, and the
+combined credits/extra-usage specimen. Before any private verifier launch, the
+pinned desktop/runner pair must be ready and root must then provide a fresh host
+watcher. Preserve its conclusive foreground verdict alongside the new captures.

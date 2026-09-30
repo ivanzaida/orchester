@@ -54,6 +54,7 @@ const USAGE: &str = r#"{"type":"turn.completed","usage":{"input_tokens":12166,"c
 
 /// Set for the helper process, which only waits.
 const HELPER: &str = "ORCHESTER_FAKE_CODEX_HELPER";
+const LIMIT_SESSION: &str = "019994f0-1234-7000-8000-000000000000";
 
 fn main() -> ExitCode {
   if std::env::var_os(HELPER).is_some() {
@@ -82,14 +83,17 @@ fn main() -> ExitCode {
     eprintln!("no worktree");
     return ExitCode::from(2);
   };
-  println!(r#"{{"type":"thread.started","thread_id":"fake-thread-1"}}"#);
+  let session = if prompt.contains("Report plan limits") {
+    if let Err(error) = write_limits() {
+      eprintln!("cannot write the fake Codex session log: {error}");
+      return ExitCode::from(2);
+    }
+    LIMIT_SESSION
+  } else {
+    "fake-thread-1"
+  };
+  println!(r#"{{"type":"thread.started","thread_id":"{session}"}}"#);
   println!(r#"{{"type":"turn.started"}}"#);
-  if prompt.contains("Report plan limits") {
-    print!(
-      "{}",
-      include_str!("../../../core/tests/fixtures/codex/plan-limits.jsonl")
-    );
-  }
   let result = StepReport {
     step: prompt
       .lines()
@@ -130,6 +134,28 @@ fn main() -> ExitCode {
     "hello".to_owned()
   };
   finish(&worktree, &line, &result)
+}
+
+/// Real exec stdout omits quotas; only the matching session log carries them.
+fn write_limits() -> std::io::Result<()> {
+  let home = std::env::var_os("CODEX_HOME")
+    .ok_or_else(|| std::io::Error::other("the limit fixture requires its own CODEX_HOME"))?;
+  let now = chrono::Utc::now();
+  let folder = PathBuf::from(home)
+    .join("sessions")
+    .join(now.format("%Y/%m/%d").to_string());
+  std::fs::create_dir_all(&folder)?;
+  let mut event: serde_json::Value =
+    serde_json::from_str(include_str!("../../../core/tests/fixtures/codex/plan-limits.jsonl"))?;
+  event["timestamp"] = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true).into();
+  event["payload"]["rate_limits"]["primary"]["resets_at"] = (now.timestamp() + 7200).into();
+  let path = folder.join(format!("rollout-{}-{LIMIT_SESSION}.jsonl", now.format("%Y-%m-%d")));
+  // The second complete event must not replace the quota snapshot or refresh its source age.
+  let malformed = serde_json::json!({
+    "timestamp": (now + chrono::Duration::milliseconds(1)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+    "type": "event_msg", "payload": {"type": "token_count", "rate_limits": null}
+  });
+  std::fs::write(path, format!("{event}\n{malformed}\n"))
 }
 
 /// Reads the prompt from standard input and reports on standard error how the CLI was started.

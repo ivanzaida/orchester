@@ -121,9 +121,11 @@ name = "failed_recovery"
 required-features = ["test-agent"]
 
 [features]
-test-agent = []
+test-agent = ["dep:chrono"]
 
 [dependencies]
+# Only the fake CLI formats fresh UTC timestamps in its session-log fixture.
+chrono = { workspace = true, optional = true }
 orchester-core.workspace = true
 orchester-exec.workspace = true
 orchester-ipc.workspace = true
