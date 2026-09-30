@@ -163,3 +163,28 @@ fn a_build_of_one_revision_does_not_wait_for_another_revision() {
 
   assert!(matches!(ensured.outcome, Outcome::Built(_)));
 }
+
+#[test]
+fn a_published_index_is_read_only_and_still_removed_with_its_worktree() {
+  let repo = Repo::new();
+  let head = repo.head();
+  let run = repo.run_with_worktree();
+  let index = repo.indexes().ensure(&head, run).expect("index").path;
+
+  for name in [
+    "tree.txt",
+    "symbols.tsv",
+    "manifest.json",
+    "outline/crates/app/src/lib.rs.md",
+  ] {
+    let file = index.join(name);
+    assert!(
+      fs::metadata(&file).expect("metadata").permissions().readonly(),
+      "{name}"
+    );
+    assert!(fs::write(&file, "changed").is_err(), "{name} cannot be written");
+  }
+  fs::remove_dir_all(repo.worktree(run)).expect("remove the worktree");
+  repo.indexes().prune().expect("prune");
+  assert!(!index.exists());
+}

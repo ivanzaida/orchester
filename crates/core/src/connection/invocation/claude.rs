@@ -116,7 +116,8 @@ impl ClaudeInvocation<'_> {
       args.extend(["--mcp-config".to_owned(), config.to_string_lossy().into_owned()]);
     }
     let servers = self.mcp.map_or(&[][..], |(_, servers)| servers);
-    args.extend(permission_args(self.permissions, servers));
+    let protected: Vec<&Path> = self.code_index.into_iter().collect();
+    args.extend(permission_args(self.permissions, servers, &protected));
     if self.permissions.writable_folders().is_some() {
       for root in self.writable_roots {
         args.extend(["--add-dir".to_owned(), root.to_string_lossy().into_owned()]);

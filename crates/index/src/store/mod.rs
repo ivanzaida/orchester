@@ -24,6 +24,7 @@ use crate::{
   build::{self, Base},
   git::Repository,
   manifest::{BuildMode, Manifest},
+  write,
 };
 
 const USERS: &str = ".users";
@@ -113,6 +114,7 @@ impl CodebaseIndexes {
       }
       other => other?,
     };
+    write::make_read_only(&staging).map_err(IndexError::io("seal", &staging))?;
     // An index of an earlier format is replaced.
     cleanup::discard(&self.root, path)?;
     fs::rename(&staging, path).map_err(IndexError::io("rename", &staging))?;

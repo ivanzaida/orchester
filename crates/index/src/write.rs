@@ -127,3 +127,24 @@ fn place(file: &Path, outline: &Outline) -> io::Result<()> {
     Outline::Previous(earlier) => fs::hard_link(earlier, file).or_else(|_| fs::copy(earlier, file).map(drop)),
   }
 }
+
+/// Marks every file under `folder` read-only: an index is shared by the runs of its revision, its
+/// outline files also by later indexes that link them, and it never changes once written. Agents
+/// that may write outside their worktree (Claude Code writes in the folders it is given) cannot
+/// change it; removing it still works.
+pub(crate) fn make_read_only(folder: &Path) -> io::Result<()> {
+  for entry in fs::read_dir(folder)? {
+    let entry = entry?;
+    let path = entry.path();
+    if entry.file_type()?.is_dir() {
+      make_read_only(&path)?;
+    } else {
+      let mut permissions = entry.metadata()?.permissions();
+      if !permissions.readonly() {
+        permissions.set_readonly(true);
+        fs::set_permissions(&path, permissions)?;
+      }
+    }
+  }
+  Ok(())
+}
