@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, components::Text, node::Element};
 use orchester_core::{
-  code_index::{CodeIndexUse, RipgrepMissing},
+  code_index::{CodeIndexUnavailable, CodeIndexUse, RipgrepMissing},
   id::StepExecutionId,
   run::{EditProgress, Invocation},
   tokens::compact_tokens,
@@ -44,7 +44,12 @@ pub(super) fn code_index_row(ctx: &Ctx, run: &RunView, invocation: &Invocation) 
       (value, ValueStyle::Mono)
     }
     CodeIndexUse::Off => (ctx.t("runs.activity.panel.codeIndexOff"), ValueStyle::Text),
-    CodeIndexUse::Unavailable { .. } => (ctx.t("runs.activity.panel.codeIndexUnavailable"), ValueStyle::Text),
+    CodeIndexUse::Unavailable {
+      reason: CodeIndexUnavailable::BuildFailed { .. },
+    } => (ctx.t("runs.activity.panel.codeIndexUnavailable"), ValueStyle::Text),
+    CodeIndexUse::Unavailable {
+      reason: CodeIndexUnavailable::Building,
+    } => (ctx.t("runs.activity.panel.codeIndexBuilding"), ValueStyle::Text),
   };
   Some(styled_property(&label, &value, style))
 }

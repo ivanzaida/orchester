@@ -2,8 +2,10 @@
 //! agents that search it.
 //!
 //! - While the project has the code index on, the index is built, or reused, each time the run's task starts executing
-//!   the run, before any step starts, and kept while the run's worktree exists. An agent that starts after the setting
-//!   was turned on during the run builds it then.
+//!   the run, and kept while the run's worktree exists. The build runs in the background: agents' news, requests and
+//!   time limits are handled meanwhile, and no agent starts until it ends. When the setting was turned on while the run
+//!   executed, the next agent start begins the build in the background; agents that start before it ends get no index
+//!   ([`CodeIndexUnavailable::Building`]), later ones get it.
 //! - At each agent start the setting is read again. Off, the agent gets nothing. On, ripgrep is looked up on the
 //!   agent's `PATH` and in the agent CLIs' installs and copied into `.orchester/tools/`, which goes first on the
 //!   agent's `PATH`; the agent then gets the index folder and the internal `orchester-codebase-index` skill.
@@ -32,14 +34,15 @@ use orchester_exec::{
   search_path::search_path,
 };
 use orchester_index::{CodebaseIndexes, IndexError, Outcome};
+use orchester_store::StoreError;
 
 use super::run::RunTask;
 
 /// The code index of the run's base revision, as the run's task knows it.
 #[derive(Clone, Debug)]
 pub(super) enum IndexState {
-  /// Not built while this task executes the run: the project had it off, or a request stopped the
-  /// wait for it. The steps' loop builds it before an agent starts while the setting is on.
+  /// Not built while this task executes the run: the project had it off when the task started, or
+  /// it is being built ([`IndexBuild`]).
   NotBuilt,
   Ready {
     folder: PathBuf,
@@ -71,8 +74,28 @@ impl AgentIndex {
   }
 }
 
+/// A build of the run's index in the background.
+pub(super) struct IndexBuild {
+  handle: tokio::task::JoinHandle<IndexState>,
+  /// Begun when the task started: no agent starts until it ends.
+  holds_starts: bool,
+}
+
+/// The index the build in `build` came to, once it ended; never while there is none.
+pub(super) async fn built(build: &mut Option<IndexBuild>) -> IndexState {
+  let Some(build) = build else {
+    return std::future::pending().await;
+  };
+  match (&mut build.handle).await {
+    Ok(state) => state,
+    Err(error) => IndexState::Failed {
+      detail: format!("building the index stopped: {error}"),
+    },
+  }
+}
+
 /// Builds or reuses the index of `revision` for `run`, off the runtime's threads.
-pub(super) async fn ensure(indexes: CodebaseIndexes, revision: Revision, run: RunId) -> IndexState {
+async fn ensure(indexes: CodebaseIndexes, revision: Revision, run: RunId) -> IndexState {
   match tokio::task::spawn_blocking(move || indexes.ensure(&revision, run)).await {
     Ok(result) => state(run, result),
     Err(error) => {
@@ -111,8 +134,34 @@ fn state(run: RunId, result: Result<orchester_index::Ensured, IndexError>) -> In
 }
 
 impl RunTask {
-  /// What an agent starting now gets of the code index, the index built first when the setting
-  /// was turned on while the run executed.
+  /// Begins building the index in the background when the project has the code index on; no agent
+  /// starts until the build ends.
+  pub(super) fn begin_code_index(&mut self) -> Result<(), StoreError> {
+    if self.db.code_index()?.is_on() {
+      self.build_code_index(true);
+    }
+    Ok(())
+  }
+
+  fn build_code_index(&mut self, holds_starts: bool) {
+    let indexes = CodebaseIndexes::new(&self.root);
+    let handle = tokio::spawn(ensure(indexes, self.run.base().clone(), self.run.id()));
+    self.index_build = Some(IndexBuild { handle, holds_starts });
+  }
+
+  /// Agents wait for the build begun when the task started.
+  pub(super) fn index_holds_starts(&self) -> bool {
+    self.index_build.as_ref().is_some_and(|build| build.holds_starts)
+  }
+
+  /// Takes in the index the background build came to.
+  pub(super) fn code_index_built(&mut self, state: IndexState) {
+    self.index_build = None;
+    self.code_index = state;
+  }
+
+  /// What an agent starting now gets of the code index. When the setting was turned on while the
+  /// run executed, the build begins now and the agent gets no index.
   pub(super) fn agent_index(&mut self) -> Result<AgentIndex, String> {
     if !self.db.code_index().map_err(|error| error.to_string())?.is_on() {
       return Ok(AgentIndex::off());
@@ -131,9 +180,10 @@ impl RunTask {
         },
         Some(folder),
       ),
-      Err(detail) => {
-        problems.push(RunnerProblem::CodebaseIndexUnavailable { detail: detail.clone() });
-        let reason = CodeIndexUnavailable::BuildFailed { detail };
+      Err(reason) => {
+        if let CodeIndexUnavailable::BuildFailed { detail } = &reason {
+          problems.push(RunnerProblem::CodebaseIndexUnavailable { detail: detail.clone() });
+        }
         (CodeIndexUse::Unavailable { reason }, None)
       }
     };
@@ -151,7 +201,10 @@ impl RunTask {
 
   /// The folder of the run's index; why there is none. A failed build may have been retried from
   /// Project settings since: an index that is there now is used.
-  fn index_folder(&mut self) -> Result<PathBuf, String> {
+  fn index_folder(&mut self) -> Result<PathBuf, CodeIndexUnavailable> {
+    if self.index_build.is_some() {
+      return Err(CodeIndexUnavailable::Building);
+    }
     if let IndexState::Failed { .. } | IndexState::NotBuilt = self.code_index
       && let Some(folder) = CodebaseIndexes::new(&self.root).existing(self.run.base())
     {
@@ -159,9 +212,12 @@ impl RunTask {
     }
     match &self.code_index {
       IndexState::Ready { folder } => Ok(folder.clone()),
-      IndexState::Failed { detail } => Err(detail.clone()),
-      // The steps' loop builds it before an agent starts; the setting was turned on in between.
-      IndexState::NotBuilt => Err("the code index was turned on after the agent's step began starting".to_owned()),
+      IndexState::Failed { detail } => Err(CodeIndexUnavailable::BuildFailed { detail: detail.clone() }),
+      // The setting was turned on after the task started.
+      IndexState::NotBuilt => {
+        self.build_code_index(false);
+        Err(CodeIndexUnavailable::Building)
+      }
     }
   }
 

@@ -838,6 +838,7 @@
         "codeIndexWithoutRipgrep": "{{index}} · ripgrep not found",
         "codeIndexOff": "Off · project setting",
         "codeIndexUnavailable": "Unavailable · build failed",
+        "codeIndexBuilding": "Unavailable · still building",
         "beforeFirstEdit": "Tokens before first edit",
         "firstEdit": "First edit",
         "firstEditValue": "{{time}} · {{path}}",

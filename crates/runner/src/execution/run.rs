@@ -21,11 +21,10 @@ use orchester_core::{
   project::Project,
   run::{InterruptCause, Invocation, Run, RunError, RunEvent, RunLimit, RunStatus, active_time},
   secret::SecretVault,
-  store::{ActivityStore, SettingsStore},
+  store::ActivityStore,
   task::Task,
   time::Timestamp,
 };
-use orchester_index::CodebaseIndexes;
 use orchester_ipc::{Event, Rejection};
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
@@ -34,7 +33,7 @@ use tokio::{sync::mpsc, time::Instant};
 use super::{
   Notifier,
   board::Board,
-  codebase_index::{self, IndexState},
+  codebase_index::{self, IndexBuild, IndexState},
   control::{Ack, Control, answer},
   prepare::Prepared,
   record::{RecordError, announce_ready, record},
@@ -107,6 +106,8 @@ pub(super) struct RunTask {
   pub(super) agents: HashMap<StepExecutionId, Active>,
   /// The code index of the run's base revision.
   pub(super) code_index: IndexState,
+  /// Its build in the background, while one runs.
+  pub(super) index_build: Option<IndexBuild>,
   pub(super) worker_events: mpsc::UnboundedSender<WorkerEvent>,
   events: mpsc::UnboundedReceiver<WorkerEvent>,
 }
@@ -131,6 +132,7 @@ impl RunTask {
       pending: Pending::default(),
       agents: HashMap::new(),
       code_index: IndexState::NotBuilt,
+      index_build: None,
       worker_events,
       events,
     }
@@ -167,15 +169,17 @@ impl RunTask {
 
   async fn steps(&mut self) -> Result<(), ExecutionError> {
     self.write_result_schema()?;
+    self.begin_code_index()?;
     loop {
-      if matches!(self.code_index, IndexState::NotBuilt) && !self.stopping() {
-        self.prepare_code_index().await?;
-      }
       while let Ok(control) = self.controls.try_recv() {
         self.control(control)?;
       }
       if self.agents.is_empty() && self.settle()? {
         return Ok(());
+      }
+      if self.index_holds_starts() {
+        self.wait(false).await?;
+        continue;
       }
       let waiting_for_slot = self.start_ready()?;
       if self.agents.is_empty() && !waiting_for_slot {
@@ -195,42 +199,9 @@ impl RunTask {
     }
   }
 
-  /// Builds or reuses the code index before the run's steps start (or before its next agent starts,
-  /// after the setting was turned on), while the project has it on. Requests are handled meanwhile;
-  /// once one stops the run (a cancel, a pause, the runner stopping) the task stops waiting: the
-  /// build goes on in the background, and the next start of the task reuses it.
-  async fn prepare_code_index(&mut self) -> Result<(), ExecutionError> {
-    if !self.db.code_index()?.is_on() {
-      return Ok(());
-    }
-    let indexes = CodebaseIndexes::new(&self.root);
-    let ensuring = codebase_index::ensure(indexes, self.run.base().clone(), self.run.id());
-    tokio::pin!(ensuring);
-    loop {
-      tokio::select! {
-        state = &mut ensuring => {
-          self.code_index = state;
-          return Ok(());
-        }
-        control = self.controls.recv(), if self.listening => match control {
-          Some(control) => {
-            self.control(control)?;
-            if self.stopping() {
-              return Ok(());
-            }
-          }
-          None => self.listening = false,
-        },
-      }
-    }
-  }
-
-  /// A request stops the run: a cancel, a pause or the runner stopping.
-  fn stopping(&self) -> bool {
-    self.pending.cancel.is_some() || self.pending.interrupt.is_some() || self.run.pause_requested()
-  }
-
-  /// Waits for an agent's news, a request, the time limit or a free slot.
+  /// Waits for an agent's news, a request, the time limit, a free slot or the code index build.
+  /// A task that stops executing the run (a cancel, a pause, the runner stopping) leaves a running
+  /// build to finish in the background; the next start of the task reuses it.
   async fn wait(&mut self, waiting_for_slot: bool) -> Result<(), ExecutionError> {
     let working = !self.agents.is_empty();
     let deadline = if working {
@@ -251,6 +222,10 @@ impl RunTask {
         if working {
           self.check_time()?;
         }
+        Ok(())
+      }
+      state = codebase_index::built(&mut self.index_build) => {
+        self.code_index_built(state);
         Ok(())
       }
     }

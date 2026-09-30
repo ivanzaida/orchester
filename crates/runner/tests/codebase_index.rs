@@ -354,6 +354,61 @@ async fn tokens_before_the_first_edit_of_an_agent_that_changed_no_file_are_all_i
   assert_eq!(progress.before, invocation.usage);
 }
 
+/// Holds the lock of the index of `root`'s `HEAD` the way another build of it does, so a build of
+/// it waits until the file is dropped.
+fn hold_index_lock(root: &Path) -> fs::File {
+  let base = git(root, &["rev-parse", "HEAD"]);
+  let locks = root.join(".orchester").join("index").join(".locks");
+  fs::create_dir_all(&locks).expect("create the locks folder");
+  let held = fs::File::create(locks.join(&base)).expect("open the lock");
+  held.lock().expect("lock");
+  held
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn turning_the_code_index_on_mid_run_builds_it_in_the_background() {
+  let project = project(&Setup {
+    review: true,
+    ..Setup::new("Wait for release.")
+  });
+  let root = project.repo.path();
+  let _path = agent_path(root, true);
+  let (scheduler, mut events) = scheduler(root);
+  let run = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, run, |run| !run.running_executions().is_empty()).await;
+  // Implement works; the setting goes on and the index cannot be built while the lock is held.
+  let held = hold_index_lock(root);
+  ProjectDb::open(root)
+    .expect("open")
+    .save_code_index(CodeIndexSetting::On)
+    .expect("turn the code index on");
+  fs::write(root.join(".orchester").join("fake-release"), "go").expect("release");
+
+  let ended = tokio::time::timeout(
+    Duration::from_secs(60),
+    wait_for(root, &mut events, run, |run| run.status().is_terminal()),
+  )
+  .await
+  .expect("Review starts and the run ends while the index is being built");
+
+  assert_eq!(ended.status(), &RunStatus::Succeeded);
+  assert_eq!(
+    uses(root, run),
+    [
+      CodeIndexUse::Off,
+      CodeIndexUse::Unavailable {
+        reason: CodeIndexUnavailable::Building
+      }
+    ]
+  );
+  // Still being built is not a problem for the agent's activity.
+  assert!(problems(root, run).is_empty());
+  drop(held);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_run_waiting_for_its_codebase_index_can_be_cancelled() {
   let project = project(&indexed("Say hello."));

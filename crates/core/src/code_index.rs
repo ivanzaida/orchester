@@ -52,6 +52,9 @@ pub enum CodeIndexUse {
 pub enum CodeIndexUnavailable {
   /// The index of the run's base revision could not be built; `detail` says why.
   BuildFailed { detail: String },
+  /// The setting was turned on while the run executed, and the index was still being built when
+  /// the agent started; agents that start after the build get it.
+  Building,
 }
 
 /// Why an agent has no ripgrep, which the index skill searches with.
