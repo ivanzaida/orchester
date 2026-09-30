@@ -17,7 +17,7 @@ use lurq::{
 };
 use orchester_core::{
   connection::{AgentConnection, CatalogSource, ModelSupport},
-  resource::PromptText,
+  resource::{ModelId, PromptText},
 };
 
 use super::{
@@ -27,6 +27,7 @@ use super::{
 use crate::{
   agents::form::{ModelSelection, effort_options, model_options},
   messages::Message,
+  screens::project::connections::status::cli_too_old,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     field::{FieldNote, ValueTone, field, select_style, styled_input, text_input, value_box},
@@ -169,6 +170,14 @@ impl ProfileEditor {
         .height(Dimension::Px(FIELD_HEIGHT))
         .placeholder(&ctx.t("agents.customModelPlaceholder")),
       );
+    }
+    let chosen = match self.model.get() {
+      ModelSelection::Listed(id) => Some(id),
+      ModelSelection::Custom => ModelId::new(self.custom_model.get().trim()).ok(),
+      ModelSelection::None => None,
+    };
+    if let Some(notice) = chosen.and_then(|model| cli_too_old(ctx, connection, &model)) {
+      column = column.child(notice);
     }
     let note = error
       .filter(|_| self.model.get() == ModelSelection::Custom && !self.custom_model.get().trim().is_empty())

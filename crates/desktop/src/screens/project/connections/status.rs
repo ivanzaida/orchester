@@ -1,9 +1,13 @@
 //! Words and icons for connection providers and statuses. Status always shows an icon and a
 //! word (`DeizF`).
 
-use orchester_core::connection::{AgentProvider, ConnectionStatus};
+use lurq::{app::ctx::Ctx, node::Element};
+use orchester_core::{
+  connection::{AgentConnection, AgentProvider, ConnectionStatus},
+  resource::ModelId,
+};
 
-use crate::ui::icon::Icon;
+use crate::ui::{icon::Icon, notice::Notice};
 
 /// Name of the CLI, e.g. "Codex CLI".
 pub const fn program_key(provider: AgentProvider) -> &'static str {
@@ -11,6 +15,26 @@ pub const fn program_key(provider: AgentProvider) -> &'static str {
     AgentProvider::CodexCli => "connections.provider.codex",
     AgentProvider::ClaudeCodeCli => "connections.provider.claude",
   }
+}
+
+/// That `connection`'s CLI is too old for `model`, as a refusal recorded (`q5LzI` notice); `None`
+/// when nothing says so.
+pub fn cli_too_old(ctx: &Ctx, connection: &AgentConnection, model: &ModelId) -> Option<Element> {
+  let too_old = connection.cannot_run(model)?;
+  let heading = ctx.t_args(
+    "connections.cliTooOld.heading",
+    [
+      ("cli", &*ctx.t(short_key(connection.provider()))),
+      ("installed", too_old.installed.as_str()),
+      ("model", model.as_str()),
+      ("required", too_old.required.as_str()),
+    ],
+  );
+  Some(
+    Notice::new(Icon::TriangleAlert, heading, ctx.t("connections.cliTooOld.detail"))
+      .id("cli-too-old")
+      .into(),
+  )
 }
 
 /// Short provider name used in a suggested connection name, e.g. "Codex".

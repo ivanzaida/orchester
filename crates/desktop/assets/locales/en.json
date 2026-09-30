@@ -786,7 +786,9 @@
         "mergeConflict": "The step’s changes conflict with the run’s branch; they stay on {{branch}}",
         "stepBudgetReached": "The step used its budget of {{budget}} tokens and was stopped",
         "programNotFound": "{{program}} was not found",
-        "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool."
+        "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool.",
+        "cliTooOld": "Claude Code {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
+        "cliTooOldDetail": "The model’s provider refused this CLI version. Update Claude Code, or point the connection at a newer one, then check the connection again."
       },
       "unparsed": {
         "one": "{{count}} unparsed line",
@@ -1883,6 +1885,10 @@
     "row": {
       "description": "{{vendor}} · {{program}} {{version}}",
       "descriptionUnchecked": "{{vendor}} · {{program}}"
+    },
+    "cliTooOld": {
+      "heading": "{{cli}} {{installed}} can’t run {{model}}; version {{required}} or newer is needed.",
+      "detail": "A run found this when the model’s provider refused the CLI. Update the CLI, then check the connection again."
     },
     "provider": {
       "codex": "Codex CLI",

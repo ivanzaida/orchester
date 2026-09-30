@@ -522,6 +522,21 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       ),
       None,
     ),
+    RunnerProblem::CliTooOld {
+      model,
+      installed,
+      required,
+    } => (
+      ctx.t_args(
+        "runs.activity.problem.cliTooOld",
+        [
+          ("model", model.as_str()),
+          ("installed", installed.as_str()),
+          ("required", required.as_str()),
+        ],
+      ),
+      Some(ctx.t("runs.activity.problem.cliTooOldDetail")),
+    ),
     RunnerProblem::ProgramNotFound { program } => (
       ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
       Some(ctx.t("runs.activity.problem.programNotFoundDetail")),

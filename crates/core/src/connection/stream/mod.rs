@@ -166,6 +166,13 @@ pub enum RunnerProblem {
   StepBudgetReached { budget: u64 },
   /// A command tool's `program` is no file on the `PATH` or in the worktree; it was not started.
   ProgramNotFound { program: String },
+  /// The provider's API refused `model` to the CLI's version `installed`: it needs `required` or
+  /// newer.
+  CliTooOld {
+    model: String,
+    installed: String,
+    required: String,
+  },
 }
 
 impl AgentEvent {

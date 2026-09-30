@@ -6,6 +6,7 @@
 mod app_server;
 mod approval;
 mod claude_approval;
+mod cli_version;
 mod command;
 mod end;
 mod mcp;

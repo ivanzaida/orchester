@@ -25,6 +25,7 @@ use super::{
 use crate::{
   messages::Message,
   pipelines::fields::{ModelChoice, RouteChoice, model_choices},
+  screens::project::connections::status::cli_too_old,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -162,19 +163,26 @@ pub fn model(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields) -> Vec<Elem
       [("model", used.as_str())],
     ),
   };
-  vec![
+  let mut elements = vec![
     labelled(
       label(ctx, "pipelines.inspector.model"),
       select(ctx, "step-model", &fields.model, options, false),
     )
     .into(),
-    effective(
-      ctx,
-      &effective_model,
-      &ctx.t("pipelines.inspector.overrideHint"),
-      "pipelines.inspector.editProfile",
-    ),
-  ]
+  ];
+  elements.extend(
+    profile
+      .agent
+      .as_ref()
+      .and_then(|connection| cli_too_old(ctx, connection, used)),
+  );
+  elements.push(effective(
+    ctx,
+    &effective_model,
+    &ctx.t("pipelines.inspector.overrideHint"),
+    "pipelines.inspector.editProfile",
+  ));
+  elements
 }
 
 /// The effective model and the link to the profiles, which are not built yet (`LRvkv`).

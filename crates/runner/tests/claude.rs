@@ -8,14 +8,14 @@ use std::time::Duration;
 
 use orchester_core::{
   connection::{
-    AgentProvider,
+    AgentConnection, AgentProvider,
     invocation::result_schema,
-    stream::{AgentEvent, CommandStatus, FileChangeKind, InvocationOutcome, OutputStream},
+    stream::{AgentEvent, CommandStatus, FileChangeKind, InvocationOutcome, OutputStream, RunnerProblem},
   },
   id::{IdempotencyKey, RunId},
-  resource::StepKey,
+  resource::{ModelId, StepKey},
   run::{PauseReason, RaisedLimits, RunLimit, RunStatus, StepFailure, StepStatus},
-  store::{ActivityStore, ConversationStore},
+  store::{ActivityStore, ConnectionStore, ConversationStore},
   tokens::{TokenBudget, TokensUsed},
 };
 use orchester_store::ProjectDb;
@@ -160,6 +160,34 @@ async fn claude_prose_without_a_result_never_passes_the_step() {
     &db.invocations(run.id()).expect("invocations")[0].outcome,
     Some(InvocationOutcome::TurnFailed { message }) if message.contains("without the step result")
   ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_refused_model_names_the_version_it_needs_and_the_connection_keeps_it() {
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    model: Some("claude-opus-5-5"),
+    ..Setup::new("Refuse the model.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events_in) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let run = wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
+  assert_eq!(implement(&run), (StepStatus::Failed, Some(StepFailure::AgentFailed)));
+  let db = ProjectDb::open(root).expect("open");
+  assert!(events(&db, id).contains(&AgentEvent::RunnerProblem {
+    problem: RunnerProblem::CliTooOld {
+      model: "claude-opus-5-5".to_owned(),
+      installed: "2.1.89".to_owned(),
+      required: "2.1.280".to_owned(),
+    }
+  }));
+  let connection = AgentConnection::try_from(db.connections().expect("connections").remove(0)).expect("agent");
+  let opus = ModelId::new("claude-opus-5-5").expect("model");
+  assert_eq!(connection.model_requirements().required(&opus), Some("2.1.280"));
 }
 
 #[tokio::test(flavor = "multi_thread")]

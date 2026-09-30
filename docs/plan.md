@@ -125,18 +125,14 @@ and MCP tools in the Tools library.
 ### C2 · Verify the Claude Code approval controls against the design (UI)
 
 `claude/claude-support` enables *Ask before MCP actions* and *Ask before running commands* for Claude Code profiles,
-pipeline steps and runs. It shows the mechanism `--permission-prompt-tool · one command approval`, the run popover's
+pipeline steps and runs, and shows a "CLI too old for this model" notice (C3) in the Connections inspector, the
+profile's model field and the step inspector's model. It shows the mechanism `--permission-prompt-tool · one command approval`, the run popover's
 Claude transport note, and the MCP enforcement row "Each tool call waits for your decision". It also changed the model
 source notes in the Connections inspector and the profile's model field. A separate agent must compare these states
 with Pencil (`AGENTS.md` rule 15): the profile Permissions tab on a Claude connection (`HnBBr`, `ossOP`), the run
 permission popover (`W29Od2`), the pipeline step switch (`wujuh`), the command approval modal for a Claude request
 (`GbNSA`) and the Connections inspector model note (`xK9v9`). **Done when** the verifier reports no blocking or major
 mismatch.
-
-### C3 · Claude Code too old for the current models (needs decision)
-
-The API refuses Opus 5.5 to Claude Code 2.1.89 ("version 2.1.280 or newer is required"); the run shows the error. Decide
-whether the connection check should warn when the CLI is older than the current models need, or leave it to that error.
 
 ## U · Screens
 
@@ -198,6 +194,11 @@ Claude Code parity: current models and interactive approvals · branch `claude/c
   --claude-permission-prompt`, with the same approval records and modal as Codex (`docs/interactive-tool-approvals.md`).
 - A real Opus 5.5 run (Implement, Review) with one approval round trip passed with Claude Code 2.1.284. See
   [evidence](evidence/claude-code-e2e-2026-09-30.md). Design verification of the changed controls is C2.
+- C3, done the same day (user decision): when the API refuses a model to an old CLI ("version X or newer is
+  required"), the run reports `CliTooOld` with the model and both versions instead of a bare failure, and the
+  connection records X for that model. The Connections inspector, the profile's model field and a step's model
+  show a notice while the checked CLI is older. No documented source lists these versions (Claude Code's
+  changelog names added models only), so nothing is known before the first refusal.
 - C1, done the same day: Claude Code gets the step result schema through `--json-schema` and its
   `structured_output` is read, with a strict fallback to a result closing the final message. A turn
   without a result fails. A real Opus 5.5 `question` turn was recognized (same evidence).

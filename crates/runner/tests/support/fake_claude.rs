@@ -21,6 +21,8 @@
 //!   `{"outcome":"question","summary":"Which database should I use?"}`, as the CLI does when given `--json-schema`;
 //!   "Answer in prose, then JSON" ends with prose followed by `{"outcome":"failed","summary":"The build breaks."}` and
 //!   no `structured_output`; "Answer without JSON" ends with prose only;
+//! - "Refuse the model": answers as Claude Code 2.1.89 did when the API refused Opus 5.5 to it ("version 2.1.280 or
+//!   newer is required") and exits with 1;
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
@@ -121,6 +123,9 @@ fn main() -> ExitCode {
     fake.assistant("msg_draft", r#"{"type":"text","text":"Drafted."}"#);
     fake.message("msg_more", r#"{"type":"text","text":"Going on."}"#, NO_USAGE);
     wait_to_be_ended();
+  }
+  if prompt.contains("Refuse the model") {
+    return fake.refuse_the_model();
   }
   if let Some((text, structured)) = answer(&prompt) {
     return fake.answer(&text, structured);
@@ -276,6 +281,25 @@ impl Fake {
       true,
     );
     self.finish_with(worktree, "hello", step, DENIAL)
+  }
+
+  /// The API's refusal of the model to an old CLI, as 2.1.89 printed it.
+  fn refuse_the_model(&self) -> ExitCode {
+    let refusal = "API Error: 400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Claude \
+                   Code 2.1.89 does not support this model; version 2.1.280 or newer is required. Run 'claude update', \
+                   or update the Claude desktop app, then try again.\"}}";
+    let message = serde_json::json!({
+      "type": "assistant", "error": "invalid_request", "session_id": self.session,
+      "message": {"id": "msg_refused", "role": "assistant", "type": "message",
+        "content": [{"type": "text", "text": refusal}], "usage": {"input_tokens": 0, "output_tokens": 0}},
+    });
+    println!("{message}");
+    let result = serde_json::json!({
+      "type": "result", "subtype": "success", "is_error": true, "result": refusal, "session_id": self.session,
+      "usage": {"input_tokens": 0, "output_tokens": 0}, "permission_denials": [],
+    });
+    println!("{result}");
+    ExitCode::from(1)
   }
 
   /// Ends with the message `text` and, when given, the result's `structured_output`.

@@ -258,7 +258,10 @@ impl RunTask {
   }
 
   /// The pinned profile version and the agent connection it runs on.
-  fn profile_and_connection(&self, profile: &PinnedVersion) -> Result<(AgentProfile, AgentConnection), RunnerProblem> {
+  pub(super) fn profile_and_connection(
+    &self,
+    profile: &PinnedVersion,
+  ) -> Result<(AgentProfile, AgentConnection), RunnerProblem> {
     let body: AgentProfile = self
       .db
       .version::<AgentProfile>(profile.resource, profile.number)

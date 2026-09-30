@@ -5,8 +5,10 @@ use std::{ops::Deref, path::PathBuf};
 use super::{
   AgentProvider, Connection, ConnectionError, ConnectionKind, ConnectionStatus, LastCheck, SignIn,
   catalog::{CatalogModel, ModelCatalog},
+  compare_versions,
+  model_requirements::CliTooOld,
 };
-use crate::{id::ConnectionId, name::Name, time::Timestamp};
+use crate::{id::ConnectionId, name::Name, resource::ModelId, time::Timestamp};
 
 /// What running an agent CLI's read-only commands found.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -113,6 +115,26 @@ impl AgentConnection {
       CheckResult::Available { catalog, .. } => Some(catalog),
       _ => None,
     }
+  }
+
+  /// Records what a refusal said: `model` needs version `required` of this CLI or newer.
+  pub fn record_model_requirement(&mut self, model: &ModelId, required: &str) {
+    self.connection.model_requirements.record(model, required);
+  }
+
+  /// Why the checked CLI cannot run `model`: its version is below the one a refusal recorded.
+  /// `None` when nothing was recorded, the CLI is new enough, or its version is unknown.
+  pub fn cannot_run(&self, model: &ModelId) -> Option<CliTooOld> {
+    let required = self.connection.model_requirements.required(model)?;
+    let CheckResult::Available { version, .. } = &self.last_check()?.result else {
+      return None;
+    };
+    compare_versions(Some(version), Some(required))
+      .is_lt()
+      .then(|| CliTooOld {
+        installed: version.clone(),
+        required: required.to_owned(),
+      })
   }
 
   /// Models a profile can choose from on this connection, in catalog order.
