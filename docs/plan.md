@@ -166,6 +166,15 @@ is not exact. Its `acceptEdits` file commands are denied since `claude/claude-su
 whole tool and deny outside the list (the whole-tool ask rule precedes allow rules, so that would need the permission
 prompt to allow listed commands) or to document the exception in the option's text. **needs decision**
 
+### C5 · Follow-ups from the Claude Code review (non-UI)
+
+- The runner records a model's required CLI version (C3) by reading, changing and saving the whole connection. A
+  person who edits the same connection in the desktop at that moment wins or loses as the last writer. Record the
+  requirement with a targeted update, or merge it on save.
+- `mode_allowed_outside` (`crates/core/src/permission/claude.rs`) drops the whole `Bash(<cmd>:*)` deny rule as soon as
+  one allowed entry starts with that command. With `rm build` allowed, `acceptEdits` runs any `rm`. A narrower rule is
+  needed, if Claude Code's rule order allows one.
+
 ## U · Screens
 
 ### U10 · Pull requests screen jumps while it loads (UI)
