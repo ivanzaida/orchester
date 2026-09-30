@@ -16,6 +16,8 @@ pub enum MemoryError {
   NotActive { id: MemoryId, status: MemoryStatus },
   #[error("memory {id} is {status}; only a deprecated record is restored, never a rejected proposal")]
   NotDeprecated { id: MemoryId, status: MemoryStatus },
+  #[error("memory {id} is not among the records given")]
+  Unknown { id: MemoryId },
   #[error("memory {id} is {status} and no longer changes")]
   Closed { id: MemoryId, status: MemoryStatus },
   /// A record supersedes only the active record of its own scope that it names, once it is active

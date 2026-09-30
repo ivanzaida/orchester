@@ -10,7 +10,7 @@ use orchester_core::{
     AgentProvenance, AgentWrite, Confidence, Delivery, InjectedMemory, InjectionReason, Memory, MemoryAuthor,
     MemoryChanges, MemoryContent, MemoryFilter, MemoryKey, MemoryKind, MemoryLimits, MemoryQuery, MemoryScope,
     MemorySettings, MemoryStatus, MemoryStore, ScopeFilter, ScreenedContent, SecretScreen, StepContext, Tags,
-    WritePolicy, next_invocation_memory,
+    WritePolicy, approval, next_invocation_memory,
   },
   resource::StepKey,
   run::Run,
@@ -570,4 +570,33 @@ fn memory_a_stale_copy_never_overwrites_a_newer_change() {
   .expect("restored");
   let stored = db.memory(record.id()).expect("read").expect("stored");
   assert_eq!(stored.status(), MemoryStatus::Active);
+}
+
+#[test]
+fn memory_approving_a_replacement_changes_every_record_in_one_transaction() {
+  let (_repo, mut db, run, execution) = started_run();
+  let mut old = person(MemoryScope::Project, keyed("Use Postgres."), 1);
+  old.set_pinned(true, at(2)).expect("pin");
+  db.add_memories(std::slice::from_ref(&old)).expect("add");
+  let proposal = Memory::replacing(
+    &old,
+    agent_write(&run, execution),
+    screened(keyed("Use SQLite.")),
+    &MemorySettings::default(),
+    at(3),
+  )
+  .expect("a replacement");
+  db.add_memories(std::slice::from_ref(&proposal)).expect("add");
+  db.change_memories(&filter(ScopeFilter::Project), |records| {
+    approval(proposal.id(), records, at(4))
+  })
+  .expect("the store works")
+  .expect("approved");
+  let status = |id| {
+    db.memory(id)
+      .expect("read")
+      .map(|memory| (memory.status(), memory.is_pinned()))
+  };
+  assert_eq!(status(old.id()), Some((MemoryStatus::Superseded, false)));
+  assert_eq!(status(proposal.id()), Some((MemoryStatus::Active, true)));
 }

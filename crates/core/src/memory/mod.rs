@@ -8,6 +8,7 @@
 //! restores it; an agent's newer record supersedes the one it names. Only active records reach prompts. Deleting a
 //! record, with its history, is a person's decision ([`MemoryStore::delete_memory`]).
 
+mod approval;
 mod content;
 mod handoff;
 mod next;
@@ -23,8 +24,9 @@ mod store;
 use std::fmt;
 
 pub use self::{
+  approval::approval,
   content::{Confidence, Importance, MemoryContent, MemoryContentError, MemoryKey, MemoryKind, Tags},
-  handoff::{Handoff, HandoffWrite, MemoryChanges, StepFate},
+  handoff::{FAILED_ATTEMPT_TAG, Handoff, HandoffWrite, MemoryChanges, StepFate},
   next::{StepContext, next_invocation_memory},
   query::MemoryQuery,
   recall::{InjectionReason, RecallRequest, estimated_tokens, recall},

@@ -4,8 +4,9 @@
 use orchester_core::{
   id::{ResourceId, StepExecutionId, TaskId},
   memory::{
-    AgentProvenance, Confidence, Handoff, HandoffWrite, Importance, Memory, MemoryAuthor, MemoryChanges, MemoryKind,
-    MemoryScope, MemorySettings, MemoryStatus, SecretScreen, StepFate, WritePolicy,
+    AgentProvenance, Confidence, FAILED_ATTEMPT_TAG, Handoff, HandoffWrite, Importance, Memory, MemoryAuthor,
+    MemoryChanges, MemoryKind, MemoryScope, MemorySettings, MemoryStatus, SecretScreen, StepFate, WritePolicy,
+    approval,
   },
   resource::StepKey,
   run::{STEP_RESULT_SCHEMA, StepOutcome, StepResult},
@@ -232,6 +233,99 @@ fn handoff_proposals_wait_and_earlier_proposals_are_withdrawn() {
   );
   assert_eq!(next.added[0].status(), MemoryStatus::Proposed);
   assert_eq!(next.added[0].supersedes(), Some(earlier[0].id()));
+}
+
+const NO_DECISIONS: &str = r#"{"outcome":"done","summary":"Done again, nothing decided."}"#;
+
+#[test]
+fn handoff_a_passing_rerun_without_decisions_deprecates_the_earlier_ones() {
+  let keeping = Keeping::new();
+  let first = provenance(ResourceId::generate());
+  let earlier = keeping.changes(RESULT, (&first, StepFate::Passed), Vec::new()).added;
+  let rerun = keeping.changes(NO_DECISIONS, (&again(&first), StepFate::Passed), earlier);
+  assert_eq!(
+    kinds(&rerun.changed),
+    [
+      (MemoryKind::Handoff, MemoryStatus::Superseded),
+      (MemoryKind::Decision, MemoryStatus::Deprecated)
+    ]
+  );
+  assert_eq!(kinds(&rerun.added), [(MemoryKind::Handoff, MemoryStatus::Active)]);
+}
+
+#[test]
+fn handoff_approved_later_replaces_the_steps_earlier_decisions() {
+  let keeping = Keeping {
+    settings: MemorySettings {
+      task_writes: WritePolicy::AfterApproval,
+      ..MemorySettings::default()
+    },
+    ..Keeping::new()
+  };
+  let first = provenance(ResourceId::generate());
+  let mut records = keeping.changes(RESULT, (&first, StepFate::Passed), Vec::new()).added;
+  for index in 0..records.len() {
+    let id = records[index].id();
+    let changes = approval(id, records.clone(), at(6)).expect("approved");
+    apply(&mut records, changes);
+  }
+  assert!(records.iter().all(|record| record.status() == MemoryStatus::Active));
+
+  // A passing re-run with no decisions waits for approval; approving its handoff makes it the
+  // step's current attempt, so the first run's decision is deprecated in the same change.
+  let rerun = keeping.changes(NO_DECISIONS, (&again(&first), StepFate::Passed), records.clone());
+  assert!(rerun.changed.is_empty(), "nothing changes before the approval");
+  let handoff = rerun.added[0].clone();
+  records.extend(rerun.added);
+  let approved = approval(handoff.id(), records.clone(), at(7)).expect("approved");
+  assert_eq!(
+    kinds(&approved.changed),
+    [
+      (MemoryKind::Handoff, MemoryStatus::Superseded),
+      (MemoryKind::Handoff, MemoryStatus::Active),
+      (MemoryKind::Decision, MemoryStatus::Deprecated)
+    ]
+  );
+}
+
+#[test]
+fn handoff_of_a_failed_attempt_is_tagged_and_replaces_no_decisions_when_approved() {
+  let keeping = Keeping {
+    settings: MemorySettings {
+      task_writes: WritePolicy::AfterApproval,
+      ..MemorySettings::default()
+    },
+    ..Keeping::new()
+  };
+  let first = provenance(ResourceId::generate());
+  let mut records = keeping.changes(RESULT, (&first, StepFate::Passed), Vec::new()).added;
+  for record in &mut records {
+    record.approve(None, at(6)).expect("approve");
+  }
+  let failed = keeping.changes(RESULT, (&again(&first), StepFate::Failed), records.clone());
+  let handoff = failed.added[0].clone();
+  assert!(handoff.content().tags().contains(FAILED_ATTEMPT_TAG));
+  records.extend(failed.added);
+  let approved = approval(handoff.id(), records, at(7)).expect("approved");
+  assert!(
+    !approved
+      .changed
+      .iter()
+      .any(|record| record.content().kind() == MemoryKind::Decision),
+    "a failed attempt defines no decisions"
+  );
+}
+
+/// `records` with `changes` applied.
+fn apply(records: &mut Vec<Memory>, changes: MemoryChanges) {
+  for changed in changes.changed {
+    let index = records
+      .iter()
+      .position(|record| record.id() == changed.id())
+      .expect("a known record");
+    records[index] = changed;
+  }
+  records.extend(changes.added);
 }
 
 #[test]

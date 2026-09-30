@@ -7,15 +7,18 @@
 //!   decision;
 //! - a step that failed leaves the handoff only, as a failed attempt, and no decisions.
 //!
-//! One handoff per step of the task stays current: a new one replaces the step's earlier handoff,
-//! and a new set of decisions replaces the decisions of the step's earlier executions. Earlier
-//! proposals of the step that no person decided on are superseded by the new records.
+//! One handoff per step of the task stays current: a new one replaces the step's earlier handoff.
+//! The latest passing attempt defines the step's decisions, even when it made none: once its
+//! handoff is active (at once, or when a person approves it or one of its decisions), the
+//! decisions of the step's earlier executions are deprecated. Earlier proposals of the step that no
+//! person decided on are withdrawn. A failed attempt's handoff is tagged `failed-attempt` and
+//! replaces no decisions.
 
 use std::fmt::Write as _;
 
 use super::{
   AgentProvenance, AgentWrite, Confidence, ContainsSecret, Importance, Memory, MemoryAuthor, MemoryContent, MemoryKind,
-  MemoryScope, MemorySettings, MemoryStatus, ScreenedContent, SecretScreen,
+  MemoryScope, MemorySettings, MemoryStatus, ScreenedContent, SecretScreen, Tags,
 };
 use crate::{
   id::TaskId,
@@ -64,6 +67,8 @@ pub struct MemoryChanges {
 /// The heading of the decisions in a handoff's text, which [`super::recall`] leaves out when the
 /// decisions reach the prompt as records of their own.
 pub(super) const DECISIONS: &str = "Decisions";
+/// The tag of a failed attempt's handoff, which defines none of the step's decisions.
+pub const FAILED_ATTEMPT_TAG: &str = "failed-attempt";
 const FAILED_ATTEMPT: &str = "This attempt failed; later attempts may take another way.";
 
 impl Handoff {
@@ -120,7 +125,15 @@ impl Handoff {
   /// What keeping the handoff changes, given the task's records now (`earlier`). Refused as a whole
   /// when any new record holds a secret's value.
   pub fn changes(&self, write: &HandoffWrite<'_>, earlier: Vec<Memory>) -> Result<MemoryChanges, ContainsSecret> {
-    let handoff_content = reported(write, MemoryKind::Handoff, &self.text(write.fate))?;
+    let mut handoff_content = MemoryContent::new(MemoryKind::Handoff, &self.text(write.fate))
+      // `from_result` returns no handoff whose text is blank.
+      .expect("a handoff's text is not blank")
+      .with_importance(Importance::High);
+    if write.fate == StepFate::Failed {
+      handoff_content =
+        handoff_content.with_tags(Tags::new([FAILED_ATTEMPT_TAG]).expect("the failed-attempt tag is one word"));
+    }
+    let handoff_content = write.screen.check(handoff_content)?;
     let mut decisions = Vec::new();
     if write.fate == StepFate::Passed {
       for decision in &self.decisions {
@@ -159,23 +172,34 @@ impl Handoff {
         write.now,
       ),
     };
-    let decisions_active = decisions
-      .first()
-      .is_some_and(|decision| decision.status() == MemoryStatus::Active);
+    let handoff_active = handoff.status() == MemoryStatus::Active;
+    // The latest passing attempt defines the step's decisions, even when it made none; a handoff
+    // that waits for approval replaces them when it is approved (`super::approval`).
+    let replaces_decisions = write.fate == StepFate::Passed && handoff_active;
     let mut changes = MemoryChanges::default();
     for (index, memory) in step_records.iter_mut().enumerate() {
-      let replaced = match (memory.content().kind(), memory.status()) {
-        (MemoryKind::Handoff, MemoryStatus::Active) => {
-          Some(index) == current && memory.supersede(&mut handoff, write.now).is_ok()
+      let changed = match (memory.content().kind(), memory.status()) {
+        (MemoryKind::Handoff, MemoryStatus::Active) if Some(index) == current && handoff_active => {
+          memory
+            .supersede(&mut handoff, write.now)
+            .expect("the new handoff is active, of the task, and names the step's current one");
+          true
         }
-        (MemoryKind::Handoff, MemoryStatus::Proposed) => memory.withdraw(write.now).is_ok(),
-        (MemoryKind::Decision, MemoryStatus::Proposed) => {
-          write.fate == StepFate::Passed && memory.withdraw(write.now).is_ok()
+        (MemoryKind::Handoff, MemoryStatus::Proposed) => {
+          memory.withdraw(write.now).expect("a proposed record can be withdrawn");
+          true
         }
-        (MemoryKind::Decision, MemoryStatus::Active) => decisions_active && memory.deprecate(write.now).is_ok(),
+        (MemoryKind::Decision, MemoryStatus::Proposed) if write.fate == StepFate::Passed => {
+          memory.withdraw(write.now).expect("a proposed record can be withdrawn");
+          true
+        }
+        (MemoryKind::Decision, MemoryStatus::Active) if replaces_decisions => {
+          memory.deprecate(write.now).expect("an active record can be deprecated");
+          true
+        }
         _ => false,
       };
-      if replaced {
+      if changed {
         changes.changed.push(memory.clone());
       }
     }
@@ -185,11 +209,10 @@ impl Handoff {
   }
 }
 
-/// A handoff record's content of `kind` saying `text`, of high importance, screened.
+/// A decision record's content of `kind` saying `text`, of high importance, screened.
 fn reported(write: &HandoffWrite<'_>, kind: MemoryKind, text: &str) -> Result<ScreenedContent, ContainsSecret> {
-  // The lists' items are not blank (`StepResult` drops blank ones), and `from_result` returns no
-  // handoff whose text is blank.
-  let content = MemoryContent::new(kind, text).expect("handoff texts are not blank");
+  // The lists' items are not blank: `StepResult` drops blank ones.
+  let content = MemoryContent::new(kind, text).expect("handoff list items are not blank");
   write.screen.check(content.with_importance(Importance::High))
 }
 
@@ -203,7 +226,7 @@ fn agent_write(write: &HandoffWrite<'_>) -> AgentWrite {
 }
 
 /// Whether `memory` is a handoff or decision an earlier execution of the step wrote.
-fn same_step_earlier(memory: &Memory, provenance: &AgentProvenance) -> bool {
+pub(super) fn same_step_earlier(memory: &Memory, provenance: &AgentProvenance) -> bool {
   matches!(
     memory.author(),
     MemoryAuthor::Agent(agent) if agent.step == provenance.step && agent.execution != provenance.execution
