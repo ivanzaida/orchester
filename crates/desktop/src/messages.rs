@@ -38,8 +38,22 @@ pub fn name_error(error: &NameError) -> Message {
   }
 }
 
+pub fn organization_error(error: &orchester_core::task::organization::OrganizationError) -> Message {
+  use orchester_core::task::organization::OrganizationError;
+  Message::new(match error {
+    OrganizationError::MissingReason => "tasks.blocked.reasonRequired",
+    OrganizationError::DependencyCycle => "tasks.blocked.cycle",
+    OrganizationError::StopRunFirst(_) => "tasks.cancel.confirmRequired",
+    OrganizationError::DuplicateTag => "tasks.tags.duplicate",
+    OrganizationError::TagNotFound(_) => "tasks.tags.stale",
+    OrganizationError::SameTag => "tasks.tags.sameTarget",
+    OrganizationError::Blocked(_) => "tasks.blocked.runUnavailable",
+  })
+}
+
 pub fn store_error(error: &StoreError) -> Message {
   match error {
+    StoreError::Organization(error) => organization_error(error),
     StoreError::NotAGitRepository(_) => Message::new("errors.notAGitRepository"),
     StoreError::AlreadyInitialized(_) => Message::new("errors.alreadyInitialized"),
     StoreError::NotInitialized(_) => Message::new("errors.projectMissing"),

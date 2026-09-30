@@ -109,6 +109,7 @@ fn page_name(ctx: &Ctx, page: Page, tasks: &TasksState) -> (Arc<str>, Option<Arc
       .and_then(|tasks| tasks.pipelines.iter().find(|choice| choice.id == pipeline))
       .map_or_else(|| (ctx.t("nav.pipelines"), None), |choice| (choice.name.clone(), None)),
     Page::PullRequest(number) => (ctx.t_args("tabs.pullRequest", [("number", &*number.to_string())]), None),
+    Page::ProjectTags => (ctx.t("tasks.tags.manage"), None),
     Page::NewTask => (ctx.t("overview.newTask"), None),
     other => (ctx.t(section_key(other)), None),
   }
@@ -117,7 +118,9 @@ fn page_name(ctx: &Ctx, page: Page, tasks: &TasksState) -> (Arc<str>, Option<Arc
 const fn section_key(page: Page) -> &'static str {
   match page {
     Page::Overview(_) => "nav.overview",
-    Page::Tasks(_) | Page::NewTask | Page::Task(..) | Page::EditTask(_) | Page::RetryTask(_) => "nav.tasks",
+    Page::ProjectTags | Page::Tasks(_) | Page::NewTask | Page::Task(..) | Page::EditTask(_) | Page::RetryTask(_) => {
+      "nav.tasks"
+    }
     Page::PullRequests | Page::PullRequest(_) => "nav.pullRequests",
     Page::Pipelines | Page::Pipeline(..) => "nav.pipelines",
     Page::Instructions(..) => "nav.instructions",

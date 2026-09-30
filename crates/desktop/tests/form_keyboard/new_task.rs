@@ -51,12 +51,16 @@ fn new_task_tab_passes_through_the_form_in_window_order() {
   // pipeline selector without pipelines, Create & run and Save as draft (no title yet) cannot
   // be used and are skipped. After the form Tab wraps to its first field.
   assert_eq!(
-    desktop.stops(7, false),
+    desktop.stops(11, false),
     expected(&[
       Some(TITLE),
       Some(BRIEF),
       Some(FIRST_CRITERION),
       Some(ADD_CRITERION),
+      Some("task-workflow-field"),
+      Some("task-priority-field"),
+      Some("task-tags-picker"),
+      Some("task-blocked-field"),
       Some(BUDGET),
       Some(TIME_LIMIT),
       Some(TITLE),

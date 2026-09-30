@@ -55,6 +55,7 @@ define_id!(
   VersionId
 );
 define_id!(TaskId);
+define_id!(TagId);
 define_id!(
   /// One execution of a task; names its branch and worktree.
   RunId

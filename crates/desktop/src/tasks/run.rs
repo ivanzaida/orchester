@@ -17,7 +17,7 @@ use orchester_core::{
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::data::{PipelineChoice, SaveTarget, pinned_pipeline, save_to};
+use super::data::{PipelineChoice, SaveTarget, pinned_pipeline, save_organized_to, save_to};
 use crate::{
   messages::{self, Message},
   runner::{RequestError, RunRequestError},
@@ -54,6 +54,23 @@ pub struct QueuedStart {
   pub pipeline: PipelineChoice,
 }
 
+pub fn queue_organized_in(
+  repo_root: &Path,
+  target: SaveTarget,
+  details: TaskDetails,
+  organization: &orchester_core::task::organization::TaskOrganization,
+  version: VersionNumber,
+) -> Result<QueuedStart, QueueFailure> {
+  let mut db = ProjectDb::open(repo_root)?;
+  let problems = check(&db, &details, version)?;
+  if !problems.is_empty() {
+    return Err(QueueFailure::Preflight(problems));
+  }
+  let task = save_organized_to(&mut db, target, details.clone(), organization, Timestamp::now())?;
+  db.check_task_readiness(task.id())?;
+  queue_in(repo_root, SaveTarget::Task(task.id()), details, version)
+}
+
 /// Checks the selected configuration, then saves and queues the task. A queued task reached by
 /// an idempotent retry keeps its original version, even if a newer version was published.
 pub fn queue_in(
@@ -68,6 +85,7 @@ pub fn queue_in(
     SaveTarget::Task(id) => db.task(id)?,
   };
   if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
+    db.check_task_readiness(task.id())?;
     return queued_start(&db, task);
   }
   let problems = check(&db, &details, selected_version)?;
@@ -78,6 +96,7 @@ pub fn queue_in(
   // receive that state even if the database becomes unreadable immediately afterwards.
   let selected_pipeline = load_pipeline(&db, details.pipeline, selected_version)?;
   let mut task = save_to(&mut db, target, details, Timestamp::now())?;
+  db.check_task_readiness(task.id())?;
   if task.status() == TaskStatus::Draft {
     task.queue(selected_version).map_err(QueueFailure::Queue)?;
     db.save_task(&task)?;
@@ -192,6 +211,9 @@ fn gib(bytes: u64) -> String {
 /// What a person reads when the start request fails, including an unconfirmed outcome.
 pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
   match error {
+    RunRequestError::Rejected(Rejection::RunAgainBlocked {
+      block: orchester_core::run::RunAgainBlock::TaskBlocked,
+    }) => vec![Message::new("tasks.blocked.runUnavailable")],
     RunRequestError::Request(RequestError::NotConnected) => vec![Message::new("runs.start.runnerUnavailable")],
     RunRequestError::Request(RequestError::Lost) => vec![Message::new("runs.start.lost")],
     RunRequestError::Rejected(Rejection::Preflight { problems }) => problems.iter().map(preflight_message).collect(),

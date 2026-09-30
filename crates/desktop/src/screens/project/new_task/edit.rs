@@ -42,6 +42,7 @@ pub(super) fn open(ctx: &Ctx, form: &NewTaskForm, editing: &Editing) {
 /// Fills the form with `task`'s saved details; an empty criteria list keeps one empty row to type
 /// in, as a new form has.
 pub(super) fn seed(ctx: &Ctx, form: &NewTaskForm, task: &Task) {
+  form.organization.seed(task.organization());
   let details = task.details();
   form.title.set(details.title.as_str().to_owned());
   form.brief.set(details.brief.clone());

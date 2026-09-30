@@ -9,6 +9,8 @@ mod limits;
 mod mcp_servers;
 mod merges;
 mod messages;
+mod organization;
+mod organized_drafts;
 mod phases;
 mod plans;
 mod pull_request_diffs;
@@ -22,6 +24,7 @@ mod runs;
 mod schema;
 mod secrets;
 mod step_outputs;
+mod tags;
 mod tasks;
 mod tool_approvals;
 

@@ -38,6 +38,12 @@ impl RunStore for ProjectDb {
     if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
       return existing.map_err(|unreadable| unreadable.error);
     }
+    let blocking = super::organization::unfinished(&transaction, new.task)?;
+    if !blocking.is_empty() {
+      return Err(
+        StoreError::Organization(orchester_core::task::organization::OrganizationError::Blocked(blocking)).into(),
+      );
+    }
     let number: i64 = transaction.query_row("SELECT next FROM counters WHERE name = 'run'", [], |row| row.get(0))?;
     let (run, created) = Run::create(RunId::generate(), run_number(number)?, new, now)?;
     insert_run(&transaction, &run, &key)?;
@@ -164,6 +170,14 @@ impl ProjectDb {
     write_attempts(&transaction, run)?;
     for event in events {
       insert_event(&transaction, event)?;
+      let status = match event.kind() {
+        RunEventKind::Started => Some(orchester_core::task::organization::WorkflowStatus::InProgress),
+        RunEventKind::Succeeded => Some(orchester_core::task::organization::WorkflowStatus::InReview),
+        _ => None,
+      };
+      if let Some(status) = status {
+        super::organization::automatic(&transaction, run.task(), status, event.at())?;
+      }
     }
     if let Some(plan) = plan {
       plans::save(&transaction, plan)?;

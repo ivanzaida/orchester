@@ -69,7 +69,7 @@ impl Criterion {
 }
 
 pub fn brief_form(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   form: &NewTaskForm,
   project: &OpenProject,
   link: Option<&RepositoryLink>,
@@ -87,6 +87,7 @@ pub fn brief_form(
     .child(title_field(ctx, form, state))
     .child(brief_field(ctx, form, state))
     .child(criteria_field(ctx, form, state))
+    .child(organization_fields(ctx, form, project))
     .child(labelled(
       ctx,
       "tasks.new.context",
@@ -359,4 +360,20 @@ fn locked_input(input: TextInput, locked: bool) -> TextInput {
   } else {
     input
   }
+}
+
+fn organization_fields(ctx: &mut Ctx, form: &NewTaskForm, project: &OpenProject) -> Element {
+  let task = ctx
+    .props::<super::NewTaskProps>()
+    .editing
+    .as_ref()
+    .map(|editing| editing.task.id());
+  ctx.mount_keyed::<super::super::organization_fields::OrganizationFields>(
+    "task-organization-fields",
+    super::super::organization_fields::OrganizationFieldsProps {
+      draft: form.organization.clone(),
+      root: project.repo_root.clone(),
+      task,
+    },
+  )
 }

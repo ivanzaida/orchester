@@ -46,6 +46,9 @@ pub struct PipelineChoice {
 /// The project's tasks and the pipelines they can use, read together.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectTasks {
+  pub updated: Arc<std::collections::HashMap<TaskId, Timestamp>>,
+  pub tags: Arc<Vec<orchester_core::task::organization::Tag>>,
+  pub blocking: Arc<std::collections::HashMap<TaskId, Vec<TaskId>>>,
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
   /// Tool requests awaiting a decision anywhere in this project, oldest first.
@@ -62,6 +65,30 @@ pub struct ProjectTasks {
 impl lurq::app::component::DevtoolsInspectable for ProjectTasks {}
 
 impl ProjectTasks {
+  pub fn decorate_row(&self, mut row: super::list::TaskRow) -> super::list::TaskRow {
+    row.tags = self
+      .tags
+      .iter()
+      .filter(|tag| row.organization.tags().contains(&tag.id()))
+      .map(|tag| Arc::from(tag.name().as_str()))
+      .collect();
+    if let Some(blocking) = self.blocking.get(&row.id).filter(|links| !links.is_empty()) {
+      let keys = blocking
+        .iter()
+        .filter_map(|id| self.tasks.iter().find(|task| task.id() == *id))
+        .map(|task| task.key().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+      row.detail = UiMessage::new("tasks.blocked.unfinished").with("tasks", keys).with(
+        "reason",
+        row.organization.blocked_reason().unwrap_or_default().to_owned(),
+      );
+    } else if let Some(reason) = row.organization.blocked_reason() {
+      row.detail = UiMessage::new("tasks.blocked.informational").with("reason", reason.to_owned());
+    }
+    row
+  }
+
   pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let tasks = db.tasks()?;
@@ -78,6 +105,22 @@ impl ProjectTasks {
       phases.insert(task.id(), latest);
     }
     Ok(Self {
+      updated: Arc::new(
+        tasks
+          .iter()
+          .map(|task| {
+            db.task_organization_updated_at(task.id())
+              .map(|updated| (task.id(), updated.unwrap_or(task.created_at())))
+          })
+          .collect::<Result<_, _>>()?,
+      ),
+      tags: Arc::new(db.project_tags()?),
+      blocking: Arc::new(
+        tasks
+          .iter()
+          .map(|task| db.unfinished_blocking_tasks(task.id()).map(|links| (task.id(), links)))
+          .collect::<Result<_, _>>()?,
+      ),
       tasks: Arc::new(tasks),
       pipelines: Arc::new(published_pipelines(&db)?),
       pending_tool_approvals: Arc::new(db.pending_tool_approvals_all()?),
@@ -299,4 +342,18 @@ pub fn save_draft_in(
     return Err(TaskDraftSaveError::DetailsMismatch);
   }
   Ok(details)
+}
+
+/// Save organization and task content as a single transaction.
+pub fn save_organized_to(
+  db: &mut ProjectDb,
+  target: SaveTarget,
+  details: TaskDetails,
+  organization: &orchester_core::task::organization::TaskOrganization,
+  now: Timestamp,
+) -> Result<Task, StoreError> {
+  match target {
+    SaveTarget::New(batch) => db.create_organized_task(batch, details, organization, now),
+    SaveTarget::Task(task) => db.update_organized_task(task, details, organization, now),
+  }
 }

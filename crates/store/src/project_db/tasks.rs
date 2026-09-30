@@ -128,7 +128,7 @@ pub(super) fn snapshot_new_run(
 }
 
 /// Existing runs from before this schema acquire their original prompt content before an edit.
-fn snapshot_earlier_runs(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
+pub(super) fn snapshot_earlier_runs(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
   let (budget, duration) = limit_columns(task.details().limits)?;
   transaction.execute(
     "INSERT INTO run_task_snapshots (run_id, title, brief, criteria, pipeline_id, budget_tokens, max_duration_ms) \
@@ -225,7 +225,7 @@ impl TaskStore for ProjectDb {
 }
 
 /// Stores the details and status of `task`, which must exist.
-fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
+pub(super) fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
   let details = task.details();
   let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
   let updated = transaction.execute(
@@ -248,7 +248,7 @@ fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreEr
   write_criteria(transaction, task.id(), &details.acceptance_criteria)
 }
 
-fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &str) -> Result<(), StoreError> {
+pub(super) fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &str) -> Result<(), StoreError> {
   let details = task.details();
   let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
   transaction.execute(
@@ -282,7 +282,7 @@ fn write_criteria(transaction: &Transaction<'_>, task: TaskId, criteria: &[Strin
   Ok(())
 }
 
-fn load_tasks(
+pub(super) fn load_tasks(
   connection: &Connection,
   project: &ProjectKey,
   clause: &str,
@@ -296,7 +296,9 @@ fn load_tasks(
     .into_iter()
     .map(|row| {
       let criteria = load_criteria(connection, &row.id)?;
-      row.into_task(project, criteria)
+      let task = row.into_task(project, criteria)?;
+      let value = super::organization::load(connection, task.id())?;
+      Ok(task.with_organization(value))
     })
     .collect()
 }
@@ -385,7 +387,7 @@ fn limit_columns(limits: Option<TaskLimits>) -> Result<(Option<i64>, Option<i64>
   ))
 }
 
-fn task_number(number: i64) -> Result<NonZeroU32, StoreError> {
+pub(super) fn task_number(number: i64) -> Result<NonZeroU32, StoreError> {
   u32::try_from(number)
     .ok()
     .and_then(NonZeroU32::new)

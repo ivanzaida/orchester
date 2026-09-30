@@ -18,7 +18,10 @@ use super::ProjectNav;
 use crate::{
   display,
   navigation::route::Page,
-  tasks::list::TaskRow,
+  tasks::{
+    list::TaskRow,
+    organization::{priority_label, tag_chips, workflow_label},
+  },
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
@@ -33,12 +36,13 @@ use crate::{
 /// line (`S2kP9L`).
 const SELECT_WIDTH: f32 = 18.0;
 const KEY_WIDTH: f32 = 72.0;
-const PIPELINE_WIDTH: f32 = 136.0;
-const STATUS_WIDTH: f32 = 128.0;
+const PRIORITY_WIDTH: f32 = 96.0;
+// ORC-39 qVMJh: workflow and run state occupy separate lines.
+const STATUS_WIDTH: f32 = 212.0;
 const READINESS_WIDTH: f32 = 184.0;
 const OPEN_WIDTH: f32 = 14.0;
 const HEADING_HEIGHT: f32 = 28.0;
-const TABLE_ROW_HEIGHT: f32 = 48.0;
+const TABLE_ROW_HEIGHT: f32 = 76.0;
 /// Overview row: row height, state tile and the width of the time column (`s0gWDM`, `aqRNL`,
 /// `XY1PR`).
 const LIST_ROW_HEIGHT: f32 = 78.0;
@@ -124,7 +128,7 @@ pub fn table_heading(ctx: &Ctx) -> Element {
     .child(Row::new().width(Dimension::Px(SELECT_WIDTH)))
     .child(cell(KEY_WIDTH, column_label(&ctx.t("tasks.columns.key"))))
     .child(Row::new().flex(1.0).child(column_label(&ctx.t("tasks.columns.task"))))
-    .child(cell(PIPELINE_WIDTH, column_label(&ctx.t("tasks.columns.pipeline"))))
+    .child(cell(PRIORITY_WIDTH, column_label(&ctx.t("tasks.priority.label"))))
     .child(cell(STATUS_WIDTH, column_label(&ctx.t("tasks.columns.status"))))
     .child(cell(READINESS_WIDTH, column_label(&ctx.t("tasks.columns.readiness"))))
     .child(Row::new().width(Dimension::Px(OPEN_WIDTH)))
@@ -151,7 +155,7 @@ impl Component for QueueRow {
     let row = ctx.props::<TaskRow>().clone();
     // Selecting tasks for a run is not available yet: unselected in `$muted` (`R7idX` in
     // `r2al55`).
-    let select = icon(Icon::Square, IconSize::Option, PaletteColor::TextSecondary);
+    let select = selection_checkbox(ctx, row.id);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(TABLE_ROW_HEIGHT))
@@ -166,20 +170,21 @@ impl Component for QueueRow {
         Text::new(&row.key).variant(TypographyStyle::Mono).nowrap(),
       ))
       .child(
-        Row::new().flex(1.0).align_items(Alignment::Center).child(
-          Text::new(&row.title)
-            .variant(TypographyStyle::FieldLabel)
-            .color(PaletteColor::TextPrimary)
-            .nowrap()
-            .text_overflow(TextOverflow::Elipsis)
-            .flex(1.0),
-        ),
+        Column::new()
+          .flex(1.0)
+          .spacing(SpacingSize::Sm)
+          .child(
+            Text::new(&row.title)
+              .variant(TypographyStyle::FieldLabel)
+              .color(PaletteColor::TextPrimary)
+              .nowrap()
+              .text_overflow(TextOverflow::Elipsis)
+              .flex(1.0),
+          )
+          .child(tag_chips(&row.tags)),
       )
-      .child(cell(
-        PIPELINE_WIDTH,
-        column_label(&message_text(ctx, &row.pipeline.message())).text_overflow(TextOverflow::Elipsis),
-      ))
-      .child(cell(STATUS_WIDTH, row_status_label(ctx, row.phase)))
+      .child(cell(PRIORITY_WIDTH, priority_label(ctx, row.organization.priority())))
+      .child(cell(STATUS_WIDTH, workflow_run(ctx, &row)))
       .child(cell(READINESS_WIDTH, column_label(&message_text(ctx, &row.detail))))
       .child(open_chevron());
     opens(&self.nav, &row, content)
@@ -221,7 +226,9 @@ pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> E
         )
         .child(metadata),
     )
-    .child(row_status_label(ctx, row.phase))
+    .child(priority_label(ctx, row.organization.priority()))
+    .child(workflow_run(ctx, row))
+    .child(tag_chips(&row.tags))
     .child(
       Row::new().width(Dimension::Px(TIME_WIDTH)).justify(Justify::End).child(
         Text::new(&message_text(ctx, &display::elapsed(now, row.created_at)))
@@ -231,4 +238,45 @@ pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> E
     )
     .child(open_chevron());
   opens(nav, row, content)
+}
+
+fn workflow_run(ctx: &Ctx, row: &TaskRow) -> Element {
+  let run_key = match row.phase {
+    Some(TaskPhase::Draft | TaskPhase::Queued | TaskPhase::Merged | TaskPhase::Succeeded) => {
+      "tasks.workflow.noActiveRun"
+    }
+    Some(phase) => status_copy(phase).1,
+    None => "tasks.status.unreadable",
+  };
+  Column::new()
+    .spacing(SpacingSize::Xs)
+    .child(workflow_label(ctx, row.organization.status()))
+    .child(Text::new(&ctx.t(run_key)).variant(TypographyStyle::Caption))
+    .into()
+}
+
+fn selection_checkbox(ctx: &mut Ctx, id: orchester_core::id::TaskId) -> Element {
+  let Some(super::task_selection::TaskSelection(selected)) = ctx.use_context::<super::task_selection::TaskSelection>()
+  else {
+    return icon(Icon::Square, IconSize::Option, PaletteColor::TextSecondary).into();
+  };
+  let checked = selected.get().0.contains(&id);
+  surface()
+    .id(format!("select-task-{id}"))
+    .cursor(lurq::node::CursorIcon::Pointer)
+    .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+    .on_click(move |event: lurq::app::events::MouseEvent| {
+      event.stop_propagation();
+      selected.update(|value| {
+        if !value.0.remove(&id) {
+          value.0.insert(id);
+        }
+      });
+    })
+    .child(icon(
+      if checked { Icon::SquareCheck } else { Icon::Square },
+      IconSize::Option,
+      PaletteColor::TextSecondary,
+    ))
+    .into()
 }

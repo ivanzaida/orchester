@@ -10,6 +10,7 @@ pub mod form;
 pub mod integration;
 pub mod integration_jobs;
 pub mod list;
+pub mod organization;
 pub mod overview;
 pub mod permissions;
 pub mod plan;

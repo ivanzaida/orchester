@@ -151,7 +151,7 @@ fn pages() -> Vec<Page> {
     Page::Overview(OverviewTab::NeedsYou),
     Page::Overview(OverviewTab::Failed),
     Page::TASKS,
-    Page::Tasks(TaskTab::Drafts),
+    Page::Tasks(TaskTab::Backlog),
     Page::NewTask,
     Page::task(TaskId::generate()),
     Page::Task(TaskId::generate(), TaskPageTab::Activity),
@@ -240,8 +240,8 @@ fn route_defaults_are_left_out_of_the_path() {
 #[test]
 fn route_tabs_are_part_of_the_path() {
   let project = ProjectId::generate();
-  let drafts = Route::Project(project, Page::Tasks(TaskTab::Drafts)).path();
-  assert_eq!(drafts, format!("/project/{project}/tasks?tab=drafts"));
+  let drafts = Route::Project(project, Page::Tasks(TaskTab::Backlog)).path();
+  assert_eq!(drafts, format!("/project/{project}/tasks?tab=backlog"));
   // A tab that cannot be opened yet, or does not exist, is the first tab.
   let queue = format!("/project/{project}/tasks?tab=queue");
   assert_eq!(Route::parse(&queue), Some(Route::Project(project, Page::TASKS)));

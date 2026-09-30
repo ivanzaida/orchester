@@ -38,7 +38,11 @@ const RECENT_TASKS: usize = 6;
 
 pub(super) fn task_list(ctx: &Ctx, tasks: &ProjectTasks, selected: OverviewTab, nav: &ProjectNav) -> Element {
   let now = Timestamp::now();
-  let rows = selected.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, RECENT_TASKS);
+  let rows: Vec<_> = selected
+    .rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, RECENT_TASKS)
+    .into_iter()
+    .map(|row| tasks.decorate_row(row))
+    .collect();
   let pipeline_filter = Row::new()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)

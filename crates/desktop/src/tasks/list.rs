@@ -18,50 +18,55 @@ use crate::{
   tasks::{data::PipelineChoice, unreadable::Unreadable},
 };
 
-/// Tabs of the task list. Only tabs whose tasks can be told apart today are available;
-/// queueing, review and completion do not exist yet.
+/// Workflow tabs; Needs you remains a run-state view.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskTab {
   All,
-  Drafts,
-  Queue,
-  NeedsReview,
+  NeedsYou,
+  Backlog,
+  Todo,
+  InProgress,
+  InReview,
   Done,
 }
-
 impl lurq::app::component::DevtoolsInspectable for TaskTab {}
-
 impl TaskTab {
-  pub const ALL: [Self; 5] = [Self::All, Self::Drafts, Self::Queue, Self::NeedsReview, Self::Done];
-
+  pub const ALL: [Self; 7] = [
+    Self::All,
+    Self::NeedsYou,
+    Self::Backlog,
+    Self::Todo,
+    Self::InProgress,
+    Self::InReview,
+    Self::Done,
+  ];
   pub const fn is_available(self) -> bool {
-    matches!(self, Self::All | Self::Drafts)
+    true
   }
-
   pub const fn label_key(self) -> &'static str {
     match self {
       Self::All => "tasks.tabs.all",
-      Self::Drafts => "tasks.tabs.drafts",
-      Self::Queue => "tasks.tabs.queue",
-      Self::NeedsReview => "tasks.tabs.needsReview",
-      Self::Done => "tasks.tabs.done",
+      Self::NeedsYou => "tasks.tabs.needsYou",
+      Self::Backlog => "tasks.workflow.backlog",
+      Self::Todo => "tasks.workflow.todo",
+      Self::InProgress => "tasks.workflow.inProgress",
+      Self::InReview => "tasks.workflow.inReview",
+      Self::Done => "tasks.workflow.done",
     }
   }
-
-  /// Whether `task` belongs to this tab; unavailable tabs contain nothing.
   pub fn includes(self, task: &Task) -> bool {
+    use orchester_core::task::organization::WorkflowStatus;
     match self {
-      Self::All => true,
-      Self::Drafts => task.status() == TaskStatus::Draft,
-      Self::Queue | Self::NeedsReview | Self::Done => false,
+      Self::All | Self::NeedsYou => true,
+      Self::Backlog => task.organization().status() == WorkflowStatus::Backlog,
+      Self::Todo => task.organization().status() == WorkflowStatus::Todo,
+      Self::InProgress => task.organization().status() == WorkflowStatus::InProgress,
+      Self::InReview => task.organization().status() == WorkflowStatus::InReview,
+      Self::Done => task.organization().status() == WorkflowStatus::Done,
     }
   }
-
-  /// Number of tasks in the tab, or `None` for a tab that cannot be counted yet.
   pub fn count(self, tasks: &[Task]) -> Option<usize> {
-    self
-      .is_available()
-      .then(|| tasks.iter().filter(|task| self.includes(task)).count())
+    (self != Self::NeedsYou).then(|| tasks.iter().filter(|task| self.includes(task)).count())
   }
 }
 
@@ -309,6 +314,8 @@ impl PipelineLabel {
 /// One task as a list row shows it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TaskRow {
+  pub organization: orchester_core::task::organization::TaskOrganization,
+  pub tags: Vec<Arc<str>>,
   pub id: TaskId,
   pub key: Arc<str>,
   pub title: Arc<str>,
@@ -348,6 +355,8 @@ impl TaskRow {
     let latest = latest.and_then(Latest::run);
     Self {
       id: task.id(),
+      organization: task.organization().clone(),
+      tags: Vec::new(),
       key: task.key().to_string().into(),
       title: task.details().title.as_str().into(),
       pipeline: PipelineLabel::of(task.details().pipeline, published),
@@ -364,7 +373,9 @@ impl TaskRow {
 pub fn rows(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, tab: TaskTab) -> Vec<TaskRow> {
   tasks
     .iter()
-    .filter(|task| tab.includes(task))
+    .filter(|task| {
+      tab.includes(task) && (tab != TaskTab::NeedsYou || phase_of(task, phases) == Some(TaskPhase::Waiting))
+    })
     .map(|task| TaskRow::new(task, published, phases.get(&task.id())))
     .collect()
 }

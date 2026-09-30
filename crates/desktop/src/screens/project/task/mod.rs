@@ -15,13 +15,17 @@ mod conversation;
 mod heading;
 mod limit_panel;
 mod notice;
+mod organization;
+mod organization_history;
 mod permissions;
 mod plan_review;
 mod progress;
 mod ready;
 mod retry_limit;
 mod run_again;
+mod scrolls;
 mod summary;
+pub(super) use scrolls::TaskScrolls;
 mod tab_state;
 mod tool_approval;
 mod unreadable;
@@ -53,7 +57,6 @@ use orchester_core::{
 pub(super) use tool_approval::modal as tool_approval_modal;
 
 use self::{
-  activity::{ActivityProps, ActivityTab},
   changes::{ChangesProps, ChangesTab, CheckpointedLoad},
   controls::{ControlAction, RunControl, control_action, control_buttons},
   notice::Lost,
@@ -142,19 +145,6 @@ pub struct TaskScreen {
   scrolls: TaskScrolls,
 }
 
-/// Where the task page's scrolled panes are: kept by the page, so a tab that goes inactive and
-/// back keeps them.
-pub(super) struct TaskScrolls {
-  /// The Summary's notice and progress (`ZVdRa`).
-  pub(super) progress: ScrollState,
-  /// This run's configuration (`F5Lsi`).
-  pub(super) this_run: ScrollState,
-  /// The Summary of a run that cannot be read (02.R).
-  pub(super) unreadable: ScrollState,
-  /// The Conversation tab's active work.
-  pub(super) work: ScrollState,
-}
-
 impl Component for TaskScreen {
   type Props = TaskProps;
 
@@ -211,21 +201,9 @@ impl Component for TaskScreen {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0));
     let Some(LoadedTask(detail)) = state.data else {
-      let panel = match &state.error {
-        Some(error) => RecoveryPanel::new(
-          Icon::AlertCircle,
-          &ctx.t("runs.page.loadFailed"),
-          &message_text(ctx, error),
-        ),
-        None => RecoveryPanel::new(
-          Icon::Loader,
-          &ctx.t("runs.page.loading"),
-          &ctx.t("runs.page.loadingDetail"),
-        ),
-      };
       return column
         .child(self.topbar(ctx, &props, (None, Vec::new()), &control))
-        .child(centered(panel.into()));
+        .child(centered(load_panel(ctx, state.error.as_ref())));
     };
     if self.redirect_queued_retry(&detail) {
       return column;
@@ -256,11 +234,19 @@ impl Component for TaskScreen {
     let earlier_unreadable = detail
       .earlier_unreadable
       .iter()
-      .map(|run| unreadable::earlier_notice(ctx, run));
+      .map(|run| unreadable::earlier_notice(ctx, run))
+      .collect::<Vec<_>>();
     column
       .child(self.topbar(ctx, &props, (Some(&detail), ended), &control))
       .with_children(runner_notice)
       .child(heading::heading(ctx, &detail, lost.is_some()))
+      .child(ctx.mount_keyed::<organization::OrganizationHeader>(
+        "task-organization",
+        organization::OrganizationProps {
+          root: props.project.repo_root.clone(),
+          detail: detail.clone(),
+        },
+      ))
       .with_children(earlier_unreadable)
       .with_children(control_error)
       .child(self.tabs(ctx, &props, files))
@@ -334,15 +320,7 @@ impl TaskScreen {
         (&props.project.repo_root, &self.scrolls),
         reason,
       ),
-      (TaskPageTab::Activity, _) => ctx.mount_keyed::<ActivityTab>(
-        "task-activity",
-        ActivityProps {
-          repo_root: props.project.repo_root.clone(),
-          detail: detail.clone(),
-          revision: props.revision,
-          live,
-        },
-      ),
+      (TaskPageTab::Activity, _) => organization_history::activity(ctx, props, detail, live),
       (TaskPageTab::Changes, _) => ctx.mount_keyed::<ChangesTab>(
         "task-changes",
         ChangesProps {
@@ -590,4 +568,20 @@ fn centered(content: Element) -> Element {
     .justify(Justify::Center)
     .child(content)
     .into()
+}
+
+fn load_panel(ctx: &Ctx, error: Option<&Message>) -> Element {
+  let panel = match error {
+    Some(error) => RecoveryPanel::new(
+      Icon::AlertCircle,
+      &ctx.t("runs.page.loadFailed"),
+      &message_text(ctx, error),
+    ),
+    None => RecoveryPanel::new(
+      Icon::Loader,
+      &ctx.t("runs.page.loading"),
+      &ctx.t("runs.page.loadingDetail"),
+    ),
+  };
+  panel.into()
 }

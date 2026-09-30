@@ -91,11 +91,13 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
     Page::Tasks(tab) => ctx.mount_keyed::<TasksScreen>(
       "tasks",
       TasksProps {
+        root: open.repo_root.clone(),
         project: open.project.name().as_str().into(),
         tab,
         tasks: shown.tasks,
       },
     ),
+    Page::ProjectTags => ctx.mount_keyed::<super::tag_manager::TagManager>("project-tags", open),
     Page::NewTask => ctx.mount_keyed::<NewTaskForm>(
       "new-task",
       NewTaskProps {

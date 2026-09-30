@@ -1,0 +1,279 @@
+//! User-owned task organization, independent of execution and scheduling.
+
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+use crate::{
+  id::{RunId, TagId, TaskId},
+  name::Name,
+  time::Timestamp,
+};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum WorkflowStatus {
+  #[default]
+  Backlog,
+  Todo,
+  InProgress,
+  InReview,
+  Done,
+  Canceled,
+}
+
+impl WorkflowStatus {
+  pub const ALL: [Self; 6] = [
+    Self::Backlog,
+    Self::Todo,
+    Self::InProgress,
+    Self::InReview,
+    Self::Done,
+    Self::Canceled,
+  ];
+
+  /// Cancellation cannot commit until the existing run cancellation path has finished.
+  pub fn check_change(self, active: Option<RunId>) -> Result<(), OrganizationError> {
+    if self == Self::Canceled
+      && let Some(run) = active
+    {
+      return Err(OrganizationError::StopRunFirst(run));
+    }
+    Ok(())
+  }
+}
+
+/// Ordering is for task lists only, never runner scheduling.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Priority {
+  Urgent,
+  High,
+  Medium,
+  Low,
+  #[default]
+  None,
+}
+
+impl Priority {
+  pub const ALL: [Self; 5] = [Self::Urgent, Self::High, Self::Medium, Self::Low, Self::None];
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DependencyGate {
+  Review,
+  Merge,
+}
+
+impl DependencyGate {
+  pub const fn is_completed(self, phase: crate::run::TaskPhase) -> bool {
+    match self {
+      Self::Review => matches!(phase, crate::run::TaskPhase::Succeeded | crate::run::TaskPhase::Merged),
+      Self::Merge => matches!(phase, crate::run::TaskPhase::Merged),
+    }
+  }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockingTask {
+  pub task: TaskId,
+  pub gate: DependencyGate,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "StoredOrganization", into = "StoredOrganization")]
+pub struct TaskOrganization {
+  status: WorkflowStatus,
+  priority: Priority,
+  blocked_reason: Option<String>,
+  dependencies: Vec<BlockingTask>,
+  tags: Vec<TagId>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct StoredOrganization {
+  status: WorkflowStatus,
+  priority: Priority,
+  blocked_reason: Option<String>,
+  dependencies: Vec<BlockingTask>,
+  tags: Vec<TagId>,
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum OrganizationError {
+  #[error("a blocked task requires a reason")]
+  MissingReason,
+  #[error("task dependency would form a cycle")]
+  DependencyCycle,
+  #[error("stop run {0} before canceling the task")]
+  StopRunFirst(RunId),
+  #[error("tag name already exists")]
+  DuplicateTag,
+  #[error("tag {0} does not exist")]
+  TagNotFound(TagId),
+  #[error("a tag cannot merge into itself")]
+  SameTag,
+  #[error("task has unfinished blocking tasks")]
+  Blocked(Vec<TaskId>),
+}
+
+impl TaskOrganization {
+  pub fn new(
+    status: WorkflowStatus,
+    priority: Priority,
+    blocked_reason: Option<String>,
+    dependencies: Vec<BlockingTask>,
+    mut tags: Vec<TagId>,
+  ) -> Result<Self, OrganizationError> {
+    let blocked_reason = blocked_reason.map(|reason| reason.trim().to_owned());
+    if blocked_reason.as_ref().is_some_and(String::is_empty) {
+      return Err(OrganizationError::MissingReason);
+    }
+    tags.sort();
+    tags.dedup();
+    Ok(Self {
+      status,
+      priority,
+      blocked_reason,
+      dependencies,
+      tags,
+    })
+  }
+
+  pub const fn status(&self) -> WorkflowStatus {
+    self.status
+  }
+  pub const fn priority(&self) -> Priority {
+    self.priority
+  }
+  pub fn blocked_reason(&self) -> Option<&str> {
+    self.blocked_reason.as_deref()
+  }
+  pub fn dependencies(&self) -> &[BlockingTask] {
+    &self.dependencies
+  }
+  pub fn tags(&self) -> &[TagId] {
+    &self.tags
+  }
+
+  pub fn with_status(mut self, status: WorkflowStatus) -> Self {
+    self.status = status;
+    self
+  }
+  pub fn with_priority(mut self, priority: Priority) -> Self {
+    self.priority = priority;
+    self
+  }
+  pub fn with_tags(mut self, mut tags: Vec<TagId>) -> Self {
+    tags.sort();
+    tags.dedup();
+    self.tags = tags;
+    self
+  }
+
+  pub fn add_tags(self, tags: &[TagId]) -> Self {
+    let mut assigned = self.tags.clone();
+    assigned.extend_from_slice(tags);
+    self.with_tags(assigned)
+  }
+
+  pub fn remove_tags(self, tags: &[TagId]) -> Self {
+    let assigned = self.tags.iter().copied().filter(|id| !tags.contains(id)).collect();
+    self.with_tags(assigned)
+  }
+
+  /// The manual flag is informational and remains visible after links resolve.
+  pub fn unfinished(&self, completed: impl Fn(&BlockingTask) -> bool) -> Vec<TaskId> {
+    self
+      .dependencies
+      .iter()
+      .filter(|link| !completed(link))
+      .map(|link| link.task)
+      .collect()
+  }
+}
+
+impl TryFrom<StoredOrganization> for TaskOrganization {
+  type Error = OrganizationError;
+  fn try_from(value: StoredOrganization) -> Result<Self, Self::Error> {
+    Self::new(
+      value.status,
+      value.priority,
+      value.blocked_reason,
+      value.dependencies,
+      value.tags,
+    )
+  }
+}
+
+impl From<TaskOrganization> for StoredOrganization {
+  fn from(value: TaskOrganization) -> Self {
+    Self {
+      status: value.status,
+      priority: value.priority,
+      blocked_reason: value.blocked_reason,
+      dependencies: value.dependencies,
+      tags: value.tags,
+    }
+  }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Tag {
+  id: TagId,
+  name: Name,
+}
+
+impl Tag {
+  pub const fn new(id: TagId, name: Name) -> Self {
+    Self { id, name }
+  }
+  pub const fn id(&self) -> TagId {
+    self.id
+  }
+  pub const fn name(&self) -> &Name {
+    &self.name
+  }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChangeActor {
+  Person,
+  Orchester,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OrganizationChange {
+  pub actor: ChangeActor,
+  pub at: Timestamp,
+  pub from: TaskOrganization,
+  pub to: TaskOrganization,
+  pub from_tag_names: Vec<Name>,
+  pub to_tag_names: Vec<Name>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TaskSort {
+  #[default]
+  Updated,
+  Status,
+  Priority,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TaskFilter {
+  pub statuses: Vec<WorkflowStatus>,
+  pub priorities: Vec<Priority>,
+  pub tags: Vec<TagId>,
+  pub all_tags: bool,
+}
+
+impl TaskFilter {
+  pub fn includes(&self, value: &TaskOrganization) -> bool {
+    (self.statuses.is_empty() || self.statuses.contains(&value.status))
+      && (self.priorities.is_empty() || self.priorities.contains(&value.priority))
+      && (self.tags.is_empty()
+        || if self.all_tags {
+          self.tags.iter().all(|tag| value.tags.contains(tag))
+        } else {
+          self.tags.iter().any(|tag| value.tags.contains(tag))
+        })
+  }
+}

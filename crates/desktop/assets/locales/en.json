@@ -12,7 +12,8 @@
     "close": "Close",
     "copy": "Copy",
     "copied": "Copied",
-    "copyFailed": "The command could not be copied. Select it and copy it by hand."
+    "copyFailed": "The command could not be copied. Select it and copy it by hand.",
+    "confirm": "Confirm"
   },
   "workspace": {
     "personal": "Personal workspace"
@@ -348,7 +349,7 @@
   "tasks": {
     "title": "Tasks",
     "breadcrumb": "{{project}} / Tasks",
-    "description": "Prepare your backlog, then choose what agents should work on.",
+    "description": "Workflow status describes your work. Run labels describe the agent.",
     "createMultiple": "Create multiple",
     "loadFailed": "Tasks cannot be read",
     "emptyTitle": "No tasks yet",
@@ -359,18 +360,32 @@
       "drafts": "Drafts",
       "queue": "Queue",
       "needsReview": "Needs review",
-      "done": "Done"
+      "done": "Done",
+      "needsYou": "Needs you"
     },
     "filters": {
       "search": "Search tasks…",
       "allPipelines": "All pipelines",
-      "manualOrder": "Manual order"
+      "manualOrder": "Manual order",
+      "clear": "Clear filters",
+      "matchAll": "Match all selected tags",
+      "matchAny": "Match any selected tag",
+      "noMatches": "No tasks match these filters."
     },
     "selection": {
       "unavailable": "Selecting tasks is not available yet",
       "readiness": "{{ready}} ready to queue · {{incomplete}} incomplete",
       "setPipeline": "Set pipeline",
-      "runSelected": "Run selected"
+      "runSelected": "Run selected",
+      "count": "{{count}} selected",
+      "setStatus": "Set status",
+      "setPriority": "Set priority",
+      "addTag": "Add tag",
+      "removeTag": "Remove tag",
+      "clear": "Clear selection",
+      "changed": "{{task}} updated.",
+      "failed": "{{task}} could not be updated: {{reason}}",
+      "removeTagCount": "Remove {{tag}} · on {{count}} selected tasks"
     },
     "columns": {
       "key": "ID",
@@ -508,6 +523,81 @@
       "leave": "Your edits to {{task}} are not saved yet. Leaving discards them; the saved task stays as it was.",
       "notStarted": "This task is queued. Its details can be edited after the first run is recorded.",
       "incomplete": "A task that has started must keep a brief, acceptance criteria, pipeline and limits."
+    },
+    "workflow": {
+      "label": "Status",
+      "backlog": "Backlog",
+      "todo": "Todo",
+      "inProgress": "In progress",
+      "inReview": "In review",
+      "done": "Done",
+      "canceled": "Canceled",
+      "noActiveRun": "No active run",
+      "saving": "Saving changes…"
+    },
+    "priority": {
+      "label": "Priority",
+      "urgent": "Urgent",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "none": "No priority"
+    },
+    "blocked": {
+      "label": "Blocked",
+      "reason": "Reason",
+      "reasonRequired": "Enter a reason when marking a task Blocked.",
+      "links": "Blocking tasks · optional",
+      "addLink": "Add blocking task",
+      "removeLink": "Remove",
+      "cycle": "This link would create a dependency cycle. Choose another task.",
+      "unfinished": "Blocked · {{tasks}} unfinished. {{reason}}",
+      "informational": "Blocked · {{reason}}",
+      "runUnavailable": "Run is unavailable until the linked blocking tasks finish."
+    },
+    "cancel": {
+      "title": "Cancel this task and stop its run?",
+      "explanation": "{{task}} has an active run. Confirming stops Run #{{run}} and sets the task to Canceled. Its work stays on {{branch}}. No branch or files are deleted.",
+      "bulkExplanation": "Cancel {{tasks}} tasks and stop {{runs}} active runs? Work stays on each run’s branch.",
+      "keep": "Keep task",
+      "confirm": "Stop run and cancel task",
+      "stopping": "Stopping…",
+      "confirmRequired": "Confirm stopping the active run before canceling this task."
+    },
+    "tags": {
+      "label": "Tags",
+      "edit": "Edit tags",
+      "search": "Search or create a tag",
+      "createNamed": "Create “{{name}}”",
+      "manage": "Manage project tags",
+      "saving": "Saving tags…",
+      "loading": "Loading tags…",
+      "new": "New tag",
+      "empty": "No tags yet. Create a tag here or while tagging a task.",
+      "taskCount": "{{count}} tasks",
+      "rename": "Rename",
+      "merge": "Merge",
+      "delete": "Delete",
+      "chooseTarget": "Choose another tag",
+      "mergeExplanation": "Confirm replacing the source tag on all its tasks with the selected target. Existing target assignments are kept once. The source tag is removed.",
+      "deleteExplanation": "This tag will be removed from {{count}} tasks and the project tag list. Tasks and their other tags stay. Recreating the name does not restore assignments.",
+      "duplicate": "A tag with that name already exists, ignoring case.",
+      "stale": "This tag no longer exists. Reload the project tag list.",
+      "sameTarget": "A tag cannot merge into itself.",
+      "back": "Back to Tasks",
+      "breadcrumb": "{project} / Project tags",
+      "description": "Tag names are unique, ignoring letter case. Tags use the same neutral theme style throughout this project."
+    },
+    "sort": {
+      "updated": "Sort: Updated",
+      "status": "Sort: Status",
+      "priority": "Sort: Priority"
+    },
+    "history": {
+      "title": "Task history",
+      "person": "You",
+      "orchester": "Orchester",
+      "change": "{time} · {actor} · {field}: {from} → {to}"
     }
   },
   "runs": {

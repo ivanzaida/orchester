@@ -80,6 +80,13 @@ impl RunAgainCheck {
       limits: db.project_limits()?,
       used_today: db.tokens_used_since(Timestamp::now().local_day_start())?,
     };
+    if !db.unfinished_blocking_tasks(task.id())?.is_empty() {
+      return Ok(Self {
+        after,
+        pipeline: name,
+        next: Err(RunAgainBlock::TaskBlocked),
+      });
+    }
     if let Err(block) = run_again(&input) {
       return Ok(Self {
         after,
@@ -112,6 +119,7 @@ impl RunAgainCheck {
 /// says it (`iE8eQ`).
 pub fn block_message(block: RunAgainBlock, pipeline: &str) -> Message {
   match block {
+    RunAgainBlock::TaskBlocked => Message::new("tasks.blocked.runUnavailable"),
     RunAgainBlock::NotEnded => Message::new("runs.runAgain.unavailable.notEnded"),
     RunAgainBlock::RunActive { number } => {
       Message::new("runs.runAgain.unavailable.runActive").with("run", number.get().to_string())

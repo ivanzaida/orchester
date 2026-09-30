@@ -71,6 +71,7 @@ enum PipelineSource {
 fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -> Result<Checked, Rejection> {
   let store = |error: StoreError| failed("cannot read the project database", &error);
   let task = db.task(task_id).map_err(store)?.ok_or(Rejection::TaskNotFound)?;
+  check_readiness(db, task_id)?;
   // Unreadable runs count too: each run of the task has its own branch.
   let earlier = db
     .runs_of_task(task_id)
@@ -172,6 +173,7 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
       execute: false,
     });
   }
+  check_readiness(db, run.task())?;
   if !worktree.is_dir() {
     worktrees
       .create(run.id(), run.branch().as_str(), run.base().as_str())
@@ -188,6 +190,18 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
     worktree,
     execute: true,
   })
+}
+
+fn check_readiness(db: &ProjectDb, task: TaskId) -> Result<(), Rejection> {
+  match db.check_task_readiness(task) {
+    Ok(()) => Ok(()),
+    Err(StoreError::Organization(orchester_core::task::organization::OrganizationError::Blocked(_))) => {
+      Err(Rejection::RunAgainBlocked {
+        block: orchester_core::run::RunAgainBlock::TaskBlocked,
+      })
+    }
+    Err(error) => Err(failed("cannot read task readiness", &error)),
+  }
 }
 
 impl Prepared {
