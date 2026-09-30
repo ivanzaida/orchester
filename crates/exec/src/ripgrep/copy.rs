@@ -1,9 +1,10 @@
 //! Copying the ripgrep found into the project's tools folder, `rg-<hash>/` by content. Every call
 //! stages its copy in a folder of its own and renames it into place, so agents starting together
 //! never share or delete a half-made copy. The content hash is kept per file (path, size and change
-//! time) for the life of the process, so an agent start does not read the program again. Copies of
-//! other content, and staging folders left by a copy that stopped, are removed once a copy is in
-//! place.
+//! time) for the life of the process, so an agent start does not read the program again. Staging
+//! folders left by a copy that stopped are removed after an hour. A copy of other content is left
+//! for agents that started with it until the current copy is a day old: every agent since started
+//! with the current one.
 
 use std::{
   collections::HashMap,
@@ -27,6 +28,8 @@ const COPY: &str = "rg-";
 const STAGING: &str = ".rg-";
 /// A staging folder this old belongs to a copy that stopped.
 const STALE_STAGING: Duration = Duration::from_secs(60 * 60);
+/// Once the current copy is this old, agents that started with an earlier one have ended.
+const REPLACED_COPY: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Numbers the staging folders of this process.
 static STAGED: AtomicU64 = AtomicU64::new(0);
@@ -109,29 +112,40 @@ fn executable(_file: &Path) -> io::Result<()> {
   Ok(())
 }
 
-/// Removes the copies in `tools` other than `current`, and staging folders a stopped copy left.
-/// A copy an agent still runs cannot be removed on Windows and is tried again next time; on macOS
-/// an agent that started with an older copy loses it, as it would when ripgrep is upgraded.
+/// Removes staging folders a stopped copy left, and the copies in `tools` other than `current` once
+/// `current` is [`REPLACED_COPY`] old. A copy an agent still runs cannot be removed on Windows and is
+/// tried again next time.
 fn remove_others(tools: &Path, current: &Path) {
-  let Ok(entries) = fs::read_dir(tools) else {
-    return;
+  let entries = match fs::read_dir(tools) {
+    Ok(entries) => entries,
+    Err(error) => {
+      tracing::debug!(%error, folder = %tools.display(), "cannot look for old ripgrep copies");
+      return;
+    }
   };
+  let replaced = age(current).is_some_and(|age| age > REPLACED_COPY);
   for entry in entries.flatten() {
     let path = entry.path();
     let name = entry.file_name();
     let name = name.to_string_lossy();
     let stale = if name.starts_with(STAGING) {
-      entry
-        .metadata()
-        .and_then(|metadata| metadata.modified())
-        .ok()
-        .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|age| age > STALE_STAGING)
+      age(&path).is_some_and(|age| age > STALE_STAGING)
     } else {
-      name.starts_with(COPY) && path != current
+      replaced && name.starts_with(COPY) && path != current
     };
     if stale && let Err(error) = remove_folder(&path) {
       tracing::debug!(%error, folder = %path.display(), "cannot remove an old ripgrep copy yet");
+    }
+  }
+}
+
+/// How long ago `folder` last changed; `None` when that cannot be read, which keeps it.
+fn age(folder: &Path) -> Option<Duration> {
+  match fs::metadata(folder).and_then(|metadata| metadata.modified()) {
+    Ok(modified) => modified.elapsed().ok(),
+    Err(error) => {
+      tracing::debug!(%error, folder = %folder.display(), "cannot read when a ripgrep folder changed");
+      None
     }
   }
 }

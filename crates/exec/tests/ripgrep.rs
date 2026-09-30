@@ -8,6 +8,7 @@ use std::{
   ffi::OsString,
   fs,
   path::{Path, PathBuf},
+  time::{Duration, SystemTime},
 };
 
 use orchester_exec::ripgrep::{
@@ -170,11 +171,50 @@ fn ripgrep_is_copied_once_per_content_into_the_tools_folder() {
   };
   let other = ripgrep::provide(&newer, &tools).expect("copied");
   assert_ne!(other, folder);
-  let entries: Vec<PathBuf> = fs::read_dir(&tools)
-    .expect("read")
-    .map(|entry| entry.expect("entry").path())
-    .collect();
-  assert_eq!(entries, [other], "the older copy and every staging folder are gone");
+  let entries = |tools: &Path| -> Vec<PathBuf> {
+    let mut entries: Vec<PathBuf> = fs::read_dir(tools)
+      .expect("read")
+      .map(|entry| entry.expect("entry").path())
+      .collect();
+    entries.sort();
+    entries
+  };
+  let mut both = vec![folder, other.clone()];
+  both.sort();
+  assert_eq!(entries(&tools), both, "agents that started with the older copy keep it");
+
+  // A day after the newer copy was placed, every agent runs it: the older one goes.
+  make_older(&other, Duration::from_secs(25 * 60 * 60));
+  assert_eq!(ripgrep::provide(&newer, &tools).expect("again"), other);
+  assert_eq!(
+    entries(&tools),
+    [other],
+    "the older copy and every staging folder are gone"
+  );
+}
+
+/// Sets when `folder` last changed to `by` ago.
+fn make_older(folder: &Path, by: Duration) {
+  open_folder(folder)
+    .set_modified(SystemTime::now() - by)
+    .expect("set when the folder changed");
+}
+
+#[cfg(windows)]
+fn open_folder(folder: &Path) -> fs::File {
+  use std::os::windows::fs::OpenOptionsExt;
+  // Windows opens a folder only with backup semantics.
+  const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+  fs::OpenOptions::new()
+    .write(true)
+    .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+    .open(folder)
+    .expect("open the folder")
+}
+
+#[cfg(not(windows))]
+fn open_folder(folder: &Path) -> fs::File {
+  fs::File::open(folder).expect("open the folder")
 }
 
 #[test]
