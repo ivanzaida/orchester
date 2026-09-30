@@ -134,8 +134,41 @@ fn ripgrep_is_copied_once_per_content_into_the_tools_folder() {
   };
   let other = ripgrep::provide(&newer, &tools).expect("copied");
   assert_ne!(other, folder);
-  let entries: Vec<_> = fs::read_dir(&tools).expect("read").collect();
-  assert_eq!(entries.len(), 2, "no staging folder is left");
+  let entries: Vec<PathBuf> = fs::read_dir(&tools)
+    .expect("read")
+    .map(|entry| entry.expect("entry").path())
+    .collect();
+  assert_eq!(entries, [other], "the older copy and every staging folder are gone");
+}
+
+#[test]
+fn ripgrep_is_copied_for_many_agents_starting_together() {
+  let dir = tempfile::tempdir().expect("temp");
+  let tools = dir.path().join("repo/.orchester/tools");
+  let found = Found {
+    path: file(&dir.path().join("a").join(PROGRAM), &"ripgrep ".repeat(100_000)),
+    source: Source::OnPath,
+  };
+
+  let folders: Vec<_> = std::thread::scope(|scope| {
+    let starts: Vec<_> = (0..16)
+      .map(|_| scope.spawn(|| ripgrep::provide(&found, &tools)))
+      .collect();
+    starts
+      .into_iter()
+      .map(|start| start.join().expect("no panic"))
+      .collect()
+  });
+
+  for folder in &folders {
+    let folder = folder.as_ref().expect("every start gets ripgrep");
+    assert_eq!(fs::metadata(folder.join(PROGRAM)).expect("copy").len(), 800_000);
+  }
+  assert_eq!(
+    fs::read_dir(&tools).expect("read").count(),
+    1,
+    "no staging folder is left"
+  );
 }
 
 #[test]

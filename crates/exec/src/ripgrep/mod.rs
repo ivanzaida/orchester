@@ -10,6 +10,7 @@
 //! hash of its content, so a new ripgrep gets a folder of its own and an agent never sees a copy change under it.
 //! Installing ripgrep is [`install`], run only when a person asks for it.
 
+mod copy;
 pub mod install;
 
 use std::{
@@ -18,9 +19,9 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+pub use self::copy::provide;
 use crate::launch::{self, Via};
 
 /// The file name of ripgrep's program.
@@ -53,8 +54,6 @@ const CLAUDE_PLATFORM: &str = if cfg!(all(windows, target_arch = "aarch64")) {
 } else {
   "x64-linux"
 };
-/// Hex digits of the content hash in a copy's folder name.
-const HASH_DIGITS: usize = 16;
 
 /// Where a ripgrep was found.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -159,54 +158,4 @@ fn codex_ripgrep(package: &Path, scope: &Path) -> Option<Found> {
       })
     })
   })
-}
-
-/// The folder in `tools` that holds a copy of `found`, copied now unless a copy of the same content
-/// is there already. Agents get this folder first on their `PATH`.
-pub fn provide(found: &Found, tools: &Path) -> Result<PathBuf, ProvideError> {
-  let content = fs::read(&found.path).map_err(|source| ProvideError::Read {
-    path: found.path.clone(),
-    source,
-  })?;
-  let hash: String = Sha256::digest(&content)
-    .iter()
-    .take(HASH_DIGITS / 2)
-    .map(|byte| format!("{byte:02x}"))
-    .collect();
-  let folder = tools.join(format!("rg-{hash}"));
-  let copy = folder.join(PROGRAM);
-  if fs::metadata(&copy).is_ok_and(|metadata| metadata.len() == content.len() as u64) {
-    return Ok(folder);
-  }
-  let failed = |path: &Path| {
-    let path = path.to_path_buf();
-    move |source| ProvideError::Copy { path, source }
-  };
-  // Written beside the folder and renamed into place, so an agent never runs a partial copy.
-  let staging = tools.join(format!(".rg-{hash}-{}", std::process::id()));
-  remove_folder(&staging).map_err(failed(&staging))?;
-  fs::create_dir_all(&staging).map_err(failed(&staging))?;
-  fs::write(staging.join(PROGRAM), &content).map_err(failed(&staging))?;
-  copy_permissions(&found.path, &staging.join(PROGRAM)).map_err(failed(&staging))?;
-  match fs::rename(&staging, &folder) {
-    Ok(()) => Ok(folder),
-    // Another runner placed the same copy first.
-    Err(_) if copy.is_file() => {
-      remove_folder(&staging).map_err(failed(&staging))?;
-      Ok(folder)
-    }
-    Err(source) => Err(ProvideError::Copy { path: folder, source }),
-  }
-}
-
-/// Keeps `from`'s permissions, the execute bits on macOS, on `to`.
-fn copy_permissions(from: &Path, to: &Path) -> io::Result<()> {
-  fs::set_permissions(to, fs::metadata(from)?.permissions())
-}
-
-fn remove_folder(folder: &Path) -> io::Result<()> {
-  match fs::remove_dir_all(folder) {
-    Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
-    _ => Ok(()),
-  }
 }
