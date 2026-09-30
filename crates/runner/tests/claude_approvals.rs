@@ -23,6 +23,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
+use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
@@ -184,10 +185,18 @@ enum Stopping {
   Shutdown,
 }
 
+/// A run paused at a pending call, as [`stop_at_a_pending_approval`] leaves it.
+struct PausedAtApproval {
+  project: TestProject,
+  scheduler: Scheduler,
+  events: mpsc::UnboundedReceiver<Event>,
+  id: RunId,
+}
+
 /// A pause or a graceful shutdown while a call waits checkpoints the session without granting the
 /// call, as for Codex: the run pauses with its step still running and its work saved, and nothing
 /// in its activity calls that a failure.
-async fn stop_at_a_pending_approval(stopping: Stopping) {
+async fn stop_at_a_pending_approval(stopping: Stopping) -> PausedAtApproval {
   let project = claude(
     "Ask before publishing.",
     permissions(CommandPermission::AskBefore, false),
@@ -244,6 +253,12 @@ async fn stop_at_a_pending_approval(stopping: Stopping) {
     .filter(|event| matches!(event, AgentEvent::TurnFailed { .. }))
     .collect();
   assert!(failures.is_empty(), "a pause is no failure: {failures:?}");
+  PausedAtApproval {
+    project,
+    scheduler,
+    events,
+    id,
+  }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -254,6 +269,63 @@ async fn claude_approvals_pause_at_a_pending_call_saves_without_granting_it() {
 #[tokio::test(flavor = "multi_thread")]
 async fn claude_approvals_shutdown_at_a_pending_call_saves_without_granting_it() {
   stop_at_a_pending_approval(Stopping::Shutdown).await;
+}
+
+/// Continuing a run paused at a pending call resumes the same session, whose call has no result.
+/// Claude Code marks it interrupted, neither granted nor refused (`fake_claude`, `resume`), so
+/// nothing ran; the agent asks again in a new call, which a person decides as usual.
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_approvals_resume_after_a_pause_at_a_pending_call_asks_again() {
+  let PausedAtApproval {
+    project,
+    scheduler,
+    mut events,
+    id,
+  } = stop_at_a_pending_approval(Stopping::Pause).await;
+  let root = project.repo.path();
+  let first = ProjectDb::open(root)
+    .expect("open")
+    .invocations(id)
+    .expect("invocations")[0]
+    .clone();
+  let session = first.session.clone().expect("the paused session");
+  tokio::time::timeout(PATIENCE, scheduler.resume_run(id))
+    .await
+    .expect("answered in time")
+    .expect("the run continues");
+  let again = pending(root, &mut events, id).await;
+  assert!(again.id.ends_with(":toolu_publish_again"), "{}", again.id);
+  assert_ne!(
+    again.invocation, first.id,
+    "the new call belongs to the resumed invocation"
+  );
+  assert!(
+    !readme(root, id).contains("approved"),
+    "the interrupted call did not run"
+  );
+  scheduler
+    .decide_tool_approval(id, again.id, true)
+    .await
+    .expect("approved");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(reported(&db, id, "resumed: "), ["toolu_publish interrupted"]);
+  assert_eq!(reported(&db, id, "permission: "), ["toolu_publish_again allow"]);
+  let argv = reported(&db, id, "argv: ");
+  assert_eq!(argv.len(), 2);
+  assert!(argv[1].ends_with(&format!("--resume {session}")), "{}", argv[1]);
+  assert!(
+    argv[1].contains("--permission-prompt-tool mcp__Orchester__approve"),
+    "{}",
+    argv[1]
+  );
+  let head = git(root, &["rev-parse", run.branch().as_str()]);
+  assert_eq!(
+    git(root, &["show", &format!("{head}:README.md")]),
+    "hi\napproved\nhello",
+    "the action ran once, after the new approval"
+  );
 }
 
 /// Stopping ends the agent, which takes its permission prompt with it, and the prompt's connection
