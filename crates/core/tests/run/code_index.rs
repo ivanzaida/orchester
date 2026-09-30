@@ -2,7 +2,11 @@
 //! agent used before its first file edit, followed from the events Codex and Claude Code report.
 
 use orchester_core::{
-  connection::stream::{AgentEvent, FileChange, FileChangeKind},
+  code_index::RipgrepFallback,
+  connection::{
+    AgentProvider,
+    stream::{AgentEvent, FileChange, FileChangeKind, RunnerProblem},
+  },
   resource::InjectionEvent,
   run::{CodeIndexPrompt, EditProgress, FirstEdit, FirstEditTracker, TokenUsage},
   time::Timestamp,
@@ -206,4 +210,41 @@ fn first_edit_of_an_execution_adds_up_its_invocations_until_the_edit() {
   assert_eq!(execution.first_edit, Some(edit));
   assert!(execution.at_most);
   assert_eq!(EditProgress::of_execution(&parts[..1]).first_edit, None);
+}
+
+#[test]
+fn a_missing_ripgrep_names_how_the_agent_searches_instead() {
+  assert_eq!(
+    RipgrepFallback::of(AgentProvider::CodexCli, true),
+    RipgrepFallback::IndexWithGitGrep
+  );
+  assert_eq!(
+    RipgrepFallback::of(AgentProvider::CodexCli, false),
+    RipgrepFallback::GitGrep
+  );
+  assert_eq!(
+    RipgrepFallback::of(AgentProvider::ClaudeCodeCli, true),
+    RipgrepFallback::IndexWithOwnTools
+  );
+  assert_eq!(
+    RipgrepFallback::of(AgentProvider::ClaudeCodeCli, false),
+    RipgrepFallback::OwnTools
+  );
+  // A problem recorded before the fallback was kept still reads, not knowing it.
+  let stored: RunnerProblem = serde_json::from_str(r#"{"problem":"ripgrep_not_found"}"#).expect("reads");
+  assert_eq!(
+    stored,
+    RunnerProblem::RipgrepNotFound {
+      fallback: RipgrepFallback::Unknown
+    }
+  );
+  let stored: RunnerProblem =
+    serde_json::from_str(r#"{"problem":"ripgrep_unavailable","detail":"denied"}"#).expect("reads");
+  assert_eq!(
+    stored,
+    RunnerProblem::RipgrepUnavailable {
+      detail: "denied".into(),
+      fallback: RipgrepFallback::Unknown
+    }
+  );
 }

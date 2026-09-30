@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::revision::Revision;
+use crate::{connection::AgentProvider, revision::Revision};
 
 /// Whether a project's agents get the code index.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -65,4 +65,33 @@ pub enum RipgrepMissing {
   NotFound,
   /// Found but not given to the agent (copied into the project's tools folder); `detail` says why.
   Unavailable { detail: String },
+}
+
+/// How an agent without ripgrep searches instead, by its CLI and whether it got the code index.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RipgrepFallback {
+  /// Recorded before this was kept: not known.
+  #[default]
+  Unknown,
+  /// Codex with the code index: it searches the index and the files with `git grep`.
+  IndexWithGitGrep,
+  /// Claude Code with the code index: it searches with its own tools.
+  IndexWithOwnTools,
+  /// Codex without the code index: it searches the files with `git grep`.
+  GitGrep,
+  /// Claude Code without the code index: it searches with its own tools.
+  OwnTools,
+}
+
+impl RipgrepFallback {
+  /// The fallback of an agent on `provider`'s CLI that got the code index when `index_given`.
+  pub const fn of(provider: AgentProvider, index_given: bool) -> Self {
+    match (provider, index_given) {
+      (AgentProvider::CodexCli, true) => Self::IndexWithGitGrep,
+      (AgentProvider::CodexCli, false) => Self::GitGrep,
+      (AgentProvider::ClaudeCodeCli, true) => Self::IndexWithOwnTools,
+      (AgentProvider::ClaudeCodeCli, false) => Self::OwnTools,
+    }
+  }
 }

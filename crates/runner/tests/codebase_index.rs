@@ -12,7 +12,7 @@ mod support;
 use std::{collections::BTreeMap, fs, num::NonZeroU32, path::Path, time::Duration};
 
 use orchester_core::{
-  code_index::{CodeIndexSetting, CodeIndexUnavailable, CodeIndexUse, RipgrepMissing},
+  code_index::{CodeIndexSetting, CodeIndexUnavailable, CodeIndexUse, RipgrepFallback, RipgrepMissing},
   connection::{
     AgentProvider,
     stream::{AgentEvent, RunnerProblem},
@@ -272,7 +272,12 @@ async fn without_ripgrep_codex_gets_the_index_and_is_told_to_search_with_git_gre
     ripgrep: Some(RipgrepMissing::NotFound),
   };
   assert_eq!(uses(root, ended.id()), [given]);
-  assert_eq!(problems(root, ended.id()), [RunnerProblem::RipgrepNotFound]);
+  assert_eq!(
+    problems(root, ended.id()),
+    [RunnerProblem::RipgrepNotFound {
+      fallback: RipgrepFallback::IndexWithGitGrep
+    }]
+  );
   assert_eq!(prompt_lines(root, ended.id(), "# Codebase index").len(), 1);
   assert_eq!(
     prompt_lines(root, ended.id(), "ripgrep (`rg`) is not available").len(),
@@ -293,6 +298,37 @@ async fn without_ripgrep_claude_code_gets_the_index_and_is_not_steered_to_git_gr
 
   assert_eq!(prompt_lines(root, ended.id(), "# Codebase index").len(), 1);
   assert!(prompt_lines(root, ended.id(), "ripgrep (`rg`) is not available").is_empty());
+  assert_eq!(
+    problems(root, ended.id()),
+    [RunnerProblem::RipgrepNotFound {
+      fallback: RipgrepFallback::IndexWithOwnTools
+    }]
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn without_ripgrep_or_an_index_codex_is_told_it_searches_with_git_grep_only() {
+  let project = project(&indexed("Say hello."));
+  let root = project.repo.path();
+  let _path = agent_path(root, false);
+  // A file where the index folder belongs: nothing can be built there.
+  fs::write(root.join(".orchester/index"), "not a folder\n").expect("block the index folder");
+  let ended = run_to_the_end(root, project.task).await;
+
+  let problems = problems(root, ended.id());
+  assert!(
+    matches!(
+      &problems[..],
+      [
+        RunnerProblem::CodebaseIndexUnavailable { .. },
+        RunnerProblem::RipgrepNotFound {
+          fallback: RipgrepFallback::GitGrep
+        }
+      ]
+    ),
+    "{problems:?}"
+  );
+  assert!(prompt_lines(root, ended.id(), "# Codebase index").is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -527,7 +563,13 @@ async fn a_ripgrep_that_cannot_be_copied_is_reported_with_the_reason() {
   assert_eq!(ended.status(), &RunStatus::Succeeded);
 
   let problems = problems(root, ended.id());
-  let [RunnerProblem::RipgrepUnavailable { detail }] = &problems[..] else {
+  let [
+    RunnerProblem::RipgrepUnavailable {
+      detail,
+      fallback: RipgrepFallback::IndexWithGitGrep,
+    },
+  ] = &problems[..]
+  else {
     panic!("one ripgrep problem: {problems:?}");
   };
   assert!(detail.contains("tools"), "{detail}");

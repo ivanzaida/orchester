@@ -15,6 +15,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
+  code_index::RipgrepFallback,
   connection::stream::{CommandStatus, FileChangeKind, OutputStream, RunnerProblem, ToolCommandResult},
   tokens::compact_tokens,
 };
@@ -532,11 +533,31 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       ctx.t("runs.activity.problem.codebaseIndexUnavailable"),
       Some(detail.as_str().into()),
     ),
-    RunnerProblem::RipgrepNotFound => (ctx.t("runs.activity.problem.ripgrepNotFound"), None),
-    RunnerProblem::RipgrepUnavailable { detail } => (
-      ctx.t("runs.activity.problem.ripgrepUnavailable"),
-      Some(detail.as_str().into()),
+    RunnerProblem::RipgrepNotFound { fallback } => (
+      ctx.t("runs.activity.problem.ripgrepNotFound"),
+      Some(ctx.t(fallback_key(*fallback))),
     ),
+    RunnerProblem::RipgrepUnavailable { detail, fallback } => (
+      ctx.t("runs.activity.problem.ripgrepUnavailable"),
+      Some(ctx.t_args(
+        "runs.activity.problem.ripgrepUnavailableDetail",
+        [
+          ("fallback", &*ctx.t(fallback_key(*fallback))),
+          ("detail", detail.as_str()),
+        ],
+      )),
+    ),
+  }
+}
+
+/// How an agent without ripgrep searched: with or without the code index, by its CLI.
+const fn fallback_key(fallback: RipgrepFallback) -> &'static str {
+  match fallback {
+    RipgrepFallback::Unknown => "runs.activity.problem.ripgrepFallback.unknown",
+    RipgrepFallback::IndexWithGitGrep => "runs.activity.problem.ripgrepFallback.indexWithGitGrep",
+    RipgrepFallback::IndexWithOwnTools => "runs.activity.problem.ripgrepFallback.indexWithOwnTools",
+    RipgrepFallback::GitGrep => "runs.activity.problem.ripgrepFallback.gitGrep",
+    RipgrepFallback::OwnTools => "runs.activity.problem.ripgrepFallback.ownTools",
   }
 }
 

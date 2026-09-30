@@ -166,7 +166,7 @@ impl RunTask {
       None => command,
     };
     let mut left_out = left_out;
-    left_out.extend(index.problems);
+    left_out.extend(index.problems(provider));
     Ok(AgentStart {
       command,
       provider,

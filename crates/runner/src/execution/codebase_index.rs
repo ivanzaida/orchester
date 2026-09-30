@@ -18,7 +18,7 @@ use std::{
 };
 
 use orchester_core::{
-  code_index::{CodeIndexUnavailable, CodeIndexUse, RipgrepMissing},
+  code_index::{CodeIndexUnavailable, CodeIndexUse, RipgrepFallback, RipgrepMissing},
   command::Command,
   connection::{
     AgentConnection, AgentProvider,
@@ -59,8 +59,10 @@ pub(super) struct AgentIndex {
   pub(super) folder: Option<PathBuf>,
   /// The folder with the copy of ripgrep, which goes first on the agent's `PATH`.
   pub(super) tools: Option<PathBuf>,
-  /// The runner problems to record in the agent's activity.
-  pub(super) problems: Vec<AgentEvent>,
+  /// Why the index could not be built, when it could not.
+  build_failed: Option<String>,
+  /// Why the agent has no ripgrep, when it has none.
+  ripgrep: Option<RipgrepMissing>,
 }
 
 impl AgentIndex {
@@ -69,8 +71,31 @@ impl AgentIndex {
       used: CodeIndexUse::Off,
       folder: None,
       tools: None,
-      problems: Vec::new(),
+      build_failed: None,
+      ripgrep: None,
     }
+  }
+
+  /// The runner problems to record in the activity of an agent on `provider`'s CLI: an index that
+  /// could not be built, and a missing ripgrep with how the agent searches instead.
+  pub(super) fn problems(&self, provider: AgentProvider) -> Vec<AgentEvent> {
+    let fallback = RipgrepFallback::of(provider, self.folder.is_some());
+    let index = self
+      .build_failed
+      .clone()
+      .map(|detail| RunnerProblem::CodebaseIndexUnavailable { detail });
+    let ripgrep = self.ripgrep.as_ref().map(|missing| match missing {
+      RipgrepMissing::NotFound => RunnerProblem::RipgrepNotFound { fallback },
+      RipgrepMissing::Unavailable { detail } => RunnerProblem::RipgrepUnavailable {
+        detail: detail.clone(),
+        fallback,
+      },
+    });
+    index
+      .into_iter()
+      .chain(ripgrep)
+      .map(|problem| AgentEvent::RunnerProblem { problem })
+      .collect()
   }
 }
 
@@ -167,35 +192,33 @@ impl RunTask {
       return Ok(AgentIndex::off());
     }
     let index = self.index_folder();
-    let (tools, missing) = match self.provide_ripgrep()? {
+    let (tools, ripgrep) = match self.provide_ripgrep()? {
       Ok(folder) => (Some(folder), None),
-      Err((missing, problem)) => (None, Some((missing, problem))),
+      Err(missing) => (None, Some(missing)),
     };
-    let mut problems = Vec::new();
-    let (used, folder) = match index {
+    let (used, folder, build_failed) = match index {
       Ok(folder) => (
         CodeIndexUse::Given {
           revision: self.run.base().clone(),
-          ripgrep: missing.as_ref().map(|(missing, _)| missing.clone()),
+          ripgrep: ripgrep.clone(),
         },
         Some(folder),
+        None,
       ),
       Err(reason) => {
-        if let CodeIndexUnavailable::BuildFailed { detail } = &reason {
-          problems.push(RunnerProblem::CodebaseIndexUnavailable { detail: detail.clone() });
-        }
-        (CodeIndexUse::Unavailable { reason }, None)
+        let build_failed = match &reason {
+          CodeIndexUnavailable::BuildFailed { detail } => Some(detail.clone()),
+          CodeIndexUnavailable::Building => None,
+        };
+        (CodeIndexUse::Unavailable { reason }, None, build_failed)
       }
     };
-    problems.extend(missing.map(|(_, problem)| problem));
     Ok(AgentIndex {
       used,
       folder,
       tools,
-      problems: problems
-        .into_iter()
-        .map(|problem| AgentEvent::RunnerProblem { problem })
-        .collect(),
+      build_failed,
+      ripgrep,
     })
   }
 
@@ -224,7 +247,7 @@ impl RunTask {
   /// The folder holding the copy of ripgrep for an agent; else why the agent has none: none was
   /// found on the `PATH` the agent starts with (the project's, else the runner's), where winget
   /// installs for the agent's user or with an agent CLI, or the one found could not be copied.
-  fn provide_ripgrep(&self) -> Result<Result<PathBuf, (RipgrepMissing, RunnerProblem)>, String> {
+  fn provide_ripgrep(&self) -> Result<Result<PathBuf, RipgrepMissing>, String> {
     let environment = self.db.project_environment().map_err(|error| error.to_string())?;
     let path = environment.get("PATH").map(OsString::from).or_else(search_path);
     let local_app_data = environment
@@ -242,16 +265,14 @@ impl RunTask {
       .collect();
     let clis: Vec<&Path> = executables.iter().map(PathBuf::as_path).collect();
     let Some(found) = ripgrep::locate(path.as_deref(), local_app_data.as_deref(), &clis) else {
-      return Ok(Err((RipgrepMissing::NotFound, RunnerProblem::RipgrepNotFound)));
+      return Ok(Err(RipgrepMissing::NotFound));
     };
     Ok(
       ripgrep::provide(&found, &self.root.join(".orchester").join("tools")).map_err(|error| {
         tracing::warn!(%error, found = %found.path.display(), "ripgrep cannot be given to agents");
-        let detail = error.to_string();
-        (
-          RipgrepMissing::Unavailable { detail: detail.clone() },
-          RunnerProblem::RipgrepUnavailable { detail },
-        )
+        RipgrepMissing::Unavailable {
+          detail: error.to_string(),
+        }
       }),
     )
   }

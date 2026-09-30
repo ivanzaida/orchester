@@ -8,6 +8,7 @@ use std::sync::Arc;
 use lurq::{app::ctx::Ctx, components::Text, node::Element};
 use orchester_core::{
   code_index::{CodeIndexUnavailable, CodeIndexUse, RipgrepMissing},
+  connection::AgentProvider,
   id::StepExecutionId,
   run::{EditProgress, Invocation},
   tokens::compact_tokens,
@@ -35,10 +36,18 @@ pub(super) fn code_index_row(ctx: &Ctx, run: &RunView, invocation: &Invocation) 
         ),
         None => ctx.t_args("runs.activity.panel.codeIndexRevision", [("revision", short)]),
       };
-      let note = match ripgrep {
+      let reason = match ripgrep {
         None => return Some(styled_property(&label, &index, ValueStyle::Mono)),
         Some(RipgrepMissing::NotFound) => ctx.t("runs.activity.panel.codeIndexRipgrepNotFound"),
         Some(RipgrepMissing::Unavailable { .. }) => ctx.t("runs.activity.panel.codeIndexRipgrepUnavailable"),
+      };
+      // How this agent's CLI searches without ripgrep.
+      let note = match run.step_of(invocation.execution).and_then(|step| step.provider) {
+        Some(AgentProvider::CodexCli) => ctx.t_args("runs.activity.panel.codeIndexGitGrep", [("reason", &*reason)]),
+        Some(AgentProvider::ClaudeCodeCli) => {
+          ctx.t_args("runs.activity.panel.codeIndexOwnTools", [("reason", &*reason)])
+        }
+        None => reason,
       };
       return Some(noted_property(&label, &index, &note));
     }
