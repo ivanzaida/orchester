@@ -176,6 +176,8 @@ ORC-44 · Command approvals and current-run policy changes · branch `orchester/
   permissions to select bidirectional Codex transport. One-action command/MCP decisions and existing-session
   continuation preserve the run, worktree, completed steps and conversation. Run-only changes leave published
   policies intact. Unsupported approval forms fail explicitly; no persistent grant or bypass mode is offered.
+- The latest Implement correction makes long approval Target/cwd values wrap in the existing mono property
+  row. Fresh Check, Review and Verify must cover this candidate; the old native report remains historical.
 - Check, Review and Verify remain separate pipeline steps. Reuse the independent design evidence and canonical
   refs below. The root reports native command approve/deny and resumed-session writes in the worktree and
   an authorized additional folder on Codex 0.159.2. The transferred exact-root validation fix and four

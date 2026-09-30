@@ -72,11 +72,20 @@ pub fn property_with_suffix(label: &str, value: &str, suffix: &str) -> Element {
 
 /// An MCP remote authentication value may span several lines (`J6IaSG` in `a4lm6D`).
 pub fn wrapping_top_property(label: &str, value: &str) -> Element {
+  wrapping_property(label, value, ExtraTypography::WrappingProperty.role())
+}
+
+/// A full selectable path, retaining the mono value style when it spans several lines.
+pub fn wrapping_path_property(label: &str, value: &str) -> Element {
+  wrapping_property(label, value, ExtraTypography::MonoValue.role())
+}
+
+fn wrapping_property(label: &str, value: &str, typography: TypographyStyle) -> Element {
   property_row(label, Alignment::Start)
     .min_height(Dimension::Px(PROPERTY_HEIGHT))
     .child(
       Text::new(value)
-        .variant(ExtraTypography::WrappingProperty.role())
+        .variant(typography)
         .color(PaletteColor::TextPrimary)
         .text_align(TextAlign::Right)
         .flex(1.0)

@@ -13,6 +13,9 @@ the step visibly. File-change approvals, additional permission grants and unsupp
 request forms are rejected explicitly. Codex invocations with neither choice keep the noninteractive
 `codex exec -a never` transport.
 
+The approval dialog shows the complete Target or working-directory path as selectable wrapping
+text, including long absolute paths. Reviewing the filename does not depend on hovering.
+
 Changing permissions from a waiting task's popover applies to the next invocation. When continuing
 the task conversation, an existing `exec` session can resume through App Server with its original
 session ID and worktree. Completed steps, uncommitted work, run limits and the saved pipeline remain

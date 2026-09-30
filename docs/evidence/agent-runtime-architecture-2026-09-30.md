@@ -238,3 +238,33 @@ active-MCP checkpoint waiting, uncertain-delivery pause and exact-root enforceme
 the canonical UI references and an exact-PID private app, with the root's watcher supplied before
 launch; typed disposable fixtures and interactive export are authorized. No app was launched or
 design changed by this implementer.
+
+### Long absolute Target correction on f4b6f5c
+
+Current implementation input is checkpoint `f4b6f5c` plus the saved desktop/documentation delta
+from this continuation. The native accept/cancel parser, command tests and canonical permission
+guidance in that checkpoint remain intact; shared runtime was not reimplemented. The negative
+`.tmp/verify/resumed/native-report.md` covers the earlier `e946b9a` pin and PID 20152 only.
+Its long absolute filePath finding informed this correction; its old screenshots and host verdict
+are historical, not evidence for the changed candidate.
+
+Target/cwd now uses the shared wrapping property layout with the existing MonoValue theme role.
+The label remains at the top, the full raw path is selectable, and the row grows to fit wrapped
+lines instead of using nowrap/ellipsis. Existing non-path wrapping properties retain their style.
+No new strings, theme values, design writes, runtime changes or unrelated layout changes were made.
+
+Fresh checks passed: desktop `i18n` filters `locales_have` and `every_key` (one test each),
+desktop `theme` filters `extra_typography_follows_pencil` and `mono_text_uses_bundled_geist_mono`
+(one test each), `powershell -File tools/check.ps1` (`check: OK`), and `git diff --check`.
+An initial `theme_` filter matched zero tests and is not counted as coverage. Runtime/native
+checks and Mac runtime checks were not repeated for this desktop-only correction; prior results
+retain their original revision provenance and do not establish a new native or visual verdict.
+
+Fresh independent Check, Review and Verify must cover current source and a new pinned pair.
+Verify must reproduce a real long absolute filePath Target, including a long unbroken segment,
+confirm the unique filename and complete path are readable/selectable without hover, and compare
+short/long MCP Target and command cwd states against `h3KeVQ`/`GbNSA` at matching sizes. Check
+button visibility and usable layout at the narrower supported size. Native approve/deny and
+same-session migration must use the current pin; old negative QA is not its verdict. Report the
+new pin **READY** before any private-app launch so the root supplies a fresh host watcher.
+This implementer launched no app, produced no pin, and performed no design verification.

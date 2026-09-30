@@ -29,7 +29,7 @@ use crate::{
     form::form,
     icon::Icon,
     message_text,
-    property::{ValueStyle, property, styled_property},
+    property::{ValueStyle, property, styled_property, wrapping_path_property},
   },
 };
 
@@ -216,14 +216,13 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
       ValueStyle::Mono,
     ))
     .with_children(approval.target.as_deref().map(|target| {
-      styled_property(
+      wrapping_path_property(
         &ctx.t(if command {
           "runs.toolApproval.cwd"
         } else {
           "runs.toolApproval.target"
         }),
         target,
-        ValueStyle::Mono,
       )
     }))
     .child(Text::new(&ctx.t("runs.toolApproval.scope")).variant(TypographyStyle::Description))
