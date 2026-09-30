@@ -36,7 +36,7 @@ use super::run::RunTask;
 #[derive(Clone, Debug)]
 pub(super) enum IndexState {
   /// Not built while this task executes the run: the project had it off, or a request stopped the
-  /// wait for it.
+  /// wait for it. The steps' loop builds it before an agent starts while the setting is on.
   NotBuilt,
   Ready {
     folder: PathBuf,
@@ -146,19 +146,19 @@ impl RunTask {
     })
   }
 
-  /// The folder of the run's index, built now when the task has not built it (the setting was
-  /// turned on while the run executed, or a request stopped the wait for it); why there is none.
+  /// The folder of the run's index; why there is none. A failed build may have been retried from
+  /// Project settings since: an index that is there now is used.
   fn index_folder(&mut self) -> Result<PathBuf, String> {
-    if matches!(self.code_index, IndexState::NotBuilt) {
-      let indexes = CodebaseIndexes::new(&self.root);
-      // Other tasks of the runtime go on while this one builds.
-      let result = tokio::task::block_in_place(|| indexes.ensure(self.run.base(), self.run.id()));
-      self.code_index = state(self.run.id(), result);
+    if let IndexState::Failed { .. } | IndexState::NotBuilt = self.code_index
+      && let Some(folder) = CodebaseIndexes::new(&self.root).existing(self.run.base())
+    {
+      self.code_index = IndexState::Ready { folder };
     }
     match &self.code_index {
       IndexState::Ready { folder } => Ok(folder.clone()),
       IndexState::Failed { detail } => Err(detail.clone()),
-      IndexState::NotBuilt => Err("the index was not built".to_owned()),
+      // The steps' loop builds it before an agent starts; the setting was turned on in between.
+      IndexState::NotBuilt => Err("the code index was turned on after the agent's step began starting".to_owned()),
     }
   }
 

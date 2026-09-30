@@ -167,8 +167,10 @@ impl RunTask {
 
   async fn steps(&mut self) -> Result<(), ExecutionError> {
     self.write_result_schema()?;
-    self.prepare_code_index().await?;
     loop {
+      if matches!(self.code_index, IndexState::NotBuilt) && !self.stopping() {
+        self.prepare_code_index().await?;
+      }
       while let Ok(control) = self.controls.try_recv() {
         self.control(control)?;
       }
@@ -193,12 +195,11 @@ impl RunTask {
     }
   }
 
-  /// Builds or reuses the code index before the run's steps start, while the project has it on.
-  /// Requests are handled meanwhile; once one stops the run (a cancel, a pause, the runner
-  /// stopping) the task stops waiting: the build goes on in the background, and an agent that
-  /// starts later builds or reuses the index then.
+  /// Builds or reuses the code index before the run's steps start (or before its next agent starts,
+  /// after the setting was turned on), while the project has it on. Requests are handled meanwhile;
+  /// once one stops the run (a cancel, a pause, the runner stopping) the task stops waiting: the
+  /// build goes on in the background, and the next start of the task reuses it.
   async fn prepare_code_index(&mut self) -> Result<(), ExecutionError> {
-    self.code_index = IndexState::NotBuilt;
     if !self.db.code_index()?.is_on() {
       return Ok(());
     }
@@ -214,7 +215,7 @@ impl RunTask {
         control = self.controls.recv(), if self.listening => match control {
           Some(control) => {
             self.control(control)?;
-            if self.pending.cancel.is_some() || self.pending.interrupt.is_some() || self.run.pause_requested() {
+            if self.stopping() {
               return Ok(());
             }
           }
@@ -222,6 +223,11 @@ impl RunTask {
         },
       }
     }
+  }
+
+  /// A request stops the run: a cancel, a pause or the runner stopping.
+  fn stopping(&self) -> bool {
+    self.pending.cancel.is_some() || self.pending.interrupt.is_some() || self.run.pause_requested()
   }
 
   /// Waits for an agent's news, a request, the time limit or a free slot.
