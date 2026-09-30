@@ -1,7 +1,10 @@
 //! The text of the index files built from the file records. [`crate::previous`] reads the same
 //! formats back.
 
-use std::fmt::Write as _;
+use std::{
+  fmt::Write as _,
+  io::{self, Write},
+};
 
 use crate::{outline::Item, record::FileRecord};
 
@@ -37,50 +40,46 @@ fn write_items(document: &mut String, items: &[Item], depth: usize) {
   }
 }
 
-/// `tree.txt`: `<path>\t<language>\t<lines>` per file, in the order of `records`.
-pub(crate) fn tree(records: &[FileRecord]) -> String {
-  let mut text = String::new();
+/// Writes `tree.txt`: `<path>\t<language>\t<lines>` per file, in the order of `records`.
+pub(crate) fn tree(out: &mut impl Write, records: &[FileRecord]) -> io::Result<()> {
   for record in records {
-    let lines = record
-      .lines
-      .map_or_else(|| NO_LINES.to_owned(), |lines| lines.to_string());
-    writeln!(text, "{}\t{}\t{lines}", record.path, record.language.name()).expect("writing to a String does not fail");
+    match record.lines {
+      Some(lines) => writeln!(out, "{}	{}	{lines}", record.path, record.language.name())?,
+      None => writeln!(out, "{}	{}	{NO_LINES}", record.path, record.language.name())?,
+    }
   }
-  text
+  Ok(())
 }
 
-/// `symbols.tsv`: `<name>\t<path>\t<line>\t<kind>\t<container>` per definition, sorted by name,
-/// then path and line.
-pub(crate) fn symbols(records: &[FileRecord]) -> String {
+/// Writes `symbols.tsv`: `<name>\t<path>\t<line>\t<kind>\t<container>` per definition, sorted by
+/// name, then path and line.
+pub(crate) fn symbols(out: &mut impl Write, records: &[FileRecord]) -> io::Result<()> {
   let mut rows: Vec<_> = records
     .iter()
     .flat_map(|record| record.symbols.iter().map(move |symbol| (record.path.as_str(), symbol)))
     .collect();
-  rows.sort_by(|(left_path, left), (right_path, right)| {
+  rows.sort_unstable_by(|(left_path, left), (right_path, right)| {
     (&left.name, left_path, left.line, left.kind.name()).cmp(&(&right.name, right_path, right.line, right.kind.name()))
   });
-  let mut text = String::new();
   for (path, symbol) in rows {
     writeln!(
-      text,
-      "{}\t{path}\t{}\t{}\t{}",
+      out,
+      "{}	{path}	{}	{}	{}",
       symbol.name,
       symbol.line,
       symbol.kind.name(),
       symbol.container
-    )
-    .expect("writing to a String does not fail");
+    )?;
   }
-  text
+  Ok(())
 }
 
-/// `docs.md`: `<path>:<line>:<heading>` per Markdown heading, as `rg -n` prints matches.
-pub(crate) fn docs(records: &[FileRecord]) -> String {
-  let mut text = String::new();
+/// Writes `docs.md`: `<path>:<line>:<heading>` per Markdown heading, as `rg -n` prints matches.
+pub(crate) fn docs(out: &mut impl Write, records: &[FileRecord]) -> io::Result<()> {
   for record in records {
     for heading in &record.headings {
-      writeln!(text, "{}:{}:{}", record.path, heading.line, heading.text).expect("writing to a String does not fail");
+      writeln!(out, "{}:{}:{}", record.path, heading.line, heading.text)?;
     }
   }
-  text
+  Ok(())
 }

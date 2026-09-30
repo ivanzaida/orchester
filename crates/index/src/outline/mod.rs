@@ -133,6 +133,34 @@ pub(crate) fn items(language: Language, source: &[u8]) -> Option<Vec<Item>> {
   Some(items)
 }
 
+/// The grammars the outlines are parsed with, as precisely as they tell: the version their
+/// `tree-sitter.json` gave, else their ABI and the number of node kinds and fields.
+pub(crate) fn grammars() -> String {
+  let grammars: [(&str, tree_sitter::Language); 5] = [
+    ("rust", tree_sitter_rust::LANGUAGE.into()),
+    ("typescript", tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
+    ("tsx", tree_sitter_typescript::LANGUAGE_TSX.into()),
+    ("python", tree_sitter_python::LANGUAGE.into()),
+    ("go", tree_sitter_go::LANGUAGE.into()),
+  ];
+  grammars
+    .iter()
+    .map(|(name, grammar)| match grammar.metadata() {
+      Some(version) => format!(
+        "{name} {}.{}.{}",
+        version.major_version, version.minor_version, version.patch_version
+      ),
+      None => format!(
+        "{name} abi {} kinds {} fields {}",
+        grammar.abi_version(),
+        grammar.node_kind_count(),
+        grammar.field_count()
+      ),
+    })
+    .collect::<Vec<_>>()
+    .join(", ")
+}
+
 fn parse(grammar: &tree_sitter::Language, source: &[u8]) -> Option<Tree> {
   let mut parser = Parser::new();
   parser

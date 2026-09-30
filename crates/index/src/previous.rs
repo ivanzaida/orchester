@@ -10,17 +10,18 @@ use std::{
 use orchester_core::revision::Revision;
 
 use crate::{
-  IndexError, build,
+  IndexError,
   language::Language,
   markdown::Heading,
   outline::Kind,
-  record::{FileRecord, Symbol},
+  outline_file::outline_path,
+  record::{FileRecord, Outline, Symbol},
   render::NO_LINES,
+  write,
 };
 
 pub(crate) struct Previous {
   dir: PathBuf,
-  revision: Revision,
   records: HashMap<String, FileRecord>,
 }
 
@@ -33,11 +34,11 @@ impl Previous {
       fs::read_to_string(&file).map_err(|error| unreadable(format!("cannot read {}: {error}", file.display())))
     };
     let mut records = HashMap::new();
-    for line in read(build::TREE)?.lines() {
+    for line in read(write::TREE)?.lines() {
       let record = tree_row(line).ok_or_else(|| unreadable(format!("unreadable tree row {line:?}")))?;
       records.insert(record.path.clone(), record);
     }
-    for line in read(build::SYMBOLS)?.lines() {
+    for line in read(write::SYMBOLS)?.lines() {
       let (path, symbol) = symbol_row(line).ok_or_else(|| unreadable(format!("unreadable symbol row {line:?}")))?;
       let Some(record) = records.get_mut(path) else {
         return Err(unreadable(format!("a symbol of {path}, which is not in the tree")));
@@ -49,7 +50,7 @@ impl Previous {
       .filter(|record| record.language == Language::Markdown)
       .map(|record| record.path.clone())
       .collect();
-    for line in read(build::DOCS)?.lines() {
+    for line in read(write::DOCS)?.lines() {
       let (path, heading) =
         heading_row(line, &documents).ok_or_else(|| unreadable(format!("unreadable heading row {line:?}")))?;
       records
@@ -60,24 +61,23 @@ impl Previous {
     }
     Ok(Self {
       dir: dir.to_path_buf(),
-      revision: revision.clone(),
       records,
     })
   }
 
-  /// The record of `path`, which did not change since this index was built; `None` when the index
-  /// does not have it.
-  pub(crate) fn take(&mut self, path: &str) -> Result<Option<FileRecord>, IndexError> {
-    let Some(mut record) = self.records.remove(path) else {
-      return Ok(None);
-    };
-    if record.language.has_grammar() {
-      let file = build::outline_path(&self.dir, path);
-      let outline = fs::read_to_string(&file)
-        .map_err(|error| unreadable(&self.revision, format!("cannot read {}: {error}", file.display())))?;
-      record.outline = Some(outline);
+  /// The record of `path`, which did not change since this index was built, with its outline file
+  /// when it is `outlined`; `None` when the index does not have it, or has no outline file for it
+  /// (it had another path of the same name ignoring case then).
+  pub(crate) fn take(&mut self, path: &str, outlined: bool) -> Option<FileRecord> {
+    let mut record = self.records.remove(path)?;
+    if outlined {
+      let file = outline_path(&self.dir, path);
+      if !file.is_file() {
+        return None;
+      }
+      record.outline = Some(Outline::Previous(file));
     }
-    Ok(Some(record))
+    Some(record)
   }
 }
 

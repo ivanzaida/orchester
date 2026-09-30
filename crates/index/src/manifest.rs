@@ -6,11 +6,12 @@ use std::{collections::BTreeMap, fs, path::Path};
 use orchester_core::{revision::Revision, time::Timestamp};
 use serde::{Deserialize, Serialize};
 
-use crate::{IndexError, record::FileRecord};
+use crate::{IndexError, outline, record::FileRecord};
 
-/// The version of the index files. An index of another version is built again, since its files
-/// may differ from what this version writes for the same revision.
-pub(crate) const FORMAT: u32 = 1;
+/// The version of the index files. An index of another version, or made by other grammars
+/// ([`generator`]), is built again, since its files may differ from what this build writes for the
+/// same revision.
+pub(crate) const FORMAT: u32 = 2;
 const FILE: &str = "manifest.json";
 
 /// How an index was built.
@@ -34,6 +35,7 @@ pub(crate) struct LanguageCount {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Manifest {
   pub(crate) format: u32,
+  pub(crate) generator: String,
   pub(crate) revision: Revision,
   pub(crate) built_at: Timestamp,
   pub(crate) build_ms: u64,
@@ -89,6 +91,11 @@ impl Manifest {
     let text = fs::read_to_string(dir.join(FILE)).ok()?;
     serde_json::from_str::<Self>(&text)
       .ok()
-      .filter(|manifest| manifest.format == FORMAT)
+      .filter(|manifest| manifest.format == FORMAT && manifest.generator == generator())
   }
+}
+
+/// What made an index: this crate's version and the grammars it parses with.
+pub(crate) fn generator() -> String {
+  format!("orchester-index {}; {}", env!("CARGO_PKG_VERSION"), outline::grammars())
 }

@@ -1,6 +1,8 @@
 //! What the index holds of one tracked file, read from its content or taken over from an earlier
 //! index.
 
+use std::path::PathBuf;
+
 use crate::{
   IndexError,
   git::Blob,
@@ -20,6 +22,14 @@ pub(crate) struct Symbol {
   pub(crate) container: String,
 }
 
+/// A source file's outline document.
+#[derive(Debug)]
+pub(crate) enum Outline {
+  Text(String),
+  /// The unchanged file of the earlier index an incremental build starts from.
+  Previous(PathBuf),
+}
+
 /// One tracked file in the index.
 #[derive(Debug)]
 pub(crate) struct FileRecord {
@@ -28,8 +38,9 @@ pub(crate) struct FileRecord {
   /// `None` for a file that is no text.
   pub(crate) lines: Option<usize>,
   pub(crate) symbols: Vec<Symbol>,
-  /// The `outline/<path>.md` document, for a file of a language with a grammar.
-  pub(crate) outline: Option<String>,
+  /// The `outline/<path>.md` document, for a file of a language with a grammar whose path gets an
+  /// outline file ([`crate::outline_file::outlined`]).
+  pub(crate) outline: Option<Outline>,
   pub(crate) headings: Vec<Heading>,
 }
 
@@ -46,8 +57,8 @@ impl FileRecord {
     }
   }
 
-  /// The record of the file at `path` with content `blob`.
-  pub(crate) fn read(path: String, blob: Blob) -> Result<Self, IndexError> {
+  /// The record of the file at `path` with content `blob`, with an outline when `outlined`.
+  pub(crate) fn read(path: String, blob: Blob, outlined: bool) -> Result<Self, IndexError> {
     let Blob::Text(content) = blob else {
       return Ok(Self::without_content(path, Language::BINARY));
     };
@@ -68,7 +79,7 @@ impl FileRecord {
         path: record.path.clone(),
       })?;
       record.symbols = symbols(&items, "");
-      record.outline = Some(render::outline(&record, &items));
+      record.outline = outlined.then(|| Outline::Text(render::outline(&record, &items)));
     }
     Ok(record)
   }

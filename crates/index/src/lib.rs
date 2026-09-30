@@ -29,10 +29,13 @@ mod manifest;
 mod map;
 mod markdown;
 mod outline;
+mod outline_file;
+mod parallel;
 mod previous;
 mod record;
 mod render;
 mod store;
+mod write;
 
 use std::{io, path::PathBuf};
 
