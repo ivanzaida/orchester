@@ -132,6 +132,77 @@ async fn command_approvals_deny_mcp_write_without_side_effects() {
   migrated(false, true).await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn command_approvals_soft_stop_after_delivery_prevents_automatic_replay() {
+  let project = project(&Setup {
+    steps: vec![StepSpec::new("implement", "Implement", "Ask first.", &[])],
+    ..Setup::new("Continue the existing work.")
+  });
+  let root = project.repo.path();
+  let (first, mut events) = scheduler(root);
+  let id = first
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("start");
+  let before = wait_for(root, &mut events, id, |run| run.waits_for_a_person()).await;
+  wait_for_idle(&first).await;
+  let mut db = ProjectDb::open(root).expect("open");
+  let profile = before
+    .profile_of(&StepKey::new("implement").expect("key"))
+    .expect("profile");
+  let mut permissions = db
+    .latest_version::<AgentProfile>(profile)
+    .expect("version")
+    .expect("profile")
+    .body()
+    .permissions()
+    .clone();
+  permissions.set_commands(CommandPermission::AskBefore);
+  first
+    .change_permissions(id, profile, permissions, PermissionsApply::NextInvocation)
+    .await
+    .expect("permissions");
+  let message = Message::from_person(
+    project.task,
+    Some(id),
+    Recipient::Orchestrator,
+    MessageBody::new("Hold approved command.").expect("body"),
+    Timestamp::now(),
+  );
+  db.send_message(IdempotencyKey::generate(), &message).expect("message");
+  first.deliver_messages(id).await.expect("resume");
+  let command = pending(root, &mut events, id).await;
+  first.decide_tool_approval(id, command.id, true).await.expect("approve");
+  let marker = root
+    .join(".orchester/worktrees")
+    .join(id.to_string())
+    .join("command-once.txt");
+  tokio::time::timeout(PATIENCE, async {
+    while !marker.exists() {
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .expect("approved action starts");
+  first.stop_all(orchester_core::run::InterruptCause::RunnerLost).await;
+  wait_for_idle(&first).await;
+  assert!(db.has_interrupted_tool_approval(id).expect("interruption"));
+  let invocations = db.invocations(id).expect("invocations");
+  assert!(invocations.last().expect("last").ended_at.is_some());
+  let (second, _) = scheduler(root);
+  let attached = second
+    .attach(
+      orchester_ipc::AttachSession::Reconnect,
+      std::num::NonZeroU32::new(1).expect("slot"),
+    )
+    .await
+    .expect("reconnect");
+  assert!(attached.continued.is_empty());
+  assert!(second.active_runs().is_empty());
+  assert_eq!(db.invocations(id).expect("invocations").len(), invocations.len());
+  assert_eq!(std::fs::read_to_string(marker).expect("marker"), "approved");
+}
+
 async fn verify_progress(
   root: &Path,
   events: &mut mpsc::UnboundedReceiver<Event>,

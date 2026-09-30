@@ -19,6 +19,7 @@ pub fn run(args: &[String]) -> ExitCode {
   let mut thread = String::new();
   let turn = "approval-turn";
   let mut stage = 0;
+  let mut hold_approved = false;
   for line in io::stdin().lock().lines() {
     let message: Value = serde_json::from_str(&line.expect("stdin")).expect("JSON RPC");
     let params = &message["params"];
@@ -36,13 +37,22 @@ pub fn run(args: &[String]) -> ExitCode {
           .iter()
           .any(|arg| arg == "sandbox_workspace_write.network_access=true");
         emit(&json!({"id":3,"result":{
-          "thread":{"id":thread},"approvalPolicy":params["approvalPolicy"],
+          "thread":{"id":thread,"environments":[{"environmentId":"local","cwd":cwd,"runtimeWorkspaceRoots":[cwd]}]},
+          "approvalPolicy":params["approvalPolicy"],
           "approvalsReviewer":"user","model":params["model"],
-          "sandbox":{"type":"workspaceWrite","networkAccess":network,"writableRoots":[]}
+          "sandbox":{"type":"workspaceWrite","networkAccess":network,"writableRoots":[cwd]}
         }}));
       }
       Some("mcpServerStatus/list") => emit(&json!({"id":4,"result":{"data":[],"nextCursor":null}})),
       Some("turn/start") => {
+        assert_eq!(
+          params["environments"],
+          json!([{"environmentId":"local","cwd":cwd,"runtimeWorkspaceRoots":[cwd]}])
+        );
+        hold_approved = params["input"][0]["text"]
+          .as_str()
+          .expect("prompt")
+          .contains("Hold approved command");
         emit(&json!({"id":5,"result":{"turn":{"id":turn}}}));
         emit(&json!({"method":"turn/started","params":{"threadId":thread,"turn":{"id":turn}}}));
         command_request(&thread, turn, &cwd);
@@ -54,6 +64,10 @@ pub fn run(args: &[String]) -> ExitCode {
           "only an exact action grant"
         );
         fs::write(cwd.join("command-once.txt"), "approved").expect("command side effect");
+        if hold_approved {
+          stage = 2;
+          continue;
+        }
         emit(&json!({"method":"item/completed","params":{"item":{
           "id":"command-1","type":"commandExecution","command":"disposable-command",
           "status":"completed","exitCode":0,"aggregatedOutput":""

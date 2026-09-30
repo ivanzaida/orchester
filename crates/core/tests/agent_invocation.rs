@@ -49,6 +49,11 @@ fn app_server_keeps_normal_codex_home_and_open_stdin_without_bypass_flags() {
   assert!(command.stdin().is_none());
   assert_eq!(command.args()[..2], ["app-server", "--stdio"]);
   assert!(command.args().contains(&"windows.sandbox=elevated".to_owned()));
+  assert!(
+    command
+      .args()
+      .contains(&"sandbox_workspace_write.writable_roots=[\"/repo/.orchester/worktrees/run\"]".to_owned())
+  );
   assert!(!command.args().iter().any(|arg| arg.contains("dangerously")));
   assert_eq!(
     command

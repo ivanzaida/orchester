@@ -6,7 +6,7 @@
 use std::{collections::BTreeSet, io, path::PathBuf};
 
 use orchester_core::{
-  command::SecretVariable,
+  command::{SecretVariable, redact_secrets},
   connection::{
     app_server::{AppServerStream, Update},
     app_server_mcp::verify_selected_servers,
@@ -137,13 +137,7 @@ impl AppServerSession {
   }
 
   pub fn redact(&self, text: &str) -> String {
-    self.setup.secrets.iter().fold(text.to_owned(), |text, secret| {
-      if secret.expose().is_empty() {
-        text
-      } else {
-        text.replace(secret.expose(), "<redacted>")
-      }
-    })
+    redact_secrets(text, &self.setup.secrets)
   }
 
   async fn response(&mut self, value: &Value, process: &Supervised) -> Result<Vec<Update>, AppServerFailure> {
@@ -222,6 +216,7 @@ impl AppServerSession {
     {
       return Err("Codex resumed a different session".to_owned());
     }
+    self.check_environment(result)?;
     let granular = result
       .get("approvalPolicy")
       .and_then(|policy| policy.get("granular"))
@@ -229,7 +224,7 @@ impl AppServerSession {
     let enabled = |key: &str| granular.get(key).and_then(Value::as_bool).unwrap_or(false);
     if enabled("mcp_elicitations") != self.setup.tool_approvals
       || enabled("rules") != self.setup.command_approvals
-      || enabled("sandbox_approval") != self.setup.command_approvals
+      || enabled("sandbox_approval")
       || enabled("request_permissions")
       || enabled("skill_approval")
     {
@@ -264,21 +259,41 @@ impl AppServerSession {
         .and_then(Value::as_array)
         .ok_or_else(|| "Codex omitted writable sandbox roots".to_owned())?;
       let actual: Option<BTreeSet<_>> = roots.iter().map(|root| root.as_str().map(str::to_owned)).collect();
-      let actual = actual.ok_or_else(|| "Codex reported invalid writable sandbox roots".to_owned())?;
+      let mut actual = actual.ok_or_else(|| "Codex reported invalid writable sandbox roots".to_owned())?;
+      // Codex reports the local cwd as an environment workspace root, not an extra sandbox root.
+      actual.insert(self.setup.worktree.to_string_lossy().into_owned());
       let expected: BTreeSet<String> = self
         .setup
         .writable_roots
         .iter()
         .map(|path| path.to_string_lossy().into_owned())
         .collect();
-      let mut allowed = expected.clone();
+      let mut allowed = expected;
       allowed.insert(self.setup.worktree.to_string_lossy().into_owned());
-      if actual != expected && actual != allowed {
-        return Err("Codex activated writable roots outside this step's grants".to_owned());
+      if actual != allowed {
+        return Err("Codex writable roots do not match this step's grants".to_owned());
       }
     }
     if result.get("model").and_then(Value::as_str) != Some(&self.setup.model) {
       return Err("Codex selected a different model for the tool-approval step".to_owned());
+    }
+    Ok(())
+  }
+
+  fn check_environment(&self, result: &Value) -> Result<(), String> {
+    let environments = result
+      .pointer("/thread/environments")
+      .and_then(Value::as_array)
+      .ok_or_else(|| "Codex did not expose the local environment".to_owned())?;
+    let [local] = environments.as_slice() else {
+      return Err("Codex did not select exactly one local environment".to_owned());
+    };
+    let cwd = self.setup.worktree.to_string_lossy();
+    if local.get("environmentId").and_then(Value::as_str) != Some("local")
+      || local.get("cwd").and_then(Value::as_str) != Some(cwd.as_ref())
+      || local.get("runtimeWorkspaceRoots") != Some(&json!([cwd]))
+    {
+      return Err("Codex selected an environment outside this worktree".to_owned());
     }
     Ok(())
   }
@@ -294,7 +309,7 @@ impl AppServerSession {
     };
     let policy = json!({"granular":{
       "mcp_elicitations":self.setup.tool_approvals,
-      "rules":self.setup.command_approvals,"sandbox_approval":self.setup.command_approvals,
+      "rules":self.setup.command_approvals,"sandbox_approval":false,
       "request_permissions":false,"skill_approval":false
     }});
     let cwd = self.setup.worktree.to_string_lossy();
@@ -315,7 +330,10 @@ impl AppServerSession {
 
   async fn start_turn(&self, process: &Supervised) -> io::Result<()> {
     let mut params = json!({"threadId":self.thread,"input":[{"type":"text","text":self.setup.prompt}],
-      "model":self.setup.model,"environments":[]});
+    "model":self.setup.model,"environments":[{
+      "environmentId":"local","cwd":self.setup.worktree,
+      "runtimeWorkspaceRoots":[self.setup.worktree]
+    }]});
     if let Some(effort) = &self.setup.effort {
       params["effort"] = json!(effort);
     }

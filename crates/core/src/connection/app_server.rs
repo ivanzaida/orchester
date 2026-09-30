@@ -137,7 +137,9 @@ impl AppServerStream {
     if params
       .get("additionalPermissions")
       .is_some_and(|value| !value.is_null())
-      || params.get("environmentId").is_some_and(|value| !value.is_null())
+      || params
+        .get("environmentId")
+        .is_some_and(|value| !value.is_null() && value.as_str() != Some("local"))
       || params
         .get("kind")
         .and_then(Value::as_str)

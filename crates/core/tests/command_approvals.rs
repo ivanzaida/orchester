@@ -16,7 +16,8 @@ fn command_approvals_reply_once_and_reject_sticky_grants() {
   let mut stream = AppServerStream::default();
   let mut message = json!({"id":"request-1","method":"item/commandExecution/requestApproval","params":{
     "threadId":"thread-1","turnId":"turn-1","itemId":"item-1",
-    "command":"echo harmless","cwd":"/worktree","availableDecisions":["accept","decline","acceptForSession"]
+    "command":"echo harmless","cwd":"/worktree","environmentId":"local",
+    "availableDecisions":["accept","decline","acceptForSession"]
   }});
   let updates = stream.parse(&message.to_string()).expect("request");
   let [Update::Approval(request)] = updates.as_slice() else {
@@ -32,6 +33,12 @@ fn command_approvals_reply_once_and_reject_sticky_grants() {
     );
   }
   assert!(!format!("{request:?}").contains("echo harmless"));
+  message["params"]["environmentId"] = json!("remote");
+  assert_eq!(
+    stream.parse(&message.to_string()).err(),
+    Some(ProtocolError::InvalidApproval)
+  );
+  message["params"]["environmentId"] = json!("local");
   message["params"]["additionalPermissions"] = json!({"network":{"enabled":true}});
   assert_eq!(
     stream.parse(&message.to_string()).err(),

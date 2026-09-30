@@ -7,8 +7,8 @@ without a request. These choices determine the transport from the effective invo
 including current-run overrides, rather than only the saved pipeline checkbox.
 
 Orchester uses Codex App Server for either choice and displays each pending request. **Approve once**
-answers only that action, including a requested sandbox exception for a command. It grants no
-standing permission and does not broaden later invocations. **Deny** prevents the action and fails
+answers only that action within the step's existing sandbox grants. Sandbox exceptions are disabled;
+approval cannot add writable folders or network access. **Deny** prevents the action and fails
 the step visibly. File-change approvals, additional permission grants and unsupported approval
 request forms are rejected explicitly. Codex invocations with neither choice keep the noninteractive
 `codex exec -a never` transport.
@@ -49,6 +49,13 @@ sandbox, including resumed `exec` invocations and App Server. Selecting that san
 read-only access into write access. Windows network restrictions retain their existing visible
 capability limitation.
 
+Every App Server turn explicitly selects the local environment with its current worktree as the
+runtime workspace root, including resumed sessions. An empty environment list disables local tools
+in Codex 0.159.2 and is never sent. Startup validates the selected environment and combines its
+implicit workspace root with the extra sandbox writable roots when checking the exact grants.
+Project MCP secret values are redacted from commands, output, messages, errors and approval metadata
+before they reach activity tracking or storage, including their JSON-escaped form.
+
 ## Build directories
 
 An absolute project `CARGO_TARGET_DIR` is a build root. Agents and command steps in a worktree receive
@@ -61,6 +68,7 @@ requires the cold-target free-space reserve even when the build root contains ot
 ## Interrupted decisions
 
 An approval is tied to one live process and JSON-RPC request. If the runner or desktop restarts
-while a tool waits, Orchester marks the request interrupted and does not automatically resume the
+while a tool waits, or after approval was delivered before the turn completed, Orchester records the
+interruption and does not automatically resume the
 run. The task page shows the interrupted run for a person to review before choosing to continue.
 The old decision cannot approve a later tool call.

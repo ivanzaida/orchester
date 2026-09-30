@@ -117,7 +117,10 @@ impl CodexInvocation<'_> {
       ]);
     }
     if self.access == RepositoryAccess::Write {
-      let roots: Vec<_> = self.writable_roots.iter().map(|root| root.to_string_lossy()).collect();
+      let roots: Vec<_> = std::iter::once(self.worktree)
+        .chain(self.writable_roots.iter().map(PathBuf::as_path))
+        .map(Path::to_string_lossy)
+        .collect();
       args.extend([
         "-c".to_owned(),
         format!("sandbox_workspace_write.writable_roots={}", toml_array(&roots)),

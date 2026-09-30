@@ -426,7 +426,10 @@ impl Worker {
 
   /// Takes in one event: a turn's usage goes to the run, and a new turn after a used-up budget
   /// ends the agent.
-  fn observe(&self, watch: &mut Watch, event: AgentEvent) -> Result<(), StoreError> {
+  fn observe(&self, watch: &mut Watch, mut event: AgentEvent) -> Result<(), StoreError> {
+    if let Some(app) = &self.app_server {
+      event.redact(&|text| app.redact(text));
+    }
     watch.tracker.observe(&event);
     let usage = match &event {
       AgentEvent::TurnCompleted { usage } => Some(*usage),
@@ -486,7 +489,7 @@ impl Worker {
   }
 
   fn finish(&self, mut watch: Watch, exit: &ProcessExit) -> Result<Finished, StoreError> {
-    if watch.approval.is_some() {
+    if watch.approval.is_some() || self.app_server.as_ref().is_some_and(|app| !app.complete()) {
       watch
         .db
         .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
