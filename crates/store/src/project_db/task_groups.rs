@@ -4,7 +4,7 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId, TaskId},
   resource::Pipeline,
   store::{ResourceStore, RunStore, TaskStore},
-  task_group::{GroupHold, Scheduling, TaskGroup},
+  task_group::{GroupHold, ReviewedPipeline, Scheduling, TaskGroup},
   task_selection::{self, SelectionProblem},
   tokens::TokensUsed,
 };
@@ -76,6 +76,7 @@ impl ProjectDb {
     &mut self,
     group: &TaskGroup,
     limits: Option<orchester_core::task::TaskLimits>,
+    reviewed: &[ReviewedPipeline],
   ) -> Result<TaskGroup, StoreError> {
     let transaction = self.connection.unchecked_transaction()?;
     if let Some(existing) = self.task_group(group.key())? {
@@ -95,9 +96,13 @@ impl ProjectDb {
         .details()
         .pipeline
         .ok_or_else(|| corrupt("task group", "pipeline missing"))?;
+      let reviewed = reviewed
+        .iter()
+        .find(|entry| entry.task == *id && entry.pipeline == pipeline)
+        .ok_or(StoreError::TaskGroupReviewChanged(*id))?;
       let version = self
-        .latest_version::<Pipeline>(pipeline)?
-        .ok_or(StoreError::ResourceNotFound(pipeline))?;
+        .version::<Pipeline>(pipeline, reviewed.version)?
+        .ok_or(StoreError::TaskGroupReviewChanged(*id))?;
       let has_run: bool = transaction.query_row(
         "SELECT EXISTS(SELECT 1 FROM runs WHERE task_id = ?1)",
         [id.to_string()],

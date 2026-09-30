@@ -32,7 +32,8 @@ async fn run_group(mode: Scheduling) {
     TokenBudget::new(3_000_000).expect("cap"),
   )
   .expect("group");
-  db.queue_task_group(&group, None).expect("queue");
+  db.queue_task_group(&group, None, &reviewed(&db, &group))
+    .expect("queue");
   let (scheduler, mut events) = scheduler(root);
   scheduler
     .attach(AttachSession::Reconnect, NonZeroU32::new(4).expect("slots"))
@@ -94,7 +95,7 @@ fn reviewed_group(db: &mut ProjectDb, original: orchester_core::id::TaskId, mode
     TokenBudget::new(cap).expect("cap"),
   )
   .expect("group");
-  db.queue_task_group(&group, None).expect("queue");
+  db.queue_task_group(&group, None, &reviewed(db, &group)).expect("queue");
   group
 }
 
@@ -246,4 +247,156 @@ async fn task_group_cancel_then_run_again_does_not_inherit_exhausted_shared_cap(
       .is_none()
   );
   assert_eq!(db.runs_of_task(first.task()).expect("runs").len(), 2);
+}
+
+fn reviewed(db: &ProjectDb, group: &TaskGroup) -> Vec<orchester_core::task_group::ReviewedPipeline> {
+  use orchester_core::{resource::Pipeline, store::ResourceStore, task_group::ReviewedPipeline};
+  group
+    .tasks()
+    .iter()
+    .map(|id| {
+      let task = db.task(*id).expect("task").expect("exists");
+      let pipeline = task.details().pipeline.expect("pipeline");
+      let version = db
+        .latest_version::<Pipeline>(pipeline)
+        .expect("version")
+        .expect("published")
+        .number();
+      ReviewedPipeline {
+        task: *id,
+        pipeline,
+        version,
+      }
+    })
+    .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn task_group_fresh_reopen_holds_second_task_until_explicit_start() {
+  let fixture = project(&Setup::new("Append one line."));
+  let root = fixture.repo.path();
+  let mut db = ProjectDb::open(root).expect("db");
+  let group = reviewed_group(&mut db, fixture.task, Scheduling::Sequential, 3_000_000);
+  let slots = NonZeroU32::new(2).expect("slots");
+  let (original, mut events) = scheduler(root);
+  original.attach(AttachSession::Reconnect, slots).await.expect("attach");
+  original.advance_task_groups().await.expect("advance");
+  let first = db
+    .run_with_key(group.tasks()[0].first_run_key())
+    .expect("run")
+    .expect("started");
+  let succeeded = wait_for(root, &mut events, first.id(), |run| {
+    run.status() == &RunStatus::Succeeded
+  })
+  .await;
+  original.stop_all(InterruptCause::QuitNow).await;
+  drop(original);
+  let second_task = group.tasks()[1];
+  let (fresh, _events) = scheduler(root);
+  fresh
+    .attach(
+      AttachSession::Fresh {
+        previous_end: orchester_ipc::SessionEnd::QuitNow,
+      },
+      slots,
+    )
+    .await
+    .expect("fresh");
+  fresh.advance_task_groups().await.expect("held advance");
+  assert!(db.run_with_key(second_task.first_run_key()).expect("second").is_none());
+  assert_eq!(
+    db.task_group_hold(group.key()).expect("hold"),
+    Some(GroupHold::SessionEnded)
+  );
+  assert_eq!(
+    fresh.start_run(second_task.first_run_key(), second_task).await,
+    Err(Rejection::TaskGroupWaiting {
+      hold: GroupHold::SessionEnded
+    })
+  );
+  fresh.stop_all(InterruptCause::QuitNow).await;
+  drop(fresh);
+  let (reconnected, mut events) = scheduler(root);
+  reconnected
+    .attach(AttachSession::Reconnect, slots)
+    .await
+    .expect("reconnect");
+  reconnected.advance_task_groups().await.expect("hold persists");
+  assert!(db.run_with_key(second_task.first_run_key()).expect("second").is_none());
+  let second = reconnected
+    .start_requested_run(second_task.first_run_key(), second_task)
+    .await
+    .expect("explicit continuation");
+  wait_for(root, &mut events, second, |run| run.status() == &RunStatus::Succeeded).await;
+  assert_eq!(db.run(first.id()).expect("first").expect("exists"), succeeded);
+  assert_eq!(db.task_group(group.key()).expect("group").expect("exists"), group);
+  assert_eq!(
+    reconnected
+      .start_requested_run(second_task.first_run_key(), second_task)
+      .await
+      .expect("retry"),
+    second
+  );
+  for task in group.tasks() {
+    assert_eq!(db.runs_of_task(*task).expect("runs").len(), 1);
+  }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn task_group_fresh_reopen_explicit_continue_keeps_first_run_checkpoint() {
+  let fixture = project(&Setup::new("Work in turns."));
+  let root = fixture.repo.path();
+  let mut db = ProjectDb::open(root).expect("db");
+  let group = reviewed_group(&mut db, fixture.task, Scheduling::Sequential, 3_000_000);
+  let slots = NonZeroU32::new(2).expect("slots");
+  let (original, mut events) = scheduler(root);
+  original.attach(AttachSession::Reconnect, slots).await.expect("attach");
+  original.advance_task_groups().await.expect("advance");
+  let first = db
+    .run_with_key(group.tasks()[0].first_run_key())
+    .expect("first")
+    .expect("exists");
+  wait_for_turns(root, &mut events, first.id(), 2).await;
+  original.stop_all(InterruptCause::QuitNow).await;
+  let interrupted = db.run(first.id()).expect("read").expect("exists");
+  assert!(matches!(interrupted.status(), RunStatus::Interrupted(_)));
+  drop(original);
+  let (fresh, mut events) = scheduler(root);
+  fresh
+    .attach(
+      AttachSession::Fresh {
+        previous_end: orchester_ipc::SessionEnd::QuitNow,
+      },
+      slots,
+    )
+    .await
+    .expect("fresh");
+  fresh.advance_task_groups().await.expect("held");
+  assert_eq!(db.run(first.id()).expect("run").expect("exists"), interrupted);
+  assert_eq!(
+    db.task_group_hold(group.key()).expect("hold"),
+    Some(GroupHold::SessionEnded)
+  );
+  let (continued, refused) = fresh.continue_runs(&[first.id()]).await;
+  assert_eq!(continued, vec![first.id()]);
+  assert!(refused.is_empty());
+  wait_for_turns(root, &mut events, first.id(), 3).await;
+  assert_ne!(
+    db.task_group_hold(group.key()).expect("hold"),
+    Some(GroupHold::SessionEnded)
+  );
+  assert_eq!(db.runs_of_task(first.task()).expect("runs").len(), 1);
+  assert_eq!(
+    db.run_with_key(first.task().first_run_key())
+      .expect("first")
+      .expect("exists")
+      .id(),
+    first.id()
+  );
+  assert!(
+    db.run_with_key(group.tasks()[1].first_run_key())
+      .expect("second")
+      .is_none()
+  );
+  fresh.stop_all(InterruptCause::QuitNow).await;
 }

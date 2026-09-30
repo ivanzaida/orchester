@@ -63,7 +63,8 @@ pub enum Command {
   Ping { nonce: u64 },
   /// Starts a run of the queued task `task`. Idempotent by `key`: repeating it (a retry after
   /// a lost reply) answers with the run the first request created. Answered with
-  /// [`Reply::RunStarted`] or [`Reply::Rejected`].
+  /// [`Reply::RunStarted`] or [`Reply::Rejected`]. An explicit first-run request also releases
+  /// its scheduling group’s persisted session-end hold; it does not bypass group eligibility.
   StartRun { key: IdempotencyKey, task: TaskId },
   /// Starts the next run of task `task`, whose latest run `after` failed or was cancelled (Run
   /// again): from the first step, in a new worktree on a new branch from the current base, with

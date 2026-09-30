@@ -31,6 +31,15 @@ impl Scheduler {
     else {
       return Ok(());
     };
+    if db
+      .task_group_hold(group.key())
+      .map_err(|e| super::failed("cannot read queue hold", &e))?
+      == Some(GroupHold::SessionEnded)
+    {
+      return Err(Rejection::TaskGroupWaiting {
+        hold: GroupHold::SessionEnded,
+      });
+    }
     let statuses = group
       .tasks()
       .iter()
@@ -76,6 +85,13 @@ impl Scheduler {
       .task_groups()
       .map_err(|error| super::failed("cannot read task groups", &error))?
     {
+      if db
+        .task_group_hold(group.key())
+        .map_err(|e| super::failed("cannot read queue hold", &e))?
+        == Some(GroupHold::SessionEnded)
+      {
+        continue;
+      }
       for task in group.tasks() {
         if db
           .run_with_key(task.first_run_key())
@@ -104,6 +120,13 @@ impl Scheduler {
   }
 
   async fn advance_group(&self, db: &ProjectDb, group: &TaskGroup) -> Result<(), Rejection> {
+    if db
+      .task_group_hold(group.key())
+      .map_err(|e| super::failed("cannot read queue hold", &e))?
+      == Some(GroupHold::SessionEnded)
+    {
+      return Ok(());
+    }
     let statuses = group
       .tasks()
       .iter()
@@ -147,6 +170,60 @@ impl Scheduler {
       }
     }
     self.group_hold(db, group, hold.as_ref())
+  }
+
+  /// A person's Start request releases the session hold; automatic scheduling never does.
+  pub async fn start_requested_run(
+    &self,
+    key: orchester_core::id::IdempotencyKey,
+    task: orchester_core::id::TaskId,
+  ) -> Result<orchester_core::id::RunId, Rejection> {
+    let db = self.open()?;
+    if key == task.first_run_key() {
+      let first = db
+        .run_with_key(key)
+        .map_err(|e| read_failed("cannot read first run", e))?;
+      if first.is_none_or(|run| run.status() == &RunStatus::Pending) {
+        self.release_group_session_hold(&db, task)?;
+      }
+    }
+    self.start_run(key, task).await
+  }
+
+  pub(super) fn release_group_session_hold(
+    &self,
+    db: &ProjectDb,
+    task: orchester_core::id::TaskId,
+  ) -> Result<(), Rejection> {
+    if let Some(group) = db
+      .task_group_for_task(task)
+      .map_err(|e| super::failed("cannot read task group", &e))?
+      && db
+        .task_group_hold(group.key())
+        .map_err(|e| super::failed("cannot read queue hold", &e))?
+        == Some(GroupHold::SessionEnded)
+    {
+      self.group_hold(db, &group, None)?;
+    }
+    Ok(())
+  }
+
+  pub(super) fn hold_groups_after_session_end(&self, db: &ProjectDb) -> Result<(), Rejection> {
+    for group in db
+      .task_groups()
+      .map_err(|e| super::failed("cannot read task groups", &e))?
+    {
+      for task in group.tasks() {
+        let first = db
+          .run_with_key(task.first_run_key())
+          .map_err(|e| read_failed("cannot read first run", e))?;
+        if first.is_none_or(|run| run.status() == &RunStatus::Pending) {
+          self.group_hold(db, &group, Some(&GroupHold::SessionEnded))?;
+          break;
+        }
+      }
+    }
+    Ok(())
   }
 
   fn group_hold(&self, db: &ProjectDb, group: &TaskGroup, hold: Option<&GroupHold>) -> Result<(), Rejection> {

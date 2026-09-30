@@ -40,8 +40,11 @@ impl Scheduler {
     if self.inner.board.is_stopping() {
       return Err(Rejection::ShuttingDown);
     }
-    self.inner.board.set_slots(slots);
     let mut db = self.open()?;
+    if matches!(session, AttachSession::Fresh { .. }) {
+      self.hold_groups_after_session_end(&db)?;
+    }
+    self.inner.board.set_slots(slots);
     let cause = session.interrupt_cause();
     let stale = readable(
       db.running_runs()
@@ -72,7 +75,25 @@ impl Scheduler {
     let mut refused = Vec::new();
     for &run in runs {
       match self.continue_idle(run, |db, root| idle::continue_interrupted(db, root, run)) {
-        Ok(()) => continued.push(run),
+        Ok(()) => {
+          match self.open().and_then(|db| {
+            let saved = db
+              .run(run)
+              .map_err(|e| super::read_failed("cannot read continued run", e))?
+              .ok_or(Rejection::RunNotFound)?;
+            if db
+              .task_group_for_run(&saved)
+              .map_err(|e| super::read_failed("cannot read continued group", e))?
+              .is_some()
+            {
+              self.release_group_session_hold(&db, saved.task())?;
+            }
+            Ok(())
+          }) {
+            Ok(()) => continued.push(run),
+            Err(rejection) => refused.push(RefusedRun { run, rejection }),
+          }
+        }
         Err(rejection) => refused.push(RefusedRun { run, rejection }),
       }
     }

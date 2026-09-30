@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-  id::{IdempotencyKey, TaskId},
+  id::{IdempotencyKey, ResourceId, TaskId},
+  resource::VersionNumber,
   run::RunStatus,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -20,6 +21,7 @@ pub enum Scheduling {
 /// Why reviewed tasks are waiting; stored independently of a run that may not yet exist.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GroupHold {
+  SessionEnded,
   AgentCapacity,
   DailyBudget,
   GroupCap,
@@ -28,6 +30,14 @@ pub enum GroupHold {
   FailedTask,
   Preflight(Vec<crate::run::PreflightProblem>),
   StartFailed,
+}
+
+/// The immutable published pipeline shown for one task in the scheduling review.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReviewedPipeline {
+  pub task: TaskId,
+  pub pipeline: ResourceId,
+  pub version: VersionNumber,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]

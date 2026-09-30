@@ -20,7 +20,7 @@ use lurq::{
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
   task::TaskLimits,
-  task_group::{Scheduling, TaskGroup},
+  task_group::{ReviewedPipeline, Scheduling, TaskGroup},
   tokens::grouped,
 };
 
@@ -78,8 +78,11 @@ enum Mode {
 }
 impl lurq::app::component::DevtoolsInspectable for Mode {}
 
+type QueueSubmission = (PathBuf, TaskGroup, TaskLimits, Vec<ReviewedPipeline>);
+
 pub struct SchedulingReview {
   seeded: Signal<bool>,
+  reviewed: Signal<TasksState>,
   order: Signal<TaskOrder>,
   chosen: Signal<OrderChoice>,
   mode: Signal<Mode>,
@@ -91,7 +94,7 @@ pub struct SchedulingReview {
   focused: crate::ui::unit_input::FocusedInput,
   fixed_policy: Signal<u8>,
   key: IdempotencyKey,
-  queue: FutureAction<(PathBuf, TaskGroup, TaskLimits), (), Vec<Message>>,
+  queue: FutureAction<QueueSubmission, (), Vec<Message>>,
 }
 
 impl Component for SchedulingReview {
@@ -108,6 +111,7 @@ impl Component for SchedulingReview {
     });
     Self {
       seeded: ctx.signal(false),
+      reviewed: ctx.signal(TasksState::Loading),
       order: ctx.signal(TaskOrder::new(Vec::new())),
       chosen: ctx.signal(OrderChoice(None)),
       mode: ctx.signal(Mode::Parallel),
@@ -126,8 +130,9 @@ impl Component for SchedulingReview {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     // Keep the create-time action's polling slot alive on every render.
     let _queue = queue_action(ctx);
-    let props = ctx.props::<ReviewProps>().clone();
+    let mut props = ctx.props::<ReviewProps>().clone();
     self.seed(ctx, &props);
+    props.tasks = self.reviewed.get();
     let state = self.queue.state().get();
     let pending = state.is_pending();
     let completed = state.data.is_some() && !pending;
@@ -135,7 +140,11 @@ impl Component for SchedulingReview {
     let submit = match &parsed {
       Ok((group, limits)) if props.runner_online && !pending && !completed => {
         let (root, group, limits, action) = (props.root.as_ref().clone(), group.clone(), *limits, self.queue.clone());
-        Some(Arc::new(move || action.run((root.clone(), group.clone(), limits))) as Arc<dyn Fn() + Send + Sync>)
+        let reviewed = reviewed_pipelines(&props, group.tasks());
+        Some(
+          Arc::new(move || action.run((root.clone(), group.clone(), limits, reviewed.clone())))
+            as Arc<dyn Fn() + Send + Sync>,
+        )
       }
       _ => None,
     };
@@ -177,9 +186,9 @@ impl Component for SchedulingReview {
   }
 }
 
-fn queue_action(ctx: &mut Ctx) -> FutureAction<(PathBuf, TaskGroup, TaskLimits), (), Vec<Message>> {
-  ctx.future_action(|(root, group, limits): (PathBuf, TaskGroup, TaskLimits)| async move {
-    background::run(move || group::queue(&root, &group, limits).map(|_| ()))
+fn queue_action(ctx: &mut Ctx) -> FutureAction<QueueSubmission, (), Vec<Message>> {
+  ctx.future_action(|(root, group, limits, reviewed): QueueSubmission| async move {
+    background::run(move || group::queue(&root, &group, limits, &reviewed).map(|_| ()))
       .await
       .map_err(|e| vec![e])?
   })
@@ -213,6 +222,7 @@ impl SchedulingReview {
     self.concurrent.set(if order.len() > 1 { 2 } else { 1 });
     self.chosen.set(OrderChoice(order.first().copied()));
     self.order.set(TaskOrder::new(order));
+    self.reviewed.set(props.tasks.clone());
     self.seeded.set(true);
   }
 
@@ -305,4 +315,29 @@ impl SchedulingReview {
       .child(queue.render(ctx))
       .into()
   }
+}
+
+fn reviewed_pipelines(props: &ReviewProps, selected: &[TaskId]) -> Vec<ReviewedPipeline> {
+  props
+    .tasks
+    .ready()
+    .into_iter()
+    .flat_map(|tasks| {
+      tasks
+        .tasks
+        .iter()
+        .filter(|task| selected.contains(&task.id()))
+        .filter_map(|task| {
+          let pipeline = tasks
+            .pipelines
+            .iter()
+            .find(|pipeline| Some(pipeline.id) == task.details().pipeline)?;
+          Some(ReviewedPipeline {
+            task: task.id(),
+            pipeline: pipeline.id,
+            version: task.pipeline_version().unwrap_or(pipeline.version),
+          })
+        })
+    })
+    .collect()
 }

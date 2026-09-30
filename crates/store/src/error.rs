@@ -41,6 +41,8 @@ pub enum StoreError {
   TaskNotEditable { task: TaskId, source: EditError },
   #[error("a task batch must contain at least one task")]
   EmptyBatch,
+  #[error("task {0} no longer uses its reviewed pipeline; review again")]
+  TaskGroupReviewChanged(TaskId),
   #[error("resource {0} does not exist")]
   ResourceNotFound(ResourceId),
   #[error("resource {resource} is a {found:?}, not a {expected:?}")]

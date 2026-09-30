@@ -50,6 +50,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::DuplicateSecretName { .. } => Message::new("errors.secretNameTaken"),
     StoreError::AlreadyMerged(_) => Message::new("runs.merge.failure.alreadyMerged"),
     StoreError::TaskNotEditable { source, .. } => edit_error(source),
+    StoreError::TaskGroupReviewChanged(_) => Message::new("tasks.bulk.reviewChanged"),
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }

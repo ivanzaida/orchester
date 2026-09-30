@@ -47,7 +47,8 @@ fn task_group_cap_and_usage_belong_only_to_first_runs_after_reopening() {
     budget(100),
   )
   .expect("group");
-  db.queue_task_group(&group, None).expect("queue");
+  db.queue_task_group(&group, None, &reviewed(&db, &group))
+    .expect("queue");
   let new = |branch| NewRun {
     task,
     snapshot: template.snapshot().clone(),
@@ -84,7 +85,11 @@ fn task_group_cap_and_usage_belong_only_to_first_runs_after_reopening() {
     db.task_group_usage(&group).expect("only first usage"),
     TokensUsed::new(100)
   );
-  assert_eq!(db.queue_task_group(&group, None).expect("first-group retry"), group);
+  assert_eq!(
+    db.queue_task_group(&group, None, &reviewed(&db, &group))
+      .expect("first-group retry"),
+    group
+  );
 }
 
 #[test]
@@ -98,7 +103,8 @@ fn task_group_queue_is_atomic_pins_versions_and_is_idempotent_after_reopening() 
     budget(2_000_000),
   )
   .expect("group");
-  db.queue_task_group(&group, None).expect("queued");
+  db.queue_task_group(&group, None, &reviewed(&db, &group))
+    .expect("queued");
   let first_version = db
     .latest_version::<Pipeline>(pipeline)
     .expect("version")
@@ -106,7 +112,11 @@ fn task_group_queue_is_atomic_pins_versions_and_is_idempotent_after_reopening() 
     .number();
   drop(db);
   let mut db = ProjectDb::open(repo.path()).expect("reopen");
-  assert_eq!(db.queue_task_group(&group, None).expect("retry"), group);
+  assert_eq!(
+    db.queue_task_group(&group, None, &reviewed(&db, &group))
+      .expect("retry"),
+    group
+  );
   for task in drafts {
     let task = db.task(task.id()).expect("task").expect("exists");
     assert_eq!(task.status(), TaskStatus::Queued);
@@ -129,7 +139,7 @@ fn task_group_incomplete_selection_rolls_back_and_pipeline_assignment_skips_runs
     budget(2_000_000),
   )
   .expect("group");
-  assert!(db.queue_task_group(&group, None).is_err());
+  assert!(db.queue_task_group(&group, None, &reviewed(&db, &group)).is_err());
   assert_eq!(
     db.task(drafts[0].id()).expect("task").expect("exists").status(),
     TaskStatus::Draft
@@ -167,5 +177,100 @@ fn task_group_incomplete_selection_rolls_back_and_pipeline_assignment_skips_runs
   assert!(
     db.set_tasks_pipeline(&[drafts[1].id()], ResourceId::generate())
       .is_err()
+  );
+}
+
+fn reviewed(db: &ProjectDb, group: &TaskGroup) -> Vec<orchester_core::task_group::ReviewedPipeline> {
+  use orchester_core::{resource::Pipeline, store::ResourceStore, task_group::ReviewedPipeline};
+  group
+    .tasks()
+    .iter()
+    .map(|id| {
+      let task = db.task(*id).expect("task").expect("exists");
+      let pipeline = task.details().pipeline.expect("pipeline");
+      let version = db
+        .latest_version::<Pipeline>(pipeline)
+        .expect("version")
+        .expect("published")
+        .number();
+      ReviewedPipeline {
+        task: *id,
+        pipeline,
+        version,
+      }
+    })
+    .collect()
+}
+
+#[test]
+fn task_group_submission_keeps_reviewed_version_after_new_publication() {
+  let (_, mut db, ..) = started_run();
+  let (pipeline, drafts) = drafts(&mut db);
+  let group = TaskGroup::new(
+    IdempotencyKey::generate(),
+    drafts.iter().map(|t| t.id()).collect(),
+    Scheduling::Sequential,
+    budget(2_000_000),
+  )
+  .expect("group");
+  let reviewed = reviewed(&db, &group);
+  let version = db
+    .latest_version::<Pipeline>(pipeline)
+    .expect("version")
+    .expect("published");
+  let mut steps = version.body().steps().to_vec();
+  steps[0].name = name("Unseen implementation");
+  let mut draft = version.to_draft(at(20));
+  draft.edit(Pipeline::new(steps).expect("pipeline"), at(21));
+  db.save_draft(pipeline, &draft).expect("draft");
+  let newer = db.publish_draft::<Pipeline>(pipeline, at(22)).expect("publish");
+  assert_ne!(newer.number(), reviewed[0].version);
+  db.queue_task_group(&group, None, &reviewed)
+    .expect("queue reviewed publication");
+  for task in drafts {
+    assert_eq!(
+      db.task(task.id()).expect("task").expect("exists").pipeline_version(),
+      Some(version.number())
+    );
+  }
+  assert_eq!(db.queue_task_group(&group, None, &[]).expect("lost-reply retry"), group);
+}
+
+#[test]
+fn task_group_changed_assignment_rejects_the_whole_review_atomically() {
+  let (_, mut db, ..) = started_run();
+  let (pipeline, drafts) = drafts(&mut db);
+  let group = TaskGroup::new(
+    IdempotencyKey::generate(),
+    drafts.iter().map(|t| t.id()).collect(),
+    Scheduling::Sequential,
+    budget(2_000_000),
+  )
+  .expect("group");
+  let reviewed = reviewed(&db, &group);
+  let version = db
+    .latest_version::<Pipeline>(pipeline)
+    .expect("version")
+    .expect("published");
+  let other = db
+    .create_resource(
+      orchester_core::resource::Slug::new("other").expect("slug"),
+      name("Other"),
+      version.body(),
+      at(20),
+    )
+    .expect("resource");
+  db.publish_draft::<Pipeline>(other.id(), at(21)).expect("publish");
+  db.set_tasks_pipeline(&[drafts[1].id()], other.id()).expect("assign");
+  assert!(
+    matches!(db.queue_task_group(&group, None, &reviewed), Err(orchester_store::StoreError::TaskGroupReviewChanged(id)) if id == drafts[1].id())
+  );
+  assert!(db.task_groups().expect("groups").is_empty());
+  assert!(
+    db.tasks()
+      .expect("tasks")
+      .iter()
+      .filter(|t| group.tasks().contains(&t.id()))
+      .all(|t| t.status() == TaskStatus::Draft)
   );
 }

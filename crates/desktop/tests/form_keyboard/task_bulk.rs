@@ -238,6 +238,7 @@ fn run_review(mode: &str) {
   desktop.click(mode);
   review_geometry(&mut desktop);
   keyboard_and_drag_reorder(&mut desktop);
+  let reviewed_version = publish_unseen_pipeline(&mut desktop);
   desktop.wait_until("the runner online", |desktop| {
     shows(desktop, "status-runner", "Runner online")
   });
@@ -263,6 +264,12 @@ fn run_review(mode: &str) {
   let db = ProjectDb::open(desktop.repo()).expect("db");
   for task in &db.tasks().expect("tasks")[..2] {
     assert_eq!(db.runs_of_task(task.id()).expect("runs").len(), 1);
+    assert_eq!(task.pipeline_version(), Some(reviewed_version));
+    let run = db
+      .run_with_key(task.id().first_run_key())
+      .expect("first run")
+      .expect("exists");
+    assert_eq!(run.snapshot().pipeline().number, reviewed_version);
   }
   assert_eq!(db.task_groups().expect("groups").len(), 1);
   let tasks = db.tasks().expect("tasks");
@@ -366,4 +373,25 @@ fn add_draft(desktop: &mut Desktop, title: &str, number: usize) {
   });
   desktop.press("new-task-back");
   desktop.wait_for(&format!("task-row-KON-{number}"));
+}
+
+fn publish_unseen_pipeline(desktop: &mut Desktop) -> orchester_core::resource::VersionNumber {
+  let mut db = ProjectDb::open(desktop.repo()).expect("db");
+  let pipeline = db.resources(ResourceKind::Pipeline).expect("resources")[0].id();
+  let version = db
+    .latest_version::<Pipeline>(pipeline)
+    .expect("version")
+    .expect("published");
+  assert!(shows(desktop, "tasks-review-pipeline", &version.number().to_string()));
+  let mut steps = version.body().steps().to_vec();
+  steps[0].name = Name::new("Unseen step configuration").expect("name");
+  let mut draft = version.to_draft(Timestamp::now());
+  draft.edit(Pipeline::new(steps).expect("pipeline"), Timestamp::now());
+  db.save_draft(pipeline, &draft).expect("draft");
+  let newer = db
+    .publish_draft::<Pipeline>(pipeline, Timestamp::now())
+    .expect("publish");
+  assert_ne!(newer.number(), version.number());
+  assert!(shows(desktop, "tasks-review-pipeline", &version.number().to_string()));
+  version.number()
 }

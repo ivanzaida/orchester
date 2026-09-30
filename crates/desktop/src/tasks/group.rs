@@ -5,7 +5,7 @@ use orchester_core::{
   id::{ResourceId, TaskId},
   resource::Pipeline,
   store::{ResourceStore, SettingsStore, TaskStore},
-  task_group::TaskGroup,
+  task_group::{ReviewedPipeline, TaskGroup},
   task_selection::SelectionProblem,
 };
 use orchester_store::ProjectDb;
@@ -30,6 +30,7 @@ pub fn problem_message(problem: &SelectionProblem) -> Message {
 pub fn hold_messages(hold: &orchester_core::task_group::GroupHold) -> Vec<Message> {
   use orchester_core::task_group::GroupHold;
   let key = match hold {
+    GroupHold::SessionEnded => "tasks.bulk.hold.sessionEnded",
     GroupHold::AgentCapacity => "tasks.bulk.hold.capacity",
     GroupHold::DailyBudget => "runs.capacity.dailyBudgetUsed",
     GroupHold::GroupCap => "tasks.bulk.stoppedGroup",
@@ -67,6 +68,7 @@ pub fn queue(
   root: &Path,
   group: &TaskGroup,
   limits: orchester_core::task::TaskLimits,
+  reviewed: &[ReviewedPipeline],
 ) -> Result<TaskGroup, Vec<Message>> {
   let mut db = ProjectDb::open(root).map_err(|error| vec![messages::store_error(&error)])?;
   if let Some(existing) = db
@@ -94,8 +96,12 @@ pub fn queue(
       .details()
       .pipeline
       .ok_or_else(|| vec![Message::new("runs.preflight.pipelineNotPublished")])?;
+    let reviewed = reviewed
+      .iter()
+      .find(|entry| entry.task == *id && entry.pipeline == pipeline)
+      .ok_or_else(|| vec![Message::new("tasks.bulk.reviewChanged")])?;
     let version = db
-      .latest_version::<Pipeline>(pipeline)
+      .version::<Pipeline>(pipeline, reviewed.version)
       .map_err(|error| vec![messages::store_error(&error)])?
       .ok_or_else(|| vec![Message::new("runs.preflight.pipelineNotPublished")])?;
     problems.extend(
@@ -108,6 +114,6 @@ pub fn queue(
   if !problems.is_empty() {
     return Err(problems);
   }
-  db.queue_task_group(group, Some(limits))
+  db.queue_task_group(group, Some(limits), reviewed)
     .map_err(|error| vec![messages::store_error(&error)])
 }

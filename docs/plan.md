@@ -208,6 +208,20 @@ Tasks list selection and scheduling review · ORC-30 · branch `orchester/orc-30
   form_keyboard/tasks `task_bulk` (5/2), i18n `locale`/`every_key` (4/1). Full suites, macOS execution and
   implementer design verification were not run. Fresh independent Check, Review and Verify remain pending.
 
+
+- Latest mandatory Review corrections: the open scheduling review retains its displayed task/pipeline state and
+  carries per-task immutable pipeline versions through exact-version preflight and atomic queue submission.
+  A changed assignment rejects the whole submission with a renewed-review reason. New publication during an open
+  review does not change either the queued version or the first run's snapshot; lost-reply retries return the group.
+  Fresh attachment persists a session scheduling hold for unstarted/Pending first runs before enabling agent slots;
+  Reconnect retains that hold. Explicit first-run Start or interrupted first-run Continue releases it, preserving
+  group identity, order and checkpoints. Automatic advancement and later Run again cannot release that hold.
+  Final `tools/check.ps1` passed; 28 affected named tests passed: core/store/runner `task_group` (3/5/7), runner
+  `lifecycle_after_quit_now` (1), desktop form_keyboard/tasks `task_bulk` (5/2), i18n `locale`/`every_key` (4/1).
+  Prior visual fixes, cap isolation, keyboard/drag Undo, Skills navigation and verification evidence are preserved.
+  Fresh independent Check, Review and Verify remain required. Full suites, macOS execution and implementer
+  design verification were not run.
+
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 
 - **Done 2026-09-30.** **Send & continue** resumes the same failed run in a new attempt, preserving its branch,

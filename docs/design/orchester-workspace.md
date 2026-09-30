@@ -836,6 +836,15 @@ The aggregate cap applies only to the group's first runs, including further atte
 followed by Run again creates a separate run with its own limits; it neither inherits the exhausted group cap nor
 contributes usage to that group. Original group membership remains stored for first-run idempotency and history.
 An unrecovered failure or cancellation holds unstarted members; existing agents retain their normal controls.
+The open review retains the published pipeline versions and task order it displays. Submission and preflight use
+those exact immutable versions, even if a newer publication appears in the meantime; atomic submission rejects a
+changed task pipeline assignment and asks for a renewed review. First-run snapshots use the queued reviewed versions.
+On a Fresh attachment after a desktop session ends, unstarted members (including Pending first runs) receive a
+persisted scheduling hold before agent slots become available. Reconnect does not clear that hold. Open a queued
+member and explicitly start its reviewed first run, or explicitly continue an interrupted first run, to release the
+group's session hold. Existing concurrency, cap, preflight and previous-task checks still apply. A later Run again
+cannot release the old group's hold. These recovery reasons reuse the task list's waiting text (implemented, not
+drawn yet); they preserve group order, original run keys, checkpoints and snapshots rather than creating a new group.
 
 **Implemented, not drawn yet:** inline Set pipeline picker/apply/cancel and skipped-task reasons (only drafts without
 runs are changed); empty search results and non-fixture filter/sort combinations; review validation, offline runner,
