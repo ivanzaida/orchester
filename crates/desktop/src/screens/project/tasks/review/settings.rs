@@ -19,12 +19,18 @@ impl SchedulingReview {
       .child(self.pipeline_readback(ctx, props))
       .child(self.approval_notice(ctx, props))
       .child(Text::new(&ctx.t("tasks.bulk.branchNote")).variant(TypographyStyle::Caption));
-    ScrollVertical::new(fields)
+    Column::new()
+      .id("tasks-review-settings")
       .width(Dimension::Px(REVIEW_RAIL_WIDTH))
       .height(Dimension::Pct(100.0))
       .padding_left(SpacingSize::Section)
       .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .scrollbar(gutter_scrollbar())
+      .child(
+        ScrollVertical::new(fields)
+          .width(Dimension::Pct(100.0))
+          .height(Dimension::Pct(100.0))
+          .scrollbar(gutter_scrollbar()),
+      )
       .into()
   }
 
@@ -45,11 +51,11 @@ impl SchedulingReview {
     ];
     Row::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Stack.role())
       .with_children(modes.into_iter().map(|(mode, id, title, detail)| {
         let selected = self.mode.get() == mode;
         let state = self.mode.clone();
-        let card = OptionCard::new(id, ctx.t(title), ctx.t(detail), selected);
+        let card = OptionCard::new(id, ctx.t(title), ctx.t(detail), selected).scheduling_review();
         let card = if locked {
           card.unavailable(None)
         } else {

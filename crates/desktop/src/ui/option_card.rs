@@ -32,6 +32,7 @@ pub struct OptionCard {
   detail: Arc<str>,
   selected: bool,
   state: State,
+  height: Option<Dimension>,
 }
 
 impl OptionCard {
@@ -43,11 +44,18 @@ impl OptionCard {
       detail,
       selected,
       state: State::Unavailable(None),
+      height: None,
     }
   }
 
   pub fn on_choose(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
     self.state = State::Available(Arc::new(handler));
+    self
+  }
+
+  /// Execution-mode card (`YZcH2`, `jPX6u`) in the scheduling review.
+  pub fn scheduling_review(mut self) -> Self {
+    self.height = Some(Dimension::Px(crate::theme::TASK_REVIEW_MODE_HEIGHT));
     self
   }
 
@@ -80,7 +88,7 @@ impl From<OptionCard> for Element {
       .spacing(ExtraSpacing::Indicator.role())
       .child(Text::new(&card.title).variant(TypographyStyle::Label))
       .child(Text::new(&card.detail).variant(ExtraTypography::Detail.role()));
-    let button = Button::empty()
+    let mut button = Button::empty()
       .button()
       .id(card.id)
       .align_items(Alignment::Start)
@@ -93,6 +101,9 @@ impl From<OptionCard> for Element {
       .describe("selected", if card.selected { "true" } else { "false" })
       .child(icon(mark, IconSize::Option, mark_color))
       .child(text);
+    if let Some(height) = card.height {
+      button = button.height(height);
+    }
     match card.state {
       State::Available(handler) => keyboard_stop(button, Ring::Outer)
         .focused_style(stroke_selected_focused(Ring::Outer, card.selected))

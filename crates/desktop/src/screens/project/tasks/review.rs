@@ -152,7 +152,8 @@ impl Component for SchedulingReview {
         Row::new()
           .flex(1.0)
           .width(Dimension::Pct(100.0))
-          .padding_horizontal(SpacingSize::Section)
+          .padding_left(SpacingSize::Section)
+          .padding_right(ExtraSpacing::BesideGutter.role())
           .spacing(ExtraSpacing::Rail.role())
           .child(self.task_order(ctx, &props, pending || completed))
           .child(self.settings(ctx, &props, pending || completed)),
@@ -287,7 +288,11 @@ impl SchedulingReview {
             Column::new()
               .flex(1.0)
               .spacing(ExtraSpacing::Indicator.role())
-              .child(Text::new(&task.title).variant(TypographyStyle::FieldLabel))
+              .child(
+                Text::new(&task.title)
+                  .variant(TypographyStyle::FieldLabel)
+                  .color(lurq::app::theme::PaletteColor::TextPrimary),
+              )
               .child(
                 Text::new(&ctx.t_args(
                   "tasks.bulk.taskPipeline",
