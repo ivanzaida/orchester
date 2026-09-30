@@ -32,8 +32,8 @@ pub(crate) fn read_files(git: &Repository<'_>, pending: Vec<Pending>) -> Result<
         let handle = scope.spawn(move || {
           receiver
             .into_iter()
-            .map(|(file, blob)| FileRecord::read(file.path, blob, file.outlined).map(|record| (file.slot, record)))
-            .collect::<Result<Vec<_>, IndexError>>()
+            .map(|(file, blob)| (file.slot, FileRecord::read(file.path, blob, file.outlined)))
+            .collect::<Vec<_>>()
         });
         (sender, handle)
       })
@@ -41,16 +41,15 @@ pub(crate) fn read_files(git: &Repository<'_>, pending: Vec<Pending>) -> Result<
     let mut files = pending.into_iter();
     let reading = git.read_blobs(objects, |position, blob| {
       let file = files.next().expect("one file per requested blob");
-      // A thread stops taking files only after an error, which joining it reports.
-      if senders[position % workers].send((file, blob)).is_err() {
-        tracing::debug!("an indexing thread stopped early");
-      }
+      senders[position % workers]
+        .send((file, blob))
+        .expect("an indexing thread takes files until its channel closes");
       Ok::<(), IndexError>(())
     });
     drop(senders);
     let mut records = Vec::new();
     for handle in handles {
-      records.extend(handle.join().expect("an indexing thread does not panic")?);
+      records.extend(handle.join().expect("an indexing thread does not panic"));
     }
     reading?;
     Ok(records)

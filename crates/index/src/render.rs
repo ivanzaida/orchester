@@ -44,8 +44,8 @@ fn write_items(document: &mut String, items: &[Item], depth: usize) {
 pub(crate) fn tree(out: &mut impl Write, records: &[FileRecord]) -> io::Result<()> {
   for record in records {
     match record.lines {
-      Some(lines) => writeln!(out, "{}	{}	{lines}", record.path, record.language.name())?,
-      None => writeln!(out, "{}	{}	{NO_LINES}", record.path, record.language.name())?,
+      Some(lines) => writeln!(out, "{}\t{}\t{lines}", record.path, record.language.name())?,
+      None => writeln!(out, "{}\t{}\t{NO_LINES}", record.path, record.language.name())?,
     }
   }
   Ok(())
@@ -64,7 +64,7 @@ pub(crate) fn symbols(out: &mut impl Write, records: &[FileRecord]) -> io::Resul
   for (path, symbol) in rows {
     writeln!(
       out,
-      "{}	{path}	{}	{}	{}",
+      "{}\t{path}\t{}\t{}\t{}",
       symbol.name,
       symbol.line,
       symbol.kind.name(),

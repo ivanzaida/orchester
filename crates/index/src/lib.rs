@@ -57,8 +57,6 @@ pub enum IndexError {
     path: PathBuf,
     source: io::Error,
   },
-  #[error("tree-sitter could not parse {path}")]
-  Parse { path: String },
   /// The earlier index an incremental build started from does not read back; a full build
   /// replaces it.
   #[error("the index of {revision} cannot be reused: {detail}")]

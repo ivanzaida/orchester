@@ -27,6 +27,11 @@ const PROGRAM: &str = "git";
 const TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// As git decides that a file is binary: a NUL byte in its first 8000 bytes.
 const BINARY_PROBE: u64 = 8000;
+/// The largest file whose text is kept for indexing; a larger one (a generated bundle, a data dump)
+/// only has its lines counted as it streams past.
+pub(crate) const MAX_TEXT_BYTES: u64 = 1024 * 1024;
+/// How much of a large file is held at once while its lines are counted.
+const COUNT_CHUNK: usize = 64 * 1024;
 
 #[derive(Debug, Error)]
 pub enum GitError {
@@ -62,6 +67,10 @@ pub(crate) struct TreeEntry {
 /// A file's content.
 pub(crate) enum Blob {
   Text(Vec<u8>),
+  /// Text larger than [`MAX_TEXT_BYTES`], with its line count.
+  Large {
+    lines: usize,
+  },
   Binary,
 }
 
@@ -244,7 +253,8 @@ fn read_errors(mut errors: ChildStderr) -> JoinHandle<io::Result<String>> {
   })
 }
 
-/// The `size` bytes of a blob; a binary one is skipped after its first bytes.
+/// The `size` bytes of a blob; a binary one is skipped after its first bytes, a large one after
+/// its lines are counted.
 fn read_content(reader: &mut impl BufRead, size: u64) -> io::Result<Blob> {
   let probe = size.min(BINARY_PROBE);
   let mut content = Vec::new();
@@ -253,9 +263,34 @@ fn read_content(reader: &mut impl BufRead, size: u64) -> io::Result<Blob> {
     let skipped = io::copy(&mut reader.by_ref().take(size - probe), &mut io::sink())?;
     return complete(probe + skipped, size).map(|()| Blob::Binary);
   }
+  if size > MAX_TEXT_BYTES {
+    return count_lines(reader, &content, size);
+  }
   reader.by_ref().take(size - probe).read_to_end(&mut content)?;
   complete(content.len() as u64, size)?;
   Ok(Blob::Text(content))
+}
+
+/// The line count of a large blob whose first bytes are `head`, read to its end a chunk at a time.
+fn count_lines(reader: &mut impl BufRead, head: &[u8], size: u64) -> io::Result<Blob> {
+  let mut breaks = head.iter().filter(|byte| **byte == b'\n').count();
+  let mut last = head.last().copied();
+  let mut read = head.len() as u64;
+  let mut rest = reader.by_ref().take(size - read);
+  let mut chunk = vec![0; COUNT_CHUNK];
+  loop {
+    let count = rest.read(&mut chunk)?;
+    if count == 0 {
+      break;
+    }
+    breaks += chunk[..count].iter().filter(|byte| **byte == b'\n').count();
+    last = Some(chunk[count - 1]);
+    read += count as u64;
+  }
+  complete(read, size)?;
+  Ok(Blob::Large {
+    lines: breaks + usize::from(last.is_some_and(|last| last != b'\n')),
+  })
 }
 
 fn complete(read: u64, size: u64) -> io::Result<()> {

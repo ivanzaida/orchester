@@ -8,12 +8,19 @@ mod python;
 mod rust;
 mod typescript;
 
-use tree_sitter::{Node, Parser, Tree};
+use std::{
+  ops::ControlFlow,
+  time::{Duration, Instant},
+};
+
+use tree_sitter::{Node, ParseOptions, ParseState, Parser, Tree};
 
 use crate::language::Language;
 
 /// The longest signature kept, in characters.
 const SIGNATURE_LIMIT: usize = 200;
+/// How long one file may take to parse; a file that takes longer gets no outline.
+const PARSE_TIME: Duration = Duration::from_secs(5);
 
 /// What a definition is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -115,7 +122,7 @@ enum Scope {
 type Classify = for<'t> fn(Node<'t>, &[u8], Scope) -> Visit<'t>;
 
 /// The definitions in `source`, a file of `language`; `None` when the language has no grammar or
-/// tree-sitter gives no tree.
+/// tree-sitter gives no tree in time.
 pub(crate) fn items(language: Language, source: &[u8]) -> Option<Vec<Item>> {
   let (grammar, classify): (tree_sitter::Language, Classify) = match language {
     Language::Rust => (tree_sitter_rust::LANGUAGE.into(), rust::classify),
@@ -161,12 +168,23 @@ pub(crate) fn grammars() -> String {
     .join(", ")
 }
 
+/// The syntax tree of `source`; `None` when tree-sitter did not finish within [`PARSE_TIME`].
 fn parse(grammar: &tree_sitter::Language, source: &[u8]) -> Option<Tree> {
   let mut parser = Parser::new();
   parser
     .set_language(grammar)
     .expect("the bundled grammars match the tree-sitter version they are built for");
-  parser.parse(source, None)
+  let deadline = Instant::now() + PARSE_TIME;
+  let mut progress = |_: &ParseState| {
+    if Instant::now() < deadline {
+      ControlFlow::Continue(())
+    } else {
+      ControlFlow::Break(())
+    }
+  };
+  let options = ParseOptions::new().progress_callback(&mut progress);
+  let mut read = |offset: usize, _| source.get(offset..).unwrap_or_default();
+  parser.parse_with_options(&mut read, None, Some(options))
 }
 
 fn collect(node: Node<'_>, source: &[u8], classify: Classify, scope: Scope, out: &mut Vec<Item>) {

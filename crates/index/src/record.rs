@@ -4,13 +4,15 @@
 use std::path::PathBuf;
 
 use crate::{
-  IndexError,
   git::Blob,
   language::Language,
   markdown::{self, Heading},
   outline::{self, Item, Kind},
   render,
 };
+
+/// The longest line, in bytes, of a file that is parsed: longer ones are minified or generated.
+const LONG_LINE: usize = 4096;
 
 /// A definition as `symbols.tsv` lists it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -57,10 +59,19 @@ impl FileRecord {
     }
   }
 
-  /// The record of the file at `path` with content `blob`, with an outline when `outlined`.
-  pub(crate) fn read(path: String, blob: Blob, outlined: bool) -> Result<Self, IndexError> {
-    let Blob::Text(content) = blob else {
-      return Ok(Self::without_content(path, Language::BINARY));
+  /// The record of the file at `path` with content `blob`, with an outline when `outlined`. Text
+  /// too large to keep, or with a line longer than [`LONG_LINE`] (minified or generated), is not
+  /// parsed.
+  pub(crate) fn read(path: String, blob: Blob, outlined: bool) -> Self {
+    let content = match blob {
+      Blob::Text(content) => content,
+      Blob::Large { lines } => {
+        let language = Language::of(&path);
+        let mut record = Self::without_content(path, language);
+        record.lines = Some(lines);
+        return record;
+      }
+      Blob::Binary => return Self::without_content(path, Language::BINARY),
     };
     let language = Language::of(&path);
     let lines = line_count(&content);
@@ -74,14 +85,16 @@ impl FileRecord {
     };
     if language == Language::Markdown {
       record.headings = markdown::headings(&String::from_utf8_lossy(&content));
-    } else if language.has_grammar() {
-      let items = outline::items(language, &content).ok_or_else(|| IndexError::Parse {
-        path: record.path.clone(),
-      })?;
-      record.symbols = symbols(&items, "");
-      record.outline = outlined.then(|| Outline::Text(render::outline(&record, &items)));
+    } else if language.has_grammar() && !content.split(|byte| *byte == b'\n').any(|line| line.len() > LONG_LINE) {
+      match outline::items(language, &content) {
+        Some(items) => {
+          record.symbols = symbols(&items, "");
+          record.outline = outlined.then(|| Outline::Text(render::outline(&record, &items)));
+        }
+        None => tracing::warn!(path = %record.path, "tree-sitter did not parse the file in time; it has no outline"),
+      }
     }
-    Ok(record)
+    record
   }
 }
 
