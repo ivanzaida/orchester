@@ -25,7 +25,6 @@ use crate::{
   manifest::{BuildMode, Manifest},
 };
 
-const INDEX_DIR: &str = ".orchester/index";
 const USERS: &str = ".users";
 const BUILDING: &str = ".building-";
 const LOCK: &str = ".lock";
@@ -68,7 +67,7 @@ impl CodebaseIndexes {
   pub fn new(repo: &Path) -> Self {
     Self {
       repo: repo.to_path_buf(),
-      root: repo.join(INDEX_DIR),
+      root: repo.join(".orchester").join("index"),
     }
   }
 
