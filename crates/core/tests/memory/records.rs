@@ -281,6 +281,27 @@ fn records_holding_a_secret_value_are_refused_without_echoing_it() {
 }
 
 #[test]
+fn records_screen_ignores_case_and_matches_short_values_as_whole_tokens() {
+  let screen = SecretScreen::new(vec![
+    (secret_name("SHORT"), secret_value("abc")),
+    (secret_name("TOKEN"), secret_value("GhP_SeCrEt123456")),
+  ]);
+  let refused = |text: &str| {
+    screen
+      .check(content(MemoryKind::Fact, text))
+      .err()
+      .map(|error| error.secret)
+  };
+  assert_eq!(refused("token is ghp_secret123456"), Some(secret_name("TOKEN")));
+  assert_eq!(refused("Refactor the abcde parser"), None);
+  assert_eq!(refused("The code is ABC, then."), Some(secret_name("SHORT")));
+  assert_eq!(refused("abc"), Some(secret_name("SHORT")));
+  // Only the value as stored is looked for.
+  assert_eq!(refused("token R2hQX1NlQ3JFdDEyMzQ1Ng=="), None);
+  assert_eq!(refused("token GhP_SeCrEt 123456"), None);
+}
+
+#[test]
 fn records_screen_reads_the_values_of_active_secrets() {
   let project = ProjectId::generate();
   let secret = |name: &str| {
