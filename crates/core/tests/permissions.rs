@@ -119,8 +119,8 @@ fn permissions_capability_table() {
     ),
     (
       O::AskBeforeCommands,
-      no(Unavailable::NeedsPermissionRequests),
-      no(Unavailable::NeedsPermissionRequests),
+      enforced(M::CodexCommandApprovals),
+      enforced(M::CodexCommandApprovals),
     ),
     (
       O::AllowedCommands,
@@ -170,26 +170,6 @@ fn permissions_capability_table() {
         support(AgentProvider::ClaudeCodeCli, platform, option),
         expected,
         "{option:?}"
-      );
-    }
-  }
-}
-
-#[test]
-fn permissions_asking_before_commands_is_never_enforceable() {
-  for provider in AgentProvider::ALL {
-    for platform in PLATFORMS {
-      let ask = permissions(
-        RepositoryAccess::ReadOnly,
-        CommandPermission::AskBefore,
-        NetworkAccess::On,
-      );
-      assert_eq!(
-        ask.enforced_on(provider, platform),
-        Err(PermissionProblem::NotEnforceable {
-          option: O::AskBeforeCommands,
-          reason: Unavailable::NeedsPermissionRequests,
-        })
       );
     }
   }

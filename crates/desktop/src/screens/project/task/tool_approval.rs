@@ -158,15 +158,30 @@ fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
 }
 
 fn header(ctx: &Ctx, approval: &PendingToolApproval) -> Element {
-  let title = ctx.t("runs.toolApproval.title");
-  let explanation = ctx.t_args(
-    "runs.toolApproval.explanation",
-    [
-      ("agent", approval.agent.as_str()),
-      ("server", approval.server.as_str()),
-      ("action", approval.action.as_str()),
-    ],
-  );
+  let command = approval.command;
+  let title = ctx.t(if command {
+    "runs.toolApproval.commandTitle"
+  } else {
+    "runs.toolApproval.title"
+  });
+  let explanation = if command {
+    ctx.t_args(
+      "runs.toolApproval.commandExplanation",
+      [
+        ("agent", approval.agent.as_str()),
+        ("cwd", approval.target.as_deref().unwrap_or_default()),
+      ],
+    )
+  } else {
+    ctx.t_args(
+      "runs.toolApproval.explanation",
+      [
+        ("agent", approval.agent.as_str()),
+        ("server", approval.server.as_str()),
+        ("action", approval.action.as_str()),
+      ],
+    )
+  };
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_vertical(SpacingSize::Lg)
@@ -180,6 +195,7 @@ fn header(ctx: &Ctx, approval: &PendingToolApproval) -> Element {
 
 fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
   let approval = &props.approval;
+  let command = approval.command;
   Column::new()
     .id("tool-approval-details")
     .width(Dimension::Pct(100.0))
@@ -187,21 +203,35 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
     .padding_horizontal(ExtraSpacing::Rail.role())
     .spacing(ExtraSpacing::Stack.role())
     .child(property(&ctx.t("runs.toolApproval.agent"), &approval.agent))
+    .with_children(
+      (!command).then(|| styled_property(&ctx.t("runs.toolApproval.server"), &approval.server, ValueStyle::Mono)),
+    )
     .child(styled_property(
-      &ctx.t("runs.toolApproval.server"),
-      &approval.server,
-      ValueStyle::Mono,
-    ))
-    .child(styled_property(
-      &ctx.t("runs.toolApproval.action"),
+      &ctx.t(if command {
+        "runs.toolApproval.command"
+      } else {
+        "runs.toolApproval.action"
+      }),
       &approval.action,
       ValueStyle::Mono,
     ))
+    .with_children(approval.target.as_deref().map(|target| {
+      styled_property(
+        &ctx.t(if command {
+          "runs.toolApproval.cwd"
+        } else {
+          "runs.toolApproval.target"
+        }),
+        target,
+        ValueStyle::Mono,
+      )
+    }))
+    .child(Text::new(&ctx.t("runs.toolApproval.scope")).variant(TypographyStyle::Description))
     .with_children(
       approval
-        .target
+        .scope
         .as_deref()
-        .map(|target| styled_property(&ctx.t("runs.toolApproval.target"), target, ValueStyle::Mono)),
+        .map(|scope| Text::new(scope).variant(TypographyStyle::Description)),
     )
     .with_children((props.remaining > 0).then(|| {
       Text::new(&ctx.t_args(

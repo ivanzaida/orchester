@@ -1,11 +1,12 @@
 //! Bidirectional Codex App Server conversation for one invocation. MCP user input and elicitation
-//! requests can be answered; command, file and sandbox approvals remain disabled. Unexpected
+//! requests and command approvals can be answered once; file and standing permission grants remain disabled. Unexpected
 //! host requests fail the invocation. Global MCP servers remain available; project-selected
 //! servers must be connected before the turn begins.
 
 use std::{collections::BTreeSet, io, path::PathBuf};
 
 use orchester_core::{
+  command::SecretVariable,
   connection::{
     app_server::{AppServerStream, Update},
     app_server_mcp::verify_selected_servers,
@@ -39,11 +40,14 @@ pub(super) struct AppServerSetup {
   pub effort: Option<String>,
   pub worktree: PathBuf,
   pub access: RepositoryAccess,
+  pub command_approvals: bool,
+  pub tool_approvals: bool,
   pub network: NetworkAccess,
   pub writable_roots: Vec<PathBuf>,
   pub resume: Option<String>,
   pub expected_servers: BTreeSet<String>,
   pub output_schema: Option<Value>,
+  pub secrets: Vec<SecretVariable>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -61,6 +65,7 @@ pub(super) struct AppServerSession {
   setup: AppServerSetup,
   phase: Phase,
   thread: Option<String>,
+  turn: Option<String>,
   stream: AppServerStream,
 }
 
@@ -70,6 +75,7 @@ impl AppServerSession {
       setup,
       phase: Phase::Initialize,
       thread: None,
+      turn: None,
       stream: AppServerStream::default(),
     }
   }
@@ -100,11 +106,20 @@ impl AppServerSession {
     }
     let value: Value = serde_json::from_str(line).map_err(|_| "Codex App Server sent invalid JSON".to_owned())?;
     if value.get("method").is_some() {
+      if value.get("method").and_then(Value::as_str) == Some("turn/started") {
+        self.turn = value
+          .pointer("/params/turn/id")
+          .and_then(Value::as_str)
+          .map(str::to_owned);
+      }
       let updates = self.stream.parse(line).map_err(|error| error.to_string())?;
       for update in &updates {
         if let Update::Approval(request) = update
           && (!matches!(self.phase, Phase::Turn | Phase::Working)
-            || self.thread.as_deref() != Some(request.thread.as_str()))
+            || self.thread.as_deref() != Some(request.thread.as_str())
+            || self.turn.as_deref() != request.turn.as_deref()
+            || (request.is_command() && !self.setup.command_approvals)
+            || (!request.is_command() && !self.setup.tool_approvals))
         {
           return Err(
             "Codex App Server requested a tool decision outside the active turn"
@@ -119,6 +134,16 @@ impl AppServerSession {
       return Ok(updates);
     }
     self.response(&value, process).await
+  }
+
+  pub fn redact(&self, text: &str) -> String {
+    self.setup.secrets.iter().fold(text.to_owned(), |text, secret| {
+      if secret.expose().is_empty() {
+        text
+      } else {
+        text.replace(secret.expose(), "<redacted>")
+      }
+    })
   }
 
   async fn response(&mut self, value: &Value, process: &Supervised) -> Result<Vec<Update>, AppServerFailure> {
@@ -192,14 +217,19 @@ impl AppServerSession {
   }
 
   fn check_thread(&self, result: &Value) -> Result<(), String> {
+    if let Some(expected) = &self.setup.resume
+      && result.pointer("/thread/id").and_then(Value::as_str) != Some(expected.as_str())
+    {
+      return Err("Codex resumed a different session".to_owned());
+    }
     let granular = result
       .get("approvalPolicy")
       .and_then(|policy| policy.get("granular"))
       .ok_or_else(|| "Codex did not activate granular tool approval policy".to_owned())?;
     let enabled = |key: &str| granular.get(key).and_then(Value::as_bool).unwrap_or(false);
-    if !enabled("mcp_elicitations")
-      || enabled("rules")
-      || enabled("sandbox_approval")
+    if enabled("mcp_elicitations") != self.setup.tool_approvals
+      || enabled("rules") != self.setup.command_approvals
+      || enabled("sandbox_approval") != self.setup.command_approvals
       || enabled("request_permissions")
       || enabled("skill_approval")
     {
@@ -263,7 +293,8 @@ impl AppServerSession {
       RepositoryAccess::Write => "workspace-write",
     };
     let policy = json!({"granular":{
-      "mcp_elicitations":true,"rules":false,"sandbox_approval":false,
+      "mcp_elicitations":self.setup.tool_approvals,
+      "rules":self.setup.command_approvals,"sandbox_approval":self.setup.command_approvals,
       "request_permissions":false,"skill_approval":false
     }});
     let cwd = self.setup.worktree.to_string_lossy();

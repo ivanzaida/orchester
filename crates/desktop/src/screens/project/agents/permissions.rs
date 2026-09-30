@@ -62,6 +62,7 @@ impl ProfileEditor {
       .child(self.folders_setting(ctx))
       .child(self.commands_setting(ctx, provider))
       .child(self.network_setting(ctx, provider))
+      .child(self.tool_approvals_setting(ctx, provider))
       .child(self.mcp_setting(ctx, provider));
     let body = Row::new()
       .width(Dimension::Pct(100.0))
@@ -79,6 +80,26 @@ impl ProfileEditor {
       )
       .into(),
     ]
+  }
+
+  fn tool_approvals_setting(&self, ctx: &Ctx, provider: Option<AgentProvider>) -> Element {
+    let enabled = self.permissions.get().interactive_tool_approvals();
+    let switch = Switch::new(
+      "agent-tool-approvals",
+      ctx.t("agents.permissions.toolApprovals"),
+      enabled,
+    );
+    let control = if provider == Some(AgentProvider::CodexCli) || enabled {
+      let permissions = self.permissions.clone();
+      switch.render(move || permissions.update(|permissions| permissions.set_interactive_tool_approvals(!enabled)))
+    } else {
+      switch.locked()
+    };
+    let mut content = Column::new().spacing(SpacingSize::Sm).child(control);
+    if provider != Some(AgentProvider::CodexCli) {
+      content = content.child(hint(ctx, "agents.permissions.toolApprovalUnavailable"));
+    }
+    setting(ctx, "agents.permissions.toolApprovals", content.into())
   }
 
   /// An option card for `option`, chosen by `choose`, or disabled with the reason when the

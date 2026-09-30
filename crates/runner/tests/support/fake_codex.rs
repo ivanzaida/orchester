@@ -46,6 +46,8 @@ use std::{
   time::Duration,
 };
 
+#[path = "fake_app_server.rs"]
+mod fake_app_server;
 #[path = "fake_mcp.rs"]
 mod fake_mcp;
 
@@ -61,6 +63,9 @@ fn main() -> ExitCode {
     return ExitCode::SUCCESS;
   }
   let args: Vec<String> = std::env::args().skip(1).collect();
+  if args.first().is_some_and(|arg| arg == "app-server") {
+    return fake_app_server::run(&args);
+  }
   let Some(prompt) = read_prompt(&args) else {
     return ExitCode::from(2);
   };

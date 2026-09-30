@@ -23,7 +23,7 @@ use orchester_core::{
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
-  permission::{FolderBounds, capability::EnforcedPermissions},
+  permission::{AgentPermissions, CommandPermission, FolderBounds, capability::EnforcedPermissions},
   resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKind},
   run::{
     AssembledPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
@@ -149,7 +149,7 @@ impl RunTask {
       skills: placed.folder.as_deref(),
       repository_skills: repository.as_deref(),
     };
-    let interactive = interactive_mode(step, provider)?;
+    let interactive = interactive_mode(enforced.permissions(), provider)?;
     let (command, mcp_file, app_server) = if interactive && provider == AgentProvider::CodexCli {
       let (command, app) = self.app_server_command(&cli, setup, prompt)?;
       (command, None, Some(app))
@@ -209,11 +209,14 @@ impl RunTask {
         effort: cli.effort.map(str::to_owned),
         worktree: cli.worktree.to_path_buf(),
         access: cli.enforced.permissions().repository(),
+        command_approvals: *cli.enforced.permissions().commands() == CommandPermission::AskBefore,
+        tool_approvals: cli.enforced.permissions().interactive_tool_approvals(),
         network: cli.enforced.permissions().network(),
         writable_roots: cli.writable_roots.to_vec(),
         resume: cli.resume.map(str::to_owned),
         expected_servers,
         output_schema: schema,
+        secrets: mcp.secrets().to_vec(),
       },
     ))
   }
@@ -428,8 +431,8 @@ impl RunTask {
   }
 }
 
-fn interactive_mode(step: &Step, provider: AgentProvider) -> Result<bool, RunnerProblem> {
-  let interactive = matches!(&step.kind, StepKind::Agent { permissions, .. } if permissions.interactive_tool_approvals);
+fn interactive_mode(permissions: &AgentPermissions, provider: AgentProvider) -> Result<bool, RunnerProblem> {
+  let interactive = permissions.interactive_tool_approvals() || *permissions.commands() == CommandPermission::AskBefore;
   if interactive && provider != AgentProvider::CodexCli {
     return Err(problem(
       "interactive tool approvals require a Codex agent profile".to_owned(),

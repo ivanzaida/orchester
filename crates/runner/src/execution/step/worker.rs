@@ -231,7 +231,7 @@ impl Worker {
           Some(Stop::AfterCommand(cause)) => {
             if watch.stop.is_none() && watch.over.is_none() {
               watch.after_command = Some(cause);
-              if watch.commands == 0 {
+              if watch.commands == 0 || watch.approval.is_some() {
                 watch.stop = watch.after_command.take();
                 self.process.terminate();
               }
@@ -292,9 +292,24 @@ impl Worker {
       execution: watch.invocation.execution,
       invocation: watch.invocation.id,
       agent: self.agent.clone(),
+      command: request.is_command(),
+      scope: request.scope.as_ref().map(|scope| {
+        self
+          .app_server
+          .as_ref()
+          .map_or_else(|| scope.clone(), |app| app.redact(scope))
+      }),
       server: request.server.clone(),
-      action: request.action.clone(),
-      target: request.target.clone(),
+      action: self
+        .app_server
+        .as_ref()
+        .map_or_else(|| request.action.clone(), |app| app.redact(&request.action)),
+      target: request.target.as_ref().map(|target| {
+        self
+          .app_server
+          .as_ref()
+          .map_or_else(|| target.clone(), |app| app.redact(target))
+      }),
       requested_at: Timestamp::now(),
     };
     watch.db.request_tool_approval(&approval)?;

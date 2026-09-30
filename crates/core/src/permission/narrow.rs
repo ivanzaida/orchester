@@ -36,7 +36,7 @@ pub struct StepPermissions {
   pub network: StepNetwork,
   /// This agent step may pause for a person's decision on one Codex MCP or app tool call.
   /// The default keeps the existing non-interactive Codex policy for published pipelines.
-  #[serde(default)]
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub interactive_tool_approvals: bool,
 }
 
@@ -69,6 +69,8 @@ impl AgentPermissions {
       (NetworkAccess::On, StepNetwork::AsProfile) => NetworkAccess::On,
       _ => NetworkAccess::Off,
     };
-    Self::new(repository, commands, network).with_writable_folders(self.writable_folders.clone())
+    let mut effective = Self::new(repository, commands, network).with_writable_folders(self.writable_folders.clone());
+    effective.set_interactive_tool_approvals(self.interactive_tool_approvals() || step.interactive_tool_approvals);
+    effective
   }
 }
