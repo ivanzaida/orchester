@@ -268,3 +268,33 @@ button visibility and usable layout at the narrower supported size. Native appro
 same-session migration must use the current pin; old negative QA is not its verdict. Report the
 new pin **READY** before any private-app launch so the root supplies a fresh host watcher.
 This implementer launched no app, produced no pin, and performed no design verification.
+
+### Command caption correction after 72bfa7c verification
+
+The current source input is `72bfa7cb4e824b0a3ff54bbe7a537e3662d826cb` plus this
+continuation's locale/test/documentation delta. The negative report at
+`.tmp/verify/candidate-72bfa7c/native-report.md`, its PID 63328 sampled observations and its
+unverified scenarios remain historical evidence for that pin, not results for the corrected source.
+
+`runs.toolApproval.commandExplanation` now states that Approve once permits only this action
+within existing permissions and adds no sandbox, folder or network access; Deny prevents execution
+and fails the step. English is the only shipped locale. The new semantic test checks each safety
+claim and the agent/cwd placeholders, and requires explicit semantic coverage when another locale
+ships. Native accept/cancel handling, runtime boundaries and full Target/cwd wrapping are unchanged.
+
+The root reports updating only canonical `GbNSA/mXvUT` copy through Pencil MCP. This session
+has no callable Pencil tools; saved design exports predate that update. Fresh canonical-caption
+access was requested, and no current design comparison is claimed. No app was launched or pin
+prepared. Before a new private app launch the verifier must report the built/pinned pair READY
+and obtain the root's new watcher.
+
+Fresh Check, Review and independent Verify must assess the new input. Remaining native denial,
+MCP approve/deny, later requests and preserved-session migration require current-pin evidence.
+Verify must cover the corrected command explanation, short/long Target/cwd, current permissions
+and unsupported states through exact-owned-PID MCP. Prior runtime checks retain their stated
+input provenance; no new runtime, native, Mac or design verification is claimed here.
+
+Fresh implementation checks passed: `cargo test -p orchester-desktop --test i18n
+command_approval_explanation` (1), `locales_have` (1), and `every_key` (1), each as a
+separate named invocation. `powershell -File tools/check.ps1` returned `check: OK` and
+`git diff --check` passed. These checks cover the corrected source, not a new pinned release.

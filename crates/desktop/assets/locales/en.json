@@ -933,7 +933,7 @@
       "approving": "Approving…",
       "notAwaited": "This tool action no longer waits for a decision.",
       "commandTitle": "Approve command?",
-      "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action within existing permissions and adds no sandbox, folder or network access. Deny prevents execution and fails this step.",
       "command": "Command",
       "cwd": "Working directory",
       "scope": "One requested action only; no session or permanent grant"
