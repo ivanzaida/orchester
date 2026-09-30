@@ -14,13 +14,13 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{id::RunId, run::PendingToolApproval};
+use orchester_core::{connection::AgentProvider, id::RunId, run::PendingToolApproval};
 use orchester_ipc::Command;
 
 use crate::{
   messages::Message,
   runner::Runners,
-  tasks::run::control_message,
+  tasks::{approvals::ShownApproval, run::control_message},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     backdrop::backdrop,
@@ -41,6 +41,8 @@ const BUTTON_HEIGHT: f32 = 36.0;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct ToolApprovalProps {
   approval: PendingToolApproval,
+  /// The CLI of the agent that asks, which decides what an approval means.
+  provider: Option<AgentProvider>,
   remaining: usize,
 }
 
@@ -123,13 +125,14 @@ impl Component for ToolApprovalDialog {
   }
 }
 
-pub(in crate::screens::project) fn modal(ctx: &mut Ctx, pending: &[PendingToolApproval]) -> Option<Element> {
-  let approval = pending.first()?.clone();
-  let key = format!("tool-approval-{}", approval.id);
+pub(in crate::screens::project) fn modal(ctx: &mut Ctx, pending: &[ShownApproval]) -> Option<Element> {
+  let shown = pending.first()?.clone();
+  let key = format!("tool-approval-{}", shown.approval.id);
   Some(ctx.mount_keyed::<ToolApprovalDialog>(
     &key,
     ToolApprovalProps {
-      approval,
+      approval: shown.approval,
+      provider: shown.provider,
       remaining: pending.len() - 1,
     },
   ))
@@ -151,13 +154,13 @@ fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
     .background(ExtraColor::Surface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
-    .child(header(ctx, &state.props.approval))
+    .child(header(ctx, &state.props.approval, state.props.provider))
     .child(details(ctx, state.props))
     .child(actions(ctx, state));
   backdrop(ctx, form(None, panel))
 }
 
-fn header(ctx: &Ctx, approval: &PendingToolApproval) -> Element {
+fn header(ctx: &Ctx, approval: &PendingToolApproval, provider: Option<AgentProvider>) -> Element {
   let command = approval.command;
   let title = ctx.t(if command {
     "runs.toolApproval.commandTitle"
@@ -165,8 +168,13 @@ fn header(ctx: &Ctx, approval: &PendingToolApproval) -> Element {
     "runs.toolApproval.title"
   });
   let explanation = if command {
+    // Claude Code runs an approved command without a sandbox; Codex keeps it in the step's.
+    let key = match provider {
+      Some(AgentProvider::ClaudeCodeCli) => "runs.toolApproval.commandExplanationClaude",
+      Some(AgentProvider::CodexCli) | None => "runs.toolApproval.commandExplanation",
+    };
     ctx.t_args(
-      "runs.toolApproval.commandExplanation",
+      key,
       [
         ("agent", approval.agent.as_str()),
         ("cwd", approval.target.as_deref().unwrap_or_default()),
@@ -226,13 +234,8 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
         ValueStyle::Mono,
       )
     }))
+    .with_children(approval.scope.as_deref().map(|scope| scope_row(ctx, command, scope)))
     .child(Text::new(&ctx.t("runs.toolApproval.scope")).variant(TypographyStyle::Description))
-    .with_children(
-      approval
-        .scope
-        .as_deref()
-        .map(|scope| Text::new(scope).variant(TypographyStyle::Description)),
-    )
     .with_children((props.remaining > 0).then(|| {
       Text::new(&ctx.t_args(
         "runs.toolApproval.remaining",
@@ -241,6 +244,17 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
       .variant(TypographyStyle::Description)
     }))
     .into()
+}
+
+/// What a request says beside its action: for a command, the reason the agent gave; for an MCP
+/// call, its arguments as one line of JSON, secret values removed and cut at 600 characters when
+/// recorded, and cut here with an ellipsis where the row ends.
+fn scope_row(ctx: &Ctx, command: bool, scope: &str) -> Element {
+  if command {
+    property(&ctx.t("runs.toolApproval.note"), scope)
+  } else {
+    styled_property(&ctx.t("runs.toolApproval.arguments"), scope, ValueStyle::Mono)
+  }
 }
 
 fn actions(ctx: &Ctx, state: &DialogState<'_>) -> Element {

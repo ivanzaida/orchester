@@ -147,16 +147,17 @@ pause-at-approval work in `step/worker.rs` and with `claude/integration` is open
 
 `claude/claude-support` enables *Ask before MCP actions* and *Ask before running commands* for Claude Code profiles,
 pipeline steps and runs, and shows a "CLI too old for this model" notice (C3) in the Connections inspector, the
-profile's model field and the step inspector's model. It shows the mechanisms `--permission-prompt-tool · every command
-asks you` and `read-only · no commands: an approved one would run unsandboxed`, the run popover's Claude transport
-note, the MCP enforcement row "Each tool call waits for your decision", an MCP approval's arguments under its scope
-line in the approval modal, and the activity problems "Orchester approvals were unavailable to Claude Code" and
+profile's model field and the step inspector's model. It shows the mechanisms `--permission-prompt-tool · asks each
+command` and `read-only · no commands` (with why under it), the run popover's Claude transport note, the MCP
+enforcement row "Each tool call waits for your decision", an MCP approval's labelled *Arguments* row and a command
+approval's *Agent's note* in the approval modal, and the activity problems "Orchester approvals were unavailable to Claude Code" and
 "Claude Code … can't run …". It also changed the model source notes in the Connections inspector and the profile's
 model field. A separate agent must compare these states
 with Pencil (`AGENTS.md` rule 15): the profile Permissions tab on a Claude connection (`HnBBr`, `ossOP`), the run
 permission popover (`W29Od2`), the pipeline step switch (`wujuh`), the command approval modal for a Claude request
 (`GbNSA`) and the Connections inspector model note (`xK9v9`). **Done when** the verifier reports no blocking or major
-mismatch.
+mismatch. Round 1 (at `6422a6d`) found two major mismatches (the transport note's role, the MCP arguments without a
+label) and five minor ones; all are fixed and wait for a re-check.
 
 ### C4 · Claude Code runs read-only commands outside the allowed list (non-UI)
 
@@ -174,6 +175,15 @@ prompt to allow listed commands) or to document the exception in the option's te
 - `mode_allowed_outside` (`crates/core/src/permission/claude.rs`) drops the whole `Bash(<cmd>:*)` deny rule as soon as
   one allowed entry starts with that command. With `rm build` allowed, `acceptEdits` runs any `rm`. A narrower rule is
   needed, if Claude Code's rule order allows one.
+
+### C6 · Tool approval layout issues found during C2 (UI)
+
+Seen by C2's verifier, older than the Claude Code work and left alone there:
+
+- The run permission popover opens at the top right of the task screen instead of at its design anchor (`W29Od2`).
+- The command approval modal (`GbNSA`) explains the request with the worktree's absolute path embedded in the
+  sentence, and cuts the working directory row short. Name the worktree the way the design does and let the row show
+  the path's end.
 
 ## U · Screens
 

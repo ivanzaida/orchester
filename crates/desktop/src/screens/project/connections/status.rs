@@ -21,12 +21,19 @@ pub const fn program_key(provider: AgentProvider) -> &'static str {
 /// when nothing says so.
 pub fn cli_too_old(ctx: &Ctx, connection: &AgentConnection, model: &ModelId) -> Option<Element> {
   let too_old = connection.cannot_run(model)?;
+  let model = unbroken(model.as_str());
   let heading = ctx.t_args(
     "connections.cliTooOld.heading",
     [
-      ("cli", &*ctx.t(short_key(connection.provider()))),
+      (
+        "cli",
+        &*ctx.t(match connection.provider() {
+          AgentProvider::CodexCli => "connections.cliTooOld.codex",
+          AgentProvider::ClaudeCodeCli => "connections.cliTooOld.claude",
+        }),
+      ),
       ("installed", too_old.installed.as_str()),
-      ("model", model.as_str()),
+      ("model", &model),
       ("required", too_old.required.as_str()),
     ],
   );
@@ -35,6 +42,12 @@ pub fn cli_too_old(ctx: &Ctx, connection: &AgentConnection, model: &ModelId) -> 
       .id("cli-too-old")
       .into(),
   )
+}
+
+/// `id` with a word joiner (U+2060) after each hyphen, so a narrow column wraps a model id as a
+/// whole instead of at a hyphen.
+fn unbroken(id: &str) -> String {
+  id.replace('-', "-\u{2060}")
 }
 
 /// Short provider name used in a suggested connection name, e.g. "Codex".

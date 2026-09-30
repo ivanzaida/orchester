@@ -170,18 +170,19 @@ pub fn model(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields) -> Vec<Elem
     )
     .into(),
   ];
-  elements.extend(
-    profile
-      .agent
-      .as_ref()
-      .and_then(|connection| cli_too_old(ctx, connection, used)),
-  );
   elements.push(effective(
     ctx,
     &effective_model,
     &ctx.t("pipelines.inspector.overrideHint"),
     "pipelines.inspector.editProfile",
   ));
+  // After the model readback, not between the select and it (`q5LzI`).
+  elements.extend(
+    profile
+      .agent
+      .as_ref()
+      .and_then(|connection| cli_too_old(ctx, connection, used)),
+  );
   elements
 }
 

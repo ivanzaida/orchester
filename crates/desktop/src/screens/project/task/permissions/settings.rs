@@ -280,8 +280,10 @@ fn tool_approvals(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &A
   };
   if let Some(transport) = transport.filter(|_| enabled || *draft.commands() == CommandPermission::AskBefore) {
     controls.push(
+      // The same hint as the unavailable reasons above it (`W29Od2`).
       Text::new(&ctx.t(transport))
-        .variant(TypographyStyle::Description)
+        .variant(ExtraTypography::Hint.role())
+        .color(PaletteColor::TextMuted)
         .into(),
     );
   }

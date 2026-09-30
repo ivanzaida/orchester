@@ -71,6 +71,10 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexCommandApprovals => "agents.permissions.mechanism.codexCommandApprovals",
     Mechanism::CodexSandboxNetworkOff => "agents.permissions.mechanism.codexNetworkOff",
     Mechanism::CodexSandboxNetworkOn => "agents.permissions.mechanism.codexNetworkOn",
+    // Read-only with asking before commands runs no command at all (see `enforced_on`).
+    Mechanism::ClaudeEditToolsRemoved if runs_no_commands(permissions) => {
+      "agents.permissions.mechanism.claudeEditToolsRemovedNoCommands"
+    }
     Mechanism::ClaudeEditToolsRemoved => "agents.permissions.mechanism.claudeEditToolsRemoved",
     Mechanism::ClaudeAcceptEdits => "agents.permissions.mechanism.claudeAcceptEdits",
     Mechanism::ClaudeWebTools => "agents.permissions.mechanism.claudeWebTools",
@@ -93,6 +97,16 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     }
   };
   ctx.t(key)
+}
+
+/// Why a mechanism limits more than its setting asks, as a line under it; `None` for most.
+pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism) -> Option<Arc<str>> {
+  (mechanism == Mechanism::ClaudeNoCommandsReadOnly)
+    .then(|| ctx.t("agents.permissions.mechanism.claudeNoCommandsReadOnlyDetail"))
+}
+
+fn runs_no_commands(permissions: &AgentPermissions) -> bool {
+  matches!(permissions.commands(), CommandPermission::Allowed(commands) if commands.entries().is_empty())
 }
 
 /// Words of the three settings, long (`haXji`: *Edits files in the task worktree · 3 allowed

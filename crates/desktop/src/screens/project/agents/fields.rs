@@ -74,6 +74,12 @@ impl ProfileEditor {
         .id("agent-provider-explanation")
         .into(),
     ];
+    // Full width after the model-source note (`q5LzI`), not inside the Model column.
+    fields.extend(connection.and_then(|connection| {
+      self
+        .chosen_model()
+        .and_then(|model| cli_too_old(ctx, connection, &model))
+    }));
     fields.extend(self.effort_field(ctx, connection));
     fields.push(self.instructions_field(ctx, errors.and_then(|errors| errors.instructions.as_ref())));
     fields
@@ -171,18 +177,20 @@ impl ProfileEditor {
         .placeholder(&ctx.t("agents.customModelPlaceholder")),
       );
     }
-    let chosen = match self.model.get() {
-      ModelSelection::Listed(id) => Some(id),
-      ModelSelection::Custom => ModelId::new(self.custom_model.get().trim()).ok(),
-      ModelSelection::None => None,
-    };
-    if let Some(notice) = chosen.and_then(|model| cli_too_old(ctx, connection, &model)) {
-      column = column.child(notice);
-    }
     let note = error
       .filter(|_| self.model.get() == ModelSelection::Custom && !self.custom_model.get().trim().is_empty())
       .map_or(FieldNote::None, |error| FieldNote::Error(message_text(ctx, error)));
     field(&label, column.into(), note)
+  }
+
+  /// The model the fields name: the listed one, or the typed id when it is a valid one (an
+  /// invalid id has its own error under the field, so `.ok()` loses nothing).
+  fn chosen_model(&self) -> Option<ModelId> {
+    match self.model.get() {
+      ModelSelection::Listed(id) => Some(id),
+      ModelSelection::Custom => ModelId::new(self.custom_model.get().trim()).ok(),
+      ModelSelection::None => None,
+    }
   }
 
   /// What the connection runs and where its models come from (`kwRad`).
