@@ -108,11 +108,6 @@ fn ripgrep_row(ctx: &Ctx, check: Option<&Result<RipgrepCheck, Message>>, install
         ctx.t("settings.codeIndex.notFound"),
         ctx.t("settings.codeIndex.notFoundDetail"),
       ),
-      SearchTool::Unavailable { detail } => (
-        Icon::AlertCircle,
-        ctx.t("settings.codeIndex.notCopied"),
-        Arc::from(detail.as_str()),
-      ),
     },
   };
   let value = vec![

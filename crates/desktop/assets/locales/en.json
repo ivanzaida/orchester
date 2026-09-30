@@ -2295,14 +2295,13 @@
       "found": "Found · {{version}}",
       "foundWithoutVersion": "Found",
       "source": {
-        "onPath": "On PATH · copied to .orchester/tools",
-        "codexCli": "Bundled with Codex CLI · copied to .orchester/tools",
-        "claudeCode": "Bundled with Claude Code · copied to .orchester/tools",
-        "winget": "Installed with winget · copied to .orchester/tools"
+        "onPath": "On PATH · agents get a copy in .orchester/tools",
+        "codexCli": "Bundled with Codex CLI · agents get a copy in .orchester/tools",
+        "claudeCode": "Bundled with Claude Code · agents get a copy in .orchester/tools",
+        "winget": "Installed with winget · agents get a copy in .orchester/tools"
       },
       "notFound": "Not found",
       "notFoundDetail": "Not on PATH, not bundled with Codex CLI or Claude Code",
-      "notCopied": "Found, not copied",
       "slowTitle": "Agents fall back to slower search",
       "slowDetail": "Without ripgrep the index skill can’t run, so agents list and read files with the shell instead. That takes longer and uses more tokens.",
       "commandLabel": "Install ripgrep runs",

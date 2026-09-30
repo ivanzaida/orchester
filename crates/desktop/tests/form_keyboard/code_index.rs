@@ -17,11 +17,15 @@ use orchester_core::{
   revision::Revision,
   store::SettingsStore,
 };
-use orchester_exec::ripgrep::LOCAL_APP_DATA;
+use orchester_exec::ripgrep::{self, LOCAL_APP_DATA};
 use orchester_index::CodebaseIndexes;
 use orchester_store::ProjectDb;
 
-use crate::{github::shows, harness::Desktop, task_run::init_repository};
+use crate::{
+  github::{contains_text, shows},
+  harness::Desktop,
+  task_run::init_repository,
+};
 
 const TAB: &str = "settings-tab-code-index";
 const SWITCH: &str = "settings-code-index-switch";
@@ -141,6 +145,32 @@ fn code_index_tab_without_an_index_or_ripgrep_says_what_agents_do() {
   desktop.click(CHECK);
   desktop.wait_for(NOTICE);
   assert!(shows(&mut desktop, "settings-code-index-ripgrep-state", "Not found"));
+}
+
+#[test]
+fn code_index_tab_finds_ripgrep_without_copying_it() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    without_ripgrep(repo);
+    // Not really ripgrep: its version cannot be read, but it is where agents would find it.
+    let empty = repo.join(".orchester").join("empty");
+    fs::write(empty.join(ripgrep::PROGRAM), "not really ripgrep").expect("a ripgrep");
+  });
+  code_index_tab(&mut desktop);
+  desktop.wait_until("ripgrep found", |desktop| {
+    desktop
+      .tree
+      .get_element_by_id("settings-code-index-ripgrep-state")
+      .is_some_and(|state| contains_text(state, "Found"))
+  });
+
+  assert!(shows(
+    &mut desktop,
+    "settings-code-index",
+    "On PATH · agents get a copy in .orchester/tools"
+  ));
+  assert!(desktop.tree.get_element_by_id(NOTICE).is_none());
+  // Only the runner copies it, when an agent starts.
+  assert!(!desktop.repo().join(".orchester").join("tools").exists());
 }
 
 #[test]

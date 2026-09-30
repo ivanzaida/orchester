@@ -129,21 +129,17 @@ impl lurq::app::component::DevtoolsInspectable for RipgrepCheck {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SearchTool {
-  /// Found and copied into `.orchester/tools`; `version` is what `rg --version` said.
+  /// Found where the runner finds it for agents; `version` is what `rg --version` said.
   Found {
     version: Option<String>,
     source: Source,
   },
   NotFound,
-  /// Found but not copied; `detail` says why.
-  Unavailable {
-    detail: String,
-  },
 }
 
 /// Looks for ripgrep as the runner does for an agent of the project at `repo_root` (the project's
-/// `PATH`, else Orchester's, then where winget installs, then the agent CLIs' installs) and copies
-/// it into the tools folder.
+/// `PATH`, else Orchester's, then where winget installs, then the agent CLIs' installs). Only
+/// looks: the runner copies it into the tools folder when an agent starts, and removes old copies.
 pub fn check_ripgrep(repo_root: &Path) -> Result<RipgrepCheck, Message> {
   let db = ProjectDb::open(repo_root).map_err(|error| messages::store_error(&error))?;
   let environment = db
@@ -168,14 +164,9 @@ pub fn check_ripgrep(repo_root: &Path) -> Result<RipgrepCheck, Message> {
   let clis: Vec<&Path> = executables.iter().map(PathBuf::as_path).collect();
   let tool = match ripgrep::locate(path.as_deref(), local_app_data.as_deref(), &clis) {
     None => SearchTool::NotFound,
-    Some(found) => match ripgrep::provide(&found, &repo_root.join(".orchester").join("tools")) {
-      Ok(_) => SearchTool::Found {
-        version: version(&found.path),
-        source: found.source,
-      },
-      Err(error) => SearchTool::Unavailable {
-        detail: error.to_string(),
-      },
+    Some(found) => SearchTool::Found {
+      version: version(&found.path),
+      source: found.source,
     },
   };
   let install = InstallPlan::find(search_path().as_deref());
