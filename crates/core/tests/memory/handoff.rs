@@ -316,6 +316,35 @@ fn handoff_of_a_failed_attempt_is_tagged_and_replaces_no_decisions_when_approved
   );
 }
 
+#[test]
+fn handoff_an_older_proposal_approved_late_keeps_a_newer_executions_decisions() {
+  let keeping = Keeping {
+    settings: MemorySettings {
+      task_writes: WritePolicy::AfterApproval,
+      ..MemorySettings::default()
+    },
+    ..Keeping::new()
+  };
+  let first = provenance(ResourceId::generate());
+  let older = keeping.changes(RESULT, (&first, StepFate::Passed), Vec::new()).added;
+  // A newer execution's decision is active (a person approved it); the older handoff still waits.
+  let mut newer = keeping
+    .changes(RESULT, (&again(&first), StepFate::Passed), Vec::new())
+    .added;
+  newer[1].approve(None, at(6)).expect("approve");
+  let mut records = older.clone();
+  records.extend(newer);
+  let approved = approval(older[0].id(), records, at(7)).expect("approved");
+  assert!(
+    !approved
+      .changed
+      .iter()
+      .any(|record| record.status() == MemoryStatus::Deprecated),
+    "{:?}",
+    kinds(&approved.changed)
+  );
+}
+
 /// `records` with `changes` applied.
 fn apply(records: &mut Vec<Memory>, changes: MemoryChanges) {
   for changed in changes.changed {

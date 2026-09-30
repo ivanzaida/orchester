@@ -1,11 +1,12 @@
 //! A person approving a proposed record, with what follows from it: a replacement supersedes the
 //! record it names, if that one is still active, and a step's decision or passing handoff makes the
 //! latest attempt's decisions the step's current ones, deprecating those of its earlier executions
-//! ([`super::handoff`]). A store applies the changes with
-//! [`super::MemoryStore::change_memories`], reading the records in the same transaction.
+//! ([`super::handoff`]) — never those of an execution newer than the proposal's. A store applies
+//! the changes with [`super::MemoryStore::change_memories`], reading the records in the same
+//! transaction.
 
 use super::{
-  Memory, MemoryAuthor, MemoryChanges, MemoryError, MemoryKind, MemoryStatus,
+  AgentProvenance, Memory, MemoryAuthor, MemoryChanges, MemoryError, MemoryKind, MemoryStatus,
   handoff::{FAILED_ATTEMPT_TAG, same_step_earlier},
 };
 use crate::{id::MemoryId, time::Timestamp};
@@ -42,6 +43,7 @@ pub fn approval(id: MemoryId, mut records: Vec<Memory>, now: Timestamp) -> Resul
       if memory.content().kind() == MemoryKind::Decision
         && memory.status() == MemoryStatus::Active
         && same_step_earlier(&memory, &agent)
+        && written_before(&memory, &agent)
       {
         memory.deprecate(now).expect("an active record can be deprecated");
         changed.push(memory);
@@ -52,6 +54,14 @@ pub fn approval(id: MemoryId, mut records: Vec<Memory>, now: Timestamp) -> Resul
     added: Vec::new(),
     changed,
   })
+}
+
+/// Whether `memory` was written by an execution that started before `agent`'s. Execution ids are
+/// time-ordered (UUIDv7), so an older proposal approved late never deprecates the decisions of a
+/// newer execution. The runner also withdraws a step's older proposals when a newer execution of
+/// the step keeps its handoff, so that case normally does not arise.
+fn written_before(memory: &Memory, agent: &AgentProvenance) -> bool {
+  matches!(memory.author(), MemoryAuthor::Agent(author) if author.execution < agent.execution)
 }
 
 /// Whether `memory`, an agent's record, makes its execution's decisions the step's current ones
