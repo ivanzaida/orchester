@@ -13,7 +13,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use rusqlite::Connection;
 
-use self::support::{at, model, started_run};
+use self::support::{at, copied_at_version, model, started_run};
 
 fn body(text: &str) -> MessageBody {
   MessageBody::new(text).expect("a message")
@@ -233,49 +233,6 @@ fn conversation_recovery_intent_round_trips_and_cannot_be_rewritten() {
 
 /// The migrations before the recovery migration; migrations are append-only, so this stays.
 const BEFORE_RECOVERY: u32 = 27;
-
-/// A project database at schema version `version` in a repository of its own, holding the rows of
-/// `current` (a database at the latest schema) in the columns that version has.
-fn copied_at_version(current: &std::path::Path, version: u32) -> tempfile::TempDir {
-  let repo = tempfile::tempdir().expect("temporary directory");
-  std::fs::create_dir(repo.path().join(".git")).expect("create .git");
-  let old = ProjectDb::create_at_version(repo.path(), version).expect("an old database");
-  old
-    .execute(
-      "ATTACH DATABASE ?1 AS current",
-      [current.to_str().expect("a UTF-8 path")],
-    )
-    .expect("attach");
-  old
-    .pragma_update(None, "foreign_keys", false)
-    .expect("no references while copying");
-  let tables: Vec<String> = old
-    .prepare("SELECT name FROM main.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
-    .expect("tables")
-    .query_map([], |row| row.get(0))
-    .expect("tables")
-    .collect::<Result<_, _>>()
-    .expect("tables");
-  for table in tables {
-    let columns: Vec<String> = old
-      .prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))
-      .expect("columns")
-      .query_map([], |row| row.get(0))
-      .expect("columns")
-      .collect::<Result<_, _>>()
-      .expect("columns");
-    let columns = columns.join(", ");
-    // Replacing: the migrations seed some rows themselves, such as the counters.
-    old
-      .execute(
-        &format!("INSERT OR REPLACE INTO main.{table} ({columns}) SELECT {columns} FROM current.{table}"),
-        [],
-      )
-      .expect("copy the rows");
-  }
-  drop(old);
-  repo
-}
 
 #[test]
 fn conversation_recovery_migration_preserves_existing_failed_run_and_messages() {
