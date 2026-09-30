@@ -7,7 +7,8 @@ pub(super) const MIGRATION: &str = r"
 -- agent's record names its profile, run, step and execution; a person's names none. `tags` holds the
 -- record's tags separated by spaces, `source_events` a JSON array of the run transcript sequences it
 -- came from, `edited_at` when a person last edited it, `revision` how many times it was changed
--- (an update names the revision it read, so a stale copy never overwrites a newer change). A key names one active record of its scope.
+-- (an update names the revision it read, so a stale copy never overwrites a newer change). A key
+-- names one active record of its scope.
 CREATE TABLE memories (
   seq INTEGER PRIMARY KEY,
   id TEXT NOT NULL UNIQUE,

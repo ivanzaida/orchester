@@ -238,7 +238,11 @@ fn finish(worktree: &std::path::Path, line: &str, result: &StepReport) -> ExitCo
 /// "Leave a handoff": the handoff fields of the step result, escaped for the JSON string it is in.
 fn handoff(step: &str) -> String {
   format!(
-    r#",\"completed\":[\"Appended hello\"],\"decisions\":[\"Greet in README.md from {step}\"],\"open_questions\":null,\"next_agent_should_know\":[\"README.md ends with hello\"]"#
+    concat!(
+      r#",\"completed\":[\"Appended hello\"],\"decisions\":[\"Greet in README.md from {step}\"],"#,
+      r#"\"open_questions\":null,\"next_agent_should_know\":[\"README.md ends with hello\"]"#
+    ),
+    step = step
   )
 }
 

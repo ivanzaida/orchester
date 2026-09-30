@@ -243,7 +243,12 @@ impl Fake {
     println!("a line that is not JSON");
     let handoff = if self.handoff {
       format!(
-        r#",\"completed\":[\"Appended {line}\"],\"decisions\":[\"Greet in README.md from {step}\"],\"open_questions\":null,\"next_agent_should_know\":[\"README.md ends with {line}\"]"#
+        concat!(
+          r#",\"completed\":[\"Appended {line}\"],\"decisions\":[\"Greet in README.md from {step}\"],"#,
+          r#"\"open_questions\":null,\"next_agent_should_know\":[\"README.md ends with {line}\"]"#
+        ),
+        line = line,
+        step = step
       )
     } else {
       String::new()

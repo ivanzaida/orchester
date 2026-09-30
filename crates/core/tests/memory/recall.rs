@@ -13,8 +13,10 @@ use super::support::{DAY, at, content, screened, write};
 
 #[test]
 fn recall_query_keeps_word_stems_paths_and_identifiers() {
-  let query =
-    MemoryQuery::from_text("Перевір міграції бази у `crates/core/src/run/result.rs`, then call parseStepResult. Go!");
+  let query = MemoryQuery::from_text(concat!(
+    "Перевір міграції бази у `crates/core/src/run/result.rs`, ",
+    "then call parseStepResult. Go!"
+  ));
   assert!(query.words().contains(&"міграц".to_owned()), "{query:?}");
   assert!(query.words().contains(&"бази".to_owned()), "{query:?}");
   assert!(query.words().contains(&"parsestepresu".to_owned()), "{query:?}");

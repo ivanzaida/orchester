@@ -158,7 +158,10 @@ fn memory_prompt_a_summary_of_several_paragraphs_is_not_repeated_either() {
   .expect("no variables")
   .text;
   assert!(
-    text.contains("## Latest handoff\n\n> Its summary is the step's result under \"Results of earlier steps\".\n>\n> Completed:\n> - Tables\n"),
+    text.contains(concat!(
+      "## Latest handoff\n\n> Its summary is the step's result under \"Results of earlier steps\".\n",
+      ">\n> Completed:\n> - Tables\n"
+    )),
     "{text}"
   );
   assert_eq!(text.matches("In two parts").count(), 1, "{text}");
