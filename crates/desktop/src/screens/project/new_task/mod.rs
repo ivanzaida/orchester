@@ -170,6 +170,12 @@ impl FormState {
     self.missing.contains(&detail)
   }
 
+  /// The task is queued and no run is recorded for it: its details are locked until the runner
+  /// starts its first run.
+  const fn awaits_first_run(&self) -> bool {
+    self.queued && !self.started
+  }
+
   /// Whether Save as draft can be pressed: not while a save or Create & run is under way or the
   /// task is queued, and for a draft being edited not while it holds what is stored.
   const fn can_save(&self) -> bool {
@@ -303,6 +309,12 @@ impl Component for NewTaskForm {
         submit.clone(),
         start,
       ));
+    // A draft this form queued reads as the queued task of D5 (`WOdDe`, `T6bVyU`) until its run
+    // starts, whether the form was opened on the draft or reopened on the queued task.
+    let (still_editing, retried) = match editing {
+      Some(task) if state.awaits_first_run() => (None, Some(task)),
+      _ => (editing, recovered),
+    };
     Column::new()
       .id("task-form")
       .width(Dimension::Pct(100.0))
@@ -311,9 +323,9 @@ impl Component for NewTaskForm {
         ctx,
         props.project.project.name().as_str(),
         &self.nav,
-        (&state, editing, recovered),
+        (&state, still_editing, retried),
       ))
-      .child(header::heading(ctx, editing, &state))
+      .child(header::heading(ctx, still_editing, &state))
       .child(form(submit, content))
   }
 }

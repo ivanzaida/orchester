@@ -283,4 +283,9 @@ fn edit_task_create_and_run_the_runner_refuses_offers_retry_run() {
   assert!(shows(&mut desktop, "create-and-run", "Retry run"));
   assert!(shows(&mut desktop, "execution-plan", "The runner is not connected."));
   assert!(!has(&mut desktop, "save-draft"));
+  // The queued draft reads as the queued task of D5, as when it is reopened (`WOdDe`, `T6bVyU`).
+  assert!(shows(&mut desktop, "task-form", "What would you like to build?"));
+  assert!(shows(&mut desktop, "task-form", "Kontur / Tasks / KON-1 / Retry run"));
+  assert!(!shows(&mut desktop, "task-form", "Edit task"));
+  assert!(!shows(&mut desktop, "task-form", "KON-1 / Edit"));
 }

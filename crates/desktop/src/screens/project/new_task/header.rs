@@ -24,17 +24,17 @@ use crate::{
 /// Topbar height (`dWjfr`).
 const TOPBAR_HEIGHT: f32 = 64.0;
 
-/// Back to the task list, or to the task being edited, the breadcrumb and the persisted task state
-/// (`dWjfr`, `kTm0n`): a draft being edited reads *Unsaved changes* once it differs from the
-/// saved one.
+/// Back to the task list, or to the task being edited or retried, the breadcrumb and the persisted
+/// task state (`dWjfr`, `kTm0n`): a draft being edited reads *Unsaved changes* once it differs from
+/// the saved one.
 pub(super) fn topbar(
   ctx: &Ctx,
   project: &str,
   nav: &ProjectNav,
-  (form, editing, recovered): (&FormState, Option<&Task>, Option<&Task>),
+  (form, editing, retried): (&FormState, Option<&Task>, Option<&Task>),
 ) -> Element {
   let nav = nav.clone();
-  let back_to = editing.or(recovered).map_or(Page::TASKS, |task| Page::task(task.id()));
+  let back_to = editing.or(retried).map_or(Page::TASKS, |task| Page::task(task.id()));
   let back = pressable(surface().id("new-task-back"), move || nav.leave(back_to))
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
@@ -75,7 +75,7 @@ pub(super) fn topbar(
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(back)
-    .child(Text::new(&edit::breadcrumb(ctx, project, editing, recovered)).variant(TypographyStyle::Description))
+    .child(Text::new(&edit::breadcrumb(ctx, project, editing, retried)).variant(TypographyStyle::Description))
     .child(Spacer::new().flex(1.0))
     .child(state)
     .into()
