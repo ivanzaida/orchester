@@ -42,6 +42,8 @@ use crate::{approval_relay::RELAY_FLAG, private_file::PrivateFile};
 
 /// How long a connection has to show the token.
 const HANDSHAKE: Duration = Duration::from_secs(10);
+/// How long the listener waits after a failed accept before the next.
+const ACCEPT_RETRY: Duration = Duration::from_millis(100);
 
 /// A call waiting for a person, and where the decision goes.
 pub(in super::super) struct Asked {
@@ -144,7 +146,11 @@ async fn accept(
         Ok((stream, _)) => {
           connections.spawn(serve(stream, token.clone(), scope.clone(), requests.clone()));
         }
-        Err(error) => tracing::warn!(%error, "the permission prompt cannot accept its relay"),
+        Err(error) => {
+          tracing::warn!(%error, "the permission prompt cannot accept its relay");
+          // Without a pause, an accept that keeps failing would spin.
+          tokio::time::sleep(ACCEPT_RETRY).await;
+        }
       },
       Some(ended) = connections.join_next() => {
         if let Err(error) = ended {
