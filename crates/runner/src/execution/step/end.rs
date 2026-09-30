@@ -11,6 +11,7 @@
 use orchester_core::{
   connection::stream::RunnerProblem,
   id::StepExecutionId,
+  memory::StepFate,
   revision::Revision,
   run::{Checkpoint, RunLimit, StepFailure, StepOutcome, StepOutput},
   store::ActivityStore,
@@ -128,11 +129,10 @@ impl RunTask {
     }
     if let Some(failure) = failure {
       self.save(execution, active, "step failed")?;
-      self.fail(execution, failure)?;
-    } else {
-      self.pass(execution, active, output.text)?;
+      self.keep_handoff(execution, StepFate::Failed)?;
+      return self.fail(execution, failure);
     }
-    self.keep_handoff(execution)
+    self.pass(execution, active, output.text)
   }
 
   /// A step its agent or command finished with `output`: its work joins the run's branch and the
@@ -148,9 +148,13 @@ impl RunTask {
       Ok(Integrated::Done) if self.run.is_gated(execution).map_err(RecordError::from)? => {
         self.propose(execution, output)
       }
-      Ok(Integrated::Done) => self.transition(|run, now| run.complete_step(execution, now)),
+      Ok(Integrated::Done) => {
+        self.keep_handoff(execution, StepFate::Passed)?;
+        self.transition(|run, now| run.complete_step(execution, now))
+      }
       Ok(Integrated::Conflict { branch, files }) => {
         self.report(&active.invocation, RunnerProblem::MergeConflict { branch, files })?;
+        self.keep_handoff(execution, StepFate::Failed)?;
         self.fail(execution, StepFailure::MergeConflict)
       }
       Err(IntegrateError::Execution(error)) => Err(error),
@@ -159,6 +163,7 @@ impl RunTask {
           detail: error.to_string(),
         };
         self.report(&active.invocation, problem)?;
+        self.keep_handoff(execution, StepFate::Failed)?;
         self.fail(execution, StepFailure::CheckpointFailed)
       }
     }

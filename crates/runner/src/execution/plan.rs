@@ -142,20 +142,21 @@ fn record(keeper: Keeper<'_>, run: &mut Run, request: PlanRequest) -> Result<(),
   db.append_events_with_plan(run, &events, &plan)
     .map_err(|error: RunStoreError| failed("cannot record the plan decision", &error))?;
   tracing::info!(run = %run.id(), execution = %request.execution, version = %plan.version, "plan decided");
+  if approved {
+    // Kept before the decision is announced, so whoever sees it finds the handoff. The decision is
+    // recorded and the run goes on; a handoff the database could not take is logged rather than
+    // turning the recorded decision into a rejection.
+    let mut keeper = Keeper { db, notifier, vault };
+    if let Err(error) = keeper.keep(run, request.execution, StepFate::Passed) {
+      tracing::error!(run = %run.id(), execution = %request.execution, %error, "the approved plan's handoff was not kept");
+    }
+  }
   notifier.send(Event::RunChanged {
     run: run.id(),
     task: run.task(),
   });
   // Approving the plan of the last step finishes the run.
   announce_ready(notifier, run);
-  if approved {
-    let mut keeper = Keeper { db, notifier, vault };
-    // The decision is recorded and the run goes on; a handoff the database could not take is logged
-    // rather than turning the recorded decision into a rejection.
-    if let Err(error) = keeper.keep(run, request.execution, StepFate::Passed) {
-      tracing::error!(run = %run.id(), execution = %request.execution, %error, "the approved plan's handoff was not kept");
-    }
-  }
   Ok(())
 }
 

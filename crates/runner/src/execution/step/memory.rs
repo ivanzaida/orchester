@@ -7,7 +7,7 @@ use orchester_core::{
   id::StepExecutionId,
   memory::{MemoryStore, Recalled, StepContext, StepFate, next_invocation_memory},
   resource::Step,
-  run::{ProfileInfo, StepStatus},
+  run::ProfileInfo,
   time::Timestamp,
 };
 
@@ -44,14 +44,14 @@ impl RunTask {
     Ok(u64::try_from(unreadable.len()).unwrap_or(u64::MAX))
   }
 
-  /// Keeps the handoff of `execution` once it passed or failed; a step waiting for its plan's
-  /// approval keeps it when the plan is approved.
-  pub(super) fn keep_handoff(&mut self, execution: StepExecutionId) -> Result<(), ExecutionError> {
-    let fate = match self.run.execution(execution).map(|execution| execution.status()) {
-      Some(StepStatus::Passed) => StepFate::Passed,
-      Some(StepStatus::Failed) => StepFate::Failed,
-      _ => return Ok(()),
-    };
+  /// Keeps the handoff of `execution`, which is about to pass or fail as `fate` says: before the
+  /// transition is recorded and announced, so whoever sees the step end finds its handoff. A step
+  /// waiting for its plan's approval keeps it when the plan is approved.
+  pub(in super::super) fn keep_handoff(
+    &mut self,
+    execution: StepExecutionId,
+    fate: StepFate,
+  ) -> Result<(), ExecutionError> {
     let mut keeper = Keeper {
       db: &mut self.db,
       notifier: &self.notifier,

@@ -23,7 +23,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, StepSpec, TestProject, project, scheduler_with, wait_for, wait_for_idle};
+use self::support::{Setup, StepSpec, TestProject, project, scheduler_with, wait_for};
 
 const BRIEF: &str = "Leave a handoff.";
 
@@ -49,8 +49,6 @@ async fn run_until_it_ends(project: &TestProject) -> (RunId, RunStatus) {
     .await
     .expect("the run starts");
   let ended = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
-  // The last step's handoff is kept once the run has ended.
-  wait_for_idle(&scheduler).await;
   (run, ended.status().clone())
 }
 
@@ -401,7 +399,6 @@ async fn memory_an_approved_plan_keeps_its_handoff_only_then() {
     .await
     .expect("approved");
   wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
-  wait_for_idle(&scheduler).await;
   let memory = task_memory(&db, project.task);
   assert!(
     memory.iter().any(|(kind, status, text)| *kind == MemoryKind::Handoff
@@ -410,4 +407,51 @@ async fn memory_an_approved_plan_keeps_its_handoff_only_then() {
     "{memory:?}"
   );
   assert!(prompts(&db, run)[1].contains("## Latest handoff, from step `plan`"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn memory_a_plan_approved_while_the_run_works_keeps_its_handoff_before_the_answer() {
+  let project = graph(vec![
+    StepSpec::new("plan", "Plan", "Propose a plan.", &[]).gate(),
+    StepSpec::new("slow", "Slow", "Wait for release.", &[]),
+  ]);
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let run = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let db = ProjectDb::open(root).expect("open");
+  let plan = loop {
+    if let Some(plan) = db.plans(run).expect("plans").pop() {
+      break plan;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+  };
+  assert!(
+    scheduler.active_runs().contains(&run),
+    "the run's task still works on `slow`"
+  );
+  assert!(task_memory(&db, project.task).is_empty());
+  scheduler
+    .decide_plan(run, plan.execution, plan.version, PlanDecision::Approved)
+    .await
+    .expect("approved");
+  let kept = |memory: &[(MemoryKind, MemoryStatus, String)]| {
+    memory.iter().any(|(kind, status, text)| {
+      *kind == MemoryKind::Handoff && *status == MemoryStatus::Active && text.starts_with("Finished Plan")
+    })
+  };
+  let memory = task_memory(&db, project.task);
+  assert!(kept(&memory), "kept by the time the approval is answered: {memory:?}");
+  std::fs::write(root.join(".orchester").join("fake-release"), "go").expect("release");
+  wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
+  let memory = task_memory(&db, project.task);
+  assert!(kept(&memory), "{memory:?}");
+  assert!(
+    memory
+      .iter()
+      .any(|(kind, _, text)| *kind == MemoryKind::Handoff && text.starts_with("Finished Slow")),
+    "the last step's handoff is kept before the run is announced as ended: {memory:?}"
+  );
 }
