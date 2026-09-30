@@ -130,13 +130,18 @@ fn total(ctx: &Ctx, rows: &[IndexRow]) -> Arc<str> {
   if rows.is_empty() {
     return ctx.t("settings.codeIndex.noneKept");
   }
-  let bytes = rows
+  let sizes: Vec<u64> = rows
     .iter()
     .filter_map(|row| match &row.state {
       IndexState::Ready(summary) => Some(summary.bytes),
       IndexState::Building(_) | IndexState::Failed { .. } | IndexState::Outdated => None,
     })
-    .sum();
+    .collect();
+  // No index is ready: there is no size to add up.
+  if sizes.is_empty() {
+    return counted(ctx, "settings.codeIndex.totalWithoutSize", rows.len());
+  }
+  let bytes = sizes.iter().sum();
   let key = if rows.len() == 1 {
     "settings.codeIndex.total.one"
   } else {

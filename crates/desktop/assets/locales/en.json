@@ -2269,6 +2269,10 @@
         "one": "1 index · {{size}} in total",
         "other": "{{count}} indexes · {{size}} in total"
       },
+      "totalWithoutSize": {
+        "one": "1 index",
+        "other": "{{count}} indexes"
+      },
       "noneKept": "None kept",
       "listExplanation": "Built per revision when a run starts, shared read-only by the runs from that revision, and removed together with the worktrees that used it.",
       "empty": "No index yet — built when the next run starts",
@@ -2283,7 +2287,7 @@
         "failed": "Failed",
         "outdated": "Outdated"
       },
-      "outdatedDetail": "Outdated format · rebuilt at the next run start",
+      "outdatedDetail": "Earlier index format · rebuilt when a run starts from it",
       "readyDetail": "{{size}} · {{files}} files · {{symbols}} symbols · built {{when}} in {{took}}",
       "builtToday": "today {{time}}",
       "builtOn": "{{month}} {{day}} {{time}}",

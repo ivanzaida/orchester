@@ -16,7 +16,7 @@ use lurq::{
 };
 use orchester_exec::ripgrep::{
   Source,
-  install::{InstallError, InstallPlan, InstallUnavailable, Installer},
+  install::{InstallError, InstallPlan, InstallUnavailable, Installer, exit_code_text},
 };
 
 use super::super::general::{readback, sized_setting_row};
@@ -187,16 +187,11 @@ fn not_found(
         check_again,
       ))),
     Err(unavailable) => copy
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding_top(SpacingSize::Md)
-          .child(
-            Text::new(&unavailable_text(ctx, unavailable))
-              .variant(ExtraTypography::Explanation.role())
-              .width(Dimension::Pct(100.0)),
-          ),
-      )
+      .child(spaced(
+        Text::new(&unavailable_text(ctx, unavailable))
+          .variant(ExtraTypography::CellLabel.role())
+          .width(Dimension::Pct(100.0)),
+      ))
       .child(spaced(actions(
         ctx,
         install_button(ctx, ("settings.codeIndex.install", Icon::Lock), None, started),
@@ -258,8 +253,8 @@ fn installing(
       }),
       false,
     ))
-    .child(spaced(command(line)))
-    .child(running)
+    .child(spaced(running))
+    .child(command(line))
     .with_children(output)
     .child(spaced(
       Row::new()
@@ -293,7 +288,7 @@ fn failed(
       "settings.codeIndex.installFailedDetail",
       [
         ("installer", &*installer),
-        ("code", code.map_or_else(String::new, |code| code.to_string()).as_str()),
+        ("code", code.map_or_else(String::new, exit_code_text).as_str()),
         ("message", message.as_str()),
       ],
     ),
@@ -315,7 +310,11 @@ fn failed(
     .spacing(ExtraSpacing::Tight.role())
     .child(heading(&ctx.t("settings.codeIndex.installFailedTitle"), true))
     .child(detail(&text, true))
-    .child(spaced(command(line)))
+    .child(spaced(
+      Text::new(&ctx.t("settings.codeIndex.commandLabel")).variant(TypographyStyle::Caption),
+    ))
+    .child(command(line))
+    .child(hint(&ctx.t("settings.codeIndex.hint")))
     .child(spaced(actions(
       ctx,
       install_button(
