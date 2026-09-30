@@ -2,7 +2,8 @@
 //! recorded as it arrives, the usage of each turn is handed to the run, which decides about limits
 //! and budgets, and the agent is ended when the run says so. A run that stops at a token limit or
 //! a step budget lets the turn that used it end: the agent has [`TURN_GRACE`] to exit on its own,
-//! and starting another turn ends it at once.
+//! and starting another turn ends it at once. What the agent used before its first file edit is
+//! followed from the same events and stored with the invocation ([`FirstEditTracker`]).
 
 use std::{
   path::{Path, PathBuf},
@@ -15,7 +16,7 @@ use orchester_core::{
     stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker},
   },
   id::{StepExecutionId, TaskId},
-  run::{Invocation, PendingToolApproval, RunLimit, ToolApprovalDecision},
+  run::{FirstEditTracker, Invocation, PendingToolApproval, RunLimit, ToolApprovalDecision},
   store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
@@ -130,6 +131,9 @@ struct Watch {
   db: ProjectDb,
   invocation: Invocation,
   tracker: InvocationTracker,
+  edits: FirstEditTracker,
+  /// The edit progress changed since it was stored.
+  edits_changed: bool,
   pending: Vec<(Timestamp, AgentEvent)>,
   stop: Option<StopCause>,
   /// The budget a turn used up, ending the agent at its next turn or after the grace.
@@ -147,6 +151,8 @@ impl Watch {
       db: ProjectDb::open(root)?,
       invocation: invocation.clone(),
       tracker: InvocationTracker::default(),
+      edits: FirstEditTracker::default(),
+      edits_changed: false,
       pending: Vec::new(),
       stop: None,
       over: None,
@@ -412,7 +418,9 @@ impl Worker {
   /// Takes in one event: a turn's usage goes to the run, and a new turn after a used-up budget
   /// ends the agent.
   fn observe(&self, watch: &mut Watch, event: AgentEvent) -> Result<(), StoreError> {
+    let now = Timestamp::now();
     watch.tracker.observe(&event);
+    watch.edits_changed |= watch.edits.observe(&event, now);
     let usage = match &event {
       AgentEvent::TurnCompleted { usage } => Some(*usage),
       _ => None,
@@ -430,7 +438,7 @@ impl Worker {
       }
       _ => {}
     }
-    watch.pending.push((Timestamp::now(), event));
+    watch.pending.push((now, event));
     if watch.pending.len() >= FLUSH_BATCH || usage.is_some() {
       self.flush(watch)?;
     }
@@ -460,6 +468,12 @@ impl Worker {
       watch.invocation.session = session;
       watch.invocation.usage = watch.tracker.usage();
       watch.db.save_invocation(&watch.invocation)?;
+    }
+    if watch.edits_changed {
+      watch
+        .db
+        .save_edit_progress(watch.invocation.id, watch.edits.progress())?;
+      watch.edits_changed = false;
     }
     let events = std::mem::take(&mut watch.pending);
     let sequence = watch.db.append_activity(&watch.invocation, &events)?;

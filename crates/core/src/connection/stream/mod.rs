@@ -167,6 +167,9 @@ pub enum RunnerProblem {
   ProgramNotFound { program: String },
   /// The codebase index of the run's base revision could not be built; the agent works without it.
   CodebaseIndexUnavailable { detail: String },
+  /// ripgrep was found neither on the agent's `PATH` nor with an agent CLI: the agent gets no code
+  /// index and searches with `git grep`.
+  RipgrepNotFound,
 }
 
 impl AgentEvent {

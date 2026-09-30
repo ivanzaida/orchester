@@ -1,6 +1,7 @@
 mod activity;
 mod agent_files;
 mod blobs;
+mod code_index;
 mod connections;
 mod environment;
 mod import;

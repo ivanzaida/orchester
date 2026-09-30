@@ -111,6 +111,7 @@ fn claude<'a>(
     session,
     mcp: None,
     skills,
+    code_index: None,
   }
 }
 

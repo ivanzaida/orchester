@@ -11,6 +11,7 @@ mod branch;
 mod counts;
 mod error;
 mod event;
+mod first_edit;
 mod follow_up;
 mod invocation;
 mod number;
@@ -39,6 +40,7 @@ pub use self::{
   counts::RunCounts,
   error::RunError,
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
+  first_edit::{EditProgress, FirstEdit, FirstEditTracker},
   invocation::{ActivityEntry, Invocation, InvocationKind, InvocationTiming, active_time, execution_tokens},
   number::RunNumber,
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
@@ -46,9 +48,10 @@ pub use self::{
   plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},
   preflight::{BuildTargetState, PreflightInput, PreflightProblem, build_space_problem, preflight},
   prompt::{
-    AssembledPrompt, CONTINUE_PROMPT, Composition, DeliveredMessages, DependencyOutput, ExcludedInstruction,
-    InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion, PipelineInfo, PlanRevision, ProfileInfo,
-    PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource, RunContext, SkillListing,
+    AssembledPrompt, CONTINUE_PROMPT, CodeIndexPrompt, Composition, DeliveredMessages, DependencyOutput,
+    ExcludedInstruction, InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion, PipelineInfo,
+    PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource, RunContext,
+    SkillListing,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},

@@ -8,7 +8,9 @@
 //! revision). The extra writable folders its permissions grant are resolved in the repository at
 //! each start, and those under `.orchester/` that do not exist yet are created: the CLIs ignore a
 //! folder that does not exist. The skills that reach the agent are placed and listed in its prompt, and the
-//! project's repository agent files setting is read at each start ([`super::skills`]).
+//! project's repository agent files setting is read at each start ([`super::skills`]). What the agent gets of the
+//! code index is decided before ([`AgentIndex`]): its folder and the internal skill in the prompt of new and resumed
+//! sessions (Claude Code also gets the folder with `--add-dir`), and ripgrep's folder first on the CLI's `PATH`.
 
 use std::{
   collections::BTreeSet,
@@ -16,6 +18,7 @@ use std::{
 };
 
 use orchester_core::{
+  code_index::CodeIndexUse,
   command::Command,
   connection::{
     AgentConnection, AgentProvider, REASONING_EFFORT,
@@ -26,15 +29,18 @@ use orchester_core::{
   permission::{FolderBounds, capability::EnforcedPermissions},
   resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKind},
   run::{
-    AssembledPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
-    PinnedVersion, PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, Run, RunContext,
-    StepExecutor, StepOutput,
+    AssembledPrompt, CodeIndexPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion,
+    InvocationPrompt, PinnedVersion, PipelineInfo, Plan, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput,
+    Run, RunContext, StepExecutor, StepOutput,
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, SettingsStore},
 };
 
 use super::{
-  super::run::RunTask,
+  super::{
+    codebase_index::{AgentIndex, IndexTold, with_tools_on_path},
+    run::RunTask,
+  },
   Continuation, Occasion,
   app_server::AppServerSetup,
   mcp::{McpServers, McpSetup},
@@ -53,8 +59,10 @@ pub(super) struct AgentStart {
   pub(super) prompt: InvocationPrompt,
   /// Claude Code's MCP configuration file, removed when this is dropped: once the CLI has ended.
   pub(super) mcp_file: Option<PrivateFile>,
-  /// An event for each MCP server the agent works without.
-  pub(super) mcp_left_out: Vec<AgentEvent>,
+  /// An event for each MCP server the agent works without, and for the code index it lacks.
+  pub(super) left_out: Vec<AgentEvent>,
+  /// What the agent gets of the code index.
+  pub(super) code_index: CodeIndexUse,
   pub(super) app_server: Option<AppServerSetup>,
   pub(super) agent: String,
 }
@@ -74,42 +82,37 @@ struct Cli<'a> {
   /// The repository's skills Codex disables, when the project has its agent files off; `None` while
   /// they are on.
   repository_skills: Option<&'a [PathBuf]>,
+  /// The code index folder the agent gets, if any.
+  code_index: Option<&'a Path>,
 }
 
 impl RunTask {
   /// How invocation `invocation` of `execution`'s agent starts: its command, the CLI it starts,
-  /// what its prompt is made of and its MCP servers, continuing as `continuation` says, or why it
-  /// cannot start.
+  /// what its prompt is made of and its MCP servers, continuing as `continuation` says, with what it
+  /// gets of the code index (`index`), or why it cannot start.
   pub(super) fn command(
     &self,
     execution: StepExecutionId,
     continuation: &Continuation,
     (invocation, worktree): (InvocationId, &Path),
+    index: AgentIndex,
   ) -> Result<AgentStart, RunnerProblem> {
-    let key = self
-      .run
-      .execution(execution)
-      .expect("the execution's model was found")
-      .step();
-    let step = self
-      .run
-      .snapshot()
-      .body()
-      .step(key)
-      .expect("executions name snapshot steps");
-    let (StepKind::Agent { .. }, Some(StepExecutor::Agent { profile, model, .. })) =
-      (&step.kind, self.run.snapshot().step(key).map(|step| step.executor()))
-    else {
-      return Err(problem(format!("step `{key}` is not an agent step")));
-    };
+    let (step, profile, model) = self.agent_step(execution)?;
+    let key = &step.key;
     let (body, connection) = self.profile_and_connection(profile)?;
     let info = ProfileInfo {
       id: profile.resource,
       version: profile.number,
       body: &body,
     };
-    let placed = self.place_skills(execution, step, info)?;
-    let AssembledPrompt { text: prompt, sources } = self.prompt(execution, step, info, continuation, &placed)?;
+    let mut placed = self.place_skills(execution, step, info)?;
+    let skill = match index.folder {
+      Some(_) => Some(self.place_code_map(execution, &mut placed)?),
+      None => None,
+    };
+    let told = IndexTold::new(&index, skill.as_deref());
+    let AssembledPrompt { text: prompt, sources } =
+      self.prompt(execution, step, info, continuation, (&placed, told.prompt()))?;
     // Preflight already refused steps whose permissions the CLI cannot enforce; checked again
     // because an agent never starts with permissions that are not enforced. The run's permissions
     // for the profile, if they were changed for it, else the profile's, narrowed by the step.
@@ -148,6 +151,7 @@ impl RunTask {
       environment: &environment,
       skills: placed.folder.as_deref(),
       repository_skills: repository.as_deref(),
+      code_index: index.folder.as_deref(),
     };
     let interactive = interactive_mode(step, provider)?;
     let (command, mcp_file, app_server) = if interactive && provider == AgentProvider::CodexCli {
@@ -157,15 +161,43 @@ impl RunTask {
       let (command, file) = self.cli_command(&cli, setup, prompt)?;
       (command, file, None)
     };
+    let command = match &index.tools {
+      Some(tools) => with_tools_on_path(command, tools),
+      None => command,
+    };
+    let mut left_out = left_out;
+    left_out.extend(index.problems);
     Ok(AgentStart {
       command,
       provider,
       prompt: sources,
       mcp_file,
-      mcp_left_out: left_out,
+      left_out,
+      code_index: index.used,
       app_server,
       agent: body.role().as_str().to_owned(),
     })
+  }
+
+  /// The agent step `execution` executes, the profile version that runs it and its model.
+  fn agent_step(&self, execution: StepExecutionId) -> Result<(&Step, &PinnedVersion, &ModelId), RunnerProblem> {
+    let key = self
+      .run
+      .execution(execution)
+      .expect("the execution's model was found")
+      .step();
+    let step = self
+      .run
+      .snapshot()
+      .body()
+      .step(key)
+      .expect("executions name snapshot steps");
+    let (StepKind::Agent { .. }, Some(StepExecutor::Agent { profile, model, .. })) =
+      (&step.kind, self.run.snapshot().step(key).map(|step| step.executor()))
+    else {
+      return Err(problem(format!("step `{key}` is not an agent step")));
+    };
+    Ok((step, profile, model))
   }
 
   fn app_server_command(
@@ -304,6 +336,7 @@ impl RunTask {
         session: ClaudeSession::continuing(cli.resume),
         mcp: file.as_ref().map(|(file, servers)| (file.path(), servers.as_slice())),
         skills: cli.skills,
+        code_index: cli.code_index,
       }
       .command(prompt, std::env::vars_os(), cli.environment),
     };
@@ -325,7 +358,7 @@ impl RunTask {
     step: &Step,
     profile: ProfileInfo<'_>,
     continuation: &Continuation,
-    placed: &PlacedSkills,
+    (placed, code_index): (&PlacedSkills, Option<CodeIndexPrompt<'_>>),
   ) -> Result<AssembledPrompt, RunnerProblem> {
     let event = if continuation.session.is_some() {
       InjectionEvent::Resume
@@ -381,6 +414,7 @@ impl RunTask {
       profile,
       instructions: &sources,
       skills: &skills,
+      code_index,
       dependencies: &dependencies,
       revision: Plan::awaiting_revision(&plans, execution, continuation.last_started).map(|(plan, note)| {
         PlanRevision {

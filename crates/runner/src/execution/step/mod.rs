@@ -15,7 +15,7 @@ use orchester_core::{
   conversation::{Message, latest_question},
   id::StepExecutionId,
   resource::ModelId,
-  run::{Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
+  run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
   store::{ActivityStore, ConversationStore, RunStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -213,7 +213,11 @@ impl RunTask {
         return Ok(true);
       }
     };
-    let mut start = match self.command(execution, &continuation, (invocation.id, workspace.path())) {
+    let start = self
+      .agent_index()
+      .map_err(|detail| RunnerProblem::CouldNotStart { detail })
+      .and_then(|index| self.command(execution, &continuation, (invocation.id, workspace.path()), index));
+    let mut start = match start {
       Ok(start) => start,
       Err(problem) => {
         self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted)?;
@@ -221,9 +225,9 @@ impl RunTask {
       }
     };
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
-    let mut unavailable = std::mem::take(&mut start.mcp_left_out);
-    unavailable.extend(self.index_unavailable());
-    self.record_left_out(&invocation, unavailable)?;
+    self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
+    self.db.save_edit_progress(invocation.id, &EditProgress::default())?;
+    self.record_left_out(&invocation, std::mem::take(&mut start.left_out))?;
     let process = match Supervised::start(&start.command) {
       Ok(process) => process,
       Err(error) => {

@@ -22,8 +22,8 @@
 //! continued session at work with it), it appends `continued` to `README.md` and ends the same way. A new
 //! session takes its id from `--session-id`.
 //!
-//! On standard error it reports its arguments, the names of its environment variables, the prompt (its first line, then
-//! each line), its process id and its MCP configuration (`fake_mcp`), like `orchester-fake-codex`.
+//! On standard error it reports its arguments, the names of its environment variables and its `PATH`, the prompt (its
+//! first line, then each line), its process id and its MCP configuration (`fake_mcp`), like `orchester-fake-codex`.
 
 #![allow(
   clippy::print_stdout,
@@ -141,6 +141,10 @@ fn read_prompt(args: &[String]) -> Option<String> {
   }
   eprintln!("argv: {}", args.join(" "));
   eprintln!("env: {}", names.join(","));
+  eprintln!(
+    "path: {}",
+    std::env::var_os("PATH").unwrap_or_default().to_string_lossy()
+  );
   eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
   for line in prompt.lines() {
     eprintln!("prompt| {line}");

@@ -530,6 +530,7 @@ fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str
       ctx.t("runs.activity.problem.codebaseIndexUnavailable"),
       Some(detail.as_str().into()),
     ),
+    RunnerProblem::RipgrepNotFound => (ctx.t("runs.activity.problem.ripgrepNotFound"), None),
   }
 }
 
