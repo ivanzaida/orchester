@@ -14,8 +14,19 @@ use crate::{
 /// Every turn gets this contract, including resumed CLI sessions without an output schema.
 const RESULT_INSTRUCTIONS: &str = "End with exactly one JSON object containing `outcome` and `summary`, for example \
                                    {\"outcome\":\"question\",\"summary\":\"Which option should I implement?\"}.\n\
-                                   Use `done` when your current step is complete; summarize its result for the \
-                                   steps that follow.\n\
+                                   Use `done` when your current step is complete and its required checks pass; \
+                                   summarize its result for the steps that follow. For a review or verification, \
+                                   completing the inspection alone is not success. A negative verdict or \
+                                   unresolved blocking or major findings requires `failed`, even when you \
+                                   finished writing the report. Explain the findings so the pipeline can route \
+                                   corrections; do not repair them in a read-only review.\n\
+                                   Check, review and verification verdicts must describe the current inputs. \
+                                   Identify the revision or saved work each result and artifact covers. Earlier \
+                                   failures are context, not a verdict on changed work: reproduce relevant \
+                                   findings against the current candidate. Reuse a check only when its inputs \
+                                   are unchanged, and state that limit. Preserve earlier evidence without \
+                                   relabeling it as evidence for a new build. If fresh verification needs a \
+                                   capability or action from the person, request it with `question`.\n\
                                    Use `question` when progress needs the person's decision, permission, access, \
                                    or clarification. This includes a proposed command outside the sandbox, an \
                                    unavailable capability, or conflicting requirements that the person can \
@@ -24,8 +35,9 @@ const RESULT_INSTRUCTIONS: &str = "End with exactly one JSON object containing `
                                    options. Orchester saves your work and waits for their answer, then resumes \
                                    the same session. Requesting permission does not grant it; use only the \
                                    permissions actually available to this session.\n\
-                                   Use `failed` only for a failure you cannot resolve within this step and for \
-                                   which no decision or action by the person would let you continue. Explain \
+                                   Use `failed` for checks that require corrections by an earlier step, or for \
+                                   a failure you cannot resolve within this step and for which no decision or \
+                                   action by the person would let you continue. Explain \
                                    what failed and what work was saved. This invokes the pipeline's failure \
                                    handling and can end the run and skip dependent steps: do not use it merely \
                                    because work is incomplete or needs permission. \
