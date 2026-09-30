@@ -6,7 +6,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, ScrollVertical, Spacer, Text, TextInput, TextOverflow},
   core::Signal,
@@ -318,7 +318,18 @@ fn criterion_row(
   removable: bool,
   locked: bool,
 ) -> Element {
-  let input = styled_input(ctx, criterion.text.clone(), TypographyStyle::FieldLabel)
+  // A criterion reads in `$muted` (`Y3PwR0` in `WOdDe`, `egNyW` in `dRN4m`); the placeholder of an
+  // empty one stays apart from it in `$subtle`.
+  let theme = ctx.theme();
+  let text = |color| {
+    FormTextRole {
+      typography: TypographyStyle::FieldLabel,
+      color,
+    }
+    .resolve(&theme.typography(), &theme.palette())
+  };
+  let input = TextInput::styled(criterion.text.clone(), text(PaletteColor::TextSecondary))
+    .placeholder_style(text(PaletteColor::TextMuted))
     .id(Arc::<str>::from(format!("criterion-{}", criterion.id)))
     .single_line()
     .flex(1.0)
