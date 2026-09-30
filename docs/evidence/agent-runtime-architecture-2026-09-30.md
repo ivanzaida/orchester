@@ -254,3 +254,42 @@ found a real long-Target truncation without a hover reveal; that UI finding is p
 its task-specific Implement agent. The temporary project maximum and daily budgets
 are 16M and 40M; default run/time limits remain 1.4M and 30 minutes. The user subsequently
 authorized Root commits after inspecting the pending runtime changes. Task branches remain unmerged.
+
+## Graceful shutdown while a tool decision is pending
+
+The committed pair (`ad13563`, `c8c683f`) was installed at 18:50:48 UTC after its final
+quality gate and release build. Actual installed desktop and runner hashes match
+`.tmp/agent-runtime/current-runtime-candidate-v2/build-manifest.json`. That update did
+not gracefully save ORC-14: the old app's CloseWaiting overlay covered its pending
+Pencil approval and the run needed an explicit Quit now interruption and continuation.
+Its existing session, checkpoint and worktree were preserved.
+
+Root now fixes this deadlock in the runner instead of answering hidden approvals during
+shutdown. Pause lets ordinary invocation work finish. When the invocation awaits a tool
+decision, it ends and checkpoints the actual work without granting or denying that action.
+The open execution and provider session are preserved. Interrupted approval records prevent
+automatic replay when attaching again; continuation remains explicit. A decision received
+after checkpoint termination starts is rejected.
+
+The parser retains the correlated tool item so checkpoint safety excludes only that pending
+item. Other active commands and MCP calls must finish first. A pause requested during an
+approved command remains pending until it finishes; a later approval request then checkpoints
+without executing the newly requested action. Apply-now uses the same safety check for a
+pending decision alongside other active tools.
+
+Validation of this additional, uncommitted root delta:
+
+- Three `approval_shutdown_` scheduler/storage/protocol regressions pass: pending command,
+  pending MCP, and active-command completion followed by a later pending MCP. They assert
+  actual checkpoint contents, the preserved session/open execution, absence of unapproved
+  side effects, and no automatic invocation after reconnect.
+- The core `pending_approval_` test proves another MCP item remains active while one waits.
+- Two existing `approval_permissions_`, four `command_approvals_`, one
+  `lifecycle_finish_at_checkpoints_`, and one `control_pause_waits_` regressions pass.
+- `tools/check.ps1` reports `check: OK` in `.tmp/agent-runtime/check-shutdown.log`;
+  core Darwin clippy with warnings denied passes.
+
+The shutdown correction has a successful release build and is ready for the Root commit the user
+authorized on this turn. It is not installed. No task branch was merged. Physical Mac testing,
+the full test suite, and full desktop/runner Darwin compilation
+remain unperformed; the native C-toolchain limitation still applies.

@@ -22,6 +22,7 @@ pub fn run(args: &[String]) -> ExitCode {
   let mut stage = 0;
   let mut hold_approved = false;
   let mut hold_mcp = false;
+  let mut release_command = false;
   let mut roots = BTreeSet::<String>::new();
   for line in io::stdin().lock().lines() {
     let message: Value = serde_json::from_str(&line.expect("stdin")).expect("JSON RPC");
@@ -41,14 +42,10 @@ pub fn run(args: &[String]) -> ExitCode {
       Some("mcpServerStatus/list") => emit(&json!({"id":4,"result":{"data":[],"nextCursor":null}})),
       Some("turn/start") => {
         check_environment(params, &cwd, &roots);
-        hold_approved = params["input"][0]["text"]
-          .as_str()
-          .expect("prompt")
-          .contains("Hold approved command");
-        hold_mcp = params["input"][0]["text"]
-          .as_str()
-          .expect("prompt")
-          .contains("Hold approved MCP");
+        let prompt = params["input"][0]["text"].as_str().expect("prompt");
+        hold_approved = prompt.contains("Hold approved command");
+        hold_mcp = prompt.contains("Hold approved MCP");
+        release_command = prompt.contains("Release approved command");
         emit(&json!({"id":5,"result":{"turn":{"id":turn}}}));
         emit(&json!({"method":"turn/started","params":{"threadId":thread,"turn":{"id":turn}}}));
         command_request(&thread, turn, &cwd);
@@ -63,6 +60,9 @@ pub fn run(args: &[String]) -> ExitCode {
         if hold_approved {
           stage = 2;
           continue;
+        }
+        if release_command {
+          wait_for_release(&cwd);
         }
         emit(&json!({"method":"item/completed","params":{"item":{
           "id":"command-1","type":"commandExecution","command":"disposable-command",
@@ -89,6 +89,12 @@ pub fn run(args: &[String]) -> ExitCode {
     }
   }
   ExitCode::SUCCESS
+}
+
+fn wait_for_release(cwd: &std::path::Path) {
+  while !cwd.join("release-active.txt").exists() {
+    std::thread::sleep(std::time::Duration::from_millis(10));
+  }
 }
 
 fn check_environment(params: &Value, cwd: &std::path::Path, roots: &BTreeSet<String>) {

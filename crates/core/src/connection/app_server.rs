@@ -25,6 +25,7 @@ pub enum ProtocolError {
 #[derive(Clone, PartialEq)]
 pub struct PendingApproval {
   id: Value,
+  item: String,
   kind: ApprovalKind,
   pub thread: String,
   pub turn: Option<String>,
@@ -63,6 +64,11 @@ enum CommandDenial {
 }
 
 impl PendingApproval {
+  /// The tool item waiting for this decision; other items may still be executing.
+  pub fn item(&self) -> &str {
+    &self.item
+  }
+
   pub fn is_command(&self) -> bool {
     matches!(self.kind, ApprovalKind::Command { .. })
   }
@@ -127,6 +133,11 @@ impl AppServerStream {
     !self.tools.is_empty()
   }
 
+  /// A pending decision does not make any other tool safe to interrupt.
+  pub fn has_other_active_tools(&self, pending: &PendingApproval) -> bool {
+    self.tools.keys().any(|item| item != pending.item())
+  }
+
   pub fn parse(&mut self, line: &str) -> Result<Vec<Update>, ProtocolError> {
     let message: Value = serde_json::from_str(line).map_err(|_| ProtocolError::InvalidJson)?;
     let Some(method) = message.get("method").and_then(Value::as_str) else {
@@ -167,9 +178,10 @@ impl AppServerStream {
     {
       return Err(ProtocolError::InvalidApproval);
     }
-    string(params, "itemId").ok_or(ProtocolError::InvalidApproval)?;
+    let item = string(params, "itemId").ok_or(ProtocolError::InvalidApproval)?;
     Ok(PendingApproval {
       id: id.clone(),
+      item,
       kind: ApprovalKind::Command {
         denial: command_denial(params)?,
       },
@@ -225,6 +237,7 @@ impl AppServerStream {
     }
     Ok(PendingApproval {
       id: id.clone(),
+      item,
       kind: ApprovalKind::UserInput {
         question: string(question, "id").ok_or(ProtocolError::InvalidApproval)?,
         accept,
@@ -258,14 +271,15 @@ impl AppServerStream {
     let turn = string(params, "turnId").ok_or(ProtocolError::InvalidApproval)?;
     let mut matching = self
       .tools
-      .values()
-      .filter(|tool| tool.server == server && tool.thread == thread && tool.turn == turn);
-    let tool = matching.next().ok_or(ProtocolError::InvalidApproval)?;
+      .iter()
+      .filter(|(_, tool)| tool.server == server && tool.thread == thread && tool.turn == turn);
+    let (item, tool) = matching.next().ok_or(ProtocolError::InvalidApproval)?;
     if matching.next().is_some() {
       return Err(ProtocolError::InvalidApproval);
     }
     Ok(PendingApproval {
       id: id.clone(),
+      item: item.clone(),
       kind: ApprovalKind::Elicitation,
       thread,
       turn: Some(turn),
