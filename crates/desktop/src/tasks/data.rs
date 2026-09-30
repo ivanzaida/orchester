@@ -48,6 +48,7 @@ pub struct PipelineChoice {
 pub struct ProjectTasks {
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  pub group_holds: Arc<BTreeMap<TaskId, Vec<UiMessage>>>,
   /// Tool requests awaiting a decision anywhere in this project, oldest first.
   pub pending_tool_approvals: Arc<Vec<PendingToolApproval>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
@@ -65,6 +66,15 @@ impl ProjectTasks {
   pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let tasks = db.tasks()?;
+    let mut group_holds = BTreeMap::new();
+    for group in db.task_groups()? {
+      if let Some(hold) = db.task_group_hold(group.key())? {
+        let messages = super::group::hold_messages(&hold);
+        for task in group.tasks() {
+          group_holds.insert(*task, messages.clone());
+        }
+      }
+    }
     let mut phases = Phases::new();
     let mut count = 0;
     for task in &tasks {
@@ -79,6 +89,7 @@ impl ProjectTasks {
     }
     Ok(Self {
       tasks: Arc::new(tasks),
+      group_holds: Arc::new(group_holds),
       pipelines: Arc::new(published_pipelines(&db)?),
       pending_tool_approvals: Arc::new(db.pending_tool_approvals_all()?),
       phases: Arc::new(phases),

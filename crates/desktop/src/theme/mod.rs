@@ -42,6 +42,10 @@ pub const UNAVAILABLE_OPTION_OPACITY: f32 = tokens::UNAVAILABLE_OPTION_OPACITY;
 pub const DISABLED_OPACITY: f32 = tokens::DISABLED_OPACITY;
 /// Opacity of a switch whose value is fixed, track and label as one group (`lW7Sp`).
 pub const LOCKED_SWITCH_OPACITY: f32 = tokens::LOCKED_SWITCH_OPACITY;
+pub const TASK_REVIEW_ROW_HEIGHT: f32 = tokens::TASK_REVIEW_ROW_HEIGHT;
+pub const TASK_REVIEW_RAIL_WIDTH: f32 = tokens::TASK_REVIEW_RAIL_WIDTH;
+pub const TASK_REVIEW_FIELD_HEIGHT: f32 = tokens::TASK_REVIEW_FIELD_HEIGHT;
+pub const TASK_REVIEW_HANDLE_SIZE: f32 = tokens::TASK_REVIEW_HANDLE_SIZE;
 
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),

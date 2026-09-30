@@ -823,6 +823,27 @@ The user explicitly requested creating ten tasks and letting agents work on them
 
 Tasks (`J9467`) is the main backlog, with All tasks, Drafts, Queue, Needs review and Done tabs. New task opens the existing single-task form; Create multiple opens `OqmXc`. Rows expose task ID, title, published pipeline, status and readiness/dependency, with selection and direct entry to task details/conversation. Run selected opens a scheduling review rather than immediately starting work.
 
+**ORC-30 implementation (2026-09-30; independent design verification pending).** Checkboxes select rows without
+opening their task. Select all affects the visible filtered rows; selections hidden by a query remain selected and
+counted. Search matches title, task key, internal ID and brief, combined with the pipeline filter, sort and tab.
+The selection bar counts ready and incomplete selections and lists each selected task's readiness problems.
+Run selected requires every selected task to be a complete draft with a published pipeline and no previous run.
+The review permits dragging the task order, parallel concurrency or sequential scheduling, per-task token/time
+limits and the aggregate cap; cancelling returns to the selection without scheduling work. Queue saves the whole
+group atomically, pins pipeline versions, and the runner starts one idempotent first run per task. Waiting for input
+or approval occupies a task slot. Sequential scheduling waits until the previous run succeeds (ready for review).
+An unrecovered failure or cancellation holds unstarted members; existing agents retain their normal controls.
+
+**Implemented, not drawn yet:** inline Set pipeline picker/apply/cancel and skipped-task reasons (only drafts without
+runs are changed); empty search results and non-fixture filter/sort combinations; review validation, offline runner,
+pending/error and queued-success states; one selected task; group waiting reasons for concurrency, previous task,
+agent capacity, daily/shared budgets, preflight or start failure. These reuse existing fields, buttons, notices and
+error text. Values are derived from real selections, never the illustrative ten-task defaults. Group caps stop
+agents at turn boundaries and can overshoot by already-running turns. Queue editing, pause scheduling and explicit
+task prerequisites remain separate backlog work; this change does not introduce those controls or claim dependency
+enforcement. Shared-cap recovery is unavailable in the per-run raise-limit panel because raising one run's limit
+cannot raise a group cap. The independent verifier must compare J9467/W1Dq6/IyJ5a and these reachable states.
+
 **Task rows by run state (`r2al55`, drawn 2026-09-27 from the app).** A task with a run shows the run's state as the status label and, in the last column (and after the key in the Overview list `zemhy`), what that means for the task now:
 
 | Status (icon) | Last column |

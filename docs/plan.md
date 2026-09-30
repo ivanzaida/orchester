@@ -167,6 +167,20 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+Tasks list selection and scheduling review · ORC-30 · branch `orchester/orc-30-run-2`
+
+- **Implementation complete 2026-09-30; independent Verify pending.** Row/select-all selection, readiness reasons,
+  draft-only published pipeline assignment, combined search/pipeline/sort/tab queries, and parallel/sequential
+  scheduling review with editable order, task limits and aggregate token cap. Atomic persisted groups and stable
+  first-run keys make retries idempotent; the runner enforces reviewed concurrency and existing agent slots.
+- Checks: `powershell -File tools/check.ps1` passed. 47 filtered tests passed: core/store/runner `task_group`,
+  desktop tasks/form_keyboard `task_bulk`, task tab counts, i18n `locale`/`every_key`, and theme `pencil`.
+  Headless review tests include drag reordering, keyboard fields, persisted pipeline assignment and both start modes.
+  Full suites, macOS execution and independent design verification were not run by the implementer.
+- Verify J9467, W1Dq6 and IyJ5a, including checkbox focus, mixed readiness, skipped assignment reasons,
+  combined filters, reordered tasks, settings validation, queued success and queue waiting reasons.
+- Assignment and non-fixture review/queue states are documented as implemented, not drawn yet in the design handoff.
+
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 
 - **Done 2026-09-30.** **Send & continue** resumes the same failed run in a new attempt, preserving its branch,

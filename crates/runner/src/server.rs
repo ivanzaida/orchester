@@ -124,8 +124,14 @@ impl Drop for InFlightRequest {
 
 impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
   async fn run(mut self) -> Result<(), IpcError> {
+    let mut groups = tokio::time::interval(Duration::from_secs(1));
     loop {
       tokio::select! {
+        _ = groups.tick(), if self.finishing.is_none() => {
+          if let Err(error) = self.scheduler.advance_task_groups().await {
+            tracing::error!(?error, "cannot advance reviewed task groups");
+          }
+        }
         request = self.requests.recv() => {
           if let Some(end) = self.on_request(request).await? {
             return end;

@@ -92,6 +92,8 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
       "tasks",
       TasksProps {
         project: open.project.name().as_str().into(),
+        root: Arc::new(open.repo_root.clone()),
+        runner_online: shown.runner == RunnerState::Online,
         tab,
         tasks: shown.tasks,
       },

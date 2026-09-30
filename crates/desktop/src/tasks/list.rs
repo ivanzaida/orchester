@@ -18,8 +18,7 @@ use crate::{
   tasks::{data::PipelineChoice, unreadable::Unreadable},
 };
 
-/// Tabs of the task list. Only tabs whose tasks can be told apart today are available;
-/// queueing, review and completion do not exist yet.
+/// Tabs of the task list; run-backed tabs use the latest phase in [`rows`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskTab {
   All,
@@ -35,7 +34,7 @@ impl TaskTab {
   pub const ALL: [Self; 5] = [Self::All, Self::Drafts, Self::Queue, Self::NeedsReview, Self::Done];
 
   pub const fn is_available(self) -> bool {
-    matches!(self, Self::All | Self::Drafts)
+    true
   }
 
   pub const fn label_key(self) -> &'static str {
@@ -53,7 +52,8 @@ impl TaskTab {
     match self {
       Self::All => true,
       Self::Drafts => task.status() == TaskStatus::Draft,
-      Self::Queue | Self::NeedsReview | Self::Done => false,
+      Self::Queue => task.status() == TaskStatus::Queued,
+      Self::NeedsReview | Self::Done => false,
     }
   }
 
@@ -364,7 +364,25 @@ impl TaskRow {
 pub fn rows(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, tab: TaskTab) -> Vec<TaskRow> {
   tasks
     .iter()
-    .filter(|task| tab.includes(task))
+    .filter(|task| match tab {
+      TaskTab::All | TaskTab::Drafts => tab.includes(task),
+      TaskTab::Queue => matches!(
+        phase_of(task, phases),
+        Some(
+          TaskPhase::Queued
+            | TaskPhase::Running
+            | TaskPhase::Waiting
+            | TaskPhase::Paused
+            | TaskPhase::StoppedAtLimit
+            | TaskPhase::Interrupted
+        )
+      ),
+      TaskTab::NeedsReview => phase_of(task, phases) == Some(TaskPhase::Succeeded),
+      TaskTab::Done => matches!(
+        phase_of(task, phases),
+        Some(TaskPhase::Merged | TaskPhase::Failed | TaskPhase::Cancelled)
+      ),
+    })
     .map(|task| TaskRow::new(task, published, phases.get(&task.id())))
     .collect()
 }

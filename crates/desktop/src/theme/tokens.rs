@@ -169,3 +169,9 @@ pub const DISABLED_OPACITY: f32 = 0.4;
 /// A switch whose value is fixed fades as one row, its label with it, to 45 % (`lW7Sp` in 04.B
 /// `W0Owo`).
 pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;
+
+/// Scheduling review W1Dq6/IyJ5a: ordered rows, settings rail, fields and drag grip.
+pub const TASK_REVIEW_ROW_HEIGHT: f32 = 50.0;
+pub const TASK_REVIEW_RAIL_WIDTH: f32 = 540.0;
+pub const TASK_REVIEW_FIELD_HEIGHT: f32 = 38.0;
+pub const TASK_REVIEW_HANDLE_SIZE: f32 = 32.0;

@@ -1,0 +1,113 @@
+//! Review validation reuses single-task preflight, then saves one atomic queue group.
+use std::path::Path;
+
+use orchester_core::{
+  id::{ResourceId, TaskId},
+  resource::Pipeline,
+  store::{ResourceStore, SettingsStore, TaskStore},
+  task_group::TaskGroup,
+  task_selection::SelectionProblem,
+};
+use orchester_store::ProjectDb;
+
+use crate::{
+  messages::{self, Message},
+  tasks::{
+    list::missing_key,
+    run::{check, preflight_message},
+  },
+};
+
+pub fn problem_message(problem: &SelectionProblem) -> Message {
+  match problem {
+    SelectionProblem::NotDraft => Message::new("tasks.bulk.notDraft"),
+    SelectionProblem::HasRun => Message::new("tasks.bulk.hasRun"),
+    SelectionProblem::Missing(detail) => Message::new(missing_key(*detail)),
+    SelectionProblem::PipelineNotPublished => Message::new("runs.preflight.pipelineNotPublished"),
+  }
+}
+
+pub fn hold_messages(hold: &orchester_core::task_group::GroupHold) -> Vec<Message> {
+  use orchester_core::task_group::GroupHold;
+  let key = match hold {
+    GroupHold::AgentCapacity => "tasks.bulk.hold.capacity",
+    GroupHold::DailyBudget => "runs.capacity.dailyBudgetUsed",
+    GroupHold::GroupCap => "tasks.bulk.stoppedGroup",
+    GroupHold::PreviousTask => "tasks.bulk.hold.previous",
+    GroupHold::Concurrency => "tasks.bulk.hold.concurrency",
+    GroupHold::FailedTask => "tasks.bulk.hold.failure",
+    GroupHold::StartFailed => "tasks.bulk.hold.startFailed",
+    GroupHold::Preflight(problems) => return problems.iter().map(preflight_message).collect(),
+  };
+  vec![Message::new(key)]
+}
+
+pub fn assign(root: &Path, tasks: &[TaskId], pipeline: ResourceId) -> Result<Vec<Message>, Message> {
+  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  let skipped = db
+    .set_tasks_pipeline(tasks, pipeline)
+    .map_err(|error| messages::store_error(&error))?;
+  skipped
+    .iter()
+    .map(|(id, reason)| {
+      let task = db
+        .task(*id)
+        .map_err(|error| messages::store_error(&error))?
+        .ok_or_else(|| Message::new("runs.start.taskMissing"))?;
+      let key = match reason {
+        SelectionProblem::HasRun => "tasks.bulk.skippedHasRun",
+        _ => "tasks.bulk.skippedNotDraft",
+      };
+      Ok(Message::new(key).with("task", task.key().to_string()))
+    })
+    .collect()
+}
+
+pub fn queue(
+  root: &Path,
+  group: &TaskGroup,
+  limits: orchester_core::task::TaskLimits,
+) -> Result<TaskGroup, Vec<Message>> {
+  let mut db = ProjectDb::open(root).map_err(|error| vec![messages::store_error(&error)])?;
+  if let Some(existing) = db
+    .task_group(group.key())
+    .map_err(|error| vec![messages::store_error(&error)])?
+  {
+    return Ok(existing);
+  }
+  let maximum = db
+    .project_limits()
+    .map_err(|error| vec![messages::store_error(&error)])?
+    .max_run_budget();
+  if limits.budget() > maximum {
+    return Err(vec![
+      Message::new("tokens.errors.aboveMax").with("max", orchester_core::tokens::compact_tokens(maximum.get())),
+    ]);
+  }
+  let mut problems = Vec::new();
+  for id in group.tasks() {
+    let task = db
+      .task(*id)
+      .map_err(|error| vec![messages::store_error(&error)])?
+      .ok_or_else(|| vec![Message::new("runs.start.taskMissing")])?;
+    let pipeline = task
+      .details()
+      .pipeline
+      .ok_or_else(|| vec![Message::new("runs.preflight.pipelineNotPublished")])?;
+    let version = db
+      .latest_version::<Pipeline>(pipeline)
+      .map_err(|error| vec![messages::store_error(&error)])?
+      .ok_or_else(|| vec![Message::new("runs.preflight.pipelineNotPublished")])?;
+    problems.extend(
+      check(&db, task.details(), version.number())
+        .map_err(|error| vec![messages::store_error(&error)])?
+        .iter()
+        .map(preflight_message),
+    );
+  }
+  if !problems.is_empty() {
+    return Err(problems);
+  }
+  db.queue_task_group(group, Some(limits))
+    .map_err(|error| vec![messages::store_error(&error)])
+}

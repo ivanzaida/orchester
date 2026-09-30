@@ -55,6 +55,7 @@ impl RunTask {
           RunLimit::Tokens => "the token limit",
           RunLimit::Time => "the time limit",
           RunLimit::DailyBudget => "the daily budget limit",
+          RunLimit::GroupBudget => "the task group budget limit",
           RunLimit::StepBudget { .. } => {
             let budget = active.budget().map_or(0, |budget| budget.get());
             self.report(&active.invocation, RunnerProblem::StepBudgetReached { budget })?;

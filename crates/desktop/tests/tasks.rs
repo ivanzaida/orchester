@@ -1,3 +1,5 @@
+#[path = "tasks/browse.rs"]
+mod browse;
 #[path = "tasks/pipelines.rs"]
 mod pipelines;
 mod support;
@@ -209,10 +211,11 @@ fn tabs_filter_and_count_tasks() {
   let tasks = stored_tasks();
   assert_eq!(TaskTab::All.count(&tasks), Some(2));
   assert_eq!(TaskTab::Drafts.count(&tasks), Some(1));
-  for unavailable in [TaskTab::Queue, TaskTab::NeedsReview, TaskTab::Done] {
-    assert!(!unavailable.is_available());
-    assert_eq!(unavailable.count(&tasks), None);
-    assert!(list::rows(&tasks, &[], &Default::default(), unavailable).is_empty());
+  for tab in [TaskTab::Queue, TaskTab::NeedsReview, TaskTab::Done] {
+    assert!(tab.is_available());
+    let count = usize::from(tab == TaskTab::Queue);
+    assert_eq!(tab.count(&tasks), Some(count));
+    assert_eq!(list::rows(&tasks, &[], &Default::default(), tab).len(), count);
   }
   let drafts = list::rows(&tasks, &[], &Default::default(), TaskTab::Drafts);
   assert_eq!(drafts.len(), 1);

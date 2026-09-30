@@ -22,6 +22,7 @@ mod runs;
 mod schema;
 mod secrets;
 mod step_outputs;
+mod task_groups;
 mod tasks;
 mod tool_approvals;
 

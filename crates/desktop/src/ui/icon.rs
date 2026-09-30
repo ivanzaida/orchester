@@ -73,6 +73,7 @@ icons! {
   FolderGit => '\u{e40a}',
   FolderInput => '\u{e334}',
   FolderLock => '\u{e336}',
+  GripVertical => '\u{e0eb}',
   FolderOpen => '\u{e247}',
   FolderSearch => '\u{e339}',
   FolderX => '\u{e33e}',

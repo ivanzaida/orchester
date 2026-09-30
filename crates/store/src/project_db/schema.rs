@@ -572,4 +572,13 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   tool_approvals::ACTIVE_TIME_MIGRATION,
   tool_approvals::MIGRATION,
   recovery::MIGRATION,
+  r"
+CREATE TABLE task_groups (key TEXT PRIMARY KEY, scheduling TEXT NOT NULL, cap INTEGER NOT NULL CHECK(cap > 0), hold TEXT) STRICT;
+CREATE TABLE task_group_members (
+  group_key TEXT NOT NULL REFERENCES task_groups(key),
+  task_id TEXT NOT NULL UNIQUE REFERENCES tasks(id),
+  position INTEGER NOT NULL,
+  PRIMARY KEY(group_key, position)
+) STRICT;
+",
 ];

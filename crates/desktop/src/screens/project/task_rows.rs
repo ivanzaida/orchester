@@ -149,18 +149,13 @@ impl Component for QueueRow {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let row = ctx.props::<TaskRow>().clone();
-    // Selecting tasks for a run is not available yet: unselected in `$muted` (`R7idX` in
-    // `r2al55`).
-    let select = icon(Icon::Square, IconSize::Option, PaletteColor::TextSecondary);
+    let select = super::tasks::selection::row_checkbox(ctx, row.id, &row.key);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(TABLE_ROW_HEIGHT))
-      .padding_horizontal(ExtraSpacing::Stack.role())
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
-      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-      .child(cell(SELECT_WIDTH, select))
       .child(cell(
         KEY_WIDTH,
         Text::new(&row.key).variant(TypographyStyle::Mono).nowrap(),
@@ -182,7 +177,14 @@ impl Component for QueueRow {
       .child(cell(STATUS_WIDTH, row_status_label(ctx, row.phase)))
       .child(cell(READINESS_WIDTH, column_label(&message_text(ctx, &row.detail))))
       .child(open_chevron());
-    opens(&self.nav, &row, content)
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .padding_horizontal(ExtraSpacing::Stack.role())
+      .spacing(SpacingSize::Md)
+      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+      .align_items(Alignment::Center)
+      .child(cell(SELECT_WIDTH, select))
+      .child(Row::new().flex(1.0).child(opens(&self.nav, &row, content)))
   }
 }
 

@@ -225,7 +225,7 @@ impl TaskStore for ProjectDb {
 }
 
 /// Stores the details and status of `task`, which must exist.
-fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
+pub(super) fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
   let details = task.details();
   let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
   let updated = transaction.execute(

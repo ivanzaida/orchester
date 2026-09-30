@@ -215,6 +215,8 @@ pub enum Event {
   Stopped { mode: ShutdownMode },
   /// Run `run` of task `task` changed state (status, step, attempt); read it from the database.
   RunChanged { run: RunId, task: TaskId },
+  /// A reviewed queue group's waiting reason changed; reread the task list.
+  TaskGroupChanged { key: IdempotencyKey },
   /// Run `run`'s transcript grew to `sequence` entries. Coalesced: one notification can stand
   /// for many entries.
   AgentActivity { run: RunId, sequence: u64 },
@@ -300,6 +302,10 @@ pub enum Rejection {
   TaskNotFound,
   /// Only queued tasks start a run.
   TaskNotQueued,
+  /// A reviewed group's order, concurrency or shared cap holds this task.
+  TaskGroupWaiting {
+    hold: orchester_core::task_group::GroupHold,
+  },
   /// The run cannot start until these are resolved.
   Preflight {
     problems: Vec<PreflightProblem>,

@@ -396,7 +396,7 @@ impl Session {
         self.pending.answer(id, reply);
         true
       }
-      Some(Ok(Some(Event::RunChanged { .. }))) => {
+      Some(Ok(Some(Event::RunChanged { .. } | Event::TaskGroupChanged { .. }))) => {
         reporter.run_changed();
         true
       }
