@@ -90,6 +90,51 @@ fn an_index_found_intact_before_is_still_checked_when_a_file_changes() {
 }
 
 #[test]
+fn an_index_to_build_on_is_read_in_full_even_when_its_file_times_were_put_back() {
+  let repo = Repo::new();
+  let first = repo.head();
+  let index = repo.ensure(&first).path;
+  // Reused once: found intact and remembered as it is.
+  assert!(matches!(repo.ensure(&first).outcome, Outcome::Reused));
+  let name = "symbols.tsv";
+  let file = index.join(name);
+  let metadata = fs::metadata(&file).expect("metadata");
+  let original = read(&index, name);
+  // One byte changed, the size, the change time and the read-only flag put back.
+  let tampered = original.replacen("Circle", "Circlf", 1);
+  assert_ne!(tampered, original);
+  let mut permissions = metadata.permissions();
+  #[allow(
+    clippy::permissions_set_readonly_false,
+    reason = "the test plays an agent that makes the file writable"
+  )]
+  permissions.set_readonly(false);
+  fs::set_permissions(&file, permissions.clone()).expect("make writable");
+  let writing = fs::OpenOptions::new()
+    .write(true)
+    .truncate(true)
+    .open(&file)
+    .expect("open");
+  std::io::Write::write_all(&mut &writing, tampered.as_bytes()).expect("tamper");
+  writing
+    .set_modified(metadata.modified().expect("modified"))
+    .expect("put the time back");
+  drop(writing);
+  permissions.set_readonly(true);
+  fs::set_permissions(&file, permissions).expect("read-only again");
+  repo.write("README.md", "# Changed\n");
+  repo.git(&["commit", "--quiet", "--all", "-m", "change"]);
+
+  let second = repo.ensure(&repo.head());
+
+  let Outcome::Built(report) = &second.outcome else {
+    panic!("built");
+  };
+  assert_eq!(report.mode, BuildMode::Full, "the changed index is no base");
+  assert!(!read(&second.path, name).contains("Circlf"));
+}
+
+#[test]
 fn an_earlier_index_with_files_without_an_outline_is_still_built_on() {
   let repo = Repo::new();
   repo.write("web/min.js", &format!("{}\n", "function a(){return 1};".repeat(300)));

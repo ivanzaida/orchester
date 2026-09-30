@@ -2,8 +2,10 @@
 //! of its revision and its outline files by later indexes, so a file an agent changed would spread:
 //! an index is checked against its digests before it is reused, handed to an agent or built on,
 //! and one that does not match is built again instead. Reading every file of a large index takes
-//! seconds, so this process remembers the size and change time of each file of an index it found
-//! intact: while none of them changed, the index is not read again.
+//! seconds, so this process remembers the size and change times of each file of an index it found
+//! intact: while none of them changed, reusing the index does not read it again. Those can be put
+//! back by whoever changed a file, so an index a build takes over files from is always read in
+//! full ([`verify_fully`]): a change there would be carried into the new index with fresh digests.
 
 use std::{
   collections::{BTreeMap, HashMap},
@@ -25,8 +27,9 @@ pub(crate) type Digests = BTreeMap<String, String>;
 
 const MANIFEST: &str = "manifest.json";
 
-/// The files of an index folder, the manifest included, by path in the index: size and change time.
-type Stats = BTreeMap<String, (u64, SystemTime)>;
+/// The files of an index folder, the manifest included, by path in the index: size, modification
+/// time and, on Unix, status change time, which no one can set.
+type Stats = BTreeMap<String, (u64, SystemTime, i64)>;
 
 /// The indexes this process found intact, by folder, as they were then.
 static INTACT: LazyLock<Mutex<HashMap<PathBuf, Stats>>> = LazyLock::new(Mutex::default);
@@ -77,9 +80,19 @@ impl<W: Write> Write for Hashing<W> {
 /// when it does not. The files are hashed on a thread per core, unless this process found them
 /// intact before and none changed size or change time since.
 pub(crate) fn verify(dir: &Path, digests: &Digests) -> Result<(), String> {
+  checked(dir, digests, true)
+}
+
+/// [`verify`] reading every file, also of an index this process found intact before: for an
+/// index a build takes over files from.
+pub(crate) fn verify_fully(dir: &Path, digests: &Digests) -> Result<(), String> {
+  checked(dir, digests, false)
+}
+
+fn checked(dir: &Path, digests: &Digests, remembered: bool) -> Result<(), String> {
   let mut stats = Stats::new();
   list(dir, dir, &mut stats).map_err(|error| format!("cannot list {}: {error}", dir.display()))?;
-  if INTACT.lock().get(dir) == Some(&stats) {
+  if remembered && INTACT.lock().get(dir) == Some(&stats) {
     return Ok(());
   }
   if let Some(extra) = stats
@@ -136,8 +149,27 @@ fn list(root: &Path, dir: &Path, found: &mut Stats) -> io::Result<()> {
         .components()
         .map(|part| part.as_os_str().to_string_lossy().into_owned())
         .collect();
-      found.insert(name.join("/"), (metadata.len(), metadata.modified()?));
+      found.insert(
+        name.join("/"),
+        (metadata.len(), metadata.modified()?, status_change(&metadata)),
+      );
     }
   }
   Ok(())
+}
+
+/// When the file's status last changed (a write, a permission change); Unix only.
+#[cfg(unix)]
+fn status_change(metadata: &fs::Metadata) -> i64 {
+  use std::os::unix::fs::MetadataExt;
+  metadata
+    .ctime()
+    .saturating_mul(1_000_000_000)
+    .saturating_add(metadata.ctime_nsec())
+}
+
+/// Windows has no status change time in its metadata: the modification time stands alone.
+#[cfg(not(unix))]
+const fn status_change(_metadata: &fs::Metadata) -> i64 {
+  0
 }

@@ -35,7 +35,7 @@ impl CodebaseIndexes {
       let lock = locks::try_lock_shared(&self.root, &existing).ok().flatten()?;
       let dir = self.root.join(existing.as_str());
       let manifest = Manifest::read_current(&dir)?;
-      if let Err(problem) = digest::verify(&dir, &manifest.digests) {
+      if let Err(problem) = digest::verify_fully(&dir, &manifest.digests) {
         tracing::warn!(from = %existing, %problem, "a changed codebase index is no base to build on");
         return None;
       }
