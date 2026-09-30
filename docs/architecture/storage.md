@@ -386,11 +386,11 @@ Task and project memory (`docs/design/orchester-workspace.md`, "Task and project
 
 | Table | Purpose |
 | --- | --- |
-| `memories` | one record: id, task (none: project memory), kind, optional key (unique among the active records of its scope), text, tags, importance (low, normal, high), confidence (low, medium, high), status (proposed, active, superseded, deprecated), pinned, the record it supersedes, author (agent with profile, run, step and execution, or person), source transcript entries, created / updated / edited by a person; `seq` is the stable rowid the indexes use; scope and origin never change; deleting a record deletes the records it superseded |
+| `memories` | one record: id, task (none: project memory), kind, optional key (unique among the active records of its scope), text, tags, importance (low, normal, high), confidence (low, medium, high), status (proposed, active, superseded, deprecated, rejected), pinned, the record it supersedes, author (agent with profile, run, step and execution, or person), source transcript entries, created / updated / edited by a person; `seq` is the stable rowid the indexes use; scope and origin never change; deleting a record deletes the records it really superseded, not the one a proposal would replace |
 | `memories_words` | FTS5 index (unicode61 tokenizer) of the records' text, key and tags, for BM25-ranked word and prefix search; external content, kept in step by triggers |
 | `memories_trigrams` | FTS5 index (trigram tokenizer) of the same columns, for substring search: other word forms, file paths, identifiers |
 | `memory_settings` | at most one row: how agents' writes to task and to project memory are kept (automatic, after approval) and the injection limits (1–50 records, 500–20,000 tokens); without it the defaults apply (task automatic, project after approval, 8 records, 3,000 tokens) |
-| `invocation_memories` | invocation, position, record id, why it was chosen (handoff, pinned, decision, warning, match) and its estimated tokens — what the invocation's prompt was given, written once before the CLI starts; a record deleted later keeps its id here |
+| `invocation_memories` | invocation, position, record id, why it was chosen (handoff, pinned, decision, warning, match), its estimated tokens and what became of it (given, truncated, over the record limit, over the token limit) — what the invocation's prompt was given in prompt order, then what the limits left out; written once before the CLI starts; a record deleted later keeps its id here |
 
 ### Conversations and pull requests
 
