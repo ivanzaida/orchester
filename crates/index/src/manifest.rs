@@ -6,12 +6,12 @@ use std::{collections::BTreeMap, fs, path::Path};
 use orchester_core::{revision::Revision, time::Timestamp};
 use serde::{Deserialize, Serialize};
 
-use crate::{IndexError, outline, record::FileRecord};
+use crate::{IndexError, digest::Digests, outline, record::FileRecord};
 
 /// The version of the index files. An index of another version, or made by other grammars
 /// ([`generator`]), is built again, since its files may differ from what this build writes for the
 /// same revision.
-pub(crate) const FORMAT: u32 = 2;
+pub(crate) const FORMAT: u32 = 3;
 const FILE: &str = "manifest.json";
 
 /// How an index was built.
@@ -47,6 +47,8 @@ pub(crate) struct Manifest {
   pub(crate) doc_headings: usize,
   pub(crate) packages: usize,
   pub(crate) languages: BTreeMap<String, LanguageCount>,
+  /// The digest of each of the index's other files.
+  pub(crate) digests: Digests,
 }
 
 /// The counts of `records`, for a manifest.

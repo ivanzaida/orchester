@@ -11,6 +11,7 @@ use orchester_core::{revision::Revision, time::Timestamp};
 
 use crate::{
   IndexError,
+  digest::Digests,
   git::{Blob, EntryKind, Repository, TreeEntry},
   language::Language,
   manifest::{self, BuildMode, Counts, Manifest},
@@ -27,6 +28,8 @@ pub(crate) struct Base {
   pub(crate) revision: Revision,
   pub(crate) dir: PathBuf,
   pub(crate) changed: HashSet<String>,
+  /// The digests of its files, which were checked.
+  pub(crate) digests: Digests,
 }
 
 /// What a build did.
@@ -59,7 +62,7 @@ pub(crate) fn build(
   let manifests = read_manifests(&git, manifest_objects)?;
   let map = map::render(revision, &collected.records, &manifests);
   progress.phase(BuildPhase::Writing);
-  write::write(out, &mut collected.records, &map.text, base.map(|base| &base.revision))?;
+  let digests = write::write(out, &mut collected.records, &map.text, base.map(|base| &base.revision))?;
   let counts = Counts::of(&collected.records);
   let manifest = Manifest {
     format: manifest::FORMAT,
@@ -81,6 +84,7 @@ pub(crate) fn build(
     doc_headings: counts.doc_headings,
     packages: map.packages,
     languages: counts.languages,
+    digests,
   };
   manifest.write(out)?;
   Ok(Built {
@@ -98,7 +102,9 @@ struct Collected {
 }
 
 fn collect(git: &Repository<'_>, entries: Vec<TreeEntry>, base: Option<&Base>) -> Result<Collected, IndexError> {
-  let mut previous = base.map(|base| Previous::open(&base.dir, &base.revision)).transpose()?;
+  let mut previous = base
+    .map(|base| Previous::open(&base.dir, &base.revision, base.digests.clone()))
+    .transpose()?;
   let outlined: HashSet<String> = outline_file::outlined(
     entries
       .iter()

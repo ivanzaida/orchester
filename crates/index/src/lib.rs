@@ -23,6 +23,7 @@
 //! [`CodebaseIndexes`] builds, reuses and removes them.
 
 mod build;
+mod digest;
 mod git;
 mod language;
 mod manifest;

@@ -11,10 +11,11 @@ use orchester_core::revision::Revision;
 
 use crate::{
   IndexError,
+  digest::Digests,
   language::Language,
   markdown::Heading,
   outline::Kind,
-  outline_file::{self, outline_path},
+  outline_file::{outline_name, outline_path},
   record::{FileRecord, Outline, Symbol},
   render::NO_LINES,
   write,
@@ -23,13 +24,13 @@ use crate::{
 pub(crate) struct Previous {
   dir: PathBuf,
   records: HashMap<String, FileRecord>,
-  /// The paths that have an outline file in this index, by the rule it was written with.
-  outlined: HashSet<String>,
+  /// The digests of its files, checked before it was opened: which outline files it has.
+  digests: Digests,
 }
 
 impl Previous {
-  /// The index of `revision` in `dir`.
-  pub(crate) fn open(dir: &Path, revision: &Revision) -> Result<Self, IndexError> {
+  /// The index of `revision` in `dir`, whose files match `digests`.
+  pub(crate) fn open(dir: &Path, revision: &Revision, digests: Digests) -> Result<Self, IndexError> {
     let unreadable = |detail: String| unreadable(revision, detail);
     let read = |name: &str| {
       let file = dir.join(name);
@@ -61,19 +62,10 @@ impl Previous {
         .headings
         .push(heading);
     }
-    let outlined = outline_file::outlined(
-      records
-        .values()
-        .filter(|record| record.language.has_grammar())
-        .map(|record| record.path.as_str()),
-    )
-    .into_iter()
-    .map(str::to_owned)
-    .collect();
     Ok(Self {
       dir: dir.to_path_buf(),
       records,
-      outlined,
+      digests,
     })
   }
 
@@ -83,10 +75,13 @@ impl Previous {
   pub(crate) fn take(&mut self, path: &str, outlined: bool) -> Option<FileRecord> {
     let mut record = self.records.remove(path)?;
     if outlined {
-      if !self.outlined.contains(path) {
-        return None;
-      }
-      record.outline = Some(Outline::Previous(outline_path(&self.dir, path)));
+      // A file the earlier index has no outline of (too large, minified, parsed too slowly, or
+      // not written) is read again: this build may make one.
+      let digest = self.digests.get(&outline_name(path))?;
+      record.outline = Some(Outline::Previous {
+        file: outline_path(&self.dir, path),
+        digest: digest.clone(),
+      });
     }
     Some(record)
   }

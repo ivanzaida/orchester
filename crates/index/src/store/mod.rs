@@ -8,6 +8,7 @@
 //! ([`locks`]): two runs asking for the same revision build it once and the second reuses it, while
 //! runs of other revisions never wait for that build, and removal skips a revision that is busy.
 
+mod base;
 mod cleanup;
 mod listing;
 mod locks;
@@ -24,7 +25,7 @@ pub use self::listing::{IndexListing, IndexState, IndexSummary};
 use crate::{
   IndexError,
   build::{self, Base},
-  git::Repository,
+  digest,
   manifest::{BuildMode, Manifest},
   progress::ProgressFile,
   write,
@@ -95,10 +96,13 @@ impl CodebaseIndexes {
     let user = users.join(run.to_string());
     File::create(&user).map_err(IndexError::io("create", user))?;
     let path = self.root.join(revision.as_str());
-    let outcome = if Manifest::read_current(&path).is_some() {
-      Outcome::Reused
-    } else {
-      Outcome::Built(self.build(revision, &path, Start::Closest)?)
+    let outcome = match Manifest::read_current(&path).map(|manifest| digest::verify(&path, &manifest.digests)) {
+      Some(Ok(())) => Outcome::Reused,
+      Some(Err(problem)) => {
+        tracing::warn!(%revision, %problem, "the codebase index was changed; building it again");
+        Outcome::Built(self.build(revision, &path, Start::Scratch)?)
+      }
+      None => Outcome::Built(self.build(revision, &path, Start::Closest)?),
     };
     drop(lock);
     if let Err(error) = self.prune() {
@@ -125,10 +129,17 @@ impl CodebaseIndexes {
     self.build(revision, &self.root.join(revision.as_str()), Start::Scratch)
   }
 
-  /// The folder of the index of `revision`, when it is built.
+  /// The folder of the index of `revision`, when it is built and unchanged.
   pub fn existing(&self, revision: &Revision) -> Option<PathBuf> {
     let path = self.root.join(revision.as_str());
-    Manifest::read_current(&path).map(|_| path)
+    let manifest = Manifest::read_current(&path)?;
+    match digest::verify(&path, &manifest.digests) {
+      Ok(()) => Some(path),
+      Err(problem) => {
+        tracing::warn!(%revision, %problem, "the codebase index was changed");
+        None
+      }
+    }
   }
 
   /// Builds the index of `revision` into `path`, holding the revision's lock, and records how it
@@ -151,9 +162,10 @@ impl CodebaseIndexes {
     progress: &ProgressFile,
   ) -> Result<BuildReport, IndexError> {
     let staging = self.root.join(format!("{BUILDING}{revision}"));
-    let base = match start {
-      Start::Closest => self.base(revision),
-      Start::Scratch => None,
+    // The earlier index stays locked while this build reads it: a removal leaves it alone.
+    let (base, _base_lock) = match start {
+      Start::Closest => self.base(revision).unzip(),
+      Start::Scratch => (None, None),
     };
     let built = match self.build_into(revision, base.as_ref(), (&staging, progress)) {
       Err(error @ IndexError::Previous { .. }) => {
@@ -190,28 +202,6 @@ impl CodebaseIndexes {
       tracing::warn!(%error, "cannot remove a codebase index that was not finished");
     }
     built
-  }
-
-  /// The existing index an incremental build of `revision` starts from: the one with the fewest
-  /// changed paths. A revision git cannot compare with is passed over.
-  fn base(&self, revision: &Revision) -> Option<Base> {
-    let git = Repository::new(&self.repo);
-    self
-      .revisions()
-      .into_iter()
-      .filter(|existing| existing != revision && Manifest::read_current(&self.root.join(existing.as_str())).is_some())
-      .filter_map(|existing| match git.changed_paths(&existing, revision) {
-        Ok(changed) => Some(Base {
-          dir: self.root.join(existing.as_str()),
-          revision: existing,
-          changed,
-        }),
-        Err(error) => {
-          tracing::warn!(%error, from = %existing, "cannot compare with an existing codebase index");
-          None
-        }
-      })
-      .min_by(|left, right| (left.changed.len(), &left.revision).cmp(&(right.changed.len(), &right.revision)))
   }
 
   /// The revisions with an index folder. One that cannot be listed is no index to start from; a

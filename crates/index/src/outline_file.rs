@@ -26,6 +26,11 @@ pub(crate) fn outline_path(dir: &Path, path: &str) -> PathBuf {
   file
 }
 
+/// The outline file of `path` as the index's digests name it: `outline/<path>.md`.
+pub(crate) fn outline_name(path: &str) -> String {
+  format!("{OUTLINES}/{path}.md")
+}
+
 /// Which of `paths` get an outline file: the portable ones that share it with no other path when
 /// case is ignored.
 pub(crate) fn outlined<'a>(paths: impl Iterator<Item = &'a str>) -> HashSet<&'a str> {

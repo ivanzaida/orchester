@@ -28,8 +28,11 @@ pub(crate) struct Symbol {
 #[derive(Debug)]
 pub(crate) enum Outline {
   Text(String),
-  /// The unchanged file of the earlier index an incremental build starts from.
-  Previous(PathBuf),
+  /// The unchanged file of the earlier index an incremental build starts from, with its digest.
+  Previous {
+    file: PathBuf,
+    digest: String,
+  },
 }
 
 /// One tracked file in the index.

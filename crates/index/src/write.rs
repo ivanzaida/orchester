@@ -9,7 +9,7 @@
 use std::{
   collections::BTreeSet,
   fs::{self, File},
-  io::{self, BufWriter, Write},
+  io::{self, BufWriter},
   num::NonZeroUsize,
   path::{Path, PathBuf},
   thread,
@@ -19,7 +19,8 @@ use orchester_core::revision::Revision;
 
 use crate::{
   IndexError,
-  outline_file::outline_path,
+  digest::{self, Digests, Hashing},
+  outline_file::{outline_name, outline_path},
   record::{FileRecord, Outline},
   render,
 };
@@ -29,22 +30,27 @@ pub(crate) const SYMBOLS: &str = "symbols.tsv";
 pub(crate) const DOCS: &str = "docs.md";
 const MAP: &str = "map.md";
 
-/// Writes the index of `records` with `map` into `out`, linking the outlines of the index of `base`.
-/// Records whose outline could not be written lose it.
+/// Writes the index of `records` with `map` into `out`, linking the outlines of the index of `base`;
+/// the digest of each file written. Records whose outline could not be written lose it.
 pub(crate) fn write(
   out: &Path,
   records: &mut [FileRecord],
   map: &str,
   base: Option<&Revision>,
-) -> Result<(), IndexError> {
-  stream(out, TREE, |file| render::tree(file, records))?;
-  stream(out, SYMBOLS, |file| render::symbols(file, records))?;
-  stream(out, DOCS, |file| render::docs(file, records))?;
+) -> Result<Digests, IndexError> {
+  let mut digests = Digests::new();
+  digests.insert(TREE.into(), stream(out, TREE, |file| render::tree(file, records))?);
+  digests.insert(
+    SYMBOLS.into(),
+    stream(out, SYMBOLS, |file| render::symbols(file, records))?,
+  );
+  digests.insert(DOCS.into(), stream(out, DOCS, |file| render::docs(file, records))?);
   let file = out.join(MAP);
   fs::write(&file, map).map_err(IndexError::io("write", file))?;
+  digests.insert(MAP.into(), digest::of(map.as_bytes()));
   for (index, error) in place_outlines(out, records) {
     let record = &mut records[index];
-    if matches!(record.outline, Some(Outline::Previous(_))) {
+    if matches!(record.outline, Some(Outline::Previous { .. })) {
       // The earlier index went while this one was built: a full build replaces this one.
       return Err(IndexError::Previous {
         revision: base.map(ToString::to_string).unwrap_or_default(),
@@ -54,19 +60,28 @@ pub(crate) fn write(
     tracing::warn!(%error, path = %record.path, "the outline cannot be written; the index goes without it");
     record.outline = None;
   }
-  Ok(())
+  for record in records.iter() {
+    let digest = match &record.outline {
+      Some(Outline::Text(text)) => digest::of(text.as_bytes()),
+      Some(Outline::Previous { digest, .. }) => digest.clone(),
+      None => continue,
+    };
+    digests.insert(outline_name(&record.path), digest);
+  }
+  Ok(digests)
 }
 
+/// Writes `name` in `out` with `render`; its digest.
 fn stream(
   out: &Path,
   name: &str,
-  render: impl FnOnce(&mut BufWriter<File>) -> io::Result<()>,
-) -> Result<(), IndexError> {
+  render: impl FnOnce(&mut Hashing<BufWriter<File>>) -> io::Result<()>,
+) -> Result<String, IndexError> {
   let path = out.join(name);
   let written = File::create(&path).and_then(|file| {
-    let mut writer = BufWriter::new(file);
+    let mut writer = Hashing::new(BufWriter::new(file));
     render(&mut writer)?;
-    writer.flush()
+    writer.finish()
   });
   written.map_err(IndexError::io("write", path))
 }
@@ -124,7 +139,9 @@ fn place(file: &Path, outline: &Outline) -> io::Result<()> {
     Outline::Text(text) => fs::write(file, text),
     // Indexes are never changed once written, so the two can share the file; a file system
     // without hard links gets a copy.
-    Outline::Previous(earlier) => fs::hard_link(earlier, file).or_else(|_| fs::copy(earlier, file).map(drop)),
+    Outline::Previous { file: earlier, .. } => {
+      fs::hard_link(earlier, file).or_else(|_| fs::copy(earlier, file).map(drop))
+    }
   }
 }
 
