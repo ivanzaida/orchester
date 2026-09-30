@@ -119,6 +119,10 @@ and MCP tools in the Tools library.
 
 ## U · Screens
 
+### ORC-39 · Task statuses, priorities and tags — awaiting independent verification
+
+Implementation is complete in the run worktree; fresh Check, Review and independent app/Pencil Verify remain pipeline gates. See [implementation handoff](evidence/orc39-implementation.md) for behavior, filtered test results and the 24 states to verify. Defaults and readiness policy B are approved. Move this entry to Done after Verify passes; no commit or merge is authorized in this run.
+
 ### U10 · Pull requests screen jumps while it loads (UI)
 
 Opening the Pull requests tab shifts its content two or three times

@@ -28,7 +28,9 @@ use crate::{
   runner::Runners,
   tasks::{
     detail::TaskDetail,
-    organization::{OrganizationValue, PriorityChoice, WorkflowChoice, priority_select, workflow_select},
+    organization::{
+      OrganizationValue, PickerAppearance, PriorityChoice, WorkflowChoice, priority_select, workflow_select,
+    },
   },
   theme::{ExtraColor, ExtraTypography},
   ui::{backdrop::backdrop, button::ActionButton, field::field_error, form::form, message_text},
@@ -89,7 +91,12 @@ impl Component for OrganizationHeader {
             self.status.clone(),
             "task-header-status",
             !state.is_pending(),
+            PickerAppearance::Header,
           )))
+          .with_children(props.detail.run.as_ref().map(|_| {
+            Text::new(&ctx.t(super::super::task_rows::status_copy(props.detail.phase()).1))
+              .variant(TypographyStyle::Caption)
+          }))
           .child(
             Column::new()
               .width(Dimension::Px(PRIORITY_WIDTH))
@@ -98,6 +105,7 @@ impl Component for OrganizationHeader {
                 self.priority.clone(),
                 "task-header-priority",
                 !state.is_pending(),
+                PickerAppearance::Header,
               )),
           )
           .child(ctx.mount_keyed::<TagPicker>(
@@ -105,6 +113,7 @@ impl Component for OrganizationHeader {
             TagPickerProps {
               root: props.root.clone(),
               selected: self.value.clone(),
+              enabled: !state.is_pending(),
             },
           )),
       );
@@ -270,6 +279,6 @@ impl OrganizationHeader {
 }
 
 // Header controls gNExS/Sd5qt; confirmation N1vwaM.
-const STATUS_WIDTH: f32 = 184.0;
-const PRIORITY_WIDTH: f32 = 160.0;
+const STATUS_WIDTH: f32 = 128.0;
+const PRIORITY_WIDTH: f32 = 112.0;
 const CONFIRM_WIDTH: f32 = 620.0;

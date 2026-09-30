@@ -877,9 +877,9 @@ Implemented (2026-09-27): **a run that cannot be read**, drawn in `mGbYs` and 02
 
 ## Task workflow, priorities and tags (ORC-39)
 
-Drawn 2026-09-30. **Design review pending; implementation has not started.** The person explicitly authorized the canonical shared source `H:/projects/orchester/data/orchester.pen`, rather than the task worktree's copy. All design reads and edits used Pencil MCP. The designer did not save the document: the user saves it. The 24 existing frames below are 1440 × 960, named with ORC-39, arranged in five columns starting at x 0 / y 37644. Do not recreate them or change unrelated frames.
+Drawn 2026-09-30. **Design approved for implementation.** The person explicitly authorized the canonical shared source `H:/projects/orchester/data/orchester.pen`, rather than the task worktree's copy. All design reads and edits used Pencil MCP. The designer did not save the document: the user saves it. The 24 existing frames below are 1440 × 960, named with ORC-39, arranged in five columns starting at x 0 / y 37644. Do not recreate them or change unrelated frames.
 
-This proposal supersedes the legacy task tabs and status-as-run presentation described above when approved. It leaves run state as a separate system label and does not change scheduling order. All titles, task IDs, counts, dates, branches, priorities and tag assignments are illustrative fixtures, not real project data or shipping defaults.
+This approved design supersedes the legacy task tabs and status-as-run presentation described above. It leaves run state as a separate system label and does not change scheduling order. All titles, task IDs, counts, dates, branches, priorities and tag assignments are illustrative fixtures, not real project data or shipping defaults.
 
 | Frame | Node ID | State shown |
 | --- | --- | --- |
@@ -918,9 +918,9 @@ Choosing Canceled with an active run opens the in-app confirmation before changi
 
 Blocked is independent of workflow status. The form has a flag, a free-text reason and optional blocking-task links, with search, add and remove. The reason is required when the manual flag is set. Self/cyclic links are unavailable, consistent with the existing dependency rules. The Dependency / readiness column and task page identify unfinished blocking tasks and explain why Run is unavailable. A finished link no longer blocks Run; clearing a manual flag does not silently remove task links, and changing workflow status does not bypass an unfinished prerequisite. The resolved specimen assumes no remaining manual block. Existing dependency completion gates still apply: a link requiring merge is not released just because a task was manually marked Done.
 
-**Open design question for the gate:** does a manual Blocked flag with only a reason also disable Run, or do only unfinished blocking-task links disable it? Reason-only is drawn without asserting a Run policy. Resolve this before implementing that readiness rule.
+**Approved readiness policy B:** a reason-only manual Blocked flag is informational. Only links to unfinished blocking tasks disable Run, showing their reason. Resolving those links restores readiness without clearing the manual flag/reason.
 
-Proposed initial New task values are Backlog, No priority, no tags and Blocked off, subject to review. Frames 07/08 focus on the organization fields; preserve the existing project, brief, criteria, context, pipeline, limits, Save as draft/Create & run and started-task editing behavior. They do not authorize removing unrelated controls or changing run snapshots. Agents neither receive nor change workflow status, priority or tags; these are not prompt variables or agent-editable tools.
+Approved initial New task values are Backlog, No priority, no tags and Blocked off. Frames 07/08 focus on the organization fields; preserve the existing project, brief, criteria, context, pipeline, limits, Save as draft/Create & run and started-task editing behavior. They do not authorize removing unrelated controls or changing run snapshots. Agents neither receive nor change workflow status, priority or tags; these are not prompt variables or agent-editable tools.
 
 ### Tags, bulk actions and filtering
 
@@ -943,6 +943,8 @@ Transitions, confirmation-dependent cancellation, dependency readiness and histo
 All 24 frames received `get_screenshot` and `snapshot_layout` inspection in the original design pass. Corrections covered column alignment, empty chip sizing, dependency-menu width, priority icons, selected bulk checkboxes and fixture identities; changed frames were rechecked, with no remaining reported layout problems. On resuming this session, the same 24 node IDs were confirmed present without recreating frames or repeating completed visual checks. These are static design checks, not independent verification of an implemented app. No Rust code, stable installation, processes or design-file disk contents were changed. No runtime tests, app design verification or macOS cross-check were run in this design step.
 
 Repository gate (2026-09-30): `powershell -File tools/check.ps1` **passed** (formatting, workspace Clippy with warnings denied, file size and UI literals), using the authorized worktree-local `CARGO_TARGET_DIR=.tmp/orc39-check/target`. The initial attempt could not write to the inherited target outside the worktree; the local-target retry resolved that access failure. `git diff --check` passed. Only this handoff document changed in the worktree; ORC-39 is not moved to Done in the implementation backlog because the approval and implementation steps remain.
+
+Implementation handoff: [ORC-39 implementation](../evidence/orc39-implementation.md). Approval and readiness policy B are recorded above; implementation checks pass, and independent Review/app-Pencil Verify remain.
 
 ## Project orchestrator conversation
 

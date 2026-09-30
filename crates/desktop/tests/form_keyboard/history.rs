@@ -131,12 +131,9 @@ fn history_alt_left_stays_with_a_focused_text_field() {
 /// Whether the tab `id` of the task list is the selected one: a selected tab, like one that
 /// cannot be opened yet, is not a button.
 fn tab_selected(tree: &mut Tree, id: &str) -> bool {
-  let unavailable = tree
-    .get_element_by_id("tasks-tab-queue")
-    .map(|tab| tab.tag_name().to_owned());
   tree
     .get_element_by_id(id)
-    .is_some_and(|tab| Some(tab.tag_name()) == unavailable.as_deref())
+    .is_some_and(|tab| tab.tag_name().eq_ignore_ascii_case("row"))
 }
 
 #[test]
@@ -155,26 +152,26 @@ fn history_saved_draft_stays_in_the_form_until_leaving() {
 fn history_back_restores_the_tab() {
   let mut desktop = saved_draft();
   assert!(tab_selected(&mut desktop.tree, "tasks-tab-all"));
-  assert!(!tab_selected(&mut desktop.tree, "tasks-tab-drafts"));
-  desktop.press("tasks-tab-drafts");
-  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  assert!(!tab_selected(&mut desktop.tree, "tasks-tab-backlog"));
+  desktop.press("tasks-tab-backlog");
+  desktop.settle("the Backlog tab", |tree| tab_selected(tree, "tasks-tab-backlog"));
   desktop.press("task-row-KON-1");
   desktop.wait_for(TASK_PAGE);
   side_button(&mut desktop, BACK);
-  desktop.settle("the list on the Drafts tab", |tree| {
-    tree.get_element_by_id(TASK_PAGE).is_none() && tab_selected(tree, "tasks-tab-drafts")
+  desktop.settle("the list on the Backlog tab", |tree| {
+    tree.get_element_by_id(TASK_PAGE).is_none() && tab_selected(tree, "tasks-tab-backlog")
   });
   side_button(&mut desktop, BACK);
   desktop.settle("the All tab", |tree| {
-    tab_selected(tree, "tasks-tab-all") && !tab_selected(tree, "tasks-tab-drafts")
+    tab_selected(tree, "tasks-tab-all") && !tab_selected(tree, "tasks-tab-backlog")
   });
 }
 
 #[test]
 fn history_saved_draft_returns_to_the_tab_it_was_written_from() {
   let mut desktop = saved_draft();
-  desktop.press("tasks-tab-drafts");
-  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  desktop.press("tasks-tab-backlog");
+  desktop.settle("the Backlog tab", |tree| tab_selected(tree, "tasks-tab-backlog"));
   desktop.click(TASKS);
   desktop.wait_for(TITLE);
   desktop.tab_to(TITLE, MAX_STOPS);
@@ -187,10 +184,10 @@ fn history_saved_draft_returns_to_the_tab_it_was_written_from() {
       .is_some_and(|status| status.contains("Draft saved locally"))
   });
   desktop.press("new-task-back");
-  desktop.settle("the second draft on the Drafts tab", |tree| {
-    tree.get_element_by_id("task-row-KON-2").is_some() && tab_selected(tree, "tasks-tab-drafts")
+  desktop.settle("the second draft on the Backlog tab", |tree| {
+    tree.get_element_by_id("task-row-KON-2").is_some() && tab_selected(tree, "tasks-tab-backlog")
   });
-  // The Drafts tab is one entry: going back leads to the All tab before it.
+  // The Backlog tab is one entry: going back leads to the All tab before it.
   side_button(&mut desktop, BACK);
   desktop.settle("the All tab", |tree| tab_selected(tree, "tasks-tab-all"));
 }
@@ -200,20 +197,20 @@ fn history_saved_draft_returns_to_the_tab_it_was_written_from() {
 #[test]
 fn history_new_task_back_arrow_returns_to_the_list_and_its_tab() {
   let mut desktop = saved_draft();
-  desktop.press("tasks-tab-drafts");
-  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  desktop.press("tasks-tab-backlog");
+  desktop.settle("the Backlog tab", |tree| tab_selected(tree, "tasks-tab-backlog"));
   desktop.click(TASKS);
   desktop.wait_for(TITLE);
   desktop.press("new-task-back");
-  desktop.settle("the list on the Drafts tab", |tree| {
-    tree.get_element_by_id(TITLE).is_none() && tab_selected(tree, "tasks-tab-drafts")
+  desktop.settle("the list on the Backlog tab", |tree| {
+    tree.get_element_by_id(TITLE).is_none() && tab_selected(tree, "tasks-tab-backlog")
   });
   // The list was not opened again: going back leads to the All tab before it, and forward to
   // the form that was left.
   side_button(&mut desktop, BACK);
   desktop.settle("the All tab", |tree| tab_selected(tree, "tasks-tab-all"));
   side_button(&mut desktop, FORWARD);
-  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  desktop.settle("the Backlog tab", |tree| tab_selected(tree, "tasks-tab-backlog"));
   side_button(&mut desktop, FORWARD);
   desktop.wait_for(TITLE);
 }

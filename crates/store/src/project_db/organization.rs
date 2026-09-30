@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use orchester_core::{
   id::{RunId, TaskId},
@@ -140,12 +140,10 @@ impl ProjectDb {
       entries.push((id, value, updated));
     }
     entries.sort_by(|a, b| {
-      let order = match sort {
-        TaskSort::Updated => std::cmp::Ordering::Equal,
-        TaskSort::Status => a.1.status().cmp(&b.1.status()),
-        TaskSort::Priority => a.1.priority().cmp(&b.1.priority()),
-      };
-      order.then_with(|| b.2.cmp(&a.2)).then_with(|| a.0.cmp(&b.0))
+      sort.compare(
+        (&a.1, Timestamp::from_unix_millis(a.2), a.0),
+        (&b.1, Timestamp::from_unix_millis(b.2), b.0),
+      )
     });
     Ok(entries.into_iter().map(|(id, ..)| id).collect())
   }
@@ -226,18 +224,17 @@ pub(super) fn validate(connection: &Connection, task: TaskId, value: &TaskOrgani
   for tag in value.tags() {
     super::tags::ensure_tag(connection, *tag)?;
   }
-  let mut reached = HashSet::new();
+  let mut graph = HashMap::new();
   let mut pending: Vec<_> = value.dependencies().iter().map(|link| link.task).collect();
   while let Some(id) = pending.pop() {
-    if id == task {
-      return Err(OrganizationError::DependencyCycle.into());
-    }
-    if !reached.insert(id) {
+    if graph.contains_key(&id) {
       continue;
     }
     let other = load(connection, id)?;
     pending.extend(other.dependencies().iter().map(|link| link.task));
+    graph.insert(id, other);
   }
+  value.check_dependencies(task, &graph)?;
   Ok(())
 }
 

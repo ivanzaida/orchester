@@ -5,10 +5,10 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Row, Select, Text},
+  components::{Row, Select, Spacer, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::{Element, SelectPartStyle, SelectStyle, dimension::Dimension},
 };
 use orchester_core::task::organization::{Priority, TaskOrganization, WorkflowStatus};
 
@@ -23,6 +23,34 @@ use crate::{
 
 /// Organization controls in gNExS/Sd5qt/ixENv.
 pub const CONTROL_HEIGHT: f32 = 40.0;
+// gNExS/Sd5qt: compact header picker buttons.
+const HEADER_HEIGHT: f32 = 36.0;
+#[derive(Clone, Copy)]
+pub enum PickerAppearance {
+  Field,
+  Header,
+}
+impl PickerAppearance {
+  fn height(self) -> f32 {
+    match self {
+      Self::Field => CONTROL_HEIGHT,
+      Self::Header => HEADER_HEIGHT,
+    }
+  }
+  fn style(self, ctx: &Ctx) -> SelectStyle {
+    let style = select_style(ctx, self.height());
+    match self {
+      Self::Field => style,
+      Self::Header => style.trigger(
+        SelectPartStyle::new()
+          .background(PaletteColor::SurfaceRaised)
+          .border_inside(lurq::app::theme::BorderSize::Sm, PaletteColor::Border)
+          .rounded(lurq::app::theme::RadiusSize::Md)
+          .min_height(HEADER_HEIGHT),
+      ),
+    }
+  }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WorkflowChoice(pub WorkflowStatus);
@@ -70,50 +98,103 @@ pub fn priority_label(ctx: &Ctx, priority: Priority) -> Element {
     .into()
 }
 
-pub fn workflow_select(ctx: &Ctx, value: Signal<WorkflowChoice>, id: &'static str, enabled: bool) -> Element {
+pub fn workflow_select(
+  ctx: &Ctx,
+  value: Signal<WorkflowChoice>,
+  id: &'static str,
+  enabled: bool,
+  appearance: PickerAppearance,
+) -> Element {
   Element::from(
-    Select::new(value)
+    Select::new(value.clone())
       .focusable(enabled)
       .options(WorkflowStatus::ALL.into_iter().map(|status| {
         lurq::components::SelectOption::new(WorkflowChoice(status), ctx.t(workflow_copy(status).1)).disabled(!enabled)
       }))
-      .height(Dimension::Px(CONTROL_HEIGHT))
+      .trigger(move |state| {
+        select_trigger(
+          workflow_copy(value.get().0).0,
+          state.label.as_deref().unwrap_or_default(),
+          appearance,
+        )
+      })
+      .height(Dimension::Px(appearance.height()))
       .width(Dimension::Pct(100.0))
-      .style(select_style(ctx, CONTROL_HEIGHT)),
+      .style(appearance.style(ctx)),
   )
   .id(id)
 }
 
-pub fn priority_select(ctx: &Ctx, value: Signal<PriorityChoice>, id: &'static str, enabled: bool) -> Element {
+pub fn priority_select(
+  ctx: &Ctx,
+  value: Signal<PriorityChoice>,
+  id: &'static str,
+  enabled: bool,
+  appearance: PickerAppearance,
+) -> Element {
   Element::from(
-    Select::new(value)
+    Select::new(value.clone())
       .focusable(enabled)
       .options(Priority::ALL.into_iter().map(|priority| {
         lurq::components::SelectOption::new(PriorityChoice(priority), ctx.t(priority_copy(priority).1))
           .disabled(!enabled)
       }))
-      .height(Dimension::Px(CONTROL_HEIGHT))
+      .trigger(move |state| {
+        select_trigger(
+          priority_copy(value.get().0).0,
+          state.label.as_deref().unwrap_or_default(),
+          appearance,
+        )
+      })
+      .height(Dimension::Px(appearance.height()))
       .width(Dimension::Pct(100.0))
-      .style(select_style(ctx, CONTROL_HEIGHT)),
+      .style(appearance.style(ctx)),
   )
   .id(id)
 }
 
-pub fn tag_chips(names: &[Arc<str>]) -> Element {
+fn select_trigger(glyph: Icon, label: &str, appearance: PickerAppearance) -> Element {
   Row::new()
-    .spacing(SpacingSize::Xs)
-    .with_children(names.iter().map(|name| {
-      Row::new()
-        .padding_horizontal(SpacingSize::Sm)
-        .padding_vertical(ExtraSpacing::Indicator.role())
-        .background(PaletteColor::SurfaceRaised)
-        .rounded(lurq::app::theme::RadiusSize::Sm)
-        .border_inside(lurq::app::theme::BorderSize::Sm, PaletteColor::Border)
-        .child(
-          Text::new(name)
-            .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextPrimary),
-        )
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .padding_horizontal(SpacingSize::Sm)
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(glyph, IconSize::Small, PaletteColor::TextSecondary))
+    .child(Text::new(label).variant(match appearance {
+      PickerAppearance::Field => TypographyStyle::Body,
+      PickerAppearance::Header => TypographyStyle::Caption,
     }))
+    .child(Spacer::new().flex(1.0))
+    .child(icon(Icon::ChevronDown, IconSize::Small, PaletteColor::TextSecondary))
     .into()
 }
+
+pub fn tag_chips(names: &[Arc<str>]) -> Element {
+  Row::new()
+    .wrap()
+    .spacing(SpacingSize::Xs)
+    .with_children(names.iter().map(|name| tag_chip(name)))
+    .into()
+}
+
+pub(super) fn tag_chip(name: &str) -> Element {
+  Row::new()
+    .max_width(Dimension::Px(TAG_MAX_WIDTH))
+    .padding_horizontal(SpacingSize::Sm)
+    .padding_vertical(ExtraSpacing::Indicator.role())
+    .background(PaletteColor::SurfaceRaised)
+    .rounded(lurq::app::theme::RadiusSize::Sm)
+    .border_inside(lurq::app::theme::BorderSize::Sm, PaletteColor::Border)
+    .child(
+      Text::new(name)
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::TextPrimary)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
+    .into()
+}
+
+// yrT73: compact row overflow, wrapped form/header chips, and long tag names.
+const TAG_MAX_WIDTH: f32 = 160.0;

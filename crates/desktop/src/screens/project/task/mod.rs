@@ -12,6 +12,7 @@ mod brief;
 mod changes;
 mod controls;
 mod conversation;
+mod dependencies;
 mod heading;
 mod limit_panel;
 mod notice;

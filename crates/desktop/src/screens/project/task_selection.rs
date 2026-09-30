@@ -3,11 +3,11 @@ use std::{collections::HashSet, path::PathBuf};
 use lurq::{
   app::{
     component::Component,
-    ctx::{Ctx, FutureAction},
+    ctx::{Ctx, FutureAction, Placement},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Modal, ModalTarget, Row, Text},
-  core::Signal,
+  components::{Column, Modal, ModalTarget, Popup, Row, Text},
+  core::{ElementRef, Signal},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -73,6 +73,8 @@ type Action = FutureAction<(Vec<TaskId>, Mutation, bool), Outcomes, Message>;
 
 pub(super) struct SelectionBar {
   menu: Signal<Option<Menu>>,
+  open: Signal<bool>,
+  anchors: [ElementRef; 4],
   tags: Signal<OrganizationValue>,
   confirm: Signal<bool>,
 }
@@ -81,6 +83,8 @@ impl Component for SelectionBar {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       menu: ctx.signal(None),
+      open: ctx.signal(false),
+      anchors: std::array::from_fn(|_| ElementRef::default()),
       tags: ctx.signal(OrganizationValue::default()),
       confirm: ctx.signal(false),
     }
@@ -90,6 +94,9 @@ impl Component for SelectionBar {
     let action = self.action(ctx, &props);
     let selected = props.selected.get().0;
     let pending = action.state().get().is_pending();
+    if selected.is_empty() {
+      return Column::new();
+    }
     let mut row = Row::new()
       .spacing(SpacingSize::Sm)
       .padding(SpacingSize::Sm)
@@ -101,14 +108,54 @@ impl Component for SelectionBar {
         ))
         .variant(TypographyStyle::Caption),
       );
-    for (menu, key) in [
+    row = self.buttons(ctx, &props, row, pending);
+    let clear = props.selected.clone();
+    row = row.child(
+      ActionButton::new(ctx.t("tasks.selection.clear"))
+        .on_click(move || clear.set(SelectedIds::default()))
+        .enabled(!pending)
+        .render(ctx),
+    );
+    row = row.with_children(
+      ["tasks.selection.setPipeline", "tasks.selection.runSelected"]
+        .into_iter()
+        .map(|key| ActionButton::new(ctx.t(key)).render(ctx)),
+    );
+    let mut column = Column::new().spacing(SpacingSize::Sm).child(row);
+    if let Some(menu) = self.menu.get().filter(|_| !selected.is_empty()) {
+      let index = match menu {
+        Menu::Status => 0,
+        Menu::Priority => 1,
+        Menu::AddTags => 2,
+        Menu::RemoveTags => 3,
+      };
+      let content = self.menu(ctx, &props, menu, &action);
+      column = column.child(
+        Popup::new(self.anchors[index].clone(), crate::ui::form::form(None, content))
+          .open(self.open.clone())
+          .placement(Placement::BottomStart),
+      );
+    }
+    column = column.child(results(ctx, &props, &action));
+    column.child(self.confirmation(ctx, &props, &action))
+  }
+}
+
+impl SelectionBar {
+  fn buttons(&self, ctx: &Ctx, props: &SelectionProps, mut row: Row, pending: bool) -> Row {
+    let selected = props.selected.get().0;
+    for (index, (menu, key)) in [
       (Menu::Status, "tasks.selection.setStatus"),
       (Menu::Priority, "tasks.selection.setPriority"),
       (Menu::AddTags, "tasks.selection.addTag"),
       (Menu::RemoveTags, "tasks.selection.removeTag"),
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
       let open = self.menu.clone();
       let tags = self.tags.clone();
+      let show = self.open.clone();
       let can_remove = props
         .tasks
         .tasks
@@ -122,7 +169,9 @@ impl Component for SelectionBar {
             Menu::AddTags => "bulk-add-tags",
             Menu::RemoveTags => "bulk-remove-tags",
           })
+          .ref_element(self.anchors[index].clone())
           .on_click(move || {
+            show.set(true);
             tags.set(OrganizationValue::default());
             open.set(Some(menu));
           })
@@ -130,46 +179,9 @@ impl Component for SelectionBar {
           .render(ctx),
       );
     }
-    let clear = props.selected.clone();
-    row = row.child(
-      ActionButton::new(ctx.t("tasks.selection.clear"))
-        .on_click(move || clear.set(SelectedIds::default()))
-        .enabled(!pending)
-        .render(ctx),
-    );
-    let mut column = Column::new().spacing(SpacingSize::Sm).child(row);
-    if let Some(menu) = self.menu.get().filter(|_| !selected.is_empty()) {
-      column = column.child(self.menu(ctx, &props, menu, &action));
-    }
-    if let Some(Outcomes(outcomes)) = action.state().get().data {
-      for (id, result) in outcomes {
-        let key = props
-          .tasks
-          .tasks
-          .iter()
-          .find(|task| task.id() == id)
-          .map(|task| task.key().to_string())
-          .unwrap_or_else(|| id.to_string());
-        let outcome: Element = match result {
-          Ok(()) => Text::new(&ctx.t_args("tasks.selection.changed", [("task", key.as_str())]))
-            .variant(TypographyStyle::Caption)
-            .into(),
-          Err(error) => field_error(&ctx.t_args(
-            "tasks.selection.failed",
-            [("task", key.as_str()), ("reason", &message_text(ctx, &error))],
-          )),
-        };
-        column = column.child(outcome.id(format!("bulk-outcome-{id}")));
-      }
-    }
-    if pending {
-      column = column.child(Text::new(&ctx.t("tasks.workflow.saving")).variant(TypographyStyle::Caption));
-    }
-    column.child(self.confirmation(ctx, &props, &action))
+    row
   }
-}
 
-impl SelectionBar {
   fn action(&self, ctx: &mut Ctx, props: &SelectionProps) -> Action {
     let root = props.root.clone();
     let runners = ctx.use_context::<Runners>().expect("root provides runners");
@@ -188,11 +200,13 @@ impl SelectionBar {
       self.confirm.clone(),
       ctx.use_context::<ProjectNav>().expect("shell provides navigation"),
     );
+    let open = self.open.clone();
     ctx.watch(&action.state(), move |state| {
       if let Some(Outcomes(outcomes)) = &state.data
         && !state.is_pending()
       {
         confirm.set(!outcomes.iter().all(|(_, result)| result.is_ok()) && confirm.get_untracked());
+        open.set(false);
         nav.tasks_changed();
       }
     });
@@ -202,50 +216,29 @@ impl SelectionBar {
   fn menu(&self, ctx: &mut Ctx, props: &SelectionProps, menu: Menu, action: &Action) -> Element {
     let selected: Vec<_> = props.selected.get().0.into_iter().collect();
     let pending = action.state().get().is_pending();
-    let mut column = Column::new().spacing(SpacingSize::Xs);
+    let mut column = Column::new()
+      .width(Dimension::Px(MENU_WIDTH))
+      .padding(SpacingSize::Sm)
+      .background(PaletteColor::SurfaceRaised)
+      .rounded(RadiusSize::Md)
+      .border_inside(BorderSize::Sm, PaletteColor::Border)
+      .spacing(SpacingSize::Xs);
     match menu {
-      Menu::Status => {
-        for status in WorkflowStatus::ALL {
-          let (action, ids, confirm) = (action.clone(), selected.clone(), self.confirm.clone());
-          let active = active_count(props);
-          column = column.child(
-            ActionButton::new(ctx.t(workflow_copy(status).1))
-              .on_click(move || {
-                if status == WorkflowStatus::Canceled && active > 0 {
-                  confirm.set(true);
-                } else {
-                  action.run((ids.clone(), Mutation::Status(status), false));
-                }
-              })
-              .enabled(!pending)
-              .render(ctx)
-              .id(format!("bulk-status-{status:?}")),
-          );
-        }
-      }
-      Menu::Priority => {
-        for priority in Priority::ALL {
-          let (action, ids) = (action.clone(), selected.clone());
-          column = column.child(
-            ActionButton::new(ctx.t(priority_copy(priority).1))
-              .on_click(move || action.run((ids.clone(), Mutation::Priority(priority), false)))
-              .enabled(!pending)
-              .render(ctx)
-              .id(format!("bulk-priority-{priority:?}")),
-          );
-        }
-      }
+      Menu::Status => column = self.status_menu(ctx, props, action, column),
+      Menu::Priority => column = self.priority_menu(ctx, props, action, column),
       Menu::AddTags => {
         column = column.child(ctx.mount_keyed::<TagPicker>(
           "bulk-tag-picker",
           TagPickerProps {
             root: props.root.clone(),
             selected: self.tags.clone(),
+            enabled: !pending,
           },
         ));
         let (action, tags) = (action.clone(), self.tags.clone());
         column = column.child(
           ActionButton::new(ctx.t("tasks.selection.addTag"))
+            .id("bulk-tags-apply")
             .on_click(move || action.run((selected.clone(), Mutation::AddTags(tags.get().0.tags().to_vec()), false)))
             .enabled(!pending && !self.tags.get().0.tags().is_empty())
             .render(ctx),
@@ -270,12 +263,78 @@ impl SelectionBar {
             ))
             .on_click(move || action.run((ids.clone(), Mutation::RemoveTags(vec![id]), false)))
             .enabled(!pending)
-            .render(ctx),
+            .render(ctx)
+            .id(format!("bulk-remove-tag-{id}")),
           );
         }
       }
     }
     column.into()
+  }
+
+  fn status_menu(&self, ctx: &Ctx, props: &SelectionProps, action: &Action, mut column: Column) -> Column {
+    let selected: Vec<_> = props.selected.get().0.into_iter().collect();
+    let pending = action.state().get().is_pending();
+    for status in WorkflowStatus::ALL {
+      let (action, ids, confirm) = (action.clone(), selected.clone(), self.confirm.clone());
+      let active = active_count(props);
+      column = column.child(
+        ActionButton::new(ctx.t(workflow_copy(status).1))
+          .icon(
+            if props
+              .tasks
+              .tasks
+              .iter()
+              .filter(|task| selected.contains(&task.id()))
+              .all(|task| task.organization().status() == status)
+            {
+              crate::ui::icon::Icon::Check
+            } else {
+              workflow_copy(status).0
+            },
+          )
+          .on_click(move || {
+            if status == WorkflowStatus::Canceled && active > 0 {
+              confirm.set(true);
+            } else {
+              action.run((ids.clone(), Mutation::Status(status), false));
+            }
+          })
+          .enabled(!pending)
+          .render(ctx)
+          .id(format!("bulk-status-{status:?}")),
+      );
+    }
+    column
+  }
+
+  fn priority_menu(&self, ctx: &Ctx, props: &SelectionProps, action: &Action, mut column: Column) -> Column {
+    let selected: Vec<_> = props.selected.get().0.into_iter().collect();
+    let pending = action.state().get().is_pending();
+    for priority in Priority::ALL {
+      let (action, ids) = (action.clone(), selected.clone());
+      column = column.child(
+        ActionButton::new(ctx.t(priority_copy(priority).1))
+          .icon(
+            if props
+              .tasks
+              .tasks
+              .iter()
+              .filter(|task| selected.contains(&task.id()))
+              .all(|task| task.organization().priority() == priority)
+            {
+              crate::ui::icon::Icon::Check
+            } else {
+              priority_copy(priority).0
+            },
+          )
+          .on_click(move || action.run((ids.clone(), Mutation::Priority(priority), false)))
+          .enabled(!pending)
+          .render(ctx)
+          .id(format!("bulk-priority-{priority:?}")),
+      );
+    }
+    column
   }
 
   fn confirmation(&self, ctx: &mut Ctx, props: &SelectionProps, action: &Action) -> Element {
@@ -341,6 +400,7 @@ impl SelectionBar {
 
 // hFH4D: bulk cancellation confirmation.
 const CONFIRM_WIDTH: f32 = 620.0;
+const MENU_WIDTH: f32 = 320.0;
 fn active_count(props: &SelectionProps) -> usize {
   let selected = props.selected.get().0;
   props
@@ -400,4 +460,33 @@ fn update(value: TaskOrganization, mutation: &Mutation) -> TaskOrganization {
     Mutation::AddTags(tags) => value.add_tags(tags),
     Mutation::RemoveTags(tags) => value.remove_tags(tags),
   }
+}
+
+fn results(ctx: &Ctx, props: &SelectionProps, action: &Action) -> Element {
+  let mut column = Column::new().spacing(SpacingSize::Sm);
+  if let Some(Outcomes(outcomes)) = action.state().get().data {
+    for (id, result) in outcomes {
+      let key = props
+        .tasks
+        .tasks
+        .iter()
+        .find(|task| task.id() == id)
+        .map(|task| task.key().to_string())
+        .unwrap_or_else(|| id.to_string());
+      let outcome: Element = match result {
+        Ok(()) => Text::new(&ctx.t_args("tasks.selection.changed", [("task", key.as_str())]))
+          .variant(TypographyStyle::Caption)
+          .into(),
+        Err(error) => field_error(&ctx.t_args(
+          "tasks.selection.failed",
+          [("task", key.as_str()), ("reason", &message_text(ctx, &error))],
+        )),
+      };
+      column = column.child(outcome.id(format!("bulk-outcome-{id}")));
+    }
+  }
+  if action.state().get().is_pending() {
+    column = column.child(Text::new(&ctx.t("tasks.workflow.saving")).variant(TypographyStyle::Caption));
+  }
+  column.into()
 }

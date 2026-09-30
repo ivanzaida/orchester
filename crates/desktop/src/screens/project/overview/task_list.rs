@@ -36,7 +36,7 @@ const LIST_FOOTER_HEIGHT: f32 = 54.0;
 /// Tasks shown in the overview; the task list has all of them.
 const RECENT_TASKS: usize = 6;
 
-pub(super) fn task_list(ctx: &Ctx, tasks: &ProjectTasks, selected: OverviewTab, nav: &ProjectNav) -> Element {
+pub(super) fn task_list(ctx: &mut Ctx, tasks: &ProjectTasks, selected: OverviewTab, nav: &ProjectNav) -> Element {
   let now = Timestamp::now();
   let rows: Vec<_> = selected
     .rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, RECENT_TASKS)

@@ -20,7 +20,8 @@ use crate::{
   navigation::route::Page,
   tasks::{
     list::TaskRow,
-    organization::{priority_label, tag_chips, workflow_label},
+    organization::{priority_label, workflow_label},
+    tag_chips::row_tag_chips,
   },
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
@@ -181,7 +182,7 @@ impl Component for QueueRow {
               .text_overflow(TextOverflow::Elipsis)
               .flex(1.0),
           )
-          .child(tag_chips(&row.tags)),
+          .child(row_tag_chips(ctx, row.id, &row.tags)),
       )
       .child(cell(PRIORITY_WIDTH, priority_label(ctx, row.organization.priority())))
       .child(cell(STATUS_WIDTH, workflow_run(ctx, &row)))
@@ -193,7 +194,7 @@ impl Component for QueueRow {
 
 /// A task in the overview's task list (`zemhy`): state tile, title with key and readiness,
 /// status, age.
-pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> Element {
+pub fn list_row(ctx: &mut Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> Element {
   let tile = Row::new()
     .size(Dimension::Px(STATE_TILE_SIZE), Dimension::Px(STATE_TILE_SIZE))
     .background(PaletteColor::SurfaceRaised)
@@ -228,7 +229,7 @@ pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> E
     )
     .child(priority_label(ctx, row.organization.priority()))
     .child(workflow_run(ctx, row))
-    .child(tag_chips(&row.tags))
+    .child(row_tag_chips(ctx, row.id, &row.tags))
     .child(
       Row::new().width(Dimension::Px(TIME_WIDTH)).justify(Justify::End).child(
         Text::new(&message_text(ctx, &display::elapsed(now, row.created_at)))

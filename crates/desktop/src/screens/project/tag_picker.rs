@@ -3,11 +3,11 @@ use std::{path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::Component,
-    ctx::{Ctx, FutureAction},
-    theme::{SpacingSize, TypographyStyle},
+    ctx::{Ctx, FutureAction, Placement},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text},
-  core::Signal,
+  components::{Column, Popup, Row, ScrollVertical, Text},
+  core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::TagId, name::Name, task::organization::Tag};
@@ -38,16 +38,18 @@ type CreateAction = FutureAction<String, CreatedTag, Message>;
 pub struct TagPickerProps {
   pub root: PathBuf,
   pub selected: Signal<OrganizationValue>,
+  pub enabled: bool,
 }
 impl PartialEq for TagPickerProps {
   fn eq(&self, other: &Self) -> bool {
-    self.root == other.root
+    self.root == other.root && self.enabled == other.enabled
   }
 }
 impl lurq::app::component::DevtoolsInspectable for TagPickerProps {}
 
 pub struct TagPicker {
   open: Signal<bool>,
+  anchor: ElementRef,
   query: Signal<String>,
   revision: Signal<u64>,
 }
@@ -56,6 +58,7 @@ impl Component for TagPicker {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       open: ctx.signal(false),
+      anchor: ElementRef::default(),
       query: ctx.signal(String::new()),
       revision: ctx.signal(0),
     }
@@ -63,12 +66,18 @@ impl Component for TagPicker {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TagPickerProps>().clone();
     let action = self.create_action(ctx, &props);
-    let load = ctx.future((props.root.clone(), self.revision.get()), |(root, _)| async move {
-      background::run(move || ProjectDb::open(&root).and_then(|db| db.project_tags()))
-        .await?
-        .map(TagCatalog)
-        .map_err(|error| messages::store_error(&error))
-    });
+    let shown = ctx
+      .use_context::<super::pages::Shown>()
+      .expect("shell provides project data");
+    let load = ctx.future(
+      (props.root.clone(), self.revision.get(), shown.revision),
+      |(root, ..)| async move {
+        background::run(move || ProjectDb::open(&root).and_then(|db| db.project_tags()))
+          .await?
+          .map(TagCatalog)
+          .map_err(|error| messages::store_error(&error))
+      },
+    );
     let state = load.state().get();
     let tags = state.data.map(|catalog| catalog.0).unwrap_or_default();
     let selected = props.selected.get().0;
@@ -79,17 +88,28 @@ impl Component for TagPicker {
       .collect();
     let open = self.open.clone();
     let mut column = Column::new().spacing(SpacingSize::Sm).child(
-      Row::new().spacing(SpacingSize::Sm).child(tag_chips(&names)).child(
-        ActionButton::new(ctx.t("tasks.tags.edit"))
-          .icon(Icon::Tag)
-          .in_form()
-          .id("task-tags-picker")
-          .on_click(move || open.update(|open| *open = !*open))
-          .render(ctx),
-      ),
+      Row::new()
+        .wrap()
+        .spacing(SpacingSize::Sm)
+        .child(tag_chips(&names))
+        .child(
+          ActionButton::new(ctx.t("tasks.tags.edit"))
+            .icon(Icon::Tag)
+            .in_form()
+            .id("task-tags-picker")
+            .ref_element(self.anchor.clone())
+            .on_click(move || open.update(|open| *open = !*open))
+            .enabled(props.enabled)
+            .render(ctx),
+        ),
     );
     if self.open.get() {
-      column = column.child(self.menu(ctx, &props, &tags, &action));
+      let menu = self.menu(ctx, &props, &tags, &action);
+      column = column.child(
+        Popup::new(self.anchor.clone(), crate::ui::form::form(None, menu))
+          .open(self.open.clone())
+          .placement(Placement::BottomStart),
+      );
     }
     if let Some(error) = state.error {
       column = column.child(field_error(&message_text(ctx, &error)));
@@ -151,7 +171,8 @@ impl TagPicker {
           })
           .in_form()
           .on_click(move || toggle(&value, id))
-          .render(ctx),
+          .render(ctx)
+          .id(format!("picker-tag-{id}")),
       );
     }
     let pending = action.state().get().is_pending();
@@ -159,6 +180,11 @@ impl TagPicker {
     let typed = self.query.clone();
     let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
     let mut menu = Column::new()
+      .width(Dimension::Px(MENU_WIDTH))
+      .padding(SpacingSize::Sm)
+      .background(PaletteColor::SurfaceRaised)
+      .rounded(RadiusSize::Md)
+      .border_inside(BorderSize::Sm, PaletteColor::Border)
       .spacing(SpacingSize::Sm)
       .child(
         text_input(ctx, "tag-search", input.clone(), false, TypographyStyle::Body)
@@ -181,6 +207,11 @@ impl TagPicker {
           .on_click(move || nav.leave(crate::navigation::route::Page::ProjectTags))
           .render(ctx),
       );
+    if tags.is_empty() {
+      menu = menu.child(Text::new(&ctx.t("tasks.tags.pickerEmpty")).variant(TypographyStyle::Caption));
+    } else if !lower.is_empty() && tags.iter().any(|tag| tag.name().as_str().to_lowercase() == lower) {
+      menu = menu.child(Text::new(&ctx.t("tasks.tags.chooseExisting")).variant(TypographyStyle::Caption));
+    }
     if pending {
       menu = menu.child(Text::new(&ctx.t("tasks.tags.saving")).variant(TypographyStyle::Caption));
     }
@@ -193,6 +224,7 @@ impl TagPicker {
 
 // IOWwP: tag options scroll inside the picker.
 const MENU_HEIGHT: f32 = 240.0;
+const MENU_WIDTH: f32 = 320.0;
 fn toggle(selected: &Signal<OrganizationValue>, id: TagId) {
   selected.update(|value| {
     let mut tags = value.0.tags().to_vec();

@@ -62,6 +62,14 @@ pub fn queue_organized_in(
   version: VersionNumber,
 ) -> Result<QueuedStart, QueueFailure> {
   let mut db = ProjectDb::open(repo_root)?;
+  let existing = match target {
+    SaveTarget::Task(task) => db.task(task)?,
+    SaveTarget::New(batch) => db.task_by_batch(batch)?,
+  };
+  if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
+    db.check_task_readiness(task.id())?;
+    return queued_start(&db, task);
+  }
   let problems = check(&db, &details, version)?;
   if !problems.is_empty() {
     return Err(QueueFailure::Preflight(problems));

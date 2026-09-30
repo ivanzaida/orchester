@@ -160,7 +160,20 @@ fn organization_tags_uniqueness_merge_delete_and_bulk_filters_sorting() {
   );
   db.delete_project_tag(target.id(), at(33)).expect("delete assignments");
   assert!(db.task_organization(ids[0]).expect("metadata").tags().is_empty());
-  assert!(!db.task_organization_history(ids[0]).expect("kept history").is_empty());
+  let history = db.task_organization_history(ids[0]).expect("kept history");
+  assert_eq!(
+    history[0]
+      .to_tag_names
+      .iter()
+      .map(|name| name.as_str())
+      .collect::<Vec<_>>(),
+    vec!["Desktop", "UX"]
+  );
+  let deletion = history.last().expect("deletion");
+  assert_eq!(deletion.actor, ChangeActor::Person);
+  assert_eq!(deletion.at, at(33));
+  assert_eq!(deletion.from_tag_names, vec![name("UX")]);
+  assert!(deletion.to_tag_names.is_empty());
   let recreated = db.create_project_tag(name("UX")).expect("recreate");
   assert_ne!(recreated.id(), target.id());
   assert_eq!(db.tag_task_count(recreated.id()).expect("count"), 0);

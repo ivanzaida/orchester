@@ -35,6 +35,7 @@ impl NewTaskForm {
         repo_root: project.repo_root.clone(),
         target,
         details: Box::new(ready?),
+        // Invalid organization is explained beside its fields and prevents Run.
         organization: self.organization.snapshot().ok()?,
         pipeline: Arc::new(
           pipelines?

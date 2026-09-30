@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 use lurq::{
   app::{
@@ -17,7 +17,9 @@ use orchester_core::{
 
 use super::tag_picker::{TagPicker, TagPickerProps};
 use crate::{
-  tasks::organization::{OrganizationValue, PriorityChoice, WorkflowChoice, priority_select, workflow_select},
+  tasks::organization::{
+    OrganizationValue, PickerAppearance, PriorityChoice, WorkflowChoice, priority_select, workflow_select,
+  },
   ui::{
     button::ActionButton,
     field::{FieldNote, field, text_input},
@@ -97,25 +99,13 @@ impl Component for OrganizationFields {
     };
     let mut content = Column::new()
       .spacing(SpacingSize::Lg)
-      .child(
-        Row::new()
-          .spacing(SpacingSize::Lg)
-          .child(Column::new().flex(1.0).child(field(
-            &ctx.t("tasks.workflow.label"),
-            workflow_select(ctx, draft.status.clone(), "task-workflow-field", true),
-            FieldNote::None,
-          )))
-          .child(Column::new().flex(1.0).child(field(
-            &ctx.t("tasks.priority.label"),
-            priority_select(ctx, draft.priority.clone(), "task-priority-field", true),
-            FieldNote::None,
-          ))),
-      )
+      .child(organization_pickers(ctx, draft))
       .child(ctx.mount_keyed::<TagPicker>(
         "form-tags",
         TagPickerProps {
           root: props.root.clone(),
           selected: draft.value.clone(),
+          enabled: true,
         },
       ))
       .child(
@@ -138,16 +128,51 @@ impl Component for OrganizationFields {
       .into();
       content = content.child(field(&ctx.t("tasks.blocked.reason"), control, note));
     }
-    content.child(ctx.mount_keyed::<DependencyFields>(
-      "blocking-links",
-      DependencyProps {
-        root: props.root,
-        task: props.task,
-        value: draft.value.clone(),
-        ready: draft.ready.clone(),
-      },
-    ))
+    if blocked || !draft.value.get().0.dependencies().is_empty() {
+      content = content.child(ctx.mount_keyed::<DependencyFields>(
+        "blocking-links",
+        DependencyProps {
+          root: props.root,
+          task: props.task,
+          value: draft.value.clone(),
+          ready: draft.ready.clone(),
+          reason: draft.reason.clone(),
+          blocked: draft.blocked.clone(),
+        },
+      ));
+    } else {
+      draft.ready.set(true);
+    }
+    content
   }
+}
+
+fn organization_pickers(ctx: &Ctx, draft: &OrganizationDraft) -> Element {
+  Row::new()
+    .spacing(SpacingSize::Lg)
+    .child(Column::new().flex(1.0).child(field(
+      &ctx.t("tasks.workflow.label"),
+      workflow_select(
+        ctx,
+        draft.status.clone(),
+        "task-workflow-field",
+        true,
+        PickerAppearance::Field,
+      ),
+      FieldNote::None,
+    )))
+    .child(Column::new().flex(1.0).child(field(
+      &ctx.t("tasks.priority.label"),
+      priority_select(
+        ctx,
+        draft.priority.clone(),
+        "task-priority-field",
+        true,
+        PickerAppearance::Field,
+      ),
+      FieldNote::None,
+    )))
+    .into()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -159,6 +184,8 @@ struct DependencyProps {
   task: Option<TaskId>,
   value: Signal<OrganizationValue>,
   ready: Signal<bool>,
+  reason: Signal<String>,
+  blocked: Signal<bool>,
 }
 impl PartialEq for DependencyProps {
   fn eq(&self, other: &Self) -> bool {
@@ -168,17 +195,22 @@ impl PartialEq for DependencyProps {
 impl lurq::app::component::DevtoolsInspectable for DependencyProps {}
 struct DependencyFields {
   choice: Signal<DependencyChoice>,
+  query: Signal<String>,
 }
 impl Component for DependencyFields {
   type Props = DependencyProps;
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       choice: ctx.signal(DependencyChoice(None)),
+      query: ctx.signal(String::new()),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<DependencyProps>().clone();
-    let load = ctx.future(props.root.clone(), |root| async move {
+    let shown = ctx
+      .use_context::<super::pages::Shown>()
+      .expect("shell provides project data");
+    let load = ctx.future((props.root.clone(), shown.revision), |(root, _)| async move {
       crate::background::run(move || crate::tasks::data::ProjectTasks::load(&root))
         .await?
         .map_err(|error| crate::messages::store_error(&error))
@@ -204,7 +236,16 @@ impl Component for DependencyFields {
         .is_some_and(|phase| link.gate.is_completed(phase))
     });
     props.ready.set(unfinished.is_empty());
-    column = column.child(readiness_note(ctx, &tasks, &organization, &unfinished));
+    column = column.child(readiness_note(
+      ctx,
+      &tasks,
+      &unfinished,
+      &if props.blocked.get() {
+        props.reason.get()
+      } else {
+        String::new()
+      },
+    ));
     for link in organization.dependencies() {
       let id = link.task;
       let label = tasks
@@ -249,13 +290,52 @@ impl Component for DependencyFields {
 }
 
 impl DependencyFields {
-  fn add_control(&self, ctx: &Ctx, props: &DependencyProps, tasks: &crate::tasks::data::ProjectTasks) -> Element {
+  fn creates_cycle(&self, props: &DependencyProps, tasks: &crate::tasks::data::ProjectTasks) -> bool {
+    self.choice.get().0.zip(props.task).is_some_and(|(id, task)| {
+      let graph = tasks
+        .tasks
+        .iter()
+        .map(|task| (task.id(), task.organization().clone()))
+        .collect();
+      TaskOrganization::new(
+        WorkflowStatus::Backlog,
+        Priority::None,
+        None,
+        vec![BlockingTask {
+          task: id,
+          gate: DependencyGate::Merge,
+        }],
+        vec![],
+      )
+      .expect("a prospective link has valid local fields")
+      .check_dependencies(task, &graph)
+      .is_err()
+    })
+  }
+
+  fn selector(&self, ctx: &Ctx, props: &DependencyProps, tasks: &crate::tasks::data::ProjectTasks) -> Element {
+    let query = self.query.get().trim().to_lowercase();
     let options = std::iter::once((DependencyChoice(None), ctx.t("tasks.blocked.addLink"))).chain(
       tasks
         .tasks
         .iter()
-        .filter(|task| Some(task.id()) != props.task)
-        .map(|task| (DependencyChoice(Some(task.id())), Arc::from(task.key().to_string()))),
+        .filter(|task| {
+          Some(task.id()) != props.task
+            && (task.details().title.as_str().to_lowercase().contains(&query)
+              || task.key().to_string().to_lowercase().contains(&query))
+        })
+        .map(|task| {
+          (
+            DependencyChoice(Some(task.id())),
+            ctx.t_args(
+              "tasks.blocked.linkLabel",
+              [
+                ("key", task.key().to_string().as_str()),
+                ("title", task.details().title.as_str()),
+              ],
+            ),
+          )
+        }),
     );
     let select: Element = Element::from(
       lurq::components::Select::new(self.choice.clone())
@@ -268,15 +348,33 @@ impl DependencyFields {
         )),
     )
     .id("task-blocking-picker");
+    select
+  }
+
+  fn add_control(&self, ctx: &Ctx, props: &DependencyProps, tasks: &crate::tasks::data::ProjectTasks) -> Element {
+    let select = self.selector(ctx, props, tasks);
     let choice = self.choice.clone();
     let value = props.value.clone();
+    let cycle = self.creates_cycle(props, tasks);
+    let query = self.query.clone();
+    let clear_choice = self.choice.clone();
     Column::new()
       .spacing(SpacingSize::Sm)
+      .child(
+        text_input(ctx, "blocking-task-search", query.clone(), false, TypographyStyle::Body)
+          .placeholder(&ctx.t("tasks.blocked.search"))
+          .on_input(move |event: lurq::app::events::TextInputEvent| {
+            query.set(event.new_value);
+            clear_choice.set(DependencyChoice(None));
+          }),
+      )
       .child(select)
+      .with_children(cycle.then(|| crate::ui::field::field_error(&ctx.t("tasks.blocked.cycle"))))
       .child(
         ActionButton::new(ctx.t("tasks.blocked.addLink"))
           .in_form()
-          .enabled(self.choice.get().0.is_some())
+          .id("task-add-blocking-link")
+          .enabled(self.choice.get().0.is_some() && !cycle)
           .on_click(move || {
             if let Some(task) = choice.get().0 {
               value.update(|value| {
@@ -306,12 +404,7 @@ impl DependencyFields {
   }
 }
 
-fn readiness_note(
-  ctx: &Ctx,
-  tasks: &crate::tasks::data::ProjectTasks,
-  organization: &TaskOrganization,
-  unfinished: &[TaskId],
-) -> Element {
+fn readiness_note(ctx: &Ctx, tasks: &crate::tasks::data::ProjectTasks, unfinished: &[TaskId], reason: &str) -> Element {
   let mut column = Column::new();
   if !unfinished.is_empty() {
     let keys = unfinished
@@ -322,10 +415,7 @@ fn readiness_note(
       .join(&ctx.t("common.listSeparator"));
     column = column.child(crate::ui::field::field_error(&ctx.t_args(
       "tasks.blocked.unfinished",
-      [
-        ("tasks", keys.as_str()),
-        ("reason", organization.blocked_reason().unwrap_or_default()),
-      ],
+      [("tasks", keys.as_str()), ("reason", reason)],
     )));
   }
   column.into()

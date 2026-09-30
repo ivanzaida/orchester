@@ -59,6 +59,7 @@ fn organization_new_form_saves_status_priority_informational_reason_and_inline_t
       .len()
       == 1
   });
+  desktop.key("Escape", "Escape");
   desktop.tab_to("save-draft", 40);
   desktop.enter();
   desktop.wait_until("organization saved", |desktop| {
@@ -218,4 +219,234 @@ fn organization_cancel_active_run_confirms_and_preserves_branch() {
       .join(run.id().to_string())
       .is_dir()
   );
+}
+
+#[test]
+fn organization_readiness_shows_reason_blocks_run_and_refreshes_after_resolution() {
+  use orchester_core::{
+    integration::{MergeKind, RunMerge},
+    revision::Revision,
+    run::BranchName,
+    store::{MergeStore, RunStore},
+    task::TaskStatus,
+  };
+
+  use crate::github::shows;
+  let mut desktop = Desktop::with_seeded_project(seed_readiness);
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-2");
+  desktop.press("task-row-KON-2");
+  desktop.wait_for("task-run");
+  assert!(shows(
+    &mut desktop,
+    "task-dependency-readiness",
+    "Waiting for integration"
+  ));
+  desktop.press("task-run");
+  assert_eq!(tasks(&desktop.repo)[1].status(), TaskStatus::Draft);
+  let mut db = ProjectDb::open(&desktop.repo).expect("open");
+  let blocker = tasks(&desktop.repo)[0].id();
+  let run = db.runs_of_task(blocker).expect("runs").remove(0).expect("readable run");
+  db.save_run_merge(&RunMerge {
+    run: run.id(),
+    into: BranchName::new("main").expect("branch"),
+    revision: Revision::new(&"b".repeat(40)).expect("revision"),
+    kind: MergeKind::FastForward,
+    merged_at: Timestamp::now(),
+  })
+  .expect("merge");
+  drop(db);
+  choose(&mut desktop, "task-header-priority", "Low");
+  desktop.wait_until("resolved readiness", |desktop| {
+    shows(desktop, "task-dependency-readiness", "Ready to queue")
+  });
+  assert_eq!(
+    tasks(&desktop.repo)[1].organization().blocked_reason(),
+    Some("Waiting for integration")
+  );
+}
+
+#[test]
+fn organization_tag_rename_and_merge_preserve_task_assignment() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let mut db = ProjectDb::open(repo).expect("open");
+    let details = TaskDetails {
+      title: Name::new("Tagged").expect("title"),
+      brief: String::new(),
+      acceptance_criteria: vec![],
+      pipeline: None,
+      limits: None,
+    };
+    let task = db
+      .create_tasks(IdempotencyKey::generate(), vec![details], Timestamp::now())
+      .expect("task")[0]
+      .id();
+    let source = db.create_project_tag(Name::new("Desktop").expect("name")).expect("tag");
+    let target = db.create_project_tag(Name::new("UX").expect("name")).expect("tag");
+    db.set_task_organization(
+      task,
+      &TaskOrganization::default().with_tags(vec![source.id(), target.id()]),
+      ChangeActor::Person,
+      Timestamp::now(),
+    )
+    .expect("tags");
+  });
+  let tags = ProjectDb::open(&desktop.repo)
+    .expect("open")
+    .project_tags()
+    .expect("tags");
+  let source = tags
+    .iter()
+    .find(|tag| tag.name().as_str() == "Desktop")
+    .expect("source")
+    .id();
+  let target = tags
+    .iter()
+    .find(|tag| tag.name().as_str() == "UX")
+    .expect("target")
+    .id();
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("project-tags-manage");
+  desktop.press("project-tags-manage");
+  let rename = format!("project-tag-rename-{source}");
+  desktop.wait_for(&rename);
+  desktop.press(&rename);
+  desktop.wait_for("project-tag-name");
+  set_text(&mut desktop, "project-tag-name", "Client");
+  desktop.tab_to("tag-editor-confirm", 6);
+  desktop.enter();
+  desktop.wait_until("tag renamed", |desktop| {
+    ProjectDb::open(&desktop.repo)
+      .expect("open")
+      .project_tags()
+      .expect("tags")
+      .iter()
+      .any(|tag| tag.name().as_str() == "Client")
+  });
+  desktop.wait_until("rename dialog closed", |desktop| {
+    desktop.tree.get_element_by_id("tag-editor-confirm").is_none()
+  });
+  desktop.press(&format!("project-tag-merge-{source}"));
+  desktop.wait_for("tag-merge-target");
+  choose(&mut desktop, "tag-merge-target", "UX");
+  desktop.tab_to("tag-editor-confirm", 6);
+  desktop.enter();
+  desktop.wait_until("merge deduplicates task assignment", |desktop| {
+    tasks(&desktop.repo)[0].organization().tags() == [target]
+  });
+  assert_eq!(
+    ProjectDb::open(&desktop.repo)
+      .expect("open")
+      .project_tags()
+      .expect("tags")
+      .len(),
+    1
+  );
+}
+
+#[test]
+fn organization_bulk_add_and_remove_tags_updates_every_selected_task() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let mut db = ProjectDb::open(repo).expect("open");
+    let details = TaskDetails {
+      title: Name::new("Bulk tagged").expect("title"),
+      brief: String::new(),
+      acceptance_criteria: vec![],
+      pipeline: None,
+      limits: None,
+    };
+    db.create_tasks(
+      IdempotencyKey::generate(),
+      vec![details.clone(), details],
+      Timestamp::now(),
+    )
+    .expect("tasks");
+    db.create_project_tag(Name::new("Desktop").expect("name")).expect("tag");
+  });
+  let tag = ProjectDb::open(&desktop.repo)
+    .expect("open")
+    .project_tags()
+    .expect("tags")[0]
+    .id();
+  let ids: Vec<_> = tasks(&desktop.repo).iter().map(|task| task.id()).collect();
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  for id in &ids {
+    desktop.press(&format!("select-task-{id}"));
+  }
+  desktop.press("bulk-add-tags");
+  desktop.wait_for("task-tags-picker");
+  desktop.press("task-tags-picker");
+  desktop.wait_for(&format!("picker-tag-{tag}"));
+  desktop.press(&format!("picker-tag-{tag}"));
+  desktop.click("bulk-tags-apply");
+  desktop.wait_until("bulk tag addition", |desktop| {
+    tasks(&desktop.repo)
+      .iter()
+      .all(|task| task.organization().tags() == [tag])
+  });
+  desktop.wait_for(&format!("bulk-outcome-{}", ids[0]));
+  desktop.wait_until("tag chips refreshed", |desktop| {
+    crate::github::shows(desktop, "task-row-KON-1", "Desktop")
+  });
+  desktop.press("bulk-remove-tags");
+  desktop.wait_for(&format!("bulk-remove-tag-{tag}"));
+  desktop.press(&format!("bulk-remove-tag-{tag}"));
+  desktop.wait_until("bulk tag removal", |desktop| {
+    tasks(&desktop.repo)
+      .iter()
+      .all(|task| task.organization().tags().is_empty())
+  });
+}
+
+fn seed_readiness(repo: &Path) {
+  use orchester_core::{
+    resource::ResourceKind,
+    store::{ResourceStore, RunStore},
+    task::{
+      TaskLimits,
+      organization::{BlockingTask, DependencyGate},
+    },
+    tokens::TokenBudget,
+  };
+
+  use crate::unreadable_run::{at, delivery, started};
+  let mut db = ProjectDb::open(repo).expect("open");
+  let snapshot = delivery(&mut db);
+  let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
+  let details = TaskDetails {
+    title: Name::new("Linked task").expect("title"),
+    brief: "Implement.".into(),
+    acceptance_criteria: vec!["Complete.".into()],
+    pipeline: Some(pipeline),
+    limits: Some(
+      TaskLimits::new(
+        TokenBudget::new(10000).expect("budget"),
+        std::time::Duration::from_secs(1800),
+      )
+      .expect("limits"),
+    ),
+  };
+  let tasks = db
+    .create_tasks(IdempotencyKey::generate(), vec![details.clone(), details], at(10))
+    .expect("tasks");
+  let mut run = started(&mut db, (tasks[0].id(), &snapshot), 1, 11);
+  let events = run.cancel(at(12)).expect("stop fixture run");
+  db.append_events(&run, &events).expect("stop");
+  let organization = TaskOrganization::new(
+    WorkflowStatus::Todo,
+    Priority::None,
+    Some("Waiting for integration".into()),
+    vec![BlockingTask {
+      task: tasks[0].id(),
+      gate: DependencyGate::Merge,
+    }],
+    vec![],
+  )
+  .expect("organization");
+  db.set_task_organization(tasks[1].id(), &organization, ChangeActor::Person, at(13))
+    .expect("link");
 }

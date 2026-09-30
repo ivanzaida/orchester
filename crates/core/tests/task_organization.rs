@@ -74,3 +74,60 @@ fn organization_dependencies_use_execution_completion() {
   assert!(DependencyGate::Review.is_completed(TaskPhase::Succeeded));
   assert!(!DependencyGate::Review.is_completed(TaskPhase::Failed));
 }
+
+#[test]
+fn organization_sorting_uses_workflow_priority_then_recent_update() {
+  use std::cmp::Ordering;
+
+  use orchester_core::{task::organization::TaskSort, time::Timestamp};
+  let first = TaskId::generate();
+  let second = TaskId::generate();
+  let old = Timestamp::from_unix_millis(1);
+  let recent = Timestamp::from_unix_millis(2);
+  let backlog = TaskOrganization::default().with_priority(Priority::Urgent);
+  let todo = TaskOrganization::default().with_status(WorkflowStatus::Todo);
+  assert_eq!(
+    TaskSort::Status.compare((&backlog, old, first), (&todo, recent, second)),
+    Ordering::Less
+  );
+  assert_eq!(
+    TaskSort::Priority.compare((&backlog, old, first), (&todo, recent, second)),
+    Ordering::Less
+  );
+  assert_eq!(
+    TaskSort::Updated.compare((&backlog, old, first), (&todo, recent, second)),
+    Ordering::Greater
+  );
+  assert_eq!(
+    TaskSort::Priority.compare((&backlog, old, first), (&backlog, recent, second)),
+    Ordering::Greater
+  );
+}
+
+#[test]
+fn organization_rejects_indirect_dependency_cycles() {
+  use std::collections::HashMap;
+  let first = TaskId::generate();
+  let second = TaskId::generate();
+  let linked = |task| {
+    TaskOrganization::new(
+      WorkflowStatus::Todo,
+      Priority::None,
+      None,
+      vec![BlockingTask {
+        task,
+        gate: DependencyGate::Merge,
+      }],
+      vec![],
+    )
+    .expect("organization")
+  };
+  let graph = HashMap::from([(second, linked(first))]);
+  assert_eq!(
+    linked(second).check_dependencies(first, &graph),
+    Err(OrganizationError::DependencyCycle)
+  );
+  TaskOrganization::default()
+    .check_dependencies(first, &graph)
+    .expect("removing link resolves cycle");
+}

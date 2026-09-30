@@ -1,9 +1,13 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{component::Component, ctx::Ctx, theme::SpacingSize},
-  components::{Column, Row, Select},
-  core::Signal,
+  app::{
+    component::Component,
+    ctx::{Ctx, OutsidePress, Placement},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+  },
+  components::{Column, Popup, Row, Select},
+  core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::task::organization::{Priority, TaskFilter, TaskSort, WorkflowStatus};
@@ -43,21 +47,31 @@ impl PartialEq for FilterProps {
 impl lurq::app::component::DevtoolsInspectable for FilterProps {}
 pub(super) struct TaskFilters {
   open: Signal<Option<Facet>>,
+  show: Signal<bool>,
+  anchors: [ElementRef; 3],
 }
 impl Component for TaskFilters {
   type Props = FilterProps;
   fn create(ctx: &mut Ctx) -> Self {
-    Self { open: ctx.signal(None) }
+    Self {
+      open: ctx.signal(None),
+      show: ctx.signal(false),
+      anchors: std::array::from_fn(|_| ElementRef::default()),
+    }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<FilterProps>().clone();
     let mut row = Row::new().spacing(SpacingSize::Sm);
-    for (facet, key) in [
+    for (index, (facet, key)) in [
       (Facet::Status, "tasks.workflow.label"),
       (Facet::Priority, "tasks.priority.label"),
       (Facet::Tags, "tasks.tags.label"),
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
       let open = self.open.clone();
+      let show = self.show.clone();
       row = row.child(
         ActionButton::new(ctx.t(key))
           .id(match facet {
@@ -65,7 +79,11 @@ impl Component for TaskFilters {
             Facet::Priority => "filter-priority",
             Facet::Tags => "filter-tags",
           })
-          .on_click(move || open.update(|value| *value = if *value == Some(facet) { None } else { Some(facet) }))
+          .ref_element(self.anchors[index].clone())
+          .on_click(move || {
+            open.set(Some(facet));
+            show.set(true);
+          })
           .render(ctx),
       );
     }
@@ -90,7 +108,17 @@ impl Component for TaskFilters {
       );
     let mut column = Column::new().spacing(SpacingSize::Sm).child(row);
     if let Some(facet) = self.open.get() {
-      column = column.child(menu(ctx, &props, facet));
+      let index = match facet {
+        Facet::Status => 0,
+        Facet::Priority => 1,
+        Facet::Tags => 2,
+      };
+      column = column.child(
+        Popup::new(self.anchors[index].clone(), menu(ctx, &props, facet))
+          .open(self.show.clone())
+          .placement(Placement::BottomStart)
+          .outside_press(OutsidePress::PassThrough),
+      );
     }
     column
   }
@@ -98,7 +126,13 @@ impl Component for TaskFilters {
 
 fn menu(ctx: &Ctx, props: &FilterProps, facet: Facet) -> Element {
   let current = props.filter.get().0;
-  let mut column = Column::new().spacing(SpacingSize::Xs);
+  let mut column = Column::new()
+    .width(Dimension::Px(MENU_WIDTH))
+    .padding(SpacingSize::Sm)
+    .background(PaletteColor::SurfaceRaised)
+    .rounded(RadiusSize::Md)
+    .border_inside(BorderSize::Sm, PaletteColor::Border)
+    .spacing(SpacingSize::Xs);
   match facet {
     Facet::Status => {
       for status in WorkflowStatus::ALL {
@@ -162,3 +196,6 @@ fn check(selected: bool) -> crate::ui::icon::Icon {
     crate::ui::icon::Icon::Square
   }
 }
+
+// l7kBSq: multi-selection filter menus.
+const MENU_WIDTH: f32 = 320.0;

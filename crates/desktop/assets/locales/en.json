@@ -13,7 +13,8 @@
     "copy": "Copy",
     "copied": "Copied",
     "copyFailed": "The command could not be copied. Select it and copy it by hand.",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "retry": "Retry"
   },
   "workspace": {
     "personal": "Personal workspace"
@@ -385,7 +386,8 @@
       "clear": "Clear selection",
       "changed": "{{task}} updated.",
       "failed": "{{task}} could not be updated: {{reason}}",
-      "removeTagCount": "Remove {{tag}} · on {{count}} selected tasks"
+      "removeTagCount": "Remove {{tag}} · on {{count}} selected tasks",
+      "run": "Run"
     },
     "columns": {
       "key": "ID",
@@ -553,7 +555,9 @@
       "cycle": "This link would create a dependency cycle. Choose another task.",
       "unfinished": "Blocked · {{tasks}} unfinished. {{reason}}",
       "informational": "Blocked · {{reason}}",
-      "runUnavailable": "Run is unavailable until the linked blocking tasks finish."
+      "runUnavailable": "Run is unavailable until the linked blocking tasks finish.",
+      "linkLabel": "{{key}} · {{title}}",
+      "search": "Search tasks"
     },
     "cancel": {
       "title": "Cancel this task and stop its run?",
@@ -585,8 +589,11 @@
       "stale": "This tag no longer exists. Reload the project tag list.",
       "sameTarget": "A tag cannot merge into itself.",
       "back": "Back to Tasks",
-      "breadcrumb": "{project} / Project tags",
-      "description": "Tag names are unique, ignoring letter case. Tags use the same neutral theme style throughout this project."
+      "breadcrumb": "{{project}} / Project tags",
+      "description": "Tag names are unique, ignoring letter case. Tags use the same neutral theme style throughout this project.",
+      "more": "+{{count}}",
+      "pickerEmpty": "No tags yet. Type a name to create the first tag.",
+      "chooseExisting": "This tag already exists. Select it to add it to this task."
     },
     "sort": {
       "updated": "Sort: Updated",
@@ -597,7 +604,7 @@
       "title": "Task history",
       "person": "You",
       "orchester": "Orchester",
-      "change": "{time} · {actor} · {field}: {from} → {to}"
+      "change": "{{time}} · {{actor}} · {{field}}: {{from}} → {{to}}"
     }
   },
   "runs": {

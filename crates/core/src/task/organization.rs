@@ -179,6 +179,26 @@ impl TaskOrganization {
     self.with_tags(assigned)
   }
 
+  pub fn check_dependencies(
+    &self,
+    task: TaskId,
+    graph: &std::collections::HashMap<TaskId, TaskOrganization>,
+  ) -> Result<(), OrganizationError> {
+    let mut reached = std::collections::HashSet::new();
+    let mut pending: Vec<_> = self.dependencies.iter().map(|link| link.task).collect();
+    while let Some(id) = pending.pop() {
+      if id == task {
+        return Err(OrganizationError::DependencyCycle);
+      }
+      if reached.insert(id)
+        && let Some(other) = graph.get(&id)
+      {
+        pending.extend(other.dependencies.iter().map(|link| link.task));
+      }
+    }
+    Ok(())
+  }
+
   /// The manual flag is informational and remains visible after links resolve.
   pub fn unfinished(&self, completed: impl Fn(&BlockingTask) -> bool) -> Vec<TaskId> {
     self
@@ -255,6 +275,23 @@ pub enum TaskSort {
   Updated,
   Status,
   Priority,
+}
+
+impl TaskSort {
+  pub fn compare(
+    self,
+    left: (&TaskOrganization, Timestamp, TaskId),
+    right: (&TaskOrganization, Timestamp, TaskId),
+  ) -> std::cmp::Ordering {
+    let order = match self {
+      Self::Updated => std::cmp::Ordering::Equal,
+      Self::Status => left.0.status().cmp(&right.0.status()),
+      Self::Priority => left.0.priority().cmp(&right.0.priority()),
+    };
+    order
+      .then_with(|| right.1.cmp(&left.1))
+      .then_with(|| left.2.cmp(&right.2))
+  }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

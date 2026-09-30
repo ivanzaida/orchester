@@ -86,9 +86,33 @@ impl Component for TasksScreen {
     let body = match &props.tasks {
       TasksState::Loading => Column::new().into(),
       TasksState::Failed(error) => {
-        centered(RecoveryPanel::new(Icon::AlertCircle, &ctx.t("tasks.loadFailed"), &message_text(ctx, error)).into())
+        let nav = nav.clone();
+        centered(
+          Column::new()
+            .spacing(SpacingSize::Sm)
+            .child(RecoveryPanel::new(
+              Icon::AlertCircle,
+              &ctx.t("tasks.loadFailed"),
+              &message_text(ctx, error),
+            ))
+            .child(
+              ActionButton::new(ctx.t("common.retry"))
+                .on_click(move || nav.tasks_changed())
+                .render(ctx),
+            )
+            .into(),
+        )
       }
-      TasksState::Ready(tasks) if tasks.tasks.is_empty() => empty(ctx, &nav),
+      TasksState::Ready(tasks) if tasks.tasks.is_empty() => Column::new()
+        .flex(1.0)
+        .child(
+          ActionButton::new(ctx.t("tasks.tags.manage"))
+            .id("project-tags-manage")
+            .link(nav.link(Page::ProjectTags))
+            .render(ctx),
+        )
+        .child(empty(ctx, &nav))
+        .into(),
       TasksState::Ready(tasks) => self.library(ctx, tasks, tab, &props.root),
     };
     Column::new()
@@ -221,20 +245,18 @@ impl TasksScreen {
       .map(|row| tasks.decorate_row(row))
       .collect();
     rows.sort_by(|a, b| {
-      let order = match sort {
-        orchester_core::task::organization::TaskSort::Status => a.organization.status().cmp(&b.organization.status()),
-        orchester_core::task::organization::TaskSort::Priority => {
-          a.organization.priority().cmp(&b.organization.priority())
-        }
-        orchester_core::task::organization::TaskSort::Updated => std::cmp::Ordering::Equal,
-      };
-      order.then_with(|| {
-        tasks
-          .updated
-          .get(&b.id)
-          .unwrap_or(&b.created_at)
-          .cmp(tasks.updated.get(&a.id).unwrap_or(&a.created_at))
-      })
+      sort.compare(
+        (
+          &a.organization,
+          tasks.updated.get(&a.id).copied().unwrap_or(a.created_at),
+          a.id,
+        ),
+        (
+          &b.organization,
+          tasks.updated.get(&b.id).copied().unwrap_or(b.created_at),
+          b.id,
+        ),
+      )
     });
     let table = if rows.is_empty() {
       Element::from(Text::new(&ctx.t("tasks.filters.noMatches")).variant(TypographyStyle::Caption))
