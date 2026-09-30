@@ -245,13 +245,13 @@ impl RunTask {
       return Ok(None);
     };
     let problem = |detail: String| RunnerProblem::CouldNotStart { detail };
-    let names = servers
-      .as_ref()
-      .map(|servers| servers.servers.clone())
-      .unwrap_or_default();
+    let (names, secrets) = servers.as_ref().map_or_else(Default::default, |servers| {
+      (servers.servers.clone(), servers.secrets.clone())
+    });
     let Some(scope) = ClaudeApprovalScope::of(permissions, &names) else {
       return Ok(None);
     };
+    let scope = scope.with_secrets(secrets);
     let relay = self.relay.as_deref().ok_or_else(|| {
       problem("Orchester cannot find its runner program, which answers Claude Code's permission prompts".to_owned())
     })?;

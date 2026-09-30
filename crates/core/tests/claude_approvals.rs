@@ -4,6 +4,7 @@
 use std::path::Path;
 
 use orchester_core::{
+  command::SecretVariable,
   connection::{
     AgentProvider,
     claude_approval::{
@@ -88,6 +89,33 @@ fn claude_approvals_route_only_what_the_permissions_leave_to_a_person() {
   assert_eq!(scope(true, true).classify(&anonymous), ClaudeAsk::Refused);
   let asks_nothing = permissions(CommandPermission::Allowed(AllowedCommands::default()), false);
   assert_eq!(ClaudeApprovalScope::of(&asks_nothing, &[]), None);
+}
+
+#[test]
+fn claude_approvals_show_mcp_arguments_without_secrets_that_json_escapes_or_the_cut_splits() {
+  let secret = |name: &str, value: &str| {
+    SecretVariable::new(
+      name,
+      std::sync::Arc::new(orchester_core::secret::SecretValue::new(value.to_owned()).expect("secret")),
+    )
+  };
+  let quoted = r#"to"k\en"#;
+  let long = "s".repeat(40);
+  let scope = scope(false, true).with_secrets(vec![secret("QUOTED", quoted), secret("LONG", &long)]);
+  let shown = |input: &Value| {
+    let ClaudeAsk::Person(request) = scope.classify(&call("mcp__docs__write", input)) else {
+      panic!("a tool of an invocation server goes to a person");
+    };
+    request.scope().expect("arguments").to_owned()
+  };
+  let escaped = shown(&json!({"header": format!("Bearer {quoted}")}));
+  assert_eq!(escaped, r#"{"header":"Bearer <redacted>"}"#);
+  // The secret starts before the cut and ends after it: none of it is shown.
+  let text = format!("{}{long}", "x".repeat(580));
+  let cut = shown(&json!({"text": text}));
+  assert!(cut.ends_with('…'), "{cut}");
+  assert!(!cut.contains("ssss"), "no part of the secret remains: {cut}");
+  assert!(cut.contains("<redacted>") || !cut.contains('s'), "{cut}");
 }
 
 #[test]

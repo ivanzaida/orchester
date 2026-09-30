@@ -37,6 +37,7 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::{
+  command::{SecretVariable, redact_secrets},
   connection::mcp::McpServerName,
   permission::{AgentPermissions, CommandPermission, RepositoryAccess},
 };
@@ -138,6 +139,8 @@ pub struct ClaudeApprovalScope {
   commands: bool,
   tools: bool,
   servers: Vec<McpServerName>,
+  /// Secret values of those servers, removed from the arguments an approval shows.
+  secrets: Vec<SecretVariable>,
 }
 
 impl ClaudeApprovalScope {
@@ -152,7 +155,15 @@ impl ClaudeApprovalScope {
       commands,
       tools,
       servers: servers.to_vec(),
+      secrets: Vec::new(),
     })
+  }
+
+  /// This scope, removing `secrets` from the MCP arguments its requests show.
+  #[must_use]
+  pub fn with_secrets(mut self, secrets: Vec<SecretVariable>) -> Self {
+    self.secrets = secrets;
+    self
   }
 
   /// What to do with the permission prompt call whose arguments are `arguments`.
@@ -190,7 +201,7 @@ impl ClaudeApprovalScope {
       server: server.to_string(),
       action: action.to_owned(),
       target: text("filePath"),
-      scope: Some(shown_arguments(input)),
+      scope: Some(shown_arguments(input, &self.secrets)),
     })
   }
 
@@ -261,10 +272,12 @@ impl ClaudeApprovalRequest {
   }
 }
 
-/// An MCP call's arguments as the approval shows them: JSON on one line, cut after
-/// [`SHOWN_ARGUMENTS`] characters. The runner removes secret values before it is stored.
-fn shown_arguments(input: &Value) -> String {
-  let text = input.to_string();
+/// An MCP call's arguments as the approval shows them: every text in them with `secrets` removed,
+/// then JSON on one line, then cut after [`SHOWN_ARGUMENTS`] characters. Removing them from the
+/// texts first means a value that JSON escapes (quotes, backslashes) or that the cut would split
+/// is still found whole.
+fn shown_arguments(input: &Value, secrets: &[SecretVariable]) -> String {
+  let text = redacted(input, secrets).to_string();
   match text.char_indices().nth(SHOWN_ARGUMENTS) {
     Some((end, _)) => format!("{}…", &text[..end]),
     None => text,
@@ -286,6 +299,21 @@ pub fn prompt_result(approve: bool) -> String {
     json!({"behavior": "allow", "updatedInput": {}}).to_string()
   } else {
     json!({"behavior": "deny", "message": DENIED}).to_string()
+  }
+}
+
+/// `value` with `secrets` removed from every text in it, keys included.
+fn redacted(value: &Value, secrets: &[SecretVariable]) -> Value {
+  match value {
+    Value::String(text) => Value::String(redact_secrets(text, secrets)),
+    Value::Array(items) => Value::Array(items.iter().map(|item| redacted(item, secrets)).collect()),
+    Value::Object(fields) => Value::Object(
+      fields
+        .iter()
+        .map(|(key, field)| (redact_secrets(key, secrets), redacted(field, secrets)))
+        .collect(),
+    ),
+    other => other.clone(),
   }
 }
 
