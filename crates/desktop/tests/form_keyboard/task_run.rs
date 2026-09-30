@@ -355,6 +355,9 @@ fn create_and_run_keeps_a_queued_task_truthful_and_retries_it_after_space_recove
   assert!(db.runs_of_task(task.id()).expect("runs").is_empty());
   assert!(!has(&mut desktop, "save-draft"));
   assert!(shows(&mut desktop, "create-and-run", "Retry run"));
+  // A new task keeps its heading and breadcrumb (`WOdDe`).
+  assert!(shows(&mut desktop, "task-form", "What would you like to build?"));
+  assert!(shows(&mut desktop, "task-form", "Kontur / Tasks / New task"));
   assert!(shows(&mut desktop, "pipeline-selector", "Delivery"));
   assert!(
     desktop

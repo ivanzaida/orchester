@@ -156,8 +156,7 @@ impl From<AllowedCommands> for Vec<CommandPrefix> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "commands")]
 pub enum CommandPermission {
-  /// Every command waits for a person's decision. Needs the permission-request flow, which does
-  /// not exist yet, so no connection can enforce it (see [`capability`]).
+  /// Codex routes commands requiring approval to a person's one-action decision.
   AskBefore,
   /// Only the listed commands run; anything else is denied and the agent is told why.
   Allowed(AllowedCommands),
@@ -183,6 +182,8 @@ pub struct AgentPermissions {
   writable_folders: WritableFolders,
   commands: CommandPermission,
   network: NetworkAccess,
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  interactive_tool_approvals: bool,
 }
 
 impl AgentPermissions {
@@ -192,6 +193,7 @@ impl AgentPermissions {
       writable_folders: WritableFolders::none(),
       commands,
       network,
+      interactive_tool_approvals: false,
     }
   }
 
@@ -237,6 +239,14 @@ impl AgentPermissions {
 
   pub const fn network(&self) -> NetworkAccess {
     self.network
+  }
+
+  pub const fn interactive_tool_approvals(&self) -> bool {
+    self.interactive_tool_approvals
+  }
+
+  pub const fn set_interactive_tool_approvals(&mut self, enabled: bool) {
+    self.interactive_tool_approvals = enabled;
   }
 
   pub const fn set_repository(&mut self, repository: RepositoryAccess) {

@@ -39,8 +39,11 @@ Environment variables, project MCP servers, tabs, and the installed stable build
    Set the Implement **step** to *Can write* as well as the profile: a new agent step starts *Read-only* and can narrow a
    write profile. Keep Review read-only.
 5. Environment: `CARGO_TARGET_DIR=<repo>/.orchester/target`; then, in Agents › Permissions of each profile that
-   builds, add it to *Extra writable folders* (the tab offers it).
-   Without it every run builds its own `target/` in its worktree (several GB, several minutes the first time).
+   builds, add this build root to *Extra writable folders* (the tab offers it).
+   The runner scopes absolute targets to `<root>/worktrees/<worktree-directory>` for agents and command tools.
+   Sequential steps and resumed invocations reuse their worktree's artifacts; parallel worktrees cannot mix
+   artifacts from different revisions. Relative targets already belong to their worktree and are kept.
+   A new worktree starts cold (several GB, several minutes), with a 10 GiB host-side free-space reserve.
 6. Limits: start at about 3M tokens and 45 minutes of active agent time per run.
 7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
    merge from Orchester while another agent is merging branches into `master` by hand.
@@ -201,6 +204,24 @@ ORC-37 · Codebase index 1/2 (backend) · branch `claude/codebase-index`
   worktree using them is removed (desktop *Remove worktree*, merge, Run again).
 - Open: independent design verification of the new activity problem text; delivery, settings and activity are
   ORC-38; macOS cross-check stops at C build scripts (no target `cc`).
+
+Agent runtime architecture · effective approvals, Windows sandbox and Cargo isolation · root `master`
+
+- **Done 2026-09-30 as a Windows release candidate, uncommitted.** Effective profile, pipeline and run
+  permissions choose the interactive Codex transport. Commands and MCP actions can receive one-action
+  decisions, and a waiting exec session can resume through App Server with its worktree and progress preserved.
+  Windows read-only invocations select the native sandbox; absolute Cargo targets are scoped per worktree
+  for agents and command tools. The expanded run popup scrolls inside the workspace.
+- Named-filter regressions, native signed-in gpt-6.1-sol MCP approve/deny runs, `tools/check.ps1`, and the
+  paired release build passed. Independent Pencil/app comparison found no blocking or major mismatch in
+  the changed profile, pipeline, popup and approval-dialog regions. Command approval and transport migration
+  used protocol fixtures, followed by a native command approve/deny probe and a resumed-session local/extra
+  folder write probe. Windows cwd/root validation accepts normalized path separators; Apply now waits for
+  active MCP actions and pauses uncertain permission restarts. Six affected runner regressions and the final
+  quality gate pass. Core/exec macOS checks passed; runner/desktop cross-check lacks a target C compiler,
+  and no physical Mac test was run. The authorized stable install was updated and blocked tasks resumed;
+  ORC-44's fresh independent Review/Verify and final task-specific verification remain in progress.
+  See [evidence](evidence/agent-runtime-architecture-2026-09-30.md).
 
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 

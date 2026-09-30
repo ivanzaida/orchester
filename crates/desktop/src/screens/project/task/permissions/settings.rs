@@ -91,6 +91,7 @@ pub(super) fn settings(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draf
     repository(ctx, edit, provider, draft),
     commands(ctx, edit, props, draft),
     network(ctx, edit, provider, draft),
+    tool_approvals(ctx, edit, props, draft),
   ]
 }
 
@@ -212,24 +213,40 @@ fn commands(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPe
   let kept = listed.clone().unwrap_or_default();
   let allowed_why = reason(ctx, provider, PermissionOption::AllowedCommands);
   let any_why = reason(ctx, provider, PermissionOption::AnyCommand);
+  let ask_why = reason(ctx, provider, PermissionOption::AskBeforeCommands);
+  let ask_edit = edit.clone();
   let (allowed_edit, any_edit) = (edit.clone(), edit.clone());
-  let mut content = vec![options(vec![
-    radio(
-      ctx,
-      ("task-permissions-allowed", PermissionOption::AllowedCommands),
-      listed.is_some(),
-      allowed_why.is_none(),
-      move || allowed_edit.change(|draft| draft.set_commands(CommandPermission::Allowed(kept.clone()))),
-    ),
-    radio(
-      ctx,
-      ("task-permissions-any", PermissionOption::AnyCommand),
-      *draft.commands() == CommandPermission::AnyInWorktree,
-      any_why.is_none(),
-      move || any_edit.change(|draft| draft.set_commands(CommandPermission::AnyInWorktree)),
-    ),
-  ])];
-  content.extend(reasons([allowed_why, any_why]));
+  let mut content = vec![
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .overflow_visible()
+      .with_children(vec![
+        radio(
+          ctx,
+          ("task-permissions-ask", PermissionOption::AskBeforeCommands),
+          *draft.commands() == CommandPermission::AskBefore,
+          ask_why.is_none(),
+          move || ask_edit.change(|draft| draft.set_commands(CommandPermission::AskBefore)),
+        ),
+        radio(
+          ctx,
+          ("task-permissions-allowed", PermissionOption::AllowedCommands),
+          listed.is_some(),
+          allowed_why.is_none(),
+          move || allowed_edit.change(|draft| draft.set_commands(CommandPermission::Allowed(kept.clone()))),
+        ),
+        radio(
+          ctx,
+          ("task-permissions-any", PermissionOption::AnyCommand),
+          *draft.commands() == CommandPermission::AnyInWorktree,
+          any_why.is_none(),
+          move || any_edit.change(|draft| draft.set_commands(CommandPermission::AnyInWorktree)),
+        ),
+      ])
+      .into(),
+  ];
+  content.extend(reasons([ask_why, allowed_why, any_why]));
   if let Some(list) = listed {
     content.push(command_entries(ctx, edit, &list, props));
     content.extend(changed_note(ctx, &list, props));
@@ -238,6 +255,38 @@ fn commands(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPe
     }
   }
   group(ctx, "agents.permissions.commands", content)
+}
+
+fn tool_approvals(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPermissions) -> Element {
+  let provider = props.step.provider;
+  let required = props.permissions.tool_approvals_required;
+  let enabled = required || draft.interactive_tool_approvals();
+  let switch = Switch::new(
+    "task-permissions-tool-approvals",
+    ctx.t("agents.permissions.toolApprovals"),
+    enabled,
+  );
+  let control = if !required && (provider == Some(AgentProvider::CodexCli) || enabled) {
+    let edit = edit.clone();
+    switch.render(move || edit.change(|draft| draft.set_interactive_tool_approvals(!enabled)))
+  } else {
+    switch.locked()
+  };
+  let mut controls = vec![control];
+  if provider != Some(AgentProvider::CodexCli) {
+    controls.push(
+      Text::new(&ctx.t("agents.permissions.toolApprovalUnavailable"))
+        .variant(TypographyStyle::Description)
+        .into(),
+    );
+  } else if enabled || *draft.commands() == CommandPermission::AskBefore {
+    controls.push(
+      Text::new(&ctx.t("agents.permissions.transport"))
+        .variant(TypographyStyle::Description)
+        .into(),
+    );
+  }
+  group(ctx, "agents.permissions.toolApprovalsHeading", controls)
 }
 
 /// The profile version's allowed commands; none when it allows no list.

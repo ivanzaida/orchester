@@ -30,7 +30,7 @@ pub const STEP_RESULT_SCHEMA: &str = r#"{
     "outcome":{
       "type":"string",
       "enum":["done","failed","question"],
-      "description":"done: current step complete. question: waiting for the person's decision, permission, access, or clarification; resumes the same session after their answer. failed: failure handled by the pipeline, no decision or action by the person would let the step continue. Incomplete work or a permission request alone is not failed."
+      "description":"done: current step complete and required checks pass. A completed review or verification with a negative verdict or unresolved blocking or major findings is failed, even if its report is complete. question: waiting for the person's decision, permission, access, or clarification; resumes the same session after their answer. failed: failure handled by the pipeline, including checks requiring corrections by an earlier step, or failure that no decision or action by the person would let the step resolve. Incomplete work or a permission request alone is not failed."
     },
     "summary":{
       "type":"string",
@@ -61,13 +61,13 @@ pub const STEP_RESULT_SCHEMA: &str = r#"{
   "additionalProperties":false
 }"#;
 
-/// Whether the agent says it did the step.
+/// Whether the agent's work passed the step, failed its checks, or needs a person.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StepOutcome {
-  /// The current step is complete.
+  /// The current step is complete and its required checks pass.
   Done,
-  /// Failure handled by the pipeline; no decision or action by the person would let the step continue.
+  /// Failed checks needing an earlier step's corrections, or an unresolvable step failure.
   Failed,
   /// It needs the person's decision, permission, access, or clarification; the summary asks for it.
   Question,

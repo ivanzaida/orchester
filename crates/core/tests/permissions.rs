@@ -119,8 +119,8 @@ fn permissions_capability_table() {
     ),
     (
       O::AskBeforeCommands,
-      no(Unavailable::NeedsPermissionRequests),
-      no(Unavailable::NeedsPermissionRequests),
+      enforced(M::CodexCommandApprovals),
+      enforced(M::CodexCommandApprovals),
     ),
     (
       O::AllowedCommands,
@@ -170,26 +170,6 @@ fn permissions_capability_table() {
         support(AgentProvider::ClaudeCodeCli, platform, option),
         expected,
         "{option:?}"
-      );
-    }
-  }
-}
-
-#[test]
-fn permissions_asking_before_commands_is_never_enforceable() {
-  for provider in AgentProvider::ALL {
-    for platform in PLATFORMS {
-      let ask = permissions(
-        RepositoryAccess::ReadOnly,
-        CommandPermission::AskBefore,
-        NetworkAccess::On,
-      );
-      assert_eq!(
-        ask.enforced_on(provider, platform),
-        Err(PermissionProblem::NotEnforceable {
-          option: O::AskBeforeCommands,
-          reason: Unavailable::NeedsPermissionRequests,
-        })
       );
     }
   }
@@ -478,10 +458,12 @@ fn permissions_map_to_codex_sandbox_arguments_per_platform() {
     NetworkAccess::Off,
   );
   for platform in PLATFORMS {
-    assert_eq!(
-      tail(&codex_args(&read_only, platform)),
-      ["--sandbox", "read-only", "-C", "/w", "-"]
-    );
+    let mut expected = vec!["--sandbox", "read-only"];
+    if platform == Platform::Windows {
+      expected.extend(["-c", "windows.sandbox=elevated"]);
+    }
+    expected.extend(["-C", "/w", "-"]);
+    assert_eq!(tail(&codex_args(&read_only, platform)), expected);
   }
   let offline = permissions(
     RepositoryAccess::Write,

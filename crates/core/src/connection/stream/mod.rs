@@ -4,6 +4,7 @@
 
 mod claude;
 mod codex;
+mod redaction;
 
 use serde::{Deserialize, Serialize};
 

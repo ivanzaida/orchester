@@ -23,7 +23,7 @@ use crate::{
   navigation::route::{Page, PipelineView},
   tabs::OpenIn,
   tasks::data::PipelineChoice,
-  theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
+  theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar, gutter_width},
   ui::{
     button::{ActionButton, SKIPPED_BY_TAB},
     field::{ValueTone, select_style, value_box_sized, wrapping_field_error},
@@ -80,9 +80,12 @@ pub fn execution_plan(
     .with_children(missing_note(ctx, state, MissingDetail::Pipeline))
     .child(run_limits(ctx, form, state, limits))
     .with_children(pipeline.map(|choice| review_policy(ctx, choice)));
+  // The column reaches past `PLAN_WIDTH` into the form's right padding by the details' scroll
+  // gutter; the actions keep out of it, so they end where the details do (`HVSv5`).
+  let gutter = gutter_width();
   Column::new()
     .id("execution-plan")
-    .width(Dimension::Px(PLAN_WIDTH))
+    .width(Dimension::Px(PLAN_WIDTH + gutter))
     .height(Dimension::Pct(100.0))
     .padding_left(ExtraSpacing::Rail.role())
     .spacing(SpacingSize::Md)
@@ -96,7 +99,7 @@ pub fn execution_plan(
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),
     )
-    .child(actions(ctx, state, save, start))
+    .child(actions(ctx, state, save, start).padding_right(Dimension::Px(gutter)))
     .into()
 }
 
@@ -395,7 +398,7 @@ fn read_back(id: &'static str, text: &str) -> Element {
 
 /// Create & run with what it is doing or why it did not start, then Save as draft (`Hc1Cp`,
 /// `Q4xE7q`). `save` and `start` are `None` while they cannot be pressed.
-fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element {
+fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Column {
   let status: Option<Element> = state
     .save_error
     .as_ref()
@@ -450,7 +453,6 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Element
         .justify(Justify::Center)
         .child(save_button(ctx, state, save))
     }))
-    .into()
 }
 
 /// Save as draft, or Save changes while a draft is edited (`Q4xE7q`, `fNWfv`); `save` is `None`
@@ -470,11 +472,12 @@ fn save_button(ctx: &Ctx, state: &FormState, save: Submit) -> Button {
     (false, _) => PaletteColor::TextMuted,
   };
   let text = Text::new(&label).variant(TypographyStyle::Caption).color(color);
+  // No vertical padding: the label itself sits 16 under Create & run and, without it, at the
+  // column's foot (`Q4xE7q` in `m82tU`, `lYOiy` in `dRN4m`).
   let save_draft = Button::empty()
     .button()
     .id("save-draft")
     .padding_horizontal(SpacingSize::Xs)
-    .padding_vertical(SpacingSize::Xs)
     .align_items(Alignment::Start)
     .justify(Justify::Center)
     .rounded(RadiusSize::Sm)

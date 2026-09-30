@@ -48,6 +48,8 @@ use std::{
   time::Duration,
 };
 
+#[path = "fake_app_server.rs"]
+mod fake_app_server;
 #[path = "fake_mcp.rs"]
 mod fake_mcp;
 
@@ -63,6 +65,9 @@ fn main() -> ExitCode {
     return ExitCode::SUCCESS;
   }
   let args: Vec<String> = std::env::args().skip(1).collect();
+  if args.first().is_some_and(|arg| arg == "app-server") {
+    return fake_app_server::run(&args);
+  }
   let Some(prompt) = read_prompt(&args) else {
     return ExitCode::from(2);
   };
@@ -146,6 +151,9 @@ fn read_prompt(args: &[String]) -> Option<String> {
     "path: {}",
     std::env::var_os("PATH").unwrap_or_default().to_string_lossy()
   );
+  if let Some(target) = std::env::var_os("CARGO_TARGET_DIR") {
+    eprintln!("cargo target: {}", PathBuf::from(target).display());
+  }
   eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
   for line in prompt.lines() {
     eprintln!("prompt| {line}");

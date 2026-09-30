@@ -21,6 +21,7 @@ mod checkpoint;
 mod codebase_index;
 mod control;
 mod conversation;
+mod environment;
 mod halt;
 mod handoff;
 mod idle;

@@ -70,6 +70,26 @@ fn pending(repo: &Path) -> bool {
 }
 
 #[test]
+fn run_permissions_popover_fits_the_workspace_when_the_window_is_resized() {
+  let mut desktop = desktop_running("Wait for release. Draft first. Then keep working.");
+  desktop.click("task-permissions-view");
+  desktop.wait_for("task-permissions-popover");
+  for (width, height) in [(1440, 960), (960, 700), (1440, 960)] {
+    desktop.tree.resize(width, height);
+    desktop.pass();
+    let viewport = desktop.bounds("task-permissions-scroll");
+    let status = desktop.bounds("status-bar");
+    assert!(viewport.y >= orchester_desktop::theme::TITLE_BAR_HEIGHT);
+    assert!(viewport.y + viewport.height <= status.y, "{viewport:?} {status:?}");
+    if height == 960 {
+      let cancel = desktop.bounds("task-permissions-cancel");
+      assert!(cancel.y + cancel.height <= status.y, "the footer stays visible");
+    }
+  }
+  desktop.click("task-permissions-cancel");
+}
+
+#[test]
 fn run_permissions_apply_now_is_pending_then_applied_and_saved_to_the_profile_draft() {
   let mut desktop = desktop_running("Wait for release. Draft first. Then keep working.");
   assert!(shows(&mut desktop, "task-permissions", "change ↗"));

@@ -33,10 +33,18 @@ fn outcome_prompt_keeps_permission_and_scope_decisions_resumable_on_every_turn()
     "ask a concrete question with the available options",
     "resumes the same session",
     "Requesting permission does not grant it",
-    "Use `failed` only for a failure",
-    "no decision or action by the person would let you continue",
+    "Use `failed` for checks that require corrections by an earlier step",
+    "action by the person would let you continue",
     "do not use it merely because work is incomplete or needs permission",
     "If the person already answered the relevant question, apply their answer",
+    "current step is complete and its required checks pass",
+    "completing the inspection alone is not success",
+    "unresolved blocking or major findings requires `failed`",
+    "do not repair them in a read-only review",
+    "verdicts must describe the current inputs",
+    "Earlier failures are context, not a verdict on changed work",
+    "Reuse a check only when its inputs are unchanged",
+    "Preserve earlier evidence without relabeling it as evidence for a new build",
   ] {
     assert!(expected.contains(rule), "missing rule: {rule}");
   }
@@ -109,4 +117,7 @@ fn outcome_prompt_schema_describes_attention_without_changing_the_wire_format() 
     .expect("guidance");
   assert!(description.contains("question: waiting for the person's decision, permission, access, or clarification"));
   assert!(description.contains("failed: failure handled by the pipeline"));
+  assert!(description.contains("required checks pass"));
+  assert!(description.contains("negative verdict or unresolved blocking or major findings is failed"));
+  assert!(description.contains("corrections by an earlier step"));
 }

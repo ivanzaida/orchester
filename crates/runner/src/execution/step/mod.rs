@@ -315,8 +315,9 @@ impl RunTask {
 
   /// Starts `execution` if it has not started; a follow-up resumes the session of its step's passed
   /// execution. One that was stopped mid-step, that a reviewer sent back, that asked a question or
-  /// that finished its turn while messages came in continues: the session of its last invocation,
-  /// if the CLI reported one, is resumed. Either way the messages queued for its agent go with it.
+  /// that finished its turn while messages came in continues its earlier session. Recovery of an
+  /// upstream step starts dependent sessions afresh while retaining their saved work. Either way
+  /// the messages queued for its agent go with it.
   fn begin_step(&mut self, execution: StepExecutionId) -> Result<Continuation, ExecutionError> {
     let messages = self.queued_for(execution)?;
     let status = self.run.execution(execution).map(|execution| execution.status());
@@ -399,7 +400,7 @@ impl RunTask {
       {
         return Ok(Some(session));
       }
-      earlier = self.run.previous_execution(execution);
+      earlier = self.run.recovered_execution(execution);
     }
     Ok(None)
   }

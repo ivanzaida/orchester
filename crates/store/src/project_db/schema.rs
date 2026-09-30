@@ -3,6 +3,7 @@
 
 mod agent_files;
 mod code_index;
+mod command_approvals;
 mod conversation;
 mod import;
 mod mcp;
@@ -574,6 +575,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   tool_approvals::ACTIVE_TIME_MIGRATION,
   tool_approvals::MIGRATION,
   recovery::MIGRATION,
+  command_approvals::MIGRATION,
   code_index::MIGRATION,
   memory::MIGRATION,
 ];
