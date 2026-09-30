@@ -14,7 +14,7 @@ pub enum MemoryContentError {
   BlankKey,
   #[error("a memory key is {length} characters long; the limit is {}", MemoryKey::MAX_CHARS)]
   KeyTooLong { length: usize },
-  #[error("a memory key is one line")]
+  #[error("a memory key is one line, without line or paragraph separators")]
   MultilineKey,
   #[error("a tag is one word without spaces, at most {} characters", Tags::MAX_CHARS)]
   InvalidTag,
@@ -79,6 +79,15 @@ impl MemoryKind {
   }
 }
 
+/// Characters a model may read as the end of a line: no key has one, and every one ends a quoted
+/// line of a record's body ([`super::render`]).
+pub(super) fn is_line_break(character: char) -> bool {
+  matches!(
+    character,
+    '\n' | '\r' | '\u{b}' | '\u{c}' | '\u{85}' | '\u{2028}' | '\u{2029}'
+  )
+}
+
 /// A short name a record is known by (`auth.token-refresh`), so a newer record on the same subject
 /// replaces it instead of standing beside it.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -97,7 +106,7 @@ impl MemoryKey {
     if length > Self::MAX_CHARS {
       return Err(MemoryContentError::KeyTooLong { length });
     }
-    if trimmed.contains(['\n', '\r']) {
+    if trimmed.contains(is_line_break) {
       return Err(MemoryContentError::MultilineKey);
     }
     Ok(Self(trimmed.to_owned()))

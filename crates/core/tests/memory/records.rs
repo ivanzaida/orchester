@@ -247,6 +247,13 @@ fn records_content_is_validated() {
     Err(MemoryContentError::BlankText)
   );
   assert_eq!(MemoryKey::new("a\nb"), Err(MemoryContentError::MultilineKey));
+  for separator in ['\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}'] {
+    assert_eq!(
+      MemoryKey::new(&format!("a{separator}# b")),
+      Err(MemoryContentError::MultilineKey),
+      "{separator:?}"
+    );
+  }
   assert!(MemoryKey::new(&"k".repeat(121)).is_err());
   assert_eq!(Tags::new(["two words"]), Err(MemoryContentError::InvalidTag));
   let tags = Tags::new(["Auth", "auth", "db"]).expect("tags");

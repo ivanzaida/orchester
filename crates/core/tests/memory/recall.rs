@@ -366,4 +366,14 @@ fn recall_leaves_out_records_with_a_chosen_key_or_the_same_text() {
   );
   let texts: Vec<&str> = chosen.iter().map(|(_, text)| text.as_str()).collect();
   assert_eq!(texts, ["SQLite.", "Same  text."]);
+  let shown = recall(
+    &request,
+    Vec::new(),
+    vec![matched(keyed("Quoted \"key\".", 5), 1.0, 1.0)],
+  );
+  assert_eq!(
+    shown.entries()[0].text,
+    "Fact (key \"db.engine\"):\n> Quoted \"key\".",
+    "the key is quoted on the label line"
+  );
 }

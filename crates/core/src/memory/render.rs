@@ -2,15 +2,7 @@
 //! record says, whoever wrote it, can start a heading or pass for a section of the prompt such as
 //! "# When you finish".
 
-use super::{InjectionReason, Memory};
-
-/// Characters a model may read as the end of a line.
-fn is_line_break(character: char) -> bool {
-  matches!(
-    character,
-    '\n' | '\r' | '\u{b}' | '\u{c}' | '\u{85}' | '\u{2028}' | '\u{2029}'
-  )
-}
+use super::{InjectionReason, Memory, content::is_line_break};
 
 /// `body` with every line quoted; an empty line becomes a bare `>`.
 pub fn quoted(body: &str) -> String {
@@ -38,7 +30,8 @@ pub(super) fn entry_text(memory: &Memory, reason: InjectionReason, body: &str) -
   let content = memory.content();
   let key = content
     .key()
-    .map(|key| format!(" ({})", key.as_str().replace(is_line_break, " ")))
+    // Quoted and escaped, so a key reads as data, never as part of the label.
+    .map(|key| format!(" (key {:?})", key.as_str()))
     .unwrap_or_default();
   format!("{}{key}:\n{}", content.kind().label(), quoted(body))
 }
