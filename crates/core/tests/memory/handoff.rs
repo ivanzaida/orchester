@@ -227,7 +227,7 @@ fn handoff_proposals_wait_and_earlier_proposals_are_withdrawn() {
   let next = keeping.changes(RESULT, (&again(&first), StepFate::Passed), earlier.clone());
   assert_eq!(
     kinds(&next.changed),
-    [(MemoryKind::Decision, MemoryStatus::Superseded)],
+    [(MemoryKind::Decision, MemoryStatus::Withdrawn)],
     "the waiting decision is withdrawn; the active handoff stays until the new one is approved"
   );
   assert_eq!(next.added[0].status(), MemoryStatus::Proposed);

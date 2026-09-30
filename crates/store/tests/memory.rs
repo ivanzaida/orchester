@@ -495,3 +495,39 @@ fn memory_unreadable_rows_are_listed_and_left_out_of_listings_and_search() {
   assert_eq!(unreadable.len(), 1);
   assert_eq!(unreadable[0].id, bad.id().to_string());
 }
+
+#[test]
+fn memory_deleting_a_withdrawn_proposal_keeps_every_history() {
+  let (_repo, mut db, run, execution) = started_run();
+  let settings = MemorySettings::default();
+  let mut first = person(MemoryScope::Project, content(MemoryKind::Fact, "Use Postgres."), 1);
+  db.add_memories(std::slice::from_ref(&first)).expect("add");
+  let replacing = |text: &str, millis| {
+    Memory::replacing(
+      &first,
+      agent_write(&run, execution),
+      screened(content(MemoryKind::Fact, text)),
+      &settings,
+      at(millis),
+    )
+    .expect("a replacement")
+  };
+  let mut withdrawn = replacing("Use MySQL.", 2);
+  let mut approved = replacing("Use SQLite.", 3);
+  withdrawn.withdraw(at(3)).expect("withdraw");
+  db.add_memories(std::slice::from_ref(&approved))
+    .expect("add the newer proposal");
+  db.add_memories(std::slice::from_ref(&withdrawn))
+    .expect("add the withdrawn one");
+  approved.approve(Some(&mut first), at(4)).expect("approve");
+  db.supersede_memory(&first, &approved).expect("store both");
+  assert_eq!(withdrawn.earlier_version(), None, "a withdrawn proposal is no version");
+  assert_eq!(approved.earlier_version(), Some(first.id()));
+
+  db.delete_memory(withdrawn.id()).expect("delete the withdrawn proposal");
+  assert!(
+    db.memory(first.id()).expect("read").is_some(),
+    "the approved record's history stays"
+  );
+  assert!(db.memory(approved.id()).expect("read").is_some());
+}

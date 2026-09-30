@@ -21,9 +21,10 @@ use self::rows::{COLUMNS, Raw};
 use super::ProjectDb;
 use crate::{StoreError, rows::corrupt};
 
-/// Deletes record `?1` and its history: the records it superseded, and theirs, followed only while
-/// the record naming one really superseded it (it is not a proposal) and that one is superseded. A
-/// proposal names the active record it would replace; deleting it leaves that record alone.
+/// Deletes record `?1` and its history: its earlier versions ([`Memory::earlier_version`]), and
+/// theirs. A record names an earlier version only once it was active (it is active, superseded or
+/// deprecated) and that version is superseded. A proposal, a rejected or a withdrawn record names
+/// only what it would have replaced; deleting it leaves that record alone.
 const DELETE_WITH_HISTORY: &str = "
   WITH RECURSIVE history (id) AS (
     SELECT id FROM memories WHERE id = ?1
@@ -31,7 +32,7 @@ const DELETE_WITH_HISTORY: &str = "
     SELECT older.id FROM history
       JOIN memories newer ON newer.id = history.id
       JOIN memories older ON older.id = newer.supersedes_id
-      WHERE older.status = 'superseded' AND newer.status NOT IN ('proposed', 'rejected')
+      WHERE older.status = 'superseded' AND newer.status IN ('active', 'superseded', 'deprecated')
   )
   DELETE FROM memories WHERE id IN (SELECT id FROM history)";
 

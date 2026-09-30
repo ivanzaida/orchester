@@ -59,15 +59,19 @@ pub enum MemoryStatus {
   Deprecated,
   /// A proposal a person rejected; it never reaches an agent and is not restored.
   Rejected,
+  /// A proposal its author replaced with a newer proposal before any person decided on it. It was
+  /// never a version of anything: it is no one's history.
+  Withdrawn,
 }
 
 impl MemoryStatus {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 6] = [
     Self::Proposed,
     Self::Active,
     Self::Superseded,
     Self::Deprecated,
     Self::Rejected,
+    Self::Withdrawn,
   ];
 
   /// Stable name, as stored.
@@ -78,6 +82,7 @@ impl MemoryStatus {
       Self::Superseded => "superseded",
       Self::Deprecated => "deprecated",
       Self::Rejected => "rejected",
+      Self::Withdrawn => "withdrawn",
     }
   }
 

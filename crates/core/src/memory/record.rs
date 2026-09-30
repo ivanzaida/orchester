@@ -197,10 +197,10 @@ impl Memory {
     self.decide(MemoryStatus::Active, now)
   }
 
-  /// A proposal that a newer record of its author replaced before any person decided on it: it is
-  /// superseded and waits for no one.
+  /// A proposal that a newer proposal of its author replaced before any person decided on it: it
+  /// is withdrawn and waits for no one. It never became a version, so it is no one's history.
   pub fn withdraw(&mut self, now: Timestamp) -> Result<(), MemoryError> {
-    self.decide(MemoryStatus::Superseded, now)
+    self.decide(MemoryStatus::Withdrawn, now)
   }
 
   /// A person rejects a proposed record: it never reaches an agent and cannot be restored.
@@ -339,9 +339,19 @@ impl Memory {
     self.pinned
   }
 
-  /// The record this one replaces.
+  /// The record this one names as the one it replaces. For a proposal, a rejected or a withdrawn
+  /// record that is only what it would have replaced; see [`Memory::earlier_version`].
   pub const fn supersedes(&self) -> Option<MemoryId> {
     self.supersedes
+  }
+
+  /// The earlier version of this record: the record it replaced, once it was active. A proposal,
+  /// a rejected and a withdrawn record have none, whatever they name.
+  pub const fn earlier_version(&self) -> Option<MemoryId> {
+    match self.status {
+      MemoryStatus::Active | MemoryStatus::Superseded | MemoryStatus::Deprecated => self.supersedes,
+      MemoryStatus::Proposed | MemoryStatus::Rejected | MemoryStatus::Withdrawn => None,
+    }
   }
 
   /// Sequences of the run transcript entries the record came from.
