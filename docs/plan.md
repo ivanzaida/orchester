@@ -179,7 +179,8 @@ ORC-44 · Command approvals and current-run policy changes · branch `orchester/
 - The latest Implement correction makes long approval Target/cwd values wrap in the existing mono property
   row. Fresh Check, Review and Verify must cover this candidate; the old native report remains historical.
 - The continuation from `72bfa7c` corrects the command approval caption's false sandbox-exception claim
-  and adds shipped-locale semantic coverage. Fresh canonical-caption access and current-pin QA remain pending.
+  and adds shipped-locale semantic coverage. The source matches the root-supplied fresh canonical caption;
+  current-pin independent QA remains pending.
 - Check, Review and Verify remain separate pipeline steps. Reuse the independent design evidence and canonical
   refs below. The root reports native command approve/deny and resumed-session writes in the worktree and
   an authorized additional folder on Codex 0.159.2. The transferred exact-root validation fix and four

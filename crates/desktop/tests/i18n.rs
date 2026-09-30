@@ -117,7 +117,7 @@ fn command_approval_explanation_preserves_permission_boundaries() {
       "en" => {
         for claim in [
           "permits only this action within existing permissions",
-          "adds no sandbox, folder or network access",
+          "it does not add sandbox, folder or network access",
           "Deny prevents execution and fails this step",
         ] {
           assert!(text.contains(claim), "{locale}: missing approval claim: {claim}");

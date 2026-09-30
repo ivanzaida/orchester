@@ -284,7 +284,13 @@ ships. Native accept/cancel handling, runtime boundaries and full Target/cwd wra
 
 The root reports updating only canonical `GbNSA/mXvUT` copy through Pencil MCP. This session
 has no callable Pencil tools; saved design exports predate that update. Fresh canonical-caption
-access was requested, and no current design comparison is claimed. No app was launched or pin
+access was requested. The root subsequently supplied a fresh MCP readback of `GbNSA/mXvUT`:
+"Approval tester requests this command in the task worktree. Approve once permits only this action
+within existing permissions; it does not add sandbox, folder or network access. Deny prevents
+execution and fails this step." The source uses that sentence verbatim with the dynamic
+`{{agent}} requests this command in {{cwd}}.` prefix. This is root-provided canonical text
+provenance, not an implementer visual comparison. No current design comparison is claimed.
+No app was launched or pin
 prepared. Before a new private app launch the verifier must report the built/pinned pair READY
 and obtain the root's new watcher.
 
@@ -298,3 +304,8 @@ Fresh implementation checks passed: `cargo test -p orchester-desktop --test i18n
 command_approval_explanation` (1), `locales_have` (1), and `every_key` (1), each as a
 separate named invocation. `powershell -File tools/check.ps1` returned `check: OK` and
 `git diff --check` passed. These checks cover the corrected source, not a new pinned release.
+
+After checkpoint `391a5b0`, the root's exact-caption answer was applied and the three named
+i18n tests and `tools/check.ps1` were rerun successfully against `391a5b0` plus this saved
+caption/test/documentation delta. Both request placeholders remain unchanged. Independent
+Verify must read/export fresh canonical `GbNSA`; earlier exports remain historical.
