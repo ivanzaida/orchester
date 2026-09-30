@@ -6,7 +6,11 @@
 
 use orchester_core::{
   command::redact_secrets,
-  connection::{app_server::PendingApproval, stream::AgentEvent},
+  connection::{
+    app_server::PendingApproval,
+    parse_cli_too_old,
+    stream::{AgentEvent, InvocationOutcome, RunnerProblem},
+  },
   run::{PendingToolApproval, ToolApprovalDecision},
   store::ActivityStore,
   time::Timestamp,
@@ -104,6 +108,35 @@ impl Worker {
       Some(app) => app.redact(text),
       None => redact_secrets(text, &self.mcp_secrets),
     }
+  }
+
+  /// Claude Code got far enough to start its MCP servers (its session started), but its
+  /// permission prompt never reached the runner: every call it asked about was denied as
+  /// unavailable, so the step must not pass as if a person had been asked. Reported, and the turn
+  /// fails, unless the CLI already failed for its own reason (not signed in, too old for the model).
+  pub(super) fn check_prompt_reached(&self, watch: &mut Watch) -> Result<(), StoreError> {
+    let unreached = self
+      .claude_approvals
+      .as_ref()
+      .is_some_and(|approvals| !approvals.reached());
+    if !unreached || watch.tracker.session().is_none() {
+      return Ok(());
+    }
+    let failed_already = match watch.tracker.outcome(Some(0)) {
+      InvocationOutcome::NotSignedIn { .. } => true,
+      InvocationOutcome::TurnFailed { message } => parse_cli_too_old(&message).is_some(),
+      _ => false,
+    };
+    if failed_already {
+      return Ok(());
+    }
+    let problem = RunnerProblem::PermissionPromptUnreachable;
+    self.observe(watch, AgentEvent::RunnerProblem { problem })?;
+    if watch.stop.is_none() {
+      let message = "Claude Code's permission prompt never reached Orchester; nothing could be approved".to_owned();
+      self.observe(watch, AgentEvent::TurnFailed { message })?;
+    }
+    Ok(())
   }
 
   /// Claude Code's permission prompt closed its connection while a call waited: the call can no

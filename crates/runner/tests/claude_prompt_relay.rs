@@ -18,7 +18,8 @@ use orchester_core::{
   },
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
-  run::{PendingToolApproval, RunStatus},
+  resource::StepKey,
+  run::{PendingToolApproval, RunStatus, StepFailure},
   store::ActivityStore,
 };
 use orchester_ipc::{Event, Rejection};
@@ -108,19 +109,18 @@ async fn claude_prompt_relay_leaving_while_a_person_decides_interrupts_the_reque
   );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn claude_prompt_relay_that_never_reached_the_runner_is_reported() {
-  // The fake CLI works without ever starting the prompt server.
-  let project = asking("Append one line.");
+/// Runs `brief` on a step that asks before commands to its end; its run and runner problems.
+async fn finished(brief: &'static str) -> (orchester_core::run::Run, Vec<RunnerProblem>) {
+  let project = asking(brief);
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
-  wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
-  let db = ProjectDb::open(root).expect("open");
-  let problems: Vec<RunnerProblem> = db
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let problems = ProjectDb::open(root)
+    .expect("open")
     .activity(id, 0)
     .expect("activity")
     .into_iter()
@@ -129,7 +129,35 @@ async fn claude_prompt_relay_that_never_reached_the_runner_is_reported() {
       _ => None,
     })
     .collect();
+  (run, problems)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_prompt_relay_that_never_reached_the_runner_fails_the_step() {
+  // The fake CLI starts its session and works without ever starting the prompt server.
+  let (run, problems) = finished("Append one line.").await;
   assert_eq!(problems, [RunnerProblem::PermissionPromptUnreachable]);
+  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  let implement = run
+    .latest_execution(&StepKey::new("implement").expect("key"))
+    .expect("the step ran");
+  assert_eq!(implement.failure(), Some(StepFailure::AgentFailed));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_prompt_relay_is_not_blamed_when_the_cli_failed_first() {
+  let (_, not_signed_in) = finished("Please sign in.").await;
+  assert!(!not_signed_in.contains(&RunnerProblem::PermissionPromptUnreachable));
+  let (_, refused) = finished("Refuse the model.").await;
+  assert!(
+    !refused.contains(&RunnerProblem::PermissionPromptUnreachable),
+    "{refused:?}"
+  );
+  assert!(
+    refused
+      .iter()
+      .any(|problem| matches!(problem, RunnerProblem::CliTooOld { .. }))
+  );
 }
 
 #[test]

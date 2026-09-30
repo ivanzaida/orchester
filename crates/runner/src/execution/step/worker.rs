@@ -14,7 +14,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::{
     app_server::Update,
-    stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker, RunnerProblem},
+    stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker},
   },
   id::{StepExecutionId, TaskId},
   run::{Invocation, RunLimit},
@@ -135,9 +135,9 @@ pub(in super::super) struct Worker {
 pub(super) struct Watch {
   pub(super) db: ProjectDb,
   pub(super) invocation: Invocation,
-  tracker: InvocationTracker,
+  pub(super) tracker: InvocationTracker,
   pending: Vec<(Timestamp, AgentEvent)>,
-  stop: Option<StopCause>,
+  pub(super) stop: Option<StopCause>,
   /// The budget a turn used up, ending the agent at its next turn or after the grace.
   over: Option<StopCause>,
   /// Commands started and not finished yet.
@@ -368,14 +368,7 @@ impl Worker {
 
   fn finish(&self, mut watch: Watch, exit: &ProcessExit) -> Result<Finished, StoreError> {
     let mut approval_interrupted = false;
-    if self
-      .claude_approvals
-      .as_ref()
-      .is_some_and(|approvals| !approvals.reached())
-    {
-      let problem = RunnerProblem::PermissionPromptUnreachable;
-      self.observe(&mut watch, AgentEvent::RunnerProblem { problem })?;
-    }
+    self.check_prompt_reached(&mut watch)?;
     if watch.approval.is_some()
       || !watch.approved_calls.is_empty()
       || self.app_server.as_ref().is_some_and(|app| !app.complete())
