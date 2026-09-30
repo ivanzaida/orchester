@@ -234,7 +234,8 @@ impl Worker {
           self.request_claude_approval(&mut watch, asked)?;
           self.stop_at_checkpoint(&mut watch);
         },
-        () = watch.prompt_closed() => self.prompt_closed(&mut watch)?,
+        // Ending the agent ends its prompt too: once it is stopping, a closed prompt is expected.
+        () = watch.prompt_closed(), if watch.stop.is_none() => self.prompt_closed(&mut watch)?,
         stop = self.stops.recv(), if listening => match stop {
           Some(Stop::Now(cause)) => {
             if watch.stop.is_none() {

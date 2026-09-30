@@ -12,7 +12,7 @@ use orchester_core::{
   connection::{
     AgentProvider,
     mcp::{McpEnvValue, McpEnvironment, McpServer, McpServerName, McpTransport, StdioServer},
-    stream::InvocationOutcome,
+    stream::{AgentEvent, InvocationOutcome},
   },
   id::{ConnectionId, IdempotencyKey, RunId, SecretId},
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
@@ -185,7 +185,8 @@ enum Stopping {
 }
 
 /// A pause or a graceful shutdown while a call waits checkpoints the session without granting the
-/// call, as for Codex: the run pauses with its step still running and its work saved.
+/// call, as for Codex: the run pauses with its step still running and its work saved, and nothing
+/// in its activity calls that a failure.
 async fn stop_at_a_pending_approval(stopping: Stopping) {
   let project = claude(
     "Ask before publishing.",
@@ -234,6 +235,15 @@ async fn stop_at_a_pending_approval(stopping: Stopping) {
   let invocation = &db.invocations(id).expect("invocations")[0];
   assert!(invocation.ended_at.is_some());
   assert!(invocation.timing.waiting_since().is_none());
+  assert_eq!(invocation.outcome, Some(InvocationOutcome::Terminated));
+  let failures: Vec<AgentEvent> = db
+    .activity(id, 0)
+    .expect("activity")
+    .into_iter()
+    .map(|entry| entry.event)
+    .filter(|event| matches!(event, AgentEvent::TurnFailed { .. }))
+    .collect();
+  assert!(failures.is_empty(), "a pause is no failure: {failures:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -244,6 +254,17 @@ async fn claude_approvals_pause_at_a_pending_call_saves_without_granting_it() {
 #[tokio::test(flavor = "multi_thread")]
 async fn claude_approvals_shutdown_at_a_pending_call_saves_without_granting_it() {
   stop_at_a_pending_approval(Stopping::Shutdown).await;
+}
+
+/// Stopping ends the agent, which takes its permission prompt with it, and the prompt's connection
+/// usually closes before the agent's exit is seen (without the fix, every pause here reported the
+/// closed prompt as a failed turn). Both happen together and the worker takes whichever it sees
+/// first, so the pause is repeated to meet either order.
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_approvals_pause_is_no_failure_when_the_prompt_closes_before_the_exit() {
+  for _ in 0..6 {
+    stop_at_a_pending_approval(Stopping::Pause).await;
+  }
 }
 
 #[tokio::test(flavor = "multi_thread")]
