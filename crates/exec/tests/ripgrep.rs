@@ -1,5 +1,5 @@
-//! Finding ripgrep for agents (on the `PATH`, then where winget links it, then bundled with the Codex CLI or Claude Code),
-//! copying it into the project's tools folder by content, and the install plan, which is unavailable
+//! Finding ripgrep for agents (on the `PATH`, then where winget links it, then bundled with the Codex CLI or Claude
+//! Code), copying it into the project's tools folder by content, and the install plan, which is unavailable
 //! without its installer. The tests give their own `%LOCALAPPDATA%`, or none: a ripgrep
 //! winget installed on the machine running them would be found first.
 
@@ -112,10 +112,7 @@ fn ripgrep_bundled_with_claude_code_is_found_from_its_script() {
 fn ripgrep_is_not_found_without_one() {
   let dir = tempfile::tempdir().expect("temp");
   let cli = file(&dir.path().join("native/claude"), "native");
-  assert_eq!(
-    ripgrep::locate(Some(&path_of(&[dir.path()])), None, &[&cli]),
-    None
-  );
+  assert_eq!(ripgrep::locate(Some(&path_of(&[dir.path()])), None, &[&cli]), None);
 }
 
 #[cfg(windows)]
@@ -126,8 +123,14 @@ fn ripgrep_winget_installed_is_found_before_a_bundled_one_when_the_path_predates
   let local = dir.path().join("Local");
   let winget = local.join("Microsoft/WinGet");
   let package = winget.join("Packages/BurntSushi.ripgrep.MSVC_Microsoft.Winget.Source_8wekyb3d8bbwe");
-  file(&package.join("ripgrep-14.1.1-x86_64-pc-windows-msvc").join(PROGRAM), "old rg");
-  let newest = file(&package.join("ripgrep-15.1.0-x86_64-pc-windows-msvc").join(PROGRAM), "new rg");
+  file(
+    &package.join("ripgrep-14.1.1-x86_64-pc-windows-msvc").join(PROGRAM),
+    "old rg",
+  );
+  let newest = file(
+    &package.join("ripgrep-15.1.0-x86_64-pc-windows-msvc").join(PROGRAM),
+    "new rg",
+  );
   file(&winget.join("Packages/Other.Tool/bin").join(PROGRAM), "other");
   let empty = dir.path().join("empty");
   fs::create_dir_all(&empty).expect("folder");
