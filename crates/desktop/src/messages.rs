@@ -62,6 +62,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::ConnectionNotFound(_)
     | StoreError::NotAGitHubConnection(_)
     | StoreError::InvocationNotFound(_)
+    | StoreError::InvocationPermissionsNotRecordable(_)
     | StoreError::SecretNotFound(_)
     | StoreError::MemoryNotFound(_)
     | StoreError::MemoryExists(_)

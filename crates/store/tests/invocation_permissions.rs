@@ -1,0 +1,102 @@
+//! Launch policies survive later run changes and migration without inventing historical data.
+
+mod support;
+
+use orchester_core::{
+  connection::stream::InvocationOutcome,
+  id::InvocationId,
+  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
+  store::{ActivityStore, RunStore},
+};
+use orchester_store::{ProjectDb, StoreError};
+use rusqlite::Connection;
+use support::{at, model, started_run};
+
+fn policy(commands: CommandPermission) -> AgentPermissions {
+  AgentPermissions::new(RepositoryAccess::Write, commands, NetworkAccess::Off)
+}
+
+#[test]
+fn invocation_permissions_are_written_once_and_survive_save_and_reopen() {
+  let (repo, mut db, run, execution) = started_run();
+  let mut invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("launch");
+  let actual = policy(CommandPermission::AskBefore);
+  db.save_invocation_permissions(invocation.id, &actual)
+    .expect("launch policy");
+  assert!(matches!(
+    db.save_invocation_permissions(invocation.id, &policy(CommandPermission::AnyInWorktree)),
+    Err(StoreError::InvocationPermissionsNotRecordable(id)) if id == invocation.id
+  ));
+  invocation.permissions = Some(policy(CommandPermission::AnyInWorktree));
+  invocation.session = Some("resumed-thread".into());
+  invocation.ended_at = Some(at(20));
+  invocation.outcome = Some(InvocationOutcome::Completed);
+  db.save_invocation(&invocation)
+    .expect("progress cannot rewrite launch policy");
+  drop(db);
+  let db = ProjectDb::open(repo.path()).expect("reopen");
+  let stored = db.invocations(run.id()).expect("read").remove(0);
+  assert_eq!(stored.permissions, Some(actual));
+  assert_eq!(stored.session.as_deref(), Some("resumed-thread"));
+  assert_eq!(stored.ended_at, Some(at(20)));
+  let raw = Connection::open(repo.path().join(".orchester/orchester.db")).expect("raw");
+  assert!(raw.execute("UPDATE invocations SET permissions = NULL", []).is_err());
+}
+
+#[test]
+fn invocation_permissions_refuse_commands_closed_launches_and_missing_ids() {
+  let (_repo, mut db, run, execution) = started_run();
+  let command = db
+    .start_command_invocation(run.id(), execution, at(10))
+    .expect("command");
+  let mut agent = db
+    .start_invocation(run.id(), execution, &model(), at(20))
+    .expect("agent");
+  agent.ended_at = Some(at(30));
+  agent.outcome = Some(InvocationOutcome::Completed);
+  db.save_invocation(&agent).expect("closed");
+  for id in [command.id, agent.id] {
+    assert!(matches!(
+      db.save_invocation_permissions(id, &policy(CommandPermission::AskBefore)),
+      Err(StoreError::InvocationPermissionsNotRecordable(found)) if found == id
+    ));
+  }
+  let missing = InvocationId::generate();
+  assert!(matches!(
+    db.save_invocation_permissions(missing, &policy(CommandPermission::AskBefore)),
+    Err(StoreError::InvocationNotFound(id)) if id == missing
+  ));
+  assert!(
+    db.invocations(run.id())
+      .expect("read")
+      .iter()
+      .all(|invocation| invocation.permissions.is_none())
+  );
+}
+
+#[test]
+fn invocation_permissions_migration_preserves_legacy_session_and_unknown_policy() {
+  let (repo, mut db, run, execution) = started_run();
+  let mut invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("agent");
+  invocation.session = Some("legacy-thread".into());
+  db.save_invocation(&invocation).expect("session");
+  drop(db);
+  let raw = Connection::open(repo.path().join(".orchester/orchester.db")).expect("raw");
+  let version: u32 = raw
+    .pragma_query_value(None, "user_version", |row| row.get(0))
+    .expect("version");
+  raw
+    .execute_batch("DROP TRIGGER invocations_permissions_immutable; ALTER TABLE invocations DROP COLUMN permissions;")
+    .expect("previous schema");
+  raw
+    .pragma_update(None, "user_version", version - 1)
+    .expect("previous version");
+  drop(raw);
+  let db = ProjectDb::open(repo.path()).expect("migrate");
+  assert_eq!(db.invocations(run.id()).expect("legacy launch"), [invocation]);
+  assert_eq!(db.run(run.id()).expect("read run").expect("run"), run);
+}

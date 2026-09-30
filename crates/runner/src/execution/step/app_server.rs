@@ -12,7 +12,7 @@ use std::{
 use orchester_core::{
   command::{SecretVariable, redact_secrets},
   connection::{
-    app_server::{AppServerStream, Update},
+    app_server::{AppServerStream, PendingApproval, Update},
     app_server_mcp::verify_selected_servers,
     stream::{AgentEvent, OutputStream},
   },
@@ -111,6 +111,10 @@ impl AppServerSession {
 
   pub fn has_active_tools(&self) -> bool {
     self.stream.has_active_tools()
+  }
+
+  pub fn has_other_active_tools(&self, pending: &PendingApproval) -> bool {
+    self.stream.has_other_active_tools(pending)
   }
 
   pub async fn receive(

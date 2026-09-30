@@ -69,6 +69,7 @@ pub(super) struct AgentStart {
   pub(super) agent: String,
   /// The task memory its prompt holds, to record with the invocation.
   pub(super) memory: Vec<InjectedMemory>,
+  pub(super) permissions: AgentPermissions,
 }
 
 /// What the prompt of an agent step's invocation is made of besides the run.
@@ -184,6 +185,7 @@ impl RunTask {
       app_server,
       agent: body.role().as_str().to_owned(),
       memory: recalled.injected(),
+      permissions: enforced.permissions().clone(),
     })
   }
 

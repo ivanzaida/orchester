@@ -155,6 +155,7 @@ fn plans_waiting_for_a_decision_is_not_active_agent_time() {
     kind: InvocationKind::Agent {
       model: model("gpt-5.5"),
     },
+    permissions: None,
     session: Some("thread-1".into()),
     started_at: at(1_000),
     ended_at: Some(at(61_000)),

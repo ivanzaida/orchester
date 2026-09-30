@@ -6,6 +6,7 @@
 //! followed from the same events and stored with the invocation ([`FirstEditTracker`]).
 
 use std::{
+  collections::HashSet,
   path::{Path, PathBuf},
   time::Duration,
 };
@@ -13,7 +14,7 @@ use std::{
 use orchester_core::{
   connection::{
     app_server::{PendingApproval, Update},
-    stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker},
+    stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker, OutputStream},
   },
   id::{StepExecutionId, TaskId},
   run::{FirstEditTracker, Invocation, PendingToolApproval, RunLimit, ToolApprovalDecision},
@@ -60,6 +61,8 @@ pub(in super::super) enum StopCause {
   Abandoned,
   /// The run's permissions changed with Apply now: the agent restarts with them.
   Permissions,
+  /// A pause checkpoints a session waiting for an unexecuted tool decision.
+  Paused,
 }
 
 /// What the run tells an agent.
@@ -71,6 +74,8 @@ pub(in super::super) enum Stop {
   AfterTurn(StopCause),
   /// End it once the command it is running has finished, or now when it runs none.
   AfterCommand(StopCause),
+  /// Let ordinary work finish, but checkpoint instead of waiting for a tool decision.
+  AtApproval,
   /// Forget an [`Stop::AfterCommand`] that has not happened yet.
   Withdraw,
 }
@@ -141,9 +146,10 @@ struct Watch {
   /// The budget a turn used up, ending the agent at its next turn or after the grace.
   over: Option<StopCause>,
   /// Commands started and not finished yet.
-  commands: usize,
+  commands: HashSet<String>,
   /// Ends the agent once no command runs.
   after_command: Option<StopCause>,
+  pause_requested: bool,
   approval: Option<(String, PendingApproval)>,
 }
 
@@ -158,8 +164,9 @@ impl Watch {
       pending: Vec::new(),
       stop: None,
       over: None,
-      commands: 0,
+      commands: HashSet::new(),
       after_command: None,
+      pause_requested: false,
       approval: None,
     })
   }
@@ -193,26 +200,8 @@ impl Worker {
       tokio::select! {
         event = self.process.next() => match event {
           Some(ProcessEvent::Output { stream, line }) => {
-            if let Some(app) = self.app_server.as_mut() {
-              match app.receive(stream, &line, &self.process).await {
-                Ok(updates) => for update in updates { self.app_update(&mut watch, update)?; },
-                Err(error) => {
-                  let event = match error {
-                    AppServerFailure::Protocol(message) => AgentEvent::TurnFailed { message },
-                    AppServerFailure::NotSignedIn(message) => AgentEvent::NotSignedIn { message },
-                  };
-                  self.observe(&mut watch, event)?;
-                  self.process.terminate();
-                }
-              }
-            } else {
-              for event in self.output.parse(stream, &line) {
-                self.observe(&mut watch, event)?;
-              }
-            }
-            if watch.after_command.is_some() && self.checkpoint_safe(&watch) && watch.stop.is_none() {
-              watch.stop = watch.after_command.take();
-            }
+            self.receive_output(&mut watch, stream, &line).await?;
+            self.stop_at_checkpoint(&mut watch);
             if watch.stop.is_some() {
               self.process.terminate();
             }
@@ -242,11 +231,12 @@ impl Worker {
           Some(Stop::AfterCommand(cause)) => {
             if watch.stop.is_none() && watch.over.is_none() {
               watch.after_command = Some(cause);
-              if self.checkpoint_safe(&watch) || watch.approval.is_some() {
-                watch.stop = watch.after_command.take();
-                self.process.terminate();
-              }
+              self.stop_at_checkpoint(&mut watch);
             }
+          }
+          Some(Stop::AtApproval) => {
+            watch.pause_requested = true;
+            self.stop_at_checkpoint(&mut watch);
           }
           Some(Stop::Withdraw) => watch.after_command = None,
           None => listening = false,
@@ -256,6 +246,52 @@ impl Worker {
           self.process.terminate();
         }
       }
+    }
+  }
+
+  async fn receive_output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
+    if let Some(app) = self.app_server.as_mut() {
+      match app.receive(stream, line, &self.process).await {
+        Ok(updates) => {
+          for update in updates {
+            self.app_update(watch, update)?;
+          }
+        }
+        Err(error) => {
+          let event = match error {
+            AppServerFailure::Protocol(message) => AgentEvent::TurnFailed { message },
+            AppServerFailure::NotSignedIn(message) => AgentEvent::NotSignedIn { message },
+          };
+          self.observe(watch, event)?;
+          self.process.terminate();
+        }
+      }
+    } else {
+      for event in self.output.parse(stream, line) {
+        self.observe(watch, event)?;
+      }
+    }
+    Ok(())
+  }
+
+  fn stop_at_checkpoint(&mut self, watch: &mut Watch) {
+    if watch.stop.is_some() || watch.over.is_some() {
+      return;
+    }
+    let pending_safe = watch.approval.as_ref().is_some_and(|(_, request)| {
+      watch.commands.iter().all(|item| item == request.item())
+        && !self
+          .app_server
+          .as_ref()
+          .is_some_and(|app| app.has_other_active_tools(request))
+    });
+    if watch.after_command.is_some() && (self.checkpoint_safe(watch) || pending_safe) {
+      watch.stop = watch.after_command.take();
+    } else if watch.pause_requested && pending_safe {
+      watch.stop = Some(StopCause::Paused);
+    }
+    if watch.stop.is_some() {
+      self.process.terminate();
     }
   }
 
@@ -275,7 +311,7 @@ impl Worker {
   }
 
   fn checkpoint_safe(&self, watch: &Watch) -> bool {
-    watch.commands == 0 && !self.app_server.as_ref().is_some_and(AppServerSession::has_active_tools)
+    watch.commands.is_empty() && !self.app_server.as_ref().is_some_and(AppServerSession::has_active_tools)
   }
 
   fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), StoreError> {
@@ -362,6 +398,9 @@ impl Worker {
     id: &str,
     approve: bool,
   ) -> Result<Result<(), Rejection>, StoreError> {
+    if watch.stop.is_some() {
+      return Ok(Err(Rejection::ToolApprovalNotAwaited));
+    }
     let Some((pending_id, request)) = watch.approval.as_ref() else {
       return Ok(Err(Rejection::ToolApprovalNotAwaited));
     };
@@ -456,9 +495,11 @@ impl Worker {
       watch.stop = watch.over;
     }
     match &event {
-      AgentEvent::CommandStarted { .. } => watch.commands += 1,
-      AgentEvent::CommandFinished { .. } => {
-        watch.commands = watch.commands.saturating_sub(1);
+      AgentEvent::CommandStarted { item, .. } => {
+        watch.commands.insert(item.clone());
+      }
+      AgentEvent::CommandFinished { item, .. } => {
+        watch.commands.remove(item);
       }
       _ => {}
     }

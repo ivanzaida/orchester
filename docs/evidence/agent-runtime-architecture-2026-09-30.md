@@ -254,3 +254,83 @@ found a real long-Target truncation without a hover reveal; that UI finding is p
 its task-specific Implement agent. The temporary project maximum and daily budgets
 are 16M and 40M; default run/time limits remain 1.4M and 30 minutes. The user subsequently
 authorized Root commits after inspecting the pending runtime changes. Task branches remain unmerged.
+
+## Graceful shutdown while a tool decision is pending
+
+The committed pair (`ad13563`, `c8c683f`) was installed at 18:50:48 UTC after its final
+quality gate and release build. Actual installed desktop and runner hashes match
+`.tmp/agent-runtime/current-runtime-candidate-v2/build-manifest.json`. That update did
+not gracefully save ORC-14: the old app's CloseWaiting overlay covered its pending
+Pencil approval and the run needed an explicit Quit now interruption and continuation.
+Its existing session, checkpoint and worktree were preserved.
+
+Root now fixes this deadlock in the runner instead of answering hidden approvals during
+shutdown. Pause lets ordinary invocation work finish. When the invocation awaits a tool
+decision, it ends and checkpoints the actual work without granting or denying that action.
+The open execution and provider session are preserved. Interrupted approval records prevent
+automatic replay when attaching again; continuation remains explicit. A decision received
+after checkpoint termination starts is rejected.
+
+The parser retains the correlated tool item so checkpoint safety excludes only that pending
+item. Other active commands and MCP calls must finish first. A pause requested during an
+approved command remains pending until it finishes; a later approval request then checkpoints
+without executing the newly requested action. Apply-now uses the same safety check for a
+pending decision alongside other active tools.
+
+Validation of this additional, uncommitted root delta:
+
+- Three `approval_shutdown_` scheduler/storage/protocol regressions pass: pending command,
+  pending MCP, and active-command completion followed by a later pending MCP. They assert
+  actual checkpoint contents, the preserved session/open execution, absence of unapproved
+  side effects, and no automatic invocation after reconnect.
+- The core `pending_approval_` test proves another MCP item remains active while one waits.
+- Two existing `approval_permissions_`, four `command_approvals_`, one
+  `lifecycle_finish_at_checkpoints_`, and one `control_pause_waits_` regressions pass.
+- `tools/check.ps1` reports `check: OK` in `.tmp/agent-runtime/check-shutdown.log`;
+  core Darwin clippy with warnings denied passes.
+
+The shutdown correction has a successful release build and is ready for the Root commit the user
+authorized on this turn. It is not installed. No task branch was merged. Physical Mac testing,
+the full test suite, and full desktop/runner Darwin compilation
+remain unperformed; the native C-toolchain limitation still applies.
+
+## Immutable invocation launch permissions
+
+ORC-44's independent Review found that a Next invocation change immediately appeared as the
+active policy while the running agent still enforced its earlier permissions. Its Implement
+agent identified a shared data gap: invocation records held no actual launch-policy snapshot,
+and permission-change events record desired settings. Timestamp inference would invent evidence.
+
+Root added the shared core/store/runner contract directly. `Invocation.permissions` is the
+enforced `AgentPermissions` used by the prepared launch command. The runner records it once
+before starting that process, including any network-on fallback when network-off cannot be
+enforced. Later run overrides, progress saves, completion and session continuation never
+rewrite an earlier invocation's snapshot. The store rejects another write, a command-tool
+policy, a closed invocation and a missing invocation. A database trigger protects an existing
+snapshot from direct update. The appended migration leaves older agent invocations explicitly
+unknown; neither desired settings nor event timestamps backfill them.
+
+Validation of this contract:
+
+- Three `invocation_permissions_` store tests pass: immutable round-trip/reopen despite a
+  conflicting progress record, invalid writes, and migration preserving the legacy session,
+  invocation and run without inventing a policy.
+- Six `run_permissions_` runner tests pass, including assertions that active policies remain
+  unchanged until the next launch or Apply-now checkpoint, resumed sessions get the new
+  snapshot, cancelled restarts retain their history, and Claude's unsupported network-off
+  is recorded as the actual network-on policy.
+- Four `command_approvals_` runner tests pass with assertions that migrating to App Server
+  records the actual Ask/MCP policy and preserves preceding launch snapshots.
+- Three `approval_shutdown_` tests pass with the new launch recording present.
+- `tools/check.ps1` reports `check: OK` in
+  `.tmp/agent-runtime/check-invocation-policy.log`; core Darwin clippy passes with warnings denied.
+
+Root supplied the 14 API/source/test files to the preserved ORC-44 worktree after checking every
+target. The only divergent target, `step/mod.rs`, retained its existing recovery behavior and
+received only the two launch-recording lines. Original files and hashes remain in
+`.tmp/agent-runtime/invocation-policy-handoff-v1`. Task-specific copy and evidence were preserved.
+Its Implement agent owns the current-versus-next display correction and fresh independent QA.
+
+The user authorized committing the current Root work and requires all subsequent Root source
+changes in a separate worktree. The launch-policy delta is not installed yet. Physical Mac,
+the full suite and full desktop/runner Darwin compilation remain unperformed.

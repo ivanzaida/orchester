@@ -63,6 +63,8 @@ pub enum StoreError {
   NotAGitHubConnection(ConnectionId),
   #[error("invocation {0} does not exist")]
   InvocationNotFound(InvocationId),
+  #[error("invocation {0} is not an open agent launch without a recorded permission snapshot")]
+  InvocationPermissionsNotRecordable(InvocationId),
   #[error("a secret named `{name}` already exists in {environment}")]
   DuplicateSecretName { name: String, environment: &'static str },
   #[error("secret {0} does not exist")]

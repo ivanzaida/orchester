@@ -226,6 +226,8 @@ impl RunTask {
         return Ok(true);
       }
     };
+    self.db.save_invocation_permissions(invocation.id, &start.permissions)?;
+    invocation.permissions = Some(start.permissions.clone());
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
     self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
     self.db.save_edit_progress(invocation.id, &EditProgress::default())?;
