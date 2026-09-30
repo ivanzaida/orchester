@@ -167,6 +167,18 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+ORC-37 · Codebase index 1/2 (backend) · branch `claude/codebase-index`
+
+- **Done 2026-09-30.** New crate `orchester-index` builds a per-revision index in `<repo>/.orchester/index/<revision>/`
+  from git objects with tree-sitter (Rust, TypeScript/JavaScript, Python, Go): `tree.txt`, `symbols.tsv`,
+  `outline/<path>.md`, `docs.md`, `map.md` (packages from Cargo/npm/Python/Go manifests) and `manifest.json`. Full
+  first, then incremental from the closest existing index via `git diff-tree` (equal to a full build); atomic rename
+  under a cross-process lock. The runner builds or reuses it before a run's first step; failure is a
+  `CodebaseIndexUnavailable` runner problem in each agent's activity and the run continues. Indexes go when the last
+  worktree using them is removed (desktop *Remove worktree*, merge, Run again).
+- Open: independent design verification of the new activity problem text; delivery to agents is ORC-38; Project
+  settings (status, Rebuild) needs a Pencil design first; macOS cross-check stops at C build scripts (no target `cc`).
+
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 
 - **Done 2026-09-30.** **Send & continue** resumes the same failed run in a new attempt, preserving its branch,
