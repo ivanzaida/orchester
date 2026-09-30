@@ -74,9 +74,14 @@ fn matches(
     return Ok(Vec::new());
   }
   let sql = format!(
-    "SELECT {COLUMNS}, -bm25({index}, {WEIGHTS}) AS relevance FROM {index} JOIN memories m ON m.seq = {index}.rowid \
-     WHERE {index} MATCH ?1 AND m.status = 'active' AND (m.task_id = ?2 OR m.task_id IS NULL) \
-     ORDER BY relevance DESC LIMIT ?3"
+    "
+    SELECT {COLUMNS}, -bm25({index}, {WEIGHTS}) AS relevance
+    FROM {index} JOIN memories m ON m.seq = {index}.rowid
+    WHERE {index} MATCH ?1
+      AND m.status = 'active'
+      AND (m.task_id = ?2 OR m.task_id IS NULL)
+    ORDER BY relevance DESC
+    LIMIT ?3"
   );
   let limit = i64::try_from(limit).unwrap_or(i64::MAX);
   let mut statement = connection.prepare(&sql)?;

@@ -191,10 +191,14 @@ impl MemoryStore for ProjectDb {
 
   fn save_memory_settings(&mut self, settings: &MemorySettings) -> Result<(), StoreError> {
     self.connection.execute(
-      "INSERT INTO memory_settings (id, task_writes, project_writes, max_records, max_tokens) \
-       VALUES (1, ?1, ?2, ?3, ?4) ON CONFLICT (id) DO UPDATE SET task_writes = excluded.task_writes, \
-       project_writes = excluded.project_writes, max_records = excluded.max_records, \
-       max_tokens = excluded.max_tokens",
+      "
+      INSERT INTO memory_settings (id, task_writes, project_writes, max_records, max_tokens)
+      VALUES (1, ?1, ?2, ?3, ?4)
+      ON CONFLICT (id) DO UPDATE SET
+        task_writes = excluded.task_writes,
+        project_writes = excluded.project_writes,
+        max_records = excluded.max_records,
+        max_tokens = excluded.max_tokens",
       params![
         settings.task_writes.name(),
         settings.project_writes.name(),
