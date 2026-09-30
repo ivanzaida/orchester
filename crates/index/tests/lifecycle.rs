@@ -3,10 +3,15 @@
 
 mod support;
 
-use std::{fs, sync::Barrier, thread};
+use std::{
+  fs,
+  sync::{Barrier, mpsc},
+  thread,
+  time::Duration,
+};
 
 use orchester_core::revision::Revision;
-use orchester_index::{BuildPhase, BuildProgress, IndexError, IndexState, Outcome};
+use orchester_index::{BuildMode, BuildPhase, BuildProgress, IndexError, IndexState, Outcome};
 use support::Repo;
 
 /// The names in the index folder that are indexes, unfinished builds or run records.
@@ -139,11 +144,58 @@ fn pruning_a_repository_without_indexes_does_nothing() {
 
 /// Holds the lock of `revision`'s index the way a build in another process does.
 fn hold_lock(repo: &Repo, revision: &Revision) -> fs::File {
-  let locks = repo.index_root().join(".locks");
-  fs::create_dir_all(&locks).expect("create the locks folder");
-  let file = fs::File::create(locks.join(revision.as_str())).expect("open the lock");
+  let file = lock_file(repo, revision);
   file.lock().expect("lock");
   file
+}
+
+/// Holds the shared lock of `revision`'s index the way another revision's build reading it as its
+/// base does.
+fn hold_shared_lock(repo: &Repo, revision: &Revision) -> fs::File {
+  let file = lock_file(repo, revision);
+  file.lock_shared().expect("lock");
+  file
+}
+
+fn lock_file(repo: &Repo, revision: &Revision) -> fs::File {
+  let locks = repo.index_root().join(".locks");
+  fs::create_dir_all(&locks).expect("create the locks folder");
+  fs::File::create(locks.join(revision.as_str())).expect("open the lock")
+}
+
+#[test]
+fn reusing_an_index_does_not_wait_for_a_build_reading_it_as_its_base() {
+  let repo = Repo::new();
+  let first = repo.head();
+  repo.ensure(&first);
+  repo.write(
+    "README.md",
+    "# Changed
+",
+  );
+  repo.git(&["commit", "--quiet", "--all", "-m", "change"]);
+  let second = repo.head();
+
+  let _reading = hold_shared_lock(&repo, &first);
+  let (done, finished) = mpsc::channel();
+  let indexes = repo.indexes();
+  let (run, reused) = (repo.run_with_worktree(), first);
+  thread::spawn(move || {
+    let outcome = indexes.ensure(&reused, run).map(|ensured| ensured.outcome);
+    // The test may have given up waiting and ended.
+    let _ = done.send(outcome);
+  });
+  let outcome = finished
+    .recv_timeout(Duration::from_secs(30))
+    .expect("reuse does not wait for the reader")
+    .expect("the index is reused");
+  assert!(matches!(outcome, Outcome::Reused));
+  // Another build may read it as its base at the same time.
+  let built = repo.ensure(&second);
+  assert!(matches!(
+    built.outcome,
+    Outcome::Built(ref report) if matches!(report.mode, BuildMode::Incremental { .. })
+  ));
 }
 
 #[test]

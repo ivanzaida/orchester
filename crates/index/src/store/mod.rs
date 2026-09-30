@@ -6,7 +6,8 @@
 //! An index is built in `.building-<revision>` beside its final folder and renamed into place once
 //! complete, so an agent never reads a half-written one. Each revision has its own lock
 //! ([`locks`]): two runs asking for the same revision build it once and the second reuses it, while
-//! runs of other revisions never wait for that build, and removal skips a revision that is busy.
+//! runs of other revisions never wait for that build, reading an index never waits for another
+//! reader, and removal skips a revision that is busy.
 
 mod base;
 mod cleanup;
@@ -87,28 +88,49 @@ impl CodebaseIndexes {
 
   /// The index of `revision` for `run`, whose worktree was created at it: reused when it exists,
   /// otherwise built, from the existing index closest to it when there is one. Indexes whose runs
-  /// no longer have worktrees are removed afterwards.
+  /// no longer have worktrees are removed afterwards. Reuse holds the revision's shared lock, so it
+  /// does not wait for another revision's build that reads this index as its base.
   pub fn ensure(&self, revision: &Revision, run: RunId) -> Result<Ensured, IndexError> {
     fs::create_dir_all(&self.root).map_err(IndexError::io("create", &self.root))?;
-    let lock = locks::lock(&self.root, revision)?;
-    let users = self.root.join(USERS).join(revision.as_str());
-    fs::create_dir_all(&users).map_err(IndexError::io("create", &users))?;
-    let user = users.join(run.to_string());
-    File::create(&user).map_err(IndexError::io("create", user))?;
     let path = self.root.join(revision.as_str());
-    let outcome = match Manifest::read_current(&path).map(|manifest| digest::verify(&path, &manifest.digests)) {
-      Some(Ok(())) => Outcome::Reused,
-      Some(Err(problem)) => {
-        tracing::warn!(%revision, %problem, "the codebase index was changed; building it again");
-        Outcome::Built(self.build(revision, &path, Start::Scratch)?)
+    let reused = {
+      let _lock = locks::lock_shared(&self.root, revision)?;
+      let current =
+        Manifest::read_current(&path).is_some_and(|manifest| digest::verify(&path, &manifest.digests).is_ok());
+      if current {
+        self.record_user(revision, run)?;
       }
-      None => Outcome::Built(self.build(revision, &path, Start::Closest)?),
+      current
     };
-    drop(lock);
+    let outcome = if reused {
+      Outcome::Reused
+    } else {
+      let _lock = locks::lock(&self.root, revision)?;
+      self.record_user(revision, run)?;
+      // Another run may have built it while this one waited for the lock.
+      match Manifest::read_current(&path).map(|manifest| digest::verify(&path, &manifest.digests)) {
+        Some(Ok(())) => Outcome::Reused,
+        Some(Err(problem)) => {
+          tracing::warn!(%revision, %problem, "the codebase index was changed; building it again");
+          Outcome::Built(self.build(revision, &path, Start::Scratch)?)
+        }
+        None => Outcome::Built(self.build(revision, &path, Start::Closest)?),
+      }
+    };
     if let Err(error) = self.prune() {
       tracing::warn!(%error, "cannot remove the codebase indexes no run uses");
     }
     Ok(Ensured { path, outcome })
+  }
+
+  /// Records that `run` uses the index of `revision`, while holding its lock: a removal, which
+  /// takes it exclusively, sees the record.
+  fn record_user(&self, revision: &Revision, run: RunId) -> Result<(), IndexError> {
+    let users = self.root.join(USERS).join(revision.as_str());
+    fs::create_dir_all(&users).map_err(IndexError::io("create", &users))?;
+    let user = users.join(run.to_string());
+    File::create(&user).map_err(IndexError::io("create", user))?;
+    Ok(())
   }
 
   /// Removes the indexes of revisions whose runs all had their worktrees removed. It never waits:
@@ -132,6 +154,8 @@ impl CodebaseIndexes {
   /// The folder of the index of `revision`, when it is built and unchanged.
   pub fn existing(&self, revision: &Revision) -> Option<PathBuf> {
     let path = self.root.join(revision.as_str());
+    // Without the lock a build or removal may be swapping the folder: the index is not trusted.
+    let _lock = locks::try_lock_shared(&self.root, revision).ok().flatten()?;
     let manifest = Manifest::read_current(&path)?;
     match digest::verify(&path, &manifest.digests) {
       Ok(()) => Some(path),
@@ -162,7 +186,7 @@ impl CodebaseIndexes {
     progress: &ProgressFile,
   ) -> Result<BuildReport, IndexError> {
     let staging = self.root.join(format!("{BUILDING}{revision}"));
-    // The earlier index stays locked while this build reads it: a removal leaves it alone.
+    // The earlier index stays locked (shared) while this build reads it: a removal leaves it alone.
     let (base, _base_lock) = match start {
       Start::Closest => self.base(revision).unzip(),
       Start::Scratch => (None, None),

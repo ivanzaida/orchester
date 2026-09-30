@@ -1,6 +1,7 @@
 //! The earlier index an incremental build starts from: of the indexes with the current format, the
 //! one whose revision differs from the new one in the fewest paths, provided no one is building or
-//! removing it and its files still match their digests. It stays locked while the build reads it.
+//! removing it and its files still match their digests. Its shared lock is held while the build
+//! reads it: runs reusing it and other builds reading it go on meanwhile, a removal or rebuild waits.
 
 use orchester_core::revision::Revision;
 
@@ -31,7 +32,7 @@ impl CodebaseIndexes {
     });
     candidates.into_iter().find_map(|(existing, changed)| {
       // A revision someone builds or removes now, or whose lock cannot be taken, is passed over.
-      let lock = locks::try_lock(&self.root, &existing).ok().flatten()?;
+      let lock = locks::try_lock_shared(&self.root, &existing).ok().flatten()?;
       let dir = self.root.join(existing.as_str());
       let manifest = Manifest::read_current(&dir)?;
       if let Err(problem) = digest::verify(&dir, &manifest.digests) {

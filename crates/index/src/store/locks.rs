@@ -1,7 +1,9 @@
-//! One lock file per revision, `.locks/<revision>`, locked exclusively while its index is built,
-//! claimed, reused or removed, in this process and across processes (the runner builds, the desktop
-//! removes). Work on other revisions never waits for it. The files stay: removing a lock file
-//! another process may be about to lock would let two of them hold the "same" lock.
+//! One lock file per revision, `.locks/<revision>`, in this process and across processes (the
+//! runner builds, the desktop removes and rebuilds). It is locked exclusively while the revision's
+//! index is built, rebuilt or removed, and shared while it is only read: reused by a run, or read
+//! as the base of another revision's incremental build. Readers never wait for each other, and work
+//! on other revisions never waits for it. The files stay: removing a lock file another process may
+//! be about to lock would let two of them hold the "same" lock.
 
 use std::{
   fs::{self, File, OpenOptions, TryLockError},
@@ -19,14 +21,32 @@ pub(super) struct RevisionLock {
   _file: File,
 }
 
-/// Waits for the lock of `revision` in the index folder `root`.
+/// Waits for the shared lock of `revision` in the index folder `root`, to read its index.
+pub(super) fn lock_shared(root: &Path, revision: &Revision) -> Result<RevisionLock, IndexError> {
+  let (file, path) = open(root, revision)?;
+  file.lock_shared().map_err(IndexError::io("lock", path))?;
+  Ok(RevisionLock { _file: file })
+}
+
+/// The shared lock of `revision` when no one builds or removes it; `None` while someone does.
+pub(super) fn try_lock_shared(root: &Path, revision: &Revision) -> Result<Option<RevisionLock>, IndexError> {
+  let (file, path) = open(root, revision)?;
+  match file.try_lock_shared() {
+    Ok(()) => Ok(Some(RevisionLock { _file: file })),
+    Err(TryLockError::WouldBlock) => Ok(None),
+    Err(TryLockError::Error(error)) => Err(IndexError::io("lock", path)(error)),
+  }
+}
+
+/// Waits for the exclusive lock of `revision` in the index folder `root`, to build it.
 pub(super) fn lock(root: &Path, revision: &Revision) -> Result<RevisionLock, IndexError> {
   let (file, path) = open(root, revision)?;
   file.lock().map_err(IndexError::io("lock", path))?;
   Ok(RevisionLock { _file: file })
 }
 
-/// The lock of `revision` when no one holds it; `None` while a build or another removal does.
+/// The exclusive lock of `revision` when no one holds it; `None` while a build, a reader or another
+/// removal does.
 pub(super) fn try_lock(root: &Path, revision: &Revision) -> Result<Option<RevisionLock>, IndexError> {
   let (file, path) = open(root, revision)?;
   match file.try_lock() {
