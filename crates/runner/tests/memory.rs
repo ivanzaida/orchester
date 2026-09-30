@@ -23,7 +23,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, StepSpec, TestProject, project, scheduler_with, wait_for};
+use self::support::{Setup, StepSpec, TestProject, project, scheduler_with, wait_for, wait_for_turns};
 
 const BRIEF: &str = "Leave a handoff.";
 
@@ -301,33 +301,66 @@ fn problems(db: &ProjectDb, run: RunId) -> Vec<RunnerProblem> {
     .collect()
 }
 
+/// Adds a project record to `root`'s memory and damages its row the way an edit outside Orchester
+/// would: a key over two lines, which no record can have.
+fn damaged_record(root: &std::path::Path) {
+  let mut db = ProjectDb::open(root).expect("open");
+  let content = SecretScreen::new(Vec::new())
+    .check(MemoryContent::new(MemoryKind::Fact, "Readable.").expect("content"))
+    .expect("no secrets");
+  let broken = Memory::by_person(MemoryScope::Project, content, Timestamp::now());
+  db.add_memories(std::slice::from_ref(&broken)).expect("add");
+  let raw = rusqlite::Connection::open(root.join(".orchester").join("orchester.db")).expect("open");
+  raw
+    .execute(
+      "UPDATE memories SET key = 'two' || char(10) || 'lines' WHERE id = ?1",
+      [broken.id().to_string()],
+    )
+    .expect("damage the row");
+}
+
+fn unreadable_reports(db: &ProjectDb, run: RunId) -> Vec<RunnerProblem> {
+  problems(db, run)
+    .into_iter()
+    .filter(|problem| matches!(problem, RunnerProblem::MemoryUnreadable { .. }))
+    .collect()
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn memory_an_unreadable_record_is_reported_once_and_left_out() {
   let project = project(&implement_then_review(AgentProvider::CodexCli));
   let root = project.repo.path();
-  {
-    let mut db = ProjectDb::open(root).expect("open");
-    let content = SecretScreen::new(Vec::new())
-      .check(MemoryContent::new(MemoryKind::Fact, "Readable.").expect("content"))
-      .expect("no secrets");
-    let broken = Memory::by_person(MemoryScope::Project, content, Timestamp::now());
-    db.add_memories(std::slice::from_ref(&broken)).expect("add");
-    // A key over two lines, which no record can have: the row was edited outside Orchester.
-    let raw = rusqlite::Connection::open(root.join(".orchester").join("orchester.db")).expect("open");
-    raw
-      .execute(
-        "UPDATE memories SET key = 'two' || char(10) || 'lines' WHERE id = ?1",
-        [broken.id().to_string()],
-      )
-      .expect("damage the row");
-  }
+  damaged_record(root);
   let run = run_to_the_end(&project).await;
   let db = ProjectDb::open(root).expect("open");
-  let unreadable: Vec<RunnerProblem> = problems(&db, run)
-    .into_iter()
-    .filter(|problem| matches!(problem, RunnerProblem::MemoryUnreadable { .. }))
-    .collect();
-  assert_eq!(unreadable, [RunnerProblem::MemoryUnreadable { records: 1 }]);
+  assert_eq!(
+    unreadable_reports(&db, run),
+    [RunnerProblem::MemoryUnreadable { records: 1 }]
+  );
+  assert_eq!(db.unreadable_memories().expect("listed").len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn memory_is_scanned_for_unreadable_records_once_per_run_task() {
+  let project = graph(vec![
+    StepSpec::new("wait", "Wait", "Wait for release.", &[]),
+    StepSpec::new("after", "After", "Say hello.", &["wait"]),
+  ]);
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let run = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for_turns(root, &mut events, run, 1).await;
+  // Damaged after the first invocation's scan: the run's task does not scan again.
+  damaged_record(root);
+  std::fs::write(root.join(".orchester").join("fake-release"), "go").expect("release");
+  let ended = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
+  assert_eq!(ended.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(db.invocations(run).expect("invocations").len(), 2);
+  assert!(unreadable_reports(&db, run).is_empty());
   assert_eq!(db.unreadable_memories().expect("listed").len(), 1);
 }
 

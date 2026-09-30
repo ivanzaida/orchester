@@ -105,8 +105,8 @@ pub(super) struct RunTask {
   pub(super) agents: HashMap<StepExecutionId, Active>,
   pub(super) worker_events: mpsc::UnboundedSender<WorkerEvent>,
   events: mpsc::UnboundedReceiver<WorkerEvent>,
-  /// Unreadable memory records were reported in the transcript: once per run task is enough.
-  pub(super) unreadable_memory_reported: bool,
+  /// The memory records were scanned for unreadable ones: once per run task is enough.
+  pub(super) memory_scanned: bool,
 }
 
 impl RunTask {
@@ -130,7 +130,7 @@ impl RunTask {
       agents: HashMap::new(),
       worker_events,
       events,
-      unreadable_memory_reported: false,
+      memory_scanned: false,
     }
   }
 

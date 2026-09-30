@@ -60,8 +60,6 @@ pub(super) struct AgentStart {
   pub(super) agent: String,
   /// The task memory its prompt holds, to record with the invocation.
   pub(super) memory: Vec<InjectedMemory>,
-  /// Memory records that could not be read back, to report once.
-  pub(super) unreadable_memory: u64,
 }
 
 /// What the prompt of an agent step's invocation is made of besides the run.
@@ -176,7 +174,6 @@ impl RunTask {
       app_server,
       agent: body.role().as_str().to_owned(),
       memory: recalled.injected(),
-      unreadable_memory: self.unreadable_memory()?,
     })
   }
 

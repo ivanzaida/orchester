@@ -7,7 +7,7 @@ use orchester_core::{
   id::StepExecutionId,
   memory::{MemoryStore, Recalled, StepContext, StepFate, next_invocation_memory},
   resource::Step,
-  run::ProfileInfo,
+  run::{Invocation, ProfileInfo},
   time::Timestamp,
 };
 
@@ -28,20 +28,22 @@ impl RunTask {
       .map_err(|error| problem(format!("cannot read task memory: {error}")))
   }
 
-  /// How many memory records cannot be read back, while that was not reported in this run's
-  /// transcript yet; agents get the others.
-  pub(super) fn unreadable_memory(&self) -> Result<u64, RunnerProblem> {
-    if self.unreadable_memory_reported {
-      return Ok(0);
+  /// Reports under `invocation` how many memory records cannot be read back (agents get the
+  /// others). The records are scanned once per run task, at its first invocation.
+  pub(super) fn report_unreadable_memory(&mut self, invocation: &Invocation) -> Result<(), ExecutionError> {
+    if self.memory_scanned {
+      return Ok(());
     }
-    let unreadable = self
-      .db
-      .unreadable_memories()
-      .map_err(|error| problem(format!("cannot read task memory: {error}")))?;
+    self.memory_scanned = true;
+    let unreadable = self.db.unreadable_memories()?;
     for record in &unreadable {
       tracing::warn!(run = %self.run.id(), memory = %record.id, detail = %record.detail, "a memory record cannot be read");
     }
-    Ok(u64::try_from(unreadable.len()).unwrap_or(u64::MAX))
+    if unreadable.is_empty() {
+      return Ok(());
+    }
+    let records = u64::try_from(unreadable.len()).expect("a count of records fits in 64 bits");
+    self.report(invocation, RunnerProblem::MemoryUnreadable { records })
   }
 
   /// Keeps the handoff of `execution`, which is about to pass or fail as `fate` says: before the
