@@ -37,6 +37,9 @@ pub enum IndexState {
   Failed {
     reason: String,
   },
+  /// Of an earlier format (or with a manifest that does not read): runs that started with it keep
+  /// reading it, and the next run from the revision builds it again.
+  Outdated,
 }
 
 /// One revision of the index list.
@@ -50,7 +53,7 @@ pub struct IndexListing {
 
 impl CodebaseIndexes {
   /// The indexes kept for the repository, as the index list shows them: ready ones by when they
-  /// were built, newest first, then building ones, then failed ones.
+  /// were built, newest first, then building, outdated and failed ones.
   pub fn list(&self) -> Result<Vec<IndexListing>, IndexError> {
     let mut listed = Vec::new();
     for revision in self.listed_revisions()? {
@@ -66,7 +69,8 @@ impl CodebaseIndexes {
     listed.sort_by_key(|listing| match &listing.state {
       IndexState::Ready(summary) => (0, -summary.built_at.unix_millis()),
       IndexState::Building(_) => (1, 0),
-      IndexState::Failed { .. } => (2, 0),
+      IndexState::Outdated => (2, 0),
+      IndexState::Failed { .. } => (3, 0),
     });
     Ok(listed)
   }
@@ -110,8 +114,10 @@ impl CodebaseIndexes {
       })));
     }
     // A failure record that cannot be read shows no failure: the next build writes it again.
-    let reason = fs::read_to_string(self.root.join(FAILURES).join(revision.as_str())).ok();
-    Ok(reason.map(|reason| IndexState::Failed { reason }))
+    if let Ok(reason) = fs::read_to_string(self.root.join(FAILURES).join(revision.as_str())) {
+      return Ok(Some(IndexState::Failed { reason }));
+    }
+    Ok(folder.is_dir().then_some(IndexState::Outdated))
   }
 }
 

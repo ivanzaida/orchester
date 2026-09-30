@@ -296,6 +296,35 @@ fn a_rebuild_of_an_index_a_program_holds_open_says_it_is_in_use_and_keeps_it() {
 }
 
 #[test]
+fn the_list_shows_an_index_of_an_earlier_format_as_outdated() {
+  let repo = Repo::new();
+  let head = repo.head();
+  let index = repo.ensure(&head).path;
+  let manifest = index.join("manifest.json");
+  let mut permissions = fs::metadata(&manifest).expect("metadata").permissions();
+  #[allow(
+    clippy::permissions_set_readonly_false,
+    reason = "the test plays an earlier version of Orchester that wrote this index"
+  )]
+  permissions.set_readonly(false);
+  fs::set_permissions(&manifest, permissions).expect("make writable");
+  let earlier = fs::read_to_string(&manifest)
+    .expect("read")
+    .replacen("\"format\": 5", "\"format\": 1", 1);
+  fs::write(&manifest, earlier).expect("an earlier format");
+
+  let listed = repo.indexes().list().expect("list");
+  assert_eq!(listed.len(), 1);
+  assert_eq!(listed[0].state, IndexState::Outdated);
+  // The next run from the revision builds it again.
+  assert!(matches!(repo.ensure(&head).outcome, Outcome::Built(_)));
+  assert!(matches!(
+    repo.indexes().list().expect("list")[0].state,
+    IndexState::Ready(_)
+  ));
+}
+
+#[test]
 fn the_list_is_read_from_records_while_runs_read_the_index() {
   let repo = Repo::new();
   let head = repo.head();

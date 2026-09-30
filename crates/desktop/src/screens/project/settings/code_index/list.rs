@@ -134,7 +134,7 @@ fn total(ctx: &Ctx, rows: &[IndexRow]) -> Arc<str> {
     .iter()
     .filter_map(|row| match &row.state {
       IndexState::Ready(summary) => Some(summary.bytes),
-      IndexState::Building(_) | IndexState::Failed { .. } => None,
+      IndexState::Building(_) | IndexState::Failed { .. } | IndexState::Outdated => None,
     })
     .sum();
   let key = if rows.len() == 1 {
@@ -168,7 +168,7 @@ fn empty(ctx: &Ctx) -> Element {
 
 /// One index (`U3kR6Z`, `P1hmI`, `OsvWE`): its revision, the runs that use it, its state and
 /// *Rebuild* (disabled while it builds) or *Retry*; then its size and when it was built, what the
-/// build does now, or why it failed.
+/// build does now, that it is of an earlier format, or why it failed.
 fn index_row(ctx: &Ctx, row: &IndexRow, rebuild: &Rebuild) -> Element {
   let short = display::short_revision(row.revision.as_str());
   let (glyph, state, button, detail) = match &row.state {
@@ -185,6 +185,14 @@ fn index_row(ctx: &Ctx, row: &IndexRow, rebuild: &Rebuild) -> Element {
       "settings.codeIndex.state.building",
       (Icon::RefreshCw, "settings.codeIndex.rebuild", false),
       Text::new(&building_detail(ctx, progress))
+        .variant(TypographyStyle::Caption)
+        .into(),
+    ),
+    IndexState::Outdated => (
+      Icon::CircleDashed,
+      "settings.codeIndex.state.outdated",
+      (Icon::RefreshCw, "settings.codeIndex.rebuild", true),
+      Text::new(&ctx.t("settings.codeIndex.outdatedDetail"))
         .variant(TypographyStyle::Caption)
         .into(),
     ),

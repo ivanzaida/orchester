@@ -2270,8 +2270,10 @@
       "state": {
         "ready": "Ready",
         "building": "Building",
-        "failed": "Failed"
+        "failed": "Failed",
+        "outdated": "Outdated"
       },
+      "outdatedDetail": "Outdated format · rebuilt at the next run start",
       "readyDetail": "{{size}} · {{files}} files · {{symbols}} symbols · built {{when}} in {{took}}",
       "builtToday": "today {{time}}",
       "builtOn": "{{month}} {{day}} {{time}}",
