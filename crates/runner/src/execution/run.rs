@@ -130,7 +130,7 @@ impl RunTask {
       settled: context.settled,
       pending: Pending::default(),
       agents: HashMap::new(),
-      code_index: IndexState::default(),
+      code_index: IndexState::NotBuilt,
       worker_events,
       events,
     }
@@ -167,12 +167,7 @@ impl RunTask {
 
   async fn steps(&mut self) -> Result<(), ExecutionError> {
     self.write_result_schema()?;
-    self.code_index = if self.db.code_index()?.is_on() {
-      let indexes = CodebaseIndexes::new(&self.root);
-      codebase_index::ensure(indexes, self.run.base().clone(), self.run.id()).await
-    } else {
-      IndexState::NotBuilt
-    };
+    self.prepare_code_index().await?;
     loop {
       while let Ok(control) = self.controls.try_recv() {
         self.control(control)?;
@@ -195,6 +190,37 @@ impl RunTask {
         return Err(ExecutionError::Stalled);
       }
       self.wait(waiting_for_slot).await?;
+    }
+  }
+
+  /// Builds or reuses the code index before the run's steps start, while the project has it on.
+  /// Requests are handled meanwhile; once one stops the run (a cancel, a pause, the runner
+  /// stopping) the task stops waiting: the build goes on in the background, and an agent that
+  /// starts later builds or reuses the index then.
+  async fn prepare_code_index(&mut self) -> Result<(), ExecutionError> {
+    self.code_index = IndexState::NotBuilt;
+    if !self.db.code_index()?.is_on() {
+      return Ok(());
+    }
+    let indexes = CodebaseIndexes::new(&self.root);
+    let ensuring = codebase_index::ensure(indexes, self.run.base().clone(), self.run.id());
+    tokio::pin!(ensuring);
+    loop {
+      tokio::select! {
+        state = &mut ensuring => {
+          self.code_index = state;
+          return Ok(());
+        }
+        control = self.controls.recv(), if self.listening => match control {
+          Some(control) => {
+            self.control(control)?;
+            if self.pending.cancel.is_some() || self.pending.interrupt.is_some() || self.run.pause_requested() {
+              return Ok(());
+            }
+          }
+          None => self.listening = false,
+        },
+      }
     }
   }
 

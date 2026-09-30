@@ -33,10 +33,10 @@ use orchester_index::{CodebaseIndexes, IndexError, Outcome};
 use super::run::RunTask;
 
 /// The code index of the run's base revision, as the run's task knows it.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(super) enum IndexState {
-  /// Not built while this task executes the run: the project had it off.
-  #[default]
+  /// Not built while this task executes the run: the project had it off, or a request stopped the
+  /// wait for it.
   NotBuilt,
   Ready {
     folder: PathBuf,
@@ -141,10 +141,13 @@ impl RunTask {
     })
   }
 
-  /// The folder of the run's index, built now when the task has not built it; why there is none.
+  /// The folder of the run's index, built now when the task has not built it (the setting was
+  /// turned on while the run executed, or a request stopped the wait for it); why there is none.
   fn index_folder(&mut self) -> Result<PathBuf, String> {
     if matches!(self.code_index, IndexState::NotBuilt) {
-      let result = CodebaseIndexes::new(&self.root).ensure(self.run.base(), self.run.id());
+      let indexes = CodebaseIndexes::new(&self.root);
+      // Other tasks of the runtime go on while this one builds.
+      let result = tokio::task::block_in_place(|| indexes.ensure(self.run.base(), self.run.id()));
       self.code_index = state(self.run.id(), result);
     }
     match &self.code_index {

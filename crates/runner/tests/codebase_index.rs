@@ -157,8 +157,15 @@ async fn codebase_index_goes_with_the_worktree_removed_before_running_again() {
     .await
     .expect("the task runs again");
 
-  assert!(!first_index.exists(), "the index went with the worktree that used it");
   let next = wait_for(root, &mut events, again, |run| run.status().is_terminal()).await;
+  // The removal runs off the runtime's threads, after the request is answered.
+  let removed = tokio::time::timeout(Duration::from_secs(10), async {
+    while first_index.exists() {
+      tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+  })
+  .await;
+  assert!(removed.is_ok(), "the index went with the worktree that used it");
   assert_ne!(next.base(), failed.base());
   assert!(index_of(root, &next).is_dir());
 }
@@ -320,4 +327,31 @@ async fn tokens_before_the_first_edit_of_an_agent_that_changed_no_file_are_all_i
   let progress = db.edit_progress(invocation.id).expect("read").expect("recorded");
   assert_eq!(progress.first_edit, None);
   assert_eq!(progress.before, invocation.usage);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_run_waiting_for_its_codebase_index_can_be_cancelled() {
+  let project = project(&indexed("Say hello."));
+  let root = project.repo.path();
+  let _path = agent_path(root, true);
+  // Another build of the revision holds its lock: the run waits for it.
+  let base = git(root, &["rev-parse", "HEAD"]);
+  let locks = root.join(".orchester").join("index").join(".locks");
+  fs::create_dir_all(&locks).expect("create the locks folder");
+  let held = fs::File::create(locks.join(&base)).expect("open the lock");
+  held.lock().expect("lock");
+  let (scheduler, mut events) = scheduler(root);
+  let run = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+
+  tokio::time::timeout(Duration::from_secs(10), scheduler.cancel_run(run))
+    .await
+    .expect("the cancel is answered while the index is being built")
+    .expect("cancelled");
+  let ended = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
+
+  assert_eq!(ended.status(), &RunStatus::Cancelled);
+  drop(held);
 }

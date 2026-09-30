@@ -68,10 +68,14 @@ pub(super) fn remove_worktrees(root: &Path, previous: &Run, confirmed: &Leftover
   let git = ProcessRunner::new(REMOVE_TIMEOUT);
   let cleanup = clean_up(&git, Path::new("git"), root, previous, Some(confirmed))
     .map_err(|error| failed("cannot remove the worktrees of the run before", &error))?;
-  // The worktrees are gone either way; an index left behind goes with the next removal.
-  if let Err(error) = CodebaseIndexes::new(root).prune() {
-    tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
-  }
+  // Off the runtime's threads: the worktrees are gone either way, and an index left behind goes
+  // with the next removal.
+  let indexes = CodebaseIndexes::new(root);
+  tokio::task::spawn_blocking(move || {
+    if let Err(error) = indexes.prune() {
+      tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
+    }
+  });
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => {
