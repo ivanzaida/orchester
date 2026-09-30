@@ -107,6 +107,11 @@ pub struct AppServerStream {
 }
 
 impl AppServerStream {
+  /// A started MCP action remains active until its completion notification arrives.
+  pub fn has_active_tools(&self) -> bool {
+    !self.tools.is_empty()
+  }
+
   pub fn parse(&mut self, line: &str) -> Result<Vec<Update>, ProtocolError> {
     let message: Value = serde_json::from_str(line).map_err(|_| ProtocolError::InvalidJson)?;
     let Some(method) = message.get("method").and_then(Value::as_str) else {

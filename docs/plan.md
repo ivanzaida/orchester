@@ -179,7 +179,9 @@ ORC-44 · Command approvals and current-run policy changes · branch `orchester/
 - Check, Review and Verify remain separate pipeline steps. Reuse the independent design evidence and canonical
   refs below. The root reports native command approve/deny and resumed-session writes in the worktree and
   an authorized additional folder on Codex 0.159.2. The transferred exact-root validation fix and four
-  approval regressions passed in this worktree; independent behavioral and visual steps must run again.
+  approval regressions passed in this worktree. The latest transferred fixes normalize Windows path
+  comparisons, wait for active MCP actions at permission checkpoints, and pause uncertain approval
+  restarts. Independent behavioral and visual steps must run again.
   The resumed implementation check results and limits are recorded in
   [runtime evidence](evidence/agent-runtime-architecture-2026-09-30.md).
 

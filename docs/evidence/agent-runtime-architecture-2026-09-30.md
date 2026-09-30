@@ -208,3 +208,33 @@ the documented UI states against the canonical design at matching sizes using it
 PID; it may use the authorized disposable fixture and root-provided host watcher. No new design
 writes or implementer design verification occurred. The full suite, native model tests and physical
 Mac runtime verification were not run by this implementer on this continuation.
+
+### Latest Review fix handoff
+
+Following checkpoint `0b958ce`, the root supplied a six-file runtime delta. This implementer
+inspected and preserved it without reimplementing the fixes. Startup compares cwd and exact
+authorized root sets as filesystem paths, accepting Codex's Windows separator normalization.
+Active MCP calls now prevent Apply-now termination until completion, as active commands do.
+If a permission restart interrupts approval delivery, the run pauses with an explicit uncertainty
+report rather than automatically starting another invocation.
+
+The root reports a no-model-turn probe of the actual preserved session, a stable release update,
+a passing release build and core/exec Darwin clippy. Session IDs, worktree snapshots, checkpoints,
+conversation, normal account and global MCP settings remain preserved according to that handoff.
+The startup rejection was a path-comparison error, not a sandbox denial or loss of saved work.
+
+This implementer reran only the newly affected named regressions:
+
+- `cargo test -p orchester-runner --features test-agent --test approval_permissions approval_permissions_`:
+  **2 passed**, covering active-MCP waiting and uncertainty pause without a new invocation.
+- `cargo test -p orchester-runner --features test-agent --test command_approvals command_approvals_`:
+  **4 passed**, including the normalized Windows path fixture and extra-root migration.
+- `powershell -File tools/check.ps1`: **check: OK**.
+
+Earlier unrelated checks were not repeated. This continuation did not run a release build,
+native model probes, physical Mac runtime tests, or design verification. Independent Check,
+Review and Verify must run again, including native approve/deny and preserved-session migration,
+active-MCP checkpoint waiting, uncertain-delivery pause and exact-root enforcement. Verify uses
+the canonical UI references and an exact-PID private app, with the root's watcher supplied before
+launch; typed disposable fixtures and interactive export are authorized. No app was launched or
+design changed by this implementer.

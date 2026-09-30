@@ -106,6 +106,8 @@ pub(in super::super) struct Finished {
   pub(in super::super) stopped: Option<StopCause>,
   /// The last message the agent wrote.
   pub(in super::super) final_message: Option<String>,
+  /// A pending or delivered decision ended without a confirmed turn completion.
+  pub(in super::super) approval_interrupted: bool,
 }
 
 /// One running agent CLI and where its news goes.
@@ -202,6 +204,9 @@ impl Worker {
                 self.observe(&mut watch, event)?;
               }
             }
+            if watch.after_command.is_some() && self.checkpoint_safe(&watch) && watch.stop.is_none() {
+              watch.stop = watch.after_command.take();
+            }
             if watch.stop.is_some() {
               self.process.terminate();
             }
@@ -231,7 +236,7 @@ impl Worker {
           Some(Stop::AfterCommand(cause)) => {
             if watch.stop.is_none() && watch.over.is_none() {
               watch.after_command = Some(cause);
-              if watch.commands == 0 || watch.approval.is_some() {
+              if self.checkpoint_safe(&watch) || watch.approval.is_some() {
                 watch.stop = watch.after_command.take();
                 self.process.terminate();
               }
@@ -261,6 +266,10 @@ impl Worker {
       self.process.terminate();
     }
     Ok(())
+  }
+
+  fn checkpoint_safe(&self, watch: &Watch) -> bool {
+    watch.commands == 0 && !self.app_server.as_ref().is_some_and(AppServerSession::has_active_tools)
   }
 
   fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), StoreError> {
@@ -442,9 +451,6 @@ impl Worker {
       AgentEvent::CommandStarted { .. } => watch.commands += 1,
       AgentEvent::CommandFinished { .. } => {
         watch.commands = watch.commands.saturating_sub(1);
-        if watch.commands == 0 && watch.stop.is_none() {
-          watch.stop = watch.after_command.take();
-        }
       }
       _ => {}
     }
@@ -489,8 +495,9 @@ impl Worker {
   }
 
   fn finish(&self, mut watch: Watch, exit: &ProcessExit) -> Result<Finished, StoreError> {
+    let mut approval_interrupted = false;
     if watch.approval.is_some() || self.app_server.as_ref().is_some_and(|app| !app.complete()) {
-      watch
+      approval_interrupted = watch
         .db
         .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
       watch.invocation.timing.resume(Timestamp::now());
@@ -526,6 +533,7 @@ impl Worker {
       outcome,
       stopped: watch.stop,
       final_message: watch.tracker.last_message().map(str::to_owned),
+      approval_interrupted,
     })
   }
 }

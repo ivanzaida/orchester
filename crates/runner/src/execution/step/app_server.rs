@@ -3,7 +3,11 @@
 //! host requests fail the invocation. Global MCP servers remain available; project-selected
 //! servers must be connected before the turn begins.
 
-use std::{collections::BTreeSet, io, path::PathBuf};
+use std::{
+  collections::BTreeSet,
+  io,
+  path::{Path, PathBuf},
+};
 
 use orchester_core::{
   command::{SecretVariable, redact_secrets},
@@ -51,15 +55,10 @@ pub(super) struct AppServerSetup {
 }
 
 impl AppServerSetup {
-  fn runtime_roots(&self) -> BTreeSet<String> {
-    let mut roots = BTreeSet::from([self.worktree.to_string_lossy().into_owned()]);
+  fn runtime_roots(&self) -> BTreeSet<PathBuf> {
+    let mut roots = BTreeSet::from([self.worktree.clone()]);
     if self.access == RepositoryAccess::Write {
-      roots.extend(
-        self
-          .writable_roots
-          .iter()
-          .map(|path| path.to_string_lossy().into_owned()),
-      );
+      roots.extend(self.writable_roots.iter().cloned());
     }
     roots
   }
@@ -108,6 +107,10 @@ impl AppServerSession {
 
   pub fn complete(&self) -> bool {
     self.phase == Phase::Complete
+  }
+
+  pub fn has_active_tools(&self) -> bool {
+    self.stream.has_active_tools()
   }
 
   pub async fn receive(
@@ -273,18 +276,13 @@ impl AppServerSession {
         .and_then(|sandbox| sandbox.get("writableRoots"))
         .and_then(Value::as_array)
         .ok_or_else(|| "Codex omitted writable sandbox roots".to_owned())?;
-      let actual: Option<BTreeSet<_>> = roots.iter().map(|root| root.as_str().map(str::to_owned)).collect();
+      let actual: Option<BTreeSet<_>> = roots.iter().map(|root| root.as_str().map(PathBuf::from)).collect();
       let mut actual = actual.ok_or_else(|| "Codex reported invalid writable sandbox roots".to_owned())?;
       // Codex reports the local cwd as an environment workspace root, not an extra sandbox root.
-      actual.insert(self.setup.worktree.to_string_lossy().into_owned());
-      let expected: BTreeSet<String> = self
-        .setup
-        .writable_roots
-        .iter()
-        .map(|path| path.to_string_lossy().into_owned())
-        .collect();
+      actual.insert(self.setup.worktree.clone());
+      let expected: BTreeSet<PathBuf> = self.setup.writable_roots.iter().cloned().collect();
       let mut allowed = expected;
-      allowed.insert(self.setup.worktree.to_string_lossy().into_owned());
+      allowed.insert(self.setup.worktree.clone());
       if actual != allowed {
         return Err("Codex writable roots do not match this step's grants".to_owned());
       }
@@ -303,13 +301,12 @@ impl AppServerSession {
     let [local] = environments.as_slice() else {
       return Err("Codex did not select exactly one local environment".to_owned());
     };
-    let cwd = self.setup.worktree.to_string_lossy();
     let roots: Option<BTreeSet<_>> = local
       .get("runtimeWorkspaceRoots")
       .and_then(Value::as_array)
-      .and_then(|roots| roots.iter().map(|root| root.as_str().map(str::to_owned)).collect());
+      .and_then(|roots| roots.iter().map(|root| root.as_str().map(PathBuf::from)).collect());
     if local.get("environmentId").and_then(Value::as_str) != Some("local")
-      || local.get("cwd").and_then(Value::as_str) != Some(cwd.as_ref())
+      || local.get("cwd").and_then(Value::as_str).map(Path::new) != Some(self.setup.worktree.as_path())
       || roots != Some(self.setup.runtime_roots())
     {
       return Err("Codex selected an environment outside this worktree".to_owned());

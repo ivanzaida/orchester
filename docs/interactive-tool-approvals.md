@@ -16,7 +16,9 @@ request forms are rejected explicitly. Codex invocations with neither choice kee
 Changing permissions from a waiting task's popover applies to the next invocation. When continuing
 the task conversation, an existing `exec` session can resume through App Server with its original
 session ID and worktree. Completed steps, uncommitted work, run limits and the saved pipeline remain
-intact. **Apply now** uses the existing checkpoint/restart mechanism. Approval requests and waiting
+intact. **Apply now** uses the existing checkpoint/restart mechanism and waits for active commands
+and MCP actions to finish. Interrupted approval delivery pauses the run for explicit review instead
+of automatically continuing. Approval requests and waiting
 time are persisted; waiting for a decision does not consume active agent time.
 
 ## App Server requests
@@ -55,6 +57,8 @@ including resumed sessions. Read-only invocations explicitly clear configured wr
 An empty environment list disables local tools
 in Codex 0.159.2 and is never sent. Startup validates the selected environment and combines its
 implicit workspace root with the extra sandbox writable roots when checking the exact grants.
+These comparisons use filesystem paths, accepting normalized Windows separators while still
+requiring the exact authorized root set.
 Project MCP secret values are redacted from commands, output, messages, errors and approval metadata
 before they reach activity tracking or storage, including their JSON-escaped form.
 

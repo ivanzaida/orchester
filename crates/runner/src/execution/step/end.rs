@@ -48,7 +48,16 @@ impl RunTask {
       // Carried out once every agent has ended; the work stays uncommitted in the worktree.
       Some(StopCause::Requested | StopCause::Abandoned) => Ok(()),
       // The execution stays open and continues with the run's new permissions.
-      Some(StopCause::Permissions) => self.restart_for_permissions(execution, &active),
+      Some(StopCause::Permissions) => {
+        self.restart_for_permissions(execution, &active)?;
+        if finished.approval_interrupted {
+          self.report(&active.invocation, RunnerProblem::CouldNotStart {
+            detail: "A tool decision ended without a confirmed result. Inspect its side effects before explicitly resuming the paused run.".to_owned(),
+          })?;
+          self.transition(|run, now| run.request_pause(now))?;
+        }
+        Ok(())
+      }
       // The execution stays open: it continues where it stopped once the run continues.
       Some(StopCause::Limit(limit)) => {
         let label = match limit {
