@@ -2,7 +2,7 @@
 //! change since its revision are taken over as they are, so they are not read or parsed again.
 
 use std::{
-  collections::{HashMap, HashSet},
+  collections::{BTreeMap, HashMap, HashSet},
   fs,
   path::{Path, PathBuf},
 };
@@ -26,11 +26,18 @@ pub(crate) struct Previous {
   records: HashMap<String, FileRecord>,
   /// The digests of its files, checked before it was opened: which outline files it has.
   digests: Digests,
+  /// Its files that were not parsed because of their content, with their blob.
+  unparsed: BTreeMap<String, String>,
 }
 
 impl Previous {
-  /// The index of `revision` in `dir`, whose files match `digests`.
-  pub(crate) fn open(dir: &Path, revision: &Revision, digests: Digests) -> Result<Self, IndexError> {
+  /// The index of `revision` in `dir`, whose files match `digests`, with the files it did not
+  /// parse because of their content.
+  pub(crate) fn open(
+    dir: &Path,
+    revision: &Revision,
+    (digests, unparsed): (Digests, BTreeMap<String, String>),
+  ) -> Result<Self, IndexError> {
     let unreadable = |detail: String| unreadable(revision, detail);
     let read = |name: &str| {
       let file = dir.join(name);
@@ -66,17 +73,24 @@ impl Previous {
       dir: dir.to_path_buf(),
       records,
       digests,
+      unparsed,
     })
   }
 
-  /// The record of `path`, which did not change since this index was built, with its outline file
-  /// when it is `outlined`; `None` when the index does not have it, or has no outline file for it
-  /// (it had another path of the same name ignoring case then).
-  pub(crate) fn take(&mut self, path: &str, outlined: bool) -> Option<FileRecord> {
+  /// The record of `path`, git's object `object`, which did not change since this index was built,
+  /// with its outline file when it is `outlined`; `None` when the index does not have it, or has no
+  /// outline file for it (it had another path of the same name ignoring case then).
+  pub(crate) fn take(&mut self, (path, object): (&str, &str), outlined: bool) -> Option<FileRecord> {
+    if let Some(unparsed) = self.unparsed.get(path).filter(|unparsed| *unparsed == object) {
+      // Too large or minified then, and the same content now: it would not be parsed again.
+      let mut record = self.records.remove(path)?;
+      record.unparsed = Some(unparsed.clone());
+      return Some(record);
+    }
     let mut record = self.records.remove(path)?;
     if outlined {
-      // A file the earlier index has no outline of (too large, minified, parsed too slowly, or
-      // not written) is read again: this build may make one.
+      // A file the earlier index has no outline of (parsed too slowly, or not written) is read
+      // again: this build may make one.
       let digest = self.digests.get(&outline_name(path))?;
       record.outline = Some(Outline::Previous {
         file: outline_path(&self.dir, path),

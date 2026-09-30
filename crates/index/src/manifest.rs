@@ -11,7 +11,7 @@ use crate::{IndexError, digest::Digests, outline, record::FileRecord};
 /// The version of the index files. An index of another version, or made by other grammars
 /// ([`generator`]), is built again, since its files may differ from what this build writes for the
 /// same revision.
-pub(crate) const FORMAT: u32 = 4;
+pub(crate) const FORMAT: u32 = 5;
 const FILE: &str = "manifest.json";
 
 /// How an index was built.
@@ -49,6 +49,9 @@ pub(crate) struct Manifest {
   pub(crate) languages: BTreeMap<String, LanguageCount>,
   /// The size of the index's other files, which the index list shows without reading the folder.
   pub(crate) bytes: u64,
+  /// The files of a language with a grammar that were not parsed because of their content, with
+  /// their blob: a later build takes them over instead of reading them again.
+  pub(crate) unparsed: BTreeMap<String, String>,
   /// The digest of each of the index's other files.
   pub(crate) digests: Digests,
 }

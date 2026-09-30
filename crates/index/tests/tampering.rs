@@ -77,8 +77,8 @@ fn an_earlier_index_with_files_without_an_outline_is_still_built_on() {
     "{:?}",
     report.mode
   );
-  // README.md changed; the bundle has no outline to take over, so it is read again.
-  assert_eq!(report.read, 2);
+  // README.md changed; the bundle has no outline, and its unchanged record is taken over.
+  assert_eq!(report.read, 1);
   let incremental_files = files(&incremental.path);
   fs::remove_dir_all(repo.index_root()).expect("remove the indexes");
   assert_eq!(files(&repo.ensure(&second).path), incremental_files);

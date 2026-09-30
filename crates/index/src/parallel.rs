@@ -32,7 +32,12 @@ pub(crate) fn read_files(git: &Repository<'_>, pending: Vec<Pending>) -> Result<
         let handle = scope.spawn(move || {
           receiver
             .into_iter()
-            .map(|(file, blob)| (file.slot, FileRecord::read(file.path, blob, file.outlined)))
+            .map(|(file, blob)| {
+              (
+                file.slot,
+                FileRecord::read(file.path, (file.object, blob), file.outlined),
+              )
+            })
             .collect::<Vec<_>>()
         });
         (sender, handle)

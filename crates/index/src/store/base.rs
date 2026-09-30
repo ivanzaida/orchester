@@ -44,6 +44,7 @@ impl CodebaseIndexes {
         revision: existing,
         changed,
         digests: manifest.digests,
+        unparsed: manifest.unparsed,
       };
       Some((base, lock))
     })

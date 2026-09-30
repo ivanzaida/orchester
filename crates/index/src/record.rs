@@ -47,6 +47,9 @@ pub(crate) struct FileRecord {
   /// outline file ([`crate::outline_file::outlined`]).
   pub(crate) outline: Option<Outline>,
   pub(crate) headings: Vec<Heading>,
+  /// The blob of a file of a language with a grammar that is not parsed because of its content (too
+  /// large, or minified): the same blob is not read again by a later build.
+  pub(crate) unparsed: Option<String>,
 }
 
 impl FileRecord {
@@ -59,19 +62,21 @@ impl FileRecord {
       symbols: Vec::new(),
       outline: None,
       headings: Vec::new(),
+      unparsed: None,
     }
   }
 
-  /// The record of the file at `path` with content `blob`, with an outline when `outlined`. Text
-  /// too large to keep, or with a line longer than [`LONG_LINE`] (minified or generated), is not
-  /// parsed.
-  pub(crate) fn read(path: String, blob: Blob, outlined: bool) -> Self {
+  /// The record of the file at `path` with content `blob`, git's object `object`, with an outline
+  /// when `outlined`. Text too large to keep, or with a line longer than [`LONG_LINE`] (minified or
+  /// generated), is not parsed.
+  pub(crate) fn read(path: String, (object, blob): (String, Blob), outlined: bool) -> Self {
     let content = match blob {
       Blob::Text(content) => content,
       Blob::Large { lines } => {
         let language = Language::of(&path);
         let mut record = Self::without_content(path, language);
         record.lines = Some(lines);
+        record.unparsed = language.has_grammar().then_some(object);
         return record;
       }
       Blob::Binary => return Self::without_content(path, Language::BINARY),
@@ -85,10 +90,13 @@ impl FileRecord {
       symbols: Vec::new(),
       outline: None,
       headings: Vec::new(),
+      unparsed: None,
     };
     if language == Language::Markdown {
       record.headings = markdown::headings(&String::from_utf8_lossy(&content));
-    } else if language.has_grammar() && !content.split(|byte| *byte == b'\n').any(|line| line.len() > LONG_LINE) {
+    } else if language.has_grammar() && content.split(|byte| *byte == b'\n').any(|line| line.len() > LONG_LINE) {
+      record.unparsed = Some(object);
+    } else if language.has_grammar() {
       match outline::items(language, &content) {
         Some(items) => {
           record.symbols = symbols(&items, "");

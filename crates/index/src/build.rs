@@ -30,6 +30,8 @@ pub(crate) struct Base {
   pub(crate) changed: HashSet<String>,
   /// The digests of its files, which were checked.
   pub(crate) digests: Digests,
+  /// Its files that were not parsed because of their content, with their blob.
+  pub(crate) unparsed: BTreeMap<String, String>,
 }
 
 /// What a build did.
@@ -86,6 +88,11 @@ pub(crate) fn build(
     packages: map.packages,
     languages: counts.languages,
     bytes,
+    unparsed: collected
+      .records
+      .iter()
+      .filter_map(|record| Some((record.path.clone(), record.unparsed.clone()?)))
+      .collect(),
     digests,
   };
   manifest.write(out)?;
@@ -105,7 +112,7 @@ struct Collected {
 
 fn collect(git: &Repository<'_>, entries: Vec<TreeEntry>, base: Option<&Base>) -> Result<Collected, IndexError> {
   let mut previous = base
-    .map(|base| Previous::open(&base.dir, &base.revision, base.digests.clone()))
+    .map(|base| Previous::open(&base.dir, &base.revision, (base.digests.clone(), base.unparsed.clone())))
     .transpose()?;
   let outlined: HashSet<String> = outline_file::outlined(
     entries
@@ -124,7 +131,7 @@ fn collect(git: &Repository<'_>, entries: Vec<TreeEntry>, base: Option<&Base>) -
     let outline = outlined.contains(&entry.path);
     if unchanged
       && let Some(previous) = previous.as_mut()
-      && let Some(record) = previous.take(&entry.path, outline)
+      && let Some(record) = previous.take((&entry.path, &entry.object), outline)
     {
       slots.push(Some(record));
       reused += 1;
