@@ -90,6 +90,47 @@ fn run_permissions_popover_fits_the_workspace_when_the_window_is_resized() {
 }
 
 #[test]
+fn run_permissions_first_next_change_shows_actual_policy_and_queued_approval_settings() {
+  let mut desktop = desktop_running("Wait for release.");
+  desktop.click("task-permissions-view");
+  desktop.click("task-permissions-ask");
+  desktop.click("task-permissions-tool-approvals");
+  desktop.click("task-permissions-apply-next");
+  desktop.wait_until("first queued change", |desktop| has(desktop, "task-permissions-next"));
+  assert!(shows(&mut desktop, "task-permissions", "Current invocation:"));
+  assert!(shows(&mut desktop, "task-permissions", "Any command"));
+  assert!(shows(&mut desktop, "task-permissions", "MCP approvals off"));
+  desktop.click("task-permissions-view");
+  assert!(shows(
+    &mut desktop,
+    "task-permissions-current-policy",
+    "MCP approvals off"
+  ));
+  desktop.click("task-permissions-any");
+  desktop.click("task-permissions-tool-approvals");
+  desktop.click("task-permissions-apply-next");
+  desktop.wait_until("queued settings restored to active policy", |desktop| {
+    !has(desktop, "task-permissions-popover") && !has(desktop, "task-permissions-next")
+  });
+  assert!(shows(&mut desktop, "task-permissions", "Any command"));
+  let run = latest_run(desktop.repo()).expect("run");
+  let db = ProjectDb::open(desktop.repo()).expect("open");
+  assert_eq!(db.invocations(run.id()).expect("invocations").len(), 1);
+  fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
+  desktop.wait_until("completed run", |desktop| run_finished(desktop.repo()));
+  // Success switches to Ready for review, whose existing design has no permissions row.
+  let stored = db.invocations(run.id()).expect("completed invocation");
+  assert!(stored[0].ended_at.is_some());
+  assert!(
+    !stored[0]
+      .permissions
+      .as_ref()
+      .expect("launch snapshot")
+      .interactive_tool_approvals()
+  );
+}
+
+#[test]
 fn run_permissions_apply_now_is_pending_then_applied_and_saved_to_the_profile_draft() {
   let mut desktop = desktop_running("Wait for release. Draft first. Then keep working.");
   assert!(shows(&mut desktop, "task-permissions", "change ↗"));
@@ -107,7 +148,8 @@ fn run_permissions_apply_now_is_pending_then_applied_and_saved_to_the_profile_dr
   desktop.wait_until("the pending change", |desktop| {
     !has(desktop, "task-permissions-popover") && has(desktop, "task-permissions-pending")
   });
-  assert!(shows(&mut desktop, "task-permissions", "Applying at next checkpoint…"));
+  assert!(shows(&mut desktop, "task-permissions", "Current invocation:"));
+  assert!(shows(&mut desktop, "task-permissions", "Read-only"));
   assert!(shows(&mut desktop, "task-permissions-saved", "draft v2"));
   let db = ProjectDb::open(desktop.repo()).expect("open");
   let builder = db.resources(ResourceKind::AgentProfile).expect("profiles")[0].id();

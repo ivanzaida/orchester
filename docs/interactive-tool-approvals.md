@@ -24,6 +24,14 @@ and MCP actions to finish. Interrupted approval delivery pauses the run for expl
 of automatically continuing. Approval requests and waiting
 time are persisted; waiting for a decision does not consume active agent time.
 
+The task Permissions row and popover distinguish the current or last invocation's recorded
+launch policy from editable next-invocation settings. Saving a run override does not relabel
+an active invocation. The first queued change shows when it will take effect; Apply now shows
+checkpoint timing while retaining the active policy. Command and MCP approval status are both
+included. Historical or unprepared invocations without a launch snapshot explicitly show unknown
+permissions; the UI never reconstructs their policy from event timestamps. Completed runs show
+their last recorded policy and keep saved settings available for reference only.
+
 ## App Server requests
 
 The verified Codex 0.159 path for an ordinary MCP tool emits `item/started` with an

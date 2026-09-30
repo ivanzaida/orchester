@@ -335,3 +335,63 @@ editable independently and show first-change NextInvocation and ApplyNow checkpo
 
 No tests/checks were rerun for this documentation-only blocker report. Review912 remains a
 negative verdict on `2df92ae`; no corrected candidate, pinned pair or new QA verdict is claimed.
+
+### Immutable policy API adoption and current/next display correction
+
+Input is `a2941a7b7d291f195a0020da201292a6b6502655` plus the root's uncommitted shared
+API handoff and this desktop/test/documentation delta. All 14 supplied files matched their
+`adopted_sha256` entries in the root's
+`H:/projects/orchester/.tmp/agent-runtime/invocation-policy-handoff-v1/manifest.json` after
+implementation (zero mismatches). The root's runtime changes remain uncommitted/uninstalled
+according to its handoff; this implementer performed no installation or stable-process control.
+
+The task resolver reads actual permissions only from `Invocation.permissions`. It identifies
+current versus last invocation, explicitly shows unknown when the snapshot is absent, and uses
+the mutable narrowed run override only for next-invocation settings. Recorded Network on is not
+relabeled as requested Network off. Command and MCP approval status are both visible. A first
+NextInvocation change has a queued timing notice even without an earlier Apply-now record;
+Apply now retains the actual policy while the checkpoint notice is pending. The popover labels
+its editable desired settings separately from the current/last summary. Terminal views show last
+recorded policy and reference-only settings; successful runs retain the separate Ready-for-review
+screen, which has no permissions row. No published profile change or runtime reconstruction was
+introduced. Existing command caption, accept/cancel parser and Target/cwd wrapping are preserved.
+
+Fresh filtered tests passed on this candidate:
+
+| Crate / binary | Filter | Passed |
+| --- | --- | --- |
+| desktop / run_permission_policy | `run_policy_` | 5 |
+| desktop / form_keyboard | `run_permissions_` | 4 |
+| desktop / i18n | `locales_have`, `every_key`, `command_approval_explanation` | 3 |
+| desktop / theme | `extra_typography_follows_pencil` | 1 |
+| store / invocation_permissions | `invocation_permissions_` | 3 |
+| runner / run_permissions | `run_permissions_` | 6 |
+| runner / command_approvals | `command_approvals_` | 4 |
+
+Runner commands use `--features test-agent`. Policy tests cover enabling and disabling Ask/MCP
+with NextInvocation, unchanged active snapshots until the next invocation, first-change timing,
+Apply-now checkpoint/application, unknown history, idle/completed policies and unsupported Network
+off versus recorded Network on. The headless first-change test toggles both controls, verifies the
+active summary and queued notice, restores desired settings without a new invocation, and confirms
+the completed launch snapshot is unchanged. Store tests cover migration and immutability; runner
+tests cover real scheduler continuation with protocol fixtures rather than native model results.
+
+Final `powershell -File tools/check.ps1` returned `check: OK`; `git diff --check` passed.
+An intermediate quality check caught an oversized notice function and was corrected by extracting
+the queued notice. Intermediate headless failures were test expectations for old copy and an absent
+Ready-for-review permissions row; final current-input tests passed. A concurrent relink encountered
+a Windows lock on the running owned test executable; after that test exited, the final test run
+linked and passed. Cargo emitted a cache-finalization access warning for a store incremental
+directory; compilation, tests and the warnings-denied clippy gate completed successfully.
+
+Review912's negative `2df92ae` verdict and earlier native/design evidence remain historical.
+Fresh independent Check, Review and Verify must assess the changed source and a fresh pinned pair.
+Verify must compare current/last/unknown summaries, first NextInvocation notices in both approval
+directions, desired popover settings, pending/applied checkpoint states and terminal reference states
+against the canonical design. Also complete current-pin native command denial, MCP approve/deny,
+later-request isolation, migration and the previously documented short/long Target/cwd states.
+Report the built/pinned pair READY before private-app launch for the root's new watcher; use only
+exact-owned-PID MCP and the authorized disposable fixture. This implementer launched no private
+app, created no pin and performed no design verification or native model tests. The full suite and
+physical Mac runtime were not run. Root-reported Darwin checks apply only to the unchanged shared
+handoff bytes, not to a new desktop/macOS runtime verdict.

@@ -220,6 +220,8 @@ impl RunTask {
         return Ok(true);
       }
     };
+    self.db.save_invocation_permissions(invocation.id, &start.permissions)?;
+    invocation.permissions = Some(start.permissions.clone());
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
     self.record_left_out(&invocation, std::mem::take(&mut start.mcp_left_out))?;
     let process = match Supervised::start(&start.command) {

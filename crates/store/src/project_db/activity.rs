@@ -3,6 +3,7 @@
 use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome},
   id::{InvocationId, RunId, StepExecutionId},
+  permission::AgentPermissions,
   resource::ModelId,
   run::{ActivityEntry, Invocation, InvocationKind, InvocationPrompt, InvocationTiming, StepOutput, TokenUsage},
   store::ActivityStore,
@@ -19,10 +20,11 @@ use crate::{
 
 const EVENT_SCHEMA: u32 = 1;
 const OUTCOME_SCHEMA: u32 = 1;
+const PERMISSIONS_SCHEMA: u32 = 1;
 
 const SELECT_INVOCATIONS: &str = "SELECT id, run_id, step_execution_id, number, kind, model, session_id, \
                                   started_at, ended_at, input_tokens, cached_input_tokens, output_tokens, outcome, \
-                                  inactive_ms, waiting_since \
+                                  inactive_ms, waiting_since, permissions \
                                   FROM invocations";
 /// `kind` of an agent CLI's invocation and of a command tool's.
 const AGENT: &str = "agent";
@@ -74,6 +76,34 @@ impl ActivityStore for ProjectDb {
     )?;
     if changed == 0 {
       return Err(StoreError::InvocationNotFound(invocation.id));
+    }
+    Ok(())
+  }
+
+  fn save_invocation_permissions(
+    &mut self,
+    invocation: InvocationId,
+    permissions: &AgentPermissions,
+  ) -> Result<(), StoreError> {
+    let changed = self.connection.execute(
+      "UPDATE invocations SET permissions = ?2 \
+       WHERE id = ?1 AND kind = 'agent' AND ended_at IS NULL AND permissions IS NULL",
+      params![
+        invocation.to_string(),
+        encode_json("invocation permissions", PERMISSIONS_SCHEMA, permissions)?,
+      ],
+    )?;
+    if changed == 0 {
+      let exists: bool = self.connection.query_row(
+        "SELECT EXISTS (SELECT 1 FROM invocations WHERE id = ?1)",
+        [invocation.to_string()],
+        |row| row.get(0),
+      )?;
+      return Err(if exists {
+        StoreError::InvocationPermissionsNotRecordable(invocation)
+      } else {
+        StoreError::InvocationNotFound(invocation)
+      });
     }
     Ok(())
   }
@@ -218,6 +248,7 @@ fn start(
     execution,
     number: u32::try_from(previous + 1).map_err(|_| corrupt("invocation number", previous))?,
     kind,
+    permissions: None,
     session: None,
     started_at: now,
     ended_at: None,
@@ -276,6 +307,7 @@ struct InvocationRow {
   outcome: Option<String>,
   inactive_ms: i64,
   waiting_since: Option<i64>,
+  permissions: Option<String>,
 }
 
 impl InvocationRow {
@@ -294,6 +326,7 @@ impl InvocationRow {
       outcome: row.get(12)?,
       inactive_ms: row.get(13)?,
       waiting_since: row.get(14)?,
+      permissions: row.get(15)?,
     })
   }
 
@@ -316,6 +349,11 @@ impl InvocationRow {
         COMMAND => InvocationKind::Command,
         other => return Err(corrupt("invocation kind", other)),
       },
+      permissions: self
+        .permissions
+        .as_deref()
+        .map(|text| decode_json("invocation permissions", PERMISSIONS_SCHEMA, text))
+        .transpose()?,
       session: self.session,
       started_at: Timestamp::from_unix_millis(self.started_at),
       ended_at: self.ended_at.map(Timestamp::from_unix_millis),

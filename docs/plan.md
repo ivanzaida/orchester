@@ -181,6 +181,10 @@ ORC-44 · Command approvals and current-run policy changes · branch `orchester/
 - The continuation from `72bfa7c` corrects the command approval caption's false sandbox-exception claim
   and adds shipped-locale semantic coverage. The source matches the root-supplied fresh canonical caption;
   current-pin independent QA remains pending.
+- After Review912, the root's immutable invocation-policy API was adopted on `a2941a7` with its
+  14-file handoff hashes intact. Current/last launch policy is separate from next-invocation settings;
+  first queued changes, unknown history and checkpoint timing are explicit. Fresh independent
+  Check/Review/Verify must assess this changed candidate and its new UI states.
 - Check, Review and Verify remain separate pipeline steps. Reuse the independent design evidence and canonical
   refs below. The root reports native command approve/deny and resumed-session writes in the worktree and
   an authorized additional folder on Codex 0.159.2. The transferred exact-root validation fix and four
