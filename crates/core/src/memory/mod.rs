@@ -26,7 +26,7 @@ use std::fmt;
 pub use self::{
   approval::approval,
   content::{Confidence, Importance, MemoryContent, MemoryContentError, MemoryKey, MemoryKind, Tags},
-  handoff::{FAILED_ATTEMPT_TAG, Handoff, HandoffWrite, MemoryChanges, StepFate},
+  handoff::{FAILED_ATTEMPT_TAG, Handoff, HandoffWrite, MemoryChanges, StepFate, split_handoff},
   next::{StepContext, next_invocation_memory},
   query::MemoryQuery,
   recall::{InjectionReason, RecallRequest, estimated_tokens, recall},

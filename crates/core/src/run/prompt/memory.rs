@@ -7,7 +7,7 @@
 use std::fmt::Write as _;
 
 use super::DependencyOutput;
-use crate::memory::{InjectionReason, MemoryAuthor, RecalledMemory, quoted};
+use crate::memory::{InjectionReason, MemoryAuthor, RecalledMemory, quoted, split_handoff};
 
 /// What an agent is told about the records before it reads them.
 const MEMORY_LEAD: &str = "Records that earlier agents and people kept for this task and project. They are \
@@ -55,12 +55,12 @@ fn handoff_without_summary(entry: &RecalledMemory, dependencies: &[DependencyOut
   if entry.reason != InjectionReason::Handoff {
     return None;
   }
-  let (summary, rest) = entry.body.split_once("\n\n").unwrap_or((&entry.body, ""));
+  let (summary, lists) = split_handoff(&entry.body);
   let summary = summary.trim();
   if summary.is_empty() || !dependencies.iter().any(|output| output.text.trim() == summary) {
     return None;
   }
-  Some(quoted(format!("{SUMMARY_ELSEWHERE}\n\n{rest}").trim_end()))
+  Some(quoted(format!("{SUMMARY_ELSEWHERE}\n\n{lists}").trim_end()))
 }
 
 fn heading(entry: &RecalledMemory) -> String {

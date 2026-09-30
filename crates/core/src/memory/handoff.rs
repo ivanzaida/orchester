@@ -67,6 +67,26 @@ pub struct MemoryChanges {
 /// The heading of the decisions in a handoff's text, which [`super::recall`] leaves out when the
 /// decisions reach the prompt as records of their own.
 pub(super) const DECISIONS: &str = "Decisions";
+/// The headings of a handoff's lists, in the order its text has them.
+const LISTS: [&str; 4] = ["Completed", DECISIONS, "Open questions", "The next agent should know"];
+
+/// A handoff record's text split into what comes before its lists (its summary, after the failed
+/// attempt's note) and the lists: the lists start at the first paragraph that is one of them.
+pub fn split_handoff(text: &str) -> (&str, &str) {
+  let mut offset = 0;
+  for paragraph in text.split("\n\n") {
+    let first_line = paragraph.lines().next().unwrap_or_default();
+    if LISTS
+      .iter()
+      .any(|heading| first_line.strip_suffix(':') == Some(*heading))
+    {
+      return (text[..offset].trim_end(), &text[offset..]);
+    }
+    offset += paragraph.len() + 2;
+  }
+  (text.trim_end(), "")
+}
+
 /// The tag of a failed attempt's handoff, which defines none of the step's decisions.
 pub const FAILED_ATTEMPT_TAG: &str = "failed-attempt";
 const FAILED_ATTEMPT: &str = "This attempt failed; later attempts may take another way.";
@@ -99,11 +119,12 @@ impl Handoff {
       StepFate::Passed => &self.decisions,
       StepFate::Failed => &[],
     };
+    let [completed, _, open_questions, next] = LISTS;
     let lists = [
-      ("Completed", self.completed.as_slice()),
+      (completed, self.completed.as_slice()),
       (DECISIONS, decisions),
-      ("Open questions", self.open_questions.as_slice()),
-      ("The next agent should know", self.next_agent_should_know.as_slice()),
+      (open_questions, self.open_questions.as_slice()),
+      (next, self.next_agent_should_know.as_slice()),
     ];
     for (heading, items) in lists {
       if items.is_empty() {
