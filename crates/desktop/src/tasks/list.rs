@@ -7,7 +7,7 @@ use orchester_core::{
   id::{ResourceId, TaskId},
   integration::RunMerge,
   resource::{StepKey, VersionNumber},
-  run::{PauseReason, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
+  run::{PauseReason, PinnedVersion, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
 };
@@ -68,6 +68,8 @@ impl TaskTab {
 /// Where a task's latest run stands, for its row's status and its dependency / readiness cell.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LatestRun {
+  /// The configuration the latest readable run actually executes.
+  pub pipeline: PinnedVersion,
   pub phase: TaskPhase,
   /// The run's number in the project, e.g. 128 for "Run #128".
   pub number: RunNumber,
@@ -129,6 +131,7 @@ impl LatestRun {
   /// `updated_at`, with the plan or the question it waits on, if any.
   pub fn of(task: &Task, (run, merge): (&Run, Option<&RunMerge>), updated_at: Timestamp, awaited: Awaited) -> Self {
     Self {
+      pipeline: run.snapshot().pipeline(),
       phase: TaskPhase::of(task, Some(run), merge),
       merged_into: merge.map(|merge| merge.into.as_str().into()),
       number: run.number(),
@@ -350,7 +353,7 @@ impl TaskRow {
       id: task.id(),
       key: task.key().to_string().into(),
       title: task.details().title.as_str().into(),
-      pipeline: PipelineLabel::of(task.details().pipeline, published),
+      pipeline: task_pipeline_label(task, published, latest),
       phase,
       detail,
       plan: latest.and_then(|latest| latest.plan.clone()),
@@ -358,6 +361,20 @@ impl TaskRow {
       created_at: task.created_at(),
     }
   }
+}
+
+fn task_pipeline_label(task: &Task, published: &[PipelineChoice], latest: Option<&LatestRun>) -> PipelineLabel {
+  let pinned = latest
+    .map(|run| (run.pipeline.resource, run.pipeline.number))
+    .or_else(|| task.details().pipeline.zip(task.pipeline_version()));
+  let id = pinned.map(|(id, _)| id).or(task.details().pipeline);
+  let mut label = PipelineLabel::of(id, published);
+  if let PipelineLabel::Published { version, .. } = &mut label
+    && let Some((_, number)) = pinned
+  {
+    *version = number;
+  }
+  label
 }
 
 /// Rows of `tab`, in task number order.

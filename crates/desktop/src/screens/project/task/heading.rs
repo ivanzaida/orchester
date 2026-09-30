@@ -34,7 +34,7 @@ pub(super) fn heading(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Element {
   }
   match &detail.run {
     Some(run) if *run.run.status() == RunStatus::Succeeded => ready_heading(ctx, title, run, detail.merge.is_some()),
-    _ => page::heading(title, &description(ctx, detail, lost)),
+    _ => page::heading(title, &description(ctx, detail, lost)).id("task-heading"),
   }
 }
 
@@ -126,6 +126,9 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     (RunStatus::Running, _) if lost => "runs.page.describe.interrupted",
     (RunStatus::Running, _) if awaiting_plan => "runs.page.describe.awaitingPlan",
     (RunStatus::Running, _) if asking => "runs.page.describe.asking",
+    (RunStatus::Pending, _) if run.group_hold == Some(orchester_core::task_group::GroupHold::SessionEnded) => {
+      "runs.page.describe.schedulingHeld"
+    }
     (RunStatus::Pending, _) => "runs.page.describe.pending",
     (RunStatus::Running, _) if run.run.pause_requested() => "runs.page.describe.pausing",
     (RunStatus::Running, Some(_)) if working.len() > 1 => "runs.page.describe.workingParallel",

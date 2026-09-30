@@ -400,3 +400,118 @@ async fn task_group_fresh_reopen_explicit_continue_keeps_first_run_checkpoint() 
   );
   fresh.stop_all(InterruptCause::QuitNow).await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn task_group_fresh_pending_first_recovery_reuses_id_key_snapshot_and_history() {
+  let fixture = project(&Setup::new("Append one line."));
+  let root = fixture.repo.path();
+  let mut db = ProjectDb::open(root).expect("db");
+  let group = reviewed_group(&mut db, fixture.task, Scheduling::Sequential, 3_000_000);
+  let slots = NonZeroU32::new(2).expect("slots");
+  let (original, mut events) = scheduler(root);
+  original.attach(AttachSession::Reconnect, slots).await.expect("attach");
+  original.advance_task_groups().await.expect("advance");
+  let first = db
+    .run_with_key(group.tasks()[0].first_run_key())
+    .expect("first")
+    .expect("exists");
+  let succeeded = wait_for(root, &mut events, first.id(), |run| {
+    run.status() == &RunStatus::Succeeded
+  })
+  .await;
+  let pending = record_pending_member(&mut db, &group, &first);
+  let task = pending.task();
+  original.stop_all(InterruptCause::QuitNow).await;
+  drop(original);
+  drop(db);
+  let db = ProjectDb::open(root).expect("reopened");
+  let (fresh, _) = scheduler(root);
+  fresh
+    .attach(
+      AttachSession::Fresh {
+        previous_end: orchester_ipc::SessionEnd::QuitNow,
+      },
+      slots,
+    )
+    .await
+    .expect("fresh");
+  fresh.advance_task_groups().await.expect("still held");
+  assert_eq!(db.run(pending.id()).expect("run").expect("exists"), pending);
+  assert_eq!(
+    db.task_group_hold(group.key()).expect("hold"),
+    Some(GroupHold::SessionEnded)
+  );
+  fresh.stop_all(InterruptCause::QuitNow).await;
+  drop(fresh);
+  let (reopened, mut events) = scheduler(root);
+  reopened
+    .attach(
+      AttachSession::Fresh {
+        previous_end: orchester_ipc::SessionEnd::QuitNow,
+      },
+      slots,
+    )
+    .await
+    .expect("second fresh");
+  reopened.advance_task_groups().await.expect("still held");
+  assert_eq!(db.run(pending.id()).expect("run").expect("exists"), pending);
+  let recovered = reopened
+    .start_requested_run(task.first_run_key(), task)
+    .await
+    .expect("recover existing first");
+  assert_eq!(recovered, pending.id());
+  assert_eq!(
+    reopened
+      .start_requested_run(task.first_run_key(), task)
+      .await
+      .expect("lost-reply retry"),
+    recovered
+  );
+  let finished = wait_for(root, &mut events, recovered, |run| {
+    run.status() == &RunStatus::Succeeded
+  })
+  .await;
+  assert_recovered_first(&db, &pending, &finished);
+  assert_eq!(db.run(first.id()).expect("earlier").expect("exists"), succeeded);
+  assert_eq!(db.task_group(group.key()).expect("group").expect("exists"), group);
+  assert_ne!(
+    db.task_group_hold(group.key()).expect("hold"),
+    Some(GroupHold::SessionEnded)
+  );
+}
+
+fn record_pending_member(
+  db: &mut ProjectDb,
+  group: &TaskGroup,
+  first: &orchester_core::run::Run,
+) -> orchester_core::run::Run {
+  let task = db.task(group.tasks()[1]).expect("task").expect("exists");
+  let limits = task.details().limits.expect("limits");
+  db.create_run(
+    task.id().first_run_key(),
+    orchester_core::run::NewRun {
+      task: task.id(),
+      snapshot: first.snapshot().clone(),
+      branch: orchester_core::run::BranchName::for_next_run(task.key(), 0),
+      base: first.base().clone(),
+      base_branch: None,
+      budget: limits.budget(),
+      max_duration: limits.max_duration(),
+    },
+    Timestamp::now(),
+  )
+  .expect("record first run without starting")
+}
+
+fn assert_recovered_first(db: &ProjectDb, pending: &orchester_core::run::Run, finished: &orchester_core::run::Run) {
+  assert_eq!(finished.snapshot(), pending.snapshot());
+  assert_eq!(finished.branch(), pending.branch());
+  assert_eq!(
+    db.run_with_key(pending.task().first_run_key())
+      .expect("first key")
+      .expect("exists")
+      .id(),
+    pending.id()
+  );
+  assert_eq!(db.runs_of_task(pending.task()).expect("runs").len(), 1);
+}

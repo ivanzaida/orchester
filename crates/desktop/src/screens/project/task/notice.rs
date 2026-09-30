@@ -59,6 +59,17 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: Option<&RunView>) -> (Icon, Arc<
       ctx.t("runs.summary.notice.queuedTitle"),
       ctx.t("runs.summary.notice.queuedDetail"),
     ),
+    Some(run) if run.first_run && run.run.status() == &RunStatus::Pending => (
+      Icon::Clock3,
+      ctx.t("runs.summary.notice.pendingTitle"),
+      ctx.t(
+        if run.group_hold == Some(orchester_core::task_group::GroupHold::SessionEnded) {
+          "runs.summary.notice.pendingHeldDetail"
+        } else {
+          "runs.summary.notice.pendingDetail"
+        },
+      ),
+    ),
     Some(run) => run_notice(ctx, run),
   }
 }

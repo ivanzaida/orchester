@@ -349,7 +349,7 @@
     "bulk": {
       "reviewChanged": "A selected task’s pipeline changed. Close this review and review the selection again.",
       "hold": {
-        "sessionEnded": "Scheduling is held after reopening. Open a queued task and start it to continue this group.",
+        "sessionEnded": "Scheduling is held after reopening. Use Start run on a pending first run, or Create & run on a queued task, to continue this group.",
         "capacity": "Waiting for agent capacity",
         "previous": "Waiting for the previous task to be ready for review",
         "concurrency": "Waiting for task concurrency",
@@ -592,6 +592,8 @@
       "pausing": "Pausing…",
       "resume": "Resume run",
       "resuming": "Resuming…",
+      "start": "Start run",
+      "starting": "Starting…",
       "continue": "Continue run",
       "continuing": "Continuing…",
       "cancel": "Cancel run",
@@ -602,7 +604,8 @@
       "draft": "Draft · not queued for a run",
       "queued": "Queued · its run has not started",
       "describe": {
-        "pending": "Run {{run}} · starting",
+        "pending": "Run {{run}} · not started",
+        "schedulingHeld": "Run {{run}} · scheduling held after reopening",
         "starting": "Run {{run}} · Attempt {{attempt}} · starting",
         "working": "Run {{run}} · Attempt {{attempt}} · {{step}} · {{agent}} working",
         "awaitingPlan": "Run {{run}} · Attempt {{attempt}} · {{pipeline}} {{version}} · {{agent}} finished",
@@ -733,6 +736,9 @@
       "notice": {
         "draftTitle": "This task is a draft",
         "draftDetail": "A run starts from Create & run once the task has every detail.",
+        "pendingTitle": "This run has not started",
+        "pendingDetail": "Start run retries this recorded first run with its reviewed pipeline and saved snapshot. It does not create another run.",
+        "pendingHeldDetail": "Scheduling is held after reopening. Start run continues this existing first run and releases its group’s scheduling hold, keeping its reviewed pipeline and saved snapshot.",
         "queuedTitle": "The run has not started",
         "queuedDetail": "The task is queued. Its run starts when the runner accepts it; Create & run on the new task form retries without starting a second run.",
         "runningTitle": "{{step}} is running",

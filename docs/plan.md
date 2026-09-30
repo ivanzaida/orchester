@@ -222,6 +222,23 @@ Tasks list selection and scheduling review · ORC-30 · branch `orchester/orc-30
   Fresh independent Check, Review and Verify remain required. Full suites, macOS execution and implementer
   design verification were not run.
 
+
+- Current c78713d negative Verify corrections (saved work based on `c78713d5c855b60cf3309144af0d1c51ad86bc7c`):
+  Queue, Needs review and Done now serialize and decode their own routes. Headless actual-navigation tests retain
+  combined search/pipeline/sort state and assert both matching and excluded rows. Pending original first runs expose
+  Start run on Summary, retrying their recorded first-run key/ID/snapshot; session-hold headings and notices no longer
+  claim that they are starting. First-run/group membership readback excludes later Run again runs. Queued and
+  recorded-run list labels use their reviewed/pinned version; drafts show the latest publication. Regressions cover
+  a newer publication, Fresh/reopen recovery, retry idempotency, prior history and preserved snapshots.
+  `tools/check.ps1` passed. 28 affected named tests passed: runner `task_group` (8), desktop form_keyboard `task_bulk`
+  (8) and `run_controls` (4), navigation `route_every_page_resolves_and_reads_back` (1), tasks `task_bulk` (2),
+  i18n `locale`/`every_key` (4/1). Core/store tests were not repeated: their implementation/test inputs are unchanged;
+  this is not a new core/store execution claim. Full suites, macOS execution and implementer design verification
+  were not run. Existing Skills navigation, cap isolation, keyboard Move/Undo and all previous evidence are retained.
+  Fresh independent Check, Review and Verify must assess this changed candidate. Before the Verify private app
+  launch, pin its own current pair READY and obtain a NEW Root watcher; old PID60644 sampled PASS and PID31288 FAIL
+  remain limited to their original lifetimes and are not evidence for this build.
+
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 
 - **Done 2026-09-30.** **Send & continue** resumes the same failed run in a new attempt, preserving its branch,

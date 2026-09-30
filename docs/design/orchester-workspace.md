@@ -845,6 +845,13 @@ member and explicitly start its reviewed first run, or explicitly continue an in
 group's session hold. Existing concurrency, cap, preflight and previous-task checks still apply. A later Run again
 cannot release the old group's hold. These recovery reasons reuse the task list's waiting text (implemented, not
 drawn yet); they preserve group order, original run keys, checkpoints and snapshots rather than creating a new group.
+A recorded Pending original first run exposes Start run in its Summary topbar (implemented, not drawn yet), using
+that existing run's stable first-run key. It retries worktree/start preparation with the recorded ID and snapshot,
+not a new run or the latest publication. Its Summary notice and heading explicitly name a session scheduling hold;
+a Pending record without that hold says it has not started. The list's pipeline column uses the latest readable
+run's pinned pipeline/version, otherwise the queued task's reviewed version, and the latest publication for a draft.
+All five task tabs round-trip through navigation routes; search, pipeline filter and sort remain combined when
+switching tabs. Unknown task-tab routes still fall back to All.
 
 **Implemented, not drawn yet:** inline Set pipeline picker/apply/cancel and skipped-task reasons (only drafts without
 runs are changed); empty search results and non-fixture filter/sort combinations; review validation, offline runner,

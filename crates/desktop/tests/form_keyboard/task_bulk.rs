@@ -1,4 +1,6 @@
 //! Task list controls and scheduling review, driven through the headless desktop.
+#[path = "task_bulk_recovery.rs"]
+mod recovery;
 use std::{path::Path, time::Duration};
 
 use lurq::app::events::MouseButton;
