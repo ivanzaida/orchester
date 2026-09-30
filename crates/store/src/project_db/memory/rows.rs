@@ -5,7 +5,7 @@ use orchester_core::{
   id::MemoryId,
   memory::{
     AgentProvenance, Confidence, Importance, Memory, MemoryAuthor, MemoryContent, MemoryKey, MemoryKind, MemoryScope,
-    MemoryStatus, ScreenedContent, StoredMemory, Tags,
+    MemoryStatus, StoredMemory, Tags,
   },
   resource::StepKey,
   time::Timestamp,
@@ -81,14 +81,14 @@ impl Raw {
     if let Some(key) = self.key {
       content = content.with_key(MemoryKey::new(&key).map_err(|error| corrupt(WHAT, error))?);
     }
-    Ok(Memory::from_stored(StoredMemory {
+    Memory::from_stored(StoredMemory {
       id: parse("memory id", &self.id)?,
       scope: match self.task {
         Some(task) => MemoryScope::Task(parse("memory task", &task)?),
         None => MemoryScope::Project,
       },
       author: author(&self.author, self.agent)?,
-      content: ScreenedContent::from_stored(content),
+      content,
       confidence,
       status: MemoryStatus::from_name(&self.status).ok_or_else(|| bad("unknown status"))?,
       pinned: self.pinned,
@@ -100,7 +100,8 @@ impl Raw {
       created_at: Timestamp::from_unix_millis(self.created_at),
       updated_at: Timestamp::from_unix_millis(self.updated_at),
       edited_at: self.edited_at.map(Timestamp::from_unix_millis),
-    }))
+    })
+    .map_err(|error| corrupt(WHAT, error))
   }
 }
 
@@ -125,12 +126,14 @@ pub(super) fn load(connection: &Connection, id: MemoryId) -> Result<Option<Memor
   rows.next().transpose()?.map(Raw::into_memory).transpose()
 }
 
-/// Stores a new record, or what an existing one says, its status and pin; its scope and origin
-/// never change. Refused when its key names another active record of its scope.
-pub(super) fn upsert(connection: &Connection, memory: &Memory) -> Result<(), StoreError> {
+/// Stores a new record; a record with its id exists already, or its key names another active record
+/// of its scope, and nothing is stored.
+pub(super) fn insert(connection: &Connection, memory: &Memory) -> Result<(), StoreError> {
+  if status(connection, memory.id())?.is_some() {
+    return Err(StoreError::MemoryExists(memory.id()));
+  }
   check_key(connection, memory)?;
   let content = memory.content();
-  let task = task_column(memory.scope());
   let (author, [profile, run, step, execution]) = match memory.author() {
     MemoryAuthor::Person => ("person", [None, None, None, None]),
     MemoryAuthor::Agent(agent) => (
@@ -145,10 +148,19 @@ pub(super) fn upsert(connection: &Connection, memory: &Memory) -> Result<(), Sto
   };
   let sources = serde_json::to_string(memory.sources()).map_err(|_| StoreError::Unrepresentable("memory sources"))?;
   connection.execute(
-    "INSERT INTO memories (id, task_id, kind, key, text, tags, importance, confidence, status, pinned,      supersedes_id, author, profile_id, run_id, step_key, step_execution_id, source_events, created_at, updated_at,      edited_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)      ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, key = excluded.key, text = excluded.text,      tags = excluded.tags, importance = excluded.importance, status = excluded.status, pinned = excluded.pinned,      updated_at = excluded.updated_at, edited_at = excluded.edited_at",
+    "
+    INSERT INTO memories (
+      id, task_id, kind, key, text, tags, importance, confidence, status, pinned, supersedes_id,
+      author, profile_id, run_id, step_key, step_execution_id, source_events,
+      created_at, updated_at, edited_at
+    ) VALUES (
+      ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
+      ?12, ?13, ?14, ?15, ?16, ?17,
+      ?18, ?19, ?20
+    )",
     params![
       memory.id().to_string(),
-      task,
+      task_column(memory.scope()),
       content.kind().name(),
       content.key().map(MemoryKey::as_str),
       content.text(),
@@ -170,6 +182,33 @@ pub(super) fn upsert(connection: &Connection, memory: &Memory) -> Result<(), Sto
     ],
   )?;
   Ok(())
+}
+
+/// Stores what an existing record says, its status and pin; its scope and origin never change. Its
+/// key must not name another active record of its scope. The number of rows changed (0: no record).
+pub(super) fn update(connection: &Connection, memory: &Memory) -> Result<usize, StoreError> {
+  check_key(connection, memory)?;
+  let content = memory.content();
+  let changed = connection.execute(
+    "
+    UPDATE memories SET
+      kind = ?2, key = ?3, text = ?4, tags = ?5, importance = ?6,
+      status = ?7, pinned = ?8, updated_at = ?9, edited_at = ?10
+    WHERE id = ?1",
+    params![
+      memory.id().to_string(),
+      content.kind().name(),
+      content.key().map(MemoryKey::as_str),
+      content.text(),
+      content.tags().joined(),
+      content.importance().name(),
+      memory.status().name(),
+      memory.is_pinned(),
+      memory.updated_at().unix_millis(),
+      memory.edited_at().map(Timestamp::unix_millis),
+    ],
+  )?;
+  Ok(changed)
 }
 
 fn task_column(scope: MemoryScope) -> Option<String> {

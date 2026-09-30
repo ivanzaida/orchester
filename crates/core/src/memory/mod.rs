@@ -3,10 +3,10 @@
 //! events and artifacts. A record belongs to one task or to the project; an agent's prompt gets the
 //! active records that matter for its step ([`recall`]), within the project's limits.
 //!
-//! A record changes only through the transitions of [`Memory`]: a proposed record is approved or
-//! rejected; a person edits an open record in place, pins, deprecates and restores it; an agent's
-//! newer record supersedes the one it names. Only active records reach prompts. Deleting a record,
-//! with its history, is a person's decision ([`MemoryStore::delete_memory`]).
+//! A record changes only through the transitions of [`Memory`]: a proposed record is approved (and
+//! then supersedes the record it replaces) or rejected; a person edits an open record in place, pins, deprecates and
+//! restores it; an agent's newer record supersedes the one it names. Only active records reach prompts. Deleting a
+//! record, with its history, is a person's decision ([`MemoryStore::delete_memory`]).
 
 mod content;
 mod handoff;
@@ -26,7 +26,7 @@ pub use self::{
   next::{StepContext, next_invocation_memory},
   query::MemoryQuery,
   recall::{InjectionReason, RecallRequest, Recalled, RecalledMemory, estimated_tokens, recall},
-  record::{AgentWrite, Memory, MemoryError, StoredMemory},
+  record::{AgentWrite, Memory, MemoryError, StoredMemory, StoredMemoryError},
   screen::{ContainsSecret, ScreenUnavailable, ScreenedContent, SecretScreen},
   settings::{MemoryLimits, MemoryLimitsError, MemorySettings, WritePolicy},
   store::{InjectedMemory, MemoryFilter, MemoryMatch, MemoryStore, ScopeFilter},
@@ -51,12 +51,20 @@ pub enum MemoryStatus {
   Active,
   /// A newer record replaced it.
   Superseded,
-  /// No longer true or wanted, or a proposal a person rejected.
+  /// No longer true or wanted; a person may restore it.
   Deprecated,
+  /// A proposal a person rejected; it never reaches an agent and is not restored.
+  Rejected,
 }
 
 impl MemoryStatus {
-  pub const ALL: [Self; 4] = [Self::Proposed, Self::Active, Self::Superseded, Self::Deprecated];
+  pub const ALL: [Self; 5] = [
+    Self::Proposed,
+    Self::Active,
+    Self::Superseded,
+    Self::Deprecated,
+    Self::Rejected,
+  ];
 
   /// Stable name, as stored.
   pub const fn name(self) -> &'static str {
@@ -65,6 +73,7 @@ impl MemoryStatus {
       Self::Active => "active",
       Self::Superseded => "superseded",
       Self::Deprecated => "deprecated",
+      Self::Rejected => "rejected",
     }
   }
 

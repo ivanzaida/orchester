@@ -71,6 +71,9 @@ pub enum StoreError {
   AlreadyMerged(RunId),
   #[error("memory {0} does not exist")]
   MemoryNotFound(MemoryId),
+  /// A record with the id is stored already; nothing was changed.
+  #[error("memory {0} exists already")]
+  MemoryExists(MemoryId),
   /// The stored record is no longer active, so it cannot be superseded; nothing was changed.
   #[error("memory {0} is no longer active")]
   MemoryNotActive(MemoryId),

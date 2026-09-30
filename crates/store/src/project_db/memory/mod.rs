@@ -30,7 +30,7 @@ const DELETE_WITH_HISTORY: &str = "
     SELECT older.id FROM history
       JOIN memories newer ON newer.id = history.id
       JOIN memories older ON older.id = newer.supersedes_id
-      WHERE older.status = 'superseded' AND newer.status <> 'proposed'
+      WHERE older.status = 'superseded' AND newer.status NOT IN ('proposed', 'rejected')
   )
   DELETE FROM memories WHERE id IN (SELECT id FROM history)";
 
@@ -40,7 +40,7 @@ impl MemoryStore for ProjectDb {
   fn add_memories(&mut self, memories: &[Memory]) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     for memory in memories {
-      rows::upsert(&transaction, memory)?;
+      rows::insert(&transaction, memory)?;
     }
     transaction.commit()?;
     Ok(())
@@ -48,10 +48,9 @@ impl MemoryStore for ProjectDb {
 
   fn save_memory(&mut self, memory: &Memory) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
-    if rows::status(&transaction, memory.id())?.is_none() {
+    if rows::update(&transaction, memory)? == 0 {
       return Err(StoreError::MemoryNotFound(memory.id()));
     }
-    rows::upsert(&transaction, memory)?;
     transaction.commit()?;
     Ok(())
   }
@@ -63,8 +62,15 @@ impl MemoryStore for ProjectDb {
       Some(_) => return Err(StoreError::MemoryNotActive(superseded.id())),
       None => return Err(StoreError::MemoryNotFound(superseded.id())),
     }
-    rows::upsert(&transaction, superseded)?;
-    rows::upsert(&transaction, replacement)?;
+    rows::update(&transaction, superseded)?;
+    // A new replacement, or a proposal that was just approved.
+    match rows::status(&transaction, replacement.id())? {
+      None => rows::insert(&transaction, replacement)?,
+      Some(MemoryStatus::Proposed) => {
+        rows::update(&transaction, replacement)?;
+      }
+      Some(_) => return Err(StoreError::MemoryNotActive(replacement.id())),
+    }
     transaction.commit()?;
     Ok(())
   }

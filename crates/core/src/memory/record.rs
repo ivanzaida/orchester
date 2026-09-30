@@ -14,7 +14,7 @@ pub enum MemoryError {
   NotProposed { id: MemoryId, status: MemoryStatus },
   #[error("memory {id} is {status}; only an active record is deprecated or superseded")]
   NotActive { id: MemoryId, status: MemoryStatus },
-  #[error("memory {id} is {status}; only a deprecated record is restored")]
+  #[error("memory {id} is {status}; only a deprecated record is restored, never a rejected proposal")]
   NotDeprecated { id: MemoryId, status: MemoryStatus },
   #[error("memory {id} is {status} and no longer changes")]
   Closed { id: MemoryId, status: MemoryStatus },
@@ -33,13 +33,26 @@ pub struct AgentWrite {
   pub sources: Vec<u64>,
 }
 
-/// A record as a store keeps it; [`Memory::from_stored`] reads it back.
+/// Why a stored record cannot be read back: it breaks a rule no transition could.
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+pub enum StoredMemoryError {
+  #[error("a {0} record is pinned")]
+  PinnedClosed(MemoryStatus),
+  #[error("the record supersedes itself")]
+  SupersedesItself,
+  #[error("the record changed before it was created")]
+  TimesOutOfOrder,
+  #[error("a person's record carries an agent's confidence or sources")]
+  PersonAsAgent,
+}
+
+/// The columns of a stored record, for the store to read one back with [`Memory::from_stored`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredMemory {
   pub id: MemoryId,
   pub scope: MemoryScope,
   pub author: MemoryAuthor,
-  pub content: ScreenedContent,
+  pub content: MemoryContent,
   pub confidence: Confidence,
   pub status: MemoryStatus,
   pub pinned: bool,
@@ -127,12 +140,31 @@ impl Memory {
     }
   }
 
-  pub fn from_stored(stored: StoredMemory) -> Self {
-    Self {
+  /// A record read back from the store it was saved to. Only a store calls this: it trusts that
+  /// the content was screened for secrets when it was saved and does not screen it again, but it
+  /// refuses combinations no transition leads to.
+  pub fn from_stored(stored: StoredMemory) -> Result<Self, StoredMemoryError> {
+    let open = matches!(stored.status, MemoryStatus::Proposed | MemoryStatus::Active);
+    if stored.pinned && !open {
+      return Err(StoredMemoryError::PinnedClosed(stored.status));
+    }
+    if stored.supersedes == Some(stored.id) {
+      return Err(StoredMemoryError::SupersedesItself);
+    }
+    let edited_in_time = stored
+      .edited_at
+      .is_none_or(|edited| stored.created_at <= edited && edited <= stored.updated_at);
+    if stored.updated_at < stored.created_at || !edited_in_time {
+      return Err(StoredMemoryError::TimesOutOfOrder);
+    }
+    if stored.author == MemoryAuthor::Person && (stored.confidence != Confidence::High || !stored.sources.is_empty()) {
+      return Err(StoredMemoryError::PersonAsAgent);
+    }
+    Ok(Self {
       id: stored.id,
       scope: stored.scope,
       author: stored.author,
-      content: stored.content.into_content(),
+      content: stored.content,
       confidence: stored.confidence,
       status: stored.status,
       pinned: stored.pinned,
@@ -141,27 +173,47 @@ impl Memory {
       created_at: stored.created_at,
       updated_at: stored.updated_at,
       edited_at: stored.edited_at,
-    }
+    })
   }
 
-  /// A person approves a proposed record: it becomes active and reaches the next agents. One that
-  /// names a record it replaces then supersedes it ([`Memory::supersede`]).
-  pub fn approve(&mut self, now: Timestamp) -> Result<(), MemoryError> {
+  /// A person approves a proposed record: it becomes active and reaches the next agents. A
+  /// replacement supersedes the record it names in the same step: pass that record as `replaced`
+  /// while it is active, `None` once it no longer is (store both with
+  /// [`super::MemoryStore::supersede_memory`]).
+  pub fn approve(&mut self, replaced: Option<&mut Self>, now: Timestamp) -> Result<(), MemoryError> {
+    self.require_proposed()?;
+    if let Some(replaced) = replaced {
+      replaced.require_active()?;
+      if self.supersedes != Some(replaced.id) || self.scope != replaced.scope {
+        return Err(MemoryError::NotItsReplacement {
+          id: replaced.id,
+          replacement: self.id,
+        });
+      }
+      self.decide(MemoryStatus::Active, now)?;
+      replaced.superseded_by(self, now);
+      return Ok(());
+    }
     self.decide(MemoryStatus::Active, now)
   }
 
-  /// A person rejects a proposed record: it is deprecated and never reaches an agent.
+  /// A person rejects a proposed record: it never reaches an agent and cannot be restored.
   pub fn reject(&mut self, now: Timestamp) -> Result<(), MemoryError> {
-    self.decide(MemoryStatus::Deprecated, now)
+    self.decide(MemoryStatus::Rejected, now)
+  }
+
+  fn require_proposed(&self) -> Result<(), MemoryError> {
+    if self.status == MemoryStatus::Proposed {
+      return Ok(());
+    }
+    Err(MemoryError::NotProposed {
+      id: self.id,
+      status: self.status,
+    })
   }
 
   fn decide(&mut self, status: MemoryStatus, now: Timestamp) -> Result<(), MemoryError> {
-    if self.status != MemoryStatus::Proposed {
-      return Err(MemoryError::NotProposed {
-        id: self.id,
-        status: self.status,
-      });
-    }
+    self.require_proposed()?;
     self.status = status;
     self.updated_at = now;
     Ok(())
@@ -207,8 +259,9 @@ impl Memory {
     Ok(())
   }
 
-  /// This active record is superseded by `replacement`, an active record that names it; the
-  /// replacement takes over its pin. Store both with [`super::MemoryStore::supersede_memory`].
+  /// This active record is superseded by `replacement`, an active record of its scope that names
+  /// it; the replacement takes over its pin. Store both with
+  /// [`super::MemoryStore::supersede_memory`].
   pub fn supersede(&mut self, replacement: &mut Self, now: Timestamp) -> Result<(), MemoryError> {
     self.require_active()?;
     if replacement.supersedes != Some(self.id)
@@ -220,11 +273,15 @@ impl Memory {
         replacement: replacement.id,
       });
     }
+    self.superseded_by(replacement, now);
+    Ok(())
+  }
+
+  fn superseded_by(&mut self, replacement: &mut Self, now: Timestamp) {
     replacement.pinned |= self.pinned;
     self.status = MemoryStatus::Superseded;
     self.pinned = false;
     self.updated_at = now;
-    Ok(())
   }
 
   fn require_active(&self) -> Result<(), MemoryError> {

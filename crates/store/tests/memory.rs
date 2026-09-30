@@ -152,12 +152,13 @@ fn memory_an_approved_replacement_supersedes_the_record_it_names() {
   assert_eq!(proposal.status(), MemoryStatus::Proposed);
   db.add_memories(std::slice::from_ref(&proposal))
     .expect("a proposal may share the key");
-  proposal.approve(at(4)).expect("approve");
+  let mut alone = proposal.clone();
+  alone.approve(None, at(4)).expect("approve alone");
   assert!(matches!(
-    db.save_memory(&proposal),
+    db.save_memory(&alone),
     Err(StoreError::DuplicateMemoryKey(key)) if key == "db.engine"
   ));
-  old.supersede(&mut proposal, at(4)).expect("supersede");
+  proposal.approve(Some(&mut old), at(4)).expect("approve and supersede");
   db.supersede_memory(&old, &proposal).expect("store both");
   let stored = db.memory(proposal.id()).expect("read").expect("stored");
   assert_eq!((stored.status(), stored.is_pinned()), (MemoryStatus::Active, true));
@@ -165,6 +166,20 @@ fn memory_an_approved_replacement_supersedes_the_record_it_names() {
     db.memory(old.id()).expect("read").map(|memory| memory.status()),
     Some(MemoryStatus::Superseded)
   );
+}
+
+#[test]
+fn memory_records_are_added_once() {
+  let (_repo, mut db, ..) = started_run();
+  let record = person(MemoryScope::Project, content(MemoryKind::Fact, "Once."), 1);
+  db.add_memories(std::slice::from_ref(&record)).expect("add");
+  let mut changed = record.clone();
+  changed.set_pinned(true, at(2)).expect("pin");
+  assert!(matches!(
+    db.add_memories(&[changed]),
+    Err(StoreError::MemoryExists(id)) if id == record.id()
+  ));
+  assert_eq!(db.memory(record.id()).expect("read"), Some(record));
 }
 
 #[test]

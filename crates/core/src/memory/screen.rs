@@ -31,11 +31,6 @@ pub struct ScreenUnavailable {
 pub struct ScreenedContent(MemoryContent);
 
 impl ScreenedContent {
-  /// Content read back from a store, which only ever stored screened content.
-  pub const fn from_stored(content: MemoryContent) -> Self {
-    Self(content)
-  }
-
   pub const fn content(&self) -> &MemoryContent {
     &self.0
   }

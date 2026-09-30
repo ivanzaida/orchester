@@ -5,8 +5,8 @@ use orchester_core::{
   id::{ProjectId, ResourceId, SecretId, TaskId},
   memory::{
     Confidence, ContainsSecret, Importance, Memory, MemoryContent, MemoryContentError, MemoryError, MemoryKey,
-    MemoryKind, MemoryLimits, MemoryLimitsError, MemoryScope, MemorySettings, MemoryStatus, SecretScreen, Tags,
-    WritePolicy,
+    MemoryKind, MemoryLimits, MemoryLimitsError, MemoryScope, MemorySettings, MemoryStatus, SecretScreen, StoredMemory,
+    StoredMemoryError, Tags, WritePolicy,
   },
   secret::{Environment, NewSecret, Secret, SecretKind, VaultError},
 };
@@ -80,19 +80,23 @@ fn records_a_proposal_is_approved_or_rejected_once() {
     at(1),
   );
   let mut rejected = proposal.clone();
-  proposal.approve(at(2)).expect("approve");
+  proposal.approve(None, at(2)).expect("approve");
   assert_eq!(proposal.status(), MemoryStatus::Active);
   assert_eq!(proposal.updated_at(), at(2));
   assert!(matches!(
-    proposal.approve(at(3)),
+    proposal.approve(None, at(3)),
     Err(MemoryError::NotProposed {
       status: MemoryStatus::Active,
       ..
     })
   ));
   rejected.reject(at(2)).expect("reject");
-  assert_eq!(rejected.status(), MemoryStatus::Deprecated);
+  assert_eq!(rejected.status(), MemoryStatus::Rejected);
   assert!(rejected.deprecate(at(3)).is_err());
+  assert!(
+    matches!(rejected.restore(at(3)), Err(MemoryError::NotDeprecated { .. })),
+    "a rejected proposal never becomes active"
+  );
 }
 
 #[test]
@@ -122,8 +126,15 @@ fn records_an_agent_supersedes_an_active_record_once_its_replacement_is_active()
     first.supersede(&mut proposed, at(4)),
     Err(MemoryError::NotItsReplacement { .. })
   ));
-  proposed.approve(at(5)).expect("approve");
-  first.supersede(&mut proposed, at(5)).expect("supersede");
+  let mut stranger = Memory::by_person(MemoryScope::Project, screened(MemoryKind::Fact, "Other."), at(1));
+  assert!(matches!(
+    proposed.clone().approve(Some(&mut stranger), at(5)),
+    Err(MemoryError::NotItsReplacement { .. })
+  ));
+  proposed
+    .approve(Some(&mut first), at(5))
+    .expect("approve and supersede");
+  assert_eq!(proposed.status(), MemoryStatus::Active);
   assert_eq!(first.status(), MemoryStatus::Superseded);
   assert!(!first.is_pinned());
   assert!(proposed.is_pinned(), "the replacement takes over the pin");
@@ -169,6 +180,63 @@ fn records_a_person_edits_in_place_deprecates_and_restores() {
   record.restore(at(9)).expect("restore");
   assert_eq!(record.status(), MemoryStatus::Active);
   assert!(matches!(record.restore(at(10)), Err(MemoryError::NotDeprecated { .. })));
+}
+
+#[test]
+fn records_read_back_refuses_combinations_no_transition_leads_to() {
+  let record = Memory::by_person(MemoryScope::Project, screened(MemoryKind::Fact, "Stored."), at(5));
+  let stored = StoredMemory {
+    id: record.id(),
+    scope: record.scope(),
+    author: record.author().clone(),
+    content: record.content().clone(),
+    confidence: record.confidence(),
+    status: record.status(),
+    pinned: false,
+    supersedes: None,
+    sources: Vec::new(),
+    created_at: at(5),
+    updated_at: at(6),
+    edited_at: None,
+  };
+  assert_eq!(
+    Memory::from_stored(stored.clone()).map(|memory| memory.id()),
+    Ok(record.id())
+  );
+  let broken = [
+    (
+      StoredMemory {
+        status: MemoryStatus::Superseded,
+        pinned: true,
+        ..stored.clone()
+      },
+      StoredMemoryError::PinnedClosed(MemoryStatus::Superseded),
+    ),
+    (
+      StoredMemory {
+        supersedes: Some(record.id()),
+        ..stored.clone()
+      },
+      StoredMemoryError::SupersedesItself,
+    ),
+    (
+      StoredMemory {
+        updated_at: at(4),
+        ..stored.clone()
+      },
+      StoredMemoryError::TimesOutOfOrder,
+    ),
+    (
+      StoredMemory {
+        confidence: Confidence::Low,
+        ..stored
+      },
+      StoredMemoryError::PersonAsAgent,
+    ),
+  ];
+  for (row, error) in broken {
+    assert_eq!(Memory::from_stored(row), Err(error));
+  }
 }
 
 #[test]
