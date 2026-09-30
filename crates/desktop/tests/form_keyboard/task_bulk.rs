@@ -237,7 +237,7 @@ fn run_review(mode: &str) {
   desktop.wait_for("tasks-review-sequential");
   desktop.click(mode);
   review_geometry(&mut desktop);
-  reorder(&mut desktop);
+  keyboard_and_drag_reorder(&mut desktop);
   desktop.wait_until("the runner online", |desktop| {
     shows(desktop, "status-runner", "Runner online")
   });
@@ -286,6 +286,38 @@ fn reorder(desktop: &mut Desktop) {
   }
   desktop.tree.mouse_up(x, end, MouseButton::Left);
   desktop.pass();
+}
+
+fn keyboard_and_drag_reorder(desktop: &mut Desktop) {
+  let tasks = ProjectDb::open(desktop.repo()).expect("db").tasks().expect("tasks");
+  let first = format!("tasks-review-order-{}", tasks[0].id());
+  let second = format!("tasks-review-order-{}", tasks[1].id());
+  desktop.tab_to("tasks-review-move-down", 40);
+  desktop.enter();
+  assert!(desktop.bounds(&first).y > desktop.bounds(&second).y);
+  desktop.tab_to("tasks-review-order-undo", 40);
+  desktop.enter();
+  assert!(desktop.bounds(&first).y < desktop.bounds(&second).y);
+  // Undo is consumed. Activating it again cannot change the restored order.
+  desktop.click("tasks-review-order-undo");
+  assert!(desktop.bounds(&first).y < desktop.bounds(&second).y);
+  desktop.tab_to("tasks-review-order-task", 40);
+  desktop.enter();
+  desktop.key("ArrowDown", "ArrowDown");
+  desktop.enter();
+  desktop.tab_to("tasks-review-move-up", 40);
+  desktop.enter();
+  assert!(desktop.bounds(&first).y > desktop.bounds(&second).y);
+  desktop.tab_to("tasks-review-order-undo", 40);
+  desktop.enter();
+  assert!(desktop.bounds(&first).y < desktop.bounds(&second).y);
+  reorder(desktop);
+  assert!(desktop.bounds(&first).y > desktop.bounds(&second).y);
+  desktop.tab_to("tasks-review-order-undo", 40);
+  desktop.enter();
+  assert!(desktop.bounds(&first).y < desktop.bounds(&second).y);
+  reorder(desktop);
+  assert!(desktop.bounds(&first).y > desktop.bounds(&second).y);
 }
 
 #[test]

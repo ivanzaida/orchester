@@ -17,7 +17,7 @@ impl SchedulingReview {
         "tasks.bulk.summarySequential"
       },
       [
-        ("count", self.order.get().0.len().to_string()),
+        ("count", self.order.get().tasks.len().to_string()),
         ("concurrent", self.concurrent.get().to_string()),
       ],
     )
@@ -114,7 +114,7 @@ impl SchedulingReview {
       for task in tasks
         .tasks
         .iter()
-        .filter(|task| self.order.get().0.contains(&task.id()))
+        .filter(|task| self.order.get().tasks.contains(&task.id()))
       {
         if let Some(pipeline) = tasks.pipelines.iter().find(|p| Some(p.id) == task.details().pipeline) {
           let version = task.pipeline_version().unwrap_or(pipeline.version);
@@ -145,7 +145,7 @@ impl SchedulingReview {
   }
 
   pub(super) fn approval_notice(&self, ctx: &Ctx, props: &ReviewProps) -> Element {
-    let order = self.order.get().0;
+    let order = self.order.get().tasks;
     let all_gated = !order.is_empty()
       && props.tasks.ready().is_some_and(|tasks| {
         order.iter().all(|id| {

@@ -73,7 +73,7 @@ impl SchedulingReview {
         FieldNote::None,
       );
     }
-    let choices = (1..=self.order.get().0.len().max(1) as u32)
+    let choices = (1..=self.order.get().tasks.len().max(1) as u32)
       .filter(|n| !locked || *n == self.concurrent.get())
       .map(|n| (n, ctx.t_args("tasks.bulk.concurrentCount", [("count", n.to_string())])));
     let control = Element::from(

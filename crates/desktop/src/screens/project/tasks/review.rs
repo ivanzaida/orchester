@@ -1,5 +1,7 @@
 //! Scheduling review W1Dq6/IyJ5a; cancel returns to the unchanged selection.
+mod order;
 mod readback;
+use order::{OrderChoice, TaskOrder};
 mod settings;
 use std::{num::NonZeroU32, path::PathBuf, sync::Arc};
 
@@ -76,13 +78,10 @@ enum Mode {
 }
 impl lurq::app::component::DevtoolsInspectable for Mode {}
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct TaskOrder(Vec<TaskId>);
-impl lurq::app::component::DevtoolsInspectable for TaskOrder {}
-
 pub struct SchedulingReview {
   seeded: Signal<bool>,
   order: Signal<TaskOrder>,
+  chosen: Signal<OrderChoice>,
   mode: Signal<Mode>,
   concurrent: Signal<u32>,
   cap: Signal<String>,
@@ -109,7 +108,8 @@ impl Component for SchedulingReview {
     });
     Self {
       seeded: ctx.signal(false),
-      order: ctx.signal(TaskOrder(Vec::new())),
+      order: ctx.signal(TaskOrder::new(Vec::new())),
+      chosen: ctx.signal(OrderChoice(None)),
       mode: ctx.signal(Mode::Parallel),
       concurrent: ctx.signal(2),
       cap: ctx.signal(String::new()),
@@ -139,7 +139,7 @@ impl Component for SchedulingReview {
       }
       _ => None,
     };
-    let count = self.order.get().0.len();
+    let count = self.order.get().tasks.len();
     let content = Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
@@ -211,7 +211,8 @@ impl SchedulingReview {
       .fold(0_u64, |sum, l| sum.saturating_add(l.budget().get()));
     self.cap.set(grouped(cap, &separator));
     self.concurrent.set(if order.len() > 1 { 2 } else { 1 });
-    self.order.set(TaskOrder(order));
+    self.chosen.set(OrderChoice(order.first().copied()));
+    self.order.set(TaskOrder::new(order));
     self.seeded.set(true);
   }
 
@@ -227,8 +228,8 @@ impl SchedulingReview {
       }
       Mode::Sequential => Scheduling::Sequential,
     };
-    let group =
-      TaskGroup::new(self.key, self.order.get().0, mode, cap).map_err(|_| Message::new("tasks.bulk.emptySelection"))?;
+    let group = TaskGroup::new(self.key, self.order.get().tasks, mode, cap)
+      .map_err(|_| Message::new("tasks.bulk.emptySelection"))?;
     Ok((group, limits))
   }
 
@@ -257,118 +258,6 @@ impl SchedulingReview {
       .into()
   }
 
-  fn task_order(&self, ctx: &mut Ctx, props: &ReviewProps, locked: bool) -> Element {
-    let rows = self
-      .order
-      .get()
-      .0
-      .iter()
-      .filter_map(|id| {
-        props.tasks.ready()?.tasks.iter().find(|t| t.id() == *id).map(|task| {
-          TaskRow::new(
-            task,
-            &props.tasks.ready().expect("ready tasks were found").pipelines,
-            None,
-          )
-        })
-      })
-      .collect::<Vec<_>>();
-    let list = Column::new()
-      .width(Dimension::Pct(100.0))
-      .with_children(rows.iter().enumerate().map(|(index, task)| {
-        let handle = self.order_handle(ctx, task.id, locked);
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .height(Dimension::Px(REVIEW_ROW_HEIGHT))
-          .spacing(SpacingSize::Sm)
-          .align_items(lurq::layout::Alignment::Center)
-          .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-          .child(handle)
-          .child(
-            Column::new()
-              .flex(1.0)
-              .spacing(ExtraSpacing::Indicator.role())
-              .child(
-                Text::new(&task.title)
-                  .variant(TypographyStyle::FieldLabel)
-                  .color(lurq::app::theme::PaletteColor::TextPrimary),
-              )
-              .child(
-                Text::new(&ctx.t_args(
-                  "tasks.bulk.taskPipeline",
-                  [
-                    ("task", task.key.to_string()),
-                    ("pipeline", message_text(ctx, &task.pipeline.message()).to_string()),
-                  ],
-                ))
-                .variant(ExtraTypography::Hint.role()),
-              ),
-          )
-          .child(Text::new(&(index + 1).to_string()).variant(TypographyStyle::Mono))
-      }));
-    Column::new()
-      .flex(1.0)
-      .spacing(SpacingSize::Md)
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .align_items(lurq::layout::Alignment::Center)
-          .child(
-            Text::new(&ctx.t(if self.mode.get() == Mode::Parallel {
-              "tasks.bulk.priority"
-            } else {
-              "tasks.bulk.order"
-            }))
-            .variant(ExtraTypography::SectionHeading.role()),
-          )
-          .child(Spacer::new().flex(1.0))
-          .child(Text::new(&ctx.t("tasks.bulk.dragToReorder")).variant(TypographyStyle::Caption)),
-      )
-      .child(
-        ScrollVertical::new(list)
-          .width(Dimension::Pct(100.0))
-          .flex(1.0)
-          .scrollbar(gutter_scrollbar()),
-      )
-      .into()
-  }
-
-  fn order_handle(&self, ctx: &mut Ctx, task: TaskId, locked: bool) -> Element {
-    let handle = surface()
-      .id(format!("tasks-review-order-{task}"))
-      .size(Dimension::Px(ORDER_HANDLE_SIZE), Dimension::Px(ORDER_HANDLE_SIZE))
-      .align_items(lurq::layout::Alignment::Center)
-      .justify(lurq::layout::layout_kind::Justify::Center)
-      .cursor(lurq::node::CursorIcon::Grab)
-      .hovered_style(Style::new().background(lurq::app::theme::PaletteColor::AccentMuted))
-      .child(icon(
-        Icon::GripVertical,
-        IconSize::Small,
-        lurq::app::theme::PaletteColor::TextPrimary,
-      ));
-    if locked {
-      return handle.into();
-    }
-    let order = self.order.clone();
-    Draggable::mount(
-      ctx,
-      DraggableProps::new()
-        .movement(DragMovement::Manual)
-        .override_policy(DragOverridePolicy::Clear)
-        .on_drag_end(move |event| {
-          let offset = (event.total_delta_y / REVIEW_ROW_HEIGHT).round() as isize;
-          order.update(|ids| {
-            if let Some(from) = ids.0.iter().position(|id| *id == task) {
-              let to = (from as isize + offset).clamp(0, ids.0.len().saturating_sub(1) as isize) as usize;
-              let moved = ids.0.remove(from);
-              ids.0.insert(to, moved);
-            }
-          });
-        }),
-      handle,
-    )
-  }
-
   fn actions(
     &self,
     ctx: &Ctx,
@@ -378,16 +267,18 @@ impl SchedulingReview {
     complete: bool,
   ) -> Element {
     let close = props.close.clone();
-    let mut queue =
-      ActionButton::new(ctx.t_args("tasks.bulk.queue", [("count", self.order.get().0.len().to_string())]))
-        .primary()
-        .icon(Icon::Play)
-        .size(
-          Dimension::Px(crate::theme::TASK_REVIEW_QUEUE_WIDTH),
-          Dimension::Px(crate::theme::TASK_REVIEW_ACTION_HEIGHT),
-        )
-        .id("tasks-review-queue")
-        .in_form();
+    let mut queue = ActionButton::new(ctx.t_args(
+      "tasks.bulk.queue",
+      [("count", self.order.get().tasks.len().to_string())],
+    ))
+    .primary()
+    .icon(Icon::Play)
+    .size(
+      Dimension::Px(crate::theme::TASK_REVIEW_QUEUE_WIDTH),
+      Dimension::Px(crate::theme::TASK_REVIEW_ACTION_HEIGHT),
+    )
+    .id("tasks-review-queue")
+    .in_form();
     queue = match submit {
       Some(submit) => queue.on_click(move || submit()),
       None => queue.disabled(),

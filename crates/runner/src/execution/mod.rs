@@ -184,14 +184,14 @@ impl Scheduler {
       .map_err(|error| read_failed("cannot read runs", error))?
     {
       if recorded.status() == &RunStatus::Pending {
-        self.check_group_start(&db, task)?;
+        self.check_group_start(&db, task, Some(&recorded))?;
         self.admit(&db)?;
         build_space::preflight(&db, root)?;
       }
       let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
       return self.begin(db, prepared);
     }
-    self.check_group_start(&db, task)?;
+    self.check_group_start(&db, task, None)?;
     self.admit(&db)?;
     let prepared = prepare::prepare_first(&mut db, root, key, task)?;
     self.begin(db, prepared)

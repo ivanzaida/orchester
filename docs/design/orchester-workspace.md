@@ -828,10 +828,13 @@ opening their task. Select all affects the visible filtered rows; selections hid
 counted. Search matches title, task key, internal ID and brief, combined with the pipeline filter, sort and tab.
 The selection bar counts ready and incomplete selections and lists each selected task's readiness problems.
 Run selected requires every selected task to be a complete draft with a published pipeline and no previous run.
-The review permits dragging the task order, parallel concurrency or sequential scheduling, per-task token/time
+The review permits dragging or keyboard editing of task order, parallel concurrency or sequential scheduling, per-task token/time
 limits and the aggregate cap; cancelling returns to the selection without scheduling work. Queue saves the whole
 group atomically, pins pipeline versions, and the runner starts one idempotent first run per task. Waiting for input
 or approval occupies a task slot. Sequential scheduling waits until the previous run succeeds (ready for review).
+The aggregate cap applies only to the group's first runs, including further attempts of those same runs. Cancel
+followed by Run again creates a separate run with its own limits; it neither inherits the exhausted group cap nor
+contributes usage to that group. Original group membership remains stored for first-run idempotency and history.
 An unrecovered failure or cancellation holds unstarted members; existing agents retain their normal controls.
 
 **Implemented, not drawn yet:** inline Set pipeline picker/apply/cancel and skipped-task reasons (only drafts without
@@ -843,6 +846,11 @@ agents at turn boundaries and can overshoot by already-running turns. Queue edit
 task prerequisites remain separate backlog work; this change does not introduce those controls or claim dependency
 enforcement. Shared-cap recovery is unavailable in the per-run raise-limit panel because raising one run's limit
 cannot raise a group cap. The independent verifier must compare J9467/W1Dq6/IyJ5a and these reachable states.
+The scheduling-review order column includes a Task to reorder selector and keyboard-reachable Move up, Move down
+and Undo buttons beneath the scrolling rows (implemented, not drawn yet). Select a task with the picker, then use
+Tab and Enter on its move action. Boundary moves and actions after submission are disabled. Each real keyboard
+move or drag replaces the single Undo snapshot; Undo restores that snapshot once. Choosing a task or attempting
+a no-op move does not replace history. Both review modes share this behavior and queue the resulting order.
 
 **After the failed 2026-09-30 visual review:** scheduling reviews now show the task-count/concurrency footer,
 token units and compact readbacks, the selected published pipeline versions, and compact active-time properties.

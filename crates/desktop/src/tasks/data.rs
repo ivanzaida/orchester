@@ -81,7 +81,12 @@ impl ProjectTasks {
       let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
       count += runs.iter().filter(|run| run.is_ok()).count();
       let latest = match runs.last() {
-        Some(Ok(latest)) => Latest::Run(latest_run(&db, task, latest)?),
+        Some(Ok(latest)) => {
+          if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
+            group_holds.remove(&task.id());
+          }
+          Latest::Run(latest_run(&db, task, latest)?)
+        }
         Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
         None => continue,
       };

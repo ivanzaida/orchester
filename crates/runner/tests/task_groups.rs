@@ -11,7 +11,7 @@ use orchester_core::{
 };
 use orchester_ipc::{AttachSession, Rejection};
 use orchester_store::ProjectDb;
-use support::{Setup, project, scheduler, wait_for};
+use support::{Setup, project, scheduler, wait_for, wait_for_turns};
 
 async fn run_group(mode: Scheduling) {
   let fixture = project(&Setup::new("Append one line."));
@@ -182,4 +182,68 @@ async fn task_group_parallel_still_obeys_runner_agent_slots() {
     Some(GroupHold::AgentCapacity)
   );
   scheduler.stop_all(InterruptCause::QuitNow).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn task_group_cancel_then_run_again_does_not_inherit_exhausted_shared_cap() {
+  let fixture = project(&Setup::new("Work in turns."));
+  let root = fixture.repo.path();
+  let mut db = ProjectDb::open(root).expect("db");
+  let group = reviewed_group(&mut db, fixture.task, Scheduling::Sequential, 5_000);
+  let (scheduler, mut events) = scheduler(root);
+  scheduler
+    .attach(AttachSession::Reconnect, NonZeroU32::new(2).expect("slots"))
+    .await
+    .expect("attach");
+  scheduler.advance_task_groups().await.expect("advance");
+  let first = db
+    .run_with_key(group.tasks()[0].first_run_key())
+    .expect("first")
+    .expect("started");
+  let stopped = wait_for(root, &mut events, first.id(), |run| {
+    matches!(run.status(), RunStatus::Paused(_))
+  })
+  .await;
+  assert_eq!(
+    stopped.status(),
+    &RunStatus::Paused(PauseReason::LimitReached(RunLimit::GroupBudget))
+  );
+  let group_usage = db.task_group_usage(&group).expect("usage");
+  scheduler.cancel_run(first.id()).await.expect("cancel");
+  let key = IdempotencyKey::generate();
+  let next = scheduler
+    .run_again(key, first.task(), first.id(), None)
+    .await
+    .expect("run again");
+  let advanced = wait_for(root, &mut events, next, |run| {
+    run.used().get() >= 5_000 || matches!(run.status(), RunStatus::Paused(_))
+  })
+  .await;
+  assert_eq!(
+    advanced.status(),
+    &RunStatus::Running,
+    "later run starts and works beyond the old shared cap"
+  );
+  wait_for_turns(root, &mut events, next, 2).await;
+  assert!(
+    !db
+      .task_group_limit_reached(&advanced)
+      .expect("new run is outside group")
+  );
+  assert_eq!(db.task_group_usage(&group).expect("original group usage"), group_usage);
+  assert_eq!(
+    scheduler
+      .run_again(key, first.task(), first.id(), None)
+      .await
+      .expect("retry"),
+    next
+  );
+  scheduler.cancel_run(next).await.expect("cancel later run");
+  scheduler.advance_task_groups().await.expect("advance held group");
+  assert!(
+    db.run_with_key(group.tasks()[1].first_run_key())
+      .expect("second")
+      .is_none()
+  );
+  assert_eq!(db.runs_of_task(first.task()).expect("runs").len(), 2);
 }

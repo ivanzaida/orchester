@@ -11,7 +11,20 @@ use super::{Scheduler, read_failed};
 
 impl Scheduler {
   /// Single-task start requests cannot bypass the saved group review.
-  pub(super) fn check_group_start(&self, db: &ProjectDb, task: orchester_core::id::TaskId) -> Result<(), Rejection> {
+  pub(super) fn check_group_start(
+    &self,
+    db: &ProjectDb,
+    task: orchester_core::id::TaskId,
+    recorded: Option<&orchester_core::run::Run>,
+  ) -> Result<(), Rejection> {
+    if let Some(run) = recorded
+      && db
+        .task_group_for_run(run)
+        .map_err(|e| read_failed("cannot read run group", e))?
+        .is_none()
+    {
+      return Ok(());
+    }
     let Some(group) = db
       .task_group_for_task(task)
       .map_err(|e| super::failed("cannot read task group", &e))?

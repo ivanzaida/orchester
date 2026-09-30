@@ -4,10 +4,12 @@ use std::num::NonZeroU32;
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   resource::{Pipeline, ResourceKind},
+  run::{BranchName, NewRun},
   store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskStatus},
   task_group::{Scheduling, TaskGroup},
   task_selection::SelectionProblem,
+  tokens::TokensUsed,
 };
 use orchester_store::ProjectDb;
 use support::{at, budget, name, started_run};
@@ -31,6 +33,58 @@ fn drafts(db: &mut ProjectDb) -> (ResourceId, Vec<orchester_core::task::Task>) {
     .create_tasks(IdempotencyKey::generate(), vec![details("One"), details("Two")], at(9))
     .expect("drafts");
   (pipeline, drafts)
+}
+
+#[test]
+fn task_group_cap_and_usage_belong_only_to_first_runs_after_reopening() {
+  let (repo, mut db, template, _) = started_run();
+  let (_, drafts) = drafts(&mut db);
+  let task = drafts[0].id();
+  let group = TaskGroup::new(
+    IdempotencyKey::generate(),
+    vec![task],
+    Scheduling::Sequential,
+    budget(100),
+  )
+  .expect("group");
+  db.queue_task_group(&group, None).expect("queue");
+  let new = |branch| NewRun {
+    task,
+    snapshot: template.snapshot().clone(),
+    branch: BranchName::new(branch).expect("branch"),
+    base: template.base().clone(),
+    base_branch: None,
+    budget: template.budget(),
+    max_duration: template.max_duration(),
+  };
+  let mut first = db
+    .create_run(task.first_run_key(), new("orchester/orc-2-run-1"), at(10))
+    .expect("first");
+  let events = first.start(at(11)).expect("start");
+  db.append_events(&first, &events).expect("events");
+  let events = first.record_usage(TokensUsed::new(100), at(12)).expect("usage");
+  db.append_events(&first, &events).expect("events");
+  assert!(db.task_group_limit_reached(&first).expect("first cap"));
+  let events = first.cancel(at(13)).expect("cancel");
+  db.append_events(&first, &events).expect("events");
+  let mut again = db
+    .create_run(IdempotencyKey::generate(), new("orchester/orc-2-run-2"), at(14))
+    .expect("again");
+  assert!(!db.task_group_limit_reached(&again).expect("new pending run cap"));
+  let events = again.start(at(15)).expect("start");
+  db.append_events(&again, &events).expect("events");
+  let events = again.record_usage(TokensUsed::new(300), at(16)).expect("usage");
+  db.append_events(&again, &events).expect("events");
+  drop(db);
+  let mut db = ProjectDb::open(repo.path()).expect("reopen");
+  assert!(!db.task_group_limit_reached(&again).expect("running again cap"));
+  assert!(db.task_group_for_run(&again).expect("membership").is_none());
+  assert!(db.task_group_limit_reached(&first).expect("first cap persists"));
+  assert_eq!(
+    db.task_group_usage(&group).expect("only first usage"),
+    TokensUsed::new(100)
+  );
+  assert_eq!(db.queue_task_group(&group, None).expect("first-group retry"), group);
 }
 
 #[test]

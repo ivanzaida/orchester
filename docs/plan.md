@@ -199,6 +199,14 @@ Tasks list selection and scheduling review · ORC-30 · branch `orchester/orc-30
   theme `pencil` (27) passed. Headless regressions cover the inset/control width and card geometry in both modes.
   No unchanged core/store tests, full suites, macOS execution or implementer visual verification were repeated.
   Fresh independent Check, Review and Verify remain required; prior verification evidence is preserved.
+- Mandatory Review/final-check fixes: group caps and membership checks now use the original first-run identity;
+  later Run again runs do not inherit the group's exhausted cap or add to its usage. The latest task list also
+  drops the old group's hold reason for those later runs. Review ordering now has keyboard-reachable task selection,
+  Move up/down and one Undo shared with dragging. These controls are documented as implemented, not drawn yet.
+  Original group records remain available for first-run idempotency and history. Skills and prior visual fixes remain.
+  Final `tools/check.ps1` passed; 23 affected named tests passed: core/store/runner `task_group` (3/3/5), desktop
+  form_keyboard/tasks `task_bulk` (5/2), i18n `locale`/`every_key` (4/1). Full suites, macOS execution and
+  implementer design verification were not run. Fresh independent Check, Review and Verify remain pending.
 
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 

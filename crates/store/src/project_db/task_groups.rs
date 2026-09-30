@@ -196,8 +196,18 @@ impl ProjectDb {
     self.task_group(parse("group key", &key)?)
   }
 
-  pub fn task_group_limit_reached(&self, task: TaskId) -> Result<bool, crate::RunStoreError> {
-    let Some(group) = self.task_group_for_task(task)? else {
+  /// Scheduling and the shared cap belong to the reviewed first run, not every later run
+  /// of its task. Membership is retained for idempotent first-run retries and group history.
+  pub fn task_group_for_run(&self, run: &orchester_core::run::Run) -> Result<Option<TaskGroup>, crate::RunStoreError> {
+    let first = self.run_with_key(run.task().first_run_key())?;
+    if first.is_none_or(|first| first.id() != run.id()) {
+      return Ok(None);
+    }
+    Ok(self.task_group_for_task(run.task())?)
+  }
+
+  pub fn task_group_limit_reached(&self, run: &orchester_core::run::Run) -> Result<bool, crate::RunStoreError> {
+    let Some(group) = self.task_group_for_run(run)? else {
       return Ok(false);
     };
     Ok(self.task_group_usage(&group)?.reached(group.cap()))

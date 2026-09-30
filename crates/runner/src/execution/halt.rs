@@ -114,7 +114,7 @@ impl RunTask {
       Some(RunLimit::DailyBudget)
     } else if self
       .db
-      .task_group_limit_reached(self.run.task())
+      .task_group_limit_reached(&self.run)
       .map_err(super::record::RecordError::from)?
     {
       Some(RunLimit::GroupBudget)
@@ -164,7 +164,7 @@ impl RunTask {
         Some(RunLimit::DailyBudget)
       } else if self
         .db
-        .task_group_limit_reached(self.run.task())
+        .task_group_limit_reached(&self.run)
         .map_err(super::record::RecordError::from)?
       {
         Some(RunLimit::GroupBudget)
