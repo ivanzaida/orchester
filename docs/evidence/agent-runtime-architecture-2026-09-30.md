@@ -309,3 +309,29 @@ After checkpoint `391a5b0`, the root's exact-caption answer was applied and the 
 i18n tests and `tools/check.ps1` were rerun successfully against `391a5b0` plus this saved
 caption/test/documentation delta. Both request placeholders remain unchanged. Independent
 Verify must read/export fresh canonical `GbNSA`; earlier exports remain historical.
+
+### Review912 effective-policy display blocker
+
+Inspection input is clean checkpoint `2df92ae` (the Review912 candidate). Existing command copy,
+native accept/cancel handling and Target/cwd wrapping were preserved. No runtime or UI source
+was changed on this inspection.
+
+The desktop resolver `tasks/permissions.rs` obtains `Run::step_permissions` from the current
+mutable run override, even while an earlier invocation remains active. `Invocation` in
+`core/src/run/invocation.rs` carries no permissions or enforcement snapshot. The
+`ActivityStore::start_invocation` API accepts run, execution, model and timestamp only;
+`save_invocation` cannot persist the actual launch policy. Runner `step/command.rs` resolves
+`EnforcedPermissions` when constructing the command after the invocation has been recorded.
+`PermissionsChanged` events identify desired overrides, not the exact policy passed to each
+invocation. Timestamp reconstruction in the UI would substitute an inference for a launch record.
+
+Per the user's instruction, this shared architecture/API gap is reported to the root rather
+than worked around in the desktop. Required invariant: an immutable invocation policy snapshot
+must represent the permissions actually used to construct its transport, with a public read API
+and an explicit unknown state for historical invocations lacking that record. The root must
+provide that API or authorize its implementation before the requested truthful active/next-policy
+display and enabling/disabling regressions can be completed. The UI must keep desired settings
+editable independently and show first-change NextInvocation and ApplyNow checkpoint timing.
+
+No tests/checks were rerun for this documentation-only blocker report. Review912 remains a
+negative verdict on `2df92ae`; no corrected candidate, pinned pair or new QA verdict is claimed.
