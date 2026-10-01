@@ -377,3 +377,33 @@ fn writable_roots_reach_claude_as_one_add_dir_each_in_new_and_resumed_sessions()
   let args = claude_args(&read_only, ClaudeSession::New(id), &roots());
   assert!(!args.contains(&"--add-dir".to_owned()), "{args:?}");
 }
+
+#[test]
+fn writable_roots_get_an_edit_rule_where_claude_runs_without_accept_edits() {
+  let commands = AllowedCommands::new(vec![CommandPrefix::new("rm -f build/x").expect("prefix")]).expect("list");
+  let permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(commands),
+    NetworkAccess::On,
+  )
+  .with_writable_folders(folders(&[".orchester/target", "../shared"]));
+  let args = claude_args(&permissions, ClaudeSession::Resume("s-1"), &roots());
+  let allowed = args.iter().position(|arg| arg == "--allowedTools").expect("allowed");
+  let first = args.iter().position(|arg| arg == "--add-dir").expect("add-dir");
+  assert_eq!(
+    args[allowed + 1..first],
+    [
+      "Bash(rm -f build/x:*)",
+      "Edit(//repo/.orchester/worktrees/run/**)",
+      "Edit(//c/repo/.orchester/target/**)",
+      "Edit(//shared/it's \"here\"/**)",
+    ]
+  );
+  let accepting = claude_args(
+    &edit_permissions(&[".orchester/target"]),
+    ClaudeSession::Resume("s-1"),
+    &roots(),
+  );
+  assert!(accepting.contains(&"acceptEdits".to_owned()), "{accepting:?}");
+  assert!(!accepting.iter().any(|arg| arg.starts_with("Edit(")), "{accepting:?}");
+}

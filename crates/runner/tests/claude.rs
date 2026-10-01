@@ -13,6 +13,7 @@ use orchester_core::{
     stream::{AgentEvent, CommandStatus, FileChangeKind, InvocationOutcome, OutputStream, RunnerProblem},
   },
   id::{IdempotencyKey, RunId},
+  permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   resource::{ModelId, StepKey},
   run::{PauseReason, RaisedLimits, RunLimit, RunStatus, StepFailure, StepStatus},
   store::{ActivityStore, ConnectionStore, ConversationStore},
@@ -196,6 +197,42 @@ async fn claude_allowed_commands_keep_accept_edits_from_running_others() {
   let (project, run) = finished("Remove the build.").await;
   let db = ProjectDb::open(project.repo.path()).expect("open");
   assert_eq!(reported(&db, run.id(), "permission: "), ["toolu_rm deny-by-rule"]);
+}
+
+/// What the CLI decided about the one command `brief` runs, in a writing step allowed `sed -n` and
+/// `rm -f build/x`.
+async fn listed_file_command(brief: &'static str) -> Vec<String> {
+  let listed = ["git", "sed -n", "rm -f build/x"].map(|entry| CommandPrefix::new(entry).expect("valid prefix"));
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    permissions: Some(AgentPermissions::new(
+      RepositoryAccess::Write,
+      CommandPermission::Allowed(AllowedCommands::new(listed.to_vec()).expect("valid list")),
+      NetworkAccess::On,
+    )),
+    ..Setup::new(brief)
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events_in) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
+  let db = ProjectDb::open(root).expect("open");
+  reported(&db, id, "permission: ")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_listed_file_commands_run_only_in_their_listed_forms() {
+  for (brief, decision) in [
+    ("Run `sed -n 1p README.md`.", "toolu_run allow-by-rule"),
+    ("Run `sed -i s/hello/bye/ README.md`.", "toolu_run deny-unasked"),
+    ("Run `rm -f build/x`.", "toolu_run allow-by-rule"),
+    ("Run `rm -rf src`.", "toolu_run deny-unasked"),
+  ] {
+    assert_eq!(listed_file_command(brief).await, [decision], "{brief}");
+  }
 }
 
 #[tokio::test(flavor = "multi_thread")]

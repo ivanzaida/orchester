@@ -18,7 +18,8 @@
 //!   Orchester's permission prompt relay and `--permission-prompt-tool` naming its tool
 //!   ([`crate::connection::claude_approval`]); on a resumed session too, as the prompt is not part of the session.
 //! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
-//!   offered, permission mode, denied tools, allowed command prefixes). Bypass modes are never used.
+//!   offered, permission mode, denied tools, allowed command prefixes, and the edit rules of the worktree and the extra
+//!   writable folders when the step does not run in `acceptEdits`). Bypass modes are never used.
 //! - Extra writable folders ([`crate::permission::writable`]), for an agent that edits files: one `--add-dir` each, so
 //!   its edit tools may write there as in the working directory. Its commands need nothing: Claude Code does not
 //!   confine them to any folder. Checked 2026-09-28 with Claude Code 2.1.89 without a model turn: the debug log shows
@@ -54,7 +55,10 @@ use crate::{
     claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
     mcp::McpServerName,
   },
-  permission::{capability::EnforcedPermissions, claude::permission_args},
+  permission::{
+    capability::EnforcedPermissions,
+    claude::{PermissionFolders, permission_args},
+  },
   resource::CommandEnvironment,
   run::STEP_RESULT_SCHEMA,
 };
@@ -147,12 +151,22 @@ impl ClaudeInvocation<'_> {
       args.extend(["--permission-prompt-tool".to_owned(), PROMPT_TOOL.to_owned()]);
     }
     let servers = self.mcp.map_or(&[][..], |(_, servers)| servers);
+    let granted = if self.permissions.writable_folders().is_some() {
+      self.writable_roots
+    } else {
+      &[]
+    };
+    let editable: Vec<&Path> = std::iter::once(self.worktree)
+      .chain(granted.iter().map(PathBuf::as_path))
+      .collect();
     let protected: Vec<&Path> = self.code_index.into_iter().collect();
-    args.extend(permission_args(self.permissions, servers, &protected));
-    if self.permissions.writable_folders().is_some() {
-      for root in self.writable_roots {
-        args.extend(["--add-dir".to_owned(), root.to_string_lossy().into_owned()]);
-      }
+    let folders = PermissionFolders {
+      editable: &editable,
+      protected: &protected,
+    };
+    args.extend(permission_args(self.permissions, servers, folders));
+    for root in granted {
+      args.extend(["--add-dir".to_owned(), root.to_string_lossy().into_owned()]);
     }
     for folder in [self.skills, self.code_index].into_iter().flatten() {
       args.extend(["--add-dir".to_owned(), folder.to_string_lossy().into_owned()]);

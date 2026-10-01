@@ -14,7 +14,9 @@ use orchester_core::{
     invocation::{ClaudeInvocation, ClaudeSession, InvocationError, Platform},
     mcp::McpServerName,
   },
-  permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
+  permission::{
+    AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess, claude::PermissionFolders,
+  },
   resource::CommandEnvironment,
 };
 use serde_json::{Value, json};
@@ -229,12 +231,16 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
 }
 
 fn permission_args_of(permissions: &AgentPermissions) -> Vec<String> {
+  let folders = PermissionFolders {
+    editable: &[Path::new(r"C:\repo\.orchester\worktrees\run")],
+    protected: &[],
+  };
   orchester_core::permission::claude::permission_args(
     &permissions
       .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
       .expect("enforceable"),
     &[],
-    &[],
+    folders,
   )
 }
 
@@ -275,15 +281,34 @@ fn claude_approvals_allowed_commands_deny_what_accept_edits_would_run() {
   };
   let args = permission_args_of(&AgentPermissions::new(
     RepositoryAccess::Write,
-    list(&["git", "rm build"]),
+    list(&["git"]),
     NetworkAccess::Off,
   ));
-  for command in ["mkdir", "touch", "rmdir", "mv", "cp", "sed"] {
+  assert!(args.contains(&"acceptEdits".to_owned()), "{args:?}");
+  for command in ["mkdir", "touch", "rm", "rmdir", "mv", "cp", "sed"] {
     assert!(args.contains(&format!("Bash({command}:*)")), "{command}: {args:?}");
   }
+  assert!(!args.iter().any(|arg| arg.starts_with("Edit(")), "{args:?}");
+  // A deny rule for rm would deny the listed rm too: no acceptEdits, edits by rule instead.
+  let args = permission_args_of(&AgentPermissions::new(
+    RepositoryAccess::Write,
+    list(&["git", "rm -f build/x"]),
+    NetworkAccess::Off,
+  ));
+  assert!(args.contains(&"dontAsk".to_owned()), "{args:?}");
   assert!(
-    !args.contains(&"Bash(rm:*)".to_owned()),
-    "an allowed command starts with rm"
+    !args
+      .iter()
+      .any(|arg| arg.starts_with("Bash(rm") && arg.ends_with(":*)") && arg != "Bash(rm -f build/x:*)")
+  );
+  let allowed = args.iter().position(|arg| arg == "--allowedTools").expect("allowed");
+  assert_eq!(
+    args[allowed + 1..],
+    [
+      "Bash(git:*)",
+      "Bash(rm -f build/x:*)",
+      "Edit(//c/repo/.orchester/worktrees/run/**)"
+    ]
   );
   let read_only = permission_args_of(&AgentPermissions::new(
     RepositoryAccess::ReadOnly,
@@ -293,6 +318,29 @@ fn claude_approvals_allowed_commands_deny_what_accept_edits_would_run() {
   assert!(
     !read_only.contains(&"Bash(mkdir:*)".to_owned()),
     "dontAsk runs nothing by mode"
+  );
+}
+
+#[test]
+fn claude_approvals_edit_by_rule_in_default_mode_when_mcp_actions_ask() {
+  let mut permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(
+      AllowedCommands::new(vec![
+        orchester_core::permission::CommandPrefix::new("sed -n").expect("prefix"),
+      ])
+      .expect("list"),
+    ),
+    NetworkAccess::Off,
+  );
+  permissions.set_interactive_tool_approvals(true);
+  let args = permission_args_of(&permissions);
+  // dontAsk would deny before the permission prompt is asked.
+  assert!(args.contains(&"default".to_owned()), "{args:?}");
+  assert!(!args.contains(&"Bash(sed:*)".to_owned()), "{args:?}");
+  assert!(
+    args.contains(&"Edit(//c/repo/.orchester/worktrees/run/**)".to_owned()),
+    "{args:?}"
   );
 }
 

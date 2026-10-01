@@ -117,8 +117,18 @@ person's review before it continues. Project MCP secret values are redacted from
 action, target and scope and from the invocation's activity. Claude Code runs an approved command
 without a sandbox, as it runs every command; the person sees the whole command first.
 
-With *Allowed commands* instead, a writing step denies the commands `acceptEdits` would run
-without a rule (`Bash(<command>:*)` deny rules, unless an allowed command starts with one). Commands
-Claude Code classifies as read-only still run without being listed (`docs/plan.md`, C4).
+With *Allowed commands* instead, a writing step denies the commands `acceptEdits` would run in any
+form without a rule (`mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp`, `sed`) with `Bash(<command>:*)`
+deny rules. A prefix deny rule wins over every allow rule in both 2.1.89 and 2.1.284, so it would
+also deny a listed `sed -n` or `rm -f build/x`. A writing step whose allowed commands contain one of
+these words therefore does not run in `acceptEdits`: it runs in `dontAsk` (`default` when it asks
+before MCP actions) and allows its edits with an `Edit(//<folder>/**)` rule for the worktree and
+each extra writable folder, which both versions accept like `acceptEdits` accepts an edit in a
+working directory, after the same deny rules and safety checks. Only the listed prefixes of those
+commands then run: `sed -n 1p README.md` runs, `sed -i …` is denied; `rm -f build/x` runs,
+`rm -rf src` is denied. A prefix still covers what follows it, as every allowed command does
+(`sed -n -i …` starts with `sed -n`). The enforcement panel names this mechanism *allowed tools ·
+edit rules per folder*. Commands Claude Code classifies as read-only still run without being
+listed (`docs/plan.md`, C4).
 
 A managed policy with `allowManagedPermissionRulesOnly` makes Claude Code ignore every rule Orchester passes (`--allowedTools`, `--disallowedTools`, the `--settings` ask rule), so none of the above is enforced on such a machine.

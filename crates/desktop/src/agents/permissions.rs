@@ -77,6 +77,7 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     }
     Mechanism::ClaudeEditToolsRemoved => "agents.permissions.mechanism.claudeEditToolsRemoved",
     Mechanism::ClaudeAcceptEdits => "agents.permissions.mechanism.claudeAcceptEdits",
+    Mechanism::ClaudeEditRules => "agents.permissions.mechanism.claudeEditRules",
     Mechanism::ClaudeWebTools => "agents.permissions.mechanism.claudeWebTools",
     Mechanism::ClaudeWebToolsRemoved => "agents.permissions.mechanism.claudeWebToolsRemoved",
     Mechanism::CodexWritableRoots => "agents.permissions.mechanism.codexWritableRoots",

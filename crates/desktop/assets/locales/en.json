@@ -1765,6 +1765,7 @@
         "claudeEditToolsRemoved": "edit tools removed · listed cmds run",
         "claudeEditToolsRemovedNoCommands": "edit tools removed · no commands",
         "claudeAcceptEdits": "permission mode · accept edits",
+        "claudeEditRules": "allowed tools · edit rules per folder",
         "claudeAllowedTools": {
           "one": "allowed tools · 1 prefix rule",
           "other": "allowed tools · {{count}} prefix rules"

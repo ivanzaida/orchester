@@ -172,9 +172,6 @@ prompt to allow listed commands) or to document the exception in the option's te
 - The runner records a model's required CLI version (C3) by reading, changing and saving the whole connection. A
   person who edits the same connection in the desktop at that moment wins or loses as the last writer. Record the
   requirement with a targeted update, or merge it on save.
-- `mode_allowed_outside` (`crates/core/src/permission/claude.rs`) drops the whole `Bash(<cmd>:*)` deny rule as soon as
-  one allowed entry starts with that command. With `rm build` allowed, `acceptEdits` runs any `rm`. A narrower rule is
-  needed, if Claude Code's rule order allows one.
 
 ### C6 · Tool approval layout issues found during C2 (UI)
 
@@ -234,6 +231,20 @@ which also preserves text selection after a drag on scaled displays.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+C5 (rule hole) · Claude Code runs the commands `acceptEdits` allows only in their listed forms · branch
+`claude/allowed-commands`
+
+- **Done 2026-10-01.** Both CLI versions check prefix deny rules before allow rules (2.1.89 `W__`, 2.1.284 `hBt`),
+  so a `Bash(sed:*)` deny also denies a listed `sed -n`; dropping it let `acceptEdits` run any `sed`. A writing
+  step whose allowed commands contain `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` or `sed` now runs in `dontAsk`
+  (`default` when it asks before MCP actions) with `Edit(//<folder>/**)` allow rules for the worktree and the extra
+  writable folders (`Mechanism::ClaudeEditRules`, enforcement panel *allowed tools · edit rules per folder*); other
+  writing steps keep `acceptEdits` with all seven deny rules. `orchester-fake-claude` models the real precedence;
+  runner tests: `sed -n` runs, `sed -i` is denied, `rm -f build/x` runs, `rm -rf src` is denied.
+- Open: the `Edit` allow rules were read in both binaries (same matcher as the code index's deny rule: `//c/x` is
+  rooted at `C:\`) but not exercised in a live model turn; a folder whose path holds `[` or `]` is matched by
+  Claude Code as a gitignore pattern; a worktree on a network share gets no allow rule, so its edits are denied.
 
 ORC-38 · Codebase index 2/2 (delivery, settings, activity) · branch `claude/codebase-index`
 

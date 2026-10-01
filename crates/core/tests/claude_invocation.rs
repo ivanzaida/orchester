@@ -11,7 +11,7 @@ use orchester_core::{
   },
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
-    capability::EnforcedPermissions,
+    capability::{EnforcedPermissions, Mechanism, PermissionSetting},
   },
   resource::{CommandEnvironment, VariableName},
   run::STEP_RESULT_SCHEMA,
@@ -201,6 +201,68 @@ fn claude_invocation_write_accepts_edits_and_allows_the_listed_commands() {
         "--allowedTools",
         "Bash(git:*)",
         "Bash(pnpm test:*)",
+      ])
+    );
+  }
+}
+
+#[test]
+fn claude_invocation_edits_by_rule_when_a_listed_command_is_one_accept_edits_runs_unlisted() {
+  for platform in PLATFORMS {
+    let repository = |repository, commands| {
+      enforced(repository, commands, NetworkAccess::On, platform).mechanism(PermissionSetting::Repository)
+    };
+    for listed in [
+      &["git", "sed -n"][..],
+      &["rm -f build/x"],
+      &["git rm"],
+      &["xargs mkdir"],
+    ] {
+      assert_eq!(
+        repository(RepositoryAccess::Write, allowed(listed)),
+        Mechanism::ClaudeEditRules,
+        "{listed:?}"
+      );
+    }
+    for commands in [
+      allowed(&["git", "pnpm test"]),
+      allowed(&[]),
+      CommandPermission::AskBefore,
+    ] {
+      assert_eq!(
+        repository(RepositoryAccess::Write, commands),
+        Mechanism::ClaudeAcceptEdits
+      );
+    }
+    assert_eq!(
+      repository(RepositoryAccess::ReadOnly, allowed(&["sed -n"])),
+      Mechanism::ClaudeEditToolsRemoved
+    );
+  }
+}
+
+#[test]
+fn claude_invocation_write_with_a_listed_file_command_edits_by_rule_without_accept_edits() {
+  for platform in PLATFORMS {
+    let permissions = enforced(
+      RepositoryAccess::Write,
+      allowed(&["sed -n", "rm -f build/x"]),
+      NetworkAccess::On,
+      platform,
+    );
+    // A `Bash(sed:*)` or `Bash(rm:*)` deny rule would deny the listed forms as well, and
+    // `acceptEdits` would run every other form: the step edits by rule instead.
+    assert_eq!(
+      args(&invocation(&permissions)),
+      expected(&[
+        "--tools",
+        "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash,WebFetch,WebSearch",
+        "--permission-mode",
+        "dontAsk",
+        "--allowedTools",
+        "Bash(sed -n:*)",
+        "Bash(rm -f build/x:*)",
+        "Edit(//repo/.orchester/worktrees/run/**)",
       ])
     );
   }
