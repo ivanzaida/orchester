@@ -379,6 +379,7 @@ fn seed_profile(repo: &Path, provider: AgentProvider, servers: Vec<ConnectionId>
   let commands = match provider {
     AgentProvider::ClaudeCodeCli => CommandPermission::Allowed(AllowedCommands::default()),
     AgentProvider::CodexCli => CommandPermission::AskBefore,
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the desktop tests have no native agent"),
   };
   let connection = agent_connection(&mut db, repo, provider);
   let body = AgentProfile::new(

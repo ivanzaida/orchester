@@ -2,7 +2,8 @@
 //! CLI enforces it, or that it cannot. The design has it come from a capability check of the CLI;
 //! what exists is core's capability table for this platform, so the panel says whose known limits
 //! it shows rather than a check time, then what it enforces for the chosen MCP servers (`mcp`). Then the rules: no
-//! bypass mode, steps only narrow.
+//! bypass mode, steps only narrow. A native connection enforces nothing in this version: the panel says it is not
+//! available yet.
 
 use std::path::Path;
 
@@ -59,8 +60,10 @@ impl ProfileEditor {
           &self.permissions.get(),
           (&result, &self.context.project.repo_root),
         ));
-        rows.extend(self.agent_files_rows(ctx, connection.provider()));
-        rows.extend(self.mcp_enforcement(ctx, connection.provider()));
+        if connection.provider().runs_agents() {
+          rows.extend(self.agent_files_rows(ctx, connection.provider()));
+          rows.extend(self.mcp_enforcement(ctx, connection.provider()));
+        }
         rows
       }
       _ => vec![line(Icon::Plug, &ctx.t("agents.permissions.enforcement.noConnection"))],
@@ -79,21 +82,25 @@ impl ProfileEditor {
 
 impl ProfileEditor {
   /// Whether the CLI loads the repository's own agent files and how (`e9t1b` in `bYDCI`), and
-  /// that the project sets it, not the profile (`k9Q3LT`).
-  fn agent_files_rows(&self, ctx: &Ctx, provider: AgentProvider) -> [Element; 2] {
+  /// that the project sets it, not the profile (`k9Q3LT`). Nothing for a provider this version runs
+  /// no agent on.
+  fn agent_files_rows(&self, ctx: &Ctx, provider: AgentProvider) -> Vec<Element> {
     let setting = self.context.agents.agent_files;
+    let Some(mechanism) = setting.mechanism(provider) else {
+      return Vec::new();
+    };
     let (glyph, title) = if setting.is_on() {
       (Icon::FolderGit, "agents.permissions.enforcement.repositoryFiles.on")
     } else {
       (Icon::CircleCheck, "agents.permissions.enforcement.repositoryFiles.off")
     };
-    let how = ctx.t(match setting.mechanism(provider) {
+    let how = ctx.t(match mechanism {
       AgentFilesMechanism::CodexLoads => "agents.permissions.enforcement.repositoryFiles.codexLoads",
       AgentFilesMechanism::CodexLeftOut => "agents.permissions.enforcement.repositoryFiles.codexLeftOut",
       AgentFilesMechanism::ClaudeNoProjectSettings => "agents.permissions.enforcement.repositoryFiles.claude",
     });
     let project = self.context.project.project.name().as_str();
-    [
+    vec![
       row(glyph, &ctx.t(title), &how),
       line(
         Icon::FolderGit,
@@ -249,6 +256,9 @@ fn not_enforceable(ctx: &Ctx, problem: &PermissionProblem) -> Element {
   let name = match problem {
     PermissionProblem::NoEnforceableOption { setting } => ctx.t(setting_label(*setting)),
     PermissionProblem::NotEnforceable { option, .. } => ctx.t(option_title(*option)),
+    PermissionProblem::NativeNotAvailable => {
+      return line(Icon::Lock, &ctx.t("agents.permissions.enforcement.nativeNotAvailable"));
+    }
   };
   let title = ctx.t_args("agents.permissions.enforcement.notEnforceable", [("setting", &*name)]);
   line(Icon::Lock, &title)

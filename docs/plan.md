@@ -224,6 +224,14 @@ endpoints such as DeepSeek), next to the Codex and Claude Code CLIs. The design 
 and phases P1–P5 (with P3b, Chat Completions) with acceptance lists. The user's decisions of 2026-10-01 are recorded
 there; turn the phases into tasks here when work starts, beginning with P1.
 
+**P1a (ORC-56), implemented on branch `orchester/orc-56-run-1`, awaiting its Verify step.** `step/command.rs` is
+split into `step/start/{mod, cli, shared, prompt}.rs` and `step/worker.rs` into `step/worker/{mod, observe,
+process}.rs`, with no behaviour change. `Connection` holds an `AgentEndpoint` (program or `ApiEndpoint`: preset, base
+URL, key secret), and `AgentProvider` has `AnthropicApi`/`OpenAiApi` (stored as `anthropic_api`/`openai_api`). A
+native connection reads *Not available yet* with its reason in the connections list and inspector, the profile
+editor, its permissions panel, the pipeline step and the run preflight; nothing tests, edits or starts it. Not in
+P1a: the native form and inspector of 04.H (P1e), models, default model/effort, provider fallback and the data notice.
+
 ## L · After lurq 0.30.0
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the

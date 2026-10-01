@@ -158,6 +158,7 @@ pub(crate) fn seed_agent(
   let (title, version, model) = match provider {
     AgentProvider::CodexCli => ("Codex · Kontur", "0.139.0", "gpt-5.5"),
     AgentProvider::ClaudeCodeCli => ("Claude · Kontur", "2.1.89", "haiku"),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the desktop tests have no native agent"),
   };
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
@@ -187,7 +188,7 @@ pub(crate) fn seed_agent(
   );
   // Claude Code cannot confine any command to the worktree, only run listed ones.
   let profile = match provider {
-    AgentProvider::CodexCli => profile,
+    AgentProvider::CodexCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => profile,
     AgentProvider::ClaudeCodeCli => profile.with_permissions(AgentPermissions::new(
       RepositoryAccess::Write,
       CommandPermission::Allowed(

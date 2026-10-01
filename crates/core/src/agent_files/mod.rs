@@ -64,12 +64,14 @@ impl RepositoryAgentFiles {
     matches!(self, Self::On)
   }
 
-  /// How `provider` treats the repository's agent files under this setting.
-  pub const fn mechanism(self, provider: AgentProvider) -> AgentFilesMechanism {
+  /// How `provider` treats the repository's agent files under this setting; `None` for a native
+  /// provider, which runs no agent in this version.
+  pub const fn mechanism(self, provider: AgentProvider) -> Option<AgentFilesMechanism> {
     match (provider, self) {
-      (AgentProvider::CodexCli, Self::On) => AgentFilesMechanism::CodexLoads,
-      (AgentProvider::CodexCli, Self::Off) => AgentFilesMechanism::CodexLeftOut,
-      (AgentProvider::ClaudeCodeCli, _) => AgentFilesMechanism::ClaudeNoProjectSettings,
+      (AgentProvider::CodexCli, Self::On) => Some(AgentFilesMechanism::CodexLoads),
+      (AgentProvider::CodexCli, Self::Off) => Some(AgentFilesMechanism::CodexLeftOut),
+      (AgentProvider::ClaudeCodeCli, _) => Some(AgentFilesMechanism::ClaudeNoProjectSettings),
+      (AgentProvider::AnthropicApi | AgentProvider::OpenAiApi, _) => None,
     }
   }
 }

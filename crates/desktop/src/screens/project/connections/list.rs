@@ -23,7 +23,7 @@ use orchester_core::{
 
 use super::{
   super::super::github::status as github_status,
-  status::{CHECKING, program_key, status_label, vendor_key},
+  status::{CHECKING, agent_status_label, program_key, vendor_key},
 };
 use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
@@ -80,7 +80,7 @@ pub fn connection_row(ctx: &Ctx, connection: &AgentConnection, state: &RowState,
   let (status_icon, status_key) = if state.checking {
     CHECKING
   } else {
-    status_label(connection.status())
+    agent_status_label(connection)
   };
   let content = RowContent {
     id: connection.id(),

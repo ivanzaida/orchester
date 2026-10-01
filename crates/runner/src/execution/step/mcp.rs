@@ -29,7 +29,7 @@ use orchester_core::{
 use orchester_exec::launch::{self, Via};
 use orchester_store::ProjectDb;
 
-use super::super::run::RunTask;
+use super::{super::run::RunTask, start::NATIVE_NOT_AVAILABLE};
 use crate::private_file::PrivateFile;
 
 /// A server left out, by name (by id when the project no longer has it), and why.
@@ -99,6 +99,11 @@ impl RunTask {
           })
           .transpose()?;
         McpSetup::Claude(file)
+      }
+      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => {
+        return Err(RunnerProblem::CouldNotStart {
+          detail: NATIVE_NOT_AVAILABLE.to_owned(),
+        });
       }
     };
     let left_out = left_out

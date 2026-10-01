@@ -44,7 +44,7 @@ pub(super) fn code_index_row(ctx: &Ctx, run: &RunView, invocation: &Invocation) 
       // How this agent's CLI searches without ripgrep.
       let note = match run.step_of(invocation.execution).and_then(|step| step.provider) {
         Some(AgentProvider::CodexCli) => ctx.t_args("runs.activity.panel.codeIndexGitGrep", [("reason", &*reason)]),
-        Some(AgentProvider::ClaudeCodeCli) => {
+        Some(AgentProvider::ClaudeCodeCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi) => {
           ctx.t_args("runs.activity.panel.codeIndexOwnTools", [("reason", &*reason)])
         }
         None => reason,

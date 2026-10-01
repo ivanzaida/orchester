@@ -27,7 +27,7 @@ use super::{
 use crate::{
   agents::form::{ModelSelection, effort_options, model_options},
   messages::Message,
-  screens::project::connections::status::cli_too_old,
+  screens::project::connections::status::{cli_too_old, native_not_available},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     field::{FieldNote, ValueTone, field, select_style, styled_input, text_input, value_box},
@@ -75,6 +75,7 @@ impl ProfileEditor {
         .into(),
     ];
     // Full width after the model-source note (`q5LzI`), not inside the Model column.
+    fields.extend(connection.and_then(|connection| native_not_available(ctx, connection)));
     fields.extend(connection.and_then(|connection| {
       self
         .chosen_model()
@@ -110,10 +111,13 @@ impl ProfileEditor {
       .connections
       .iter()
       .map(|connection| {
-        (
-          ConnectionChoice(Some(connection.id())),
-          connection.name().as_str().into(),
-        )
+        let name = connection.name().as_str();
+        let label = if connection.provider().runs_agents() {
+          name.into()
+        } else {
+          ctx.t_args("agents.connectionNotAvailable", [("connection", name)])
+        };
+        (ConnectionChoice(Some(connection.id())), label)
       })
       .collect();
     let select =
@@ -199,6 +203,9 @@ impl ProfileEditor {
     let Some(connection) = connection else {
       return ctx.t("agents.noConnectionChosen");
     };
+    if !connection.provider().runs_agents() {
+      return ctx.t_args("agents.explain.native", [("connection", connection.name().as_str())]);
+    }
     let key = match (self.model.get(), connection.catalog().map(|catalog| catalog.source())) {
       (ModelSelection::Custom, _) => "agents.explain.custom",
       (_, None) => "agents.explain.notChecked",

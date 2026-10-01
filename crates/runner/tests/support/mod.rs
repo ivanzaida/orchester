@@ -224,6 +224,7 @@ fn agent_connection(provider: AgentProvider) -> orchester_core::connection::Conn
   let (title, fake, version) = match provider {
     AgentProvider::CodexCli => ("Codex · Kontur", FAKE_CODEX, "0.139.0"),
     AgentProvider::ClaudeCodeCli => ("Claude · Kontur", FAKE_CLAUDE, "2.1.89"),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the runner tests have no native agent"),
   };
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
@@ -301,6 +302,7 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     ModelId::new(setup.model.unwrap_or(match setup.provider {
       AgentProvider::CodexCli => "gpt-5.5",
       AgentProvider::ClaudeCodeCli => "haiku",
+      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the runner tests have no native agent"),
     }))
     .expect("model"),
     settings,
@@ -358,6 +360,7 @@ fn commands(provider: AgentProvider) -> CommandPermission {
     AgentProvider::ClaudeCodeCli => CommandPermission::Allowed(
       AllowedCommands::new(vec![CommandPrefix::new("git").expect("valid prefix")]).expect("valid list"),
     ),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the runner tests have no native agent"),
   }
 }
 

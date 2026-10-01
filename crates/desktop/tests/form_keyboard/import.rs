@@ -12,7 +12,7 @@ use std::{
 use lurq::node::element::ElementRef;
 use orchester_core::{
   connection::{
-    AgentProvider, Connection, ConnectionKind,
+    AgentEndpoint, AgentProvider, Connection, ConnectionKind,
     mcp::{HttpServer, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, McpUrl},
   },
   id::{ConnectionId, ResourceId},
@@ -39,7 +39,7 @@ fn codex(db: &mut ProjectDb) -> ConnectionId {
     ConnectionId::generate(),
     name("Codex"),
     ConnectionKind::Agent(AgentProvider::CodexCli),
-    std::env::temp_dir().join("codex"),
+    AgentEndpoint::Program(std::env::temp_dir().join("codex")),
     Timestamp::now(),
   )
   .expect("absolute executable");

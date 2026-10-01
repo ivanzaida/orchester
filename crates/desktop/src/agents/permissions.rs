@@ -69,6 +69,7 @@ pub fn unavailable(ctx: &Ctx, reason: Unavailable, provider: AgentProvider) -> O
     Unavailable::CannotLimitCommands => "agents.permissions.unavailable.cannotLimitCommands",
     Unavailable::CannotConfineCommands => "agents.permissions.unavailable.cannotConfineCommands",
     Unavailable::CannotBlockNetwork => "agents.permissions.unavailable.cannotBlockNetwork",
+    Unavailable::NativeNotAvailable => "agents.permissions.unavailable.nativeNotAvailable",
   };
   Some(ctx.t_args(key, [("cli", &*ctx.t(program_key(provider)))]))
 }
@@ -315,6 +316,9 @@ pub fn problem(ctx: &Ctx, problem: &PermissionProblem, provider: AgentProvider) 
       "agents.permissions.problem.notEnforceable",
       [("cli", &*cli), ("option", &*ctx.t(option_title(*option)))],
     ),
+    PermissionProblem::NativeNotAvailable => {
+      ctx.t_args("agents.permissions.problem.nativeNotAvailable", [("cli", &*cli)])
+    }
   }
 }
 

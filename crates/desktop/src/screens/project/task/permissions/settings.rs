@@ -285,7 +285,8 @@ fn tool_approvals(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &A
   let transport = match provider {
     Some(AgentProvider::CodexCli) => Some("agents.permissions.transport"),
     Some(AgentProvider::ClaudeCodeCli) => Some("agents.permissions.claudeTransport"),
-    None => None,
+    // A native agent runs in no version yet, so no transport asks for it.
+    Some(AgentProvider::AnthropicApi | AgentProvider::OpenAiApi) | None => None,
   };
   if let Some(transport) = transport.filter(|_| enabled || *draft.commands() == CommandPermission::AskBefore) {
     controls.push(hint(&ctx.t(transport)));

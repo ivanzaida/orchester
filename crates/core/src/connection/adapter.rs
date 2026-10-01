@@ -8,6 +8,8 @@
 //! - Claude Code CLI: `claude --version`, `claude auth status --json` ("Show authentication status") and the
 //!   `initialize` control request of its stream-json input, whose answer lists its models; that one starts no session
 //!   and sends no prompt ([`super::claude_catalog`]).
+//!
+//! A native provider has no CLI: nothing here runs for it ([`check`]).
 
 use std::{
   ffi::OsStr,
@@ -34,10 +36,28 @@ const CLAUDE_SIGN_IN_ARGS: &[&str] = &["auth", "status", "--json"];
 /// Codex lists models meant for people with this visibility; others are internal.
 const CODEX_LISTED: &str = "list";
 
+/// The agent CLIs this module asks.
+#[derive(Clone, Copy)]
+enum AgentCli {
+  Codex,
+  Claude,
+}
+
+impl AgentCli {
+  const fn of(provider: AgentProvider) -> Option<Self> {
+    match provider {
+      AgentProvider::CodexCli => Some(Self::Codex),
+      AgentProvider::ClaudeCodeCli => Some(Self::Claude),
+      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => None,
+    }
+  }
+}
+
 /// Checks the CLI at `executable`: its version, whether it is signed in and its models. The CLI
 /// sees only `environment`, the one agents run with ([`super::invocation::agent_environment`]),
 /// so that the check finds what a run would: variables of an agent host Orchester itself runs in
-/// change the Claude Code CLI's answer.
+/// change the Claude Code CLI's answer. A native provider has no CLI to answer, so nothing runs and
+/// the program is not recognized as one.
 pub fn check(
   provider: AgentProvider,
   executable: &Path,
@@ -45,6 +65,12 @@ pub fn check(
   environment: &[(String, String)],
   now: Timestamp,
 ) -> ConnectionCheck {
+  let Some(kind) = AgentCli::of(provider) else {
+    return ConnectionCheck {
+      at: now,
+      result: CheckResult::NotRecognized,
+    };
+  };
   let cli = Cli {
     executable,
     runner,
@@ -59,8 +85,8 @@ pub fn check(
       None => CheckResult::NotRecognized,
       Some(version) => CheckResult::Available {
         version,
-        sign_in: sign_in(provider, &cli),
-        catalog: catalog(provider, &cli),
+        sign_in: sign_in(kind, &cli),
+        catalog: catalog(kind, &cli),
       },
     },
   };
@@ -68,11 +94,11 @@ pub fn check(
 }
 
 /// The version number in `--version` output, if the output is the expected CLI's:
-/// `codex-cli 0.139.0` or `2.1.89 (Claude Code)`.
+/// `codex-cli 0.139.0` or `2.1.89 (Claude Code)`. No output is a native provider's.
 pub fn parse_version(provider: AgentProvider, output: &CommandOutput) -> Option<String> {
-  let marker = match provider {
-    AgentProvider::CodexCli => "codex-cli",
-    AgentProvider::ClaudeCodeCli => "(Claude Code)",
+  let marker = match AgentCli::of(provider)? {
+    AgentCli::Codex => "codex-cli",
+    AgentCli::Claude => "(Claude Code)",
   };
   let text = output.stdout.trim();
   if !output.success() || !text.contains(marker) {
@@ -101,18 +127,18 @@ impl<R: CommandRunner> Cli<'_, R> {
   }
 }
 
-fn sign_in(provider: AgentProvider, cli: &Cli<'_, impl CommandRunner>) -> SignIn {
-  let args = match provider {
-    AgentProvider::CodexCli => CODEX_SIGN_IN_ARGS,
-    AgentProvider::ClaudeCodeCli => CLAUDE_SIGN_IN_ARGS,
+fn sign_in(kind: AgentCli, cli: &Cli<'_, impl CommandRunner>) -> SignIn {
+  let args = match kind {
+    AgentCli::Codex => CODEX_SIGN_IN_ARGS,
+    AgentCli::Claude => CLAUDE_SIGN_IN_ARGS,
   };
   // A status command that cannot run leaves the sign-in unknown, not signed out.
   let Ok(output) = cli.run(args) else {
     return SignIn::Unknown;
   };
-  match provider {
-    AgentProvider::CodexCli => parse_codex_login_status(&output),
-    AgentProvider::ClaudeCodeCli => parse_claude_auth_status(&output),
+  match kind {
+    AgentCli::Codex => parse_codex_login_status(&output),
+    AgentCli::Claude => parse_claude_auth_status(&output),
   }
 }
 
@@ -143,9 +169,9 @@ pub fn parse_claude_auth_status(output: &CommandOutput) -> SignIn {
   }
 }
 
-fn catalog(provider: AgentProvider, cli: &Cli<'_, impl CommandRunner>) -> ModelCatalog {
-  match provider {
-    AgentProvider::CodexCli => {
+fn catalog(kind: AgentCli, cli: &Cli<'_, impl CommandRunner>) -> ModelCatalog {
+  match kind {
+    AgentCli::Codex => {
       // Without a readable catalog the list stays empty: models can still be entered by hand
       // and are marked as not verified.
       let models = cli
@@ -156,7 +182,7 @@ fn catalog(provider: AgentProvider, cli: &Cli<'_, impl CommandRunner>) -> ModelC
         .unwrap_or_default();
       ModelCatalog::new(CatalogSource::Provider, models)
     }
-    AgentProvider::ClaudeCodeCli => {
+    AgentCli::Claude => {
       // Without the CLI's list the catalog still has the current model ids and the aliases.
       let listed = cli
         .runner

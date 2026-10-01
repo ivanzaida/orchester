@@ -82,7 +82,7 @@ impl ProjectConnections {
     let connections = store.connections()?;
     let launches = connections
       .iter()
-      .map(|connection| (connection.id(), launch::resolve(connection.executable())))
+      .filter_map(|connection| Some((connection.id(), launch::resolve(connection.executable()?))))
       .collect();
     Ok(Self {
       github: Arc::new(github_connections(connections.clone())),
@@ -172,6 +172,9 @@ pub enum SaveError {
   /// The check did not find the expected CLI; the dialog does not offer saving then.
   #[error("the connection was not verified")]
   NotVerified,
+  /// A native connection is not checked in this version.
+  #[error("native agents are not available in this version")]
+  NativeNotAvailable,
 }
 
 impl SaveError {
@@ -182,8 +185,15 @@ impl SaveError {
       // The dialog edits agent connections only; a stored connection of another kind under
       // the edited id means the stored data does not match what was shown.
       Self::Connection(
-        ConnectionError::NotAgent(_) | ConnectionError::NotGitHub(_) | ConnectionError::CheckKindMismatch(_),
+        ConnectionError::NotAgent(_)
+        | ConnectionError::NotGitHub(_)
+        | ConnectionError::CheckKindMismatch(_)
+        | ConnectionError::PresetNotOffered,
       ) => Message::new("errors.storage"),
+      // Only a native connection has no program to point at.
+      Self::Connection(ConnectionError::EndpointMismatch(_)) | Self::NativeNotAvailable => {
+        Message::new("errors.nativeNotAvailable")
+      }
       Self::NotVerified => Message::new("errors.connectionNotVerified"),
     }
   }
@@ -222,12 +232,15 @@ pub fn save_in(repo_root: &Path, draft: ConnectionDraft) -> Result<ConnectionId,
   save(&mut ProjectDb::open(repo_root)?, draft, Timestamp::now())
 }
 
-/// Checks a stored connection's CLI again and stores the result, whatever it is.
-pub fn recheck_in(repo_root: &Path, id: ConnectionId) -> Result<(), StoreError> {
+/// Checks a stored connection's CLI again and stores the result, whatever it is. A native
+/// connection is not checked in this version.
+pub fn recheck_in(repo_root: &Path, id: ConnectionId) -> Result<(), SaveError> {
   let mut db = ProjectDb::open(repo_root)?;
   let mut connection = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
+  let check = probe::recheck(&connection).ok_or(SaveError::NativeNotAvailable)?;
   connection
-    .record_check(probe::recheck(&connection))
+    .record_check(check)
     .expect("the check was made for the connection's own kind");
-  db.save_connection(&connection)
+  db.save_connection(&connection)?;
+  Ok(())
 }

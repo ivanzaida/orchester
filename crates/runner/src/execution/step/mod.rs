@@ -7,11 +7,11 @@ mod app_server;
 mod approval;
 mod claude_approval;
 mod cli_version;
-mod command;
 mod end;
 mod mcp;
 mod memory;
 mod skills;
+mod start;
 mod stderr;
 pub(super) mod worker;
 
@@ -274,7 +274,7 @@ impl RunTask {
     &mut self,
     execution: StepExecutionId,
     invocation: Invocation,
-    (process, start): (Supervised, command::AgentStart),
+    (process, start): (Supervised, start::AgentStart),
     workspace: Workspace,
   ) -> Result<(), ExecutionError> {
     let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);

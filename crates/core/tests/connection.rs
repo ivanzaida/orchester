@@ -402,7 +402,7 @@ fn candidates_follow_the_path_order() {
   let first = std::env::current_dir().expect("current directory").join("a");
   let second = std::env::current_dir().expect("current directory").join("b");
   let path: OsString = std::env::join_paths([&first, &second]).expect("joinable paths");
-  let candidates = executable_candidates(AgentProvider::ClaudeCodeCli.program_name(), Some(&path));
+  let candidates = executable_candidates(AgentProvider::ClaudeCodeCli.program_name().expect("a CLI"), Some(&path));
   assert!(candidates[0].starts_with(&first));
   assert!(candidates.last().expect("candidates").starts_with(&second));
   assert!(
@@ -410,5 +410,5 @@ fn candidates_follow_the_path_order() {
       .iter()
       .all(|candidate| candidate.file_stem().is_some_and(|stem| stem == "claude"))
   );
-  assert!(executable_candidates(AgentProvider::CodexCli.program_name(), None).is_empty());
+  assert!(executable_candidates(AgentProvider::CodexCli.program_name().expect("a CLI"), None).is_empty());
 }

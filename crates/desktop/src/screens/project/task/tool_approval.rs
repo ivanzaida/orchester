@@ -177,8 +177,12 @@ fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
     let key = match (props.provider, props.read_only) {
       (Some(AgentProvider::ClaudeCodeCli), false) => "runs.toolApproval.commandExplanationClaude",
       (Some(AgentProvider::ClaudeCodeCli), true) => "runs.toolApproval.commandExplanationClaudeReadOnly",
-      (Some(AgentProvider::CodexCli) | None, false) => "runs.toolApproval.commandExplanation",
-      (Some(AgentProvider::CodexCli) | None, true) => "runs.toolApproval.commandExplanationReadOnly",
+      (Some(AgentProvider::CodexCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi) | None, false) => {
+        "runs.toolApproval.commandExplanation"
+      }
+      (Some(AgentProvider::CodexCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi) | None, true) => {
+        "runs.toolApproval.commandExplanationReadOnly"
+      }
     };
     ctx.t_args(
       key,
