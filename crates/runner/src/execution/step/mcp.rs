@@ -212,7 +212,9 @@ fn started(
   }
   let leading = launch.leading_args().to_vec();
   match launch.via() {
-    Via::Direct | Via::NodeScript { .. } => Ok((unicode(launch.program().to_path_buf())?, [leading, args].concat())),
+    Via::Direct | Via::NodeScript { .. } | Via::LauncherProgram => {
+      Ok((unicode(launch.program().to_path_buf())?, [leading, args].concat()))
+    }
     // The CLI starts programs, not scripts: `cmd.exe` runs the script, with arguments that pass
     // through it unchanged (checked above).
     Via::CommandScript => {

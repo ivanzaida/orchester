@@ -1,12 +1,12 @@
-//! Windows `.cmd`/`.bat` scripts: recognising npm's Node.js launchers and the arguments that
-//! pass through `cmd.exe` unchanged.
+//! Windows `.cmd`/`.bat` scripts: recognising npm's launchers (of a Node.js script or of a
+//! program file) and the arguments that pass through `cmd.exe` unchanged.
 
 use std::{
   fs, io,
   path::{Path, PathBuf},
 };
 
-use super::{Launch, Via};
+use super::{Launch, Via, program_shim::native_shim_program};
 
 /// Node.js next to an npm launcher; the launcher falls back to the one on the `PATH`.
 const LOCAL_NODE: &str = "node.exe";
@@ -35,12 +35,17 @@ pub(super) fn resolve(program: &Path) -> Option<Launch> {
     }
   };
   let folder = program.parent()?;
-  let script = node_shim_script(&text)
+  let launch = node_launch(&text, folder)
+    .or_else(|| native_launch(&text, folder))
+    .unwrap_or_else(|| command_script(program));
+  Some(launch)
+}
+
+/// Node.js running the script an npm launcher names, when that script exists.
+fn node_launch(text: &str, folder: &Path) -> Option<Launch> {
+  let script = node_shim_script(text)
     .map(|relative| folder.join(relative))
-    .filter(|script| script.is_file());
-  let Some(script) = script else {
-    return Some(command_script(program));
-  };
+    .filter(|script| script.is_file())?;
   let local = folder.join(LOCAL_NODE);
   let node = if local.is_file() {
     local
@@ -51,6 +56,18 @@ pub(super) fn resolve(program: &Path) -> Option<Launch> {
     program: node,
     leading_args: vec![script.to_string_lossy().into_owned()],
     via: Via::NodeScript { script },
+  })
+}
+
+/// The program an npm launcher starts, when that program exists.
+fn native_launch(text: &str, folder: &Path) -> Option<Launch> {
+  let program = native_shim_program(text)
+    .map(|relative| folder.join(relative))
+    .filter(|program| program.is_file())?;
+  Some(Launch {
+    program,
+    leading_args: Vec::new(),
+    via: Via::LauncherProgram,
   })
 }
 

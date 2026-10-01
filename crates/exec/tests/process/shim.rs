@@ -1,7 +1,8 @@
-//! Windows command scripts: npm launchers are replaced by the Node.js script they start, and any
+//! Windows command scripts: npm launchers are replaced by what they start, and any
 //! other script only gets arguments that `cmd.exe` passes on unchanged. The launcher texts are
-//! copies of the ones npm (`codex.cmd`, via `cmd-shim`) and corepack (`pnpm.cmd`) installed; the
-//! programs they start are not needed.
+//! copies of the ones npm (`codex.cmd` and Claude Code 2.1's `claude.cmd`, via `cmd-shim`) and
+//! corepack (`pnpm.cmd`) installed; the programs they start are not needed (`launcher_program.rs`
+//! starts one).
 
 use std::{
   fs,
@@ -15,13 +16,14 @@ use orchester_core::{
   repository::GitHubRepo,
   revision::Revision,
 };
-use orchester_exec::launch::{self, Via, node_shim_script, passes_through_cmd};
+use orchester_exec::launch::{self, Via, native_shim_program, node_shim_script, passes_through_cmd};
 
 use super::RUNNER;
 
 const CODEX_SHIM: &str = include_str!("../fixtures/shims/codex.cmd");
 const PNPM_SHIM: &str = include_str!("../fixtures/shims/pnpm.cmd");
 const NPM_SHIM: &str = include_str!("../fixtures/shims/npm.cmd");
+const CLAUDE_SHIM: &str = include_str!("../fixtures/shims/claude.cmd");
 /// A script that is no npm launcher: it prints its arguments, then its standard input.
 const ECHO_SCRIPT: &str = "@echo off\r\necho ARGS %*\r\nfindstr \"^\"\r\n";
 const QUERY: &str = "query($owner:String!){repository(owner:$owner,name:\"x\"){id}}";
@@ -58,6 +60,46 @@ fn process_shim_scripts_of_other_scripts_are_not_guessed() {
   assert_eq!(node_shim_script(&two), None);
 }
 
+#[test]
+fn process_shim_programs_of_npm_launchers_are_recognised() {
+  assert_eq!(
+    native_shim_program(CLAUDE_SHIM),
+    Some(relative("node_modules/@anthropic-ai/claude-code/bin/claude.exe"))
+  );
+  assert_eq!(
+    native_shim_program(&CLAUDE_SHIM.replace('\n', "\r\n")),
+    native_shim_program(CLAUDE_SHIM)
+  );
+  assert_eq!(
+    native_shim_program("@SETLOCAL\r\n\"%~dp0\\bin\\tool.EXE\" %*\r\n"),
+    Some(relative("bin/tool.EXE"))
+  );
+  // A launcher of a Node.js script is not one of a program, and the other way round.
+  assert_eq!(native_shim_program(CODEX_SHIM), None);
+  assert_eq!(node_shim_script(CLAUDE_SHIM), None);
+}
+
+#[test]
+fn process_shim_programs_of_other_scripts_are_not_guessed() {
+  let launch_line = CLAUDE_SHIM.lines().last().expect("a launch line");
+  for text in [
+    // A command before or after the launch line.
+    CLAUDE_SHIM.replace(":start\n", ":start\necho starting\n"),
+    format!("{CLAUDE_SHIM}echo done\n"),
+    // `%dp0%` that the script never sets.
+    format!("@ECHO off\n{launch_line}\n"),
+    // Not every argument passed on, no program file, a variable in the path, a path not quoted.
+    CLAUDE_SHIM.replace("%*", "%1"),
+    CLAUDE_SHIM.replace("claude.exe", "claude.js"),
+    CLAUDE_SHIM.replace("bin\\claude", "%TOOL%\\claude"),
+    CLAUDE_SHIM.replace("\"%dp0%", "%dp0%").replace(".exe\"", ".exe"),
+    ECHO_SCRIPT.to_owned(),
+    NPM_SHIM.to_owned(),
+  ] {
+    assert_eq!(native_shim_program(&text), None, "{text}");
+  }
+}
+
 /// `codex.cmd` next to its script, with or without Node.js beside it.
 fn installed_codex(folder: &Path, local_node: bool) -> PathBuf {
   let script = folder.join(relative("node_modules/@openai/codex/bin/codex.js"));
@@ -90,6 +132,9 @@ fn process_shim_without_its_script_runs_through_cmd() {
   let shim = folder.path().join("codex.cmd");
   fs::write(&shim, CODEX_SHIM).expect("launcher");
   assert_eq!(launch::resolve(&shim).via(), &Via::CommandScript);
+  let claude = folder.path().join("claude.cmd");
+  fs::write(&claude, CLAUDE_SHIM).expect("launcher");
+  assert_eq!(launch::resolve(&claude).via(), &Via::CommandScript);
   assert_eq!(launch::resolve(Path::new("C:/tools/gh.exe")).via(), &Via::Direct);
 }
 
