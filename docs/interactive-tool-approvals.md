@@ -123,15 +123,16 @@ token; the configuration file holding the token is private and removed when the 
 
 What reaches a person is decided by `ClaudeApprovalScope` in core: a `Bash` command when the step
 asks before commands or has allowed commands (one outside the list), and a tool of one of the
-invocation's own MCP servers when it asks before MCP actions. For commands, a writing step gets `--settings {"permissions":{"ask":["Bash"]}}`: a
+invocation's own MCP servers when it asks before MCP actions. Every Claude Code step therefore has
+the prompt ("agents ask"), and none runs in `dontAsk`. For commands, a step that asks before them, or
+lists none, gets `--settings {"permissions":{"ask":["Bash"]}}`: a
 rule asking for the whole `Bash` tool is checked before the tool's own check (both 2.1.89 and
 2.1.284), so every command reaches the prompt, including the `mkdir`, `touch`, `rm`, `rmdir`, `mv`,
 `cp` and `sed` that `acceptEdits` would otherwise run, and the commands Claude Code classifies as
 read-only. That is stricter than Codex, whose known-safe read-only commands run without asking. A
-read-only step that asks before every command gets no `Bash` at all: Claude Code would run an
-approved command outside any sandbox, where it could write. For MCP actions the `mcp__<server>` allow rules are left out, and a
-read-only step runs in permission mode `default` instead of `dontAsk`, which would deny before
-asking. Everything else Claude Code asks about (edits or reads
+read-only step asks too, in permission mode `default` (`dontAsk` would deny before asking), with the
+edit tools removed; its approval says that Claude Code runs an approved command outside any sandbox,
+where it can change files. For MCP actions the `mcp__<server>` allow rules are left out. Everything else Claude Code asks about (edits or reads
 outside the working folders, web fetches, the approval tool itself) is denied at once, as print mode
 denies it without the prompt. Every MCP tool call of a server asks; Claude Code does not pass the
 server's own approval hints to the prompt.
@@ -156,7 +157,8 @@ without a sandbox, as it runs every command; the person sees the whole command f
 With *Allowed commands* ("List + ask"), the listed prefixes become `Bash(<prefix>:*)` allow rules,
 and the step runs in permission mode `default` with the permission prompt, read-only and writing
 alike. Commands Claude Code classifies as read-only run without being listed, once the list has an
-entry (with none, the step gets no `Bash` at all and nothing asks). That is the user's decision
+entry (with none, every command asks, as when asking before commands; the panel reads *no listed
+commands · all ask*). That is the user's decision
 (`docs/plan.md`, C4) and the same as Codex, whose known-safe read-only commands run without
 asking: they change no file. Any other command asks a person. In `default` mode every check that
 would ask hands the call to the prompt: an unlisted command, a listed one with a `$VAR` expansion,
@@ -187,8 +189,13 @@ known-safe read-only commands, such as ls, cat or git log, without listing them.
 you first."
 
 Each invocation records its launch permissions once, before the CLI starts: the enforced
-permissions and what happened to commands outside them (`OutsideCommands`: `asked` for Codex and for
-Claude Code with allowed commands or asking before commands, `denied` for a Claude Code step that
-gets no command). Launches recorded before this was added keep it unknown.
+permissions and how a person is asked about commands outside them (`OutsideCommands`:
+`permission_prompt` for Claude Code, `sandbox_approval` for Codex). Launches recorded before agents
+asked keep it unknown (their CLIs denied such commands).
+
+A Codex request with an additional permission overlay (`with_additional_permissions`) is not asked
+about: such a grant can stay for later commands of the turn, so it cannot be one decision about one
+command. The feature is turned off (`features.exec_permission_approvals=false`); if such a request
+still arrives, the step stops and its activity says why.
 
 A managed policy with `allowManagedPermissionRulesOnly` makes Claude Code ignore every rule Orchester passes (`--allowedTools`, `--disallowedTools`, the `--settings` ask rule), so none of the above is enforced on such a machine.

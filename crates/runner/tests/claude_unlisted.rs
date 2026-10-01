@@ -130,7 +130,7 @@ async fn claude_unlisted_listed_command_runs_without_asking() {
     .permissions
     .clone()
     .expect("recorded");
-  assert_eq!(launched.outside_commands(), Some(OutsideCommands::Asked));
+  assert_eq!(launched.outside_commands(), Some(OutsideCommands::PermissionPrompt));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -233,7 +233,7 @@ async fn claude_unlisted_command_in_a_read_only_step_asks() {
     .clone()
     .expect("recorded");
   assert_eq!(launched.permissions().repository(), RepositoryAccess::ReadOnly);
-  assert_eq!(launched.outside_commands(), Some(OutsideCommands::Asked));
+  assert_eq!(launched.outside_commands(), Some(OutsideCommands::PermissionPrompt));
   let run = started.decide(request, false).await;
   assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
 }

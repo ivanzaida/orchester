@@ -41,9 +41,14 @@ fn command_approvals_reply_once_and_reject_sticky_grants() {
   );
   message["params"]["environmentId"] = json!("local");
   message["params"]["additionalPermissions"] = json!({"network":{"enabled":true}});
-  assert_eq!(
-    stream.parse(&message.to_string()).err(),
-    Some(ProtocolError::InvalidApproval)
+  let refused = stream.parse(&message.to_string()).err();
+  assert_eq!(refused, Some(ProtocolError::AdditionalPermissions));
+  // The step's activity says why it stopped.
+  assert!(
+    refused
+      .expect("refused")
+      .to_string()
+      .contains("with_additional_permissions")
   );
   message["params"]["additionalPermissions"] = Value::Null;
   message["params"]["availableDecisions"] = json!(["acceptForSession"]);
@@ -123,32 +128,15 @@ fn permissions_asking_before_commands_route_to_each_clis_approval_on_both_platfo
         NetworkAccess::On,
       );
       ask.set_interactive_tool_approvals(true);
-      // Claude Code would run an approved command unsandboxed, so a read-only step gets none.
+      // Agents ask: a read-only Claude Code step asks about every command too, and its launch
+      // permissions keep asking before commands.
       let expected = match provider {
         AgentProvider::CodexCli => Mechanism::CodexCommandApprovals,
-        AgentProvider::ClaudeCodeCli => Mechanism::ClaudeNoCommandsReadOnly,
+        AgentProvider::ClaudeCodeCli => Mechanism::ClaudePermissionPrompt,
       };
-      assert_eq!(
-        ask
-          .enforced_on(provider, platform)
-          .expect("supported")
-          .mechanism(PermissionSetting::Commands),
-        expected
-      );
-      if provider == AgentProvider::ClaudeCodeCli {
-        let enforced = ask.enforced_on(provider, platform).expect("supported");
-        assert_eq!(
-          *enforced.permissions().commands(),
-          CommandPermission::Allowed(orchester_core::permission::AllowedCommands::default()),
-          "the launch permissions say no command runs"
-        );
-      }
-      ask.set_repository(RepositoryAccess::Write);
-      let writing = ask.enforced_on(provider, platform).expect("supported");
-      assert_ne!(
-        writing.mechanism(PermissionSetting::Commands),
-        Mechanism::ClaudeNoCommandsReadOnly
-      );
+      let enforced = ask.enforced_on(provider, platform).expect("supported");
+      assert_eq!(enforced.mechanism(PermissionSetting::Commands), expected);
+      assert_eq!(*enforced.permissions().commands(), CommandPermission::AskBefore);
     }
   }
 }
@@ -207,72 +195,53 @@ fn command_approvals_decline_file_changes_and_network_hosts_without_a_person() {
   }
 }
 
-/// What happens to a command the permissions do not run by themselves, as each launch records it.
+/// How a person is asked about a command the permissions do not run by themselves, as each launch
+/// records it: Codex through its sandbox approval, Claude Code through its permission prompt, whatever
+/// the repository access and the commands.
 #[test]
-fn permissions_record_whether_other_commands_ask_a_person() {
+fn permissions_record_how_other_commands_ask_a_person() {
   let listed =
     CommandPermission::Allowed(AllowedCommands::new(vec![CommandPrefix::new("git").expect("prefix")]).expect("list"));
   let none = CommandPermission::Allowed(AllowedCommands::default());
-  let cases = [
-    (
-      AgentProvider::CodexCli,
-      RepositoryAccess::Write,
-      CommandPermission::AnyInWorktree,
-      OutsideCommands::Asked,
-    ),
-    (
-      AgentProvider::CodexCli,
-      RepositoryAccess::ReadOnly,
-      CommandPermission::AnyInWorktree,
-      OutsideCommands::Asked,
-    ),
-    (
-      AgentProvider::CodexCli,
-      RepositoryAccess::Write,
-      CommandPermission::AskBefore,
-      OutsideCommands::Asked,
-    ),
-    (
-      AgentProvider::ClaudeCodeCli,
-      RepositoryAccess::Write,
-      listed.clone(),
-      OutsideCommands::Asked,
-    ),
-    (
-      AgentProvider::ClaudeCodeCli,
-      RepositoryAccess::ReadOnly,
-      listed,
-      OutsideCommands::Asked,
-    ),
-    (
-      AgentProvider::ClaudeCodeCli,
-      RepositoryAccess::Write,
-      CommandPermission::AskBefore,
-      OutsideCommands::Asked,
-    ),
-    (
-      AgentProvider::ClaudeCodeCli,
-      RepositoryAccess::ReadOnly,
-      CommandPermission::AskBefore,
-      OutsideCommands::Denied,
-    ),
-    (
-      AgentProvider::ClaudeCodeCli,
-      RepositoryAccess::Write,
-      none,
-      OutsideCommands::Denied,
-    ),
-  ];
-  for (provider, repository, commands, outside) in cases {
-    let enforced = AgentPermissions::new(repository, commands.clone(), NetworkAccess::On)
-      .enforced_on(provider, Platform::Windows)
-      .expect("enforceable");
-    assert_eq!(
-      enforced.outside_commands(),
-      outside,
-      "{provider:?} {repository:?} {commands:?}"
-    );
-    assert_eq!(enforced.launch().outside_commands(), Some(outside));
-    assert_eq!(enforced.launch().permissions(), enforced.permissions());
+  for repository in [RepositoryAccess::Write, RepositoryAccess::ReadOnly] {
+    let cases = [
+      (
+        AgentProvider::CodexCli,
+        CommandPermission::AnyInWorktree,
+        OutsideCommands::SandboxApproval,
+      ),
+      (
+        AgentProvider::CodexCli,
+        CommandPermission::AskBefore,
+        OutsideCommands::SandboxApproval,
+      ),
+      (
+        AgentProvider::ClaudeCodeCli,
+        listed.clone(),
+        OutsideCommands::PermissionPrompt,
+      ),
+      (
+        AgentProvider::ClaudeCodeCli,
+        none.clone(),
+        OutsideCommands::PermissionPrompt,
+      ),
+      (
+        AgentProvider::ClaudeCodeCli,
+        CommandPermission::AskBefore,
+        OutsideCommands::PermissionPrompt,
+      ),
+    ];
+    for (provider, commands, outside) in cases {
+      let enforced = AgentPermissions::new(repository, commands.clone(), NetworkAccess::On)
+        .enforced_on(provider, Platform::Windows)
+        .expect("enforceable");
+      assert_eq!(
+        enforced.outside_commands(),
+        outside,
+        "{provider:?} {repository:?} {commands:?}"
+      );
+      assert_eq!(enforced.launch().outside_commands(), Some(outside));
+      assert_eq!(enforced.launch().permissions(), enforced.permissions());
+    }
   }
 }

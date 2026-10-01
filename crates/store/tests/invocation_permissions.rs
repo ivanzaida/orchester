@@ -17,7 +17,7 @@ use support::{at, copied_at_version, model, started_run};
 fn policy(commands: CommandPermission) -> LaunchPermissions {
   LaunchPermissions::new(
     AgentPermissions::new(RepositoryAccess::Write, commands, NetworkAccess::Off),
-    OutsideCommands::Asked,
+    OutsideCommands::SandboxApproval,
   )
 }
 

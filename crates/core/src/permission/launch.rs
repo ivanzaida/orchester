@@ -5,15 +5,16 @@ use serde::{Deserialize, Serialize};
 
 use super::AgentPermissions;
 
-/// What happens to a command the permissions do not run by themselves: one outside the allowed list
-/// (Claude Code) or one that needs more than the sandbox (Codex).
+/// How a person is asked about a command the permissions do not run by themselves, deciding that one
+/// command in "Needs you". Launches recorded before agents asked (their CLIs denied such a command)
+/// have none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OutsideCommands {
-  /// The CLI denies it and tells the agent.
-  Denied,
-  /// The CLI asks a person, who decides that one command in "Needs you".
-  Asked,
+  /// Claude Code's permission prompt: a command outside the allowed list, or every command.
+  PermissionPrompt,
+  /// Codex App Server's sandbox approval: a command that needs more than the sandbox.
+  SandboxApproval,
 }
 
 /// Launch permissions: the enforced [`AgentPermissions`] and what happened to other commands.

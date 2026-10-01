@@ -24,6 +24,13 @@ pub enum ProtocolError {
   UnsupportedRequest { method: String },
   #[error("Codex App Server sent an approval request without a usable decision")]
   InvalidApproval,
+  /// `with_additional_permissions`: Codex can keep such a grant for the turn's later commands, so it
+  /// cannot be one decision about one command (`features.exec_permission_approvals` is turned off).
+  #[error(
+    "Codex asked to widen the sandbox for a command (with_additional_permissions). Such a grant can stay for later \
+     commands of the turn, so Orchester does not ask about it and the step stopped."
+  )]
+  AdditionalPermissions,
 }
 
 /// One host decision for one pending JSON-RPC request. Arbitrary tool arguments and form
@@ -186,9 +193,12 @@ impl AppServerStream {
     if params
       .get("additionalPermissions")
       .is_some_and(|value| !value.is_null())
-      || params
-        .get("environmentId")
-        .is_some_and(|value| !value.is_null() && value.as_str() != Some("local"))
+    {
+      return Err(ProtocolError::AdditionalPermissions);
+    }
+    if params
+      .get("environmentId")
+      .is_some_and(|value| !value.is_null() && value.as_str() != Some("local"))
       || params
         .get("kind")
         .and_then(Value::as_str)

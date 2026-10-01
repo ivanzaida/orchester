@@ -490,21 +490,16 @@ fn agent_permissions_a_folder_no_edit_rule_can_name_is_not_enforceable() {
   assert!(shows(&mut desktop, "Repository access · enforced"));
 }
 
+/// Agents ask: a read-only step that asks before commands asks about every one.
 #[test]
-fn agent_permissions_claude_asking_read_only_runs_no_commands_and_says_why() {
+fn agent_permissions_claude_asking_read_only_asks_about_every_command() {
   let mut desktop = seeded();
   permissions_of(&mut desktop, "Reviewer");
   assert!(shows(&mut desktop, "edit tools removed · listed cmds run"));
-  // Read-only and asking: an approved command would run unsandboxed, so the step gets none.
   desktop.press("agent-permission-ask");
-  assert!(shows(&mut desktop, "read-only · no commands"));
-  assert!(shows(
-    &mut desktop,
-    "Claude Code would run an approved command outside any sandbox, so a read-only step gets none."
-  ));
-  assert!(shows(&mut desktop, "edit tools removed · no commands"));
+  assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
+  assert!(shows(&mut desktop, "edit tools removed · commands ask"));
   assert!(!shows(&mut desktop, "listed cmds run"));
   desktop.press("agent-permission-edit");
   assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
-  assert!(!shows(&mut desktop, "outside any sandbox"));
 }

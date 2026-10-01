@@ -233,10 +233,11 @@ C6 · Commands outside the permissions ask a person ("List + ask") · branch `cl
   approved command can change files). Writing steps with allowed commands always edit by `Edit` rules. Every Codex
   step runs as App Server with `sandbox_approval`: a command that needs more than the sandbox asks; `codex exec` is
   gone. Launch permissions record what happened to other commands. `docs/interactive-tool-approvals.md`.
-- Open: no live model turn checked either CLI's asking (the binaries were read, the fakes model them). App Server
-  loads the user's Codex configuration, global MCP servers and execpolicy rules files for every Codex step now (no
-  `--ignore-user-config`/`--ignore-rules`). A Claude Code read-only step that asks before every command still gets no
-  command. Design verification of the changed texts is pending.
+- Agents ask everywhere: a Claude Code read-only step that asks before commands, and an empty allowed list, ask about
+  every command. App Server agents get none of the user's MCP servers, plugins, apps or notify program; the user's
+  execpolicy `.rules` still apply (no App Server setting turns them off), which the enforcement panel says. Live
+  turns: `docs/evidence/ask-outside-e2e-2026-10-01.md`.
+- Open: design verification of the changed texts is pending.
 
 C4 · Claude Code runs known-safe read-only commands outside the allowed list · branch `claude/allowed-commands`
 

@@ -360,8 +360,10 @@ async fn claude_approvals_ask_even_for_a_command_accept_edits_would_run() {
   assert_eq!(reported(&db, id, "permission: "), ["toolu_mkdir allow"]);
 }
 
+/// Agents ask: a read-only step that asks before commands asks about every one; approved, the
+/// command runs once (outside any sandbox, which the approval says).
 #[tokio::test(flavor = "multi_thread")]
-async fn claude_approvals_leave_a_read_only_step_without_commands() {
+async fn claude_approvals_ask_in_a_read_only_step_too() {
   let mut read_only = permissions(CommandPermission::AskBefore, false);
   read_only.set_repository(RepositoryAccess::ReadOnly);
   let project = claude("Make a folder.", read_only);
@@ -371,26 +373,32 @@ async fn claude_approvals_leave_a_read_only_step_without_commands() {
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
+  let request = pending(root, &mut events, id).await;
+  assert_eq!(request.action, "mkdir build-output");
+  scheduler
+    .decide_tool_approval(id, request.id, true)
+    .await
+    .expect("approved");
   wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   let db = ProjectDb::open(root).expect("open");
-  assert_eq!(reported(&db, id, "permission: "), ["toolu_mkdir deny-by-rule"]);
+  assert_eq!(reported(&db, id, "permission: "), ["toolu_mkdir allow"]);
   let argv = reported(&db, id, "argv: ").pop().expect("argv");
-  assert!(
-    !argv.contains("--permission-prompt-tool") && !argv.contains("--settings"),
-    "{argv}"
-  );
-  // The launch permissions recorded with the invocation say what Claude Code enforced: no command.
+  for expected in [
+    " --permission-prompt-tool mcp__Orchester__approve ",
+    " --permission-mode default ",
+    r#" --settings {"permissions":{"ask":["Bash"]}} "#,
+    " --disallowedTools Edit Write NotebookEdit ",
+  ] {
+    assert!(argv.contains(expected), "{expected}: {argv}");
+  }
   let launched = db.invocations(id).expect("invocations")[0]
     .permissions
     .clone()
     .expect("recorded");
-  assert_eq!(
-    *launched.permissions().commands(),
-    CommandPermission::Allowed(orchester_core::permission::AllowedCommands::default())
-  );
+  assert_eq!(*launched.permissions().commands(), CommandPermission::AskBefore);
   assert_eq!(
     launched.outside_commands(),
-    Some(orchester_core::permission::OutsideCommands::Denied)
+    Some(orchester_core::permission::OutsideCommands::PermissionPrompt)
   );
 }
 

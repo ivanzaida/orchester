@@ -131,24 +131,26 @@ fn claude_invocation_passes_the_step_result_schema_as_one_json_argument() {
   }
 }
 
+/// Agents ask: without a listed command every command reaches a person; the edit tools stay removed.
 #[test]
-fn claude_invocation_read_only_without_commands_offers_no_tool_that_can_change_files() {
+fn claude_invocation_read_only_without_commands_asks_about_every_command() {
   for platform in PLATFORMS {
     let permissions = enforced(RepositoryAccess::ReadOnly, allowed(&[]), NetworkAccess::Off, platform);
     assert_eq!(
       args(&invocation(&permissions)),
       expected(
-        false,
+        true,
         &[
           "--tools",
-          "Read,Glob,Grep,TodoWrite",
+          "Read,Glob,Grep,TodoWrite,Bash",
           "--permission-mode",
-          "dontAsk",
+          "default",
+          "--settings",
+          r#"{"permissions":{"ask":["Bash"]}}"#,
           "--disallowedTools",
           "Edit",
           "Write",
           "NotebookEdit",
-          "Bash",
           "WebFetch",
           "WebSearch",
         ]

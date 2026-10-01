@@ -10,7 +10,7 @@
 //!   `windows.sandbox=elevated`). It has no way to deny every command outside a list, so *Allowed commands* is
 //!   unavailable. On Windows its sandbox does not turn network access off. A command that needs more than the sandbox
 //!   (network while it is off, a write outside the writable roots, an escalation the model requests) asks a person
-//!   through App Server ([`OutsideCommands::Asked`]).
+//!   through App Server ([`OutsideCommands::SandboxApproval`]).
 //! - Claude Code removes its edit tools for read-only and limits Bash to `--allowedTools` prefix rules, besides the
 //!   commands it classifies as read-only, which it runs unlisted as Codex runs its known-safe ones ([`super::claude`]).
 //!   Any other command asks a person through its permission prompt tool. It cannot confine an arbitrary command to the
@@ -18,8 +18,8 @@
 //!   network use by commands.
 //! - Asking before commands or MCP actions routes each request to a person in Orchester: Codex through App Server,
 //!   Claude Code through its permission prompt tool (`crate::connection::claude_approval`), where every command asks.
-//!   Claude Code runs an approved command outside any sandbox, so a read-only step asking before every command gets no
-//!   command tool at all; with allowed commands it asks for the others, and the approval says it can change files.
+//!   Claude Code runs an approved command outside any sandbox, so in a read-only step the approval says it can change
+//!   files.
 //! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
 //!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
@@ -128,12 +128,9 @@ pub enum Mechanism {
   ClaudeAddDir,
   /// `--permission-prompt-tool` with a rule asking before every command: a person decides each one.
   ClaudePermissionPrompt,
-  /// A read-only step gets no command tool: Claude Code would run an approved command outside any
-  /// sandbox, where it could write.
-  ClaudeNoCommandsReadOnly,
   /// `--allowedTools "Bash(<prefix>:*)"`, one rule per command. Claude Code also runs the commands it
-  /// classifies as read-only without a rule once it has the command tool; any other command asks a
-  /// person through the permission prompt tool.
+  /// classifies as read-only without a rule; any other command asks a person through the permission
+  /// prompt tool. Without any entry every command asks, as with [`Self::ClaudePermissionPrompt`].
   ClaudeAllowedTools,
   /// WebFetch and WebSearch stay available.
   ClaudeWebTools,
@@ -226,9 +223,8 @@ pub struct EnforcedPermissions {
 
 impl EnforcedPermissions {
   /// The permissions the CLI runs with: the chosen ones, except network on when off cannot be
-  /// enforced (see [`Self::network_stays_on`]), and no command at all for a read-only Claude Code
-  /// step that asks before commands ([`Mechanism::ClaudeNoCommandsReadOnly`]). An invocation
-  /// records these as its launch permissions.
+  /// enforced (see [`Self::network_stays_on`]). An invocation records these as its launch
+  /// permissions.
   pub const fn permissions(&self) -> &AgentPermissions {
     &self.permissions
   }
@@ -252,10 +248,9 @@ impl EnforcedPermissions {
     self.network_stays_on
   }
 
-  /// What the CLI does with a command these permissions do not run by themselves. Codex asks a
-  /// person whenever a command needs more than its sandbox; Claude Code asks about every command
-  /// outside the allowed list, or about every command when it asks before commands, and denies
-  /// commands only when the step gets none at all.
+  /// How the CLI asks a person about a command these permissions do not run by themselves: Codex
+  /// whenever a command needs more than its sandbox, Claude Code about every command outside the
+  /// allowed list (every command when the list is empty or it asks before commands).
   pub const fn outside_commands(&self) -> OutsideCommands {
     self.outside_commands
   }
@@ -295,16 +290,8 @@ impl AgentPermissions {
       Mechanism::ClaudeAcceptEdits if self.lists_commands() => Mechanism::ClaudeEditRules,
       mechanism => mechanism,
     };
-    let commands = match enforced(PermissionOption::of_commands(&self.commands))? {
-      Mechanism::ClaudePermissionPrompt if self.repository == RepositoryAccess::ReadOnly => {
-        Mechanism::ClaudeNoCommandsReadOnly
-      }
-      mechanism => mechanism,
-    };
+    let commands = enforced(PermissionOption::of_commands(&self.commands))?;
     let mut permissions = self.clone();
-    if commands == Mechanism::ClaudeNoCommandsReadOnly {
-      permissions.commands = CommandPermission::Allowed(AllowedCommands::default());
-    }
     let (network, network_stays_on) = match support(provider, platform, PermissionOption::of_network(self.network)) {
       Support::Enforced(mechanism) => (mechanism, None),
       Support::Unavailable(reason) => {
@@ -323,9 +310,9 @@ impl AgentPermissions {
         AgentProvider::CodexCli => Mechanism::CodexWritableRoots,
         AgentProvider::ClaudeCodeCli => Mechanism::ClaudeAddDir,
       });
-    let outside_commands = match (provider, &permissions.commands) {
-      (AgentProvider::ClaudeCodeCli, CommandPermission::Allowed(list)) if list.is_empty() => OutsideCommands::Denied,
-      _ => OutsideCommands::Asked,
+    let outside_commands = match provider {
+      AgentProvider::ClaudeCodeCli => OutsideCommands::PermissionPrompt,
+      AgentProvider::CodexCli => OutsideCommands::SandboxApproval,
     };
     Ok(EnforcedPermissions {
       permissions,

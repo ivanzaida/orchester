@@ -537,18 +537,19 @@ fn permissions_map_to_claude_arguments_without_bypass_modes() {
       "Bash(rg:*)"
     ]
   );
-  // Network off stays on for commands; without commands, Bash is not offered at all.
+  // Network off stays on for commands; without a listed command, every command asks.
   let edit = permissions(RepositoryAccess::Write, allowed(&[]), NetworkAccess::Off);
   let args = claude(&edit, Platform::MacOs).expect("enforceable, network stays on");
   assert_eq!(
     args,
     [
       "--tools",
-      "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit",
+      "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash",
       "--permission-mode",
       "acceptEdits",
+      "--settings",
+      r#"{"permissions":{"ask":["Bash"]}}"#,
       "--disallowedTools",
-      "Bash",
       "WebFetch",
       "WebSearch"
     ]

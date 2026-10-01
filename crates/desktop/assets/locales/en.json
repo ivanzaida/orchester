@@ -1642,7 +1642,7 @@
       "commandPlaceholder": "e.g. pnpm test",
       "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
       "fileCommandPrefix": "{{command}} also allows any arguments after it, including ones that change files.",
-      "noCommands": "No command is allowed yet, so none runs, not even a read-only one.",
+      "noCommands": "No command is listed yet, so every command asks you first, even a read-only one.",
       "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them. Other commands ask you first.",
       "codexEscalations": "Commands that need more than the sandbox ask you first.",
       "commandInvalid": {
@@ -1691,7 +1691,7 @@
         "editFoldersOther": "Edits files in the task worktree and {{count}} more folders",
         "commandsAsk": "Asks before commands",
         "commandsAny": "Any command in the worktree",
-        "commandsNone": "No commands",
+        "commandsNone": "No listed commands · all ask",
         "commandsOne": "1 allowed command",
         "commandsOther": "{{count}} allowed commands",
         "networkOff": "Network off",
@@ -1705,7 +1705,7 @@
         "editFoldersOther": "Edit files + {{count}} folders",
         "commandsAsk": "Asks before commands",
         "commandsAny": "Any command",
-        "commandsNone": "No commands",
+        "commandsNone": "All commands ask",
         "commandsOne": "1 command",
         "commandsOther": "{{count}} commands",
         "networkOff": "Network off",
@@ -1769,19 +1769,18 @@
         "codexNetworkOn": "sandbox · network access on",
         "codexWritableRoots": "sandbox · writable roots",
         "claudeEditToolsRemoved": "edit tools removed · listed cmds run",
-        "claudeEditToolsRemovedNoCommands": "edit tools removed · no commands",
+        "claudeEditToolsRemovedAsk": "edit tools removed · commands ask",
         "claudeAcceptEdits": "permission mode · accept edits",
         "claudeEditRules": "allowed tools · edit rules per folder",
         "claudeAllowedTools": {
+          "none": "no listed commands · all ask",
           "one": "allowed tools · 1 rule · others ask",
           "other": "allowed tools · {{count}} rules · others ask"
         },
         "claudeWebTools": "web tools allowed",
         "claudeWebToolsRemoved": "web tools removed · commands keep network",
         "claudeAddDir": "--add-dir for edit tools · commands not confined",
-        "claudePermissionPrompt": "--permission-prompt-tool · asks each command",
-        "claudeNoCommandsReadOnly": "read-only · no commands",
-        "claudeNoCommandsReadOnlyDetail": "Claude Code would run an approved command outside any sandbox, so a read-only step gets none."
+        "claudePermissionPrompt": "--permission-prompt-tool · asks each command"
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",

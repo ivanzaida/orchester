@@ -16,8 +16,8 @@
 //! with the invocation's random [`ApprovalToken`]; the runner shows the request, waits for one
 //! person's decision and answers exactly that call.
 //!
-//! [`ClaudeApprovalScope`] decides what may reach a person: a `Bash` command when the step asks
-//! before commands or has allowed commands (one outside the list asks, also in a read-only step),
+//! [`ClaudeApprovalScope`] decides what may reach a person: a `Bash` command (one outside the allowed
+//! list, or every command when the step asks before commands or lists none; also in a read-only step),
 //! and a tool of one of the invocation's MCP servers when it asks before MCP actions. Anything else
 //! the CLI would ask about (an edit or a read outside the working folders, a web fetch) is denied at
 //! once, as print mode denies it without the tool, so a prompt never grants more than the step's
@@ -40,7 +40,7 @@ use zeroize::Zeroizing;
 use crate::{
   command::{SecretVariable, redact_secrets},
   connection::mcp::McpServerName,
-  permission::{AgentPermissions, CommandPermission, RepositoryAccess},
+  permission::{AgentPermissions, CommandPermission},
 };
 
 /// The MCP server that serves the permission prompt.
@@ -146,15 +146,11 @@ pub struct ClaudeApprovalScope {
 
 impl ClaudeApprovalScope {
   /// The scope of an invocation with the enforced `permissions` and the MCP servers `servers`; `None`
-  /// when it asks a person for nothing and so needs no permission prompt. Commands ask when the step
-  /// asks before each one (a read-only step then gets no `Bash`, `crate::permission::claude`) or when
-  /// it has allowed commands, for those outside the list.
+  /// when it asks a person for nothing and so needs no permission prompt. Commands ask whatever the
+  /// repository access (`crate::permission::claude`): every one when the step asks before commands or
+  /// lists none, those outside the list otherwise.
   pub fn of(permissions: &AgentPermissions, servers: &[McpServerName]) -> Option<Self> {
-    let commands = match permissions.commands() {
-      CommandPermission::AskBefore => permissions.repository() == RepositoryAccess::Write,
-      CommandPermission::Allowed(list) => !list.is_empty(),
-      CommandPermission::AnyInWorktree => false,
-    };
+    let commands = *permissions.commands() != CommandPermission::AnyInWorktree;
     let tools = permissions.interactive_tool_approvals();
     (commands || tools).then(|| Self {
       commands,

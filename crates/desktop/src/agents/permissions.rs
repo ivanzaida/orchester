@@ -78,9 +78,9 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexCommandApprovals => "agents.permissions.mechanism.codexCommandApprovals",
     Mechanism::CodexSandboxNetworkOff => "agents.permissions.mechanism.codexNetworkOff",
     Mechanism::CodexSandboxNetworkOn => "agents.permissions.mechanism.codexNetworkOn",
-    // Read-only with asking before commands runs no command at all (see `enforced_on`).
-    Mechanism::ClaudeEditToolsRemoved if runs_no_commands(permissions) => {
-      "agents.permissions.mechanism.claudeEditToolsRemovedNoCommands"
+    // Without a listed command every command asks.
+    Mechanism::ClaudeEditToolsRemoved if lists_no_command(permissions) => {
+      "agents.permissions.mechanism.claudeEditToolsRemovedAsk"
     }
     Mechanism::ClaudeEditToolsRemoved => "agents.permissions.mechanism.claudeEditToolsRemoved",
     Mechanism::ClaudeAcceptEdits => "agents.permissions.mechanism.claudeAcceptEdits",
@@ -90,13 +90,14 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexWritableRoots => "agents.permissions.mechanism.codexWritableRoots",
     Mechanism::ClaudeAddDir => "agents.permissions.mechanism.claudeAddDir",
     Mechanism::ClaudePermissionPrompt => "agents.permissions.mechanism.claudePermissionPrompt",
-    Mechanism::ClaudeNoCommandsReadOnly => "agents.permissions.mechanism.claudeNoCommandsReadOnly",
     Mechanism::ClaudeAllowedTools => {
       let count = match permissions.commands() {
         CommandPermission::Allowed(commands) => commands.entries().len(),
         CommandPermission::AskBefore | CommandPermission::AnyInWorktree => 0,
       };
-      let key = if count == 1 {
+      let key = if count == 0 {
+        "agents.permissions.mechanism.claudeAllowedTools.none"
+      } else if count == 1 {
         "agents.permissions.mechanism.claudeAllowedTools.one"
       } else {
         "agents.permissions.mechanism.claudeAllowedTools.other"
@@ -110,9 +111,6 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
 /// What a mechanism does beyond its setting's words, as a line under it; `None` for most.
 pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions) -> Option<Arc<str>> {
   match (mechanism, permissions.commands()) {
-    (Mechanism::ClaudeNoCommandsReadOnly, _) => {
-      Some(ctx.t("agents.permissions.mechanism.claudeNoCommandsReadOnlyDetail"))
-    }
     // Codex asks a person about a command that needs more than its sandbox (App Server).
     (Mechanism::CodexSandboxedCommands | Mechanism::CodexCommandApprovals, _) => Some(ctx.t(ESCALATIONS)),
     (Mechanism::ClaudeAllowedTools, CommandPermission::Allowed(list)) if !list.is_empty() => {
@@ -168,8 +166,13 @@ pub fn file_command_hints(ctx: &Ctx, list: &AllowedCommands) -> Vec<Arc<str>> {
     .collect()
 }
 
-fn runs_no_commands(permissions: &AgentPermissions) -> bool {
-  matches!(permissions.commands(), CommandPermission::Allowed(commands) if commands.entries().is_empty())
+/// Whether no command is listed: asking before commands, or an empty list.
+fn lists_no_command(permissions: &AgentPermissions) -> bool {
+  match permissions.commands() {
+    CommandPermission::Allowed(commands) => commands.is_empty(),
+    CommandPermission::AskBefore => true,
+    CommandPermission::AnyInWorktree => false,
+  }
 }
 
 /// Words of the three settings, long (`haXji`: *Edits files in the task worktree · 3 allowed

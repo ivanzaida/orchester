@@ -16,7 +16,8 @@
 //! - Network access is a setting of the `workspace-write` sandbox only; the `read-only` sandbox has none. A command
 //!   that needs more than the sandbox (network while it is off, a write outside the writable roots, an escalation the
 //!   model requests) asks a person through the granular approval policy's `sandbox_approval`
-//!   ([`crate::permission::OutsideCommands::Asked`]); approved, Codex runs that one command outside the sandbox.
+//!   ([`crate::permission::OutsideCommands::SandboxApproval`]); approved, Codex runs that one command outside the
+//!   sandbox.
 //! - Extra writable folders ([`crate::permission::writable`]) are added to the `workspace-write` sandbox as a TOML
 //!   array of basic strings, with the worktree, which Codex also reports as the local environment's workspace root. A
 //!   folder that does not exist is accepted and ignored, so the runner creates them first.

@@ -296,7 +296,7 @@ impl RunTask {
         worktree: cli.worktree.to_path_buf(),
         access: cli.enforced.permissions().repository(),
         command_approvals: *cli.enforced.permissions().commands() == CommandPermission::AskBefore,
-        sandbox_approvals: cli.enforced.outside_commands() == OutsideCommands::Asked,
+        sandbox_approvals: cli.enforced.outside_commands() == OutsideCommands::SandboxApproval,
         tool_approvals: cli.enforced.permissions().interactive_tool_approvals(),
         network: cli.enforced.permissions().network(),
         writable_roots: cli.writable_roots.to_vec(),

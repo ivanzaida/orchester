@@ -115,7 +115,7 @@ async fn codex_escalations_ask_and_run_once_when_approved() {
     .permissions
     .clone()
     .expect("recorded");
-  assert_eq!(launched.outside_commands(), Some(OutsideCommands::Asked));
+  assert_eq!(launched.outside_commands(), Some(OutsideCommands::SandboxApproval));
   assert_eq!(reported(&db, started.id, "escalation: "), ["accept"]);
   let head = git(started.project.repo.path(), &["rev-parse", run.branch().as_str()]);
   assert_eq!(

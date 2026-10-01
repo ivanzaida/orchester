@@ -31,11 +31,13 @@ fn permissions(commands: CommandPermission, tools: bool) -> AgentPermissions {
   permissions
 }
 
+/// The scope of a step that asks about commands (`commands`) and MCP actions (`tools`). Only *Any
+/// command in the worktree*, which Claude Code cannot enforce, leaves commands out of it.
 fn scope(commands: bool, tools: bool) -> ClaudeApprovalScope {
   let commands = if commands {
     CommandPermission::AskBefore
   } else {
-    CommandPermission::Allowed(AllowedCommands::default())
+    CommandPermission::AnyInWorktree
   };
   ClaudeApprovalScope::of(&permissions(commands, tools), &[server("docs"), server("docs__v2")])
     .expect("the permissions ask a person")
@@ -89,8 +91,11 @@ fn claude_approvals_route_only_what_the_permissions_leave_to_a_person() {
   }
   let anonymous = json!({"tool_name": "Bash", "input": {"command": "ls"}});
   assert_eq!(scope(true, true).classify(&anonymous), ClaudeAsk::Refused);
-  let asks_nothing = permissions(CommandPermission::Allowed(AllowedCommands::default()), false);
-  assert_eq!(ClaudeApprovalScope::of(&asks_nothing, &[]), None);
+  // Agents ask: even an empty list asks about every command.
+  let empty = permissions(CommandPermission::Allowed(AllowedCommands::default()), false);
+  let ClaudeAsk::Person(_) = ClaudeApprovalScope::of(&empty, &[]).expect("asks").classify(&bash) else {
+    panic!("a command goes to a person");
+  };
 }
 
 #[test]
@@ -244,8 +249,10 @@ fn permission_args_of(permissions: &AgentPermissions) -> Vec<String> {
   )
 }
 
+/// Asking before commands sends every command to a person, in a read-only step too: there the edit
+/// tools stay removed and the step runs in `default`, as `dontAsk` would deny before asking.
 #[test]
-fn claude_approvals_ask_before_every_command_and_never_in_read_only_steps() {
+fn claude_approvals_ask_before_every_command_also_in_read_only_steps() {
   let mut write = AgentPermissions::new(
     RepositoryAccess::Write,
     CommandPermission::AskBefore,
@@ -258,12 +265,21 @@ fn claude_approvals_ask_before_every_command_and_never_in_read_only_steps() {
   assert!(!args.iter().any(|arg| arg.starts_with("Bash(")), "{args:?}");
   write.set_repository(RepositoryAccess::ReadOnly);
   let args = permission_args_of(&write);
-  assert!(!args.contains(&"--settings".to_owned()), "{args:?}");
-  let tools = args.iter().position(|arg| arg == "--tools").expect("tools");
-  assert!(!args[tools + 1].contains("Bash"), "{args:?}");
-  let denied = args.iter().position(|arg| arg == "--disallowedTools").expect("denied");
-  assert!(args[denied + 1..].contains(&"Bash".to_owned()), "{args:?}");
-  assert_eq!(ClaudeApprovalScope::of(&write, &[]), None, "nothing is left to ask");
+  assert_eq!(
+    values(&args, "--settings"),
+    [r#"{"permissions":{"ask":["Bash"]}}"#],
+    "{args:?}"
+  );
+  assert_eq!(values(&args, "--permission-mode"), ["default"], "{args:?}");
+  assert!(values(&args, "--tools")[0].contains("Bash"), "{args:?}");
+  assert!(
+    values(&args, "--disallowedTools").starts_with(&["Edit", "Write", "NotebookEdit"]),
+    "{args:?}"
+  );
+  let scope = ClaudeApprovalScope::of(&write, &[]).expect("every command asks");
+  let ClaudeAsk::Person(_) = scope.classify(&call("Bash", &json!({"command": "ls"}))) else {
+    panic!("a command goes to a person");
+  };
 }
 
 fn listed(repository: RepositoryAccess, entries: &[&str]) -> AgentPermissions {
@@ -321,12 +337,18 @@ fn claude_approvals_allowed_commands_ask_for_the_others() {
   );
   let scope = ClaudeApprovalScope::of(&read_only, &[]).expect("a read-only step asks too");
   assert!(matches!(scope.classify(&unlisted), ClaudeAsk::Person(_)));
-  // Without any command the step gets no command tool, and nothing asks.
+  // Without any listed command every command asks, as when asking before commands.
   let none = listed(RepositoryAccess::ReadOnly, &[]);
   let args = permission_args_of(&none);
-  assert_eq!(values(&args, "--permission-mode"), ["dontAsk"], "{args:?}");
-  assert!(values(&args, "--disallowedTools").contains(&"Bash"), "{args:?}");
-  assert_eq!(ClaudeApprovalScope::of(&none, &[]), None);
+  assert_eq!(values(&args, "--permission-mode"), ["default"], "{args:?}");
+  assert_eq!(
+    values(&args, "--settings"),
+    [r#"{"permissions":{"ask":["Bash"]}}"#],
+    "{args:?}"
+  );
+  assert!(!values(&args, "--disallowedTools").contains(&"Bash"), "{args:?}");
+  let scope = ClaudeApprovalScope::of(&none, &[]).expect("every command asks");
+  assert!(matches!(scope.classify(&unlisted), ClaudeAsk::Person(_)));
 }
 
 #[test]
