@@ -113,6 +113,8 @@ pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPerm
     (Mechanism::ClaudeNoCommandsReadOnly, _) => {
       Some(ctx.t("agents.permissions.mechanism.claudeNoCommandsReadOnlyDetail"))
     }
+    // Codex asks a person about a command that needs more than its sandbox (App Server).
+    (Mechanism::CodexSandboxedCommands | Mechanism::CodexCommandApprovals, _) => Some(ctx.t(ESCALATIONS)),
     (Mechanism::ClaudeAllowedTools, CommandPermission::Allowed(list)) if !list.is_empty() => {
       Some(ctx.t(READ_ONLY_COMMANDS))
     }
@@ -120,13 +122,31 @@ pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPerm
   }
 }
 
-/// That Claude Code also runs known-safe read-only commands without a rule (`docs/plan.md`, C4).
+/// That Claude Code also runs known-safe read-only commands without a rule (`docs/plan.md`, C4), and
+/// asks a person about any other command.
 const READ_ONLY_COMMANDS: &str = "agents.permissions.claudeReadOnlyCommands";
 
 /// What runs besides `list` on `provider`: Claude Code's known-safe read-only commands, once the
-/// list has a command (without one it gets no command tool). `None` where only the list runs.
+/// list has a command (without one it gets no command tool), and that the others ask a person.
+/// `None` where only the list runs.
 pub fn unlisted_commands(ctx: &Ctx, provider: Option<AgentProvider>, list: &AllowedCommands) -> Option<Arc<str>> {
   (runs_read_only_unlisted(provider) && !list.is_empty()).then(|| ctx.t(READ_ONLY_COMMANDS))
+}
+
+/// That Codex asks a person about a command that needs more than its sandbox.
+const ESCALATIONS: &str = "agents.permissions.codexEscalations";
+
+/// That a command needing more than the sandbox asks a person, where `provider` enforces `commands`
+/// with its sandbox; `None` elsewhere.
+pub fn escalations(ctx: &Ctx, provider: Option<AgentProvider>, commands: &CommandPermission) -> Option<Arc<str>> {
+  let option = PermissionOption::of_commands(commands);
+  let sandboxed = provider.is_some_and(|provider| {
+    matches!(
+      support(provider, Platform::current(), option),
+      Support::Enforced(Mechanism::CodexSandboxedCommands | Mechanism::CodexCommandApprovals)
+    )
+  });
+  sandboxed.then(|| ctx.t(ESCALATIONS))
 }
 
 /// Whether `provider` enforces an allowed list the way that also runs known-safe read-only commands.

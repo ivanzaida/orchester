@@ -1,21 +1,37 @@
-# Interactive Codex approvals
+# Interactive approvals
 
-A Codex profile or a current run can enable **Ask before MCP actions that require approval**.
-A published pipeline step can require it too. Separately, **Ask before running commands** enables
-decisions for Codex commands that require approval; ordinary sandboxed commands can still run
-without a request. These choices determine the transport from the effective invocation permissions,
-including current-run overrides, rather than only the saved pipeline checkbox.
+What an agent's permissions do not allow by themselves asks a person in "Needs you" instead of being
+refused (the user's decision 2026-10-01, "List + ask"): with *Allowed commands*, Claude Code runs the
+listed commands and its known-safe read-only ones, and any other command asks you first; with *Any
+command in the worktree*, Codex runs commands in its sandbox, and a command that needs more than the
+sandbox asks you first. A Codex profile or a current run can also enable **Ask before MCP actions
+that require approval**; a published pipeline step can require it too. **Ask before running
+commands** sends every Claude Code command to a person, and every Codex command an execpolicy rule
+asks about. These choices come from the effective invocation permissions, including current-run
+overrides, rather than only the saved pipeline checkbox.
 
-Orchester uses Codex App Server for either choice and displays each pending request. **Approve once**
-answers only that action within the step's existing sandbox grants. Sandbox exceptions are disabled;
-approval cannot add writable folders or network access. **Deny** prevents the action and fails
-the step visibly. File-change approvals, additional permission grants and unsupported approval
-request forms are rejected explicitly. Codex invocations with neither choice keep the noninteractive
-`codex exec -a never` transport.
+Every Codex step runs as Codex App Server, and Orchester displays each pending request. The thread's
+granular approval policy turns on `sandbox_approval` (always), `rules` (with *Ask before running
+commands*) and `mcp_elicitations` (with *Ask before MCP actions*); `request_permissions` and
+`skill_approval` stay off. With `sandbox_approval` Codex asks before it runs a command outside its
+sandbox: when the model requests it (`sandbox_permissions: "require_escalated"`, with its
+justification as the question), and when a command failed in the sandbox for want of network or
+write access. Codex 0.159.2's instructions to the model name both (network while it is off, a write
+outside the writable roots, GUI apps, destructive commands it was not asked for). **Approve once**
+answers `accept` for exactly that request: Codex runs that one command outside the sandbox; no
+session grant, `acceptForSession`, execpolicy amendment or network policy amendment is ever chosen.
+**Deny** prevents the command and fails the step visibly. A request with an additional permission
+overlay (`with_additional_permissions`, off unless `features.exec_permission_approvals` is enabled)
+and unsupported request forms fail the step. Two requests are declined at once without a person: a
+file change outside the writable roots (`item/fileChange/requestApproval`: edits keep their rules,
+only commands are asked about) and a host approval of Codex's managed network proxy
+(`networkApprovalContext`, whose grant may outlast the command). A read-only step keeps the
+`read-only` sandbox, and its escalations ask as well; the approval says that an approved command
+runs outside the sandbox, where it can change files.
 
 Changing permissions from a waiting task's popover applies to the next invocation. When continuing
-the task conversation, an existing `exec` session can resume through App Server with its original
-session ID and worktree. Completed steps, uncommitted work, run limits and the saved pipeline remain
+the task conversation, a session that ran through `codex exec` before App Server became the only
+transport resumes through App Server with its original session ID and worktree. Completed steps, uncommitted work, run limits and the saved pipeline remain
 intact. **Apply now** uses the existing checkpoint/restart mechanism. Approval requests and waiting
 time are persisted; waiting for a decision does not consume active agent time.
 
@@ -39,13 +55,20 @@ temporary frame was removed by that exact ID, preserving the existing design.
 
 ## Codex profile
 
-Interactive steps inherit the user's normal Codex account and configured global MCP servers.
-Orchester adds the project-selected MCP servers and checks that each selected server is connected
-before starting the turn. Other global servers remain available. If Codex is signed out, the step
-reports a clear `Not signed in` failure; Orchester does not start a separate login flow.
+App Server has no `--ignore-user-config` or `--ignore-rules`, so every Codex step inherits the user's
+normal Codex account, configuration, configured global MCP servers and execpolicy rules files; an
+`allow` rule there lets a matching command run outside the sandbox without asking. Orchester adds the
+project-selected MCP servers. A step that asks before MCP actions checks that each selected server is
+connected before starting the turn; any other step works without a selected server Codex did not
+connect, and its activity names it. Other global servers remain available. If Codex is signed out,
+the step reports a clear `Not signed in` failure; Orchester does not start a separate login flow.
+Codex's standard error is kept in the step's activity as raw lines. A turn's usage adds the `last`
+usage of each `thread/tokenUsage/updated` whose thread total moved, so a model response is counted
+once even when Codex repeats the notification; Codex reports usage per model response, so a run or
+step budget applies when the turn ends.
 
 Both read-only and workspace-write Windows invocations explicitly select Codex's native elevated
-sandbox, including resumed `exec` invocations and App Server. Selecting that sandbox does not change
+sandbox. Selecting that sandbox does not change
 read-only access into write access. Windows network restrictions retain their existing visible
 capability limitation.
 
@@ -75,8 +98,8 @@ The old decision cannot approve a later tool call.
 
 ## Claude Code
 
-A Claude Code profile, pipeline step or run can use the same two choices. Claude Code has no App
-Server; Orchester uses its print-mode permission prompt instead (`--permission-prompt-tool`, hidden
+A Claude Code profile, pipeline step or run can use the same two choices, and a step with allowed
+commands asks about the others. Claude Code has no App Server; Orchester uses its print-mode permission prompt instead (`--permission-prompt-tool`, hidden
 from `claude --help` in 2.1.89 but present in the binary as "MCP tool to use for permission
 prompts (only works with --print)"). The invocation gets a second `--mcp-config` file that starts
 `orchester-runner --claude-permission-prompt`, an MCP server named `Orchester` whose one tool,
@@ -86,14 +109,14 @@ hands each call to the runner over a loopback connection opened with a random pe
 token; the configuration file holding the token is private and removed when the CLI ends.
 
 What reaches a person is decided by `ClaudeApprovalScope` in core: a `Bash` command when the step
-asks before commands, and a tool of one of the invocation's own MCP servers when it asks before
-MCP actions. For commands, a writing step gets `--settings {"permissions":{"ask":["Bash"]}}`: a
+asks before commands or has allowed commands (one outside the list), and a tool of one of the
+invocation's own MCP servers when it asks before MCP actions. For commands, a writing step gets `--settings {"permissions":{"ask":["Bash"]}}`: a
 rule asking for the whole `Bash` tool is checked before the tool's own check (both 2.1.89 and
 2.1.284), so every command reaches the prompt, including the `mkdir`, `touch`, `rm`, `rmdir`, `mv`,
 `cp` and `sed` that `acceptEdits` would otherwise run, and the commands Claude Code classifies as
 read-only. That is stricter than Codex, whose known-safe read-only commands run without asking. A
-read-only step gets no `Bash` at all: Claude Code would run an approved command outside any
-sandbox, where it could write. For MCP actions the `mcp__<server>` allow rules are left out, and a
+read-only step that asks before every command gets no `Bash` at all: Claude Code would run an
+approved command outside any sandbox, where it could write. For MCP actions the `mcp__<server>` allow rules are left out, and a
 read-only step runs in permission mode `default` instead of `dontAsk`, which would deny before
 asking. Everything else Claude Code asks about (edits or reads
 outside the working folders, web fetches, the approval tool itself) is denied at once, as print mode
@@ -117,25 +140,42 @@ person's review before it continues. Project MCP secret values are redacted from
 action, target and scope and from the invocation's activity. Claude Code runs an approved command
 without a sandbox, as it runs every command; the person sees the whole command first.
 
-With *Allowed commands* instead, a writing step denies the commands `acceptEdits` would run in any
-form without a rule (`mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp`, `sed`) with `Bash(<command>:*)`
-deny rules. A prefix deny rule wins over every allow rule in both 2.1.89 and 2.1.284, so it would
-also deny a listed `sed -n` or `rm -f build/x`. A writing step whose allowed commands contain one of
-these words therefore does not run in `acceptEdits`: it runs in `dontAsk` (`default` when it asks
-before MCP actions) and allows its edits with an `Edit(//<folder>/**)` rule for the worktree and
-each extra writable folder, which both versions accept like `acceptEdits` accepts an edit in a
-working directory, after the same deny rules and safety checks. No rule can name a folder on a
-network share, so such a step refuses to start when its worktree or an extra writable folder is on
-one, and the enforcement panel shows that setting as not enforceable. Only the listed prefixes of those
-commands then run: `sed -n 1p README.md` runs, `sed -i …` is denied; `rm -f build/x` runs,
-`rm -rf src` is denied. A prefix still covers what follows it, as every allowed command does
-(`sed -n -i …` starts with `sed -n`). The enforcement panel names this mechanism *allowed tools ·
-edit rules per folder*. Commands Claude Code classifies as read-only still run without being
-listed, once the list has an entry (with none, the step gets no `Bash` at all). That is the
-user's decision (`docs/plan.md`, C4) and the same as Codex, whose known-safe read-only commands run
-without asking: they change no file. The option's text says so (*These commands run, as do
-known-safe read-only commands such as ls, cat or git log*), and the enforcement panel, the run
-permissions popover and the pipeline step's commands add "Claude Code also runs known-safe
-read-only commands, such as ls, cat or git log, without listing them."
+With *Allowed commands* ("List + ask"), the listed prefixes become `Bash(<prefix>:*)` allow rules,
+and the step runs in permission mode `default` with the permission prompt, read-only and writing
+alike. Commands Claude Code classifies as read-only run without being listed, once the list has an
+entry (with none, the step gets no `Bash` at all and nothing asks). That is the user's decision
+(`docs/plan.md`, C4) and the same as Codex, whose known-safe read-only commands run without
+asking: they change no file. Any other command asks a person. In `default` mode every check that
+would ask hands the call to the prompt: an unlisted command, a listed one with a `$VAR` expansion,
+a compound command (`;`, `&&`, `|`) one of whose parts is not allowed, a path outside the working
+folders. `dontAsk`, which these steps ran in before, turns exactly those asks into the denial
+"Permission to use Bash has been denied because Claude Code is running in don't ask mode": in
+2.1.89, 2.1.284 and 2.1.286 the only place that mode denies is where the permission check returned
+`ask` (`TGo` in 2.1.286), so in `default` the same calls reach the prompt tool instead. In a
+read-only step the edit tools stay removed, and the approval says that Claude Code runs an approved
+command outside any sandbox, where it can change files.
+
+`acceptEdits` would run `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form without a
+rule (a mode check after the deny, ask and allow rules, both 2.1.89 and 2.1.284), and a
+`Bash(<command>:*)` deny rule would also deny a listed `sed -n` or `rm -f build/x`, since a prefix
+deny rule wins over every allow rule. A writing step with allowed commands therefore never runs in
+`acceptEdits`: it allows its edits with an `Edit(//<folder>/**)` rule for the worktree and each extra
+writable folder, which both versions accept like `acceptEdits` accepts an edit in a working
+directory, after the same deny rules and safety checks. Those seven commands then run only in their
+listed forms, and any other form asks: `sed -n 1p README.md` runs, `sed -i …` asks; `rm -f build/x`
+runs, `rm -rf src` asks. A prefix still covers what follows it, as every allowed command does (`sed
+-n -i …` starts with `sed -n`). The enforcement panel names this mechanism *allowed tools · edit
+rules per folder*. No rule can name a folder on a network share, so such a step refuses to start
+when its worktree or an extra writable folder is on one, and the enforcement panel shows that
+setting as not enforceable. The option's text says what runs (*These commands run, as do known-safe
+read-only commands such as ls, cat or git log. Other commands ask you first.*), and the enforcement
+panel, the run permissions popover and the pipeline step's commands add "Claude Code also runs
+known-safe read-only commands, such as ls, cat or git log, without listing them. Other commands ask
+you first."
+
+Each invocation records its launch permissions once, before the CLI starts: the enforced
+permissions and what happened to commands outside them (`OutsideCommands`: `asked` for Codex and for
+Claude Code with allowed commands or asking before commands, `denied` for a Claude Code step that
+gets no command). Launches recorded before this was added keep it unknown.
 
 A managed policy with `allowManagedPermissionRulesOnly` makes Claude Code ignore every rule Orchester passes (`--allowedTools`, `--disallowedTools`, the `--settings` ask rule), so none of the above is enforced on such a machine.

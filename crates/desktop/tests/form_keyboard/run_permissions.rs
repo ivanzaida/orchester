@@ -86,6 +86,12 @@ fn run_permissions_popover_fits_the_workspace_when_the_window_is_resized() {
   let mut desktop = desktop_running("Wait for release. Draft first. Then keep working.");
   desktop.click("task-permissions-view");
   desktop.wait_for("task-permissions-popover");
+  // Any command in the worktree on Codex: what needs more than the sandbox asks a person.
+  assert!(shows(
+    &mut desktop,
+    "task-permissions-popover",
+    "Commands that need more than the sandbox ask you first."
+  ));
   for (width, height) in [(1440, 960), (960, 700), (1440, 960)] {
     desktop.tree.resize(width, height);
     desktop.pass();
@@ -194,7 +200,8 @@ fn run_permissions_popover_on_claude_says_which_commands_run_unlisted() {
   assert!(shows(
     &mut desktop,
     "task-permissions-popover",
-    "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them."
+    "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them. Other \
+     commands ask you first."
   ));
   assert!(!shows(
     &mut desktop,

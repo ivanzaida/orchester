@@ -986,6 +986,8 @@
       "commandTitle": "Approve command?",
       "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny prevents execution and fails this step.",
       "commandExplanationClaude": "{{agent}} requests this command in {{cwd}}. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationClaudeReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "command": "Command",
       "cwd": "Working directory",
       "note": "Agent’s note",
@@ -1624,11 +1626,11 @@
         "allowed": {
           "title": "Allowed commands",
           "detail": "Only these commands run. Anything else is denied and the agent is told why.",
-          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Anything else is denied and the agent is told why."
+          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you first."
         },
         "any": {
           "title": "Any command in the worktree",
-          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders."
+          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. Commands that need more than the sandbox ask you first."
         }
       },
       "addCommand": "Add command",
@@ -1641,7 +1643,8 @@
       "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
       "fileCommandPrefix": "{{command}} also allows any arguments after it, including ones that change files.",
       "noCommands": "No command is allowed yet, so none runs, not even a read-only one.",
-      "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them.",
+      "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them. Other commands ask you first.",
+      "codexEscalations": "Commands that need more than the sandbox ask you first.",
       "commandInvalid": {
         "blank": "Type a command first.",
         "tooLong": "A command is at most {{max}} characters long.",
@@ -1758,7 +1761,7 @@
       "mechanism": {
         "codexReadOnly": "sandbox · read-only",
         "codexWorkspaceWrite": "sandbox · workspace-write",
-        "codexCommands": "sandbox · commands stay in the worktree",
+        "codexCommands": "sandbox · escalations ask you",
         "codexCommandApprovals": "Codex App Server · one command approval",
         "codexNetworkOff": "sandbox · network access off",
         "codexNetworkOn": "sandbox · network access on",
@@ -1768,8 +1771,8 @@
         "claudeAcceptEdits": "permission mode · accept edits",
         "claudeEditRules": "allowed tools · edit rules per folder",
         "claudeAllowedTools": {
-          "one": "allowed tools · 1 prefix rule",
-          "other": "allowed tools · {{count}} prefix rules"
+          "one": "allowed tools · 1 rule · others ask",
+          "other": "allowed tools · {{count}} rules · others ask"
         },
         "claudeWebTools": "web tools allowed",
         "claudeWebToolsRemoved": "web tools removed · commands keep network",

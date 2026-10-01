@@ -27,7 +27,7 @@ use orchester_core::{
 use super::RunPermissionsProps;
 use crate::{
   agents::permissions::{
-    file_command_hints, option_title, unavailable, unlisted_commands, with_command, without_command,
+    escalations, file_command_hints, option_title, unavailable, unlisted_commands, with_command, without_command,
   },
   messages::Message,
   theme::{ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY},
@@ -249,6 +249,7 @@ fn commands(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPe
       .into(),
   ];
   content.extend(reasons([ask_why, allowed_why, any_why]));
+  content.extend(escalations(ctx, provider, draft.commands()).map(|note| hint(&note)));
   if let Some(list) = listed {
     content.push(command_entries(ctx, edit, &list, props));
     content.extend(changed_note(ctx, &list, props));

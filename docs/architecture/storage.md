@@ -125,9 +125,9 @@ at work takes one.
   (a new session, when the CLI reported none, gets its earlier plan and the note), and its result is the
   next version, which needs a decision of its own. A run that only waits keeps waiting across a new
   runner or session (it is not interrupted); a pause of it is immediate, and a decision needs it running.
-- **Sessions.** Codex reports its session (`thread.started`); a Claude Code session gets an id
-  Orchester chose (`--session-id`), which the CLI reports back (`system/init`). Continuing a step
-  resumes the session its last invocation reported (`codex exec resume`, `claude --resume`).
+- **Sessions.** Codex reports its session (the thread of `thread/start`); a Claude Code session gets an
+  id Orchester chose (`--session-id`), which the CLI reports back (`system/init`). Continuing a step
+  resumes the session its last invocation reported (`thread/resume`, `claude --resume`).
 - **Task conversation (M8).** A person's message goes to Orchestrator, which routes it to the agent
   of the task's run whose invocation starts next, or to the agents of one profile; it is written for
   the task's latest run (for its next run when it has none). The runner delivers messages at the

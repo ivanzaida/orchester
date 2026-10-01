@@ -43,6 +43,8 @@ pub(super) struct ToolApprovalProps {
   approval: PendingToolApproval,
   /// The CLI of the agent that asks, which decides what an approval means.
   provider: Option<AgentProvider>,
+  /// The asking step only reads: an approved command can still change files.
+  read_only: bool,
   remaining: usize,
 }
 
@@ -133,6 +135,7 @@ pub(in crate::screens::project) fn modal(ctx: &mut Ctx, pending: &[ShownApproval
     ToolApprovalProps {
       approval: shown.approval,
       provider: shown.provider,
+      read_only: shown.read_only,
       remaining: pending.len() - 1,
     },
   ))
@@ -154,13 +157,14 @@ fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
     .background(ExtraColor::Surface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
-    .child(header(ctx, &state.props.approval, state.props.provider))
+    .child(header(ctx, state.props))
     .child(details(ctx, state.props))
     .child(actions(ctx, state));
   backdrop(ctx, form(None, panel))
 }
 
-fn header(ctx: &Ctx, approval: &PendingToolApproval, provider: Option<AgentProvider>) -> Element {
+fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
+  let approval = &props.approval;
   let command = approval.command;
   let title = ctx.t(if command {
     "runs.toolApproval.commandTitle"
@@ -168,10 +172,13 @@ fn header(ctx: &Ctx, approval: &PendingToolApproval, provider: Option<AgentProvi
     "runs.toolApproval.title"
   });
   let explanation = if command {
-    // Claude Code runs an approved command without a sandbox; Codex keeps it in the step's.
-    let key = match provider {
-      Some(AgentProvider::ClaudeCodeCli) => "runs.toolApproval.commandExplanationClaude",
-      Some(AgentProvider::CodexCli) | None => "runs.toolApproval.commandExplanation",
+    // Claude Code runs an approved command without a sandbox; Codex runs an approved escalation
+    // outside its sandbox. Either can then change files, which a read-only step must say.
+    let key = match (props.provider, props.read_only) {
+      (Some(AgentProvider::ClaudeCodeCli), false) => "runs.toolApproval.commandExplanationClaude",
+      (Some(AgentProvider::ClaudeCodeCli), true) => "runs.toolApproval.commandExplanationClaudeReadOnly",
+      (Some(AgentProvider::CodexCli) | None, false) => "runs.toolApproval.commandExplanation",
+      (Some(AgentProvider::CodexCli) | None, true) => "runs.toolApproval.commandExplanationReadOnly",
     };
     ctx.t_args(
       key,

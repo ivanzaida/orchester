@@ -224,6 +224,20 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+C6 · Commands outside the permissions ask a person ("List + ask") · branch `claude/ask-outside`
+
+- **Done 2026-10-01.** User decision after ORC-48, where Claude Code steps with allowed commands ran in `dontAsk` and
+  13 commands (`$VAR`, compound commands, `sed`, `git grep`, `powershell -Command`, `codex exec`) were denied without
+  reaching "Needs you". Claude Code steps with allowed commands now run in `default` with the permission prompt: the
+  listed and known-safe read-only commands run, any other asks (also in read-only steps, whose approval says an
+  approved command can change files). Writing steps with allowed commands always edit by `Edit` rules. Every Codex
+  step runs as App Server with `sandbox_approval`: a command that needs more than the sandbox asks; `codex exec` is
+  gone. Launch permissions record what happened to other commands. `docs/interactive-tool-approvals.md`.
+- Open: no live model turn checked either CLI's asking (the binaries were read, the fakes model them). App Server
+  loads the user's Codex configuration, global MCP servers and execpolicy rules files for every Codex step now (no
+  `--ignore-user-config`/`--ignore-rules`). A Claude Code read-only step that asks before every command still gets no
+  command. Design verification of the changed texts is pending.
+
 C4 · Claude Code runs known-safe read-only commands outside the allowed list · branch `claude/allowed-commands`
 
 - **Done 2026-10-01.** User decision: they stay allowed, as Codex's known-safe read-only commands are. Said

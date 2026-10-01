@@ -1,12 +1,14 @@
-//! Tool requests awaiting a person's decision, with the CLI of the agent that asks: its approval
-//! dialog says what an approval means for that CLI (Codex keeps an approved command in its
-//! sandbox; Claude Code has none).
+//! Tool requests awaiting a person's decision, with the CLI of the agent that asks and whether its
+//! step only reads: the approval dialog says what an approval means for that CLI (an approved
+//! Codex command runs outside its sandbox, Claude Code has none) and that it can change files in a
+//! step that only reads.
 
 use orchester_core::{
   connection::{AgentProvider, ConnectionKind},
+  permission::RepositoryAccess,
   resource::AgentProfile,
   run::{PendingToolApproval, StepExecutor},
-  store::{ConnectionStore, ResourceStore, RunStore},
+  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 
@@ -15,6 +17,8 @@ use orchester_store::{ProjectDb, StoreError};
 pub struct ShownApproval {
   pub approval: PendingToolApproval,
   pub provider: Option<AgentProvider>,
+  /// The asking invocation launched read-only, by its recorded launch permissions.
+  pub read_only: bool,
 }
 
 /// The project's pending requests, oldest first, each with its agent's CLI.
@@ -24,10 +28,28 @@ pub fn pending(db: &ProjectDb) -> Result<Vec<ShownApproval>, StoreError> {
       .into_iter()
       .map(|approval| {
         let provider = provider(db, &approval);
-        ShownApproval { approval, provider }
+        let read_only = launched_read_only(db, &approval);
+        ShownApproval {
+          approval,
+          provider,
+          read_only,
+        }
       })
       .collect(),
   )
+}
+
+/// Whether the invocation that asks launched with read-only repository access. An unreadable or
+/// unrecorded launch reads as not read-only, which only loses the read-only wording.
+fn launched_read_only(db: &ProjectDb, approval: &PendingToolApproval) -> bool {
+  // `.ok()`: as for the provider, the request stays shown and decidable without the wording.
+  db.invocations(approval.run)
+    .ok()
+    .into_iter()
+    .flatten()
+    .find(|invocation| invocation.id == approval.invocation)
+    .and_then(|invocation| invocation.permissions)
+    .is_some_and(|launch| launch.permissions().repository() == RepositoryAccess::ReadOnly)
 }
 
 /// The CLI the request's step ran on: its run's pinned profile version and that profile's

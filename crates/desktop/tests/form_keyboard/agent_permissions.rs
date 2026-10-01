@@ -216,6 +216,17 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
   ));
   assert!(!shows(&mut desktop, "known-safe read-only"));
   assert!(shows(&mut desktop, "Ask before running commands"));
+  // Any command in the worktree: a command that needs more than the sandbox asks a person.
+  assert!(shows(
+    &mut desktop,
+    "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. \
+     Commands that need more than the sandbox ask you first."
+  ));
+  assert!(shows(&mut desktop, "sandbox · escalations ask you"));
+  assert!(shows(
+    &mut desktop,
+    "Commands that need more than the sandbox ask you first."
+  ));
   let network_off_enforced = cfg!(not(windows));
   assert_eq!(
     shows(
@@ -415,9 +426,9 @@ fn step_inspector_narrows_the_profile_commands_and_never_widens() {
   });
 }
 
-/// What Claude Code runs besides a non-empty list of allowed commands.
-const READ_ONLY_COMMANDS: &str =
-  "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them.";
+/// What Claude Code runs besides a non-empty list of allowed commands, and that the others ask.
+const READ_ONLY_COMMANDS: &str = "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, \
+                                  without listing them. Other commands ask you first.";
 
 #[test]
 fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_commands_edit() {
@@ -425,9 +436,11 @@ fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_
   permissions_of(&mut desktop, "Reviewer");
   assert!(shows(
     &mut desktop,
-    "These commands run, as do known-safe read-only commands such as ls, cat or git log."
+    "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you \
+     first."
   ));
   assert!(shows(&mut desktop, READ_ONLY_COMMANDS));
+  assert!(shows(&mut desktop, "allowed tools · 3 rules · others ask"));
   desktop.tab_to("agent-new-command", MAX_STOPS);
   desktop.type_text("sed -n");
   desktop.enter();
@@ -439,7 +452,7 @@ fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_
   ));
   assert!(!shows(&mut desktop, "git also allows any arguments"));
   desktop.press("agent-permission-edit");
-  // A deny rule for sed would deny the listed form too, so edits are allowed by rule instead.
+  // acceptEdits would run every form of sed, so with allowed commands edits are allowed by rule.
   assert!(shows(&mut desktop, "allowed tools · edit rules per folder"));
   assert!(!shows(&mut desktop, "permission mode · accept edits"));
 }
