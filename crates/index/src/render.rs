@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-  map,
+  map::TestFolders,
   outline::{Item, Kind},
   record::FileRecord,
 };
@@ -76,9 +76,9 @@ impl SymbolList {
     }
   }
 
-  /// The list of a definition of `kind` in the file at `path`.
-  fn of(path: &str, kind: Kind) -> Self {
-    if map::in_test_folder(path) {
+  /// The list of a definition of `kind` in the file at `path`, of the repository whose test folders are `tests`.
+  fn of(path: &str, kind: Kind, tests: &TestFolders) -> Self {
+    if tests.hold(path) {
       Self::Tests
     } else if matches!(kind, Kind::Const | Kind::Static) {
       Self::Constants
@@ -89,12 +89,17 @@ impl SymbolList {
 }
 
 /// Writes the symbols file of `list`: `<name>\t<path>\t<line>\t<kind>\t<container>` per definition
-/// it lists, sorted by name, then path and line.
-pub(crate) fn symbols(out: &mut impl Write, records: &[FileRecord], list: SymbolList) -> io::Result<()> {
+/// it lists, sorted by name, then path and line. `tests` are the test folders of the repository.
+pub(crate) fn symbols(
+  out: &mut impl Write,
+  records: &[FileRecord],
+  list: SymbolList,
+  tests: &TestFolders,
+) -> io::Result<()> {
   let mut rows: Vec<_> = records
     .iter()
     .flat_map(|record| record.symbols.iter().map(move |symbol| (record.path.as_str(), symbol)))
-    .filter(|(path, symbol)| SymbolList::of(path, symbol.kind) == list)
+    .filter(|(path, symbol)| SymbolList::of(path, symbol.kind, tests) == list)
     .collect();
   rows.sort_unstable_by(|(left_path, left), (right_path, right)| {
     (&left.name, left_path, left.line, left.kind.name()).cmp(&(&right.name, right_path, right.line, right.kind.name()))
