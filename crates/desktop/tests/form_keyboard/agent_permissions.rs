@@ -361,6 +361,7 @@ fn step_inspector_narrows_the_profile_commands_and_never_widens() {
   desktop.press("step-card-review");
   desktop.wait_for("step-command-2");
   assert!(shows(&mut desktop, "Commands · narrowed"));
+  assert!(shows(&mut desktop, READ_ONLY_COMMANDS));
   assert!(shows(&mut desktop, "Reviewer v1 also allows pnpm lint."));
   // A read-only profile offers no repository choice, and a step cannot add commands of its own.
   assert!(desktop.tree.get_element_by_id("step-repository").is_none());
@@ -379,6 +380,29 @@ fn step_inspector_narrows_the_profile_commands_and_never_widens() {
       .root()
       .is_some_and(|root| contains_text(root, "Reviewer v1 also allows git."))
   });
+}
+
+/// What Claude Code runs besides a non-empty list of allowed commands.
+const READ_ONLY_COMMANDS: &str =
+  "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them.";
+
+#[test]
+fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_commands_edit() {
+  let mut desktop = seeded();
+  permissions_of(&mut desktop, "Reviewer");
+  assert!(shows(
+    &mut desktop,
+    "These commands run, as do known-safe read-only commands such as ls, cat or git log."
+  ));
+  assert!(shows(&mut desktop, READ_ONLY_COMMANDS));
+  desktop.tab_to("agent-new-command", MAX_STOPS);
+  desktop.type_text("sed -n");
+  desktop.enter();
+  desktop.wait_for("agent-command-3");
+  desktop.press("agent-permission-edit");
+  // A deny rule for sed would deny the listed form too, so edits are allowed by rule instead.
+  assert!(shows(&mut desktop, "allowed tools · edit rules per folder"));
+  assert!(!shows(&mut desktop, "permission mode · accept edits"));
 }
 
 #[test]

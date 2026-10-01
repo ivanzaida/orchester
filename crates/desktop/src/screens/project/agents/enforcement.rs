@@ -158,7 +158,7 @@ fn setting_rows(
     .into_iter()
     .map(|(setting, name)| {
       let how = mechanism(ctx, enforced.mechanism(setting), enforced.permissions());
-      let detail = mechanism_detail(ctx, enforced.mechanism(setting));
+      let detail = mechanism_detail(ctx, enforced.mechanism(setting), enforced.permissions());
       let (glyph, title) = if setting == PermissionSetting::Network && network_stays_on {
         (Icon::Lock, ctx.t("agents.permissions.enforcement.staysOn"))
       } else {

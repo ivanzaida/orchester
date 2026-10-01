@@ -1202,7 +1202,7 @@ Decided 2026-09-25 (user): permissions are set on the agent profile and can be c
 | Setting | Options (fixture: Builder) | Notes |
 | --- | --- | --- |
 | Repository access | *Read-only* · **Edit files in the task worktree** | Option cards (`lcwsy`). Edits are only ever inside the run's own worktree. |
-| Commands | *Ask before running commands* (disabled, marked *later*) · **Allowed commands** · *Any command in the worktree* | The allowlist is edited as chips (`bpmzN`) plus *Add command*. Entries match by prefix: `pnpm test` also allows `pnpm test src/auth`. A command outside the list is denied and the agent is told why; it is not a failure of the run. *Ask* needs the permission-request flow (below) and stays disabled until it ships. |
+| Commands | *Ask before running commands* (disabled, marked *later*) · **Allowed commands** · *Any command in the worktree* | The allowlist is edited as chips (`bpmzN`) plus *Add command*. Entries match by prefix: `pnpm test` also allows `pnpm test src/auth`. Known-safe read-only commands (`ls`, `cat`, `git log`, …) also run once the list has an entry, as Codex runs its own (user decision 2026-10-01, `docs/plan.md` C4); with an empty list no command runs. Any other command outside the list is denied and the agent is told why; it is not a failure of the run. *Ask* needs the permission-request flow (below) and stays disabled until it ships. |
 | Network | Switch (`K8ItM`), **Off** | Off: package installs and web requests fail. |
 
 The *Enforced by <CLI>* panel lists each setting with the mechanism the chosen connection uses and whether it is enforced. It comes from a capability check of the connection's CLI (*checked 14:02*), not from a static table. There is no bypass, "skip permissions" or "full auto" option anywhere, and no setting to add one; the panel says so. Wording in the UI is provider-neutral except in this panel, which names the CLI.
@@ -1224,7 +1224,7 @@ The *Enforced by <CLI>* panel lists each setting with the mechanism the chosen c
 | Working directory | `--cd <worktree>` | process cwd = worktree |
 | Read-only | `--sandbox read-only` | deny edit tools: `--disallowedTools Edit Write NotebookEdit` (or `--permission-mode plan`) |
 | Edit files in the worktree | `--sandbox workspace-write` | `--permission-mode acceptEdits` |
-| Allowed commands | no flag; Codex exec-policy prefix rules, if they apply to `exec` | `--allowedTools "Bash(git:*)" "Bash(pnpm test:*)"`; anything else is denied in `-p` mode |
+| Allowed commands | no flag; Codex exec-policy prefix rules, if they apply to `exec` | `--allowedTools "Bash(git:*)" "Bash(pnpm test:*)"`; commands Claude Code classifies as read-only also run, anything else is denied in `-p` mode |
 | Any command | `workspace-write` sandbox (commands confined to the worktree) | `--allowedTools Bash`; **not confined to the worktree** unless Claude Code's own sandbox is enabled → option disabled |
 | Network off | default of `workspace-write` (sandbox network access off) | `--disallowedTools WebFetch WebSearch`; commands keep network → *Off* disabled, network stays on |
 | Network on | sandbox network access enabled through a `-c` config override | web tools allowed |

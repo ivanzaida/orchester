@@ -7,11 +7,14 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  connection::AgentProvider,
+  connection::{AgentProvider, invocation::Platform},
   permission::{
     AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPermission, CommandPrefix, CommandPrefixError,
     NetworkAccess, RepositoryAccess,
-    capability::{EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Unavailable},
+    capability::{
+      EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Support, Unavailable,
+      support,
+    },
   },
 };
 
@@ -100,10 +103,27 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
   ctx.t(key)
 }
 
-/// Why a mechanism limits more than its setting asks, as a line under it; `None` for most.
-pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism) -> Option<Arc<str>> {
-  (mechanism == Mechanism::ClaudeNoCommandsReadOnly)
-    .then(|| ctx.t("agents.permissions.mechanism.claudeNoCommandsReadOnlyDetail"))
+/// What a mechanism does beyond its setting's words, as a line under it; `None` for most.
+pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions) -> Option<Arc<str>> {
+  match (mechanism, permissions.commands()) {
+    (Mechanism::ClaudeNoCommandsReadOnly, _) => {
+      Some(ctx.t("agents.permissions.mechanism.claudeNoCommandsReadOnlyDetail"))
+    }
+    (Mechanism::ClaudeAllowedTools, CommandPermission::Allowed(list)) if !list.is_empty() => {
+      Some(ctx.t(READ_ONLY_COMMANDS))
+    }
+    _ => None,
+  }
+}
+
+/// That Claude Code also runs known-safe read-only commands without a rule (`docs/plan.md`, C4).
+const READ_ONLY_COMMANDS: &str = "agents.permissions.claudeReadOnlyCommands";
+
+/// What runs besides `list` on `provider`: Claude Code's known-safe read-only commands, once the
+/// list has a command (without one it gets no command tool). `None` where only the list runs.
+pub fn unlisted_commands(ctx: &Ctx, provider: Option<AgentProvider>, list: &AllowedCommands) -> Option<Arc<str>> {
+  let how = provider.map(|provider| support(provider, Platform::current(), PermissionOption::AllowedCommands));
+  (how == Some(Support::Enforced(Mechanism::ClaudeAllowedTools)) && !list.is_empty()).then(|| ctx.t(READ_ONLY_COMMANDS))
 }
 
 fn runs_no_commands(permissions: &AgentPermissions) -> bool {

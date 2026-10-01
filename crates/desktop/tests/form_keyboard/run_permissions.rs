@@ -2,12 +2,13 @@
 //! `orchester-fake-codex`: the popover changes the permissions for the run, Apply now shows the
 //! change pending until the agent restarts and then applied, Also save to the profile adds the
 //! change to the profile's draft, Keep for next invocation instead cancels the restart, and
-//! Escape or Cancel close the popover without changes.
+//! Escape or Cancel close the popover without changes. On `orchester-fake-claude` the popover says
+//! what Claude Code runs besides the allowed commands.
 
 use std::{fs, path::Path};
 
 use orchester_core::{
-  connection::stream::AgentEvent,
+  connection::{AgentProvider, stream::AgentEvent},
   permission::RepositoryAccess,
   resource::{AgentProfile, ResourceKind},
   store::{ActivityStore, ResourceStore},
@@ -17,13 +18,24 @@ use orchester_store::ProjectDb;
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps},
+  task_run::{
+    agent_step, create_and_run, fake_claude, has, init_repository, latest_run, programs, run_finished, seed_agent,
+  },
 };
 
 fn desktop_running(instructions: &'static str) -> Desktop {
+  running_on(AgentProvider::CodexCli, instructions)
+}
+
+/// The task page while the Builder on `provider`'s fake CLI runs its first command.
+fn running_on(provider: AgentProvider, instructions: &'static str) -> Desktop {
   let (runner, fake) = programs();
+  let fake = match provider {
+    AgentProvider::CodexCli => fake,
+    AgentProvider::ClaudeCodeCli => fake_claude(&fake),
+  };
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
-    seed_steps(repo, &fake, |builder| {
+    seed_agent(repo, &fake, provider, |builder| {
       vec![agent_step(builder, "implement", "Implement", instructions, &[])]
     });
   });
@@ -172,4 +184,19 @@ fn run_permissions_popover_closes_without_changes_and_keeps_a_change_for_the_nex
     1,
     "the agent was not restarted"
   );
+}
+
+#[test]
+fn run_permissions_popover_on_claude_says_which_commands_run_unlisted() {
+  let mut desktop = running_on(AgentProvider::ClaudeCodeCli, "Wait for release.");
+  desktop.click("task-permissions-view");
+  desktop.wait_for("task-permissions-popover");
+  assert!(shows(
+    &mut desktop,
+    "task-permissions-popover",
+    "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them."
+  ));
+  desktop.click("task-permissions-cancel");
+  fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }

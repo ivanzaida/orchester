@@ -1623,7 +1623,7 @@
         },
         "allowed": {
           "title": "Allowed commands",
-          "detail": "Only these commands run. Anything else is denied and the agent is told why."
+          "detail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Anything else is denied and the agent is told why."
         },
         "any": {
           "title": "Any command in the worktree",
@@ -1638,7 +1638,8 @@
       "claudeTransport": "Claude Code asks Orchester through its permission prompt tool. Only the project-selected MCP servers load.",
       "commandPlaceholder": "e.g. pnpm test",
       "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
-      "noCommands": "No command is allowed yet.",
+      "noCommands": "No command is allowed yet, so none runs, not even a read-only one.",
+      "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them.",
       "commandInvalid": {
         "blank": "Type a command first.",
         "tooLong": "A command is at most {{max}} characters long.",

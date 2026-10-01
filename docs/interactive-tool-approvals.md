@@ -129,6 +129,11 @@ commands then run: `sed -n 1p README.md` runs, `sed -i …` is denied; `rm -f bu
 `rm -rf src` is denied. A prefix still covers what follows it, as every allowed command does
 (`sed -n -i …` starts with `sed -n`). The enforcement panel names this mechanism *allowed tools ·
 edit rules per folder*. Commands Claude Code classifies as read-only still run without being
-listed (`docs/plan.md`, C4).
+listed, once the list has an entry (with none, the step gets no `Bash` at all). That is the
+user's decision (`docs/plan.md`, C4) and the same as Codex, whose known-safe read-only commands run
+without asking: they change no file. The option's text says so (*These commands run, as do
+known-safe read-only commands such as ls, cat or git log*), and the enforcement panel, the run
+permissions popover and the pipeline step's commands add "Claude Code also runs known-safe
+read-only commands, such as ls, cat or git log, without listing them."
 
 A managed policy with `allowManagedPermissionRulesOnly` makes Claude Code ignore every rule Orchester passes (`--allowedTools`, `--disallowedTools`, the `--settings` ask rule), so none of the above is enforced on such a machine.

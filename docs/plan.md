@@ -159,14 +159,6 @@ permission popover (`W29Od2`), the pipeline step switch (`wujuh`), the command a
 mismatch. Round 1 (at `6422a6d`) found two major mismatches (the transport note's role, the MCP arguments without a
 label) and five minor ones; all are fixed and wait for a re-check.
 
-### C4 · Claude Code runs read-only commands outside the allowed list (non-UI)
-
-With *Allowed commands*, Claude Code still runs commands its own classifier calls read-only (`ls`, `cat`, `grep`,
-`git log`, …) without a rule, in `dontAsk` and `acceptEdits` alike. They change no file, but "Only these commands run"
-is not exact. Its `acceptEdits` file commands are denied since `claude/claude-support`. Decide whether to ask for the
-whole tool and deny outside the list (the whole-tool ask rule precedes allow rules, so that would need the permission
-prompt to allow listed commands) or to document the exception in the option's text. **needs decision**
-
 ### C5 · Follow-ups from the Claude Code review (non-UI)
 
 - The runner records a model's required CLI version (C3) by reading, changing and saving the whole connection. A
@@ -231,6 +223,19 @@ which also preserves text selection after a drag on scaled displays.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+C4 · Claude Code runs known-safe read-only commands outside the allowed list · branch `claude/allowed-commands`
+
+- **Done 2026-10-01.** User decision: they stay allowed, as Codex's known-safe read-only commands are. Said
+  wherever the list is explained for Claude Code: the *Allowed commands* option (*These commands run, as do known-safe
+  read-only commands such as ls, cat or git log. …*), the empty list's hint (*… so none runs, not even a read-only
+  one.*), a detail under the enforcement panel's Commands row, a hint under the run permissions popover's commands and
+  a note under the pipeline step's commands (*Claude Code also runs known-safe read-only commands, such as ls, cat or
+  git log, without listing them.*); also `docs/interactive-tool-approvals.md`, the capability table's notes and the
+  design document's permission rows.
+- Open: independent design verification of these texts (profile Permissions tab `HnBBr`, `ossOP`; run permission
+  popover `W29Od2`; pipeline step `wujuh`). The Pencil design was not changed; where it shows the old option
+  text *Only these commands run.*, the design needs the new text.
 
 C5 (rule hole) · Claude Code runs the commands `acceptEdits` allows only in their listed forms · branch
 `claude/allowed-commands`
