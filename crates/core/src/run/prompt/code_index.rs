@@ -104,13 +104,21 @@ impl MapExcerpt {
     Some(Self { text, contents_omitted })
   }
 
-  /// Appends the excerpt to `prompt`, saying when the module file lists were left out.
+  /// Appends the excerpt to `prompt`, saying when the module file lists were left out, in a fence longer than any
+  /// backtick run of the excerpt, so a path holding backticks cannot close it.
   fn push(&self, prompt: &mut String) {
     prompt.push_str("The packages and modules, from map.md");
     if self.contents_omitted {
       prompt.push_str(" (module file lists omitted; see map.md)");
     }
-    prompt.push_str(&format!(":\n```text\n{}```\n", self.text));
+    let longest_run = self
+      .text
+      .split(|character| character != '`')
+      .map(str::len)
+      .max()
+      .unwrap_or(0);
+    let fence = "`".repeat(longest_run.max(2) + 1);
+    prompt.push_str(&format!(":\n{fence}text\n{}{fence}\n", self.text));
   }
 }
 

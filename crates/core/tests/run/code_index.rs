@@ -71,12 +71,24 @@ const CONTENTS_OMITTED: &str = " (module file lists omitted; see map.md)";
 
 /// The map excerpt of the prompt `text`.
 fn excerpt(text: &str) -> &str {
+  fenced(text).1
+}
+
+/// The fence of the map excerpt of the prompt `text`, and the excerpt.
+fn fenced(text: &str) -> (&str, &str) {
   let intro = text
     .find(EXCERPT_INTRO)
     .unwrap_or_else(|| panic!("no map excerpt in\n{text}"));
-  let start = intro + text[intro..].find(":\n```text\n").expect("the excerpt is fenced") + ":\n```text\n".len();
-  let end = start + text[start..].find("```\n").expect("the excerpt ends");
-  &text[start..end]
+  let opening = intro + text[intro..].find(":\n").expect("the introduction ends") + ":\n".len();
+  let fence_end = opening
+    + text[opening..]
+      .find(|character| character != '`')
+      .expect("the fence ends");
+  let fence = &text[opening..fence_end];
+  let start = fence_end + text[fence_end..].find('\n').expect("the opening fence ends") + 1;
+  let closing = format!("\n{fence}\n");
+  let end = start - 1 + text[start - 1..].find(&closing).expect("the excerpt ends") + 1;
+  (fence, &text[start..end])
 }
 
 /// The pointer a prompt without an excerpt has to `map.md`.
@@ -151,6 +163,17 @@ fn a_map_too_large_even_without_module_contents_is_cut_at_a_line() {
     text.contains(&format!("{EXCERPT_INTRO}{CONTENTS_OMITTED}:\n")),
     "{text}"
   );
+}
+
+#[test]
+fn a_map_excerpt_is_fenced_longer_than_any_backtick_run_in_it() {
+  assert_eq!(fenced(&with_map(MAP)).0, "```");
+  let map = "# Repository map\n\n## Outside packages\n\n- a```b/ (1 file)\n- c````/ (2 files)\n";
+  let text = with_map(map);
+  let (fence, excerpt) = fenced(&text);
+  assert_eq!(fence, "`````", "{text}");
+  assert!(text.contains("\n`````text\n"), "{text}");
+  assert_eq!(excerpt, "## Outside packages\n- a```b/ (1 file)\n- c````/ (2 files)\n");
 }
 
 #[test]
