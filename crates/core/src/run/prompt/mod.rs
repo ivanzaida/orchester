@@ -20,9 +20,8 @@
 //!
 //! New and resumed sessions alike are told about the code index ([`CodeIndexPrompt`]): where the index of the run's
 //! base revision is, an excerpt of its package and module map, and the internal skill that explains searching it,
-//! or that ripgrep is missing and `git grep -n`
-//! searches instead. A resumed session is told again because the index may be new to it: the setting or ripgrep can
-//! have changed since it started.
+//! or that ripgrep is missing and `git grep -n` searches instead. A resumed session is told again because the index
+//! may be new to it: the setting or ripgrep can have changed since it started.
 //!
 //! Every invocation, new or resumed, reads the task memory recalled for it ([`memory`]).
 //!
