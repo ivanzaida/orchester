@@ -31,7 +31,7 @@ use super::{
   step_inspector::{Fields, StepInspectorProps},
 };
 use crate::{
-  agents::permissions::unlisted_commands,
+  agents::permissions::{file_command_hints, unlisted_commands},
   pipelines::{data::ProfileChoice, describe::repository_access, fields::AccessChoice},
   theme::ExtraTypography,
   ui::{
@@ -171,6 +171,7 @@ fn commands_rows(
       .into(),
   );
   if let CommandPermission::Allowed(kept) = effective.commands() {
+    rows.extend(file_command_hints(ctx, kept).iter().map(|text| note(text)));
     rows.extend(unlisted_commands(ctx, choice.provider, kept).map(|text| note(&text)));
   }
   rows

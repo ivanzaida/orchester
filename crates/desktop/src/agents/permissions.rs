@@ -126,6 +126,17 @@ pub fn unlisted_commands(ctx: &Ctx, provider: Option<AgentProvider>, list: &Allo
   (how == Some(Support::Enforced(Mechanism::ClaudeAllowedTools)) && !list.is_empty()).then(|| ctx.t(READ_ONLY_COMMANDS))
 }
 
+/// For each entry of `list` whose first word changes files (`rm`, `sed`, …), that it also allows
+/// any arguments after it, including ones that change other files.
+pub fn file_command_hints(ctx: &Ctx, list: &AllowedCommands) -> Vec<Arc<str>> {
+  list
+    .entries()
+    .iter()
+    .filter(|entry| entry.starts_with_file_command())
+    .map(|entry| ctx.t_args("agents.permissions.fileCommandPrefix", [("command", entry.as_str())]))
+    .collect()
+}
+
 fn runs_no_commands(permissions: &AgentPermissions) -> bool {
   matches!(permissions.commands(), CommandPermission::Allowed(commands) if commands.entries().is_empty())
 }

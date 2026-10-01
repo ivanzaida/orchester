@@ -247,6 +247,9 @@ C5 (rule hole) · Claude Code runs the commands `acceptEdits` allows only in the
   writable folders (`Mechanism::ClaudeEditRules`, enforcement panel *allowed tools · edit rules per folder*); other
   writing steps keep `acceptEdits` with all seven deny rules. `orchester-fake-claude` models the real precedence;
   runner tests: `sed -n` runs, `sed -i` is denied, `rm -f build/x` runs, `rm -rf src` is denied.
+- A listed entry whose first word is one of the seven gets a hint under the command entries in the profile, the run
+  permissions popover and the step inspector: "*rm -f build/x* also allows any arguments after it, including ones
+  that change files." Prefix matching is unchanged.
 - Open: the `Edit` allow rules were read in both binaries (same matcher as the code index's deny rule: `//c/x` is
   rooted at `C:\`) but not exercised in a live model turn; a folder whose path holds `[` or `]` is matched by
   Claude Code as a gitignore pattern; a worktree on a network share gets no allow rule, so its edits are denied.

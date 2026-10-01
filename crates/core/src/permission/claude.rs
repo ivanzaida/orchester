@@ -58,7 +58,7 @@ const EDIT_TOOLS: [&str; 3] = ["Edit", "Write", "NotebookEdit"];
 const WEB_TOOLS: [&str; 2] = ["WebFetch", "WebSearch"];
 const COMMAND_TOOL: &str = "Bash";
 /// Commands `acceptEdits` runs without a rule.
-const MODE_ALLOWED: [&str; 7] = ["mkdir", "touch", "rm", "rmdir", "mv", "cp", "sed"];
+const MODE_ALLOWED: [&str; 7] = super::FILE_COMMANDS;
 /// Settings that make every command ask.
 const ASK_EVERY_COMMAND: &str = r#"{"permissions":{"ask":["Bash"]}}"#;
 

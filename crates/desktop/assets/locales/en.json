@@ -1638,6 +1638,7 @@
       "claudeTransport": "Claude Code asks Orchester through its permission prompt tool. Only the project-selected MCP servers load.",
       "commandPlaceholder": "e.g. pnpm test",
       "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
+      "fileCommandPrefix": "{{command}} also allows any arguments after it, including ones that change files.",
       "noCommands": "No command is allowed yet, so none runs, not even a read-only one.",
       "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them.",
       "commandInvalid": {

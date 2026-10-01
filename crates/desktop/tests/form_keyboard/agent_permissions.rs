@@ -399,6 +399,12 @@ fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_
   desktop.type_text("sed -n");
   desktop.enter();
   desktop.wait_for("agent-command-3");
+  // A prefix allows whatever follows it, and for sed that includes -i.
+  assert!(shows(
+    &mut desktop,
+    "sed -n also allows any arguments after it, including ones that change files."
+  ));
+  assert!(!shows(&mut desktop, "git also allows any arguments"));
   desktop.press("agent-permission-edit");
   // A deny rule for sed would deny the listed form too, so edits are allowed by rule instead.
   assert!(shows(&mut desktop, "allowed tools · edit rules per folder"));

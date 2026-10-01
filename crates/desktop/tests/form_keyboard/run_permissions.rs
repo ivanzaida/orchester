@@ -196,6 +196,21 @@ fn run_permissions_popover_on_claude_says_which_commands_run_unlisted() {
     "task-permissions-popover",
     "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them."
   ));
+  assert!(!shows(
+    &mut desktop,
+    "task-permissions-popover",
+    "also allows any arguments"
+  ));
+  desktop.click("task-permissions-add-command");
+  desktop.wait_for("task-permissions-new-command");
+  desktop.type_text("rm -f build/x");
+  desktop.enter();
+  desktop.wait_for("task-permissions-command-1");
+  assert!(shows(
+    &mut desktop,
+    "task-permissions-popover",
+    "rm -f build/x also allows any arguments after it, including ones that change files."
+  ));
   desktop.click("task-permissions-cancel");
   fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
