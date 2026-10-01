@@ -148,8 +148,10 @@ fn native_connection_reads_not_available_in_the_profile_and_the_pipeline_step() 
   assert!(shows(
     &mut desktop,
     "agent-enforcement",
-    "Native agents are not available in this version yet"
+    "Not enforced yet · native agents are not available"
   ));
+  assert!(!shows(&mut desktop, "agent-enforcement", "Enforced by"));
+  assert!(!shows(&mut desktop, "agent-enforcement", "known limits"));
 
   desktop.click("nav-pipelines");
   desktop.wait_for("pipeline-row");

@@ -1733,6 +1733,8 @@
       "enforcement": {
         "title": "Enforced by {{cli}}",
         "source": "{{connection}} · known limits on {{platform}}",
+        "nativeTitle": "Not enforced yet · native agents are not available",
+        "nativeSource": "{{connection}} · {{provider}}",
         "platform": {
           "windows": "Windows",
           "macos": "macOS"
@@ -1746,7 +1748,7 @@
         "notEnforceable": "{{setting}} · not enforceable",
         "networkShare": "Edits on a network share can’t be allowed by rule, so a run can’t start.",
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
-        "nativeNotAvailable": "Native agents are not available in this version yet, so nothing is enforced and no agent runs on this connection.",
+        "nativeNotAvailable": "This version enforces none of these settings and starts no agent on this connection.",
         "noBypass": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
         "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",

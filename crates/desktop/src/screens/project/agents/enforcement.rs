@@ -113,26 +113,38 @@ impl ProfileEditor {
   }
 }
 
-/// "Enforced by Codex CLI" and whose limits these are (`FLmZD`).
+/// "Enforced by Codex CLI" and whose limits these are (`FLmZD`). A native connection enforces
+/// nothing in this version, so its heading says so and names no limits.
 fn heading(ctx: &Ctx, connection: &AgentConnection) -> Element {
-  let cli = ctx.t(program_key(connection.provider()));
-  let platform = ctx.t(match Platform::current() {
-    Platform::Windows => "agents.permissions.enforcement.platform.windows",
-    Platform::MacOs => "agents.permissions.enforcement.platform.macos",
-  });
+  let provider = connection.provider();
+  let cli = ctx.t(program_key(provider));
+  let name = connection.name().as_str();
+  let (title, source) = if provider.runs_agents() {
+    let platform = ctx.t(match Platform::current() {
+      Platform::Windows => "agents.permissions.enforcement.platform.windows",
+      Platform::MacOs => "agents.permissions.enforcement.platform.macos",
+    });
+    (
+      ctx.t_args("agents.permissions.enforcement.title", [("cli", &*cli)]),
+      ctx.t_args(
+        "agents.permissions.enforcement.source",
+        [("connection", name), ("platform", &*platform)],
+      ),
+    )
+  } else {
+    (
+      ctx.t("agents.permissions.enforcement.nativeTitle"),
+      ctx.t_args(
+        "agents.permissions.enforcement.nativeSource",
+        [("connection", name), ("provider", &*cli)],
+      ),
+    )
+  };
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
-    .child(
-      Text::new(&ctx.t_args("agents.permissions.enforcement.title", [("cli", &*cli)])).variant(TypographyStyle::Label),
-    )
-    .child(
-      Text::new(&ctx.t_args(
-        "agents.permissions.enforcement.source",
-        [("connection", connection.name().as_str()), ("platform", &*platform)],
-      ))
-      .variant(TypographyStyle::Caption),
-    )
+    .child(Text::new(&title).variant(TypographyStyle::Label))
+    .child(Text::new(&source).variant(TypographyStyle::Caption))
     .into()
 }
 
