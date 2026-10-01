@@ -1623,7 +1623,8 @@
         },
         "allowed": {
           "title": "Allowed commands",
-          "detail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Anything else is denied and the agent is told why."
+          "detail": "Only these commands run. Anything else is denied and the agent is told why.",
+          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Anything else is denied and the agent is told why."
         },
         "any": {
           "title": "Any command in the worktree",

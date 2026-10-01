@@ -209,6 +209,12 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
     &mut desktop,
     "Unavailable on this connection: Codex CLI can’t limit commands to a list."
   ));
+  // Only Claude Code also runs known-safe read-only commands besides the list.
+  assert!(shows(
+    &mut desktop,
+    "Only these commands run. Anything else is denied and the agent is told why."
+  ));
+  assert!(!shows(&mut desktop, "known-safe read-only"));
   assert!(shows(&mut desktop, "Ask before running commands"));
   let network_off_enforced = cfg!(not(windows));
   assert_eq!(

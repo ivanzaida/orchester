@@ -113,7 +113,7 @@ impl ProfileEditor {
     let card = OptionCard::new(
       option_id(option),
       ctx.t(option_title(option)),
-      ctx.t(option_detail(option)),
+      ctx.t(option_detail(option, provider)),
       selected,
     );
     let Some(provider) = provider else {

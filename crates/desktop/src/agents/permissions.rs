@@ -33,9 +33,13 @@ pub const fn option_title(option: PermissionOption) -> &'static str {
   }
 }
 
-/// What an option allows (`C85wh` in `lcwsy`).
-pub const fn option_detail(option: PermissionOption) -> &'static str {
+/// What an option allows on `provider` (`C85wh` in `lcwsy`). Only Claude Code also runs known-safe
+/// read-only commands besides an allowed list, so only its *Allowed commands* says so.
+pub fn option_detail(option: PermissionOption, provider: Option<AgentProvider>) -> &'static str {
   match option {
+    PermissionOption::AllowedCommands if runs_read_only_unlisted(provider) => {
+      "agents.permissions.option.allowed.claudeDetail"
+    }
     PermissionOption::ReadOnly => "agents.permissions.option.readOnly.detail",
     PermissionOption::EditWorktree => "agents.permissions.option.editWorktree.detail",
     PermissionOption::AskBeforeCommands => "agents.permissions.option.askBefore.detail",
@@ -122,8 +126,15 @@ const READ_ONLY_COMMANDS: &str = "agents.permissions.claudeReadOnlyCommands";
 /// What runs besides `list` on `provider`: Claude Code's known-safe read-only commands, once the
 /// list has a command (without one it gets no command tool). `None` where only the list runs.
 pub fn unlisted_commands(ctx: &Ctx, provider: Option<AgentProvider>, list: &AllowedCommands) -> Option<Arc<str>> {
-  let how = provider.map(|provider| support(provider, Platform::current(), PermissionOption::AllowedCommands));
-  (how == Some(Support::Enforced(Mechanism::ClaudeAllowedTools)) && !list.is_empty()).then(|| ctx.t(READ_ONLY_COMMANDS))
+  (runs_read_only_unlisted(provider) && !list.is_empty()).then(|| ctx.t(READ_ONLY_COMMANDS))
+}
+
+/// Whether `provider` enforces an allowed list the way that also runs known-safe read-only commands.
+fn runs_read_only_unlisted(provider: Option<AgentProvider>) -> bool {
+  provider.is_some_and(|provider| {
+    support(provider, Platform::current(), PermissionOption::AllowedCommands)
+      == Support::Enforced(Mechanism::ClaudeAllowedTools)
+  })
 }
 
 /// For each entry of `list` whose first word changes files (`rm`, `sed`, …), that it also allows

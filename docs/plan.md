@@ -232,10 +232,10 @@ C4 · Claude Code runs known-safe read-only commands outside the allowed list ·
   one.*), a detail under the enforcement panel's Commands row, a hint under the run permissions popover's commands and
   a note under the pipeline step's commands (*Claude Code also runs known-safe read-only commands, such as ls, cat or
   git log, without listing them.*); also `docs/interactive-tool-approvals.md`, the capability table's notes and the
-  design document's permission rows.
-- Open: independent design verification of these texts (profile Permissions tab `HnBBr`, `ossOP`; run permission
-  popover `W29Od2`; pipeline step `wujuh`). The Pencil design was not changed; where it shows the old option
-  text *Only these commands run.*, the design needs the new text.
+  design document's permission rows. Other connections (Codex, where the option is unavailable) keep *Only these
+  commands run. …*
+- Design verification of these texts passed (at `23f988e`). The Pencil design was not changed; where it shows the
+  old option text on a Claude Code profile, the design needs the new text.
 
 C5 (rule hole) · Claude Code runs the commands `acceptEdits` allows only in their listed forms · branch
 `claude/allowed-commands`
