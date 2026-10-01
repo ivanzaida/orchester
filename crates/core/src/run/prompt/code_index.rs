@@ -51,9 +51,11 @@ pub(super) fn push(text: &mut String, code_index: Option<CodeIndexPrompt<'_>>) {
            repository with `git grep -n` on the narrowest path instead.\n",
         );
       }
-      let excerpt = map_excerpt(map);
-      if !excerpt.is_empty() {
-        text.push_str(&format!("The packages and modules, from map.md:\n```text\n{excerpt}```\n"));
+      match MapExcerpt::of(map) {
+        Some(excerpt) => excerpt.push(text),
+        None => text.push_str(&format!(
+          "Read map.md in {folder} first: it lists the packages, modules, entry points and test folders.\n"
+        )),
       }
     }
     CodeIndexPrompt::WithoutRipgrep => {
@@ -66,32 +68,50 @@ pub(super) fn push(text: &mut String, code_index: Option<CodeIndexPrompt<'_>>) {
   }
 }
 
-/// The package and module map of `map` (the text of `map.md`), each line ending in a line break, in at most
-/// [`MAP_EXCERPT_LIMIT`] bytes: its sections without the title, blank lines, counts and the files beside a package's
-/// sources. A map too large for that loses what each module folder holds, then the lines that do not fit.
-fn map_excerpt(map: &str) -> String {
-  let Some(first_section) = map.find("\n## ") else {
-    return String::new();
-  };
-  let mut lines: Vec<&str> = map[first_section + 1..]
-    .lines()
-    .filter(|line| !line.is_empty() && !line.starts_with("- files:") && !line.starts_with("- also:"))
-    .collect();
-  if size(&lines) > MAP_EXCERPT_LIMIT {
-    lines = lines.into_iter().map(without_contents).collect();
-  }
-  let fits = size(&lines) <= MAP_EXCERPT_LIMIT;
-  let mut excerpt = String::new();
-  for line in lines {
-    if !fits && excerpt.len() + line.len() + MAP_CUT.len() + 2 > MAP_EXCERPT_LIMIT {
-      excerpt.push_str(MAP_CUT);
-      excerpt.push('\n');
-      break;
+/// The package and module map of an index's `map.md`, in at most [`MAP_EXCERPT_LIMIT`] bytes.
+struct MapExcerpt {
+  /// Its lines, each ending in a line break.
+  text: String,
+  /// The module folders lost what they hold to fit.
+  contents_omitted: bool,
+}
+
+impl MapExcerpt {
+  /// The excerpt of `map` (the text of `map.md`): its sections without the title, blank lines, counts and the files
+  /// beside a package's sources. A map too large for the bound loses what each module folder holds, then the lines
+  /// that do not fit. `None` when `map` has no section.
+  fn of(map: &str) -> Option<Self> {
+    let first_section = map.find("\n## ")?;
+    let mut lines: Vec<&str> = map[first_section + 1..]
+      .lines()
+      .filter(|line| !line.is_empty() && !line.starts_with("- files:") && !line.starts_with("- also:"))
+      .collect();
+    let contents_omitted = size(&lines) > MAP_EXCERPT_LIMIT;
+    if contents_omitted {
+      lines = lines.into_iter().map(without_contents).collect();
     }
-    excerpt.push_str(line);
-    excerpt.push('\n');
+    let fits = size(&lines) <= MAP_EXCERPT_LIMIT;
+    let mut text = String::new();
+    for line in lines {
+      if !fits && text.len() + line.len() + MAP_CUT.len() + 2 > MAP_EXCERPT_LIMIT {
+        text.push_str(MAP_CUT);
+        text.push('\n');
+        break;
+      }
+      text.push_str(line);
+      text.push('\n');
+    }
+    Some(Self { text, contents_omitted })
   }
-  excerpt
+
+  /// Appends the excerpt to `prompt`, saying when the module file lists were left out.
+  fn push(&self, prompt: &mut String) {
+    prompt.push_str("The packages and modules, from map.md");
+    if self.contents_omitted {
+      prompt.push_str(" (module file lists omitted; see map.md)");
+    }
+    prompt.push_str(&format!(":\n```text\n{}```\n", self.text));
+  }
 }
 
 /// The bytes of `lines`, each with its line break.
