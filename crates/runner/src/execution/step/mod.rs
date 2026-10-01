@@ -12,6 +12,7 @@ mod end;
 mod mcp;
 mod memory;
 mod skills;
+mod stderr;
 pub(super) mod worker;
 
 use orchester_core::{

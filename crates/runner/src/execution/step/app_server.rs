@@ -11,7 +11,7 @@
 //! (`orchester_core::connection::app_server_config`). A step that asks before MCP
 //! actions needs its project-selected servers connected before the turn begins, any other step works
 //! without one that is not and its activity says so. Codex's standard error is kept in the activity
-//! as raw lines.
+//! as raw lines, bounded and without its echo of the user's settings (`super::stderr`).
 
 use std::{
   collections::BTreeSet,
@@ -36,6 +36,7 @@ use orchester_core::{
 use serde_json::{Value, json};
 use thiserror::Error;
 
+use super::stderr::StderrLog;
 use crate::supervisor::Supervised;
 
 #[derive(Debug, Error)]
@@ -101,6 +102,7 @@ pub(super) struct AppServerSession {
   stream: AppServerStream,
   /// The configured MCP servers the step does not choose, turned off for its thread.
   turned_off: Vec<String>,
+  stderr: StderrLog,
 }
 
 impl AppServerSession {
@@ -109,6 +111,7 @@ impl AppServerSession {
       setup,
       phase: Phase::Initialize,
       turned_off: Vec::new(),
+      stderr: StderrLog::default(),
       thread: None,
       turn: None,
       stream: AppServerStream::default(),
@@ -145,8 +148,13 @@ impl AppServerSession {
     process: &Supervised,
   ) -> Result<Vec<Update>, AppServerFailure> {
     if stream == OutputStream::Stderr {
-      let line = line.to_owned();
-      return Ok(vec![Update::Activity(AgentEvent::Raw { stream, line })]);
+      let kept = self.stderr.keep(line);
+      return Ok(
+        kept
+          .map(|line| Update::Activity(AgentEvent::Raw { stream, line }))
+          .into_iter()
+          .collect(),
+      );
     }
     let value: Value = serde_json::from_str(line).map_err(|_| "Codex App Server sent invalid JSON".to_owned())?;
     if value.get("method").is_some() {

@@ -10,6 +10,8 @@
 //! - "Leave a handoff": works as below, and its step result hands off (`completed`, `decisions`, `open_questions`,
 //!   `next_agent_should_know`), with the decision "Greet in README.md from <step>";
 //! - "Fail once": the first time a step works on it, the result says it failed; later it works as below;
+//! - "Flood standard error": first writes Codex's coloured warning about unknown settings with the setting it names, a
+//!   line of 5000 characters and 1100 numbered lines (`stderr line <n>`) to standard error, then works as below;
 //! - "Write own file": writes `<step>.txt` instead of appending to `README.md`;
 //! - "Sign the line": appends `hello from <step>` instead of `hello`;
 //! - "Ask first": appends `draft` to `README.md` and ends with the step result `{"outcome":"question","summary":"Keep
@@ -70,6 +72,9 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     }
     wait_to_be_ended();
   }
+  if prompt.contains("Flood standard error") {
+    flood_stderr();
+  }
   before_finishing(session, prompt);
   let line = if prompt.contains("Sign the line") {
     format!("hello from {}", result.step)
@@ -77,6 +82,20 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     "hello".to_owned()
   };
   finish(session, &line, &result)
+}
+
+/// What App Server writes when the user's configuration has a setting it does not know, then more
+/// than the runner keeps.
+fn flood_stderr() {
+  eprintln!(
+    "\u{1b}[2m2026-10-01T15:47:47Z\u{1b}[0m \u{1b}[31mERROR\u{1b}[0m codex_app_server: Codex is ignoring 1 \
+     unrecognized configuration setting. Check for typos or deprecated settings."
+  );
+  eprintln!("  user (C:\\Users\\me\\.codex\\config.toml): `disable_response_storage` is ignored.");
+  eprintln!("\u{1b}[33mWARN\u{1b}[0m {}", "x".repeat(5000));
+  for line in 0..1100 {
+    eprintln!("stderr line {line}");
+  }
 }
 
 /// Whether this is the first time a step with this prompt's step name works: a marker next to the worktrees
