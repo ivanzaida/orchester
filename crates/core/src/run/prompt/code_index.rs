@@ -53,7 +53,7 @@ pub(super) fn push(text: &mut String, code_index: Option<CodeIndexPrompt<'_>>) {
       }
       let excerpt = map_excerpt(map);
       if !excerpt.is_empty() {
-        let _ = write!(text, "The packages and modules, from map.md:\n```text\n{excerpt}```\n");
+        text.push_str(&format!("The packages and modules, from map.md:\n```text\n{excerpt}```\n"));
       }
     }
     CodeIndexPrompt::WithoutRipgrep => {
