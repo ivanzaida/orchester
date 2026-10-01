@@ -1449,6 +1449,112 @@ The fixture shows all three Builder settings enforced by Codex. *Allowed command
 
 Proposed copy namespaces: `agents.permissions.*`, `agents.permissions.enforcement.*`, `pipelines.step.permissions.*`, `runs.permissions.*`, `runs.permissionRequest.*`.
 
+## Command categories and approval policy
+
+Drawn 2026-10-01, not built. Group `lozqh` ("States · Command categories and approval policy") in the section `DMBmo` ("States · Agent runtime permissions (ORC-44)", top level at x 46784), after its ORC-44 frames, at x 0 / y 1864, 4896 × 4924. The section grew from 3040 × 2300 to 4896 × 6884 so the group fits the x 48 / 1568 / 3088 columns. The user decided the behaviour; these frames show it. Fixture: Kontur, ORC-142 *Split the sync worker module*, Run 142 on Feature delivery, 03 Implement · Builder on Claude / Opus 5.5 (Builder v3), and Reviewer v2 for the read-only variant. Every command, path, time and count is illustrative. Proposed copy namespaces: `agents.permissions.policy.*`, `pipelines.step.permissions.policy.*`, `runs.permissions.policy.*`, `runs.permissionRequest.*` (the dialog) and `runs.activity.decision.*` (marks and the decision summary).
+
+**What it does.** When an agent's CLI asks before running a command (Claude Code's permission prompt, Codex's `sandbox_approval`), Orchester classifies the command and answers by its category, according to the profile's policy. Only what the policy sends to a person reaches *Needs you*. Every answer still covers one request: Orchester never gives the CLI a session grant, an `acceptForSession`, an `updatedPermissions` rule or an execpolicy amendment. Commands the CLI runs without asking (a listed command, a known-safe read-only one, a command inside Codex's sandbox) never reach the policy.
+
+### Categories and classification
+
+| Category | What lands here | Examples |
+| --- | --- | --- |
+| Read-only | Reads files, history and state; changes nothing | `cat`, `rg`, `wc`, `git status`, `git diff`, `git log` |
+| Worktree | Writes, moves or deletes only inside the run's worktree | `sed -i`, `git mv`, `rm`, `git add`, `git commit`, `mkdir`, `cargo build`, `cargo test` |
+| Run temp | Temp-folder files this run created earlier | `rm /tmp/worker_orig.rs` after this run wrote it |
+| Outside write | Writes or deletes outside the worktree, including a temp file the run did not create | `cp src/sync/worker.rs /tmp/worker_orig.rs` |
+| Network | Reaches the network | `curl`, `git fetch`, `git clone`, `cargo add`, `pnpm install` |
+| History / destructive | Rewrites or discards history, or deletes outside the temp folder | `git push`, `git reset --hard`, `git rebase`, `git branch -D`, `rm -rf` outside the temp folder |
+| Unknown | Anything not parsed to the end | scripts, `-Command` content Orchester can't read, unexpanded variables, aliases and functions |
+
+Rules (board `U97QE`):
+
+- **Parse into simple commands.** Bash and PowerShell, joined by `&&`, `||`, `;`, `|` or a new line, including subshells and `$( )`. A redirection is a write to its target (`> /tmp/out.txt` is Outside write).
+- **Classify each part** by program, subcommand, flags and the paths it writes, resolved against the worktree with links followed. `git push` is History / destructive although it also uses the network.
+- **The strictest part decides.** Each part gets its category's policy value; the command gets the strictest: Deny over Ask me over Allow. On a tie the stricter category names it, in this order: History / destructive, Unknown, Outside write, Network, Worktree, Run temp, Read-only.
+- **Run temp is earned.** A temp-folder file becomes Run temp once a command of this run that Orchester saw wrote it (for example an approved Outside write). Another run's temp files stay Outside write.
+- **Nothing is guessed.** What Orchester cannot read to the end is Unknown, and the dialog says where reading stopped.
+
+### Policy, defaults and narrowing
+
+The profile's Permissions tab gets **When the agent asks** after *Commands* (04.04 layout; frames `p8g7C`, `jYJJa`, `xMjXP`, shown scrolled to the section with the scroll thumb): a heading with the state (*Defaults for a profile that edits files* / *3 changed from the defaults*) and *Reset to defaults* (0.4 while nothing changed), one sentence on what it does, the relation to Allowed commands, then one row per category (*Approvals / Policy row*: icon, name, examples, and the *Approvals / Policy choice* control Allow · Ask me · Deny in the segmented style of the Conversation toolbar). A changed row is outlined (1.5 `$text`) and its examples end *· changed from Ask me*; the save status and *Save draft* follow the U8 header states. The tab's summary adds *When it asks: 3 allow, 4 ask*. The policy is part of the profile version: *Publish vN* makes it available to new runs.
+
+| Category | Writing profile | Read-only profile |
+| --- | --- | --- |
+| Read-only | Allow | Allow |
+| Worktree | Allow | Ask me; Allow unavailable (0.4) |
+| Run temp | Allow | Allow |
+| Outside write | Ask me | Ask me |
+| Network | Ask me | Ask me |
+| History / destructive | Ask me, or Deny; Allow unavailable | the same |
+| Unknown | Ask me, or Deny; Allow unavailable | the same |
+
+The read-only frame (`xMjXP`, Reviewer) says why Worktree asks: Reviewer doesn't edit files, and an approved command runs outside any sandbox, where it can change files.
+
+**Narrowing.** Effective policy = profile ∩ step ∩ run, per category. A pipeline step (`gPZzc`, the Review step inspector scrolled to its permissions) shows *When the agent asks* under the step constraints with a compact choice per category; values wider than the profile's are unavailable (0.4), a narrowed row is outlined and bold, the heading counts *2 narrowed*, and a note names what the profile allows (*Reviewer v2 asks you about Outside write and Network; this step denies them*). The run popover (`BuFfP`, 02.J layout) shows the effective policy in two columns, narrowing only (*History* denied for Run 142, *1 narrowed for this run*). A policy change applies **from the next request**, because Orchester answers each one; the other permissions keep their next-invocation / *Apply now* rule, so with only a policy change the primary button is *Apply from next request* and *Apply now* is 0.4. *Also save to the Builder profile* adds the narrowing to the profile draft. The popover's MCP rows are unchanged and left out of this frame for height.
+
+**Allowed commands come first.** Allowed commands stay an exact prefix list on top of the categories: a command whose every part matches a listed prefix runs without asking, whatever its category, Deny included, because the CLI runs it before Orchester sees it (Claude Code's allow rules). The section says so in a note; when a listed prefix also covers History / destructive forms, the note turns into a warning (`jYJJa`: *git in Allowed commands also covers git push and git reset --hard … List git status and git log instead.*). Every other command is classified.
+
+**Enforcement panel** (`U97QE`, and the panel of `p8g7C`): rows *When the agent asks · Orchester decides by category* (`permission prompt → policy · one answer per request`; Codex `sandbox_approval → policy · accept, never acceptForSession`), *Allowed commands run first, unseen by the policy* (`allowed tools · 3 rules`), *Every part of a command is classified* (`bash and PowerShell parser · strictest part decides`) and *No session grants* (`updatedPermissions never sent`). Codex adds *Commands inside the sandbox don't ask* (`Read-only and Worktree run in the sandbox · the policy sees escalations`) and keeps *Your own Codex rules still apply*. The steps-narrow line reads *A pipeline step or a run can make the policy stricter, never wider.*
+
+### The approval dialog
+
+The `GbNSA` dialog at 720 wide (`vyShL`, over the task Summary; on the Conversation tab the same request is the inline card, below). Header: *Approve command?* and what the policy did. Body: the category chip (*Approvals / Category chip*) with the policy value (*Ask me · Builder v3*) and *waiting since 12:11*; the reason in one line (*Writes outside the worktree:* `/tmp/worker_orig.rs`); the whole command in a mono block, never shortened; Agent, Working directory and Agent's note; what *similar* means here; *Each answer covers one request; Orchester never gives Builder's CLI a session grant.* Footer: *Always allow for this profile…* (text action, left), *Deny*, *Approve similar in this run* and primary *Approve once*. Deny keeps the command from running; the agent is told why and continues.
+
+- **Compound command** (`k4cz1C`, first row): the dialog lists the parts (number, the part as written, category chip, what the policy says: *Allow · policy*, *Allowed command*, *Ask me · asks you*). The part that forced the ask is outlined (1.5 `$text`, on `$raised`), and the chip and reason name it (*asks you · forced by part 2 of 3*, *Part 2 writes outside the worktree*). Approve once runs the whole command once; Approve similar applies to the forcing part; with several asking parts, Approve similar is unavailable (*Several parts ask: approve once or deny.*).
+- **What "similar" means** (`k4cz1C`, second row): the same program and subcommand (`cargo add`; the program alone when it has no subcommands, `cp`) classified in the same category (Network), until this run ends. Flags, arguments and packages may differ. A command with another subcommand, a part in another category, or another part that asks still asks. The scope panel opens under the request while *Approve similar in this run* has hover or focus: the rule, then *Runs without asking* and *Still asks you* examples with why. Each later request is still answered one at a time and marked *approved by similar rule*. Rules live with the run, are listed with *Revoke*, and never reach the CLI.
+- **Always allow for this profile** (`ZJt4d`, first row) opens a second step in the dialog: the prefix to add, starting at program + subcommand (`git fetch`), with the exact command as the narrowest choice and a prefix that would also cover History / destructive forms locked with the reason (`git`); then the version note *Publishes Builder v4: v3 plus git fetch in Allowed commands*: runs that start later use v4, Run 142 keeps v3 and also allows the prefix until it ends (a change for this run), an unsaved draft is kept and gets the prefix, and the pipelines that use Builder are named. *Back* and primary *Add to v4 and approve*.
+- **Unknown** (`ZJt4d`, second row): *What Orchester read*, part by part, and where it stopped (`& $env:SYNC_SCRIPT -Rebuild` calls the program named by a variable that is unset until it runs). Approve similar and Always allow are unavailable (0.4, lock): *Orchester can't tell which later commands would be alike.*
+- **Deny by policy** asks no one: Orchester denies the request with the reason as the CLI's message, for example *Denied by Orchester policy (History / destructive: git push --force). Don't retry it. Continue without it, or say in your final message why it is needed.* For Unknown: *Orchester can't check what ./scripts/regen.sh runs. Run its steps as separate commands instead.* The step continues.
+
+### Decision marks and the run's decisions
+
+Every command an agent asked about carries a mark (*Approvals / Decision mark*: 18 high, icon 11 and text 10 `$muted`, hairline outline, radius 4) in the Conversation timeline (inside tool groups), the Tools view and Activity rows, beside the exit code and duration:
+
+| Mark | Icon | When |
+| --- | --- | --- |
+| *approved by policy · Worktree* | shield-check | the effective policy is Allow for the category |
+| *approved by you · Outside write* | user-check | Approve once; after Approve similar it adds *· similar rule added* |
+| *approved by similar rule · Network* | copy-check | a rule from Approve similar answered it; the row names the rule |
+| *denied by policy · History* | shield-x | Deny without asking; the only filled mark (`$raised`, `$border`, `$text`), on a problem row that shows what the agent was told and never folds into a group |
+| *asked you · Unknown* | hand | waiting; once answered it becomes *approved by you* or *denied by you* |
+| *not asked · Allowed command* / *· known-safe read-only* | list-checks | the CLI ran it without asking; shown so nothing is silent |
+
+On the Conversation tab a waiting request is the inline approval card (as decided for the merged Conversation) with the category chip, reason, command and the same answers (`A9j8eD`), and the working line reads *Builder waits for your answer · since 12:19, its active time stopped*.
+
+**Per-run summary.** The Details pane opens on **Command decisions** (`A9j8eD`): totals by answer (by policy, by you, by similar rule, denied by policy, waiting) and a table by category with the same four answers as icon columns. Each row is a link that shows those commands in the timeline (*Tools*, filtered: `INTTC`, with *Showing Network commands only · 4 of 43 … · Show all*); the line under the table counts what ran without asking. Below it, *Approved as similar in this run* lists the rules with *Revoke*. Under the run's end marker one line counts the decisions with *Details ↗* (`E2cL0U`); the task Summary repeats it under the run's permissions.
+
+**Similar rules and Revoke.** Listed in the run popover (`BuFfP`) and the Details pane: the rule (`cargo add …`, category chip), since when and how many commands it approved, and *Revoke*. Revoke applies from the next request: those commands ask again (*asked you · Network*, and the row says the rule was revoked at 12:22); commands approved before stay approved. *Undo* restores the rule until the run ends; rules always end with the run (`E2cL0U`).
+
+### Frames
+
+Columns x 48 / 1568 / 3088 in `lozqh`; rows at y 100, 1148, 2355 and 3868 (the compact boards are taller than 960); labels 32 above.
+
+| Frame | Node | Position |
+| --- | --- | --- |
+| Profile permissions · When the agent asks · defaults, writing profile (Builder), enforcement panel with the policy rows | `p8g7C` | 48 / 100 |
+| Profile permissions · edited, unsaved (Network Allow, History and Unknown Deny) and the listed-prefix warning | `jYJJa` | 1568 / 100 |
+| Profile permissions · read-only profile (Reviewer): Worktree asks, Allow unavailable | `xMjXP` | 3088 / 100 |
+| Classification rules, categories table, shared parts (canonical home of the new components) and the Claude Code and Codex enforcement panels (compact, 1440 × 1119) | `U97QE` | 48 / 1148 |
+| Pipeline step inspector · the Review step narrows the policy | `gPZzc` | 1568 / 1148 |
+| Run permissions popover · the policy for this run, narrowed, and the similar rules with Revoke | `BuFfP` | 3088 / 1148 |
+| Approval dialog · one command, its category and reason, four answers | `vyShL` | 48 / 2355 |
+| Approval dialog · compound command; Approve similar scope explained (compact, 1440 × 1425) | `k4cz1C` | 1568 / 2355 |
+| Approval dialog · Always allow with the profile-version note; Unknown command (compact, 1440 × 1225) | `ZJt4d` | 3088 / 2355 |
+| Conversation · decision marks, denied by policy, inline Unknown request, Details on Command decisions | `A9j8eD` | 48 / 3868 |
+| Conversation · Tools view filtered to Network from the summary | `INTTC` | 1568 / 3868 |
+| Decision marks legend, denial rows, a revoked similar rule, the run's end summary (compact, 1440 × 797) | `E2cL0U` | 3088 / 3868 |
+
+Reused: `zo9Py`, `TSJpn`, `SOW6S`, `u1XBP`, `DeizF`, `ZGwlv`, `lcwsy`, `bpmzN`, `tfGRt`, `K8ItM`, `q5LzI`, `jNTVN`, `ajikA`, `mDnc3`, `N4SlQq`, `V17jfc` and `C3nu0z`, and copies of `HnBBr`, `wujuh`, `W29Od2`, `t0q3ws` and `gNa91`. New components, canonical in `U97QE`: `M7pU0A` *Approvals / Decision mark*, `EfQuh` *Approvals / Category chip*, `J8OVYQ` *Approvals / Policy choice* and `KU2fY` *Approvals / Policy row*. No new variables.
+
+**Open questions.**
+
+- **Allow for Unknown and History / destructive.** The frames make Allow unavailable for both (and for Worktree on a read-only profile); the decision named only the defaults.
+- **A listed command against a Deny category.** Drawn as the mechanism behaves: the list wins, because Claude Code runs a listed command before Orchester sees it, and the profile warns when a prefix covers History / destructive forms. The alternative is to stop passing such prefixes to the CLI.
+- **Deny by a person.** The dialog says the agent is told and continues, as with Deny by policy; the current implementation fails the step on Deny (`docs/interactive-tool-approvals.md`).
+- **Always allow publishes.** Drawn as publishing v4 at once (v3 plus the prefix) and keeping any draft; it could instead add the prefix to the draft only.
+- **Run temp evidence.** Which commands count as "this run wrote it" (only approved Outside writes, or any command whose written path Orchester parsed) depends on the parser's design.
+
 ## MCP servers
 
 Implemented 2026-09-28. Claude Code agents run with the user's own CLI configuration left out (`--strict-mcp-config --setting-sources ""`), so the only MCP servers they get are the project's own. Codex agents run as App Server (since 2026-10-01), which loads the user's configuration; Orchester turns the user's own servers off for the thread by name, with plugins, apps and `notify`, and never loads the repository's own `.codex` folder (`docs/interactive-tool-approvals.md`). The user's own execpolicy rules still apply, as the user's choice. An MCP server is a project connection (the *MCP servers* tab of 04.01, the *Project knowledge* row `enoFW` and its details `pQ0DW` in 04.A `RZUKo`); Orchester configures it, the agent's CLI starts or reaches it with each agent and ends it with the agent. For CLI agents Orchester never talks to a server itself; for native agents (decided 2026-10-01, `docs/architecture/native-agent.md`, phase P4) the runner is the MCP client and starts or reaches the server itself, with the same configuration, secrets and approvals.
