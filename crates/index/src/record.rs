@@ -14,7 +14,7 @@ use crate::{
 /// The longest line, in bytes, of a file that is parsed: longer ones are minified or generated.
 const LONG_LINE: usize = 4096;
 
-/// A definition as `symbols.tsv` lists it.
+/// A definition as the symbols files list it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Symbol {
   pub(crate) name: String,

@@ -99,6 +99,25 @@ A run row whose id or task id cannot be parsed still fails the whole listing
 whether such a row is reported as a project-level "unreadable rows" error that still lists the others. **needs
 decision**.
 
+### T5 · Re-measure the code index after ORC-48 (non-UI)
+
+ORC-48 changed what agents get of the code index: `symbols.tsv` lists only the code's own definitions
+(`symbols-consts.tsv` holds constants and statics, `symbols-tests.tsv` the definitions in test folders; index format
+6), the prompt's *Codebase index* part carries an excerpt of `map.md` of at most 8 KiB, and the internal skill
+(`crates/runner/assets/codebase-index/SKILL.md`) gives column-anchored `rg` commands for PowerShell and bash. The
+measurement that should show whether this helps was deferred by the user: the stable install does not have the
+change, and a dev build on this repository would share `<repo>/.orchester` with it.
+
+1. **Done 2026-10-01.** Skill commands verified as written in bash, pwsh 7 and Windows PowerShell 5.1 against a
+   format-6 index by the ORC-48 review.
+2. Measure index on vs off on 2–3 tasks of different kinds, at least one that needs navigating this repository (e.g.
+   a core/runner change), plus ORC-32 again for comparison with
+   `docs/evidence/code-index-effect-2026-10-01.md`. Alternate the order of the arms and give each run its own
+   `CARGO_TARGET_DIR`. Record tokens, time to the first edit and command counts (all, and before the first edit),
+   and which index files the agent used.
+
+**Done when** a new `docs/evidence` file has the table and a conclusion.
+
 ## M · MCP servers
 
 ### M1 · Confirm MCP behaviour in a real run (non-UI)
@@ -238,6 +257,18 @@ C6 · Commands outside the permissions ask a person ("List + ask") · branch `cl
   execpolicy `.rules` still apply (no App Server setting turns them off), which the enforcement panel says. Live
   turns: `docs/evidence/ask-outside-e2e-2026-10-01.md`.
 - Open: design verification of the changed texts is pending.
+
+ORC-48 · Make the code index useful to agents · branch `orchester/orc-48-run-2`
+
+- **Done 2026-10-01, without the re-measurement.** The index writes `symbols.tsv` with the code's own types,
+  functions, methods, impls, modules and macros, `symbols-consts.tsv` with constants and statics and
+  `symbols-tests.tsv` with every definition in a `tests/`, `test/`, `__tests__/` or `spec/` folder (format 6, so
+  older indexes are rebuilt). The prompt's *Codebase index* part names the three files and carries the package and
+  module map from `map.md` (at most 8 KiB: module folders lose their file lists first, then the map is cut at a line
+  and points to `map.md`). The internal skill was rewritten with column-anchored `rg` commands for PowerShell and bash.
+- Open: the skill's regexes were run in bash against the a89fe98 index (same columns), not through `$IDX`, not in
+  PowerShell and not against a format-6 index; the measurement index on vs off is T5 (user decision). Test files
+  named by convention outside test folders (`*_test.go`, `*.test.ts`) stay in `symbols.tsv`.
 
 C4 · Claude Code runs known-safe read-only commands outside the allowed list · branch `claude/allowed-commands`
 

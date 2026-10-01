@@ -11,7 +11,7 @@ use crate::{IndexError, digest::Digests, outline, record::FileRecord};
 /// The version of the index files. An index of another version, or made by other grammars
 /// ([`generator`]), is built again, since its files may differ from what this build writes for the
 /// same revision.
-pub(crate) const FORMAT: u32 = 5;
+pub(crate) const FORMAT: u32 = 7;
 const FILE: &str = "manifest.json";
 
 /// How an index was built.

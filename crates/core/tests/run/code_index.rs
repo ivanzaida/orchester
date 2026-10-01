@@ -17,12 +17,36 @@ use crate::{
   prompt::{Prompt, builder, step_with},
 };
 
-const GIVEN: CodeIndexPrompt<'static> = CodeIndexPrompt::Given {
-  revision: "4d2b8e0",
-  folder: "/repo/.orchester/index/4d2b8e0",
-  skill: "/repo/.orchester/skills/e1/_orchester/codebase-index/SKILL.md",
-  git_grep: false,
-};
+const GIVEN: CodeIndexPrompt<'static> = given("", false);
+
+/// The index of a fixture repository with `map` as its `map.md`.
+const fn given(map: &str, git_grep: bool) -> CodeIndexPrompt<'_> {
+  CodeIndexPrompt::Given {
+    revision: "4d2b8e0",
+    folder: "/repo/.orchester/index/4d2b8e0",
+    skill: "/repo/.orchester/skills/e1/_orchester/codebase-index/SKILL.md",
+    git_grep,
+    map,
+  }
+}
+
+const MAP: &str = "# Repository map\n\n\
+                   Revision 4d2b8e0: 15 files, 168 lines, 42 symbols, 2 packages.\n\n\
+                   ## crates/app: app (rust)\n\n\
+                   The fixture workspace.\n\n\
+                   - files: 4, lines: 62, symbols: 18\n\
+                   - entry: src/lib.rs (lib), src/main.rs (bin app)\n\
+                   - tests: tests/ (1 file)\n\
+                   - modules in crates/app/src/:\n\
+                   \x20 - lib.rs (56 lines)\n\
+                   \x20 - store/ (2 files, 90 lines): mod.rs, sqlite.rs\n\
+                   - also: Cargo.toml\n\n\
+                   ## Outside packages\n\n\
+                   - docs/ (1 file)\n\
+                   - root files: .gitignore, Cargo.toml\n";
+
+/// The prompt's bound on the map excerpt, in bytes.
+const MAP_EXCERPT_LIMIT: usize = 8 * 1024;
 
 fn prompt() -> Prompt {
   Prompt::new(
@@ -30,6 +54,137 @@ fn prompt() -> Prompt {
     step_with("Implement it."),
     task("Users sign in with GitHub.", &["Sign-in works"]),
   )
+}
+
+/// The text of a new session's prompt told about an index whose `map.md` is `map`.
+fn with_map(map: &str) -> String {
+  let prompt = prompt();
+  let mut input = prompt.input(&[], &[], true);
+  input.code_index = Some(given(map, false));
+  input.assemble(InjectionEvent::Start).expect("assembled").text
+}
+
+/// The line that introduces the map excerpt in a prompt.
+const EXCERPT_INTRO: &str = "The packages and modules, from map.md";
+/// What the introduction adds when the module folders lost what they hold.
+const CONTENTS_OMITTED: &str = " (module file lists omitted; see map.md)";
+
+/// The map excerpt of the prompt `text`.
+fn excerpt(text: &str) -> &str {
+  fenced(text).1
+}
+
+/// The fence of the map excerpt of the prompt `text`, and the excerpt.
+fn fenced(text: &str) -> (&str, &str) {
+  let intro = text
+    .find(EXCERPT_INTRO)
+    .unwrap_or_else(|| panic!("no map excerpt in\n{text}"));
+  let opening = intro + text[intro..].find(":\n").expect("the introduction ends") + ":\n".len();
+  let fence_end = opening
+    + text[opening..]
+      .find(|character| character != '`')
+      .expect("the fence ends");
+  let fence = &text[opening..fence_end];
+  let start = fence_end + text[fence_end..].find('\n').expect("the opening fence ends") + 1;
+  let closing = format!("\n{fence}\n");
+  let end = start - 1 + text[start - 1..].find(&closing).expect("the excerpt ends") + 1;
+  (fence, &text[start..end])
+}
+
+/// The pointer a prompt without an excerpt has to `map.md`.
+const MAP_POINTER: &str = "Read map.md in /repo/.orchester/index/4d2b8e0 first";
+
+/// A map of `packages` packages of `modules` module folders each.
+fn large_map(packages: usize, modules: usize) -> String {
+  let mut map = String::from("# Repository map\n\nRevision 4d2b8e0: many files.\n");
+  for package in 0..packages {
+    map.push_str(&format!(
+      "\n## crates/part{package}: part{package} (rust)\n\n- files: 9\n- modules in crates/part{package}/src/:\n"
+    ));
+    for module in 0..modules {
+      map.push_str(&format!(
+        "  - module{module}/ (3 files, 300 lines): first.rs, second.rs, third.rs\n"
+      ));
+    }
+  }
+  map
+}
+
+#[test]
+fn code_index_prompt_carries_the_package_and_module_map() {
+  let text = with_map(MAP);
+  assert_eq!(
+    excerpt(&text),
+    "## crates/app: app (rust)\n\
+     The fixture workspace.\n\
+     - entry: src/lib.rs (lib), src/main.rs (bin app)\n\
+     - tests: tests/ (1 file)\n\
+     - modules in crates/app/src/:\n\
+     \x20 - lib.rs (56 lines)\n\
+     \x20 - store/ (2 files, 90 lines): mod.rs, sqlite.rs\n\
+     ## Outside packages\n\
+     - docs/ (1 file)\n\
+     - root files: .gitignore, Cargo.toml\n"
+  );
+  assert!(
+    text.contains("symbols-consts.tsv") && text.contains("symbols-tests.tsv"),
+    "{text}"
+  );
+  assert!(text.contains(&format!("{EXCERPT_INTRO}:\n")), "{text}");
+  assert!(!text.contains(MAP_POINTER), "{text}");
+}
+
+#[test]
+fn a_map_over_the_bound_loses_what_module_folders_hold_first() {
+  let map = large_map(5, 30);
+  assert!(map.len() > MAP_EXCERPT_LIMIT, "the test map is over the bound");
+  let text = with_map(&map);
+  let excerpt = excerpt(&text);
+  assert!(excerpt.len() <= MAP_EXCERPT_LIMIT, "{} bytes", excerpt.len());
+  assert!(excerpt.contains("## crates/part4: part4 (rust)\n"));
+  assert!(excerpt.contains("  - module29/ (3 files, 300 lines)\n"));
+  assert!(!excerpt.contains("first.rs"));
+  assert!(!excerpt.contains("(the rest is in map.md)"));
+  assert!(
+    text.contains(&format!("{EXCERPT_INTRO}{CONTENTS_OMITTED}:\n")),
+    "{text}"
+  );
+}
+
+#[test]
+fn a_map_too_large_even_without_module_contents_is_cut_at_a_line() {
+  let text = with_map(&large_map(20, 40));
+  let excerpt = excerpt(&text);
+  assert!(excerpt.len() <= MAP_EXCERPT_LIMIT, "{} bytes", excerpt.len());
+  assert!(excerpt.starts_with("## crates/part0: part0 (rust)\n"));
+  assert!(excerpt.ends_with("\n- ... (the rest is in map.md)\n"), "{excerpt}");
+  assert!(!excerpt.contains("## crates/part19"));
+  assert!(
+    text.contains(&format!("{EXCERPT_INTRO}{CONTENTS_OMITTED}:\n")),
+    "{text}"
+  );
+}
+
+#[test]
+fn a_map_excerpt_is_fenced_longer_than_any_backtick_run_in_it() {
+  assert_eq!(fenced(&with_map(MAP)).0, "```");
+  let map = "# Repository map\n\n## Outside packages\n\n- a```b/ (1 file)\n- c````/ (2 files)\n";
+  let text = with_map(map);
+  let (fence, excerpt) = fenced(&text);
+  assert_eq!(fence, "`````", "{text}");
+  assert!(text.contains("\n`````text\n"), "{text}");
+  assert_eq!(excerpt, "## Outside packages\n- a```b/ (1 file)\n- c````/ (2 files)\n");
+}
+
+#[test]
+fn code_index_without_a_map_excerpt_points_to_map_md() {
+  let unread = with_map("");
+  let without_sections = with_map("# Repository map\n\nRevision 4d2b8e0: 0 files, 0 lines, 0 symbols, 0 packages.\n");
+  for text in [unread, without_sections] {
+    assert!(text.contains("# Codebase index\n"));
+    assert!(!text.contains(EXCERPT_INTRO), "{text}");
+    assert_eq!(text.matches(MAP_POINTER).count(), 1, "{text}");
+  }
 }
 
 #[test]
@@ -75,12 +230,7 @@ fn without_ripgrep_the_prompt_says_to_search_with_git_grep() {
 fn code_index_without_ripgrep_names_git_grep_for_the_index_and_the_repository() {
   let prompt = prompt();
   let mut input = prompt.input(&[], &[], true);
-  input.code_index = Some(CodeIndexPrompt::Given {
-    revision: "4d2b8e0",
-    folder: "/repo/.orchester/index/4d2b8e0",
-    skill: "/repo/.orchester/skills/e1/_orchester/codebase-index/SKILL.md",
-    git_grep: true,
-  });
+  input.code_index = Some(given("", true));
   let text = input.assemble(InjectionEvent::Start).expect("assembled").text;
   assert!(text.contains("# Codebase index\n"), "{text}");
   assert!(text.contains("`git grep --no-index -n`"));

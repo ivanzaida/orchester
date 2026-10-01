@@ -63,8 +63,6 @@ fn symbols_name_rust_and_typescript_definitions_at_their_lines() {
   let symbols = read(&repo.ensure(&repo.head()).path, "symbols.tsv");
   let rows: Vec<&str> = symbols.lines().collect();
   for expected in [
-    "LIMIT\tcrates/app/src/lib.rs\t3\tconst\t",
-    "NAME\tcrates/app/src/lib.rs\t5\tstatic\t",
     "Result\tcrates/app/src/lib.rs\t7\ttype\t",
     "Store\tcrates/app/src/lib.rs\t10\tstruct\t",
     "Error\tcrates/app/src/lib.rs\t14\tenum\t",
@@ -80,7 +78,6 @@ fn symbols_name_rust_and_typescript_definitions_at_their_lines() {
     "area\tweb/src/index.ts\t2\tmethod\tinterface Shape",
     "Id\tweb/src/index.ts\t6\ttype\t",
     "Color\tweb/src/index.ts\t8\tenum\t",
-    "LIMIT\tweb/src/index.ts\t13\tconst\t",
     "double\tweb/src/index.ts\t15\tfunction\t",
     "area\tweb/src/index.ts\t20\tmethod\tclass Circle",
     "describe\tweb/src/index.ts\t29\tfunction\t",
@@ -99,6 +96,80 @@ fn symbols_name_rust_and_typescript_definitions_at_their_lines() {
   let mut sorted = rows.clone();
   sorted.sort_by_key(|row| row.split('\t').next().expect("a name"));
   assert_eq!(rows, sorted, "rows are sorted by name");
+}
+
+#[test]
+fn constants_and_test_definitions_are_listed_apart_from_the_code() {
+  let repo = Repo::new();
+  let index = repo.ensure(&repo.head()).path;
+  let main = read(&index, "symbols.tsv");
+  for row in main.lines() {
+    let fields: Vec<&str> = row.split('\t').collect();
+    assert!(!["const", "static"].contains(&fields[3]), "{row} in symbols.tsv");
+    assert!(!fields[1].contains("/tests/"), "{row} in symbols.tsv");
+  }
+  assert_eq!(
+    read(&index, "symbols-consts.tsv"),
+    "LIMIT\tcrates/app/src/lib.rs\t3\tconst\t\n\
+     LIMIT\tweb/src/index.ts\t13\tconst\t\n\
+     NAME\tcrates/app/src/lib.rs\t5\tstatic\t\n\
+     Port\tsvc/main.go\t11\tconst\t\n"
+  );
+  assert_eq!(
+    read(&index, "symbols-tests.tsv"),
+    "works\tcrates/app/tests/it.rs\t2\tfunction\t\n"
+  );
+  // The map still counts every definition.
+  let all = [
+    main,
+    read(&index, "symbols-consts.tsv"),
+    read(&index, "symbols-tests.tsv"),
+  ]
+  .iter()
+  .map(|list| list.lines().count())
+  .sum::<usize>();
+  assert!(read(&index, "map.md").contains(&format!("{all} symbols, 3 packages.")));
+}
+
+#[test]
+fn only_top_level_test_folders_send_definitions_to_the_test_list() {
+  let repo = Repo::new();
+  repo.write("crates/a/Cargo.toml", "[package]\nname = \"a\"\n");
+  repo.write("crates/a/src/lib.rs", "pub mod openapi;\n");
+  repo.write("crates/a/src/openapi/spec/x.rs", "pub fn in_package_spec() {}\n");
+  repo.write("crates/a/src/test/support.rs", "pub fn in_package_test() {}\n");
+  repo.write("crates/a/tests/t.rs", "fn package_test() {}\n");
+  repo.write("crates/a/spec/s.rs", "fn package_spec() {}\n");
+  repo.write("src/openapi/spec/x.rs", "pub fn in_root_spec() {}\n");
+  repo.write("tests/e2e.rs", "fn repository_test() {}\n");
+  repo.git(&["add", "crates", "src", "tests"]);
+  repo.git(&["commit", "--quiet", "-m", "test folders"]);
+  let index = repo.ensure(&repo.head()).path;
+
+  let listed = |file: &str| -> Vec<String> {
+    read(&index, file)
+      .lines()
+      .map(|row| row.split('\t').take(2).collect::<Vec<_>>().join(" "))
+      .collect()
+  };
+  let main = listed("symbols.tsv");
+  for row in [
+    "in_package_spec crates/a/src/openapi/spec/x.rs",
+    "in_package_test crates/a/src/test/support.rs",
+    "in_root_spec src/openapi/spec/x.rs",
+  ] {
+    assert!(main.contains(&row.to_owned()), "{row} not in symbols.tsv: {main:?}");
+  }
+  assert_eq!(
+    listed("symbols-tests.tsv"),
+    [
+      "package_spec crates/a/spec/s.rs",
+      "package_test crates/a/tests/t.rs",
+      "repository_test tests/e2e.rs",
+      "works crates/app/tests/it.rs",
+    ]
+  );
+  assert!(read(&index, "map.md").contains("- tests: spec/ (1 file), tests/ (1 file)\n"));
 }
 
 #[test]
@@ -234,9 +305,8 @@ fn incremental_build_reads_only_changed_files_and_equals_a_full_build() {
     }
   );
   assert_eq!((report.read, report.reused, report.files), (4, 12, 16));
-  let symbols = read(&incremental.path, "symbols.tsv");
-  assert!(symbols.contains("MAXIMUM\tcrates/app/src/lib.rs\t3\tconst\t"));
-  assert!(!symbols.contains("tools/app.py"));
+  assert!(read(&incremental.path, "symbols-consts.tsv").contains("MAXIMUM\tcrates/app/src/lib.rs\t3\tconst\t"));
+  assert!(!read(&incremental.path, "symbols.tsv").contains("tools/app.py"));
   let incremental_files = files(&incremental.path);
 
   fs::remove_dir_all(repo.index_root()).expect("remove the indexes");

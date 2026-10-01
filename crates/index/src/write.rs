@@ -1,4 +1,4 @@
-//! Writing an index's files into its folder: `tree.txt`, `symbols.tsv`, `docs.md` and `map.md`
+//! Writing an index's files into its folder: `tree.txt`, the symbols files, `docs.md` and `map.md`
 //! streamed from the records, and one outline file per outlined source file, written from the text
 //! just made or linked to the unchanged file of the earlier index, so an incremental build does not
 //! read or copy what did not change. Creating many small files is what an index spends most of its
@@ -20,34 +20,37 @@ use orchester_core::revision::Revision;
 use crate::{
   IndexError,
   digest::{self, Digests, Hashing},
+  map::Map,
   outline_file::{outline_name, outline_path},
   record::{FileRecord, Outline},
-  render,
+  render::{self, SymbolList},
 };
 
 pub(crate) const TREE: &str = "tree.txt";
-pub(crate) const SYMBOLS: &str = "symbols.tsv";
 pub(crate) const DOCS: &str = "docs.md";
 const MAP: &str = "map.md";
 
-/// Writes the index of `records` with `map` into `out`, linking the outlines of the index of `base`;
+/// Writes the index of `records` with their `map` into `out`, linking the outlines of the index of `base`;
 /// the digest of each file written. Records whose outline could not be written lose it.
 pub(crate) fn write(
   out: &Path,
   records: &mut [FileRecord],
-  map: &str,
+  map: &Map,
   base: Option<&Revision>,
 ) -> Result<Digests, IndexError> {
   let mut digests = Digests::new();
   digests.insert(TREE.into(), stream(out, TREE, |file| render::tree(file, records))?);
-  digests.insert(
-    SYMBOLS.into(),
-    stream(out, SYMBOLS, |file| render::symbols(file, records))?,
-  );
+  for list in SymbolList::ALL {
+    let name = list.file();
+    digests.insert(
+      name.into(),
+      stream(out, name, |file| render::symbols(file, records, list, &map.tests))?,
+    );
+  }
   digests.insert(DOCS.into(), stream(out, DOCS, |file| render::docs(file, records))?);
   let file = out.join(MAP);
-  fs::write(&file, map).map_err(IndexError::io("write", file))?;
-  digests.insert(MAP.into(), digest::of(map.as_bytes()));
+  fs::write(&file, &map.text).map_err(IndexError::io("write", file))?;
+  digests.insert(MAP.into(), digest::of(map.text.as_bytes()));
   for (index, error) in place_outlines(out, records) {
     let record = &mut records[index];
     if matches!(record.outline, Some(Outline::Previous { .. })) {
