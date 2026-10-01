@@ -287,7 +287,8 @@ impl ProfileEditor {
 
   /// The network switch (`k1QWD`), locked on with the reason when off cannot be enforced
   /// (`lW7Sp`). It shows the network access a run gets, which is on wherever off cannot be
-  /// enforced, whatever was chosen.
+  /// enforced, whatever was chosen. On a native connection, where no run starts, it shows the chosen
+  /// access, locked with the reason, as the permission summary does.
   fn network_setting(&self, ctx: &Ctx, provider: Option<AgentProvider>) -> Element {
     let chosen = self.permissions.get();
     let network = provider.map_or(chosen.network(), |provider| {

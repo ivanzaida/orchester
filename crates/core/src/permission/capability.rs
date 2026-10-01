@@ -335,10 +335,13 @@ impl AgentPermissions {
   }
 
   /// The network access a run on `provider` gets on `platform`: the chosen one, or on when off
-  /// cannot be enforced there (as [`Self::enforced_on`] runs it).
+  /// cannot be enforced there (as [`Self::enforced_on`] runs it). A native provider runs nothing in
+  /// this version, so nothing turns its network on: it keeps the chosen access.
   pub const fn effective_network(&self, provider: AgentProvider, platform: Platform) -> NetworkAccess {
     match self.network {
-      NetworkAccess::Off if !support(provider, platform, PermissionOption::NetworkOff).is_enforced() => {
+      NetworkAccess::Off
+        if provider.runs_agents() && !support(provider, platform, PermissionOption::NetworkOff).is_enforced() =>
+      {
         NetworkAccess::On
       }
       network => network,

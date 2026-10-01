@@ -157,6 +157,9 @@ fn native_connection_reads_not_available_in_the_profile_and_the_pipeline_step() 
   ));
   assert!(!shows(&mut desktop, "agent-enforcement", "Enforced by"));
   assert!(!shows(&mut desktop, "agent-enforcement", "known limits"));
+  // Off as chosen, like the summary: no run turns it on.
+  assert!(shows(&mut desktop, "agent-network", "Off"));
+  assert!(!shows(&mut desktop, "agent-network", "On"));
 
   desktop.click("nav-pipelines");
   desktop.wait_for("pipeline-row");

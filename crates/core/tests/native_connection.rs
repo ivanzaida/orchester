@@ -251,6 +251,13 @@ fn nothing_is_enforced_checked_or_run_for_a_native_provider() {
         permissions.enforced_on(provider, platform),
         Err(PermissionProblem::NativeNotAvailable)
       );
+      // No run turns the network on, so the profile shows the access it chose.
+      let offline = AgentPermissions::new(
+        RepositoryAccess::ReadOnly,
+        CommandPermission::Allowed(AllowedCommands::default()),
+        NetworkAccess::Off,
+      );
+      assert_eq!(offline.effective_network(provider, platform), NetworkAccess::Off);
     }
     let checked = check(
       provider,
