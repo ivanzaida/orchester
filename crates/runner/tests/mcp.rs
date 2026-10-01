@@ -267,3 +267,33 @@ async fn mcp_servers_reach_claude_code_in_a_private_file_removed_after_the_run()
   ));
   assert_eq!(left_out(&db, &run), expected);
 }
+
+/// A server of the user's own Codex configuration named like a chosen one would merge its
+/// `command`, `args` or `env` into the chosen server, so the step stops before its thread starts.
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_servers_named_like_one_of_the_users_own_refuse_the_codex_step() {
+  let taken = server("user-global", stdio(TEST_COMMAND, None), McpEnvironment::default());
+  let project = project(&Setup {
+    mcp: vec![taken],
+    ..Setup::new("Say hello.")
+  });
+  let run = run_to_the_end(&project).await;
+  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  let failures: Vec<String> = db
+    .activity(run.id(), 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::TurnFailed { message } => Some(message),
+      _ => None,
+    })
+    .collect();
+  assert!(
+    failures
+      .iter()
+      .any(|message| message.contains("has an MCP server named `user-global`")),
+    "{failures:?}"
+  );
+  assert!(reported(&db, run.id(), "thread: ").is_empty(), "no thread starts");
+}
