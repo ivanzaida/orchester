@@ -1788,7 +1788,8 @@
       "blockedTitle": "This profile cannot be published with these permissions",
       "changeConnection": "Change connection",
       "resetTitle": "Changed to what {{connection}} can enforce",
-      "resetDetail": "Unavailable on this connection and replaced by the most restrictive option it enforces: {{options}}. Review before publishing.",
+      "resetDetail": "Unavailable on this connection, so changed to the most restrictive option it enforces: {{changes}}. Review before publishing.",
+      "resetChange": "{{from}} became {{to}}",
       "appliesTitle": "Applies to new runs after publishing",
       "appliesDetail": "Runs keep the permissions they launched with. You can still change them for a single run from its task page.",
       "mcp": {

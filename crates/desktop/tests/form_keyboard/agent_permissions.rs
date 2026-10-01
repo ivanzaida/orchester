@@ -330,6 +330,33 @@ fn agent_permissions_choose_an_option_and_add_a_command() {
 }
 
 #[test]
+fn agent_permissions_reset_names_the_option_it_chose() {
+  let mut desktop = seeded();
+  permissions_of(&mut desktop, "Reviewer");
+  desktop.press("agent-tab-profile");
+  desktop.wait_for("agent-connection-select");
+  let mut select = desktop
+    .tree
+    .get_element_by_id_mut("agent-connection-select")
+    .and_then(|element| element.as_select())
+    .expect("the connection select");
+  let codex = select
+    .labels()
+    .iter()
+    .position(|label| label.contains("Codex"))
+    .expect("the Codex connection");
+  select.commit(codex);
+  desktop.pass();
+  desktop.wait_for("agent-permissions-reset");
+  // Codex cannot limit commands to a list; the reset names what it chose instead.
+  assert!(shows(
+    &mut desktop,
+    "Unavailable on this connection, so changed to the most restrictive option it enforces: Allowed commands became \
+     Any command in the worktree. Review before publishing."
+  ));
+}
+
+#[test]
 fn agent_permissions_the_connection_cannot_enforce_block_publishing() {
   let mut desktop = seeded();
   permissions_of(&mut desktop, "Scout");
