@@ -958,6 +958,8 @@ At narrower widths the task proposal becomes an on-demand panel above the compos
 
 ## Task conversation
 
+*Superseded 2026-10-01 by [Conversation (merged with Activity)](#conversation-merged-with-activity); the rules below still apply where that section does not change them.*
+
 The task has a visible Conversation tab, an Open conversation entry on the review summary, and a conversation panel beside running/paused progress. The recipient defaults to Orchestrator; the picker can target a participating agent directly. Orchestrator routes messages, while direct messages retain their selected recipient. Messages belong to the task and record run, step, recipient and author.
 
 Delivery states distinguish Queued, Delivered and Acknowledged. Acknowledgement does not prove the requested change was applied. Work-changing messages are delivered at the next checkpoint of their recipient; Pause is the visible control for an urgent interruption. While paused, messages to the suspended agent remain queued and are delivered before that agent's next action on resume. A direct message to a different agent waits for that agent's next turn, which may be later in the pipeline. Scope changes return to plan review rather than silently changing approved work.
@@ -1053,6 +1055,8 @@ Proposed copy namespace: `runs.limit.*`.
 
 ## Activity tab
 
+*Superseded 2026-10-01 by [Conversation (merged with Activity)](#conversation-merged-with-activity): the transcript and the invocation panel move into the Conversation tab.*
+
 The task page's Activity tab (`jQt8l`) is the agent transcript: a chronological, readable stream per step execution. **02.I (`SfXU1`)** shows working Run 128.
 
 - **Toolbar:** step filter (*All steps · 3 executions*, a select listing each step execution with agent, invocation and status), *Show raw lines* switch (off by default), live state at the right (*Following live*).
@@ -1090,6 +1094,88 @@ Implemented (2026-09-27), **drawn 2026-09-27**: merging a run and clearing its w
   A successful recovery returns to the existing *Ready for review* state; a question uses *Waiting for you*.
 - **After Remove worktree (drawn 2026-09-29: 02.Q4 `PacyY`, 02.Q5 `Y8hyj`).** A run ready for review whose own worktree was removed (or whose folder was deleted) can still be merged, but its agent cannot be asked again: it would continue its session in that worktree, and recreating it would bring back what the person just cleared. *Ask agent* stays between the scope and *Merge*, unavailable (0.4, trailing lock), with the hint *Ask agent is unavailable: the run’s worktree was removed, so its agent cannot continue.* under the actions, in the style of the Merge hint. The Conversation tab keeps the status label *Ready for review*; as in 02.S2 the recipient select is disabled, the composer reads *No agent of this run reads messages any more.*, *Send* is disabled and the policy line is left out; the line under the composer reads *The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.*, and a message still queued reads *Not delivered · the run’s worktree was removed*. The runner refuses a follow-up for such a run with that reason and leaves the run as it was. As built (U5): the readiness card keeps *Ready for your review* with the folder-x glyph and the one-line detail *Every step passed. The worktree was removed; committed changes remain ready.*; the topbar has no *Remove worktree*; *Merge into main* stays available and *Ask agent* is unavailable with its hint under the Review PR hint (02.Q4). On the Conversation tab the notice is *The run’s worktree was removed* (folder-x) · *Its committed changes remain ready for review. No agent can continue this run.*; the Permissions row has no *change ↗*; the participants line reads *Explorer, Planner, Builder, Reviewer cannot continue*; a message still queued reads *Not delivered · the run’s worktree was removed* (02.Q5).
 - **Project settings › Environment** — 02.O `tXahd`, the third tab after General and Limits, laid out like Limits (content 760 wide, padding 24 / 32, gap 16): page description *Variables Kontur adds for its agents and command tools.*; *Environment variables* (15/500) and its explanation; the field label *Variables · NAME=value per line* (11 `$muted`); a mono 12 text area (`$sidebar`, `$border`, radius 7, padding 12, 4 to 12 lines, no placeholder); the hint *Stored and shown in plain text, so never put secrets here.*; the notice (lightbulb, `$raised`, radius 8) *Share one build folder between run worktrees* with its explanation and *Add CARGO_TARGET_DIR* (plus, secondary, 32 high) at its right; the notice (history) *Changes apply to the next agent or command that starts* · *An agent or command already running keeps the environment it started with.*; the topbar says *All changes saved*. An invalid line strokes the area 1 `$subtle` (`BorderStrong`; 1.5 `$text` is the focus stroke) with the field error under it (circle-alert 12 and Inter 11, both `$text`, 4 apart), then the hint: the same state as the MCP server's variables in 04.E3 `Hpycl`.
+
+## Conversation (merged with Activity)
+
+Drawn 2026-10-01, not built. Group `fTfl8` ("States · Merged conversation", last in 02 / Tasks & runs at x 0 / y 51875, height 4749; the section is now 56624 high). The user asked for one view where the person follows what the agents do and can chat with the working agent. Fixture: Kontur, ORC-128 *Add GitHub authentication*, Run 128 on Feature delivery (Research · Explorer on Claude / Opus 5.5, Plan · Planner and Implement · Builder on Codex / Sol, Run checks, Review · Reviewer); ORC-129 *Add repository switcher*, Run 129 queued. Every message, command, path, time, hash and count is illustrative. Proposed copy namespace: `runs.conversation.*` (timeline, composer, delivery), reusing `runs.activity.*` for the entries and the invocation panel.
+
+**What replaces what.** The task page has one **Conversation** tab where it had *Conversation* and *Activity*; the tabs are *Summary · Conversation · Changes · Memory · Artifacts*. Its main column is one chronological timeline per run: the old Activity transcript (step executions, agent messages, reasoning summaries, commands, file changes, problems, usage) and the old conversation panel (your messages, questions, answers, plan decisions, follow-ups, Ask agent) in the order they happened. The step progress rows and *Working context* that 02.12 showed beside the conversation panel stay on Summary; the timeline's step headers carry each step's status and tokens. The invocation panel becomes the toggleable **Details** pane. *Ask agent*, *Open conversation*, *Answer question →* and *Reply →* open this tab with the focus in the composer.
+
+Superseded (kept on the canvas, not redrawn):
+
+- Activity: 02.I `SfXU1`, `BbGhA`, `IFmpE`, `HW9mB`, 04.H10 `IcGvI`, 04.G `a2PR7K` and 02.R2 `lmlkQ` as page layouts. Their entries (`N4SlQq`), step headers (`mDnc3`) and invocation-panel rows (`rd1Vo`, `F3XhQ`, `upPCd`) stay valid: entries appear inside tool groups and as problem rows, the panel rows in Details. From 02.I states `hig8O`, *Loading* and *Couldn’t load* carry over to this tab unchanged; *No activity yet* is replaced by the empty state below and *scrolled up* by the follow rules below.
+- Conversation: 02.12 `jgqPe`, 02.S `JOG1i`, 02.S2 `m3gLZ`, 02.S3 `sYuiX`, 02.S4 `Ok14G`, 02.S5 `cj2a2`, 02.S6 `vUPqr` and 02.Q5 `Y8hyj`, and the side panel `kjsmd` (*Conversation / Task panel*) with its message row `J5MIT`. Their states and wording carry over to the composer and to the delivery lines (interrupted, paused, stopped, merged, worktree removed, not started, the recipient menu).
+
+**Timeline.** The column is at most 840 wide. With Details closed it is centred in the tab; with Details open the 320 pane takes the right and the column fills the rest, so text does not reflow when the pane toggles. Items, top to bottom in time:
+
+- **Step header** (`mDnc3`): number, step · agent, provider / model · invocation and times, tokens (*315k tokens · 43k before first edit*), status label. A finished step folds to its header (chevron-right); the running step and a step that waits for you are open. A step that never ran after a failure shows its header at 0.6 with *Not started* (circle-dashed). Opening a folded step shows its messages, groups, cards and result card.
+- **Agent message** (*Conversation / Timeline message* `V17jfc`): bot glyph in a 24 `$raised` square, the agent (12/500), step and time (11 `$subtle`), the text at 13 `$text`, line height 1.6. Agent messages are never folded into a group.
+- **Your message**: the same component on `$raised` with `$border`, radius 8, padding 10 / 12, user glyph on `$hover`, *You* and *to Builder · 12:05*, and its delivery line (icon 11 and text 10, below).
+- **Tool group** (*Conversation / Tool group* `uoK7y`): a 32-high row indented 36 to the message text, hairline stroke, radius 7: wrench 12, the summary (12 `$muted`), *N tool calls · first–last time* (mono 10) and chevron-right. Expanded, the header turns `$text` with chevron-down and the group’s entries follow as Activity rows (`N4SlQq`, with the time column) inside the same stroke, at most 7 before *Show N more · 4 reads, 1 search*.
+- **Cards** for decisions, on `$raised` with `$border`, radius 8, padding 14: header (glyph on `$hover`, title 12/500, step and time, status label at the right), body indented 36, actions under it. Question (*Builder asks you* · *Waiting for your answer*); plan (*Plan v1 · <task>* · *Waiting for approval*, the first plan lines and *Show the whole plan · 24 lines*, primary *Approve plan & continue*); tool approval (the ORC-41 request: server, action, target, *Deny* and *Approve once*). After the decision a card loses the raised fill and reads *Answered* / *Approved* / *Denied*.
+- **Problem rows**: `N4SlQq` without the time column (time in the meta), glyph in `$text`: denied commands, *permission_denied*, refusals, runner problems, *Working without MCP server*, a handoff not saved. They always show on their own and are never folded into a group.
+- **Result card** per step: border only, radius 8: glyph, *Review passed* / *Run checks failed* / *Research done* (12/500), what the agent or tool reported, duration and tokens, a one-line summary, links (*Changes · 4 files ↗*, *Summary ↗*, *Handoff in Memory ↗*). The run’s end is a centred hairline marker (*Run 128 is ready for your review · 14:32*).
+- **Working line** at the end while an agent works: loader 12 and *Builder is working · last event 2 s ago* (a real time, never fake progress).
+
+**Grouping rules.** A tool group is the longest run of consecutive tool events of one step execution between two items that are not tool events (a message, a card, a problem row, a result card or a step header). Tool events: commands, file reads and searches, file changes, MCP tool calls, memory searches and saves, reasoning summaries, usage reports and unparsed raw lines. The summary counts by kind in a fixed order — *Read N files · searched N times · searched memory · ran <command> · edited N files · N MCP calls* — naming a command when there are one or two (*ran pnpm test src/auth*) and counting them otherwise (*ran 5 commands*); kinds with no events are left out. A failed command stays in its group, is named with its exit code (*· exit 1*) and turns the group’s glyph into circle-alert in `$text`; opening the group shows its output expanded, as in Activity. A group that is still growing (the agent is calling tools now) ends with the action in progress (*· running pnpm test*, loader) — not drawn.
+
+**Filters and search.** The toolbar (52 high) holds the step filter (`ZGwlv`, *All steps · 3 executions*), *Show* as a segmented control in the Usage period style (`$sidebar`, `$border`, segments 26 high, radius 5, selected `$hover`): **All** (default), **Messages** (messages, cards, problems, step headers and result cards; groups hidden and counted, *31 tool calls in 4 groups hidden · Show all*) and **Tools** (every tool event as a flat Activity transcript, messages as one-line entries; *Show raw lines* moves here — not drawn), *Search this run…* (180), then the follow state and *Details*. Search matches message text, commands, paths and output; items without a match hide, and a match inside a group opens that group. Picking one step execution shows only its items, a read-back line *Showing 01 Research only · 02 Plan and 03 Implement are hidden.* with *Show all steps*, and Details follows the picked step (as decided for `F3XhQ`). The composer is not filtered: it always addresses the run’s current state.
+
+**Details pane.** *Details* (panel-right, 32 high) toggles the 320 `$sidebar` pane with the invocation panel: step and attempt, agent and model, started or ran, *Code index*, *Memory given*, tokens, run budget, tokens before first edit, permissions and the footnote. Pressed, the button is `$hover` with a `$subtle` stroke and panel-right-close. **Closed by default**, and remembered per person for every task: the tab’s job is to follow and to talk, the timeline needs the width for command output, and the figures in the pane are looked up now and then (each step header already shows its tokens). It opens on demand, and choosing a step’s tokens in its header opens it on that step.
+
+**Following live (ORC-36).** While the end of the timeline is in view, it follows new items (*Following live*, radio). Scrolling up stops following (*Not following*, circle-pause) and shows *Jump to latest · 3 new* (arrow-down, 30 high) centred 16 above the composer; the count is of new timeline items, not raw events. Jumping, or sending a message, scrolls to the end and follows again. Opening the tab starts at the end, or at a card that waits for you.
+
+**Composer.** Always visible at the bottom of the main column (dock: hairline above, padding 12 / 32 / 14), in the 840 column, with the recipient select and *Attach* (unavailable, 0.4) in its action row and one line under it that says what sending does now. Enter adds a line; Ctrl/Cmd+Enter presses the state’s primary action, except while an agent works, when it sends after this turn (below); drafts and retries follow the existing contract (kept until stored, sent once).
+
+| Run state | Composer |
+| --- | --- |
+| An agent works | *To: Builder · working*; **Send now** (zap, primary) and **Send after this turn** (clock-3, secondary); Ctrl/Cmd+Enter sends after this turn, the safer default, and *Send now* is pressed only with its own button. Hint: *Send now reaches Builder at its next tool call, while it works. Send after this turn waits until Builder finishes its turn.* |
+| A tool step runs, or the recipient is not the working agent | One **Send** that queues (*Queued · waiting for Reviewer’s next turn*) with the reason in the hint. |
+| A question waits | *Answering Builder’s question from 12:09* above the field, the field focused, recipient fixed to the asker (0.4), **Send answer**; the agent continues at once. |
+| A plan waits | *Changes to plan v1 · sent to Planner*, **Request changes** (undo-2), unavailable while empty; *Approve plan & continue* is on the card only. |
+| Ready for review | *To: Builder · resumes its session* (any agent that ran), **Send follow-up**: the agent resumes its session in the worktree and the run is ready for review again when it finishes (Ask agent). |
+| Failed or stopped | *To: Builder · continues the run* (agents that already ran), **Continue with instructions** (play, ORC-43): continues the run from its saved work; the agent resumes its session with the message, dependent steps run again. *Run again* (ORC-16) stays in the topbar, secondary on this tab. |
+| Paused or interrupted (not drawn) | **Send** queues; *Queued · delivered before the next action on resume* / *when the run continues* (02.S3 wording). |
+| Queued, not started | *To: Explorer · first step*, **Send when the run starts**; messages wait in the task. |
+| Merged, worktree removed, no agent step | Visible but disabled: *No agent of this run reads messages any more.*, recipient and Send at 0.4, a lock and the reason (*The run’s worktree was removed, so its agent cannot continue.*, *This run’s work was merged.*, *This run has no agent step to continue.*). |
+
+**Delivery.** *Send now* gives the message to the agent while its turn runs, after the tool call that is running: Codex through App Server, which steers the running turn (`turn/steer`); Claude Code through a stream-json user message on stdin (`--input-format stream-json`). That it lands after the running tool call is to verify in implementation, for both, on Windows and macOS; a connection that cannot take a message mid-turn offers only *Send after this turn*, with *Send now* unavailable (0.4, lock) and the reason. *Send after this turn* queues the message as the agent’s next input when its turn ends. A message to an agent that is not working waits for that agent’s next turn, as before. Delivery lines (icon 11 `$subtle`, text 10 `$muted`):
+
+- *Sending now · Builder gets it at its next tool call* (loader);
+- *Delivered mid-turn to Builder · 12:05, at its next tool call* (zap);
+- *Queued · Builder reads it when its turn ends* (clock-3);
+- *Delivered at end of turn to Builder · 12:09* (check); for *Send now* when the turn ended before another tool call: *… · its turn ended before another tool call*;
+- *Could not deliver to Builder: <why>. Your message is kept here.* (circle-alert and text in `$text`) with *Send after this turn* and *Edit in composer*;
+- *Not delivered · the run’s worktree was removed* (circle-x), and the other 02.S-family endings.
+
+Scope changes still do not return to plan review by themselves.
+
+**Frames** (x 48 / 1568 / 3088; rows at y 100 / 1148 / 2196 / 3244, labels 32 above):
+
+| Frame | Node |
+| --- | --- |
+| Agent working: messages, collapsed tool groups, a mid-turn delivery and a queued message, composer in steer mode, Details closed. Canonical home of `V17jfc` and `uoK7y` | `RrScB` |
+| A tool group expanded; scrolled up, *Not following* and *Jump to latest · 3 new*; empty composer, Send buttons 0.4 | `CxrSA` |
+| A question waits inline; the composer answers it | `ZxYGh` |
+| Plan v1 waits inline: *Approve plan & continue* on the card, *Request changes* from the composer; no *Pause run* while the run only waits | `haIEI` |
+| Ready for review: steps folded, the Review step’s message and result card, the run’s end marker, *Send follow-up* | `AzKYQ` |
+| Failed at Run checks: the failing command with output, the result card, Review not started, *Continue with instructions* | `hep0l` |
+| Details open (the invocation panel of the running step) | `gNa91` |
+| Step filter on 01 Research, Details following it | `LhLL8` |
+| Run not started (queued): the empty timeline says why and lists the steps | `zxIMy` |
+| Delivery states, the composer without Send now and unavailable, the inline approval card, an answered question, problem rows and the Messages view (compact, 1440 × 1445) | `OlLGD` |
+
+Reused: `zo9Py`, `TSJpn`, `SOW6S`, `u1XBP`, `DeizF`, `ZGwlv`, `mDnc3`, `N4SlQq`, `tfGRt`, `C3nu0z`, the invocation panel of `IFmpE` and the segmented period control of the usage dashboard. New components: `V17jfc` *Conversation / Timeline message* and `uoK7y` *Conversation / Tool group*, canonical in `RrScB`. No new variables.
+
+**Decisions (2026-10-01).** The user approved the frames and answered their open questions. Where a frame differs, these decisions win; the frames were not redrawn.
+
+- **No *Acknowledged by Builder*.** The agent’s reply shows in the timeline, so a delivered message keeps its delivery line and gets no acknowledgement line.
+- **Ctrl/Cmd+Enter sends after this turn** while an agent works, the safer default; *Send now* stays a separate button. The steer hint in `RrScB`, `gNa91` and `LhLL8` ends *Ctrl+Enter sends now.*; it should read *Ctrl+Enter sends after this turn.*
+- **Send now lands after the running tool call.** To verify in implementation for Codex App Server and Claude Code stream-json input.
+- **Tool approvals.** On the Conversation tab a request is the inline card. When the person is on another page, the approval dialog (ORC-41) still opens; *Needs you* and the status bar lead to the inline card.
+- **Failed state.** *Continue with instructions* is the primary action; *Run again* is secondary in the topbar on this tab.
+- **Progress.** The step header is enough while chatting; the progress rows and *Working context* stay on Summary.
+- **Specified, not drawn.** The paused and interrupted composer states and the still-growing tool group are specified here only; that is enough.
 
 ## Code index
 
