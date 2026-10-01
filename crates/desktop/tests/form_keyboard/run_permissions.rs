@@ -90,7 +90,7 @@ fn run_permissions_popover_fits_the_workspace_when_the_window_is_resized() {
   assert!(shows(
     &mut desktop,
     "task-permissions-popover",
-    "Commands beyond the sandbox ask you first."
+    "Beyond the sandbox, commands ask you first."
   ));
   // App Server still applies the user's own Codex rules, never the repository's; the popover says so too.
   assert!(shows(

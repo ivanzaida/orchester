@@ -1638,7 +1638,7 @@
         "any": {
           "title": "Any command in the worktree",
           "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders.",
-          "codexDetail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. Commands beyond the sandbox ask you first."
+          "codexDetail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. Beyond the sandbox, commands ask you first."
         }
       },
       "addCommand": "Add command",
@@ -1652,7 +1652,7 @@
       "fileCommandPrefix": "{{command}} also allows any arguments after it, including ones that change files.",
       "noCommands": "No command is listed yet, so every command asks you first, even a read-only one.",
       "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them. Other commands ask you first.",
-      "codexEscalations": "Commands beyond the sandbox ask you first.",
+      "codexEscalations": "Beyond the sandbox, commands ask you first.",
       "codexRulesNote": "Your own Codex rules still apply: a command they allow runs outside the sandbox without asking you. The repository’s .codex settings are ignored.",
       "commandInvalid": {
         "blank": "Type a command first.",
@@ -1747,7 +1747,7 @@
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
         "mcp": {
           "codexChosen": "Only the chosen MCP servers run",
-          "codexDenied": "approval requests denied · not asked",
+          "codexDenied": "not asked · the call fails",
           "none": "No MCP servers",
           "noneHow": "none chosen · user’s own ignored",
           "onlyOne": "Only the chosen MCP server loads",

@@ -498,14 +498,10 @@ fn agent_profile_codex_mcp_enforcement_says_when_approval_requests_are_denied() 
     "agent-enforcement",
     "MCP approval requests are denied"
   ));
-  assert!(shows(
-    &mut desktop,
-    "agent-enforcement",
-    "approval requests denied · not asked"
-  ));
+  assert!(shows(&mut desktop, "agent-enforcement", "not asked · the call fails"));
   assert!(!shows(&mut desktop, "agent-enforcement", "One requested action only"));
   desktop.tab_to("agent-tool-approvals", PRESSES);
   desktop.enter();
   assert!(shows(&mut desktop, "agent-enforcement", "One requested action only"));
-  assert!(!shows(&mut desktop, "agent-enforcement", "approval requests denied"));
+  assert!(!shows(&mut desktop, "agent-enforcement", "not asked · the call fails"));
 }

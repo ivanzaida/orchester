@@ -83,11 +83,11 @@ async fn codex_repository_settings_are_left_out_and_the_activity_says_so() {
   let argv = reported(&db, run, "argv: ").pop().expect("argv reported");
   assert!(argv.contains(" -c projects={"), "{argv}");
   assert!(argv.contains("={trust_level=\"untrusted\"}"), "{argv}");
-  let folder = Path::new(&worktree(&db, run)).join(".codex");
+  // Named in the worktree, not by its absolute path.
   assert_eq!(
     problems(&db, run),
     [RunnerProblem::CodexSettingsIgnored {
-      folder: folder.to_string_lossy().into_owned()
+      folder: format!(".codex{}", std::path::MAIN_SEPARATOR)
     }]
   );
 }

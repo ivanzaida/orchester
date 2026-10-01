@@ -220,7 +220,7 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
   assert!(shows(
     &mut desktop,
     "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. \
-     Commands beyond the sandbox ask you first."
+     Beyond the sandbox, commands ask you first."
   ));
   assert!(shows(&mut desktop, "sandbox · escalations ask you"));
   // The user's own execpolicy rules stay, the repository's `.codex` folder never loads; the panel says so.
@@ -230,7 +230,7 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
   assert!(shows(&mut desktop, "worktree untrusted · none load"));
   // Builder chooses no MCP server, so none runs; the user's own are turned off.
   assert!(shows(&mut desktop, "none chosen · user’s own ignored"));
-  assert!(shows(&mut desktop, "Commands beyond the sandbox ask you first."));
+  assert!(shows(&mut desktop, "Beyond the sandbox, commands ask you first."));
   let network_off_enforced = cfg!(not(windows));
   assert_eq!(
     shows(

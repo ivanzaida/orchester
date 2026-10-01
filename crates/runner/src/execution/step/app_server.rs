@@ -310,7 +310,9 @@ impl AppServerSession {
       ignored
         .map(|folder| {
           Update::Activity(AgentEvent::RunnerProblem {
-            problem: RunnerProblem::CodexSettingsIgnored { folder },
+            problem: RunnerProblem::CodexSettingsIgnored {
+              folder: in_worktree(&folder, &self.setup.worktree),
+            },
           })
         })
         .into_iter()
@@ -472,6 +474,14 @@ impl AppServerSession {
     }
     send(process, json!({"id":5,"method":"turn/start","params":params})).await
   }
+}
+
+/// `folder` as the worktree names it (`.codex\`), or as Codex wrote it when it lies elsewhere.
+fn in_worktree(folder: &str, worktree: &Path) -> String {
+  Path::new(folder).strip_prefix(worktree).map_or_else(
+    |_| folder.to_owned(),
+    |relative| format!("{}{}", relative.display(), std::path::MAIN_SEPARATOR),
+  )
 }
 
 fn phase_name(phase: Phase) -> &'static str {
