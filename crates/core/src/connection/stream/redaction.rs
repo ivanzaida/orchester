@@ -61,6 +61,7 @@ impl RunnerProblem {
       | Self::CodebaseIndexUnavailable { detail }
       | Self::RipgrepUnavailable { detail, .. }
       | Self::MemoryScanFailed { detail } => *detail = redact(detail),
+      Self::CodexSettingsIgnored { folder } => *folder = redact(folder),
       Self::UnavailableVariable { variable } => *variable = redact(variable),
       Self::ProgramNotFound { program } => *program = redact(program),
       Self::MergeConflict { branch, files } => {

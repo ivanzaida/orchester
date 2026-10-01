@@ -92,11 +92,12 @@ fn run_permissions_popover_fits_the_workspace_when_the_window_is_resized() {
     "task-permissions-popover",
     "Commands beyond the sandbox ask you first."
   ));
-  // App Server still applies the user's own Codex rules; the popover says so too.
+  // App Server still applies the user's own Codex rules, never the repository's; the popover says so too.
   assert!(shows(
     &mut desktop,
     "task-permissions-popover",
-    "Your Codex rules still apply: a command they allow runs outside the sandbox without asking you."
+    "Your own Codex rules still apply: a command they allow runs outside the sandbox without asking you. \
+     The repository’s .codex settings are ignored."
   ));
   for (width, height) in [(1440, 960), (960, 700), (1440, 960)] {
     desktop.tree.resize(width, height);

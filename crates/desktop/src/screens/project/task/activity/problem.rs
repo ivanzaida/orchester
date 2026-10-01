@@ -86,7 +86,16 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
       Some(detail.as_str().into()),
     ),
     RunnerProblem::MemoryUnreadable { records } => memory_unreadable(ctx, *records),
+    RunnerProblem::CodexSettingsIgnored { folder } => codex_settings_ignored(ctx, folder),
   }
+}
+
+/// The repository's `.codex` folder Codex left out, and what still applies.
+fn codex_settings_ignored(ctx: &Ctx, folder: &str) -> (Arc<str>, Option<Arc<str>>) {
+  (
+    ctx.t("runs.activity.problem.codexSettingsIgnored"),
+    Some(ctx.t_args("runs.activity.problem.codexSettingsIgnoredDetail", [("folder", folder)])),
+  )
 }
 
 /// A model the provider's API refused to the installed CLI, and the version it needs.

@@ -270,6 +270,7 @@ impl RunTask {
     let expected_servers = mcp.servers().iter().map(ToString::to_string).collect::<BTreeSet<_>>();
     let invocation = CodexInvocation {
       executable: cli.connection.executable(),
+      repository: &self.root,
       access: cli.enforced.permissions().repository(),
       network: cli.enforced.permissions().network(),
       writable_roots: cli.writable_roots,

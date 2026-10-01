@@ -223,9 +223,11 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
      Commands beyond the sandbox ask you first."
   ));
   assert!(shows(&mut desktop, "sandbox · escalations ask you"));
-  // App Server cannot leave the user's own execpolicy rules out; the panel says so.
-  assert!(shows(&mut desktop, "Your Codex rules still apply"));
+  // The user's own execpolicy rules stay, the repository's `.codex` folder never loads; the panel says so.
+  assert!(shows(&mut desktop, "Your own Codex rules still apply"));
   assert!(shows(&mut desktop, "allow rules run unsandboxed, unasked"));
+  assert!(shows(&mut desktop, "Repository .codex settings ignored"));
+  assert!(shows(&mut desktop, "worktree untrusted · none load"));
   // Builder chooses no MCP server, so none runs; the user's own are turned off.
   assert!(shows(&mut desktop, "none chosen · user’s own ignored"));
   assert!(shows(&mut desktop, "Commands beyond the sandbox ask you first."));

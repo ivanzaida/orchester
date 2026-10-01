@@ -264,6 +264,7 @@ fn roots() -> Vec<PathBuf> {
 fn codex_args(access: RepositoryAccess, roots: &[PathBuf]) -> Vec<String> {
   CodexInvocation {
     executable: Path::new("/bin/codex"),
+    repository: Path::new("/repo"),
     access,
     network: NetworkAccess::Off,
     writable_roots: roots,

@@ -8,6 +8,7 @@
 mod adapter;
 mod agent;
 pub mod app_server;
+pub mod app_server_config;
 pub mod app_server_mcp;
 mod catalog;
 pub mod claude_approval;

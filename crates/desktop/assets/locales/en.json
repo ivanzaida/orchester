@@ -811,6 +811,8 @@
           "other": "{{count}} memory records could not be read"
         },
         "memoryScanFailed": "Task memory could not be checked for unreadable records; the agent started all the same",
+        "codexSettingsIgnored": "This branch has .codex/ settings; Orchester ignores them",
+        "codexSettingsIgnoredDetail": "Codex loaded no configuration, hooks, rules or MCP servers from {{folder}}. Its skills follow Repository agent files. Your own Codex settings still apply.",
         "memoryUnreadableDetail": "Agents get the other records. The unreadable ones stay in the project database as they are."
       },
       "unparsed": {
@@ -1646,7 +1648,7 @@
       "noCommands": "No command is listed yet, so every command asks you first, even a read-only one.",
       "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them. Other commands ask you first.",
       "codexEscalations": "Commands beyond the sandbox ask you first.",
-      "codexRulesNote": "Your Codex rules still apply: a command they allow runs outside the sandbox without asking you.",
+      "codexRulesNote": "Your own Codex rules still apply: a command they allow runs outside the sandbox without asking you. The repository’s .codex settings are ignored.",
       "commandInvalid": {
         "blank": "Type a command first.",
         "tooLong": "A command is at most {{max}} characters long.",
@@ -1728,8 +1730,10 @@
         },
         "enforced": "{{setting}} · enforced",
         "staysOn": "Network stays on · off is not enforceable",
-        "codexRules": "Your Codex rules still apply",
+        "codexRules": "Your own Codex rules still apply",
         "codexRulesHow": "allow rules run unsandboxed, unasked",
+        "codexRepository": "Repository .codex settings ignored",
+        "codexRepositoryHow": "worktree untrusted · none load",
         "notEnforceable": "{{setting}} · not enforceable",
         "networkShare": "Edits on a network share can’t be allowed by rule, so a run can’t start.",
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",

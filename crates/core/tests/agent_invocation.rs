@@ -23,6 +23,7 @@ use orchester_core::{
 fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'static> {
   CodexInvocation {
     executable: Path::new("/bin/codex"),
+    repository: Path::new("/repo"),
     access,
     network: NetworkAccess::Off,
     writable_roots: &[],
@@ -33,7 +34,8 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
   }
 }
 
-/// The arguments after the isolation overrides, which every invocation starts with.
+/// The arguments after the isolation overrides and the untrusted projects, which every invocation
+/// starts with.
 fn args(invocation: &CodexInvocation<'_>) -> Vec<String> {
   let args = invocation.args().expect("unicode paths");
   let isolation: Vec<String> = CODEX_ISOLATION
@@ -41,7 +43,53 @@ fn args(invocation: &CodexInvocation<'_>) -> Vec<String> {
     .flat_map(|setting| ["-c".to_owned(), (*setting).to_owned()])
     .collect();
   assert_eq!(args[2..2 + isolation.len()], isolation, "{args:?}");
-  [&args[..2], &args[2 + isolation.len()..]].concat()
+  let rest = &args[2 + isolation.len()..];
+  assert!(rest[1].starts_with("projects={"), "{args:?}");
+  [&args[..2], &rest[2..]].concat()
+}
+
+/// The `-c projects=…` value of an invocation in `worktree` of `repository` on `platform`.
+fn untrusted(worktree: &str, repository: &str, platform: Platform) -> String {
+  let invocation = CodexInvocation {
+    repository: Path::new(repository),
+    worktree: Path::new(worktree),
+    platform,
+    ..invocation(RepositoryAccess::Write, platform)
+  };
+  let args = invocation.args().expect("unicode paths");
+  let at = args
+    .iter()
+    .position(|arg| arg.starts_with("projects="))
+    .expect("the untrusted projects");
+  assert_eq!(args[at - 1], "-c");
+  args[at].clone()
+}
+
+/// The repository's own `.codex` folder never loads: the worktree and its repository are untrusted
+/// whatever the user's configuration trusts, written as Codex names them (on Windows: `\`, no
+/// `\\?\` prefix, a lower-case drive letter), as an inline table that merges with the user's.
+#[test]
+fn invocation_marks_the_worktree_and_its_repository_untrusted() {
+  assert_eq!(
+    untrusted("/repo/.orchester/worktrees/run", "/repo", Platform::MacOs),
+    r#"projects={"/repo/.orchester/worktrees/run"={trust_level="untrusted"},"/repo"={trust_level="untrusted"}}"#
+  );
+  assert_eq!(
+    untrusted(
+      r"\\?\H:\Projects\Kontur\.orchester\worktrees\run",
+      "H:/Projects/Kontur",
+      Platform::Windows
+    ),
+    r#"projects={"h:\\Projects\\Kontur\\.orchester\\worktrees\\run"={trust_level="untrusted"},"h:\\Projects\\Kontur"={trust_level="untrusted"}}"#
+  );
+  assert_eq!(
+    untrusted(
+      r"\\?\UNC\server\share\repo\wt",
+      r"\\server\share\repo",
+      Platform::Windows
+    ),
+    r#"projects={"\\\\server\\share\\repo\\wt"={trust_level="untrusted"},"\\\\server\\share\\repo"={trust_level="untrusted"}}"#
+  );
 }
 
 /// What App Server would otherwise take from the user's own Codex setup is turned off on every start:

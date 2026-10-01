@@ -441,6 +441,7 @@ fn codex_args(permissions: &AgentPermissions, platform: Platform) -> Vec<String>
     .expect("enforceable on Codex");
   CodexInvocation {
     executable: Path::new("/bin/codex"),
+    repository: Path::new("/repo"),
     access: enforced.permissions().repository(),
     network: enforced.permissions().network(),
     writable_roots: &[],
@@ -455,8 +456,8 @@ fn codex_args(permissions: &AgentPermissions, platform: Platform) -> Vec<String>
 
 #[test]
 fn permissions_map_to_codex_sandbox_arguments_per_platform() {
-  // After `app-server --stdio` and the isolation overrides.
-  let sandbox = |args: &[String]| args[2 + 2 * CODEX_ISOLATION.len()..].to_vec();
+  // After `app-server --stdio`, the isolation overrides and the untrusted projects.
+  let sandbox = |args: &[String]| args[2 + 2 * CODEX_ISOLATION.len() + 2..].to_vec();
   let read_only = permissions(
     RepositoryAccess::ReadOnly,
     CommandPermission::AnyInWorktree,

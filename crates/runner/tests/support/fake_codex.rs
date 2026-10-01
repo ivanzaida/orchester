@@ -14,7 +14,10 @@
 //! A new session is `fake-thread-1`; `thread/resume` continues the thread it names in the worktree.
 //!
 //! Its configuration (`config/read`) has, besides the project servers of its arguments, the user's own
-//! server `user-global`, which runs unless the thread's configuration turns it off.
+//! server `user-global`, which runs unless the thread's configuration turns it off. Its layers are the
+//! user's, the arguments', and, when the worktree has a `.codex` folder, a project layer that is
+//! disabled only while the arguments mark the worktree untrusted (`projects={"<worktree>"=…}`), as Codex
+//! names it.
 
 #![allow(
   clippy::print_stdout,
@@ -134,7 +137,10 @@ impl Session {
       Some("initialized") => {}
       Some("account/read") => emit(&json!({"id": 2, "result": {"account": {"type": "chatgpt"}}})),
       Some(method @ ("thread/start" | "thread/resume")) => self.thread(method, params),
-      Some("config/read") => emit(&json!({"id": 6, "result": {"config": self.configuration()}})),
+      Some("config/read") => {
+        let cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
+        emit(&json!({"id": 6, "result": {"config": self.configuration(), "layers": self.layers(&cwd)}}));
+      }
       Some("mcpServerStatus/list") => emit(&json!({"id": 4, "result": {"data": self.servers(), "nextCursor": null}})),
       Some("turn/start") => return self.turn(params),
       None => return fake_app_server::answered(self, message),
@@ -210,6 +216,38 @@ impl Session {
       json!({"enabled": true, "command": "user-tool"}),
     );
     json!({"mcp_servers": servers, "hooks": null})
+  }
+
+  /// The configuration's layers: the user's (with `user-global`), the arguments' and, for a worktree
+  /// with a `.codex` folder, the project's, disabled while the worktree is untrusted.
+  fn layers(&self, cwd: &std::path::Path) -> Vec<Value> {
+    let mut layers = vec![
+      json!({"name": {"type": "user", "file": "fake-codex-home/config.toml"},
+        "config": {"mcp_servers": {"user-global": {"command": "user-tool"}}}}),
+      json!({"name": {"type": "sessionFlags"}, "config": {}}),
+    ];
+    let folder = cwd.join(".codex");
+    if folder.is_dir() {
+      let mut key = cwd.to_string_lossy().into_owned();
+      if cfg!(windows) {
+        key = key.replace('/', "\\");
+        if let Some(drive) = key.get(..1) {
+          key = format!("{}{}", drive.to_ascii_lowercase(), &key[1..]);
+        }
+      }
+      let quoted = serde_json::to_string(&key).expect("a string");
+      let untrusted = self
+        .args
+        .iter()
+        .any(|arg| arg.starts_with("projects={") && arg.contains(&format!("{quoted}={{trust_level=\"untrusted\"}}")));
+      // A test makes the fake load the folder whatever its trust, as a Codex that changed would.
+      let loads_anyway = folder.join("fake-loads-anyway").exists();
+      let reason =
+        (untrusted && !loads_anyway).then(|| format!("{key} is marked as untrusted in the effective configuration."));
+      layers
+        .push(json!({"name": {"type": "project", "dotCodexFolder": folder}, "config": {}, "disabledReason": reason}));
+    }
+    layers
   }
 
   /// The project servers, of which `broken` did not start, and the user's own server.

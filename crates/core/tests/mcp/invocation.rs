@@ -58,6 +58,7 @@ fn remote(bearer: Option<Arc<SecretValue>>) -> McpLaunch {
 fn codex_command(mcp: &CodexMcp) -> Command {
   CodexInvocation {
     executable: Path::new("/bin/codex"),
+    repository: Path::new("/repo"),
     access: RepositoryAccess::ReadOnly,
     network: NetworkAccess::Off,
     writable_roots: &[],

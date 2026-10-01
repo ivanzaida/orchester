@@ -3,10 +3,12 @@
 //! permission grants remain disabled. A command approval comes from a rule when the step asks before
 //! commands, and from the sandbox when a command needs more than it allows (`sandbox_approval`, on
 //! whenever the step's other commands ask a person). Unexpected host requests fail the invocation.
-//! The MCP servers of the user's own configuration and of a trusted project's `.codex` folders, read
-//! with `config/read` before the thread starts, are turned off for the thread, and the thread's
-//! inventory must show every server the step does not choose turned off; a configuration with hooks
-//! refuses the step (`orchester_core::connection::app_server_mcp`). A step that asks before MCP
+//! The MCP servers of the user's own configuration, read with `config/read` before the thread
+//! starts, are turned off for the thread, and the thread's inventory must show every server the step
+//! does not choose turned off; a configuration with hooks refuses the step
+//! (`orchester_core::connection::app_server_mcp`). The repository's own `.codex` folder must be left
+//! out (a project layer Codex loaded refuses the step); one the worktree has is noted in the activity
+//! (`orchester_core::connection::app_server_config`). A step that asks before MCP
 //! actions needs its project-selected servers connected before the turn begins, any other step works
 //! without one that is not and its activity says so. Codex's standard error is kept in the activity
 //! as raw lines.
@@ -21,11 +23,12 @@ use orchester_core::{
   command::{SecretVariable, redact_secrets},
   connection::{
     app_server::{AppServerStream, PendingApproval, Update},
+    app_server_config::repository_settings,
     app_server_mcp::{
       refuse_user_hooks, servers_to_turn_off, unavailable_selected, verify_only_chosen_run, verify_selected_servers,
     },
     mcp::McpServerProblem,
-    stream::{AgentEvent, OutputStream},
+    stream::{AgentEvent, OutputStream, RunnerProblem},
   },
   permission::NetworkAccess,
   resource::RepositoryAccess,
@@ -214,19 +217,15 @@ impl AppServerSession {
         }
         self.phase = Phase::Configuration;
         let cwd = self.setup.worktree.to_string_lossy();
-        send(process, json!({"id":6,"method":"config/read","params":{"cwd":cwd}}))
-          .await
-          .map_err(|error| io_message(&error))?;
+        send(
+          process,
+          json!({"id":6,"method":"config/read","params":{"cwd":cwd,"includeLayers":true}}),
+        )
+        .await
+        .map_err(|error| io_message(&error))?;
         Ok(Vec::new())
       }
-      (Phase::Configuration, 6) => {
-        refuse_user_hooks(result).map_err(|error| error.to_string())?;
-        self.turned_off =
-          servers_to_turn_off(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
-        self.phase = Phase::Thread;
-        self.start_thread(process).await.map_err(|error| io_message(&error))?;
-        Ok(Vec::new())
-      }
+      (Phase::Configuration, 6) => self.configured(result, process).await,
       (Phase::Thread, 3) => {
         self.check_thread(result)?;
         let thread = result
@@ -260,6 +259,27 @@ impl AppServerSession {
       (Phase::Complete, 5) => Ok(Vec::new()),
       _ => Err("Codex App Server responded out of sequence".to_owned().into()),
     }
+  }
+
+  /// Checks the configuration Codex read (`config/read` with its layers), then starts the thread
+  /// with the servers the step does not choose turned off; notes a repository `.codex` folder Codex
+  /// left out.
+  async fn configured(&mut self, result: &Value, process: &Supervised) -> Result<Vec<Update>, AppServerFailure> {
+    refuse_user_hooks(result).map_err(|error| error.to_string())?;
+    let ignored = repository_settings(result).map_err(|error| error.to_string())?;
+    self.turned_off = servers_to_turn_off(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+    self.phase = Phase::Thread;
+    self.start_thread(process).await.map_err(|error| io_message(&error))?;
+    Ok(
+      ignored
+        .map(|folder| {
+          Update::Activity(AgentEvent::RunnerProblem {
+            problem: RunnerProblem::CodexSettingsIgnored { folder },
+          })
+        })
+        .into_iter()
+        .collect(),
+    )
   }
 
   fn check_thread(&self, result: &Value) -> Result<(), String> {

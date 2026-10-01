@@ -1,7 +1,8 @@
 //! How an agent step starts the Codex CLI: always as a bidirectional App Server, so that a request
 //! for a person's decision can reach "Needs you" (`docs/interactive-tool-approvals.md`):
 //!
-//! `codex app-server --stdio <isolation> [-c windows.sandbox=elevated] [-c sandbox_workspace_write.network_access=<on>]
+//! `codex app-server --stdio <isolation> -c projects={<worktree>={trust_level="untrusted"},<repository>=…}
+//!  [-c windows.sandbox=elevated] [-c sandbox_workspace_write.network_access=<on>]
 //!  -c sandbox_workspace_write.writable_roots=[<worktree>, <folders>] [-c project_doc_max_bytes=0
 //!  [-c skills.config=[<skills>]]] [<MCP servers>]`
 //!
@@ -21,16 +22,19 @@
 //! - Extra writable folders ([`crate::permission::writable`]) are added to the `workspace-write` sandbox as a TOML
 //!   array of basic strings, with the worktree, which Codex also reports as the local environment's workspace root. A
 //!   folder that does not exist is accepted and ignored, so the runner creates them first.
-//! - App Server has no `--ignore-user-config` or `--ignore-rules`, so it loads the user's own configuration (and a
-//!   trusted project's `.codex` folders). What of it would reach the agent is turned off ([`ISOLATION`]): the `notify`
-//!   program, plugins (with their skills and MCP servers), apps, and the permission requests that could stay granted
-//!   for later commands. The user's and the project's own MCP servers are turned off for the thread by name, which the
-//!   runner reads with `config/read` first (`crate::connection::app_server_mcp`). The execpolicy `.rules` files cannot
-//!   be turned off in App Server (0.159.2 has no setting for it): a command an `allow` rule there matches runs outside
-//!   the sandbox without asking, which the enforcement panel says. The runner checks the sandbox, approval policy,
-//!   reviewer, network, writable roots and model Codex activated against the step's permissions before the turn starts.
-//!   The MCP servers the profile chooses are passed as configuration overrides ([`CodexMcp`]), their secrets through
-//!   the process environment only.
+//! - App Server has no `--ignore-user-config` or `--ignore-rules`, so it loads the user's own configuration. What of it
+//!   would reach the agent is turned off ([`ISOLATION`]): the `notify` program, plugins (with their skills and MCP
+//!   servers), apps, and the permission requests that could stay granted for later commands. The user's own MCP servers
+//!   are turned off for the thread by name, which the runner reads with `config/read` first
+//!   (`crate::connection::app_server_mcp`). The user's own execpolicy `.rules` stay: they are the user's choice, and
+//!   the enforcement panel says that a command an `allow` rule there matches runs outside the sandbox without asking.
+//! - The repository's own `.codex` folder (configuration, hooks, execpolicy rules, MCP servers) is never loaded,
+//!   whatever the user's configuration trusts: the worktree and its repository are marked untrusted
+//!   ([`CodexInvocation::untrusted_projects`]), and the runner checks with `config/read` that Codex loaded no project
+//!   layer (`crate::connection::app_server_config`). The runner checks the sandbox, approval policy, reviewer, network,
+//!   writable roots and model Codex activated against the step's permissions before the turn starts. The MCP servers
+//!   the profile chooses are passed as configuration overrides ([`CodexMcp`]), their secrets through the process
+//!   environment only.
 //! - Repository agent files ([`crate::agent_files`]): while the project has them off, `AGENTS.md` is left out with
 //!   `project_doc_max_bytes=0` and each skill of `<worktree>/.agents/skills` is disabled by the path of its `SKILL.md`
 //!   (`{path="…",enabled=false}`), on new and resumed sessions alike.
@@ -69,6 +73,8 @@ pub const ISOLATION: [&str; 5] = [
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CodexInvocation<'a> {
   pub executable: &'a Path,
+  /// The repository the worktree belongs to.
+  pub repository: &'a Path,
   pub access: RepositoryAccess,
   /// Network access of a `workspace-write` sandbox.
   pub network: NetworkAccess,
@@ -100,6 +106,7 @@ impl CodexInvocation<'_> {
     for setting in ISOLATION {
       args.extend(["-c".to_owned(), setting.to_owned()]);
     }
+    args.extend(["-c".to_owned(), self.untrusted_projects()]);
     if self.platform == Platform::Windows {
       args.extend(["-c".to_owned(), "windows.sandbox=elevated".to_owned()]);
     }
@@ -142,6 +149,25 @@ impl CodexInvocation<'_> {
     Ok(args)
   }
 
+  /// The worktree and its repository marked untrusted, so that Codex loads no `.codex` folder of
+  /// theirs, even where the user's configuration trusts the repository. Codex 0.159.2 looks trust up
+  /// by the folder it works in, then by the repository a worktree belongs to, not by other parent
+  /// folders; a key must be written as Codex writes the folder ([`trust_key`]). Checked with
+  /// `config/read` and the execpolicy load log, without a model turn (2026-10-01). An inline table
+  /// merges with the user's own `projects`; a dotted key would split at the dot of `.orchester`.
+  fn untrusted_projects(&self) -> String {
+    let entries: Vec<String> = [self.worktree, self.repository]
+      .into_iter()
+      .map(|folder| {
+        format!(
+          "{}={{trust_level=\"untrusted\"}}",
+          toml_string(&trust_key(folder, self.platform))
+        )
+      })
+      .collect();
+    format!("projects={{{}}}", entries.join(","))
+  }
+
   /// The App Server process: in the worktree, with the allowed part of `environment`, the variables
   /// the project adds (`project`) and the MCP servers' secrets.
   pub fn command(
@@ -158,5 +184,26 @@ impl CodexInvocation<'_> {
       .with_interactive_stdin();
     let secrets = self.mcp.map_or(&[][..], CodexMcp::secrets);
     Ok(secrets.iter().cloned().fold(command, Command::with_secret_env))
+  }
+}
+
+/// `folder` as Codex names a project. On Windows Codex matches `\` separators only, without the
+/// `\\?\` prefix of a canonical path, and with either case of the drive letter; its own messages
+/// write it lower-case.
+fn trust_key(folder: &Path, platform: Platform) -> String {
+  let text = folder.to_string_lossy();
+  if platform == Platform::MacOs {
+    return text.into_owned();
+  }
+  let text = text.replace('/', r"\");
+  let text = if let Some(share) = text.strip_prefix(r"\\?\UNC\") {
+    format!(r"\\{share}")
+  } else {
+    text.strip_prefix(r"\\?\").map_or_else(|| text.clone(), str::to_owned)
+  };
+  let mut chars = text.chars();
+  match (chars.next(), chars.next()) {
+    (Some(drive), Some(':')) if drive.is_ascii_alphabetic() => format!("{}{}", drive.to_ascii_lowercase(), &text[1..]),
+    _ => text,
   }
 }

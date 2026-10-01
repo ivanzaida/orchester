@@ -118,7 +118,12 @@ fn assert_transcript(db: &ProjectDb, run: RunId) {
   } else {
     "-c sandbox_workspace_write.network_access=false -c sandbox_workspace_write.writable_roots=["
   };
-  assert!(argv.starts_with(&format!("{isolation}{expected}")), "{argv}");
+  // Then the worktree and its repository are untrusted, so the repository's `.codex` never loads.
+  assert!(argv.starts_with(&format!("{isolation}-c projects={{")), "{argv}");
+  assert!(
+    argv.contains(&format!("={{trust_level=\"untrusted\"}}}} {expected}")),
+    "{argv}"
+  );
   assert_thread_and_turn(&stderr);
   let environment = stderr
     .iter()

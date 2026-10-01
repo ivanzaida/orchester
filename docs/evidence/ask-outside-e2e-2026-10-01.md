@@ -57,6 +57,36 @@ In run 1, `node --version` in place of the `node -e` command ran **without askin
 queries as read-only, which the allowed-commands option says it runs. `echo $USERNAME` asked and was approved once
 there too.
 
+## Repository `.codex` settings (no model turn)
+
+After the user's decision to keep their own Codex login, configuration and `~/.codex/rules`, only the
+repository's `.codex` folder is left out. Probe: a scratch repository (`.tmp/codex-untrusted/repo`) with an
+Orchester-style worktree (`.orchester/worktrees/w1`) holding `.codex/config.toml` (server
+`orch_project_probe`, a model), `.codex/rules/x.rules` (`cmake` allow), `.codex/hooks.json` and
+`.codex/skills/orch-proj-skill`. `probe.py` reads `config/read` with layers, `hooks/list`, an ephemeral
+`thread/start` without a turn (with `RUST_LOG` for the execpolicy load lines) and its MCP inventory, under
+scratch `CODEX_HOME`s (`cases.py`), with and without
+`-c projects={"<worktree>"={trust_level="untrusted"},…}`:
+
+| The scratch home trusts | Without the override | With it |
+| --- | --- | --- |
+| the repository (`h:\…\repo` or `H:\…\repo`) | server, hook, project model and `loaded 1 .rules files in …\w1\.codex\rules` | project layer disabled (*…\w1 is marked as untrusted*), nothing of it loads |
+| the worktree | the same: loaded | disabled, nothing loads |
+| the repository written with `/` | not trusted | disabled |
+| a parent folder, or the drive | not trusted (no trust by ancestor) | disabled |
+
+Only the worktree key matters once it is untrusted: marking just the worktree, in either drive-letter case,
+disabled the layer of a trusted repository; a key with `/` or the `\\?\` prefix did not. Under the user's
+real configuration, which trusts `h:\projects\orchester`, the nested scratch repository was untrusted (the
+user's own rules still loaded from `~/.codex/rules`). Skills of `.codex/skills` load even untrusted
+(`skills/list`) and are disabled by path, which Orchester does while *Repository agent files* is off. The
+runner checks the layers before each thread (a loaded project layer refuses the step) and notes a disabled
+one in the activity.
+
+App Server finds a session `codex exec` recorded: `thread/read` (metadata only) of an exec-era thread of an
+earlier Orchester run returned it with `source: exec`; the rollout file was unchanged. A thread id Codex has
+no rollout for is refused with `no rollout found for thread id …`.
+
 ## Not covered
 
 - No decline was made live; declines are covered by the runner tests with the fake CLIs.

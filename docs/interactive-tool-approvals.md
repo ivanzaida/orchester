@@ -56,9 +56,9 @@ temporary frame was removed by that exact ID, preserving the existing design.
 ## Codex profile
 
 App Server has no `--ignore-user-config` or `--ignore-rules`, so it loads the user's normal Codex
-account and configuration, and the `.codex` folders of a trusted project. Orchester keeps what of it
-would reach the agent out (checked against 0.159.2 with `config/read` and `mcpServerStatus/list`,
-without a model turn):
+account and configuration. Orchester keeps what of it would reach the agent out (checked against
+0.159.2 with `config/read` and `mcpServerStatus/list`, without a model turn), except the user's own
+execpolicy rules, which are the user's choice (user decision 2026-10-01):
 
 | From the user's setup | Neutralised by |
 | --- | --- |
@@ -66,9 +66,28 @@ without a model turn):
 | plugins, their skills and MCP servers (`code-review`, `cua_repl`, …) | `-c features.plugins=false` |
 | apps (`codex_app`) | `-c features.apps=false` |
 | permission overlays that can stay granted (`with_additional_permissions`, `request_permissions`) | `-c features.exec_permission_approvals=false`, `-c features.request_permissions_tool=false` |
-| the user's and a project's MCP servers | each turned off for the thread by name (`config` of `thread/start`/`thread/resume`: `mcp_servers.<name>.enabled=false`), the names read with `config/read` first; a table merges with the user's, so `mcp_servers={}` would not remove them. The thread's inventory must then show every server the step does not choose `disabled`, or the step fails. |
+| the user's MCP servers | each turned off for the thread by name (`config` of `thread/start`/`thread/resume`: `mcp_servers.<name>.enabled=false`), the names read with `config/read` first; a table merges with the user's, so `mcp_servers={}` would not remove them. The thread's inventory must then show every server the step does not choose `disabled`, or the step fails. |
 | hooks | cannot be turned off: a configuration that defines any refuses the step |
-| execpolicy `.rules` files (`$CODEX_HOME/rules`, a trusted project's `.codex/rules`) | **cannot be turned off**: 0.159.2 has no setting for it in App Server. A command an `allow` rule matches runs outside the sandbox without asking. The enforcement panel says *Your Codex rules still apply · allow rules run unsandboxed, unasked*. |
+| the user's execpolicy `.rules` (`$CODEX_HOME/rules`) | **kept**, as the user's choice (0.159.2 has no App Server setting for them anyway). A command an `allow` rule matches runs outside the sandbox without asking. The enforcement panel says *Your own Codex rules still apply · allow rules run unsandboxed, unasked*, and the run permissions popover says it under Commands. |
+
+The repository's own `.codex` folder (`config.toml`, `hooks.json`, `rules/`, its MCP servers) is never
+loaded, whatever the user's configuration trusts. Every start marks the worktree and its repository
+untrusted with `-c projects={"<worktree>"={trust_level="untrusted"},"<repository>"={…}}`. Codex
+0.159.2 looks a project's trust up by the folder it works in, then by the repository a worktree belongs
+to; a parent folder the user trusts does not make a repository trusted. A key matches on Windows only
+with `\` separators and without the `\\?\` prefix (the drive letter's case does not matter), so the
+keys are written that way; an inline table merges with the user's `projects`, while a dotted key would
+split at the dot of `.orchester`. Checked on 2026-10-01 without a model turn, in a scratch repository
+whose worktree has an allow rule, a server, a hook and a skill under `.codex`, under scratch
+`CODEX_HOME`s that trust the repository (either drive-letter case), the worktree, a parent folder or
+the drive: without the override the trusted cases loaded the server, the hook and the rule (the
+execpolicy log line `loaded 1 .rules files in …\.codex\rules`); with it `config/read` lists the folder
+as a project layer disabled because the folder *is marked as untrusted*, and nothing of it loads.
+Before each thread the runner reads `config/read` with its layers: a project layer Codex loaded all the
+same refuses the step, and a disabled one adds *This branch has .codex/ settings; Orchester ignores
+them* to the activity without stopping the step. Codex still loads the skills of `.codex/skills` in
+an untrusted repository; they follow *Repository agent files* like `.agents/skills` (disabled by path
+while it is off).
 
 The user's model, reasoning effort and service tier defaults still apply where the profile sets none.
 Orchester adds the project-selected MCP servers. A step that asks before MCP actions checks that each

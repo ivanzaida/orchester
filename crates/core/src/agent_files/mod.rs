@@ -1,5 +1,5 @@
 //! A repository's own agent files (ORC-15, `docs/design/orchester-workspace.md`, "Instructions"):
-//! `AGENTS.md` and `.agents/skills` for Codex, `CLAUDE.md` and `.claude/skills` for Claude Code.
+//! `AGENTS.md`, `.agents/skills` and `.codex/skills` for Codex, `CLAUDE.md` and `.claude/skills` for Claude Code.
 //!
 //! - Project settings › General › *Repository agent files* ([`RepositoryAgentFiles`]) decides whether the agent CLIs
 //!   may load them besides Orchester's own instructions and skills. It is set per project, read when an agent starts (a
@@ -16,11 +16,12 @@
 //!   `<worktree>/.agents/skills` (at any depth) among its skills; a skill named in the prompt (`$name`) has its body
 //!   added. `-c project_doc_max_bytes=0` leaves `AGENTS.md` out; each repository skill is left out, even when named, by
 //!   disabling it by path (`-c skills.config=[{path="…/SKILL.md",enabled=false},…]`), which the runner does for the
-//!   files it finds when the agent starts. Codex needs both on a resumed session too: one without them read `AGENTS.md`
-//!   and the skills again. `skills.include_instructions=false` only hides the list (a named skill still loaded) and is
-//!   not used. Codex's own skills in `CODEX_HOME/skills/.system` stay available (they are the CLI's, not the
-//!   repository's); `-c skills.bundled.enabled=false` would remove them. A Codex version without `skills.config`
-//!   ignores the key: this was not checked against older versions.
+//!   files it finds when the agent starts. Codex 0.159.2 also loads the skills of `<worktree>/.codex/skills`, even with
+//!   the repository untrusted (2026-10-01), so those are disabled the same way. Codex needs both on a resumed session
+//!   too: one without them read `AGENTS.md` and the skills again. `skills.include_instructions=false` only hides the
+//!   list (a named skill still loaded) and is not used. Codex's own skills in `CODEX_HOME/skills/.system` stay
+//!   available (they are the CLI's, not the repository's); `-c skills.bundled.enabled=false` would remove them. A Codex
+//!   version without `skills.config` ignores the key: this was not checked against older versions.
 //! - Claude Code 2.1.89 is always started with `--setting-sources ""` (see
 //!   [`crate::connection::invocation::ClaudeInvocation`]), and with it the request held neither `CLAUDE.md` nor a skill
 //!   of `.claude/skills`; with `--setting-sources project` it held both, also with `--disable-slash-commands`. So

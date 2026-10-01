@@ -16,6 +16,7 @@ use orchester_core::{
 fn codex(agent_files: CodexAgentFiles<'_>) -> CodexInvocation<'_> {
   CodexInvocation {
     executable: Path::new("/bin/codex"),
+    repository: Path::new("/repo"),
     access: StepAccess::ReadOnly,
     network: NetworkAccess::Off,
     writable_roots: &[],

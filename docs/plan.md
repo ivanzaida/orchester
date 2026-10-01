@@ -254,8 +254,10 @@ C6 · Commands outside the permissions ask a person ("List + ask") · branch `cl
   gone. Launch permissions record what happened to other commands. `docs/interactive-tool-approvals.md`.
 - Agents ask everywhere: a Claude Code read-only step that asks before commands, and an empty allowed list, ask about
   every command. App Server agents get none of the user's MCP servers, plugins, apps or notify program; the user's
-  execpolicy `.rules` still apply (no App Server setting turns them off), which the enforcement panel says. Live
-  turns: `docs/evidence/ask-outside-e2e-2026-10-01.md`.
+  execpolicy `.rules` still apply (the user's choice, user decision 2026-10-01), which the enforcement panel and
+  the run popover say. The repository's own `.codex` folder never loads: the worktree and its repository are marked
+  untrusted, a project layer Codex loaded anyway refuses the step, and a branch with `.codex/` gets a note in its
+  activity. Live turns: `docs/evidence/ask-outside-e2e-2026-10-01.md`.
 - Open: design verification of the changed texts is pending.
 
 ORC-48 · Make the code index useful to agents · branch `orchester/orc-48-run-2`
