@@ -21,8 +21,8 @@ use orchester_exec::ProcessRunner;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 const RUNNER: ProcessRunner = ProcessRunner::new(COMMAND_TIMEOUT);
 
-/// Checks the agent CLI at `executable` now.
-pub fn check(provider: AgentProvider, executable: &Path) -> ConnectionCheck {
+/// Checks the agent CLI at `executable` now; `None` for a native provider, which has no CLI.
+pub fn check(provider: AgentProvider, executable: &Path) -> Option<ConnectionCheck> {
   let environment = agent_environment(std::env::vars_os());
   connection::check(provider, executable, &RUNNER, &environment, Timestamp::now())
 }
@@ -42,7 +42,7 @@ pub fn detect_repository(request: &DetectRequest<'_>) -> Detection {
 pub fn recheck(connection: &Connection) -> Option<LastCheck> {
   let executable = connection.executable()?;
   Some(match connection.kind() {
-    ConnectionKind::Agent(provider) => LastCheck::Agent(check(*provider, executable)),
+    ConnectionKind::Agent(provider) => LastCheck::Agent(check(*provider, executable)?),
     ConnectionKind::GitHub { host } => LastCheck::GitHub(check_github(host, executable)),
   })
 }

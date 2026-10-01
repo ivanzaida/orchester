@@ -223,7 +223,7 @@ impl ConnectionDialog {
           return Ok(None);
         };
         let check = background::run(move || {
-          let check = probe::check(provider, &executable);
+          let check = probe::check(provider, &executable)?;
           Some(Checked {
             provider,
             executable,

@@ -9,7 +9,7 @@
 //!   `initialize` control request of its stream-json input, whose answer lists its models; that one starts no session
 //!   and sends no prompt ([`super::claude_catalog`]).
 //!
-//! A native provider has no CLI: nothing here runs for it ([`check`]).
+//! A native provider has no CLI: nothing here runs for it, and [`check`] has no answer for it.
 
 use std::{
   ffi::OsStr,
@@ -56,21 +56,16 @@ impl AgentCli {
 /// Checks the CLI at `executable`: its version, whether it is signed in and its models. The CLI
 /// sees only `environment`, the one agents run with ([`super::invocation::agent_environment`]),
 /// so that the check finds what a run would: variables of an agent host Orchester itself runs in
-/// change the Claude Code CLI's answer. A native provider has no CLI to answer, so nothing runs and
-/// the program is not recognized as one.
+/// change the Claude Code CLI's answer. `None` for a native provider: it has no CLI, so nothing runs
+/// and there is nothing to report.
 pub fn check(
   provider: AgentProvider,
   executable: &Path,
   runner: &impl CommandRunner,
   environment: &[(String, String)],
   now: Timestamp,
-) -> ConnectionCheck {
-  let Some(kind) = AgentCli::of(provider) else {
-    return ConnectionCheck {
-      at: now,
-      result: CheckResult::NotRecognized,
-    };
-  };
+) -> Option<ConnectionCheck> {
+  let kind = AgentCli::of(provider)?;
   let cli = Cli {
     executable,
     runner,
@@ -90,7 +85,7 @@ pub fn check(
       },
     },
   };
-  ConnectionCheck { at: now, result }
+  Some(ConnectionCheck { at: now, result })
 }
 
 /// The version number in `--version` output, if the output is the expected CLI's:

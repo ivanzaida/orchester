@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{
-    AgentConnection, AgentEndpoint, AgentProvider, AgentRuntime, ApiEndpoint, BaseUrl, CheckResult, Connection,
-    ConnectionError, ConnectionKind, ConnectionStatus, EndpointError, EndpointPreset, WireApi, check,
-    invocation::Platform, parse_version,
+    AgentConnection, AgentEndpoint, AgentProvider, AgentRuntime, ApiEndpoint, BaseUrl, Connection, ConnectionError,
+    ConnectionKind, ConnectionStatus, EndpointError, EndpointPreset, WireApi, check, invocation::Platform,
+    parse_version,
   },
   id::{ConnectionId, SecretId},
   name::Name,
@@ -207,7 +207,7 @@ fn nothing_is_enforced_checked_or_run_for_a_native_provider() {
       &[],
       Timestamp::from_unix_millis(2_000),
     );
-    assert_eq!(checked.result, CheckResult::NotRecognized);
+    assert_eq!(checked, None, "a native provider has no CLI to check");
     let output = CommandOutput {
       code: Some(0),
       stdout: "2.1.89 (Claude Code)".into(),
