@@ -21,17 +21,20 @@
 //!   offered, permission mode, denied tools, allowed command prefixes, and the edit rules of the worktree and the extra
 //!   writable folders when the step does not run in `acceptEdits`). Bypass modes are never used.
 //! - Extra writable folders ([`crate::permission::writable`]), for an agent that edits files: one `--add-dir` each, so
-//!   its edit tools may write there as in the working directory. Its commands need nothing: Claude Code does not
-//!   confine them to any folder. Checked 2026-09-28 with Claude Code 2.1.89 without a model turn: the debug log shows
-//!   each existing folder added as a permission directory (`cliArg`) and a missing one left out; the folder's own
-//!   `.claude/settings.json` is looked up but, with `--setting-sources ""`, its rules were not applied.
+//!   its edit tools may write there as in the working directory (in `acceptEdits`; with edit rules, by the folder's
+//!   `Edit` allow rule). Its commands need nothing: Claude Code does not confine them to any folder. Checked 2026-09-28
+//!   with Claude Code 2.1.89 without a model turn: the debug log shows each existing folder added as a permission
+//!   directory (`cliArg`) and a missing one left out; the folder's own `.claude/settings.json` is looked up but, with
+//!   `--setting-sources ""`, its rules were not applied.
 //! - Repository agent files ([`crate::agent_files`]): `--setting-sources ""` already keeps `CLAUDE.md` and
 //!   `.claude/skills` out (checked 2026-09-29 against the request the CLI sends), so the project's setting adds
 //!   nothing.
 //! - Orchester's skills ([`crate::resource::Skill`]) are placed in a folder outside the worktree, which `--add-dir`
 //!   lets the agent read (Claude Code asks before reading outside its working directories, and print mode denies what
-//!   it would ask). An agent that edits files may also write there; the folder is its own and written again when it
-//!   starts. The code index of the run's base revision (`crate::code_index`) is given the same way.
+//!   it would ask). In `acceptEdits` an agent that edits files may also write there, as in every working directory; the
+//!   folder is its own and written again when it starts. A step that edits by rule
+//!   ([`crate::permission::capability::Mechanism::ClaudeEditRules`]) gets no rule for it, so it only reads it. The code
+//!   index of the run's base revision (`crate::code_index`) is given the same way.
 //! - Sessions: a new session gets an id Orchester chose (`--session-id`); a continue after a pause or a limit resumes
 //!   the session the CLI reported (`--resume`), with the permissions given again. Sessions are kept on disk (no
 //!   `--no-session-persistence`) so that they can be resumed.
