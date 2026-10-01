@@ -1,19 +1,25 @@
 //! What actually starts when a program is run. On Windows, npm installs CLIs such as `codex` as
 //! `.cmd` scripts; `cmd.exe` runs those by reading their arguments again, which splits or changes
-//! free-form text. A script whose structure is recognised as npm's Node.js launcher is replaced by
-//! the Node.js program it starts; any other script still runs through `cmd.exe`, but only with
-//! arguments that pass through it unchanged. macOS and other Unix systems run every program
-//! directly.
+//! free-form text. A script whose structure is recognised as an npm launcher is replaced by what it
+//! starts: Node.js with the launcher's script, or the launcher's program file (Claude Code since
+//! 2.1). Any other script still runs through `cmd.exe`, but only with arguments that pass through
+//! it unchanged. macOS and other Unix systems run every program directly: npm links a CLI's
+//! command to its file or writes a shell script with a `#!` line, which the system starts itself.
 
 #[cfg(windows)]
 mod command_script;
+#[cfg(windows)]
+mod program_shim;
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::command::CommandError;
 
 #[cfg(windows)]
-pub use self::command_script::{node_shim_script, passes_through_cmd};
+pub use self::{
+  command_script::{node_shim_script, passes_through_cmd},
+  program_shim::native_shim_program,
+};
 
 /// How a program is started.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -22,6 +28,8 @@ pub enum Via {
   Direct,
   /// Node.js running `script`, the target of an npm launcher script.
   NodeScript { script: PathBuf },
+  /// The program file an npm launcher script starts, run directly in the launcher's place.
+  LauncherProgram,
   /// `cmd.exe` running a `.cmd`/`.bat` script that is not a recognised launcher.
   CommandScript,
 }
@@ -43,7 +51,8 @@ impl Launch {
     }
   }
 
-  /// The file the operating system starts: the program itself, Node.js or the script.
+  /// The file the operating system starts: the program itself, Node.js, the program a launcher
+  /// starts, or the script.
   pub fn program(&self) -> &Path {
     &self.program
   }

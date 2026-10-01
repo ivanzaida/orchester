@@ -275,6 +275,30 @@ fn connections_know_what_their_launcher_scripts_start() {
   assert_eq!(via(direct), Some(Via::Direct));
 }
 
+/// An npm launcher of a program file (Claude Code's `claude.cmd` since 2.1) is shown as that
+/// program, which is what starts.
+#[cfg(windows)]
+#[test]
+fn connections_know_the_program_their_launcher_starts() {
+  use orchester_exec::launch::Via;
+
+  let (repo, mut db) = project_db();
+  let program = repo.path().join("node_modules").join("claude.exe");
+  fs::create_dir_all(program.parent().expect("a folder")).expect("program folder");
+  fs::write(&program, "").expect("program");
+  let shim = repo.path().join("claude.cmd");
+  fs::write(&shim, "@SETLOCAL\r\n\"%~dp0\\node_modules\\claude.exe\" %*\r\n").expect("launcher");
+  let launcher = ConnectionDraft {
+    executable: shim,
+    ..draft(&repo, "Claude", signed_out())
+  };
+  let id = save(&mut db, launcher, now()).expect("saved");
+  let connections = ProjectConnections::load(&db).expect("load");
+  let launch = connections.launch_of(id).expect("a launch");
+  assert_eq!(launch.via(), &Via::LauncherProgram);
+  assert_eq!(launch.program(), program);
+}
+
 #[test]
 fn editing_or_checking_a_connection_keeps_the_versions_its_models_need() {
   let (repo, mut db) = project_db();

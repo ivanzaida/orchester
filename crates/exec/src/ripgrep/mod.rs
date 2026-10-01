@@ -164,10 +164,11 @@ fn bundled(cli: &Path) -> Option<Found> {
   let launch = launch::resolve(cli);
   let program = match launch.via() {
     Via::NodeScript { script } => script.clone(),
+    Via::LauncherProgram => launch.program().to_path_buf(),
     Via::Direct | Via::CommandScript => cli.to_path_buf(),
   };
-  // npm links a global CLI's command to the script in its package (macOS), or the script is
-  // named by the launcher (Windows): the package is one of the script's folders. A program whose
+  // npm links a global CLI's command to the file in its package (macOS), or the file is named by
+  // the launcher (Windows): the package is one of the file's folders. A program whose
   // links cannot be followed is looked at where it was named.
   let program = fs::canonicalize(&program).unwrap_or(program);
   program.ancestors().find_map(|folder| {
