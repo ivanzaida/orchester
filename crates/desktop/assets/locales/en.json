@@ -1630,7 +1630,8 @@
         },
         "any": {
           "title": "Any command in the worktree",
-          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. Commands that need more than the sandbox ask you first."
+          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders.",
+          "codexDetail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. Commands beyond the sandbox ask you first."
         }
       },
       "addCommand": "Add command",
@@ -1644,7 +1645,8 @@
       "fileCommandPrefix": "{{command}} also allows any arguments after it, including ones that change files.",
       "noCommands": "No command is listed yet, so every command asks you first, even a read-only one.",
       "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them. Other commands ask you first.",
-      "codexEscalations": "Commands that need more than the sandbox ask you first.",
+      "codexEscalations": "Commands beyond the sandbox ask you first.",
+      "codexRulesNote": "Your Codex rules still apply: a command they allow runs outside the sandbox without asking you.",
       "commandInvalid": {
         "blank": "Type a command first.",
         "tooLong": "A command is at most {{max}} characters long.",
@@ -1691,7 +1693,7 @@
         "editFoldersOther": "Edits files in the task worktree and {{count}} more folders",
         "commandsAsk": "Asks before commands",
         "commandsAny": "Any command in the worktree",
-        "commandsNone": "No listed commands · all ask",
+        "commandsNone": "No listed commands, all ask",
         "commandsOne": "1 allowed command",
         "commandsOther": "{{count}} allowed commands",
         "networkOff": "Network off",
@@ -1736,6 +1738,7 @@
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
         "mcp": {
           "codexChosen": "Only the chosen MCP servers run",
+          "codexDenied": "approval requests denied · not asked",
           "none": "No MCP servers",
           "noneHow": "none chosen · user’s own ignored",
           "onlyOne": "Only the chosen MCP server loads",
@@ -1768,8 +1771,8 @@
         "codexNetworkOff": "sandbox · network access off",
         "codexNetworkOn": "sandbox · network access on",
         "codexWritableRoots": "sandbox · writable roots",
-        "claudeEditToolsRemoved": "edit tools removed · listed cmds run",
-        "claudeEditToolsRemovedAsk": "edit tools removed · commands ask",
+        "claudeEditToolsRemoved": "edit tools off · list runs · others ask",
+        "claudeEditToolsRemovedAsk": "edit tools off · commands ask",
         "claudeAcceptEdits": "permission mode · accept edits",
         "claudeEditRules": "allowed tools · edit rules per folder",
         "claudeAllowedTools": {

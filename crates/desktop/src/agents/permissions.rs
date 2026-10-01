@@ -34,11 +34,15 @@ pub const fn option_title(option: PermissionOption) -> &'static str {
 }
 
 /// What an option allows on `provider` (`C85wh` in `lcwsy`). Only Claude Code also runs known-safe
-/// read-only commands besides an allowed list, so only its *Allowed commands* says so.
+/// read-only commands besides an allowed list, so only its *Allowed commands* says so; only Codex
+/// asks about commands that need more than its sandbox, so only its *Any command* says that.
 pub fn option_detail(option: PermissionOption, provider: Option<AgentProvider>) -> &'static str {
   match option {
     PermissionOption::AllowedCommands if runs_read_only_unlisted(provider) => {
       "agents.permissions.option.allowed.claudeDetail"
+    }
+    PermissionOption::AnyCommand if provider == Some(AgentProvider::CodexCli) => {
+      "agents.permissions.option.any.codexDetail"
     }
     PermissionOption::ReadOnly => "agents.permissions.option.readOnly.detail",
     PermissionOption::EditWorktree => "agents.permissions.option.editWorktree.detail",

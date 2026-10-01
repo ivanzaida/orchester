@@ -220,17 +220,15 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
   assert!(shows(
     &mut desktop,
     "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. \
-     Commands that need more than the sandbox ask you first."
+     Commands beyond the sandbox ask you first."
   ));
   assert!(shows(&mut desktop, "sandbox · escalations ask you"));
   // App Server cannot leave the user's own execpolicy rules out; the panel says so.
   assert!(shows(&mut desktop, "Your Codex rules still apply"));
   assert!(shows(&mut desktop, "allow rules run unsandboxed, unasked"));
-  assert!(shows(&mut desktop, "Only the chosen MCP servers run"));
-  assert!(shows(
-    &mut desktop,
-    "Commands that need more than the sandbox ask you first."
-  ));
+  // Builder chooses no MCP server, so none runs; the user's own are turned off.
+  assert!(shows(&mut desktop, "none chosen · user’s own ignored"));
+  assert!(shows(&mut desktop, "Commands beyond the sandbox ask you first."));
   let network_off_enforced = cfg!(not(windows));
   assert_eq!(
     shows(
@@ -495,11 +493,11 @@ fn agent_permissions_a_folder_no_edit_rule_can_name_is_not_enforceable() {
 fn agent_permissions_claude_asking_read_only_asks_about_every_command() {
   let mut desktop = seeded();
   permissions_of(&mut desktop, "Reviewer");
-  assert!(shows(&mut desktop, "edit tools removed · listed cmds run"));
+  assert!(shows(&mut desktop, "edit tools off · list runs · others ask"));
   desktop.press("agent-permission-ask");
   assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
-  assert!(shows(&mut desktop, "edit tools removed · commands ask"));
-  assert!(!shows(&mut desktop, "listed cmds run"));
+  assert!(shows(&mut desktop, "edit tools off · commands ask"));
+  assert!(!shows(&mut desktop, "list runs"));
   desktop.press("agent-permission-edit");
   assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
 }

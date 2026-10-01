@@ -250,6 +250,10 @@ fn commands(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPe
   ];
   content.extend(reasons([ask_why, allowed_why, any_why]));
   content.extend(escalations(ctx, provider, draft.commands()).map(|note| hint(&note)));
+  // App Server cannot leave out the user's execpolicy rules (`docs/interactive-tool-approvals.md`).
+  if provider == Some(AgentProvider::CodexCli) {
+    content.push(warning(&ctx.t("agents.permissions.codexRulesNote")));
+  }
   if let Some(list) = listed {
     content.push(command_entries(ctx, edit, &list, props));
     content.extend(changed_note(ctx, &list, props));
@@ -415,6 +419,23 @@ fn hint(note: &str) -> Element {
   Text::new(note)
     .variant(ExtraTypography::Hint.role())
     .color(PaletteColor::TextMuted)
+    .into()
+}
+
+/// A hint that limits what the settings above promise, after a warning icon.
+fn warning(note: &str) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Tight.role())
+    .align_items(Alignment::Start)
+    .describe("role", "codex-rules")
+    .child(icon(Icon::TriangleAlert, IconSize::Reason, PaletteColor::TextMuted))
+    .child(
+      Text::new(note)
+        .variant(ExtraTypography::Hint.role())
+        .color(PaletteColor::TextMuted)
+        .flex(1.0),
+    )
     .into()
 }
 
