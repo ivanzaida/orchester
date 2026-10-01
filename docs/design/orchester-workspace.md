@@ -1352,6 +1352,16 @@ Drawn 2026-10-01, not built. Group `PNDQm` ("States · Native agent connections"
 
 Reused: `zo9Py`, `TSJpn`, `u1XBP`, `ZGwlv`, `lcwsy`, `DeizF`, `tfGRt`, `q5LzI`, `K8ItM`, `bpmzN`, `sFtAz`, `jNTVN`, `SOW6S`, `mDnc3`, `N4SlQq`, `l3hyb`, `i9rVFu`, `mBkeJ`, the connection dialog of 04.E `yRb2k`, the approval dialog `GbNSA` over the task page of `t0q3ws`, the permissions page of `bYDCI`, the Activity page of `HW9mB` and the task Summary of `rS8mx`. No new components or variables.
 
+**Decisions (2026-10-01).** The user approved the frames and answered their open questions. Where a frame differs, these decisions win; the frames were not redrawn.
+
+- **Key secret with its environment.** A secret used as a connection key shows its environment when it has one, as elsewhere: *API key · DOCS_API_KEY (Staging)*, in the key select, the inspector's *Authentication* row and the status board. The frames show the name only.
+- **Preset-filled limits.** Context, max output and efforts that the preset fills read *From the preset*, not *From the endpoint*; *From the endpoint* is only for values the endpoint reported. The DeepSeek rows in 04.H2 and 04.H4 should read *From the preset*.
+- **Removing a model a profile uses is blocked.** The dialog says which profiles use it and that they must switch to another model first; it has no *Remove* for that model. 04.H6 draws a warning with *Keep* / *Remove* instead.
+- **Acknowledge starts the run.** The acknowledgement is asked once per project and preset: a second DeepSeek connection in Kontur does not ask again, another project does. 04.H7's third consequence should say so.
+- **Repository agent files.** Native agents load repository agent files (AGENTS.md, skills) by the same project setting as the CLIs (Project settings › General); the enforcement panel shows that row as for the CLIs. 04.H8 leaves it out.
+- **Line counts.** *+38 −6* on native file edits stays, although CLI file rows have no counts.
+- **The shell string is never shortened.** In the approval dialog the full string is always shown; a long one scrolls inside its mono block, with nothing hidden behind *Show all*.
+
 ## All projects
 
 Drawn 2026-09-28 (`wa6B7`) and implemented. **All projects** (01.06 `Z7IZZ`, route `/projects`)
