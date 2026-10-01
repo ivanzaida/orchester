@@ -27,52 +27,73 @@ pub(super) fn authority(rest: &str) -> &str {
   rest.split(['/', '?', '#']).next().unwrap_or(rest)
 }
 
-/// HTTP clients read a backslash as a slash, so in a URL it could end the host where these checks
-/// do not; a URL with one is refused.
+/// The authority and path of `rest`, a URL after its scheme: everything before the first `?` or `#`.
+pub(super) fn before_query(rest: &str) -> &str {
+  rest.split(['?', '#']).next().unwrap_or(rest)
+}
+
+/// HTTP clients read a backslash before the query as a slash, so there it could end the host where
+/// these checks do not.
 pub(super) const BACKSLASH: char = '\\';
+
+/// Code points a domain cannot have (the URL Standard's forbidden domain code points, less the
+/// controls and spaces refused before). Any other character, a combining mark of an IDN label
+/// included, may be part of a host name.
+pub(super) const FORBIDDEN_IN_DOMAIN: [char; 13] = ['#', '%', '/', ':', '<', '>', '?', '@', '[', '\\', ']', '^', '|'];
+
+/// Whether a bracketed IPv6 address may name a zone after `%25` (RFC 6874, `[fe80::1%25eth0]`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ZoneId {
+  Allowed,
+  Refused,
+}
 
 /// Why an authority names no usable host.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum HostError {
   /// Nothing before the port.
   Missing,
-  /// Characters a host name cannot have, an unclosed or empty IPv6 address, or a port that is not
-  /// a number.
+  /// A bracketed IPv6 address that does not close, holds something other than an address (and a
+  /// zone id where allowed), or is followed by something other than `:`.
   Invalid,
 }
 
-/// The host of `authority`, checked with its port: a bracketed IPv6 address or a name of letters,
-/// digits, `-`, `.` and `_`, then nothing or `:` and a port number.
-pub(super) fn host(authority: &str) -> Result<&str, HostError> {
-  let (host, port) = match authority.strip_prefix('[') {
-    Some(inside) => {
-      let end = inside.find(']').ok_or(HostError::Invalid)?;
-      let address = &inside[..end];
-      if address.is_empty() || !address.chars().all(|c| c.is_ascii_hexdigit() || c == ':' || c == '.') {
-        return Err(HostError::Invalid);
-      }
-      let port = match &inside[end + 1..] {
-        "" => None,
-        after => Some(after.strip_prefix(':').ok_or(HostError::Invalid)?),
-      };
-      (&authority[..end + 2], port)
-    }
-    None => match authority.split_once(':') {
+/// `authority` split into its host and the text after the `:` that ends the host, if any. A
+/// bracketed IPv6 address keeps its brackets and is checked; a host name and the port are left to
+/// the caller.
+pub(super) fn split_host(authority: &str, zone: ZoneId) -> Result<(&str, Option<&str>), HostError> {
+  let Some(inside) = authority.strip_prefix('[') else {
+    let (host, port) = match authority.split_once(':') {
       Some((host, port)) => (host, Some(port)),
       None => (authority, None),
-    },
+    };
+    return if host.is_empty() {
+      Err(HostError::Missing)
+    } else {
+      Ok((host, port))
+    };
   };
-  if host.is_empty() {
-    return Err(HostError::Missing);
-  }
-  let name = |c: char| c.is_alphanumeric() || matches!(c, '-' | '.' | '_');
-  if !host.starts_with('[') && !host.chars().all(name) {
+  let end = inside.find(']').ok_or(HostError::Invalid)?;
+  if !is_address(&inside[..end], zone) {
     return Err(HostError::Invalid);
   }
-  // `u16` parsing alone would take a sign.
-  let valid_port = |port: &str| port.chars().all(|c| c.is_ascii_digit()) && port.parse::<u16>().is_ok();
-  if port.is_some_and(|port| !valid_port(port)) {
-    return Err(HostError::Invalid);
-  }
-  Ok(host)
+  let port = match &inside[end + 1..] {
+    "" => None,
+    after => Some(after.strip_prefix(':').ok_or(HostError::Invalid)?),
+  };
+  Ok((&authority[..end + 2], port))
+}
+
+/// Whether `text`, the inside of brackets, is an IPv6 address, then a zone id where `zone` allows.
+fn is_address(text: &str, zone: ZoneId) -> bool {
+  let (address, zone_id) = match (zone, text.split_once("%25")) {
+    (ZoneId::Allowed, Some((address, zone_id))) => (address, Some(zone_id)),
+    _ => (text, None),
+  };
+  let address_char = |c: char| c.is_ascii_hexdigit() || c == ':' || c == '.';
+  // A zone id is unreserved characters and percent-encodings.
+  let zone_char = |c: char| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | '~' | '%');
+  !address.is_empty()
+    && address.chars().all(address_char)
+    && zone_id.is_none_or(|zone_id| !zone_id.is_empty() && zone_id.chars().all(zone_char))
 }

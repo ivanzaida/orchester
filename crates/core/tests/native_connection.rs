@@ -97,6 +97,8 @@ fn native_base_urls_are_https_or_this_computer_without_credentials_or_query() {
     "https://gateway.example.dev:8443/v1"
   );
   assert!(BaseUrl::new("https://[2001:db8::1]:443/v1").is_ok());
+  // A combining mark (the virama) is part of an IDN label.
+  assert!(BaseUrl::new("https://हिन्दी.भारत/v1").is_ok());
   for local in [
     "http://localhost:11434/v1",
     "http://127.0.0.1:8080",
@@ -127,6 +129,9 @@ fn native_base_urls_are_https_or_this_computer_without_credentials_or_query() {
     ("https://api.example.dev:+443", EndpointError::InvalidHost),
     ("https://api.example.dev:99999", EndpointError::InvalidHost),
     ("https://api<1>.example.dev", EndpointError::InvalidHost),
+    // Stricter than an MCP server's URL: no percent-encoded host, no zone id, no empty port.
+    ("https://%61pi.example.dev", EndpointError::InvalidHost),
+    ("http://[fe80::1%25eth0]:8080", EndpointError::InvalidHost),
     ("http://localhost:8080@api.example.dev", EndpointError::UrlCredentials),
   ];
   for (url, error) in refused {

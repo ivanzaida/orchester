@@ -66,7 +66,7 @@ fn mcp_urls_are_http_without_credentials() {
     McpUrl::new("https://mcp.example.dev/a b"),
     Err(TransportError::Whitespace(_))
   ));
-  assert!(McpUrl::new("http://[::1]:8931/mcp").is_ok());
+  // A backslash before the query could end the host where the check does not; after it, it is data.
   for invalid in [r"https://mcp.example.dev\@evil.example/", r"http://localhost\mcp"] {
     assert_eq!(McpUrl::new(invalid), Err(TransportError::Backslash), "{invalid}");
   }
@@ -74,12 +74,34 @@ fn mcp_urls_are_http_without_credentials() {
     "http://[::1]x/mcp",
     "http://[::1/mcp",
     "https://[]/mcp",
-    "https://mcp.example.dev:/mcp",
-    "https://mcp.example.dev:http/mcp",
-    "https://mcp.example.dev:99999/mcp",
-    "https://mcp<1>.example.dev/mcp",
+    "https://[mcp.dev]/mcp",
   ] {
     assert_eq!(McpUrl::new(invalid), Err(TransportError::InvalidHost), "{invalid}");
+  }
+}
+
+/// URLs the check accepted before the backslash and IPv6 rules: a stored server keeps loading.
+#[test]
+fn mcp_urls_still_accepted() {
+  for url in [
+    "https://пример.рф/mcp",
+    "https://bücher.de/mcp",
+    "https://例え.テスト/mcp",
+    "https://हिन्दी.भारत/mcp",
+    "https://mcp.example.dev:8443/v1?team=a&scope=read",
+    "https://mcp_server.example.dev/mcp",
+    "https://mcp.example.dev./mcp",
+    "HTTPS://MCP.EXAMPLE.DEV/MCP",
+    "http://[::ffff:127.0.0.1]:8931/mcp",
+    "http://[::1]:8931/mcp",
+    "http://[fe80::1%25eth0]:8931/mcp",
+    "https://mcp.example.dev:/mcp",
+    "https://xn--e1afmkfd.xn--p1ai/mcp",
+    "https://%6Dcp.example.dev/mcp",
+    r"https://mcp.example.dev/mcp?path=C:\work",
+    r"https://mcp.example.dev/mcp#C:\work",
+  ] {
+    assert!(McpUrl::new(url).is_ok(), "{url}");
   }
 }
 

@@ -11,7 +11,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::http_url::{self, HostError, Scheme};
+use super::http_url::{self, HostError, Scheme, ZoneId};
 use crate::id::SecretId;
 
 /// Longest base URL, in characters.
@@ -144,10 +144,7 @@ impl BaseUrl {
     if authority.contains('@') {
       return Err(EndpointError::UrlCredentials);
     }
-    let host = http_url::host(authority).map_err(|error| match error {
-      HostError::Missing => EndpointError::NoHost,
-      HostError::Invalid => EndpointError::InvalidHost,
-    })?;
+    let host = host_of(authority)?;
     let loopback = LOOPBACK_HOSTS.iter().any(|local| local.eq_ignore_ascii_case(host));
     if scheme == Scheme::Http && !loopback {
       return Err(EndpointError::UrlScheme);
@@ -164,6 +161,26 @@ impl BaseUrl {
     let rest = self.0.split_once("://").map_or(self.0.as_str(), |(_, rest)| rest);
     http_url::authority(rest)
   }
+}
+
+/// The host of `authority`, with its port checked. Stricter than an MCP server's URL
+/// ([`super::mcp::McpUrl`]), which must keep reading the URLs it stored before: native connections
+/// are new, so no stored base URL predates these rules. The host is a bracketed IPv6 address
+/// without a zone id or a name without percent-encodings, and a port, if any, is a number.
+fn host_of(authority: &str) -> Result<&str, EndpointError> {
+  let (host, port) = http_url::split_host(authority, ZoneId::Refused).map_err(|error| match error {
+    HostError::Missing => EndpointError::NoHost,
+    HostError::Invalid => EndpointError::InvalidHost,
+  })?;
+  if !host.starts_with('[') && host.contains(http_url::FORBIDDEN_IN_DOMAIN) {
+    return Err(EndpointError::InvalidHost);
+  }
+  // `u16` parsing alone would take a sign.
+  let valid_port = |port: &str| port.chars().all(|c| c.is_ascii_digit()) && port.parse::<u16>().is_ok();
+  if port.is_some_and(|port| !valid_port(port)) {
+    return Err(EndpointError::InvalidHost);
+  }
+  Ok(host)
 }
 
 impl fmt::Display for BaseUrl {
