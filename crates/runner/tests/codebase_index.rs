@@ -200,6 +200,8 @@ async fn codebase_index_reaches_codex_on_new_and_resumed_sessions_with_ripgrep_o
       .iter()
       .all(|line| line.contains(&index.to_string_lossy().into_owned()))
   );
+  let map = prompt_lines(root, run, "The packages and modules, from map.md:");
+  assert_eq!(map.len(), 2, "both sessions get the map excerpt: {map:?}");
   let skill = prompt_lines(root, run, "- orchester-codebase-index: ");
   assert_eq!(skill.len(), 1, "the new session lists the skill: {skill:?}");
   let document = skill[0]

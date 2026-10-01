@@ -17,7 +17,7 @@ use crate::{
   outline::Kind,
   outline_file::{outline_name, outline_path},
   record::{FileRecord, Outline, Symbol},
-  render::NO_LINES,
+  render::{NO_LINES, SymbolList},
   write,
 };
 
@@ -48,12 +48,14 @@ impl Previous {
       let record = tree_row(line).ok_or_else(|| unreadable(format!("unreadable tree row {line:?}")))?;
       records.insert(record.path.clone(), record);
     }
-    for line in read(write::SYMBOLS)?.lines() {
-      let (path, symbol) = symbol_row(line).ok_or_else(|| unreadable(format!("unreadable symbol row {line:?}")))?;
-      let Some(record) = records.get_mut(path) else {
-        return Err(unreadable(format!("a symbol of {path}, which is not in the tree")));
-      };
-      record.symbols.push(symbol);
+    for list in SymbolList::ALL {
+      for line in read(list.file())?.lines() {
+        let (path, symbol) = symbol_row(line).ok_or_else(|| unreadable(format!("unreadable symbol row {line:?}")))?;
+        let Some(record) = records.get_mut(path) else {
+          return Err(unreadable(format!("a symbol of {path}, which is not in the tree")));
+        };
+        record.symbols.push(symbol);
+      }
     }
     let documents: HashSet<String> = records
       .values()

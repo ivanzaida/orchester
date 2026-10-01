@@ -6,7 +6,11 @@ use std::{
   io::{self, Write},
 };
 
-use crate::{outline::Item, record::FileRecord};
+use crate::{
+  map,
+  outline::{Item, Kind},
+  record::FileRecord,
+};
 
 /// What `tree.txt` shows for a file without a line count.
 pub(crate) const NO_LINES: &str = "-";
@@ -51,12 +55,46 @@ pub(crate) fn tree(out: &mut impl Write, records: &[FileRecord]) -> io::Result<(
   Ok(())
 }
 
-/// Writes `symbols.tsv`: `<name>\t<path>\t<line>\t<kind>\t<container>` per definition, sorted by
-/// name, then path and line.
-pub(crate) fn symbols(out: &mut impl Write, records: &[FileRecord]) -> io::Result<()> {
+/// The symbols file that lists a definition. A search by name in `symbols.tsv` finds the types,
+/// functions and methods of the code itself first: the definitions of test files and the constants
+/// and statics, which outnumber them, are listed apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SymbolList {
+  Main,
+  Constants,
+  Tests,
+}
+
+impl SymbolList {
+  pub(crate) const ALL: [Self; 3] = [Self::Main, Self::Constants, Self::Tests];
+
+  pub(crate) const fn file(self) -> &'static str {
+    match self {
+      Self::Main => "symbols.tsv",
+      Self::Constants => "symbols-consts.tsv",
+      Self::Tests => "symbols-tests.tsv",
+    }
+  }
+
+  /// The list of a definition of `kind` in the file at `path`.
+  fn of(path: &str, kind: Kind) -> Self {
+    if map::in_test_folder(path) {
+      Self::Tests
+    } else if matches!(kind, Kind::Const | Kind::Static) {
+      Self::Constants
+    } else {
+      Self::Main
+    }
+  }
+}
+
+/// Writes the symbols file of `list`: `<name>\t<path>\t<line>\t<kind>\t<container>` per definition
+/// it lists, sorted by name, then path and line.
+pub(crate) fn symbols(out: &mut impl Write, records: &[FileRecord], list: SymbolList) -> io::Result<()> {
   let mut rows: Vec<_> = records
     .iter()
     .flat_map(|record| record.symbols.iter().map(move |symbol| (record.path.as_str(), symbol)))
+    .filter(|(path, symbol)| SymbolList::of(path, symbol.kind) == list)
     .collect();
   rows.sort_unstable_by(|(left_path, left), (right_path, right)| {
     (&left.name, left_path, left.line, left.kind.name()).cmp(&(&right.name, right_path, right.line, right.kind.name()))

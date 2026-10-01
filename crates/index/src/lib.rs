@@ -9,7 +9,9 @@
 //! - `tree.txt`: every tracked file, `<path>\t<language>\t<lines>` (`-` for binary files, symbolic links and
 //!   submodules);
 //! - `symbols.tsv`: one definition per line, `<name>\t<path>\t<line>\t<kind>\t<container>`, sorted by name; the
-//!   container is the enclosing item (`impl Worktree`, `class Store`), empty at top level;
+//!   container is the enclosing item (`impl Worktree`, `class Store`), empty at top level. It holds the code's own
+//!   types, functions, methods and the like; `symbols-consts.tsv` its constants and statics and `symbols-tests.tsv`
+//!   every definition of the files in test folders (`tests/`, `test/`, `__tests__/`, `spec/`), in the same format;
 //! - `outline/<path>.md` for each file of a parsed language: its items with line ranges, nested (impl → methods, class
 //!   → methods, mod → items), each with its signature;
 //! - `docs.md`: the headings of tracked Markdown files as `rg -n` prints them, `<path>:<line>:<heading>`;
