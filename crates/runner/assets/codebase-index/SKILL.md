@@ -19,7 +19,7 @@ repository at the run's **base revision**:
 | `tree.txt` | every tracked file with its language and line count | `path<TAB>language<TAB>lines` (`-` for binary files, links, submodules) |
 | `symbols.tsv` | the code's own definitions: types, traits, functions, methods, impls, modules, classes, macros; sorted by name | `name<TAB>path<TAB>line<TAB>kind<TAB>container` |
 | `symbols-consts.tsv` | the constants and statics of the code, same format | as `symbols.tsv` |
-| `symbols-tests.tsv` | every definition in a test folder (`tests/`, `test/`, `__tests__/`, `spec/`), same format | as `symbols.tsv` |
+| `symbols-tests.tsv` | every definition in a test folder: a package's top-level `tests/`, `test/`, `__tests__/` or `spec/` (the test folders in `map.md`) and the repository's top-level `tests/`; same format | as `symbols.tsv` |
 | `outline/<path>.md` | the items of one source file, nested, with line ranges and signatures | `- L<start>-<end> <signature>`, indented under their parent |
 | `docs.md` | the headings of the tracked Markdown files | `path:line:## Heading`, as `rg -n` prints matches |
 

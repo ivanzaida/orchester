@@ -108,16 +108,15 @@ ORC-48 changed what agents get of the code index: `symbols.tsv` lists only the c
 measurement that should show whether this helps was deferred by the user: the stable install does not have the
 change, and a dev build on this repository would share `<repo>/.orchester` with it.
 
-1. After ORC-48 is merged and the stable build reinstalled, run the skill's commands exactly as written in Windows
-   PowerShell 5.1, in `pwsh` and in bash (Git Bash) against a format-6 index, with `IDX` set as the skill says.
+1. **Done 2026-10-01.** Skill commands verified as written in bash, pwsh 7 and Windows PowerShell 5.1 against a
+   format-6 index by the ORC-48 review.
 2. Measure index on vs off on 2–3 tasks of different kinds, at least one that needs navigating this repository (e.g.
    a core/runner change), plus ORC-32 again for comparison with
    `docs/evidence/code-index-effect-2026-10-01.md`. Alternate the order of the arms and give each run its own
    `CARGO_TARGET_DIR`. Record tokens, time to the first edit and command counts (all, and before the first edit),
    and which index files the agent used.
 
-**Done when** the skill commands are confirmed (or fixed) in all three shells and a new `docs/evidence` file has the
-table and a conclusion.
+**Done when** a new `docs/evidence` file has the table and a conclusion.
 
 ## M · MCP servers
 

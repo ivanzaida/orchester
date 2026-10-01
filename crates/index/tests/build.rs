@@ -132,6 +132,47 @@ fn constants_and_test_definitions_are_listed_apart_from_the_code() {
 }
 
 #[test]
+fn only_top_level_test_folders_send_definitions_to_the_test_list() {
+  let repo = Repo::new();
+  repo.write("crates/a/Cargo.toml", "[package]\nname = \"a\"\n");
+  repo.write("crates/a/src/lib.rs", "pub mod openapi;\n");
+  repo.write("crates/a/src/openapi/spec/x.rs", "pub fn in_package_spec() {}\n");
+  repo.write("crates/a/src/test/support.rs", "pub fn in_package_test() {}\n");
+  repo.write("crates/a/tests/t.rs", "fn package_test() {}\n");
+  repo.write("crates/a/spec/s.rs", "fn package_spec() {}\n");
+  repo.write("src/openapi/spec/x.rs", "pub fn in_root_spec() {}\n");
+  repo.write("tests/e2e.rs", "fn repository_test() {}\n");
+  repo.git(&["add", "crates", "src", "tests"]);
+  repo.git(&["commit", "--quiet", "-m", "test folders"]);
+  let index = repo.ensure(&repo.head()).path;
+
+  let listed = |file: &str| -> Vec<String> {
+    read(&index, file)
+      .lines()
+      .map(|row| row.split('\t').take(2).collect::<Vec<_>>().join(" "))
+      .collect()
+  };
+  let main = listed("symbols.tsv");
+  for row in [
+    "in_package_spec crates/a/src/openapi/spec/x.rs",
+    "in_package_test crates/a/src/test/support.rs",
+    "in_root_spec src/openapi/spec/x.rs",
+  ] {
+    assert!(main.contains(&row.to_owned()), "{row} not in symbols.tsv: {main:?}");
+  }
+  assert_eq!(
+    listed("symbols-tests.tsv"),
+    [
+      "package_spec crates/a/spec/s.rs",
+      "package_test crates/a/tests/t.rs",
+      "repository_test tests/e2e.rs",
+      "works crates/app/tests/it.rs",
+    ]
+  );
+  assert!(read(&index, "map.md").contains("- tests: spec/ (1 file), tests/ (1 file)\n"));
+}
+
+#[test]
 fn outlines_nest_items_with_line_ranges_and_signatures() {
   let repo = Repo::new();
   let index = repo.ensure(&repo.head()).path;

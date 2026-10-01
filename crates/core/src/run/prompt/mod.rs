@@ -20,9 +20,8 @@
 //!
 //! New and resumed sessions alike are told about the code index ([`CodeIndexPrompt`]): where the index of the run's
 //! base revision is, an excerpt of its package and module map, and the internal skill that explains searching it,
-//! or that ripgrep is missing and `git grep -n`
-//! searches instead. A resumed session is told again because the index may be new to it: the setting or ripgrep can
-//! have changed since it started.
+//! or that ripgrep is missing and `git grep -n` searches instead. A resumed session is told again because the index
+//! may be new to it: the setting or ripgrep can have changed since it started.
 //!
 //! Every invocation, new or resumed, reads the task memory recalled for it ([`memory`]).
 //!
@@ -101,8 +100,8 @@ pub enum CodeIndexPrompt<'a> {
   /// The index of the run's base `revision` is in `folder`; the skill whose `SKILL.md` is `skill`
   /// explains how to search it. `git_grep`: the agent has no ripgrep and searches with `git grep`
   /// (not said to an agent with a search tool of its own). `map` is the text of the index's
-  /// `map.md`, whose package and module map the prompt carries in a size-bounded excerpt; empty
-  /// leaves the excerpt out.
+  /// `map.md`, whose package and module map the prompt carries in a size-bounded excerpt; a map
+  /// without sections (empty when it could not be read) gets a pointer to `map.md` instead.
   Given {
     revision: &'a str,
     folder: &'a str,

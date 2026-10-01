@@ -64,15 +64,35 @@ fn with_map(map: &str) -> String {
   input.assemble(InjectionEvent::Start).expect("assembled").text
 }
 
+/// The line that introduces the map excerpt in a prompt.
+const EXCERPT_INTRO: &str = "The packages and modules, from map.md";
+/// What the introduction adds when the module folders lost what they hold.
+const CONTENTS_OMITTED: &str = " (module file lists omitted; see map.md)";
+
 /// The map excerpt of the prompt `text`.
 fn excerpt(text: &str) -> &str {
-  let start = text
-    .find("The packages and modules, from map.md:\n```text\n")
-    .map(|at| at + "The packages and modules, from map.md:\n```text\n".len())
-    .unwrap_or_else(|| panic!("no map excerpt in\n{text}"));
-  let end = start + text[start..].find("```\n").expect("the excerpt ends");
-  &text[start..end]
+  fenced(text).1
 }
+
+/// The fence of the map excerpt of the prompt `text`, and the excerpt.
+fn fenced(text: &str) -> (&str, &str) {
+  let intro = text
+    .find(EXCERPT_INTRO)
+    .unwrap_or_else(|| panic!("no map excerpt in\n{text}"));
+  let opening = intro + text[intro..].find(":\n").expect("the introduction ends") + ":\n".len();
+  let fence_end = opening
+    + text[opening..]
+      .find(|character| character != '`')
+      .expect("the fence ends");
+  let fence = &text[opening..fence_end];
+  let start = fence_end + text[fence_end..].find('\n').expect("the opening fence ends") + 1;
+  let closing = format!("\n{fence}\n");
+  let end = start - 1 + text[start - 1..].find(&closing).expect("the excerpt ends") + 1;
+  (fence, &text[start..end])
+}
+
+/// The pointer a prompt without an excerpt has to `map.md`.
+const MAP_POINTER: &str = "Read map.md in /repo/.orchester/index/4d2b8e0 first";
 
 /// A map of `packages` packages of `modules` module folders each.
 fn large_map(packages: usize, modules: usize) -> String {
@@ -110,6 +130,8 @@ fn code_index_prompt_carries_the_package_and_module_map() {
     text.contains("symbols-consts.tsv") && text.contains("symbols-tests.tsv"),
     "{text}"
   );
+  assert!(text.contains(&format!("{EXCERPT_INTRO}:\n")), "{text}");
+  assert!(!text.contains(MAP_POINTER), "{text}");
 }
 
 #[test]
@@ -123,6 +145,10 @@ fn a_map_over_the_bound_loses_what_module_folders_hold_first() {
   assert!(excerpt.contains("  - module29/ (3 files, 300 lines)\n"));
   assert!(!excerpt.contains("first.rs"));
   assert!(!excerpt.contains("(the rest is in map.md)"));
+  assert!(
+    text.contains(&format!("{EXCERPT_INTRO}{CONTENTS_OMITTED}:\n")),
+    "{text}"
+  );
 }
 
 #[test]
@@ -133,13 +159,32 @@ fn a_map_too_large_even_without_module_contents_is_cut_at_a_line() {
   assert!(excerpt.starts_with("## crates/part0: part0 (rust)\n"));
   assert!(excerpt.ends_with("\n- ... (the rest is in map.md)\n"), "{excerpt}");
   assert!(!excerpt.contains("## crates/part19"));
+  assert!(
+    text.contains(&format!("{EXCERPT_INTRO}{CONTENTS_OMITTED}:\n")),
+    "{text}"
+  );
 }
 
 #[test]
-fn an_unread_map_leaves_the_excerpt_out() {
-  let text = with_map("");
-  assert!(text.contains("# Codebase index\n"));
-  assert!(!text.contains("from map.md:"), "{text}");
+fn a_map_excerpt_is_fenced_longer_than_any_backtick_run_in_it() {
+  assert_eq!(fenced(&with_map(MAP)).0, "```");
+  let map = "# Repository map\n\n## Outside packages\n\n- a```b/ (1 file)\n- c````/ (2 files)\n";
+  let text = with_map(map);
+  let (fence, excerpt) = fenced(&text);
+  assert_eq!(fence, "`````", "{text}");
+  assert!(text.contains("\n`````text\n"), "{text}");
+  assert_eq!(excerpt, "## Outside packages\n- a```b/ (1 file)\n- c````/ (2 files)\n");
+}
+
+#[test]
+fn code_index_without_a_map_excerpt_points_to_map_md() {
+  let unread = with_map("");
+  let without_sections = with_map("# Repository map\n\nRevision 4d2b8e0: 0 files, 0 lines, 0 symbols, 0 packages.\n");
+  for text in [unread, without_sections] {
+    assert!(text.contains("# Codebase index\n"));
+    assert!(!text.contains(EXCERPT_INTRO), "{text}");
+    assert_eq!(text.matches(MAP_POINTER).count(), 1, "{text}");
+  }
 }
 
 #[test]

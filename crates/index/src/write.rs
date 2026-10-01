@@ -20,6 +20,7 @@ use orchester_core::revision::Revision;
 use crate::{
   IndexError,
   digest::{self, Digests, Hashing},
+  map::Map,
   outline_file::{outline_name, outline_path},
   record::{FileRecord, Outline},
   render::{self, SymbolList},
@@ -29,12 +30,12 @@ pub(crate) const TREE: &str = "tree.txt";
 pub(crate) const DOCS: &str = "docs.md";
 const MAP: &str = "map.md";
 
-/// Writes the index of `records` with `map` into `out`, linking the outlines of the index of `base`;
+/// Writes the index of `records` with their `map` into `out`, linking the outlines of the index of `base`;
 /// the digest of each file written. Records whose outline could not be written lose it.
 pub(crate) fn write(
   out: &Path,
   records: &mut [FileRecord],
-  map: &str,
+  map: &Map,
   base: Option<&Revision>,
 ) -> Result<Digests, IndexError> {
   let mut digests = Digests::new();
@@ -43,13 +44,13 @@ pub(crate) fn write(
     let name = list.file();
     digests.insert(
       name.into(),
-      stream(out, name, |file| render::symbols(file, records, list))?,
+      stream(out, name, |file| render::symbols(file, records, list, &map.tests))?,
     );
   }
   digests.insert(DOCS.into(), stream(out, DOCS, |file| render::docs(file, records))?);
   let file = out.join(MAP);
-  fs::write(&file, map).map_err(IndexError::io("write", file))?;
-  digests.insert(MAP.into(), digest::of(map.as_bytes()));
+  fs::write(&file, &map.text).map_err(IndexError::io("write", file))?;
+  digests.insert(MAP.into(), digest::of(map.text.as_bytes()));
   for (index, error) in place_outlines(out, records) {
     let record = &mut records[index];
     if matches!(record.outline, Some(Outline::Previous { .. })) {

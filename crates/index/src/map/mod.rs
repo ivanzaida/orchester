@@ -15,14 +15,28 @@ use orchester_core::revision::Revision;
 use self::packages::{Context, Package, join};
 use crate::record::FileRecord;
 
-/// Folders of a package that hold its tests.
+/// Folders of a package that hold its tests, at its top level.
 const TEST_FOLDERS: [&str; 4] = ["tests", "test", "__tests__", "spec"];
+/// The repository's top-level folder that holds tests outside any package.
+const REPOSITORY_TESTS: &str = "tests";
 /// The most names listed for the content of one folder.
 const LISTED: usize = 20;
 
 pub(crate) struct Map {
   pub(crate) text: String,
   pub(crate) packages: usize,
+  pub(crate) tests: TestFolders,
+}
+
+/// The folders whose files serve the tests: the top-level test folders of each package the map lists, and the
+/// repository's top-level `tests/`. A folder of the same name deeper in a package holds its code.
+pub(crate) struct TestFolders(HashSet<String>);
+
+impl TestFolders {
+  /// Whether the file at `path` is in one of these folders, at any depth.
+  pub(crate) fn hold(&self, path: &str) -> bool {
+    path.match_indices('/').any(|(at, _)| self.0.contains(&path[..at]))
+  }
 }
 
 /// Whether the file at `path` is a manifest the map reads.
@@ -76,8 +90,9 @@ pub(crate) fn render(revision: &Revision, records: &[FileRecord], manifests: &BT
       found.len()
     ),
   );
+  let mut tests = HashSet::from([REPOSITORY_TESTS.to_owned()]);
   for (package, files) in found.iter().zip(&owned) {
-    package_section(&mut text, package, files);
+    tests.extend(package_section(&mut text, package, files));
   }
   outside_section(&mut text, &outside);
   if !unreadable.is_empty() {
@@ -89,6 +104,7 @@ pub(crate) fn render(revision: &Revision, records: &[FileRecord], manifests: &BT
   Map {
     text,
     packages: found.len(),
+    tests: TestFolders(tests),
   }
 }
 
@@ -101,7 +117,8 @@ fn owner(by_dir: &HashMap<&str, usize>, path: &str) -> Option<usize> {
     .find_map(|folder| by_dir.get(folder).copied())
 }
 
-fn package_section(text: &mut String, package: &Package, files: &[&FileRecord]) {
+/// Writes the section of `package`, whose files are `files`; its test folders, relative to the repository.
+fn package_section(text: &mut String, package: &Package, files: &[&FileRecord]) -> Vec<String> {
   let dir = if package.dir.is_empty() { "." } else { &package.dir };
   line(
     text,
@@ -135,13 +152,13 @@ fn package_section(text: &mut String, package: &Package, files: &[&FileRecord]) 
     })
     .collect();
   let top = level(relative.iter().copied());
-  let tests: Vec<String> = top
+  let tests: Vec<(&String, &Entry)> = top
     .iter()
     .filter(|(name, entry)| entry.folder && TEST_FOLDERS.contains(&name.as_str()))
-    .map(|(name, entry)| entry.name(name))
     .collect();
   if !tests.is_empty() {
-    line(text, format_args!("- tests: {}", tests.join(", ")));
+    let names: Vec<String> = tests.iter().map(|(name, entry)| entry.name(name)).collect();
+    line(text, format_args!("- tests: {}", names.join(", ")));
   }
   let source = package.source_root.as_deref();
   let modules = level(relative.iter().filter_map(|(path, record)| match source {
@@ -165,6 +182,7 @@ fn package_section(text: &mut String, package: &Package, files: &[&FileRecord]) 
       line(text, format_args!("- also: {}", listed(also)));
     }
   }
+  tests.into_iter().map(|(name, _)| join(&package.dir, name)).collect()
 }
 
 fn outside_section(text: &mut String, outside: &[&FileRecord]) {
@@ -184,13 +202,6 @@ fn outside_section(text: &mut String, outside: &[&FileRecord]) {
   if !root_files.is_empty() {
     line(text, format_args!("- root files: {}", listed(root_files)));
   }
-}
-
-/// Whether the file at `path` is in a test folder at any depth: its definitions serve the tests.
-pub(crate) fn in_test_folder(path: &str) -> bool {
-  path
-    .rsplit_once('/')
-    .is_some_and(|(folders, _)| folders.split('/').any(|folder| TEST_FOLDERS.contains(&folder)))
 }
 
 fn is_test(path: &str) -> bool {

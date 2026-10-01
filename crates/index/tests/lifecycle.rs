@@ -310,7 +310,7 @@ fn the_list_shows_an_index_of_an_earlier_format_as_outdated() {
   fs::set_permissions(&manifest, permissions).expect("make writable");
   let earlier = fs::read_to_string(&manifest)
     .expect("read")
-    .replacen("\"format\": 6", "\"format\": 1", 1);
+    .replacen("\"format\": 7", "\"format\": 1", 1);
   fs::write(&manifest, earlier).expect("an earlier format");
 
   let listed = repo.indexes().list().expect("list");
