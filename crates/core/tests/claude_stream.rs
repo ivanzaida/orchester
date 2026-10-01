@@ -5,12 +5,9 @@
 //! probe recorded (`.tmp/cli-probe/REPORT.md`) and are not captured output.
 
 use orchester_core::{
-  connection::{
-    AgentProvider,
-    stream::{
-      AgentEvent, AgentStream, ClaudeStream, CommandStatus, FileChange, FileChangeKind, InvocationOutcome,
-      InvocationTracker, OutputStream,
-    },
+  connection::stream::{
+    AgentEvent, ClaudeStream, CommandStatus, FileChange, FileChangeKind, InvocationOutcome, InvocationTracker,
+    OutputStream,
   },
   run::{StepOutcome, StepResult, TokenUsage},
 };
@@ -286,7 +283,7 @@ fn claude_stream_reads_an_error_result_as_a_failed_turn() {
 
 #[test]
 fn claude_stream_keeps_what_it_does_not_understand() {
-  let mut stream = AgentStream::new(AgentProvider::ClaudeCodeCli);
+  let mut stream = ClaudeStream::default();
   for (output, line) in [
     (OutputStream::Stdout, "not json"),
     (OutputStream::Stdout, r#"{"type":"system","subtype":"hook_started"}"#),

@@ -7,7 +7,7 @@ mod support;
 use std::time::Duration;
 
 use orchester_core::{
-  connection::stream::InvocationOutcome,
+  connection::{AgentProvider, stream::InvocationOutcome},
   id::{IdempotencyKey, RunId},
   resource::StepKey,
   run::{PauseReason, RaisedLimits, Run, RunLimit, RunStatus, StepStatus},
@@ -19,7 +19,9 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, git, is_running, project, reported, scheduler, wait_for, wait_for_turns};
+use self::support::{
+  PATIENCE, Setup, git, is_running, project, reported, scheduler, threads, wait_for, wait_for_turns,
+};
 
 fn step_status(run: &Run, step: &str) -> Option<StepStatus> {
   run
@@ -130,8 +132,10 @@ async fn control_cancel_ends_the_agent_and_its_processes_and_keeps_the_worktree(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn control_token_limit_commits_the_work_and_continues_the_session_once_raised() {
+  // Claude Code reports each message's usage while its turn goes on; Codex reports a turn's at its end.
   let project = project(&Setup {
     budget: 5_000,
+    provider: AgentProvider::ClaudeCodeCli,
     ..Setup::new("Work in turns.")
   });
   let root = project.repo.path();
@@ -190,11 +194,11 @@ async fn control_token_limit_commits_the_work_and_continues_the_session_once_rai
   assert_eq!(readme_at(root, &head), "hi\ndraft\ncontinued");
   let argv = reported(&db, id, "argv: ");
   assert_eq!(argv.len(), 2);
-  assert!(argv[1].starts_with("-a never exec resume --json"), "{}", argv[1]);
-  assert!(argv[1].contains("sandbox_mode=workspace-write"), "{}", argv[1]);
-  assert!(argv[1].ends_with("fake-thread-1 -"), "{}", argv[1]);
   let invocations = db.invocations(id).expect("invocations");
-  assert_eq!(invocations[1].session.as_deref(), Some("fake-thread-1"));
+  let session = invocations[0].session.clone().expect("the session");
+  assert!(argv[1].ends_with(&format!("--resume {session}")), "{}", argv[1]);
+  assert!(argv[1].contains("--permission-mode default"), "{}", argv[1]);
+  assert_eq!(invocations[1].session.as_deref(), Some(session.as_str()));
   assert_eq!(invocations[1].number, 2);
 }
 
@@ -231,8 +235,8 @@ async fn control_time_limit_counts_active_time_and_stops_the_agent() {
   let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);
   let db = ProjectDb::open(root).expect("open");
-  let argv = reported(&db, id, "argv: ");
-  assert!(argv[1].contains("exec resume"), "{}", argv[1]);
+  let threads = threads(&db, id);
+  assert_eq!(threads[1]["threadId"], "fake-thread-1", "the session continues");
 }
 
 /// A run whose start failed stays pending. Cancelling it ends it without an attempt, and the

@@ -31,7 +31,7 @@ use super::{
   step_inspector::{Fields, StepInspectorProps},
 };
 use crate::{
-  agents::permissions::{file_command_hints, unlisted_commands},
+  agents::permissions::{escalations, file_command_hints, unlisted_commands},
   pipelines::{data::ProfileChoice, describe::repository_access, fields::AccessChoice},
   theme::ExtraTypography,
   ui::{
@@ -132,6 +132,7 @@ fn commands_rows(
     &commands_value(ctx, effective),
     ValueStyle::Mono,
   )];
+  rows.extend(escalations(ctx, choice.provider, effective.commands()).map(|text| note(&text)));
   let CommandPermission::Allowed(profile) = choice.permissions.commands() else {
     return rows;
   };

@@ -191,6 +191,20 @@ fn setting_rows(
     };
     rows.insert(1, folders_row);
   }
+  // The user's own execpolicy rules stay (their choice): an allow rule there runs a command outside
+  // the sandbox without asking. The repository's `.codex` folder is never loaded.
+  if provider == AgentProvider::CodexCli {
+    rows.push(row(
+      Icon::TriangleAlert,
+      &ctx.t("agents.permissions.enforcement.codexRules"),
+      &ctx.t("agents.permissions.enforcement.codexRulesHow"),
+    ));
+    rows.push(row(
+      Icon::CircleCheck,
+      &ctx.t("agents.permissions.enforcement.codexRepository"),
+      &ctx.t("agents.permissions.enforcement.codexRepositoryHow"),
+    ));
+  }
   rows
 }
 

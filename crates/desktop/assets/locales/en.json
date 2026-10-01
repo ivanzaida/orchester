@@ -811,6 +811,13 @@
           "other": "{{count}} memory records could not be read"
         },
         "memoryScanFailed": "Task memory could not be checked for unreadable records; the agent started all the same",
+        "codexSettingsIgnored": "This branch has .codex/ settings; Orchester ignores them",
+        "stderrLeftOut": {
+          "one": "{{count}} more line of the agent’s standard error left out",
+          "other": "{{count}} more lines of the agent’s standard error left out"
+        },
+        "stderrLeftOutDetail": "The activity keeps the first 1000 lines (256 KiB) of each agent start.",
+        "codexSettingsIgnoredDetail": "Codex loaded no configuration, hooks, rules or MCP servers from {{folder}}. Its skills follow Repository agent files. Your own Codex settings still apply.",
         "memoryUnreadableDetail": "Agents get the other records. The unreadable ones stay in the project database as they are."
       },
       "unparsed": {
@@ -986,6 +993,8 @@
       "commandTitle": "Approve command?",
       "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny prevents execution and fails this step.",
       "commandExplanationClaude": "{{agent}} requests this command in {{cwd}}. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationClaudeReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "command": "Command",
       "cwd": "Working directory",
       "note": "Agent’s note",
@@ -1624,24 +1633,27 @@
         "allowed": {
           "title": "Allowed commands",
           "detail": "Only these commands run. Anything else is denied and the agent is told why.",
-          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Anything else is denied and the agent is told why."
+          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you first."
         },
         "any": {
           "title": "Any command in the worktree",
-          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders."
+          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders.",
+          "codexDetail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. Beyond the sandbox, commands ask you first."
         }
       },
       "addCommand": "Add command",
       "toolApprovals": "Ask before MCP actions that require approval",
       "toolApprovalsHeading": "MCP approvals",
       "toolApprovalsDisabled": "MCP approval requests are denied",
-      "transport": "Codex App Server uses your normal account and inherited global MCP servers, plus project-selected servers.",
+      "transport": "Codex App Server uses your normal account. Your own MCP servers, plugins and notify program are turned off.",
       "claudeTransport": "Claude Code asks Orchester through its permission prompt tool. Only the project-selected MCP servers load.",
       "commandPlaceholder": "e.g. pnpm test",
       "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
       "fileCommandPrefix": "{{command}} also allows any arguments after it, including ones that change files.",
-      "noCommands": "No command is allowed yet, so none runs, not even a read-only one.",
-      "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them.",
+      "noCommands": "No command is listed yet, so every command asks you first, even a read-only one.",
+      "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them. Other commands ask you first.",
+      "codexEscalations": "Beyond the sandbox, commands ask you first.",
+      "codexRulesNote": "Your own Codex rules still apply: a command they allow runs outside the sandbox without asking you. The repository’s .codex settings are ignored.",
       "commandInvalid": {
         "blank": "Type a command first.",
         "tooLong": "A command is at most {{max}} characters long.",
@@ -1688,7 +1700,7 @@
         "editFoldersOther": "Edits files in the task worktree and {{count}} more folders",
         "commandsAsk": "Asks before commands",
         "commandsAny": "Any command in the worktree",
-        "commandsNone": "No commands",
+        "commandsNone": "No listed commands, all ask",
         "commandsOne": "1 allowed command",
         "commandsOther": "{{count}} allowed commands",
         "networkOff": "Network off",
@@ -1702,7 +1714,7 @@
         "editFoldersOther": "Edit files + {{count}} folders",
         "commandsAsk": "Asks before commands",
         "commandsAny": "Any command",
-        "commandsNone": "No commands",
+        "commandsNone": "All commands ask",
         "commandsOne": "1 command",
         "commandsOther": "{{count}} commands",
         "networkOff": "Network off",
@@ -1723,6 +1735,10 @@
         },
         "enforced": "{{setting}} · enforced",
         "staysOn": "Network stays on · off is not enforceable",
+        "codexRules": "Your own Codex rules still apply",
+        "codexRulesHow": "allow rules run unsandboxed, unasked",
+        "codexRepository": "Repository .codex settings ignored",
+        "codexRepositoryHow": "worktree untrusted · none load",
         "notEnforceable": "{{setting}} · not enforceable",
         "networkShare": "Edits on a network share can’t be allowed by rule, so a run can’t start.",
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
@@ -1730,15 +1746,13 @@
         "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
         "mcp": {
-          "inherited": "Project-selected and global MCP servers remain available",
+          "codexChosen": "Only the chosen MCP servers run",
+          "codexDenied": "not asked · the call fails",
           "none": "No MCP servers",
           "noneHow": "none chosen · user’s own ignored",
           "onlyOne": "Only the chosen MCP server loads",
           "only": "Only the {{count}} chosen MCP servers load",
-          "codexLoading": "-c mcp_servers.* · no user config",
           "claudeLoading": "--strict-mcp-config --mcp-config",
-          "codexCalls": "Their tools run without approval",
-          "codexCallsHow": "-a never · unverified",
           "claudeCalls": "Only their tools are allowed",
           "claudeCallsHow": "--allowedTools mcp__* · unverified",
           "claudeCallsAsk": "Each tool call waits for your decision",
@@ -1761,25 +1775,24 @@
       "mechanism": {
         "codexReadOnly": "sandbox · read-only",
         "codexWorkspaceWrite": "sandbox · workspace-write",
-        "codexCommands": "sandbox · commands stay in the worktree",
+        "codexCommands": "sandbox · escalations ask you",
         "codexCommandApprovals": "Codex App Server · one command approval",
         "codexNetworkOff": "sandbox · network access off",
         "codexNetworkOn": "sandbox · network access on",
         "codexWritableRoots": "sandbox · writable roots",
-        "claudeEditToolsRemoved": "edit tools removed · listed cmds run",
-        "claudeEditToolsRemovedNoCommands": "edit tools removed · no commands",
+        "claudeEditToolsRemoved": "edit tools off · list runs · others ask",
+        "claudeEditToolsRemovedAsk": "edit tools off · commands ask",
         "claudeAcceptEdits": "permission mode · accept edits",
         "claudeEditRules": "allowed tools · edit rules per folder",
         "claudeAllowedTools": {
-          "one": "allowed tools · 1 prefix rule",
-          "other": "allowed tools · {{count}} prefix rules"
+          "none": "no listed commands · all ask",
+          "one": "allowed tools · 1 rule · others ask",
+          "other": "allowed tools · {{count}} rules · others ask"
         },
         "claudeWebTools": "web tools allowed",
         "claudeWebToolsRemoved": "web tools removed · commands keep network",
         "claudeAddDir": "--add-dir for edit tools · commands not confined",
-        "claudePermissionPrompt": "--permission-prompt-tool · asks each command",
-        "claudeNoCommandsReadOnly": "read-only · no commands",
-        "claudeNoCommandsReadOnlyDetail": "Claude Code would run an approved command outside any sandbox, so a read-only step gets none."
+        "claudePermissionPrompt": "--permission-prompt-tool · asks each command"
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",

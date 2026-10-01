@@ -251,6 +251,26 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+C6 · Commands outside the permissions ask a person ("List + ask") · branch `claude/ask-outside`
+
+- **Done 2026-10-01.** User decision after ORC-48, where Claude Code steps with allowed commands ran in `dontAsk` and
+  13 commands (`$VAR`, compound commands, `sed`, `git grep`, `powershell -Command`, `codex exec`) were denied without
+  reaching "Needs you". Claude Code steps with allowed commands now run in `default` with the permission prompt: the
+  listed and known-safe read-only commands run, any other asks (also in read-only steps, whose approval says an
+  approved command can change files). Writing steps with allowed commands always edit by `Edit` rules. Every Codex
+  step runs as App Server with `sandbox_approval`: a command that needs more than the sandbox asks; `codex exec` is
+  gone. Launch permissions record what happened to other commands. `docs/interactive-tool-approvals.md`.
+- Agents ask everywhere: a Claude Code read-only step that asks before commands, and an empty allowed list, ask about
+  every command. App Server agents get none of the user's MCP servers, plugins, apps or notify program; the user's
+  execpolicy `.rules` still apply (the user's choice, user decision 2026-10-01), which the enforcement panel and
+  the run popover say. The repository's own `.codex` folder never loads: the worktree and its repository are marked
+  untrusted, a project layer Codex loaded anyway refuses the step, and a branch with `.codex/` gets a note in its
+  activity. Live turns: `docs/evidence/ask-outside-e2e-2026-10-01.md`.
+- Open (macOS): check whether Codex canonicalises its working folder (`/var` → `/private/var`, symlinks) before it
+  looks trust up, against the keys Orchester writes (the worktree and repository paths as the runner names them). If
+  it does, a trusted repository's `.codex` would load; until checked on a Mac, the runner's `config/read` layer check
+  fails such a step closed ("Codex loaded the repository's own Codex settings").
+
 ORC-48 · Make the code index useful to agents · branch `orchester/orc-48-run-2`
 
 - **Done 2026-10-01, without the re-measurement.** The index writes `symbols.tsv` with the code's own types,

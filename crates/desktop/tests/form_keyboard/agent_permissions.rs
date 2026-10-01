@@ -216,6 +216,21 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
   ));
   assert!(!shows(&mut desktop, "known-safe read-only"));
   assert!(shows(&mut desktop, "Ask before running commands"));
+  // Any command in the worktree: a command that needs more than the sandbox asks a person.
+  assert!(shows(
+    &mut desktop,
+    "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. \
+     Beyond the sandbox, commands ask you first."
+  ));
+  assert!(shows(&mut desktop, "sandbox · escalations ask you"));
+  // The user's own execpolicy rules stay, the repository's `.codex` folder never loads; the panel says so.
+  assert!(shows(&mut desktop, "Your own Codex rules still apply"));
+  assert!(shows(&mut desktop, "allow rules run unsandboxed, unasked"));
+  assert!(shows(&mut desktop, "Repository .codex settings ignored"));
+  assert!(shows(&mut desktop, "worktree untrusted · none load"));
+  // Builder chooses no MCP server, so none runs; the user's own are turned off.
+  assert!(shows(&mut desktop, "none chosen · user’s own ignored"));
+  assert!(shows(&mut desktop, "Beyond the sandbox, commands ask you first."));
   let network_off_enforced = cfg!(not(windows));
   assert_eq!(
     shows(
@@ -415,9 +430,9 @@ fn step_inspector_narrows_the_profile_commands_and_never_widens() {
   });
 }
 
-/// What Claude Code runs besides a non-empty list of allowed commands.
-const READ_ONLY_COMMANDS: &str =
-  "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them.";
+/// What Claude Code runs besides a non-empty list of allowed commands, and that the others ask.
+const READ_ONLY_COMMANDS: &str = "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, \
+                                  without listing them. Other commands ask you first.";
 
 #[test]
 fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_commands_edit() {
@@ -425,9 +440,11 @@ fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_
   permissions_of(&mut desktop, "Reviewer");
   assert!(shows(
     &mut desktop,
-    "These commands run, as do known-safe read-only commands such as ls, cat or git log."
+    "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you \
+     first."
   ));
   assert!(shows(&mut desktop, READ_ONLY_COMMANDS));
+  assert!(shows(&mut desktop, "allowed tools · 3 rules · others ask"));
   desktop.tab_to("agent-new-command", MAX_STOPS);
   desktop.type_text("sed -n");
   desktop.enter();
@@ -439,7 +456,7 @@ fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_
   ));
   assert!(!shows(&mut desktop, "git also allows any arguments"));
   desktop.press("agent-permission-edit");
-  // A deny rule for sed would deny the listed form too, so edits are allowed by rule instead.
+  // acceptEdits would run every form of sed, so with allowed commands edits are allowed by rule.
   assert!(shows(&mut desktop, "allowed tools · edit rules per folder"));
   assert!(!shows(&mut desktop, "permission mode · accept edits"));
 }
@@ -473,21 +490,16 @@ fn agent_permissions_a_folder_no_edit_rule_can_name_is_not_enforceable() {
   assert!(shows(&mut desktop, "Repository access · enforced"));
 }
 
+/// Agents ask: a read-only step that asks before commands asks about every one.
 #[test]
-fn agent_permissions_claude_asking_read_only_runs_no_commands_and_says_why() {
+fn agent_permissions_claude_asking_read_only_asks_about_every_command() {
   let mut desktop = seeded();
   permissions_of(&mut desktop, "Reviewer");
-  assert!(shows(&mut desktop, "edit tools removed · listed cmds run"));
-  // Read-only and asking: an approved command would run unsandboxed, so the step gets none.
+  assert!(shows(&mut desktop, "edit tools off · list runs · others ask"));
   desktop.press("agent-permission-ask");
-  assert!(shows(&mut desktop, "read-only · no commands"));
-  assert!(shows(
-    &mut desktop,
-    "Claude Code would run an approved command outside any sandbox, so a read-only step gets none."
-  ));
-  assert!(shows(&mut desktop, "edit tools removed · no commands"));
-  assert!(!shows(&mut desktop, "listed cmds run"));
+  assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
+  assert!(shows(&mut desktop, "edit tools off · commands ask"));
+  assert!(!shows(&mut desktop, "list runs"));
   desktop.press("agent-permission-edit");
   assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
-  assert!(!shows(&mut desktop, "outside any sandbox"));
 }

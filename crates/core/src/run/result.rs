@@ -1,6 +1,6 @@
 //! What a step left behind for the steps after it. An agent ends a new session with a structured
-//! final message (Codex `--output-schema`, `.tmp/cli-probe/REPORT.md`: with `--json` the final
-//! agent message is JSON matching the schema): whether it did the step, or asks the person a
+//! final message (Codex: the turn's `outputSchema`; the final agent message is JSON matching the
+//! schema, `.tmp/cli-probe/REPORT.md`): whether it did the step, or asks the person a
 //! question before it can go on, and a summary — the question, when it asks one. When the final
 //! message is not such a result (a continued session, which is started without the schema, or a
 //! CLI that ignored it), the CLI's exit decides and the message itself is the output.

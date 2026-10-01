@@ -6,7 +6,7 @@ use std::path::Path;
 use orchester_core::{
   connection::{
     AgentProvider,
-    invocation::{CodexAgentFiles, CodexInvocation, Platform},
+    invocation::{CODEX_ISOLATION, CodexAgentFiles, CodexInvocation, Platform},
   },
   permission::{
     AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPermission, CommandPrefix, CommandPrefixError,
@@ -441,63 +441,57 @@ fn codex_args(permissions: &AgentPermissions, platform: Platform) -> Vec<String>
     .expect("enforceable on Codex");
   CodexInvocation {
     executable: Path::new("/bin/codex"),
-    model: "gpt-5.5",
-    reasoning_effort: None,
+    repository: Path::new("/repo"),
     access: enforced.permissions().repository(),
     network: enforced.permissions().network(),
     writable_roots: &[],
     worktree: Path::new("/w"),
     platform,
-    resume: None,
-    output_schema: None,
     mcp: None,
     agent_files: CodexAgentFiles::Loaded,
   }
   .args()
-  .into_iter()
-  .map(|arg| arg.into_string().expect("unicode"))
-  .collect()
+  .expect("unicode paths")
 }
 
 #[test]
 fn permissions_map_to_codex_sandbox_arguments_per_platform() {
-  let tail = |args: &[String]| args[args.iter().position(|arg| arg == "--sandbox").expect("sandbox")..].to_vec();
+  // After `app-server --stdio`, the isolation overrides and the untrusted projects.
+  let sandbox = |args: &[String]| args[2 + 2 * CODEX_ISOLATION.len() + 2..].to_vec();
   let read_only = permissions(
     RepositoryAccess::ReadOnly,
     CommandPermission::AnyInWorktree,
     NetworkAccess::Off,
   );
   for platform in PLATFORMS {
-    let mut expected = vec!["--sandbox", "read-only"];
+    let mut expected = Vec::new();
     if platform == Platform::Windows {
       expected.extend(["-c", "windows.sandbox=elevated"]);
     }
-    expected.extend(["-C", "/w", "-"]);
-    assert_eq!(tail(&codex_args(&read_only, platform)), expected);
+    expected.extend(["-c", "sandbox_workspace_write.writable_roots=[]"]);
+    assert_eq!(sandbox(&codex_args(&read_only, platform)), expected);
   }
   let offline = permissions(
     RepositoryAccess::Write,
     CommandPermission::AnyInWorktree,
     NetworkAccess::Off,
   );
+  let roots = r#"sandbox_workspace_write.writable_roots=["/w"]"#;
   assert_eq!(
-    tail(&codex_args(&offline, Platform::Windows)),
+    sandbox(&codex_args(&offline, Platform::Windows)),
     [
-      "--sandbox",
-      "workspace-write",
       "-c",
       "windows.sandbox=elevated",
       "-c",
       "sandbox_workspace_write.network_access=true",
-      "-C",
-      "/w",
-      "-"
+      "-c",
+      roots
     ],
     "network off cannot be enforced on Windows, so network stays on"
   );
   assert_eq!(
-    tail(&codex_args(&offline, Platform::MacOs)),
-    ["--sandbox", "workspace-write", "-C", "/w", "-"]
+    sandbox(&codex_args(&offline, Platform::MacOs)),
+    ["-c", "sandbox_workspace_write.network_access=false", "-c", roots]
   );
   let online = permissions(
     RepositoryAccess::Write,
@@ -505,16 +499,8 @@ fn permissions_map_to_codex_sandbox_arguments_per_platform() {
     NetworkAccess::On,
   );
   assert_eq!(
-    tail(&codex_args(&online, Platform::MacOs)),
-    [
-      "--sandbox",
-      "workspace-write",
-      "-c",
-      "sandbox_workspace_write.network_access=true",
-      "-C",
-      "/w",
-      "-"
-    ]
+    sandbox(&codex_args(&online, Platform::MacOs)),
+    ["-c", "sandbox_workspace_write.network_access=true", "-c", roots]
   );
 }
 
@@ -542,7 +528,7 @@ fn permissions_map_to_claude_arguments_without_bypass_modes() {
       "--tools",
       "Read,Glob,Grep,TodoWrite,Bash,WebFetch,WebSearch",
       "--permission-mode",
-      "dontAsk",
+      "default",
       "--disallowedTools",
       "Edit",
       "Write",
@@ -552,18 +538,19 @@ fn permissions_map_to_claude_arguments_without_bypass_modes() {
       "Bash(rg:*)"
     ]
   );
-  // Network off stays on for commands; without commands, Bash is not offered at all.
+  // Network off stays on for commands; without a listed command, every command asks.
   let edit = permissions(RepositoryAccess::Write, allowed(&[]), NetworkAccess::Off);
   let args = claude(&edit, Platform::MacOs).expect("enforceable, network stays on");
   assert_eq!(
     args,
     [
       "--tools",
-      "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit",
+      "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash",
       "--permission-mode",
       "acceptEdits",
+      "--settings",
+      r#"{"permissions":{"ask":["Bash"]}}"#,
       "--disallowedTools",
-      "Bash",
       "WebFetch",
       "WebSearch"
     ]

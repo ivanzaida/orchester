@@ -11,8 +11,9 @@
 //!   that gets the code index (`super::super::codebase_index`), under `_orchester/`, which no project skill's slug can
 //!   name. It is not a project resource and no screen lists it.
 //! - The repository's own skills: while the project has its agent files off, every `SKILL.md` under
-//!   `<worktree>/.agents/skills` (at any depth, through links, as Codex finds them) is listed for Codex to disable. A
-//!   folder that cannot be read stops the agent from starting rather than letting Codex load what it holds.
+//!   `<worktree>/.agents/skills` and `<worktree>/.codex/skills` (at any depth, through links, as Codex finds them) is
+//!   listed for Codex to disable; Codex loads the skills of `.codex` even for a project it does not trust. A folder
+//!   that cannot be read stops the agent from starting rather than letting Codex load what it holds.
 
 use std::{
   collections::HashSet,
@@ -31,8 +32,8 @@ use orchester_core::{
 
 use super::super::run::RunTask;
 
-/// The Codex skills folder of a repository.
-const REPOSITORY_SKILLS: [&str; 2] = [".agents", "skills"];
+/// The Codex skills folders of a repository.
+const REPOSITORY_SKILLS: [[&str; 2]; 2] = [[".agents", "skills"], [".codex", "skills"]];
 /// Where Orchester's internal skills go in an execution's skills folder: `_` starts no slug.
 const INTERNAL_SKILLS: &str = "_orchester";
 /// The internal skill that explains the code index, as agents get it.
@@ -184,20 +185,20 @@ fn remove_folder(folder: &Path) -> io::Result<()> {
   }
 }
 
-/// Every `SKILL.md` under `<worktree>/.agents/skills`, for Codex to disable; none when the folder
-/// does not exist.
+/// Every `SKILL.md` under `<worktree>/.agents/skills` and `<worktree>/.codex/skills`, for Codex to
+/// disable; none from a folder that does not exist.
 pub(super) fn repository_skills(worktree: &Path) -> Result<Vec<PathBuf>, RunnerProblem> {
-  let root = REPOSITORY_SKILLS
-    .iter()
-    .fold(worktree.to_path_buf(), |path, name| path.join(name));
   let mut found = Vec::new();
   let mut visited = HashSet::new();
-  collect(&root, &mut found, &mut visited).map_err(|error| {
-    problem(format!(
-      "cannot read the repository's skills in {}: {error}",
-      root.display()
-    ))
-  })?;
+  for folder in REPOSITORY_SKILLS {
+    let root = folder.iter().fold(worktree.to_path_buf(), |path, name| path.join(name));
+    collect(&root, &mut found, &mut visited).map_err(|error| {
+      problem(format!(
+        "cannot read the repository's skills in {}: {error}",
+        root.display()
+      ))
+    })?;
+  }
   found.sort();
   Ok(found)
 }

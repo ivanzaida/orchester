@@ -7,6 +7,7 @@ use std::{collections::BTreeMap, ffi::OsString, path::Path};
 use orchester_core::{
   connection::{
     AgentProvider,
+    claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
     invocation::{ClaudeInvocation, ClaudeSession, InvocationError, Platform, result_schema},
   },
   permission::{
@@ -44,7 +45,12 @@ fn enforced(
     .expect("enforceable on Claude Code")
 }
 
+/// The permission prompt's configuration file, for the invocations that ask a person.
+const APPROVALS: &str = "/tmp/approvals.json";
+
+/// An invocation with `permissions`, given the permission prompt when they ask a person.
 fn invocation(permissions: &EnforcedPermissions) -> ClaudeInvocation<'_> {
+  let asks = ClaudeApprovalScope::of(permissions.permissions(), &[]).is_some();
   ClaudeInvocation {
     executable: Path::new("/bin/claude"),
     model: "haiku",
@@ -56,7 +62,7 @@ fn invocation(permissions: &EnforcedPermissions) -> ClaudeInvocation<'_> {
     mcp: None,
     skills: None,
     code_index: None,
-    approvals: None,
+    approvals: asks.then_some(Path::new(APPROVALS)),
   }
 }
 
@@ -83,12 +89,19 @@ const BASE: [&str; 12] = [
   "--disable-slash-commands",
 ];
 
-/// [`BASE`], the result schema, `permissions`, then the new session.
-fn expected(permissions: &[&str]) -> Vec<String> {
+/// [`BASE`], the result schema, the permission prompt when the step `asks` a person, `permissions`,
+/// then the new session.
+fn expected(asks: bool, permissions: &[&str]) -> Vec<String> {
   let schema = result_schema();
+  let prompt: &[&str] = if asks {
+    &["--mcp-config", APPROVALS, "--permission-prompt-tool", PROMPT_TOOL]
+  } else {
+    &[]
+  };
   BASE
     .iter()
     .chain(&["--json-schema", schema.as_str()])
+    .chain(prompt)
     .chain(permissions)
     .chain(&["--session-id", "0199a0a0-0000-7000-8000-000000000001"])
     .map(|arg| (*arg).to_owned())
@@ -118,31 +131,37 @@ fn claude_invocation_passes_the_step_result_schema_as_one_json_argument() {
   }
 }
 
+/// Agents ask: without a listed command every command reaches a person; the edit tools stay removed.
 #[test]
-fn claude_invocation_read_only_without_commands_offers_no_tool_that_can_change_files() {
+fn claude_invocation_read_only_without_commands_asks_about_every_command() {
   for platform in PLATFORMS {
     let permissions = enforced(RepositoryAccess::ReadOnly, allowed(&[]), NetworkAccess::Off, platform);
     assert_eq!(
       args(&invocation(&permissions)),
-      expected(&[
-        "--tools",
-        "Read,Glob,Grep,TodoWrite",
-        "--permission-mode",
-        "dontAsk",
-        "--disallowedTools",
-        "Edit",
-        "Write",
-        "NotebookEdit",
-        "Bash",
-        "WebFetch",
-        "WebSearch",
-      ])
+      expected(
+        true,
+        &[
+          "--tools",
+          "Read,Glob,Grep,TodoWrite,Bash",
+          "--permission-mode",
+          "default",
+          "--settings",
+          r#"{"permissions":{"ask":["Bash"]}}"#,
+          "--disallowedTools",
+          "Edit",
+          "Write",
+          "NotebookEdit",
+          "WebFetch",
+          "WebSearch",
+        ]
+      )
     );
   }
 }
 
+/// The listed commands run; any other asks a person, which `dontAsk` would deny before asking.
 #[test]
-fn claude_invocation_read_only_runs_only_the_listed_commands() {
+fn claude_invocation_read_only_runs_the_listed_commands_and_asks_for_others() {
   for platform in PLATFORMS {
     let permissions = enforced(
       RepositoryAccess::ReadOnly,
@@ -152,25 +171,28 @@ fn claude_invocation_read_only_runs_only_the_listed_commands() {
     );
     assert_eq!(
       args(&invocation(&permissions)),
-      expected(&[
-        "--tools",
-        "Read,Glob,Grep,TodoWrite,Bash,WebFetch,WebSearch",
-        "--permission-mode",
-        "dontAsk",
-        "--disallowedTools",
-        "Edit",
-        "Write",
-        "NotebookEdit",
-        "--allowedTools",
-        "Bash(git log:*)",
-        "Bash(rg:*)",
-      ])
+      expected(
+        true,
+        &[
+          "--tools",
+          "Read,Glob,Grep,TodoWrite,Bash,WebFetch,WebSearch",
+          "--permission-mode",
+          "default",
+          "--disallowedTools",
+          "Edit",
+          "Write",
+          "NotebookEdit",
+          "--allowedTools",
+          "Bash(git log:*)",
+          "Bash(rg:*)",
+        ]
+      )
     );
   }
 }
 
 #[test]
-fn claude_invocation_write_accepts_edits_and_allows_the_listed_commands() {
+fn claude_invocation_write_allows_the_listed_commands_and_asks_for_others() {
   for platform in PLATFORMS {
     let permissions = enforced(
       RepositoryAccess::Write,
@@ -182,56 +204,42 @@ fn claude_invocation_write_accepts_edits_and_allows_the_listed_commands() {
     assert!(permissions.network_stays_on().is_some());
     assert_eq!(
       args(&invocation(&permissions)),
-      expected(&[
-        "--tools",
-        "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash",
-        "--permission-mode",
-        "acceptEdits",
-        "--disallowedTools",
-        // What `acceptEdits` would run without a rule.
-        "Bash(mkdir:*)",
-        "Bash(touch:*)",
-        "Bash(rm:*)",
-        "Bash(rmdir:*)",
-        "Bash(mv:*)",
-        "Bash(cp:*)",
-        "Bash(sed:*)",
-        "WebFetch",
-        "WebSearch",
-        "--allowedTools",
-        "Bash(git:*)",
-        "Bash(pnpm test:*)",
-      ])
+      expected(
+        true,
+        &[
+          "--tools",
+          "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash",
+          "--permission-mode",
+          "default",
+          "--disallowedTools",
+          "WebFetch",
+          "WebSearch",
+          "--allowedTools",
+          "Bash(git:*)",
+          "Bash(pnpm test:*)",
+          "Edit(//repo/.orchester/worktrees/run/**)",
+        ]
+      )
     );
   }
 }
 
+/// `acceptEdits` would run `rm`, `sed` and the other file commands in any form, so a step with
+/// allowed commands edits by rule instead.
 #[test]
-fn claude_invocation_edits_by_rule_when_a_listed_command_is_one_accept_edits_runs_unlisted() {
+fn claude_invocation_edits_by_rule_whenever_commands_are_listed() {
   for platform in PLATFORMS {
     let repository = |repository, commands| {
       enforced(repository, commands, NetworkAccess::On, platform).mechanism(PermissionSetting::Repository)
     };
-    for listed in [
-      &["git", "sed -n"][..],
-      &["rm -f build/x"],
-      &["git rm"],
-      // A deny rule would match these after stripping `xargs`, a wrapper or an assignment.
-      &["xargs mkdir"],
-      &["timeout 60 rm -f build/x"],
-      &["LANG=C sed -n"],
-    ] {
+    for listed in [&["git", "sed -n"][..], &["rm -f build/x"], &["git", "pnpm test"]] {
       assert_eq!(
         repository(RepositoryAccess::Write, allowed(listed)),
         Mechanism::ClaudeEditRules,
         "{listed:?}"
       );
     }
-    for commands in [
-      allowed(&["git", "pnpm test"]),
-      allowed(&[]),
-      CommandPermission::AskBefore,
-    ] {
+    for commands in [allowed(&[]), CommandPermission::AskBefore] {
       assert_eq!(
         repository(RepositoryAccess::Write, commands),
         Mechanism::ClaudeAcceptEdits
@@ -245,7 +253,7 @@ fn claude_invocation_edits_by_rule_when_a_listed_command_is_one_accept_edits_run
 }
 
 #[test]
-fn claude_invocation_write_with_a_listed_file_command_edits_by_rule_without_accept_edits() {
+fn claude_invocation_write_runs_listed_file_commands_in_their_listed_forms_only() {
   for platform in PLATFORMS {
     let permissions = enforced(
       RepositoryAccess::Write,
@@ -253,20 +261,22 @@ fn claude_invocation_write_with_a_listed_file_command_edits_by_rule_without_acce
       NetworkAccess::On,
       platform,
     );
-    // A `Bash(sed:*)` or `Bash(rm:*)` deny rule would deny the listed forms as well, and
-    // `acceptEdits` would run every other form: the step edits by rule instead.
+    // No deny rule: every other form asks a person, as any unlisted command does.
     assert_eq!(
       args(&invocation(&permissions)),
-      expected(&[
-        "--tools",
-        "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash,WebFetch,WebSearch",
-        "--permission-mode",
-        "dontAsk",
-        "--allowedTools",
-        "Bash(sed -n:*)",
-        "Bash(rm -f build/x:*)",
-        "Edit(//repo/.orchester/worktrees/run/**)",
-      ])
+      expected(
+        true,
+        &[
+          "--tools",
+          "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash,WebFetch,WebSearch",
+          "--permission-mode",
+          "default",
+          "--allowedTools",
+          "Bash(sed -n:*)",
+          "Bash(rm -f build/x:*)",
+          "Edit(//repo/.orchester/worktrees/run/**)",
+        ]
+      )
     );
   }
 }
@@ -296,7 +306,7 @@ fn claude_invocation_refuses_edits_by_rule_on_a_network_share() {
   );
   let accepting = enforced(
     RepositoryAccess::Write,
-    allowed(&["git"]),
+    allowed(&[]),
     NetworkAccess::On,
     Platform::Windows,
   );
@@ -369,7 +379,8 @@ fn claude_invocation_resume_continues_the_reported_session() {
     ["--resume", "5f0c2a1e-7b3d-4c8e-9a61-2d4b8e0f1a37"]
   );
   assert!(!args.contains(&"--session-id".to_owned()));
-  assert!(args.contains(&"acceptEdits".to_owned()), "permissions are given again");
+  assert!(args.contains(&"default".to_owned()), "permissions are given again");
+  assert!(args.contains(&PROMPT_TOOL.to_owned()), "so is the permission prompt");
   assert!(matches!(ClaudeSession::continuing(None), ClaudeSession::New(_)));
   assert_eq!(ClaudeSession::continuing(Some("s")), ClaudeSession::Resume("s"));
 }
@@ -526,7 +537,7 @@ fn claude_invocation_gets_no_edit_rule_for_a_code_index_on_a_network_share() {
   ] {
     let writing = enforced(
       RepositoryAccess::Write,
-      allowed(&["git"]),
+      allowed(&[]),
       NetworkAccess::On,
       Platform::Windows,
     );

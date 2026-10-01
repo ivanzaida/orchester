@@ -57,7 +57,7 @@ struct Shown {
 impl Worker {
   /// The CLI the approvals of this worker come from, for its messages.
   const fn cli(&self) -> &'static str {
-    if self.app_server.is_some() {
+    if self.app_server().is_some() {
       "Codex"
     } else {
       "Claude Code"
@@ -114,7 +114,7 @@ impl Worker {
   }
 
   pub(super) fn redact(&self, text: &str) -> String {
-    match &self.app_server {
+    match self.app_server() {
       Some(app) => app.redact(text),
       None => redact_secrets(text, &self.mcp_secrets),
     }

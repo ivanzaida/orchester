@@ -21,7 +21,7 @@ use orchester_core::{
 use orchester_ipc::AttachSession;
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, git, killed_mid_run, project, reported, scheduler, wait_for};
+use self::support::{Setup, git, killed_mid_run, project, reported, scheduler, threads, wait_for};
 
 /// Commits a repository skill for Codex, so every worktree of a run has it.
 fn commit_repository_skill(root: &Path) {
@@ -110,11 +110,10 @@ async fn agent_files_off_reach_codex_on_new_and_resumed_sessions() {
   let db = ProjectDb::open(root).expect("open");
   let argv = reported(&db, run, "argv: ");
   assert_eq!(argv.len(), 2, "{argv:?}");
-  // The worktree as the runner names it (`-C`), which the resumed session works in too.
-  let worktree = argv[0]
-    .split(" -C ")
-    .nth(1)
-    .and_then(|rest| rest.strip_suffix(" -"))
+  let threads = threads(&db, run);
+  // The worktree as the runner names it, which the resumed session works in too.
+  let worktree = threads[0]["cwd"]
+    .as_str()
     .map(Path::new)
     .expect("a new session is started in its worktree");
   let skill = worktree.join(".agents").join("skills").join("deploy").join("SKILL.md");
@@ -122,8 +121,8 @@ async fn agent_files_off_reach_codex_on_new_and_resumed_sessions() {
     "skills.config=[{{path={},enabled=false}}]",
     serde_json::to_string(&skill.to_string_lossy()).expect("quoted")
   );
-  for (argv, resumed) in argv.iter().zip([false, true]) {
-    assert_eq!(argv.contains(" resume "), resumed, "{argv}");
+  for ((argv, thread), resumed) in argv.iter().zip(&threads).zip([false, true]) {
+    assert_eq!(thread.get("threadId").is_some(), resumed, "{thread}");
     assert!(argv.contains("-c project_doc_max_bytes=0"), "{argv}");
     assert!(argv.contains(&disabled), "{argv}\n{disabled}");
   }

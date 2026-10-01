@@ -12,6 +12,7 @@ mod canvas_zoom;
 mod changes;
 mod claude_run;
 mod code_index;
+mod command_approvals;
 mod conversation;
 mod dialogs;
 mod draft_autosave;

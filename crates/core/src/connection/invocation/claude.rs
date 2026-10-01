@@ -14,9 +14,9 @@
 //!   run hooks, and in a writing step the agent could edit that file for the invocations after it.
 //! - MCP servers: only those the profile chooses, from a file the runner writes for the invocation
 //!   ([`super::ClaudeMcpConfig`]); their tools are allowed with `--allowedTools mcp__<server>` rules.
-//! - Approvals: a step that asks a person before commands or MCP actions also gets the configuration file of
-//!   Orchester's permission prompt relay and `--permission-prompt-tool` naming its tool
-//!   ([`crate::connection::claude_approval`]); on a resumed session too, as the prompt is not part of the session.
+//! - Approvals: a step that asks a person before commands or MCP actions, or about commands outside its allowed list,
+//!   also gets the configuration file of Orchester's permission prompt relay and `--permission-prompt-tool` naming its
+//!   tool ([`crate::connection::claude_approval`]); on a resumed session too, as the prompt is not part of the session.
 //! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
 //!   offered, permission mode, denied tools, allowed command prefixes, and the edit rules of the worktree and the extra
 //!   writable folders when the step does not run in `acceptEdits`). Bypass modes are never used.

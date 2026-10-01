@@ -34,7 +34,7 @@ use orchester_core::{
     AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
     StepKind,
   },
-  run::Run,
+  run::{PendingToolApproval, Run},
   secret::Secret,
   store::{
     ActivityStore, ConnectionStore, McpServerStore, ResourceStore, RunStore, SecretStore, SettingsStore, TaskStore,
@@ -422,6 +422,31 @@ pub async fn wait_for(
     .expect("the run reaches the state in time")
 }
 
+/// Waits until the run has a tool approval whose invocation waits for it, and returns it.
+pub async fn pending_approval(
+  root: &Path,
+  events: &mut mpsc::UnboundedReceiver<Event>,
+  run: RunId,
+) -> PendingToolApproval {
+  tokio::time::timeout(PATIENCE, async {
+    loop {
+      let db = ProjectDb::open(root).expect("open");
+      if let Some(request) = db.pending_tool_approvals(run).expect("requests").first()
+        && db
+          .invocations(run)
+          .expect("invocations")
+          .iter()
+          .any(|invocation| invocation.id == request.invocation && invocation.timing.waiting_since().is_some())
+      {
+        return request.clone();
+      }
+      events.recv().await.expect("notification");
+    }
+  })
+  .await
+  .expect("an approval arrives")
+}
+
 /// Waits until the run's transcript holds `count` agent turns that started.
 pub async fn wait_for_turns(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, run: RunId, count: usize) {
   let db = ProjectDb::open(root).expect("open");
@@ -452,6 +477,14 @@ pub fn reported(db: &ProjectDb, run: RunId, prefix: &str) -> Vec<String> {
       AgentEvent::Raw { line, .. } => line.strip_prefix(prefix).map(str::to_owned),
       _ => None,
     })
+    .collect()
+}
+
+/// The parameters of each `thread/start` or `thread/resume` `orchester-fake-codex` was sent, in order.
+pub fn threads(db: &ProjectDb, run: RunId) -> Vec<serde_json::Value> {
+  reported(db, run, "thread: ")
+    .iter()
+    .map(|thread| serde_json::from_str(thread).expect("the fake reports JSON"))
     .collect()
 }
 
