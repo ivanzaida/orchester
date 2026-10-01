@@ -115,17 +115,16 @@ pub const fn status_label(status: ConnectionStatus) -> (Icon, &'static str) {
 /// What the status means and what to do about it. Signing in names the CLI's own command,
 /// which Orchester never runs itself. A native connection says that this version cannot use it.
 pub const fn status_detail_key(status: ConnectionStatus, provider: AgentProvider) -> &'static str {
-  if !provider.runs_agents() {
-    return "connections.detail.nativeNotAvailable";
-  }
+  let sign_in = match provider {
+    AgentProvider::CodexCli => "connections.detail.signInCodex",
+    AgentProvider::ClaudeCodeCli => "connections.detail.signInClaude",
+    // A native connection is never checked, so no status describes it.
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return "connections.detail.nativeNotAvailable",
+  };
   match status {
     ConnectionStatus::NotChecked => "connections.detail.notChecked",
     ConnectionStatus::Connected => "connections.detail.connected",
-    ConnectionStatus::SignInRequired => match provider {
-      AgentProvider::CodexCli => "connections.detail.signInCodex",
-      AgentProvider::ClaudeCodeCli => "connections.detail.signInClaude",
-      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => "connections.detail.nativeNotAvailable",
-    },
+    ConnectionStatus::SignInRequired => sign_in,
     ConnectionStatus::SignInUnknown => "connections.detail.signInUnknown",
     ConnectionStatus::ExecutableMissing => "connections.detail.executableMissing",
     ConnectionStatus::NotRecognized => "connections.detail.notRecognized",

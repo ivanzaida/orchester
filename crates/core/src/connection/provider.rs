@@ -28,15 +28,13 @@ pub enum AgentRuntime {
 }
 
 /// The wire format a native agent talks to its model API in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum WireApi {
   AnthropicMessages,
   OpenAiResponses,
 }
 
 impl AgentProvider {
-  pub const ALL: [Self; 4] = [Self::CodexCli, Self::ClaudeCodeCli, Self::AnthropicApi, Self::OpenAiApi];
   /// The providers a connection can be added for in this version: the agent CLIs.
   pub const CLI: [Self; 2] = [Self::CodexCli, Self::ClaudeCodeCli];
 

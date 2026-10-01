@@ -177,12 +177,10 @@ fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
     let key = match (props.provider, props.read_only) {
       (Some(AgentProvider::ClaudeCodeCli), false) => "runs.toolApproval.commandExplanationClaude",
       (Some(AgentProvider::ClaudeCodeCli), true) => "runs.toolApproval.commandExplanationClaudeReadOnly",
-      (Some(AgentProvider::CodexCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi) | None, false) => {
-        "runs.toolApproval.commandExplanation"
-      }
-      (Some(AgentProvider::CodexCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi) | None, true) => {
-        "runs.toolApproval.commandExplanationReadOnly"
-      }
+      (Some(AgentProvider::CodexCli) | None, false) => "runs.toolApproval.commandExplanation",
+      (Some(AgentProvider::CodexCli) | None, true) => "runs.toolApproval.commandExplanationReadOnly",
+      // No native agent runs in this version; the wording claims no sandbox for one.
+      (Some(AgentProvider::AnthropicApi | AgentProvider::OpenAiApi), _) => "runs.toolApproval.commandExplanationNative",
     };
     ctx.t_args(
       key,

@@ -309,9 +309,8 @@ impl AgentPermissions {
         permissions.network = NetworkAccess::On;
         let mechanism = match provider {
           AgentProvider::ClaudeCodeCli => Mechanism::ClaudeWebToolsRemoved,
-          AgentProvider::CodexCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => {
-            enforced(PermissionOption::NetworkOn)?
-          }
+          AgentProvider::CodexCli => enforced(PermissionOption::NetworkOn)?,
+          AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return Err(PermissionProblem::NativeNotAvailable),
         };
         (mechanism, Some(reason))
       }

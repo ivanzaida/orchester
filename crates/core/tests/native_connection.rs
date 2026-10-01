@@ -62,7 +62,12 @@ fn native_providers_run_over_a_wire_format_and_run_no_agent_yet() {
   );
   assert_eq!(AgentProvider::ClaudeCodeCli.program_name(), Some("claude"));
   assert_eq!(AgentProvider::OpenAiApi.program_name(), None);
-  for provider in AgentProvider::ALL {
+  for provider in [
+    AgentProvider::CodexCli,
+    AgentProvider::ClaudeCodeCli,
+    AgentProvider::AnthropicApi,
+    AgentProvider::OpenAiApi,
+  ] {
     assert_eq!(provider.runs_agents(), !provider.is_native());
     assert_eq!(AgentProvider::CLI.contains(&provider), !provider.is_native());
   }

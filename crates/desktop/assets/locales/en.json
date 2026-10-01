@@ -994,6 +994,7 @@
       "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny prevents execution and fails this step.",
       "commandExplanationClaude": "{{agent}} requests this command in {{cwd}}. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "commandExplanationReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationNative": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "commandExplanationClaudeReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "command": "Command",
       "cwd": "Working directory",

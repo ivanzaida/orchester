@@ -29,7 +29,10 @@ use orchester_core::{
 use orchester_exec::launch::{self, Via};
 use orchester_store::ProjectDb;
 
-use super::{super::run::RunTask, start::NATIVE_NOT_AVAILABLE};
+use super::{
+  super::run::RunTask,
+  start::{NATIVE_NOT_AVAILABLE, problem},
+};
 use crate::private_file::PrivateFile;
 
 /// A server left out, by name (by id when the project no longer has it), and why.
@@ -100,11 +103,8 @@ impl RunTask {
           .transpose()?;
         McpSetup::Claude(file)
       }
-      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => {
-        return Err(RunnerProblem::CouldNotStart {
-          detail: NATIVE_NOT_AVAILABLE.to_owned(),
-        });
-      }
+      // `start::cli::program` refuses a native connection before its servers are set up.
+      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return Err(problem(NATIVE_NOT_AVAILABLE.to_owned())),
     };
     let left_out = left_out
       .into_iter()
