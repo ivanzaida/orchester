@@ -135,7 +135,7 @@ async fn finished(brief: &'static str) -> (orchester_core::run::Run, Vec<RunnerP
 #[tokio::test(flavor = "multi_thread")]
 async fn claude_prompt_relay_that_never_reached_the_runner_fails_the_step() {
   // The fake CLI starts its session and works without ever starting the prompt server.
-  let (run, problems) = finished("Append one line.").await;
+  let (run, problems) = finished("Leave the prompt unstarted. Append one line.").await;
   assert_eq!(problems, [RunnerProblem::PermissionPromptUnreachable]);
   assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
   let implement = run

@@ -8,6 +8,7 @@
 
 pub mod capability;
 pub mod claude;
+mod launch;
 pub mod mcp;
 mod narrow;
 pub mod writable;
@@ -18,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  launch::{LaunchPermissions, OutsideCommands},
   narrow::{StepCommands, StepNetwork, StepPermissions},
   writable::{
     FolderBounds, ResolvedFolder, WritableFolder, WritableFolderError, WritableFolders, WritableFoldersError,

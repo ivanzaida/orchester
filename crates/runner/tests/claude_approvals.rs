@@ -385,8 +385,12 @@ async fn claude_approvals_leave_a_read_only_step_without_commands() {
     .clone()
     .expect("recorded");
   assert_eq!(
-    *launched.commands(),
+    *launched.permissions().commands(),
     CommandPermission::Allowed(orchester_core::permission::AllowedCommands::default())
+  );
+  assert_eq!(
+    launched.outside_commands(),
+    Some(orchester_core::permission::OutsideCommands::Denied)
   );
 }
 

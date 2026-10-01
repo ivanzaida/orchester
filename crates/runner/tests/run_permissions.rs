@@ -68,7 +68,13 @@ fn launch_permissions(root: &Path, run: RunId) -> Vec<AgentPermissions> {
     .invocations(run)
     .expect("invocations")
     .into_iter()
-    .map(|invocation| invocation.permissions.expect("actual prepared launch policy"))
+    .map(|invocation| {
+      invocation
+        .permissions
+        .expect("actual prepared launch policy")
+        .permissions()
+        .clone()
+    })
     .collect()
 }
 

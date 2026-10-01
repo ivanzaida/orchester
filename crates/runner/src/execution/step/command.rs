@@ -28,7 +28,7 @@ use orchester_core::{
   },
   id::{InvocationId, StepExecutionId},
   memory::{InjectedMemory, RecalledMemory},
-  permission::{AgentPermissions, CommandPermission, FolderBounds, capability::EnforcedPermissions},
+  permission::{CommandPermission, FolderBounds, LaunchPermissions, capability::EnforcedPermissions},
   resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKey, StepKind},
   run::{
     AssembledPrompt, CodeIndexPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion,
@@ -74,7 +74,7 @@ pub(super) struct AgentStart {
   pub(super) agent: String,
   /// The task memory its prompt holds, to record with the invocation.
   pub(super) memory: Vec<InjectedMemory>,
-  pub(super) permissions: AgentPermissions,
+  pub(super) permissions: LaunchPermissions,
 }
 
 /// What the prompt of an agent step's invocation is made of besides the run.
@@ -197,7 +197,7 @@ impl RunTask {
       mcp_secrets,
       agent: body.role().as_str().to_owned(),
       memory: recalled.injected(),
-      permissions: enforced.permissions().clone(),
+      permissions: enforced.launch(),
     })
   }
 

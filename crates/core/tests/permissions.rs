@@ -542,7 +542,7 @@ fn permissions_map_to_claude_arguments_without_bypass_modes() {
       "--tools",
       "Read,Glob,Grep,TodoWrite,Bash,WebFetch,WebSearch",
       "--permission-mode",
-      "dontAsk",
+      "default",
       "--disallowedTools",
       "Edit",
       "Write",

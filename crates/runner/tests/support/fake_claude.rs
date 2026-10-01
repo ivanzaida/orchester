@@ -16,13 +16,17 @@
 //!   (`fake_permission_prompt`); approved, it appends `approved` to `README.md` and asks about the same call once more;
 //!   then works as below. "Ask before writing docs" does the same for the `write` tool of the `docs` MCP server, with
 //!   the secret `docs-token-value-7f3a` in the file path, and "Try an edit outside" for a `Write` outside the worktree.
-//!   Each decision is reported on standard error as `permission: <call> <behavior>` (`again` for the repeated call);
+//!   "Run `<command>`" runs that command through Bash: decided by the rules (`fake_claude_rules`) it appends `ran` to
+//!   `README.md` when they run it, and when they ask it asks its permission prompt as above. Each decision is reported
+//!   on standard error as `permission: <call> <behavior>` (`again` for the repeated call);
 //! - "Answer with structured output": writes prose and ends with the result's `structured_output` asking
 //!   `{"outcome":"question","summary":"Which database should I use?"}`, as the CLI does when given `--json-schema`;
 //!   "Answer in prose, then JSON" ends with prose followed by `{"outcome":"failed","summary":"The build breaks."}` and
 //!   no `structured_output`; "Answer without JSON" ends with prose only;
 //! - "Refuse the model": answers as Claude Code 2.1.89 did when the API refused Opus 5.5 to it ("version 2.1.280 or
 //!   newer is required") and exits with 1;
+//! - "Leave the prompt unstarted": never starts the permission prompt's server, which Claude Code starts with the other
+//!   MCP servers as it starts;
 //! - "Knock first" (with "Ask before publishing"): first connects to the prompt's runner end with a wrong token, and
 //!   after the decision once more with the right one, reporting `knock: ` and `second: ` (`answered` or `closed`);
 //!   "Leave while waiting" sends its call, then ends the prompt server once `fake-release` exists and waits;
@@ -114,8 +118,9 @@ fn main() -> ExitCode {
     .find_map(|line| line.strip_prefix("# Current step: "))
     .unwrap_or("the step")
     .to_owned();
+  let permission_prompt = started_prompt(&args, &prompt);
   if resumed.is_some() {
-    return fake.resume(&worktree, &args, &step);
+    return fake.resume(&worktree, &args, &step, permission_prompt);
   }
   if prompt.contains("Keep working") {
     fake.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
@@ -140,7 +145,7 @@ fn main() -> ExitCode {
     return fake.answer(&text, structured);
   }
   if let Some(ask) = Ask::of(&prompt) {
-    return fake.ask_prompt(&worktree, &args, &ask, &step);
+    return fake.ask_prompt(&worktree, (&args, permission_prompt), &ask, &step);
   }
   if prompt.contains("Wait for release") {
     fake.wait_for_release(&worktree, &prompt);
@@ -149,6 +154,15 @@ fn main() -> ExitCode {
     return fake.ask_for_the_web(&worktree, &step);
   }
   fake.finish(&worktree, "hello", &step)
+}
+
+/// The permission prompt's server: Claude Code starts its MCP servers, that one among them, as it
+/// starts. A test that knocks first opens it only after the knock.
+fn started_prompt(args: &[String], prompt: &str) -> Option<fake_permission_prompt::Prompt> {
+  if prompt.contains("Knock first") || prompt.contains("Leave the prompt unstarted") {
+    return None;
+  }
+  fake_permission_prompt::Prompt::open(args)
 }
 
 /// Reads the prompt from standard input and reports on standard error how the CLI was started.
@@ -354,8 +368,15 @@ impl Fake {
     ExitCode::SUCCESS
   }
 
-  /// Asks the permission prompt about `ask`, carries it out when approved, then finishes.
-  fn ask_prompt(&self, worktree: &Path, args: &[String], ask: &Ask, step: &str) -> ExitCode {
+  /// Asks the permission prompt about `ask`, carries it out when approved, then finishes. `opened` is
+  /// the prompt's server when it was started already.
+  fn ask_prompt(
+    &self,
+    worktree: &Path,
+    (args, opened): (&[String], Option<fake_permission_prompt::Prompt>),
+    ask: &Ask,
+    step: &str,
+  ) -> ExitCode {
     let block = serde_json::json!({"type": "tool_use", "id": ask.call, "name": ask.tool, "input": ask.input});
     self.assistant("msg_ask", &block.to_string());
     let command = ask.input.get("command").and_then(serde_json::Value::as_str);
@@ -364,10 +385,7 @@ impl Fake {
     });
     if rule != fake_claude_rules::Decision::Ask {
       eprintln!("permission: {} {}", &ask.call, rule.as_str());
-      let ran = matches!(
-        rule,
-        fake_claude_rules::Decision::AllowedByRule | fake_claude_rules::Decision::AllowedByMode
-      );
+      let ran = rule.runs();
       if ran && append(worktree, "ran").is_err() {
         eprintln!("cannot write README.md");
       }
@@ -378,7 +396,7 @@ impl Fake {
     if knocks {
       eprintln!("knock: {}", fake_permission_prompt::knock(args, Some("not-the-token")));
     }
-    let Some(mut prompt) = fake_permission_prompt::Prompt::open(args) else {
+    let Some(mut prompt) = opened.or_else(|| fake_permission_prompt::Prompt::open(args)) else {
       eprintln!("no permission prompt");
       return ExitCode::from(2);
     };
@@ -422,9 +440,15 @@ impl Fake {
 
   /// A continued session: it takes up a call it was ended while waiting on, else appends
   /// `continued` once the test no longer holds it.
-  fn resume(&self, worktree: &Path, args: &[String], step: &str) -> ExitCode {
+  fn resume(
+    &self,
+    worktree: &Path,
+    args: &[String],
+    step: &str,
+    opened: Option<fake_permission_prompt::Prompt>,
+  ) -> ExitCode {
     if let Some(interrupted) = self.interrupted_call(worktree) {
-      return self.resume_interrupted(worktree, args, interrupted, step);
+      return self.resume_interrupted(worktree, (args, opened), interrupted, step);
     }
     wait_while_held(worktree);
     self.finish(worktree, "continued", step)
@@ -448,14 +472,20 @@ impl Fake {
   /// result "[Tool call interrupted: the session ended before this call's result was recorded, so its
   /// outcome is unknown. …]" (`Z0` in its binary), so the model sees it neither granted nor refused.
   /// The fake then asks for the same action again, in a new call.
-  fn resume_interrupted(&self, worktree: &Path, args: &[String], interrupted: Ask, step: &str) -> ExitCode {
+  fn resume_interrupted(
+    &self,
+    worktree: &Path,
+    prompt: (&[String], Option<fake_permission_prompt::Prompt>),
+    interrupted: Ask,
+    step: &str,
+  ) -> ExitCode {
     self.tool_result(&interrupted.call, INTERRUPTED, true);
     eprintln!("resumed: {} interrupted", interrupted.call);
     let again = Ask {
       call: format!("{}_again", interrupted.call),
       ..interrupted
     };
-    self.ask_prompt(worktree, args, &again, step)
+    self.ask_prompt(worktree, prompt, &again, step)
   }
 
   /// "Ask first": a draft, then a question as the step result.

@@ -11,11 +11,13 @@
 //!   unavailable. On Windows its sandbox does not turn network access off.
 //! - Claude Code removes its edit tools for read-only and limits Bash to `--allowedTools` prefix rules, besides the
 //!   commands it classifies as read-only, which it runs unlisted as Codex runs its known-safe ones ([`super::claude`]).
-//!   It cannot confine an arbitrary command to the worktree (its own sandbox is not supported on Windows and is not
-//!   used), and it can block its web tools but not network use by commands.
+//!   Any other command asks a person through its permission prompt tool. It cannot confine an arbitrary command to the
+//!   worktree (its own sandbox is not supported on Windows and is not used), and it can block its web tools but not
+//!   network use by commands.
 //! - Asking before commands or MCP actions routes each request to a person in Orchester: Codex through App Server,
 //!   Claude Code through its permission prompt tool (`crate::connection::claude_approval`), where every command asks.
-//!   Claude Code runs an approved command outside any sandbox, so a read-only step gets no command tool at all.
+//!   Claude Code runs an approved command outside any sandbox, so a read-only step asking before every command gets no
+//!   command tool at all; with allowed commands it asks for the others, and the approval says it can change files.
 //! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
 //!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
@@ -23,7 +25,10 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess};
+use super::{
+  AgentPermissions, AllowedCommands, CommandPermission, LaunchPermissions, NetworkAccess, OutsideCommands,
+  RepositoryAccess,
+};
 use crate::connection::{AgentProvider, invocation::Platform};
 
 /// One of the three settings of [`AgentPermissions`].
@@ -113,8 +118,8 @@ pub enum Mechanism {
   /// `--permission-mode acceptEdits`, edits in the working directory.
   ClaudeAcceptEdits,
   /// `--allowedTools "Edit(//<folder>/**)"` for the worktree and the extra writable folders, without
-  /// `acceptEdits`: the allowed commands contain `rm`, `sed` or another command that mode would run in
-  /// any form ([`super::claude`]).
+  /// `acceptEdits`: the step has allowed commands, and that mode would run `rm`, `sed` and the other
+  /// file commands in any form ([`super::claude`]).
   ClaudeEditRules,
   /// `--add-dir <folder>`: the edit tools may also write there; commands were never confined.
   ClaudeAddDir,
@@ -124,7 +129,8 @@ pub enum Mechanism {
   /// sandbox, where it could write.
   ClaudeNoCommandsReadOnly,
   /// `--allowedTools "Bash(<prefix>:*)"`, one rule per command. Claude Code also runs the commands it
-  /// classifies as read-only without a rule once it has the command tool.
+  /// classifies as read-only without a rule once it has the command tool; any other command asks a
+  /// person through the permission prompt tool.
   ClaudeAllowedTools,
   /// WebFetch and WebSearch stay available.
   ClaudeWebTools,
@@ -212,6 +218,7 @@ pub struct EnforcedPermissions {
   writable_folders: Option<Mechanism>,
   /// Network off was chosen but cannot be enforced, so network stays on.
   network_stays_on: Option<Unavailable>,
+  outside_commands: OutsideCommands,
 }
 
 impl EnforcedPermissions {
@@ -241,6 +248,19 @@ impl EnforcedPermissions {
   pub const fn network_stays_on(&self) -> Option<Unavailable> {
     self.network_stays_on
   }
+
+  /// What the CLI does with a command these permissions do not run by themselves. Codex declines a
+  /// command that needs more than its sandbox; Claude Code asks about every command outside the
+  /// allowed list, or about every command when it asks before commands, and denies commands only when
+  /// the step gets none at all.
+  pub const fn outside_commands(&self) -> OutsideCommands {
+    self.outside_commands
+  }
+
+  /// What an invocation that runs with these permissions records as its launch permissions.
+  pub fn launch(&self) -> LaunchPermissions {
+    LaunchPermissions::new(self.permissions.clone(), self.outside_commands)
+  }
 }
 
 impl AgentPermissions {
@@ -269,7 +289,7 @@ impl AgentPermissions {
       Support::Unavailable(reason) => Err(PermissionProblem::NotEnforceable { option, reason }),
     };
     let repository = match enforced(PermissionOption::of_repository(self.repository))? {
-      Mechanism::ClaudeAcceptEdits if self.lists_file_commands() => Mechanism::ClaudeEditRules,
+      Mechanism::ClaudeAcceptEdits if self.lists_commands() => Mechanism::ClaudeEditRules,
       mechanism => mechanism,
     };
     let commands = match enforced(PermissionOption::of_commands(&self.commands))? {
@@ -300,6 +320,11 @@ impl AgentPermissions {
         AgentProvider::CodexCli => Mechanism::CodexWritableRoots,
         AgentProvider::ClaudeCodeCli => Mechanism::ClaudeAddDir,
       });
+    let outside_commands = match (provider, &permissions.commands) {
+      (AgentProvider::ClaudeCodeCli, CommandPermission::Allowed(list)) if list.is_empty() => OutsideCommands::Denied,
+      (AgentProvider::ClaudeCodeCli, _) => OutsideCommands::Asked,
+      (AgentProvider::CodexCli, _) => OutsideCommands::Denied,
+    };
     Ok(EnforcedPermissions {
       permissions,
       repository,
@@ -307,11 +332,12 @@ impl AgentPermissions {
       network,
       writable_folders,
       network_stays_on,
+      outside_commands,
     })
   }
 
-  fn lists_file_commands(&self) -> bool {
-    matches!(&self.commands, CommandPermission::Allowed(list) if super::claude::lists_file_commands(list.entries()))
+  fn lists_commands(&self) -> bool {
+    matches!(&self.commands, CommandPermission::Allowed(list) if !list.is_empty())
   }
 
   /// The network access a run on `provider` gets on `platform`: the chosen one, or on when off

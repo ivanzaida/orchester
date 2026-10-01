@@ -399,11 +399,10 @@ fn writable_roots_get_an_edit_rule_where_claude_runs_without_accept_edits() {
       "Edit(//shared/it's \"here\"/**)",
     ]
   );
-  let accepting = claude_args(
-    &edit_permissions(&[".orchester/target"]),
-    ClaudeSession::Resume("s-1"),
-    &roots(),
-  );
+  // Without allowed commands the step runs in `acceptEdits`, which needs no rule.
+  let asking = AgentPermissions::new(RepositoryAccess::Write, CommandPermission::AskBefore, NetworkAccess::On)
+    .with_writable_folders(folders(&[".orchester/target"]));
+  let accepting = claude_args(&asking, ClaudeSession::Resume("s-1"), &roots());
   assert!(accepting.contains(&"acceptEdits".to_owned()), "{accepting:?}");
   assert!(!accepting.iter().any(|arg| arg.starts_with("Edit(")), "{accepting:?}");
 }

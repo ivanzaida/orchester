@@ -4,37 +4,40 @@
 //! - `--tools` offers only the built-in tools the permissions need: reading and searching always, the edit tools for
 //!   *Edit files in the task worktree*, `Bash` only when commands are allowed, the web tools only with network access.
 //!   Scheduling, remote triggers, worktree switching and sub-agents are never offered.
-//! - Read-only runs in `dontAsk`: whatever no rule allows is denied. Writing runs in `acceptEdits`: edits in the
-//!   working directory are accepted, and in print mode nothing else is asked, so a command no rule allows is denied and
-//!   the CLI reports the denial.
+//! - Read-only without commands runs in `dontAsk`: whatever no rule allows is denied. Writing without commands, and
+//!   writing that asks before every command, runs in `acceptEdits`: edits in the working directory are accepted.
 //! - Allowed commands become `--allowedTools "Bash(<prefix>:*)"` prefix rules. Without any, `Bash` is removed (the
-//!   probe: it can change files, so a read-only step must not have it). With some, Claude Code also runs the commands
-//!   it classifies as read-only (`ls`, `cat`, `git log`, …) without a rule, in every permission mode (both 2.1.89 and
-//!   2.1.284: the last check before asking). They change no file; the user accepted them as Codex's known-safe
-//!   read-only commands are accepted (`docs/plan.md`, C4), and the option's text says so.
-//! - `acceptEdits` also runs `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form without a rule (both
-//!   versions: a mode check after the deny, ask and allow rules). A writing step therefore denies each of them with a
-//!   `Bash(<command>:*)` rule. A deny rule matching a command's prefix wins over every allow rule (both versions check
-//!   prefix deny rules first, also after stripping variable assignments, wrappers and `xargs`), so it would deny a
-//!   listed `sed -n` as well: a writing step whose allowed commands contain one of these words does not run in
-//!   `acceptEdits` at all ([`Mechanism::ClaudeEditRules`]). It runs in `dontAsk` (`default` when a person is asked) and
-//!   allows its edits with an `Edit(//<folder>/**)` rule for the worktree and each extra writable folder: both versions
-//!   accept an edit there by such a rule as `acceptEdits` does in a working directory, after the same deny rules and
-//!   safety checks, and a command's own path check (2.1.89 runs it before the allow rules) accepts a write there by the
-//!   same rule. Then only the listed prefixes of those commands run.
+//!   probe: it can change files, so a step without commands must not have it). With some, Claude Code also runs the
+//!   commands it classifies as read-only (`ls`, `cat`, `git log`, …) without a rule, in every permission mode (both
+//!   2.1.89 and 2.1.284: the last check before asking). They change no file; the user accepted them as Codex's
+//!   known-safe read-only commands are accepted (`docs/plan.md`, C4), and the option's text says so.
+//! - Any other command asks a person (the user's decision, "List + ask"): a step with allowed commands runs in
+//!   `default` and gets Orchester's permission prompt tool. In `default` every check that would ask, an unlisted
+//!   command, a listed one with a `$VAR` expansion, a compound command (`;`, `&&`, `|`) with an unlisted part or a path
+//!   outside the working folders, hands the call to the prompt tool; `dontAsk` turns exactly these into the denial
+//!   "Permission to use Bash has been denied because Claude Code is running in don't ask mode" (2.1.89, 2.1.284 and
+//!   2.1.286: the only place the mode denies is where the check returned `ask`). A read-only step asks too: an approved
+//!   command runs outside any sandbox and can change files, which the approval says.
+//! - `acceptEdits` runs `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form without a rule (both
+//!   versions: a mode check after the deny, ask and allow rules), so a writing step with allowed commands does not run
+//!   in it ([`Mechanism::ClaudeEditRules`]). It allows its edits with an `Edit(//<folder>/**)` rule for the worktree
+//!   and each extra writable folder: both versions accept an edit there by such a rule as `acceptEdits` does in a
+//!   working directory, after the same deny rules and safety checks, and a command's own path check (2.1.89 runs it
+//!   before the allow rules) accepts a write there by the same rule. Those seven commands then run only in their listed
+//!   forms; another form asks like every other command.
 //! - Network off cannot be enforced (commands keep network access, and Claude Code's own sandbox is not supported on
 //!   Windows), so network stays on; when off was chosen the web tools are still removed.
 //! - The tools of the MCP servers the invocation gives the agent are allowed with one `mcp__<server>` rule per server;
 //!   without a rule, print mode denies them. The servers themselves run outside these permissions.
-//! - Asking a person (*Ask before running commands*, *Ask before MCP actions*): the invocation gets Orchester's
-//!   permission prompt tool (`crate::connection::claude_approval`), and what the rules leave open goes to it instead of
-//!   being denied. The MCP servers' tools then have no `mcp__<server>` rules, and a read-only step runs in `default`
-//!   rather than `dontAsk`, which would deny before asking.
+//! - Asking a person (*Ask before running commands*, *Ask before MCP actions*, or allowed commands): the invocation
+//!   gets Orchester's permission prompt tool (`crate::connection::claude_approval`), and what the rules leave open goes
+//!   to it instead of being denied. With *Ask before MCP actions* the MCP servers' tools have no `mcp__<server>` rules,
+//!   and a read-only step runs in `default` rather than `dontAsk`, which would deny before asking.
 //! - Asking before commands in a writing step offers `Bash` with the settings `{"permissions":{"ask":["Bash"]}}`
 //!   (`--settings`, which `--setting-sources ""` does not exclude). A rule asking for the whole tool is checked before
 //!   the tool's own check, so neither `acceptEdits` nor the read-only classifier runs a command without the prompt
-//!   (both versions: the whole-tool ask rule returns `ask` before `checkPermissions`). A read-only step never gets
-//!   `Bash`: an approved command would run outside any sandbox and could write.
+//!   (both versions: the whole-tool ask rule returns `ask` before `checkPermissions`). A read-only step that asks
+//!   before commands gets no `Bash` ([`Mechanism::ClaudeNoCommandsReadOnly`]).
 //! - The disallowed list repeats what `--tools` leaves out that the permissions deny, so a tool list that grows in a
 //!   later CLI version does not widen them.
 //! - A folder the agent may read but must not change (the shared code index, which `--add-dir` makes a working
@@ -48,7 +51,7 @@
 use std::path::Path;
 
 use super::{
-  CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
+  CommandPermission, NetworkAccess, RepositoryAccess,
   capability::{EnforcedPermissions, Mechanism, PermissionSetting},
 };
 use crate::connection::mcp::McpServerName;
@@ -57,8 +60,6 @@ const READ_TOOLS: [&str; 4] = ["Read", "Glob", "Grep", "TodoWrite"];
 const EDIT_TOOLS: [&str; 3] = ["Edit", "Write", "NotebookEdit"];
 const WEB_TOOLS: [&str; 2] = ["WebFetch", "WebSearch"];
 const COMMAND_TOOL: &str = "Bash";
-/// Commands `acceptEdits` runs without a rule.
-const MODE_ALLOWED: [&str; 7] = super::FILE_COMMANDS;
 /// Settings that make every command ask.
 const ASK_EVERY_COMMAND: &str = r#"{"permissions":{"ask":["Bash"]}}"#;
 
@@ -99,7 +100,8 @@ pub fn permission_args(
   } else {
     denied.extend(EDIT_TOOLS.map(str::to_owned));
   }
-  let mode = match (accepts_edits, ask_tools) {
+  // Unlisted commands ask a person, which `dontAsk` would deny before asking.
+  let mode = match (accepts_edits, ask_tools || !commands.is_empty()) {
     (true, _) => "acceptEdits",
     (false, true) => "default",
     (false, false) => "dontAsk",
@@ -108,9 +110,6 @@ pub fn permission_args(
     denied.push(COMMAND_TOOL.to_owned());
   } else {
     offered.push(COMMAND_TOOL);
-  }
-  if accepts_edits && !commands.is_empty() {
-    denied.extend(MODE_ALLOWED.map(|command| format!("{COMMAND_TOOL}({command}:*)")));
   }
   let mcp = if ask_tools { &[] } else { mcp };
   if network {
@@ -144,22 +143,6 @@ pub fn permission_args(
     args.extend(mcp.iter().map(|server| format!("mcp__{server}")));
   }
   args
-}
-
-/// Whether an allowed command contains a word `acceptEdits` runs without a rule. A
-/// `Bash(<command>:*)` deny rule could then match a listed command, so a writing step with
-/// `commands` does not run in `acceptEdits` ([`Mechanism::ClaudeEditRules`]).
-///
-/// Any word, not only the first: before matching a deny rule both CLI versions strip leading
-/// variable assignments (`A=1 rm`) and the wrappers `timeout`, `time`, `nice`, `stdbuf` and `nohup`,
-/// and a prefix rule also matches after `xargs ` (2.1.89 `Er`, `vt$` and `Lt$`; 2.1.284 the same).
-/// The deny rule would then deny a listed `timeout 60 rm -f x` or `xargs rm`. Matching any word
-/// covers these without copying the CLI's stripping; a word elsewhere (`git rm`) only makes the
-/// step edit by rule, which is as strict.
-pub(super) fn lists_file_commands(commands: &[CommandPrefix]) -> bool {
-  commands
-    .iter()
-    .any(|entry| entry.as_str().split(' ').any(|word| MODE_ALLOWED.contains(&word)))
 }
 
 /// Whether an `Edit` allow rule can let a step that edits by rule ([`Mechanism::ClaudeEditRules`])

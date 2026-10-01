@@ -4,7 +4,7 @@ use orchester_core::{
   code_index::CodeIndexUse,
   connection::stream::{AgentEvent, InvocationOutcome},
   id::{InvocationId, RunId, StepExecutionId},
-  permission::AgentPermissions,
+  permission::{AgentPermissions, LaunchPermissions},
   resource::ModelId,
   run::{
     ActivityEntry, EditProgress, Invocation, InvocationKind, InvocationPrompt, InvocationTiming, StepOutput, TokenUsage,
@@ -18,12 +18,13 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 use super::{ProjectDb, code_index, invocation_prompts, step_outputs};
 use crate::{
   StoreError,
-  rows::{corrupt, decode_json, encode_json, parse},
+  rows::{corrupt, decode_body, decode_document, decode_json, encode_json, parse},
 };
 
 const EVENT_SCHEMA: u32 = 1;
 const OUTCOME_SCHEMA: u32 = 1;
-const PERMISSIONS_SCHEMA: u32 = 1;
+/// 2: launch permissions with what happened to commands outside them; 1 held the permissions alone.
+const PERMISSIONS_SCHEMA: u32 = 2;
 
 const SELECT_INVOCATIONS: &str = "SELECT id, run_id, step_execution_id, number, kind, model, session_id, \
                                   started_at, ended_at, input_tokens, cached_input_tokens, output_tokens, outcome, \
@@ -86,7 +87,7 @@ impl ActivityStore for ProjectDb {
   fn save_invocation_permissions(
     &mut self,
     invocation: InvocationId,
-    permissions: &AgentPermissions,
+    permissions: &LaunchPermissions,
   ) -> Result<(), StoreError> {
     let changed = self.connection.execute(
       "UPDATE invocations SET permissions = ?2 \
@@ -393,11 +394,7 @@ impl InvocationRow {
         COMMAND => InvocationKind::Command,
         other => return Err(corrupt("invocation kind", other)),
       },
-      permissions: self
-        .permissions
-        .as_deref()
-        .map(|text| decode_json("invocation permissions", PERMISSIONS_SCHEMA, text))
-        .transpose()?,
+      permissions: self.permissions.as_deref().map(launch_permissions).transpose()?,
       session: self.session,
       started_at: Timestamp::from_unix_millis(self.started_at),
       ended_at: self.ended_at.map(Timestamp::from_unix_millis),
@@ -412,5 +409,19 @@ impl InvocationRow {
         self.waiting_since.map(Timestamp::from_unix_millis),
       ),
     })
+  }
+}
+
+/// Stored launch permissions; those recorded with schema 1, before what happened to commands
+/// outside them was, read with that unknown.
+fn launch_permissions(text: &str) -> Result<LaunchPermissions, StoreError> {
+  const WHAT: &str = "invocation permissions";
+  match decode_document(WHAT, text)? {
+    (PERMISSIONS_SCHEMA, body) => decode_body(WHAT, body),
+    (1, body) => decode_body::<AgentPermissions>(WHAT, body).map(LaunchPermissions::recorded_before),
+    (schema, _) => Err(corrupt(
+      WHAT,
+      format!("schema {schema} is not the supported schema {PERMISSIONS_SCHEMA}"),
+    )),
   }
 }

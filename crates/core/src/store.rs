@@ -18,7 +18,7 @@ use crate::{
   integration::RunMerge,
   limits::ProjectLimits,
   name::Name,
-  permission::AgentPermissions,
+  permission::LaunchPermissions,
   pull_request::{PullRequest, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
   resource::{
@@ -414,7 +414,7 @@ pub trait ActivityStore {
   fn save_invocation_permissions(
     &mut self,
     invocation: InvocationId,
-    permissions: &AgentPermissions,
+    permissions: &LaunchPermissions,
   ) -> Result<(), Self::Error>;
 
   /// Stores the session, usage, end and outcome of an existing invocation.

@@ -129,6 +129,10 @@ name = "claude_approvals"
 required-features = ["test-agent"]
 
 [[test]]
+name = "claude_unlisted"
+required-features = ["test-agent"]
+
+[[test]]
 name = "claude_prompt_relay"
 required-features = ["test-agent"]
 

@@ -266,59 +266,67 @@ fn claude_approvals_ask_before_every_command_and_never_in_read_only_steps() {
   assert_eq!(ClaudeApprovalScope::of(&write, &[]), None, "nothing is left to ask");
 }
 
+fn listed(repository: RepositoryAccess, entries: &[&str]) -> AgentPermissions {
+  let entries = entries
+    .iter()
+    .map(|entry| orchester_core::permission::CommandPrefix::new(entry).expect("prefix"))
+    .collect();
+  AgentPermissions::new(
+    repository,
+    CommandPermission::Allowed(AllowedCommands::new(entries).expect("list")),
+    NetworkAccess::Off,
+  )
+}
+
+/// After `flag`, up to the next option.
+fn values<'a>(args: &'a [String], flag: &str) -> Vec<&'a str> {
+  args
+    .iter()
+    .skip_while(|arg| *arg != flag)
+    .skip(1)
+    .take_while(|arg| !arg.starts_with("--"))
+    .map(String::as_str)
+    .collect()
+}
+
+/// "List + ask": the listed commands run, any other asks a person, in a writing and a read-only step.
 #[test]
-fn claude_approvals_allowed_commands_deny_what_accept_edits_would_run() {
-  let list = |entries: &[&str]| {
-    CommandPermission::Allowed(
-      AllowedCommands::new(
-        entries
-          .iter()
-          .map(|entry| orchester_core::permission::CommandPrefix::new(entry).expect("prefix"))
-          .collect(),
-      )
-      .expect("list"),
-    )
-  };
-  let args = permission_args_of(&AgentPermissions::new(
-    RepositoryAccess::Write,
-    list(&["git"]),
-    NetworkAccess::Off,
-  ));
-  assert!(args.contains(&"acceptEdits".to_owned()), "{args:?}");
-  for command in ["mkdir", "touch", "rm", "rmdir", "mv", "cp", "sed"] {
-    assert!(args.contains(&format!("Bash({command}:*)")), "{command}: {args:?}");
+fn claude_approvals_allowed_commands_ask_for_the_others() {
+  let unlisted = call("Bash", &json!({"command": "pnpm build"}));
+  for entries in [&["git"][..], &["git", "rm -f build/x"]] {
+    let write = listed(RepositoryAccess::Write, entries);
+    let args = permission_args_of(&write);
+    // dontAsk would deny before asking, and acceptEdits would run `rm`, `sed` and the other file commands in any form.
+    assert_eq!(values(&args, "--permission-mode"), ["default"], "{args:?}");
+    assert_eq!(
+      values(&args, "--disallowedTools"),
+      ["WebFetch", "WebSearch"],
+      "{args:?}"
+    );
+    let mut allowed: Vec<String> = entries.iter().map(|entry| format!("Bash({entry}:*)")).collect();
+    allowed.push("Edit(//c/repo/.orchester/worktrees/run/**)".to_owned());
+    assert_eq!(values(&args, "--allowedTools"), allowed, "{args:?}");
+    let scope = ClaudeApprovalScope::of(&write, &[]).expect("unlisted commands ask");
+    assert!(matches!(scope.classify(&unlisted), ClaudeAsk::Person(request) if request.action() == "pnpm build"));
+    let outside = call("Write", &json!({"file_path": "/etc/hosts"}));
+    assert_eq!(scope.classify(&outside), ClaudeAsk::Refused, "edits keep their rules");
   }
-  assert!(!args.iter().any(|arg| arg.starts_with("Edit(")), "{args:?}");
-  // A deny rule for rm would deny the listed rm too: no acceptEdits, edits by rule instead.
-  let args = permission_args_of(&AgentPermissions::new(
-    RepositoryAccess::Write,
-    list(&["git", "rm -f build/x"]),
-    NetworkAccess::Off,
-  ));
-  assert!(args.contains(&"dontAsk".to_owned()), "{args:?}");
+  let read_only = listed(RepositoryAccess::ReadOnly, &["git"]);
+  let args = permission_args_of(&read_only);
+  assert_eq!(values(&args, "--permission-mode"), ["default"], "{args:?}");
+  assert_eq!(values(&args, "--allowedTools"), ["Bash(git:*)"], "{args:?}");
   assert!(
-    !args
-      .iter()
-      .any(|arg| arg.starts_with("Bash(rm") && arg.ends_with(":*)") && arg != "Bash(rm -f build/x:*)")
+    values(&args, "--disallowedTools").starts_with(&["Edit", "Write", "NotebookEdit"]),
+    "{args:?}"
   );
-  let allowed = args.iter().position(|arg| arg == "--allowedTools").expect("allowed");
-  assert_eq!(
-    args[allowed + 1..],
-    [
-      "Bash(git:*)",
-      "Bash(rm -f build/x:*)",
-      "Edit(//c/repo/.orchester/worktrees/run/**)"
-    ]
-  );
-  let read_only = permission_args_of(&AgentPermissions::new(
-    RepositoryAccess::ReadOnly,
-    list(&["git"]),
-    NetworkAccess::Off,
-  ));
-  assert!(
-    !read_only.contains(&"Bash(mkdir:*)".to_owned()),
-    "dontAsk runs nothing by mode"
-  );
+  let scope = ClaudeApprovalScope::of(&read_only, &[]).expect("a read-only step asks too");
+  assert!(matches!(scope.classify(&unlisted), ClaudeAsk::Person(_)));
+  // Without any command the step gets no command tool, and nothing asks.
+  let none = listed(RepositoryAccess::ReadOnly, &[]);
+  let args = permission_args_of(&none);
+  assert_eq!(values(&args, "--permission-mode"), ["dontAsk"], "{args:?}");
+  assert!(values(&args, "--disallowedTools").contains(&"Bash"), "{args:?}");
+  assert_eq!(ClaudeApprovalScope::of(&none, &[]), None);
 }
 
 #[test]
