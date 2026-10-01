@@ -13,7 +13,6 @@ use orchester_core::{
     stream::{AgentEvent, CommandStatus, FileChangeKind, InvocationOutcome, OutputStream, RunnerProblem},
   },
   id::{IdempotencyKey, RunId},
-  permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   resource::{ModelId, StepKey},
   run::{PauseReason, RaisedLimits, RunLimit, RunStatus, StepFailure, StepStatus},
   store::{ActivityStore, ConnectionStore, ConversationStore},
@@ -63,10 +62,16 @@ async fn claude_runs_a_step_and_commits_its_changes() {
   assert!(
     argv.starts_with(&format!(
       "-p --output-format stream-json --verbose --model haiku --effort low --strict-mcp-config --setting-sources  \
-       --disable-slash-commands --json-schema {schema} --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash \
-       --permission-mode acceptEdits --disallowedTools Bash(mkdir:*) Bash(touch:*) Bash(rm:*) Bash(rmdir:*) \
-       Bash(mv:*) Bash(cp:*) Bash(sed:*) WebFetch WebSearch --allowedTools Bash(git:*) --session-id "
+       --disable-slash-commands --json-schema {schema} --mcp-config "
     )),
+    "{argv}"
+  );
+  // Commands outside the list ask a person through the permission prompt; edits are allowed by rule.
+  assert!(
+    argv.contains(
+      " --permission-prompt-tool mcp__Orchester__approve --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash \
+       --permission-mode default --disallowedTools WebFetch WebSearch --allowedTools Bash(git:*) Edit(//"
+    ),
     "{argv}"
   );
   // The schema reaches the CLI as one argument, exactly.
@@ -190,49 +195,6 @@ async fn claude_refused_model_names_the_version_it_needs_and_the_connection_keep
   let connection = AgentConnection::try_from(db.connections().expect("connections").remove(0)).expect("agent");
   let opus = ModelId::new("claude-opus-5-5").expect("model");
   assert_eq!(connection.model_requirements().required(&opus), Some("2.1.280"));
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn claude_allowed_commands_keep_accept_edits_from_running_others() {
-  let (project, run) = finished("Remove the build.").await;
-  let db = ProjectDb::open(project.repo.path()).expect("open");
-  assert_eq!(reported(&db, run.id(), "permission: "), ["toolu_rm deny-by-rule"]);
-}
-
-/// What the CLI decided about the one command `brief` runs, in a writing step allowed `sed -n` and
-/// `rm -f build/x`.
-async fn listed_file_command(brief: &'static str) -> Vec<String> {
-  let listed = ["git", "sed -n", "rm -f build/x"].map(|entry| CommandPrefix::new(entry).expect("valid prefix"));
-  let project = project(&Setup {
-    provider: AgentProvider::ClaudeCodeCli,
-    permissions: Some(AgentPermissions::new(
-      RepositoryAccess::Write,
-      CommandPermission::Allowed(AllowedCommands::new(listed.to_vec()).expect("valid list")),
-      NetworkAccess::On,
-    )),
-    ..Setup::new(brief)
-  });
-  let root = project.repo.path();
-  let (scheduler, mut events_in) = scheduler(root);
-  let id = scheduler
-    .start_run(IdempotencyKey::generate(), project.task)
-    .await
-    .expect("the run starts");
-  wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
-  let db = ProjectDb::open(root).expect("open");
-  reported(&db, id, "permission: ")
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn claude_listed_file_commands_run_only_in_their_listed_forms() {
-  for (brief, decision) in [
-    ("Run `sed -n 1p README.md`.", "toolu_run allow-by-rule"),
-    ("Run `sed -i s/hello/bye/ README.md`.", "toolu_run deny-unasked"),
-    ("Run `rm -f build/x`.", "toolu_run allow-by-rule"),
-    ("Run `rm -rf src`.", "toolu_run deny-unasked"),
-  ] {
-    assert_eq!(listed_file_command(brief).await, [decision], "{brief}");
-  }
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -12,10 +12,11 @@ mod end;
 mod mcp;
 mod memory;
 mod skills;
+mod stderr;
 pub(super) mod worker;
 
 use orchester_core::{
-  connection::stream::{AgentEvent, AgentStream, InvocationOutcome, RunnerProblem},
+  connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, RunnerProblem},
   conversation::{Message, latest_question},
   id::StepExecutionId,
   memory::MemoryStore,
@@ -30,7 +31,7 @@ use tokio::sync::mpsc;
 
 use self::{
   app_server::AppServerSession,
-  worker::{Stop, Worker},
+  worker::{Stop, Transport, Worker},
 };
 use super::{
   record::RecordError,
@@ -249,8 +250,7 @@ impl RunTask {
     };
     // Messages that never reached a started agent stay queued.
     self.deliver(execution, &invocation, std::mem::take(&mut continuation.messages))?;
-    let output = AgentStream::new(start.provider);
-    self.spawn(execution, invocation, (output, process, start), workspace)?;
+    self.spawn(execution, invocation, (process, start), workspace)?;
     Ok(true)
   }
 
@@ -274,7 +274,7 @@ impl RunTask {
     &mut self,
     execution: StepExecutionId,
     invocation: Invocation,
-    (output, process, start): (AgentStream, Supervised, command::AgentStart),
+    (process, start): (Supervised, command::AgentStart),
     workspace: Workspace,
   ) -> Result<(), ExecutionError> {
     let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);
@@ -284,13 +284,15 @@ impl RunTask {
     let worker = Worker {
       root: self.root.clone(),
       invocation: invocation.clone(),
-      output,
+      transport: match start.app_server {
+        Some(setup) => Transport::AppServer(Box::new(AppServerSession::new(setup))),
+        None => Transport::Claude(ClaudeStream::default()),
+      },
       process,
       notifier: self.notifier.clone(),
       events: self.worker_events.clone(),
       stops: stopped,
       mcp_file: start.mcp_file,
-      app_server: start.app_server.map(AppServerSession::new),
       claude_approvals: start.claude_approvals,
       mcp_secrets: start.mcp_secrets,
       agent: start.agent,

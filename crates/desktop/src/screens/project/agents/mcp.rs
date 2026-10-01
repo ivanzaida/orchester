@@ -19,7 +19,7 @@ use orchester_core::{
     AgentProvider,
     mcp::{McpServer, McpTransport},
   },
-  permission::mcp::{McpCalls, McpLoading, mcp_support},
+  permission::mcp::starts_in_its_folder,
 };
 
 use super::{
@@ -114,16 +114,11 @@ impl ProfileEditor {
     Some(ctx.t_args("agents.permissions.mcp.noFolder", [("folder", folder.as_str())]))
   }
 
-  /// What the connection's CLI enforces for the chosen servers (`kXyN7`): only they load, how
-  /// their tools are allowed, and that the servers work outside these permissions.
+  /// What the connection's CLI enforces for the chosen servers (`kXyN7`): which load, how their
+  /// tools are allowed, and that the servers work outside these permissions. Neither CLI gets the
+  /// user's own servers.
   pub(super) fn mcp_enforcement(&self, ctx: &Ctx, provider: AgentProvider) -> Vec<Element> {
     let permissions = self.permissions.get();
-    if provider == AgentProvider::CodexCli
-      && (permissions.interactive_tool_approvals()
-        || *permissions.commands() == orchester_core::permission::CommandPermission::AskBefore)
-    {
-      return interactive_enforcement(ctx, permissions.interactive_tool_approvals());
-    }
     let chosen = self.mcp.get();
     // The chosen servers an agent gets: those the project has, that are on and that the CLI can start.
     let count = self
@@ -133,44 +128,49 @@ impl ProfileEditor {
       .iter()
       .filter(|server| chosen.0.contains(server.id()) && usable(server, provider))
       .count();
-    let support = mcp_support(provider);
-    let loaded = match count {
-      0 if !chosen.0.is_empty() => ctx.t("agents.permissions.enforcement.mcp.noneLoad"),
-      0 => ctx.t("agents.permissions.enforcement.mcp.none"),
-      1 => ctx.t("agents.permissions.enforcement.mcp.onlyOne"),
-      _ => ctx.t_args(
+    if count == 0 {
+      let (loaded, loading) = if chosen.0.is_empty() {
+        (
+          "agents.permissions.enforcement.mcp.none",
+          "agents.permissions.enforcement.mcp.noneHow",
+        )
+      } else {
+        (
+          "agents.permissions.enforcement.mcp.noneLoad",
+          "agents.permissions.enforcement.mcp.noneLoadHow",
+        )
+      };
+      return vec![row(Icon::CircleCheck, &ctx.t(loaded), &ctx.t(loading))];
+    }
+    if provider == AgentProvider::CodexCli {
+      return app_server_enforcement(ctx, permissions.interactive_tool_approvals());
+    }
+    let loaded = if count == 1 {
+      ctx.t("agents.permissions.enforcement.mcp.onlyOne")
+    } else {
+      ctx.t_args(
         "agents.permissions.enforcement.mcp.only",
         [("count", count.to_string().as_str())],
-      ),
+      )
     };
-    let loading = match (count, support.loading) {
-      (0, _) if !chosen.0.is_empty() => ctx.t("agents.permissions.enforcement.mcp.noneLoadHow"),
-      (0, _) => ctx.t("agents.permissions.enforcement.mcp.noneHow"),
-      (_, McpLoading::CodexConfigOverrides) => ctx.t("agents.permissions.enforcement.mcp.codexLoading"),
-      (_, McpLoading::ClaudeStrictConfig) => ctx.t("agents.permissions.enforcement.mcp.claudeLoading"),
-    };
-    let mut rows = vec![row(Icon::CircleCheck, &loaded, &loading)];
-    if count == 0 {
-      return rows;
-    }
+    let mut rows = vec![row(
+      Icon::CircleCheck,
+      &loaded,
+      &ctx.t("agents.permissions.enforcement.mcp.claudeLoading"),
+    )];
     // Asking before MCP actions leaves Claude Code's MCP tools to its permission prompt.
-    let asks = provider == AgentProvider::ClaudeCodeCli && permissions.interactive_tool_approvals();
-    rows.push(match support.calls {
-      McpCalls::ClaudeAllowedTools if asks => row(
+    rows.push(if permissions.interactive_tool_approvals() {
+      row(
         Icon::CircleCheck,
         &ctx.t("agents.permissions.enforcement.mcp.claudeCallsAsk"),
         &ctx.t("agents.permissions.enforcement.mcp.claudeCallsAskHow"),
-      ),
-      McpCalls::CodexNeverAsks => row(
-        Icon::TriangleAlert,
-        &ctx.t("agents.permissions.enforcement.mcp.codexCalls"),
-        &ctx.t("agents.permissions.enforcement.mcp.codexCallsHow"),
-      ),
-      McpCalls::ClaudeAllowedTools => row(
+      )
+    } else {
+      row(
         Icon::CircleCheck,
         &ctx.t("agents.permissions.enforcement.mcp.claudeCalls"),
         &ctx.t("agents.permissions.enforcement.mcp.claudeCallsHow"),
-      ),
+      )
     });
     rows.push(row(
       Icon::Unplug,
@@ -188,7 +188,7 @@ fn usable(server: &McpServer, provider: AgentProvider) -> bool {
     McpTransport::Stdio(stdio) => stdio.working_directory().is_some(),
     McpTransport::Http(_) => false,
   };
-  server.enabled() && (!folder || mcp_support(provider).working_directory)
+  server.enabled() && (!folder || starts_in_its_folder(provider))
 }
 
 fn hint(ctx: &Ctx, key: &str) -> Element {
@@ -198,22 +198,30 @@ fn hint(ctx: &Ctx, key: &str) -> Element {
     .into()
 }
 
-fn interactive_enforcement(ctx: &Ctx, tool_approvals: bool) -> Vec<Element> {
+/// Codex App Server's MCP rows when a chosen server runs: only the chosen servers run (the user's
+/// own are turned off), and a tool call that asks for approval reaches a person only when the
+/// profile asks before MCP actions; otherwise the request is denied without asking.
+fn app_server_enforcement(ctx: &Ctx, tool_approvals: bool) -> Vec<Element> {
+  let approvals = if tool_approvals {
+    row(
+      Icon::CircleCheck,
+      &ctx.t("agents.permissions.toolApprovals"),
+      &ctx.t("runs.toolApproval.scope"),
+    )
+  } else {
+    row(
+      Icon::TriangleAlert,
+      &ctx.t("agents.permissions.toolApprovalsDisabled"),
+      &ctx.t("agents.permissions.enforcement.mcp.codexDenied"),
+    )
+  };
   vec![
     row(
       Icon::CircleCheck,
-      &ctx.t("agents.permissions.enforcement.mcp.inherited"),
+      &ctx.t("agents.permissions.enforcement.mcp.codexChosen"),
       &ctx.t("agents.permissions.transport"),
     ),
-    row(
-      Icon::CircleCheck,
-      &ctx.t(if tool_approvals {
-        "agents.permissions.toolApprovals"
-      } else {
-        "agents.permissions.toolApprovalsDisabled"
-      }),
-      &ctx.t("runs.toolApproval.scope"),
-    ),
+    approvals,
     row(
       Icon::Unplug,
       &ctx.t("agents.permissions.enforcement.mcp.outside"),

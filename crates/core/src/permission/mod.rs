@@ -8,6 +8,7 @@
 
 pub mod capability;
 pub mod claude;
+mod launch;
 pub mod mcp;
 mod narrow;
 pub mod writable;
@@ -18,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  launch::{LaunchPermissions, OutsideCommands},
   narrow::{StepCommands, StepNetwork, StepPermissions},
   writable::{
     FolderBounds, ResolvedFolder, WritableFolder, WritableFolderError, WritableFolders, WritableFoldersError,
@@ -258,11 +260,6 @@ impl AgentPermissions {
 
   pub const fn interactive_tool_approvals(&self) -> bool {
     self.interactive_tool_approvals
-  }
-
-  /// Whether a person decides some of the agent's actions: commands, MCP actions or both.
-  pub fn asks_a_person(&self) -> bool {
-    self.interactive_tool_approvals || self.commands == CommandPermission::AskBefore
   }
 
   pub const fn set_interactive_tool_approvals(&mut self, enabled: bool) {

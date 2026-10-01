@@ -25,7 +25,9 @@ use orchester_store::ProjectDb;
 use crate::{
   github::{contains_text, shows},
   harness::Desktop,
-  task_run::{create_and_run, fill_new_task, has, init_repository, latest_run, programs, run_finished, seed},
+  task_run::{
+    create_and_run, fill_new_task, has, init_repository, latest_run, programs, run_finished, seed, seed_claude,
+  },
 };
 
 /// A desktop whose project runs Implement on the fake CLI, with the runner program `runner`.
@@ -358,7 +360,7 @@ fn save_daily_budget(repo: &Path, daily: u64) {
 fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
-    seed(repo, &fake, false);
+    seed_claude(repo, &fake);
     save_daily_budget(repo, 5_000);
   });
   create_and_run(&mut desktop, "Work in turns.", "1400000");

@@ -6,7 +6,7 @@ use std::path::Path;
 use orchester_core::{
   conversation::{Message, MessageBody, Recipient},
   id::{IdempotencyKey, RunId},
-  permission::{AgentPermissions, CommandPermission, FolderBounds, WritableFolder, WritableFolders},
+  permission::{AgentPermissions, CommandPermission, FolderBounds, LaunchPermissions, WritableFolder, WritableFolders},
   resource::{AgentProfile, StepKey},
   run::{PendingToolApproval, PermissionsApply, RunStatus},
   store::{ActivityStore, ConversationStore, ResourceStore},
@@ -113,7 +113,7 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
   verify_progress(root, &mut events, id, &before, &message, (deny_command, deny_tool)).await;
 }
 
-fn policies(db: &ProjectDb, run: RunId) -> Vec<Option<AgentPermissions>> {
+fn policies(db: &ProjectDb, run: RunId) -> Vec<Option<LaunchPermissions>> {
   db.invocations(run)
     .expect("invocations")
     .into_iter()
@@ -121,7 +121,12 @@ fn policies(db: &ProjectDb, run: RunId) -> Vec<Option<AgentPermissions>> {
     .collect()
 }
 
-fn assert_migration_policies(db: &ProjectDb, run: RunId, old: &[Option<AgentPermissions>], desired: &AgentPermissions) {
+fn assert_migration_policies(
+  db: &ProjectDb,
+  run: RunId,
+  old: &[Option<LaunchPermissions>],
+  desired: &AgentPermissions,
+) {
   let actual = policies(db, run);
   assert_eq!(&actual[..2], old);
   let enforced = desired
@@ -131,8 +136,8 @@ fn assert_migration_policies(db: &ProjectDb, run: RunId, old: &[Option<AgentPerm
     )
     .expect("actual supported policy");
   assert_eq!(
-    actual[2].as_ref(),
-    Some(enforced.permissions()),
+    actual[2],
+    Some(enforced.launch()),
     "actual App Server policy includes Ask and MCP approvals"
   );
 }

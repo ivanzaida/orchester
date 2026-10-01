@@ -34,11 +34,15 @@ pub const fn option_title(option: PermissionOption) -> &'static str {
 }
 
 /// What an option allows on `provider` (`C85wh` in `lcwsy`). Only Claude Code also runs known-safe
-/// read-only commands besides an allowed list, so only its *Allowed commands* says so.
+/// read-only commands besides an allowed list, so only its *Allowed commands* says so; only Codex
+/// asks about commands that need more than its sandbox, so only its *Any command* says that.
 pub fn option_detail(option: PermissionOption, provider: Option<AgentProvider>) -> &'static str {
   match option {
     PermissionOption::AllowedCommands if runs_read_only_unlisted(provider) => {
       "agents.permissions.option.allowed.claudeDetail"
+    }
+    PermissionOption::AnyCommand if provider == Some(AgentProvider::CodexCli) => {
+      "agents.permissions.option.any.codexDetail"
     }
     PermissionOption::ReadOnly => "agents.permissions.option.readOnly.detail",
     PermissionOption::EditWorktree => "agents.permissions.option.editWorktree.detail",
@@ -78,9 +82,9 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexCommandApprovals => "agents.permissions.mechanism.codexCommandApprovals",
     Mechanism::CodexSandboxNetworkOff => "agents.permissions.mechanism.codexNetworkOff",
     Mechanism::CodexSandboxNetworkOn => "agents.permissions.mechanism.codexNetworkOn",
-    // Read-only with asking before commands runs no command at all (see `enforced_on`).
-    Mechanism::ClaudeEditToolsRemoved if runs_no_commands(permissions) => {
-      "agents.permissions.mechanism.claudeEditToolsRemovedNoCommands"
+    // Without a listed command every command asks.
+    Mechanism::ClaudeEditToolsRemoved if lists_no_command(permissions) => {
+      "agents.permissions.mechanism.claudeEditToolsRemovedAsk"
     }
     Mechanism::ClaudeEditToolsRemoved => "agents.permissions.mechanism.claudeEditToolsRemoved",
     Mechanism::ClaudeAcceptEdits => "agents.permissions.mechanism.claudeAcceptEdits",
@@ -90,13 +94,14 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexWritableRoots => "agents.permissions.mechanism.codexWritableRoots",
     Mechanism::ClaudeAddDir => "agents.permissions.mechanism.claudeAddDir",
     Mechanism::ClaudePermissionPrompt => "agents.permissions.mechanism.claudePermissionPrompt",
-    Mechanism::ClaudeNoCommandsReadOnly => "agents.permissions.mechanism.claudeNoCommandsReadOnly",
     Mechanism::ClaudeAllowedTools => {
       let count = match permissions.commands() {
         CommandPermission::Allowed(commands) => commands.entries().len(),
         CommandPermission::AskBefore | CommandPermission::AnyInWorktree => 0,
       };
-      let key = if count == 1 {
+      let key = if count == 0 {
+        "agents.permissions.mechanism.claudeAllowedTools.none"
+      } else if count == 1 {
         "agents.permissions.mechanism.claudeAllowedTools.one"
       } else {
         "agents.permissions.mechanism.claudeAllowedTools.other"
@@ -110,9 +115,8 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
 /// What a mechanism does beyond its setting's words, as a line under it; `None` for most.
 pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions) -> Option<Arc<str>> {
   match (mechanism, permissions.commands()) {
-    (Mechanism::ClaudeNoCommandsReadOnly, _) => {
-      Some(ctx.t("agents.permissions.mechanism.claudeNoCommandsReadOnlyDetail"))
-    }
+    // Codex asks a person about a command that needs more than its sandbox (App Server).
+    (Mechanism::CodexSandboxedCommands | Mechanism::CodexCommandApprovals, _) => Some(ctx.t(ESCALATIONS)),
     (Mechanism::ClaudeAllowedTools, CommandPermission::Allowed(list)) if !list.is_empty() => {
       Some(ctx.t(READ_ONLY_COMMANDS))
     }
@@ -120,13 +124,31 @@ pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPerm
   }
 }
 
-/// That Claude Code also runs known-safe read-only commands without a rule (`docs/plan.md`, C4).
+/// That Claude Code also runs known-safe read-only commands without a rule (`docs/plan.md`, C4), and
+/// asks a person about any other command.
 const READ_ONLY_COMMANDS: &str = "agents.permissions.claudeReadOnlyCommands";
 
 /// What runs besides `list` on `provider`: Claude Code's known-safe read-only commands, once the
-/// list has a command (without one it gets no command tool). `None` where only the list runs.
+/// list has a command (without one it gets no command tool), and that the others ask a person.
+/// `None` where only the list runs.
 pub fn unlisted_commands(ctx: &Ctx, provider: Option<AgentProvider>, list: &AllowedCommands) -> Option<Arc<str>> {
   (runs_read_only_unlisted(provider) && !list.is_empty()).then(|| ctx.t(READ_ONLY_COMMANDS))
+}
+
+/// That Codex asks a person about a command that needs more than its sandbox.
+const ESCALATIONS: &str = "agents.permissions.codexEscalations";
+
+/// That a command needing more than the sandbox asks a person, where `provider` enforces `commands`
+/// with its sandbox; `None` elsewhere.
+pub fn escalations(ctx: &Ctx, provider: Option<AgentProvider>, commands: &CommandPermission) -> Option<Arc<str>> {
+  let option = PermissionOption::of_commands(commands);
+  let sandboxed = provider.is_some_and(|provider| {
+    matches!(
+      support(provider, Platform::current(), option),
+      Support::Enforced(Mechanism::CodexSandboxedCommands | Mechanism::CodexCommandApprovals)
+    )
+  });
+  sandboxed.then(|| ctx.t(ESCALATIONS))
 }
 
 /// Whether `provider` enforces an allowed list the way that also runs known-safe read-only commands.
@@ -148,8 +170,13 @@ pub fn file_command_hints(ctx: &Ctx, list: &AllowedCommands) -> Vec<Arc<str>> {
     .collect()
 }
 
-fn runs_no_commands(permissions: &AgentPermissions) -> bool {
-  matches!(permissions.commands(), CommandPermission::Allowed(commands) if commands.entries().is_empty())
+/// Whether no command is listed: asking before commands, or an empty list.
+fn lists_no_command(permissions: &AgentPermissions) -> bool {
+  match permissions.commands() {
+    CommandPermission::Allowed(commands) => commands.is_empty(),
+    CommandPermission::AskBefore => true,
+    CommandPermission::AnyInWorktree => false,
+  }
 }
 
 /// Words of the three settings, long (`haXji`: *Edits files in the task worktree · 3 allowed

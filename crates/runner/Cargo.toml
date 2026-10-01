@@ -129,6 +129,26 @@ name = "claude_approvals"
 required-features = ["test-agent"]
 
 [[test]]
+name = "claude_unlisted"
+required-features = ["test-agent"]
+
+[[test]]
+name = "codex_escalations"
+required-features = ["test-agent"]
+
+[[test]]
+name = "codex_repository_settings"
+required-features = ["test-agent"]
+
+[[test]]
+name = "codex_stderr"
+required-features = ["test-agent"]
+
+[[test]]
+name = "codex_resume"
+required-features = ["test-agent"]
+
+[[test]]
 name = "claude_prompt_relay"
 required-features = ["test-agent"]
 

@@ -112,6 +112,14 @@ pub(crate) fn seed(repo: &Path, fake: &Path, review: bool) {
   });
 }
 
+/// [`seed`] on Claude Code, without Review: its fake reports each message's usage while its turn goes
+/// on, which Codex reports when the turn ends.
+pub(crate) fn seed_claude(repo: &Path, fake: &Path) {
+  seed_agent(repo, &fake_claude(fake), AgentProvider::ClaudeCodeCli, |builder| {
+    vec![agent_step(builder, "implement", "Implement", "Append one line.", &[])]
+  });
+}
+
 /// A write step on `builder` that runs after `after`, doing what `instructions` tell the fake CLI.
 pub(crate) fn agent_step(builder: ResourceId, key: &str, name: &str, instructions: &str, after: &[&str]) -> Step {
   Step {
@@ -435,7 +443,7 @@ fn queued_task_reopens_for_retry_with_the_same_first_run_key() {
 #[test]
 fn run_controls_raise_the_limit_of_a_run_stopped_at_it_and_continue() {
   let (runner, fake) = programs();
-  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed_claude(repo, &fake));
   create_and_run(&mut desktop, "Work in turns.", "5000");
   desktop.wait_until("the raise-limit panel", |desktop| has(desktop, "raise-limit"));
   assert!(shows(
@@ -472,7 +480,7 @@ fn run_controls_raise_the_limit_of_a_run_stopped_at_it_and_continue() {
 fn run_controls_raise_the_step_budget_of_a_run_stopped_at_it_and_continue() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
-    seed_steps(repo, &fake, |builder| {
+    seed_agent(repo, &fake_claude(&fake), AgentProvider::ClaudeCodeCli, |builder| {
       let implement = agent_step(builder, "implement", "Implement", "Work in turns.", &[]);
       vec![Step {
         budget: Some(TokenBudget::new(1_000).expect("above zero")),

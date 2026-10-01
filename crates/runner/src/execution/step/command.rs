@@ -23,12 +23,14 @@ use orchester_core::{
   command::{Command, SecretVariable},
   connection::{
     AgentConnection, AgentProvider, REASONING_EFFORT,
-    invocation::{ClaudeInvocation, ClaudeSession, CodexAgentFiles, CodexInvocation, InvocationError, Platform},
+    invocation::{
+      ClaudeInvocation, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError, Platform,
+    },
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
   memory::{InjectedMemory, RecalledMemory},
-  permission::{AgentPermissions, CommandPermission, FolderBounds, capability::EnforcedPermissions},
+  permission::{CommandPermission, FolderBounds, LaunchPermissions, OutsideCommands, capability::EnforcedPermissions},
   resource::{AgentProfile, CommandEnvironment, InjectionEvent, Instruction, ModelId, Step, StepKey, StepKind},
   run::{
     AssembledPrompt, CodeIndexPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion,
@@ -46,7 +48,7 @@ use super::{
   Continuation, Occasion,
   app_server::AppServerSetup,
   claude_approval::ClaudeApprovals,
-  mcp::{McpServers, McpSetup},
+  mcp::{ClaudeServers, McpServers, McpSetup},
   skills::{PlacedSkills, repository_skills},
 };
 use crate::private_file::PrivateFile;
@@ -58,7 +60,6 @@ pub(super) fn problem(detail: String) -> RunnerProblem {
 /// How an agent invocation starts.
 pub(super) struct AgentStart {
   pub(super) command: Command,
-  pub(super) provider: AgentProvider,
   pub(super) prompt: InvocationPrompt,
   /// Claude Code's MCP configuration file, removed when this is dropped: once the CLI has ended.
   pub(super) mcp_file: Option<PrivateFile>,
@@ -74,7 +75,7 @@ pub(super) struct AgentStart {
   pub(super) agent: String,
   /// The task memory its prompt holds, to record with the invocation.
   pub(super) memory: Vec<InjectedMemory>,
-  pub(super) permissions: AgentPermissions,
+  pub(super) permissions: LaunchPermissions,
 }
 
 /// What the prompt of an agent step's invocation is made of besides the run.
@@ -171,13 +172,15 @@ impl RunTask {
       code_index: index.folder.as_deref(),
       approvals: claude_approvals.as_ref().map(ClaudeApprovals::config),
     };
-    let interactive = enforced.permissions().asks_a_person();
-    let (command, mcp_file, app_server) = if interactive && provider == AgentProvider::CodexCli {
-      let (command, app) = self.app_server_command(&cli, setup, prompt)?;
-      (command, None, Some(app))
-    } else {
-      let (command, file) = self.cli_command(&cli, setup, prompt)?;
-      (command, file, None)
+    let (command, mcp_file, app_server) = match setup {
+      McpSetup::Codex(mcp) => {
+        let (command, app) = self.app_server_command(&cli, &mcp, prompt)?;
+        (command, None, Some(app))
+      }
+      McpSetup::Claude(servers) => {
+        let (command, file) = self.claude_command(&cli, servers, prompt)?;
+        (command, file, None)
+      }
     };
     let command = match &index.tools {
       Some(tools) => with_tools_on_path(command, tools),
@@ -187,7 +190,6 @@ impl RunTask {
     left_out.extend(index.problems(provider));
     Ok(AgentStart {
       command,
-      provider,
       prompt: sources,
       mcp_file,
       left_out,
@@ -197,7 +199,7 @@ impl RunTask {
       mcp_secrets,
       agent: body.role().as_str().to_owned(),
       memory: recalled.injected(),
-      permissions: enforced.permissions().clone(),
+      permissions: enforced.launch(),
     })
   }
 
@@ -257,34 +259,30 @@ impl RunTask {
     Ok((step, profile, model))
   }
 
+  /// Codex App Server with the MCP servers `mcp`, and what the runner tells it once it runs: the
+  /// prompt, the thread's settings and the approvals it may ask a person for.
   fn app_server_command(
     &self,
     cli: &Cli<'_>,
-    setup: McpSetup,
+    mcp: &CodexMcp,
     prompt: String,
   ) -> Result<(Command, AppServerSetup), RunnerProblem> {
-    let McpSetup::Codex(mcp) = setup else {
-      return Err(problem("interactive tool approvals require Codex".to_owned()));
-    };
     let expected_servers = mcp.servers().iter().map(ToString::to_string).collect::<BTreeSet<_>>();
     let invocation = CodexInvocation {
       executable: cli.connection.executable(),
-      model: cli.model.as_str(),
-      reasoning_effort: cli.effort,
+      repository: &self.root,
       access: cli.enforced.permissions().repository(),
       network: cli.enforced.permissions().network(),
       writable_roots: cli.writable_roots,
       worktree: cli.worktree,
       platform: Platform::current(),
-      resume: cli.resume,
-      output_schema: None,
-      mcp: Some(&mcp),
+      mcp: Some(mcp),
       agent_files: cli
         .repository_skills
         .map_or(CodexAgentFiles::Loaded, |skills| CodexAgentFiles::LeftOut { skills }),
     };
     let command = invocation
-      .app_server_command(std::env::vars_os(), cli.environment)
+      .command(std::env::vars_os(), cli.environment)
       .map_err(|error| problem(error.to_string()))?;
     let schema = (cli.resume.is_none()).then(|| {
       serde_json::from_str(orchester_core::run::STEP_RESULT_SCHEMA)
@@ -299,6 +297,7 @@ impl RunTask {
         worktree: cli.worktree.to_path_buf(),
         access: cli.enforced.permissions().repository(),
         command_approvals: *cli.enforced.permissions().commands() == CommandPermission::AskBefore,
+        sandbox_approvals: cli.enforced.outside_commands() == OutsideCommands::SandboxApproval,
         tool_approvals: cli.enforced.permissions().interactive_tool_approvals(),
         network: cli.enforced.permissions().network(),
         writable_roots: cli.writable_roots.to_vec(),
@@ -363,55 +362,32 @@ impl RunTask {
     Ok((body, connection))
   }
 
-  /// The CLI's command with `prompt` on its standard input and the MCP servers of `setup`, and the
+  /// Claude Code's command with `prompt` on its standard input and the MCP servers `servers`, and the
   /// configuration file it reads them from, if any.
-  fn cli_command(
+  fn claude_command(
     &self,
     cli: &Cli<'_>,
-    setup: McpSetup,
+    servers: Option<ClaudeServers>,
     prompt: String,
   ) -> Result<(Command, Option<PrivateFile>), RunnerProblem> {
-    let command = match &setup {
-      McpSetup::Codex(mcp) => CodexInvocation {
-        executable: cli.connection.executable(),
-        model: cli.model.as_str(),
-        reasoning_effort: cli.effort,
-        access: cli.enforced.permissions().repository(),
-        network: cli.enforced.permissions().network(),
-        writable_roots: cli.writable_roots,
-        worktree: cli.worktree,
-        platform: Platform::current(),
-        resume: cli.resume,
-        output_schema: Some(&self.schema_path()),
-        mcp: Some(mcp),
-        agent_files: cli
-          .repository_skills
-          .map_or(CodexAgentFiles::Loaded, |skills| CodexAgentFiles::LeftOut { skills }),
-      }
-      .command(prompt, std::env::vars_os(), cli.environment),
-      McpSetup::Claude(servers) => ClaudeInvocation {
-        executable: cli.connection.executable(),
-        model: cli.model.as_str(),
-        effort: cli.effort,
-        permissions: cli.enforced,
-        writable_roots: cli.writable_roots,
-        worktree: cli.worktree,
-        session: ClaudeSession::continuing(cli.resume),
-        mcp: servers
-          .as_ref()
-          .map(|servers| (servers.file.path(), servers.servers.as_slice())),
-        skills: cli.skills,
-        code_index: cli.code_index,
-        approvals: cli.approvals,
-      }
-      .command(prompt, std::env::vars_os(), cli.environment),
-    };
-    let command = command.map_err(|error: InvocationError| problem(error.to_string()))?;
-    let file = match setup {
-      McpSetup::Claude(servers) => servers.map(|servers| servers.file),
-      McpSetup::Codex(_) => None,
-    };
-    Ok((command, file))
+    let command = ClaudeInvocation {
+      executable: cli.connection.executable(),
+      model: cli.model.as_str(),
+      effort: cli.effort,
+      permissions: cli.enforced,
+      writable_roots: cli.writable_roots,
+      worktree: cli.worktree,
+      session: ClaudeSession::continuing(cli.resume),
+      mcp: servers
+        .as_ref()
+        .map(|servers| (servers.file.path(), servers.servers.as_slice())),
+      skills: cli.skills,
+      code_index: cli.code_index,
+      approvals: cli.approvals,
+    }
+    .command(prompt, std::env::vars_os(), cli.environment)
+    .map_err(|error: InvocationError| problem(error.to_string()))?;
+    Ok((command, servers.map(|servers| servers.file)))
   }
 
   /// The prompt of `execution`'s next invocation: role, instructions, step and task with the run's

@@ -12,7 +12,7 @@ use orchester_core::{
 };
 use orchester_ipc::AttachSession;
 use orchester_store::ProjectDb;
-use support::{Setup, StepSpec, project, reported, scheduler, wait_for, wait_for_idle};
+use support::{Setup, StepSpec, project, scheduler, threads, wait_for, wait_for_idle};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn recovery_sessions_new_upstream_work_starts_fresh_dependent_cli_and_keeps_history() {
@@ -52,17 +52,17 @@ async fn recovery_sessions_new_upstream_work_starts_fresh_dependent_cli_and_keep
   let calls = db.invocations(id).expect("all invocations");
   assert_eq!(calls.len(), 4);
   assert_eq!(&calls[..2], before.as_slice(), "original sessions retained");
-  let arguments = reported(&db, id, "argv: ");
-  assert_eq!(arguments.len(), 4);
+  let threads = threads(&db, id);
+  assert_eq!(threads.len(), 4);
   assert!(
-    arguments[2].split_whitespace().any(|argument| argument == "resume"),
+    threads[2].get("threadId").is_some(),
     "selected Implement resumes: {}",
-    arguments[2]
+    threads[2]
   );
   assert!(
-    !arguments[3].split_whitespace().any(|argument| argument == "resume"),
+    threads[3].get("threadId").is_none(),
     "dependent Review starts fresh: {}",
-    arguments[3]
+    threads[3]
   );
   assert_eq!(ended.id(), failed.id());
   assert_eq!(ended.branch(), failed.branch());
@@ -144,9 +144,9 @@ async fn recovery_sessions_parallel_review_uses_current_source_and_preserves_its
   assert_eq!(calls.len(), 6);
   assert_eq!(&calls[..3], before.as_slice());
   assert_eq!(
-    reported(&db, id, "argv: ")
+    threads(&db, id)
       .iter()
-      .filter(|args| args.split_whitespace().any(|arg| arg == "resume"))
+      .filter(|thread| thread.get("threadId").is_some())
       .count(),
     1
   );

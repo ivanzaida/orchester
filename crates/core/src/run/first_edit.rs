@@ -3,7 +3,7 @@
 //! where that edit was, or that it changed no file. An edit is a file change the CLI reports
 //! (Codex `file_change` items, Claude Code's edit tools); a file a shell command writes is not
 //! seen. A turn's usage arrives when it completes, so the turn in which the first edit happens
-//! counts as before it: Codex reports a whole `exec` turn at its end, which then makes the count an
+//! counts as before it: Codex reports a whole turn's usage at its end, which then makes the count an
 //! upper bound ([`EditProgress::at_most`]); Claude Code reports each message, and a message that
 //! makes the edit completes before its result does. Claude Code's per-message usage can report less
 //! output than its final `result` does; what the result adds after the edit is not counted.

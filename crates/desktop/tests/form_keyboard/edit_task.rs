@@ -22,7 +22,7 @@ use crate::{
   harness::Desktop,
   new_task::{close, ends},
   tabs::{BACK, click_with, command, has, side_button},
-  task_run::{init_repository, latest_run, programs, seed, set_text},
+  task_run::{init_repository, latest_run, programs, seed_claude, set_text},
 };
 
 const ROW: &str = "task-row-KON-1";
@@ -179,7 +179,7 @@ fn edit_task_leaving_with_unsaved_changes_asks_first() {
 
 /// The published Delivery pipeline and the draft KON-1 on it, with a budget its run stops at.
 fn seed_runnable_draft(repo: &Path, fake: &Path) {
-  seed(repo, fake, false);
+  seed_claude(repo, fake);
   let db = ProjectDb::open(repo).expect("open the project");
   let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
   drop(db);

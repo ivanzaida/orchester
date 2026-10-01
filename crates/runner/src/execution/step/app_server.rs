@@ -1,7 +1,17 @@
-//! Bidirectional Codex App Server conversation for one invocation. MCP user input and elicitation
-//! requests and command approvals can be answered once; file and standing permission grants remain disabled. Unexpected
-//! host requests fail the invocation. Global MCP servers remain available; project-selected
-//! servers must be connected before the turn begins.
+//! Bidirectional Codex App Server conversation for one invocation, the only way Codex runs. MCP user
+//! input and elicitation requests and command approvals can be answered once; file and standing
+//! permission grants remain disabled. A command approval comes from a rule when the step asks before
+//! commands, and from the sandbox when a command needs more than it allows (`sandbox_approval`, on
+//! whenever the step's other commands ask a person). Unexpected host requests fail the invocation.
+//! The MCP servers of the user's own configuration, read with `config/read` before the thread
+//! starts, are turned off for the thread, and the thread's inventory must show every server the step
+//! does not choose turned off; a configuration with hooks refuses the step
+//! (`orchester_core::connection::app_server_mcp`). The repository's own `.codex` folder must be left
+//! out (a project layer Codex loaded refuses the step); one the worktree has is noted in the activity
+//! (`orchester_core::connection::app_server_config`). A step that asks before MCP
+//! actions needs its project-selected servers connected before the turn begins, any other step works
+//! without one that is not and its activity says so. Codex's standard error is kept in the activity
+//! as raw lines, bounded and without its echo of the user's settings (`super::stderr`).
 
 use std::{
   collections::BTreeSet,
@@ -13,8 +23,12 @@ use orchester_core::{
   command::{SecretVariable, redact_secrets},
   connection::{
     app_server::{AppServerStream, PendingApproval, Update},
-    app_server_mcp::verify_selected_servers,
-    stream::{AgentEvent, OutputStream},
+    app_server_config::{refuse_taken_names, repository_settings},
+    app_server_mcp::{
+      refuse_user_hooks, servers_to_turn_off, unavailable_selected, verify_only_chosen_run, verify_selected_servers,
+    },
+    mcp::McpServerProblem,
+    stream::{AgentEvent, OutputStream, RunnerProblem},
   },
   permission::NetworkAccess,
   resource::RepositoryAccess,
@@ -22,7 +36,11 @@ use orchester_core::{
 use serde_json::{Value, json};
 use thiserror::Error;
 
+use super::stderr::StderrLog;
 use crate::supervisor::Supervised;
+
+/// Characters kept of Codex's reason for refusing to resume a session.
+const REASON_CHARS: usize = 300;
 
 #[derive(Debug, Error)]
 pub(super) enum AppServerFailure {
@@ -44,7 +62,10 @@ pub(super) struct AppServerSetup {
   pub effort: Option<String>,
   pub worktree: PathBuf,
   pub access: RepositoryAccess,
+  /// Commands an execpolicy rule asks about reach a person (*Ask before running commands*).
   pub command_approvals: bool,
+  /// Commands that need more than the sandbox reach a person.
+  pub sandbox_approvals: bool,
   pub tool_approvals: bool,
   pub network: NetworkAccess,
   pub writable_roots: Vec<PathBuf>,
@@ -68,6 +89,7 @@ impl AppServerSetup {
 enum Phase {
   Initialize,
   Account,
+  Configuration,
   Thread,
   Servers,
   Turn,
@@ -81,6 +103,9 @@ pub(super) struct AppServerSession {
   thread: Option<String>,
   turn: Option<String>,
   stream: AppServerStream,
+  /// The configured MCP servers the step does not choose, turned off for its thread.
+  turned_off: Vec<String>,
+  stderr: StderrLog,
 }
 
 impl AppServerSession {
@@ -88,6 +113,8 @@ impl AppServerSession {
     Self {
       setup,
       phase: Phase::Initialize,
+      turned_off: Vec::new(),
+      stderr: StderrLog::default(),
       thread: None,
       turn: None,
       stream: AppServerStream::default(),
@@ -124,7 +151,14 @@ impl AppServerSession {
     process: &Supervised,
   ) -> Result<Vec<Update>, AppServerFailure> {
     if stream == OutputStream::Stderr {
-      return Ok(Vec::new());
+      let secrets = &self.setup.secrets;
+      let kept = self.stderr.keep(line, |text| redact_secrets(text, secrets));
+      return Ok(
+        kept
+          .map(|line| Update::Activity(AgentEvent::Raw { stream, line }))
+          .into_iter()
+          .collect(),
+      );
     }
     let value: Value = serde_json::from_str(line).map_err(|_| "Codex App Server sent invalid JSON".to_owned())?;
     if value.get("method").is_some() {
@@ -140,7 +174,7 @@ impl AppServerSession {
           && (!matches!(self.phase, Phase::Turn | Phase::Working)
             || self.thread.as_deref() != Some(request.thread.as_str())
             || self.turn.as_deref() != request.turn.as_deref()
-            || (request.is_command() && !self.setup.command_approvals)
+            || (request.is_command() && !self.setup.command_approvals && !self.setup.sandbox_approvals)
             || (!request.is_command() && !self.setup.tool_approvals))
         {
           return Err(
@@ -158,6 +192,11 @@ impl AppServerSession {
     self.response(&value, process).await
   }
 
+  /// Lines of Codex's standard error dropped once the activity kept as many as it keeps.
+  pub const fn stderr_left_out(&self) -> u64 {
+    self.stderr.left_out()
+  }
+
   pub fn redact(&self, text: &str) -> String {
     redact_secrets(text, &self.setup.secrets)
   }
@@ -167,8 +206,8 @@ impl AppServerSession {
       .get("id")
       .and_then(Value::as_u64)
       .ok_or_else(|| "Codex App Server omitted a response ID".to_owned())?;
-    if value.get("error").is_some() {
-      return Err(format!("Codex App Server rejected {}", phase_name(self.phase)).into());
+    if let Some(error) = value.get("error") {
+      return Err(self.rejected(error).into());
     }
     let result = value
       .get("result")
@@ -193,10 +232,17 @@ impl AppServerSession {
             "Codex is not signed in. Sign in to the normal Codex account and retry this step.".to_owned(),
           ));
         }
-        self.phase = Phase::Thread;
-        self.start_thread(process).await.map_err(|error| io_message(&error))?;
+        self.phase = Phase::Configuration;
+        let cwd = self.setup.worktree.to_string_lossy();
+        send(
+          process,
+          json!({"id":6,"method":"config/read","params":{"cwd":cwd,"includeLayers":true}}),
+        )
+        .await
+        .map_err(|error| io_message(&error))?;
         Ok(Vec::new())
       }
+      (Phase::Configuration, 6) => self.configured(result, process).await,
       (Phase::Thread, 3) => {
         self.check_thread(result)?;
         let thread = result
@@ -218,10 +264,10 @@ impl AppServerSession {
         Ok(vec![Update::Activity(AgentEvent::SessionStarted { session: thread })])
       }
       (Phase::Servers, 4) => {
-        self.check_servers(result)?;
+        let left_out = self.check_servers(result)?;
         self.phase = Phase::Turn;
         self.start_turn(process).await.map_err(|error| io_message(&error))?;
-        Ok(Vec::new())
+        Ok(left_out)
       }
       (Phase::Turn, 5) => {
         self.phase = Phase::Working;
@@ -230,6 +276,48 @@ impl AppServerSession {
       (Phase::Complete, 5) => Ok(Vec::new()),
       _ => Err("Codex App Server responded out of sequence".to_owned().into()),
     }
+  }
+
+  /// Why the step stops after Codex answered its request with `error`. A session Codex cannot resume
+  /// (its history is not in this Codex home, for one) is named with Codex's reason, cut to a line.
+  fn rejected(&self, error: &Value) -> String {
+    match (&self.setup.resume, self.phase) {
+      (Some(session), Phase::Thread) => {
+        let reason: String = error
+          .get("message")
+          .and_then(Value::as_str)
+          .unwrap_or("no reason given")
+          .chars()
+          .take(REASON_CHARS)
+          .collect();
+        format!("Codex could not resume the earlier session {session}: {reason}")
+      }
+      _ => format!("Codex App Server rejected {}", phase_name(self.phase)),
+    }
+  }
+
+  /// Checks the configuration Codex read (`config/read` with its layers), then starts the thread
+  /// with the servers the step does not choose turned off; notes a repository `.codex` folder Codex
+  /// left out.
+  async fn configured(&mut self, result: &Value, process: &Supervised) -> Result<Vec<Update>, AppServerFailure> {
+    refuse_user_hooks(result).map_err(|error| error.to_string())?;
+    let ignored = repository_settings(result).map_err(|error| error.to_string())?;
+    refuse_taken_names(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+    self.turned_off = servers_to_turn_off(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+    self.phase = Phase::Thread;
+    self.start_thread(process).await.map_err(|error| io_message(&error))?;
+    Ok(
+      ignored
+        .map(|folder| {
+          Update::Activity(AgentEvent::RunnerProblem {
+            problem: RunnerProblem::CodexSettingsIgnored {
+              folder: in_worktree(&folder, &self.setup.worktree),
+            },
+          })
+        })
+        .into_iter()
+        .collect(),
+    )
   }
 
   fn check_thread(&self, result: &Value) -> Result<(), String> {
@@ -246,7 +334,7 @@ impl AppServerSession {
     let enabled = |key: &str| granular.get(key).and_then(Value::as_bool).unwrap_or(false);
     if enabled("mcp_elicitations") != self.setup.tool_approvals
       || enabled("rules") != self.setup.command_approvals
-      || enabled("sandbox_approval")
+      || enabled("sandbox_approval") != self.setup.sandbox_approvals
       || enabled("request_permissions")
       || enabled("skill_approval")
     {
@@ -318,8 +406,26 @@ impl AppServerSession {
     Ok(())
   }
 
-  fn check_servers(&self, result: &Value) -> Result<(), String> {
-    verify_selected_servers(result, &self.setup.expected_servers).map_err(|error| error.to_string())
+  /// The selected MCP servers the agent works without, as activity; an error when the step needs
+  /// them all (it asks before MCP actions) or the inventory cannot be read.
+  fn check_servers(&self, result: &Value) -> Result<Vec<Update>, String> {
+    verify_only_chosen_run(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+    if self.setup.tool_approvals {
+      verify_selected_servers(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+      return Ok(Vec::new());
+    }
+    let unavailable = unavailable_selected(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+    Ok(
+      unavailable
+        .into_iter()
+        .map(|server| {
+          Update::Activity(AgentEvent::McpServer {
+            server: Some(server.name),
+            problem: McpServerProblem::FailedToStart { detail: server.state },
+          })
+        })
+        .collect(),
+    )
   }
 
   async fn start_thread(&self, process: &Supervised) -> io::Result<()> {
@@ -329,16 +435,22 @@ impl AppServerSession {
     };
     let policy = json!({"granular":{
       "mcp_elicitations":self.setup.tool_approvals,
-      "rules":self.setup.command_approvals,"sandbox_approval":false,
+      "rules":self.setup.command_approvals,"sandbox_approval":self.setup.sandbox_approvals,
       "request_permissions":false,"skill_approval":false
     }});
     let cwd = self.setup.worktree.to_string_lossy();
+    // A table merges with the user's configuration: each server of it is turned off by name.
+    let servers: serde_json::Map<String, Value> = self
+      .turned_off
+      .iter()
+      .map(|name| (name.clone(), json!({"enabled":false})))
+      .collect();
+    let config = json!({"mcp_servers":servers});
     let params = match &self.setup.resume {
       Some(thread) => json!({"threadId":thread,"cwd":cwd,"model":self.setup.model,
-        "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox}),
+        "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),
       None => json!({"cwd":cwd,"model":self.setup.model,
-        "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,
-        "config":{"features":{"apps":false}}}),
+        "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),
     };
     let method = if self.setup.resume.is_some() {
       "thread/resume"
@@ -364,10 +476,19 @@ impl AppServerSession {
   }
 }
 
+/// `folder` as the worktree names it (`.codex\`), or as Codex wrote it when it lies elsewhere.
+fn in_worktree(folder: &str, worktree: &Path) -> String {
+  Path::new(folder).strip_prefix(worktree).map_or_else(
+    |_| folder.to_owned(),
+    |relative| format!("{}{}", relative.display(), std::path::MAIN_SEPARATOR),
+  )
+}
+
 fn phase_name(phase: Phase) -> &'static str {
   match phase {
     Phase::Initialize => "initialize",
     Phase::Account => "account/read",
+    Phase::Configuration => "config/read",
     Phase::Thread => "thread/start or resume",
     Phase::Servers => "mcpServerStatus/list",
     Phase::Turn => "turn/start",
