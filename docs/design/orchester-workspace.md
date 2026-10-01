@@ -183,7 +183,7 @@ There are 110 full screen frames; earlier screen IDs are preserved. Screens rema
 
 - Getting started: first launch → project folder → project with detected GitHub repository → runner/agents → ready. Setup blocking, compact empty-project feedback (`RlwqW`), the *Change GitHub account or access* panel (01.D, x 1568 / y 426) and the ten GitHub detection states (01.C1–C10, x 2128–4808, rows at y 100, 512 and 980) are in `GojEY` (height 1400) below the main flow. All projects, its removal, the project switcher and their states are in `wa6B7` ("All projects · list, removal, switcher", y 3920, height 3256: 01.06, 01.06 A, 01.06 B in row 1, 01.06 C, D, E in row 2, 01.06 F `glurU` at x 48 in row 3; section height 7272); see [All projects](#all-projects).
 - Tasks & runs starts with project chat in `I0Ij1T`: new conversation → task proposal. `UIc5y` follows with task library, bulk creation, parallel/sequential scheduling and active queue, and the compact task-rows board `r2al55` (x 3088 / y 1148, row 2). The individual flow is in `D4pfd`: overview → new task → research → plan approval → working conversation → ready for review. `F3fEH` ("States · New task truthful states & build space (D4, D5)", drawn 2026-09-29) follows it: 02.09A, 02.09B, 02.09C in row 1; 02.09D, 02.09E, 02.09F in row 2. Pause and retry are alternatives in `O4vgKt`, with 02.B2 `z2xET` at x 3088; runner/repository/loading recovery, status variants and interaction notes are in `y8TKW8`. Application lifecycle states (close with active work, runner connection, recovery on start) and the sidebar runner card states are in `Z7Fyr8`. Agent execution states (Activity transcript, run permissions, permission request, stopped at limit) with the compact Activity, Apply now and token budget states, plus Project settings / Limits and General (row 3, with the time-limit select board `u5Vn2` at x 1568 / y 2592) and the step-budget and daily-budget stops 02.L2 / 02.L3 (row 4, y 3260), with Project settings / Environment 02.O `tXahd` beside them at x 3088 under 02.N, are in `BnxJ1` (height 5324), with the compact board 02.L3 states `uOLP2` at x 48 / y 4308 (row 5, y 4308) and, beside it, the ORC-15 Project settings frames `qO84y` and `Sr5gP` (x 1568 / 3088, y 4308). Merging a run and removing its worktrees are in `gdgT2` ("States · Review, merge & worktrees": 02.P, 02.P2, 02.P3 in row 1; the compact merge board 02.P states, 02.Q and 02.Q2 in row 2; the compact board 02.Q states `XIEn8` at x 48 in row 3, y 2196, with 02.P4 `d3oSWA` and 02.Q3 `g8ZALb` beside it; 02.Q4 `PacyY` and 02.Q5 `Y8hyj` in row 4, y 3244; height 4300). The unreadable run and the task conversation as built are in `GvUXd` ("States · Unreadable run & task conversation": the compact task-rows board for Merged and Unreadable, 02.R and 02.S in row 1; 02.S2, 02.R2 `lmlkQ` and 02.R3 `cP8oh` in row 2; 02.S3 `sYuiX`, 02.S4 `Ok14G` and 02.S5 `cj2a2` in row 3, y 2196; height 3252). Group positions are y 160 / 1376 / 3640 / 5904 (`F3fEH`) / 8168 / 9384 / 10480 / 13096 / 17848 / 22244 respectively; the section height is 25592. `F3fEH` is the last layer of the section, although it sits after `D4pfd` on the canvas.
-- Pipelines: the visual editor is separate from task execution. `UJUi0` holds edit → publish confirmation → published. `t9zWUe` holds the library (the Pipelines navigation destination) → new pipeline → an empty pipeline in the editor. `rBy9L` holds the empty library, the publish-blocked editor and 03.C `h5GPCL` (a name whose slug is taken, x 3088). `r8rPaS` holds the version history: viewing v4 → compare v3 with the draft → restore v3 (row 1) and the compact history-panel states (row 2). Group positions are y 160 / 1376 / 2592 / 3808; the section height is 5664.
+- Pipelines: the visual editor is separate from task execution. `UJUi0` holds edit → publish confirmation → published. `t9zWUe` holds the library (the Pipelines navigation destination) → new pipeline → an empty pipeline in the editor. `rBy9L` holds the empty library, the publish-blocked editor and 03.C `h5GPCL` (a name whose slug is taken, x 3088). `r8rPaS` holds the version history: viewing v4 → compare v3 with the draft → restore v3 (row 1) and the compact history-panel states (row 2). `Rg8DS` holds the pipeline presets (see [Presets](#presets)). Group positions are y 160 / 1376 / 2592 / 3808 / 5664; the section height is 10024.
 - Agents & connections: connections → add provider → assign connection/model in the agent profile (`kOGgX` row 1), then the profile's Permissions tab (04.04), the GitHub connection (04.05) and Add GitHub connection (04.06) in row 2; expired-access recovery, the compact state 04.B (options the connection can't enforce) and the GitHub connection states 04.C1–C5 (x 2108 / 2492 / 2876 / 3260 / 3644) are in `DLRW5` (now at y 2424). The MCP servers are in `m3wObx` ("States · MCP servers", y 3640, height 2404): 04.D, 04.E, 04.E2 in row 1; 04.E3, the compact boards 04.F and 04.G in row 2 (04.F is 1160 high); 04.D2 `a4lm6D` at x 48 in row 3 (y 2396); height 3452. The agent profile header states are in `iWIfR` ("States · Agent profile header (U8)", y 7188, height 1120): 04.03A, 04.04A, 04.03B, and in row 2 (y 1148) the ORC-15 Permissions frame `bYDCI`; `iWIfR` is now 2168 high. The native agent connections are in `PNDQm` ("States · Native agent connections", y 9452, height 4468); the section is now 14016 high. See [MCP servers](#mcp-servers) and [Native agent connections](#native-agent-connections).
 - Instructions: rules → composed prompt → variable catalog; unavailable-variable state is below. ORC-15 (skills and import from repository) is `HhPZg` at y 2592 (height 2168); the section is 4856 high.
 - Tools & imports: library → configuration → access policy in the first group. Select → resolve dependencies → ready to import is a separate complete row in `TSGMX`. Success/failure panels remain in `tjNmM`, now with the Create pull request settings (06.A, x 1040) and push-rejected recovery (06.B, x 1600) and the Rename copy name field (06.C, x 2096); `tjNmM` is 720 high and the section height is 3408.
@@ -817,6 +817,70 @@ The library row is a new reusable component, `hn8qO` (Pipelines / Library row), 
 
 **Version history** (implemented 2026-09-27, drawn in `r8rPaS`). *Version history* (history) is in the topbar in place of Publish when the draft has no changes (03.03 `yf6XH`), and a small toolbar button after *Pipeline settings* while it has. It opens the latest version read-only. *03.07 · Viewing v4 · Read-only* (`fvPvA`): the topbar stays the draft's (*Draft v5*, *Draft saved · Published v4*, *Run v4*, *Publish v5*); the toolbar becomes *Back to editing* (arrow-left, 30 high) and, at the right, a lock with *Viewing v4 · Read-only*; the canvas shows the version's steps with no selection and no published notice; the history panel replaces the step inspector in the same 304-wide frame (padding 24, gap 16): history icon, *Version history* (16/500) and a 24 × 24 close (x). Versions are listed newest first, 8 apart, each a row (padding 12, radius 7; selected `$hover`, hover the same): *v4* (13/500), the mono 9 *LATEST* tag on the newest only, the age at the right (11, *2d ago*), and *3 changes · 2 runs* (11). Under the selected row, indented 12: *Changes from v3* and one line per change (pencil / plus / minus 12 `$muted`, 12 `$text`, the icon on the first line), *Runs that pinned it* with *#131, #133* (or *No run pinned this version*), then *Compare with draft v5* (git-compare-arrows) and *Restore v4 as draft* (undo-2), full width. *03.08 · Compare v3 with draft v5* (`Fb42P`): the list heading reads *From v3 to draft v5*, the button *Hide comparison*, and each step the draft changes carries a *Changed in draft v5* tag (pencil 10, 10/500, `$hover` with `$border`, radius 5) at its card's top-right edge — the tag is a proposal, the app does not mark the canvas yet. *03.09 · Restore v3 as draft* (`NmNRM`): with draft changes the first click arms the button, which becomes primary and reads *Replace draft v5? Click again*; the second click restores and returns to the draft (primary while armed is a proposal; the app keeps it secondary). Compact states (`H0l9D`): *Reading the published versions…*, the notice *The published versions could not be read*, a first version (*First version · No runs*, *This is the first version: every step is new.*, Compare and Restore disabled because the editor holds the same steps) and a comparison with an invalid draft (*Draft v5 has problems to fix before it can be compared.*). Fixture versions: v4 2d ago (3 changes, runs #131, #133), v3 12d ago (2 changes, six runs incl. #128), v2 21d ago, v1 34d ago; draft v5 changes Implement's model.
 
+## Presets
+
+Drawn 2026-10-01, not built. Group `Rg8DS` ("Presets · entry, choose, preview, finish setup, save", last in 03 / Pipelines at x 0 / y 5664, height 4264; the section is now 10024 high). It sits in 03 / Pipelines because a preset is mainly a way to get pipelines: *Add from preset* lives in the Pipelines library, presets replace the single starter of 03.A and 03.05, and the profiles and tools a preset creates exist for its pipelines. Fixture: Kontur (and Atlas in 03.D); the presets *Website content update* and *Kontur feature flow*, the dates, the commands and every count are illustrative. Proposed copy namespaces: `presets.*` (`presets.picker.*`, `presets.preview.*`, `presets.finishSetup.*`, `presets.save.*`, `presets.provenance.*`), `setup.startingPoint.*`.
+
+**What a preset is.** A ready-made bundle that Orchester copies into a project as drafts. It holds:
+
+- **Agent profiles:** name, role and responsibility, role instructions, and default permissions (repository access, commands, network; MCP servers are left out). Never a connection or a model: the person chooses them.
+- **Pipelines:** the steps, their gates, the profile or tool each step uses, each step's repository access, and the Deliver step's mode and merge method.
+- **Tool placeholders:** a command tool such as *Check* whose command the person fills in (`cargo test`, `npm test`). A saved preset may also keep a tool's command (*Run test suite* keeps `pnpm test`).
+- Optionally project instructions and skills.
+
+Built-in presets ship with Orchester: *Simple change* (Implement → Check → Review → Deliver), *UI change with design* (Design with an approval gate → Implement → Check → Review → Verify → Deliver; adds the skill `verify-against-design`), *Bug fix* (Investigate, read-only → Fix → Check → Review; no Deliver step, so its runs keep the manual merge of 02.P) and *Research only* (one read-only agent, no Deliver). *Your presets* are the ones the person saved from a project with *Save as preset*. They are stored for the user on this computer, outside any project, because they are reused across projects.
+
+**Creation rules.**
+
+- **Everything is a draft.** Each resource is created as *Draft v1*. Nothing is published and no run starts. The usual draft rules apply: tasks can only select a published pipeline.
+- **Exactly what the preview lists is created, once.** *Create N drafts* creates them in one operation; a retry must not create a second set.
+- **Name conflicts are renamed with the next free number, never skipped or reused.** *Builder* becomes *Builder 2* (slug `builder-2`), or *Builder 3* when *Builder 2* is taken too, and the pipeline's steps point at the renamed copies. Skipping would bind the preset's pipeline to the project's existing profile of the same name, whose permissions and instructions can differ: an existing *Reviewer* that edits files would turn a read-only review step into one that writes, so the pipeline would no longer do what its preview says. Renaming keeps the preset consistent and never changes, replaces or reuses what the project already has. The person can rename the copies, or point a step at an existing profile in the editor, afterwards. The preview names every rename (*renamed · Kontur already has Builder*) and lists them beside it.
+- **Connection and model.** The preview offers *Leave unset* (default) or *Use one connection for all agents* with one of the project's connections and a model. The connection is set only on profiles whose permissions it can enforce; the others stay unset and say why (03.D).
+- **Permissions a connection can't enforce.** The rule of 04.B applies. When a profile's default permission can only be enforced by a CLI the project has no connection for, the preview marks the profile (*Needs Codex CLI*) and offers two choices: keep the permission, so the profile stays unset until such a connection exists, or narrow it to the most restrictive option that is available. Orchester never falls back to an unenforced option.
+- **Placeholders are marked *Needs setup*.** A tool without its command, a profile without a connection or model, and a tool whose credential was left out all show the *Needs setup* label (circle-dashed, `DeizF`) in the preview, the lists and the editors. A step that uses an unset tool can't run.
+- **Provenance.** Every created resource records the preset (built-in or yours) and the time: *From preset ‘UI change with design’ · created Oct 1, 14:02*. It is shown in the editors and on the library rows and is only informational. The resources are independent copies: editing them does not change the preset, and later preset changes do not reach them (as with Import from project).
+- **Never in a preset:** secrets, connections, models, MCP servers, tool credentials, tasks, runs and memory.
+
+**Finish setup checklist.** After *Create N drafts*, Orchester opens *Finish setting up <preset>*, a page under Pipelines. It lists every created resource with what it still needs, grouped in the order they can be published:
+
+1. Agent profiles: *Needs a connection and a model before it can be published*, or *… is set · publish it*.
+2. Tools and skills: *Needs a command, such as cargo test or npm test*.
+3. The pipeline, last. It stays locked with the reason *Can be published once Builder 2, Reviewer 2, Verifier and Check are published*: a pipeline can't be published until every profile and tool its steps use has a published version.
+
+Each item links to its resource (*Open Builder 2*). Progress counts the items that are done (*2 of 8 done*). Until everything is published, the checklist stays reachable from a banner in the Pipelines library and from *Finish setup · N left* in the editors. *Dismiss checklist* hides it and keeps the drafts.
+
+**Save as preset.** *Save as preset* in the Pipelines topbar opens a dialog with a name, a description (shown on the preset card) and the pipelines to include.
+
+- The profiles and tools the chosen pipelines use are included and can't be unchecked. Other profiles, instructions and skills are optional.
+- Only published versions are saved; a pipeline that was never published can't be chosen, and says why.
+- A command tool can keep its command or be saved as a *Needs setup* placeholder.
+- The dialog states what is never included: secrets, connections and models. MCP servers are left out, a tool that uses a secret is saved without it and arrives as *Needs setup*, and tasks, runs and memory are never part of a preset.
+
+**Frames** (x 48 / 1568 / 3088; rows at y 100 / 1148 / 2196 / 3244, labels 32 above):
+
+| Frame | Node |
+| --- | --- |
+| 03.10 · Project setup / Start from a preset or start empty: built-in and your presets as options, *Start empty*, the selected preset's contents; the rail gains *2. Starting point* | `am0Dq` |
+| 03.11 · No pipelines yet / Add from preset: four built-in cards replace the starter; *Add from preset* in the topbar and as the primary action | `imNnP` |
+| 03.12 · Add from preset / Choose a preset: cards with name, description, step chips (approval, read-only, tool, Deliver) and *Creates N agents · M pipelines · K tools*; built-in and *Your presets* are separate groups | `imgjE` |
+| 03.13 · Preview and confirm: profiles with their permissions; the pipeline's steps with profile, access and gate; the tool and the skill, all *Draft v1*; the renames; *Leave unset* / *Use one connection for all agents* | `G4DHd` |
+| 03.14 · Finish setup / Checklist after creating *UI change with design* | `pD3c2` |
+| 03.15 · Pipeline editor / Created from a preset: provenance strip, *Needs setup* badges on steps, the Check step's command field, Publish v1 unavailable with the reason | `zB3Gh` |
+| 03.16 · Pipelines library / *Needs setup · 6* marker and provenance on the row, the Finish setup banner, *Save as preset* in the topbar | `T7He6` |
+| 03.17 · Agent profile / From a preset: provenance line, connection required, *Needs setup* in the profile list | `lF2E8` |
+| 03.18 · Save this project's setup as a preset | `cf6cq` |
+| 03.D · Preview / The preset needs a CLI the project has no connection for (*Writer needs a Codex CLI connection*) | `sxzDL` |
+| 03.E · Preview / Every name in the preset is already taken (*Kontur feature flow* added to Kontur again) | `Sg6A8` |
+
+Reused: sidebar `zo9Py` with `TSJpn`, `u1XBP`, `DeizF`, `ZGwlv`, `q5LzI`, `tfGRt`, `jNTVN`, `SOW6S`, `ajikA` and `hn8qO`; the setup layout of 01.04 `w6ODp4`, the dialog layout of 03.05 `c3jD7`, the library of 03.04 and 03.A, the editor of `j8OB3` and the profile editor of 04.03 `WPmtS`. No new components or variables.
+
+**Decisions (2026-10-01).** The user approved the frames and answered their open questions. Where a frame differs, these decisions win.
+
+- **No Starting point step yet.** Until the later setup steps ship, a new project is offered the presets on its empty Pipelines (03.11 `imNnP`). The setup step of 03.10 `am0Dq` comes later.
+- **Always a renamed copy.** A preview row never offers to use the project's existing profile (*Use Kontur's Builder instead*). A name conflict always creates a renamed copy, for the permissions reason above.
+- **Managing your presets is out of scope.** Renaming, updating, deleting and sharing a saved preset come in a later task.
+- **Skill scope follows ids.** A skill's step scope refers to the step by id, not by name, so it survives the renames of a preset's pipeline and steps.
+
 ## Task library, bulk creation and scheduling
 
 The user explicitly requested creating ten tasks and letting agents work on them either concurrently or in sequence. A pipeline defines the steps within one task; the task queue coordinates separate task runs. All of this remains within the selected project.
@@ -893,6 +957,8 @@ Proposed runtime states: preserve drafts on failed sends and show Retry; dedupli
 At narrower widths the task proposal becomes an on-demand panel above the composer, keeping chat usable; collapse project navigation first. Keyboard focus, panel transitions, persistence, response streaming and actual routing require runtime acceptance tests. [Project chat overview](previews/organization/I0Ij1T.png).
 
 ## Task conversation
+
+*Superseded 2026-10-01 by [Conversation (merged with Activity)](#conversation-merged-with-activity); the rules below still apply where that section does not change them.*
 
 The task has a visible Conversation tab, an Open conversation entry on the review summary, and a conversation panel beside running/paused progress. The recipient defaults to Orchestrator; the picker can target a participating agent directly. Orchestrator routes messages, while direct messages retain their selected recipient. Messages belong to the task and record run, step, recipient and author.
 
@@ -989,6 +1055,8 @@ Proposed copy namespace: `runs.limit.*`.
 
 ## Activity tab
 
+*Superseded 2026-10-01 by [Conversation (merged with Activity)](#conversation-merged-with-activity): the transcript and the invocation panel move into the Conversation tab.*
+
 The task page's Activity tab (`jQt8l`) is the agent transcript: a chronological, readable stream per step execution. **02.I (`SfXU1`)** shows working Run 128.
 
 - **Toolbar:** step filter (*All steps · 3 executions*, a select listing each step execution with agent, invocation and status), *Show raw lines* switch (off by default), live state at the right (*Following live*).
@@ -1026,6 +1094,88 @@ Implemented (2026-09-27), **drawn 2026-09-27**: merging a run and clearing its w
   A successful recovery returns to the existing *Ready for review* state; a question uses *Waiting for you*.
 - **After Remove worktree (drawn 2026-09-29: 02.Q4 `PacyY`, 02.Q5 `Y8hyj`).** A run ready for review whose own worktree was removed (or whose folder was deleted) can still be merged, but its agent cannot be asked again: it would continue its session in that worktree, and recreating it would bring back what the person just cleared. *Ask agent* stays between the scope and *Merge*, unavailable (0.4, trailing lock), with the hint *Ask agent is unavailable: the run’s worktree was removed, so its agent cannot continue.* under the actions, in the style of the Merge hint. The Conversation tab keeps the status label *Ready for review*; as in 02.S2 the recipient select is disabled, the composer reads *No agent of this run reads messages any more.*, *Send* is disabled and the policy line is left out; the line under the composer reads *The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.*, and a message still queued reads *Not delivered · the run’s worktree was removed*. The runner refuses a follow-up for such a run with that reason and leaves the run as it was. As built (U5): the readiness card keeps *Ready for your review* with the folder-x glyph and the one-line detail *Every step passed. The worktree was removed; committed changes remain ready.*; the topbar has no *Remove worktree*; *Merge into main* stays available and *Ask agent* is unavailable with its hint under the Review PR hint (02.Q4). On the Conversation tab the notice is *The run’s worktree was removed* (folder-x) · *Its committed changes remain ready for review. No agent can continue this run.*; the Permissions row has no *change ↗*; the participants line reads *Explorer, Planner, Builder, Reviewer cannot continue*; a message still queued reads *Not delivered · the run’s worktree was removed* (02.Q5).
 - **Project settings › Environment** — 02.O `tXahd`, the third tab after General and Limits, laid out like Limits (content 760 wide, padding 24 / 32, gap 16): page description *Variables Kontur adds for its agents and command tools.*; *Environment variables* (15/500) and its explanation; the field label *Variables · NAME=value per line* (11 `$muted`); a mono 12 text area (`$sidebar`, `$border`, radius 7, padding 12, 4 to 12 lines, no placeholder); the hint *Stored and shown in plain text, so never put secrets here.*; the notice (lightbulb, `$raised`, radius 8) *Share one build folder between run worktrees* with its explanation and *Add CARGO_TARGET_DIR* (plus, secondary, 32 high) at its right; the notice (history) *Changes apply to the next agent or command that starts* · *An agent or command already running keeps the environment it started with.*; the topbar says *All changes saved*. An invalid line strokes the area 1 `$subtle` (`BorderStrong`; 1.5 `$text` is the focus stroke) with the field error under it (circle-alert 12 and Inter 11, both `$text`, 4 apart), then the hint: the same state as the MCP server's variables in 04.E3 `Hpycl`.
+
+## Conversation (merged with Activity)
+
+Drawn 2026-10-01, not built. Group `fTfl8` ("States · Merged conversation", last in 02 / Tasks & runs at x 0 / y 51875, height 4749; the section is now 56624 high). The user asked for one view where the person follows what the agents do and can chat with the working agent. Fixture: Kontur, ORC-128 *Add GitHub authentication*, Run 128 on Feature delivery (Research · Explorer on Claude / Opus 5.5, Plan · Planner and Implement · Builder on Codex / Sol, Run checks, Review · Reviewer); ORC-129 *Add repository switcher*, Run 129 queued. Every message, command, path, time, hash and count is illustrative. Proposed copy namespace: `runs.conversation.*` (timeline, composer, delivery), reusing `runs.activity.*` for the entries and the invocation panel.
+
+**What replaces what.** The task page has one **Conversation** tab where it had *Conversation* and *Activity*; the tabs are *Summary · Conversation · Changes · Memory · Artifacts*. Its main column is one chronological timeline per run: the old Activity transcript (step executions, agent messages, reasoning summaries, commands, file changes, problems, usage) and the old conversation panel (your messages, questions, answers, plan decisions, follow-ups, Ask agent) in the order they happened. The step progress rows and *Working context* that 02.12 showed beside the conversation panel stay on Summary; the timeline's step headers carry each step's status and tokens. The invocation panel becomes the toggleable **Details** pane. *Ask agent*, *Open conversation*, *Answer question →* and *Reply →* open this tab with the focus in the composer.
+
+Superseded (kept on the canvas, not redrawn):
+
+- Activity: 02.I `SfXU1`, `BbGhA`, `IFmpE`, `HW9mB`, 04.H10 `IcGvI`, 04.G `a2PR7K` and 02.R2 `lmlkQ` as page layouts. Their entries (`N4SlQq`), step headers (`mDnc3`) and invocation-panel rows (`rd1Vo`, `F3XhQ`, `upPCd`) stay valid: entries appear inside tool groups and as problem rows, the panel rows in Details. From 02.I states `hig8O`, *Loading* and *Couldn’t load* carry over to this tab unchanged; *No activity yet* is replaced by the empty state below and *scrolled up* by the follow rules below.
+- Conversation: 02.12 `jgqPe`, 02.S `JOG1i`, 02.S2 `m3gLZ`, 02.S3 `sYuiX`, 02.S4 `Ok14G`, 02.S5 `cj2a2`, 02.S6 `vUPqr` and 02.Q5 `Y8hyj`, and the side panel `kjsmd` (*Conversation / Task panel*) with its message row `J5MIT`. Their states and wording carry over to the composer and to the delivery lines (interrupted, paused, stopped, merged, worktree removed, not started, the recipient menu).
+
+**Timeline.** The column is at most 840 wide. With Details closed it is centred in the tab; with Details open the 320 pane takes the right and the column fills the rest, so text does not reflow when the pane toggles. Items, top to bottom in time:
+
+- **Step header** (`mDnc3`): number, step · agent, provider / model · invocation and times, tokens (*315k tokens · 43k before first edit*), status label. A finished step folds to its header (chevron-right); the running step and a step that waits for you are open. A step that never ran after a failure shows its header at 0.6 with *Not started* (circle-dashed). Opening a folded step shows its messages, groups, cards and result card.
+- **Agent message** (*Conversation / Timeline message* `V17jfc`): bot glyph in a 24 `$raised` square, the agent (12/500), step and time (11 `$subtle`), the text at 13 `$text`, line height 1.6. Agent messages are never folded into a group.
+- **Your message**: the same component on `$raised` with `$border`, radius 8, padding 10 / 12, user glyph on `$hover`, *You* and *to Builder · 12:05*, and its delivery line (icon 11 and text 10, below).
+- **Tool group** (*Conversation / Tool group* `uoK7y`): a 32-high row indented 36 to the message text, hairline stroke, radius 7: wrench 12, the summary (12 `$muted`), *N tool calls · first–last time* (mono 10) and chevron-right. Expanded, the header turns `$text` with chevron-down and the group’s entries follow as Activity rows (`N4SlQq`, with the time column) inside the same stroke, at most 7 before *Show N more · 4 reads, 1 search*.
+- **Cards** for decisions, on `$raised` with `$border`, radius 8, padding 14: header (glyph on `$hover`, title 12/500, step and time, status label at the right), body indented 36, actions under it. Question (*Builder asks you* · *Waiting for your answer*); plan (*Plan v1 · <task>* · *Waiting for approval*, the first plan lines and *Show the whole plan · 24 lines*, primary *Approve plan & continue*); tool approval (the ORC-41 request: server, action, target, *Deny* and *Approve once*). After the decision a card loses the raised fill and reads *Answered* / *Approved* / *Denied*.
+- **Problem rows**: `N4SlQq` without the time column (time in the meta), glyph in `$text`: denied commands, *permission_denied*, refusals, runner problems, *Working without MCP server*, a handoff not saved. They always show on their own and are never folded into a group.
+- **Result card** per step: border only, radius 8: glyph, *Review passed* / *Run checks failed* / *Research done* (12/500), what the agent or tool reported, duration and tokens, a one-line summary, links (*Changes · 4 files ↗*, *Summary ↗*, *Handoff in Memory ↗*). The run’s end is a centred hairline marker (*Run 128 is ready for your review · 14:32*).
+- **Working line** at the end while an agent works: loader 12 and *Builder is working · last event 2 s ago* (a real time, never fake progress).
+
+**Grouping rules.** A tool group is the longest run of consecutive tool events of one step execution between two items that are not tool events (a message, a card, a problem row, a result card or a step header). Tool events: commands, file reads and searches, file changes, MCP tool calls, memory searches and saves, reasoning summaries, usage reports and unparsed raw lines. The summary counts by kind in a fixed order — *Read N files · searched N times · searched memory · ran <command> · edited N files · N MCP calls* — naming a command when there are one or two (*ran pnpm test src/auth*) and counting them otherwise (*ran 5 commands*); kinds with no events are left out. A failed command stays in its group, is named with its exit code (*· exit 1*) and turns the group’s glyph into circle-alert in `$text`; opening the group shows its output expanded, as in Activity. A group that is still growing (the agent is calling tools now) ends with the action in progress (*· running pnpm test*, loader) — not drawn.
+
+**Filters and search.** The toolbar (52 high) holds the step filter (`ZGwlv`, *All steps · 3 executions*), *Show* as a segmented control in the Usage period style (`$sidebar`, `$border`, segments 26 high, radius 5, selected `$hover`): **All** (default), **Messages** (messages, cards, problems, step headers and result cards; groups hidden and counted, *31 tool calls in 4 groups hidden · Show all*) and **Tools** (every tool event as a flat Activity transcript, messages as one-line entries; *Show raw lines* moves here — not drawn), *Search this run…* (180), then the follow state and *Details*. Search matches message text, commands, paths and output; items without a match hide, and a match inside a group opens that group. Picking one step execution shows only its items, a read-back line *Showing 01 Research only · 02 Plan and 03 Implement are hidden.* with *Show all steps*, and Details follows the picked step (as decided for `F3XhQ`). The composer is not filtered: it always addresses the run’s current state.
+
+**Details pane.** *Details* (panel-right, 32 high) toggles the 320 `$sidebar` pane with the invocation panel: step and attempt, agent and model, started or ran, *Code index*, *Memory given*, tokens, run budget, tokens before first edit, permissions and the footnote. Pressed, the button is `$hover` with a `$subtle` stroke and panel-right-close. **Closed by default**, and remembered per person for every task: the tab’s job is to follow and to talk, the timeline needs the width for command output, and the figures in the pane are looked up now and then (each step header already shows its tokens). It opens on demand, and choosing a step’s tokens in its header opens it on that step.
+
+**Following live (ORC-36).** While the end of the timeline is in view, it follows new items (*Following live*, radio). Scrolling up stops following (*Not following*, circle-pause) and shows *Jump to latest · 3 new* (arrow-down, 30 high) centred 16 above the composer; the count is of new timeline items, not raw events. Jumping, or sending a message, scrolls to the end and follows again. Opening the tab starts at the end, or at a card that waits for you.
+
+**Composer.** Always visible at the bottom of the main column (dock: hairline above, padding 12 / 32 / 14), in the 840 column, with the recipient select and *Attach* (unavailable, 0.4) in its action row and one line under it that says what sending does now. Enter adds a line; Ctrl/Cmd+Enter presses the state’s primary action, except while an agent works, when it sends after this turn (below); drafts and retries follow the existing contract (kept until stored, sent once).
+
+| Run state | Composer |
+| --- | --- |
+| An agent works | *To: Builder · working*; **Send now** (zap, primary) and **Send after this turn** (clock-3, secondary); Ctrl/Cmd+Enter sends after this turn, the safer default, and *Send now* is pressed only with its own button. Hint: *Send now reaches Builder at its next tool call, while it works. Send after this turn waits until Builder finishes its turn.* |
+| A tool step runs, or the recipient is not the working agent | One **Send** that queues (*Queued · waiting for Reviewer’s next turn*) with the reason in the hint. |
+| A question waits | *Answering Builder’s question from 12:09* above the field, the field focused, recipient fixed to the asker (0.4), **Send answer**; the agent continues at once. |
+| A plan waits | *Changes to plan v1 · sent to Planner*, **Request changes** (undo-2), unavailable while empty; *Approve plan & continue* is on the card only. |
+| Ready for review | *To: Builder · resumes its session* (any agent that ran), **Send follow-up**: the agent resumes its session in the worktree and the run is ready for review again when it finishes (Ask agent). |
+| Failed or stopped | *To: Builder · continues the run* (agents that already ran), **Continue with instructions** (play, ORC-43): continues the run from its saved work; the agent resumes its session with the message, dependent steps run again. *Run again* (ORC-16) stays in the topbar, secondary on this tab. |
+| Paused or interrupted (not drawn) | **Send** queues; *Queued · delivered before the next action on resume* / *when the run continues* (02.S3 wording). |
+| Queued, not started | *To: Explorer · first step*, **Send when the run starts**; messages wait in the task. |
+| Merged, worktree removed, no agent step | Visible but disabled: *No agent of this run reads messages any more.*, recipient and Send at 0.4, a lock and the reason (*The run’s worktree was removed, so its agent cannot continue.*, *This run’s work was merged.*, *This run has no agent step to continue.*). |
+
+**Delivery.** *Send now* gives the message to the agent while its turn runs, after the tool call that is running: Codex through App Server, which steers the running turn (`turn/steer`); Claude Code through a stream-json user message on stdin (`--input-format stream-json`). That it lands after the running tool call is to verify in implementation, for both, on Windows and macOS; a connection that cannot take a message mid-turn offers only *Send after this turn*, with *Send now* unavailable (0.4, lock) and the reason. *Send after this turn* queues the message as the agent’s next input when its turn ends. A message to an agent that is not working waits for that agent’s next turn, as before. Delivery lines (icon 11 `$subtle`, text 10 `$muted`):
+
+- *Sending now · Builder gets it at its next tool call* (loader);
+- *Delivered mid-turn to Builder · 12:05, at its next tool call* (zap);
+- *Queued · Builder reads it when its turn ends* (clock-3);
+- *Delivered at end of turn to Builder · 12:09* (check); for *Send now* when the turn ended before another tool call: *… · its turn ended before another tool call*;
+- *Could not deliver to Builder: <why>. Your message is kept here.* (circle-alert and text in `$text`) with *Send after this turn* and *Edit in composer*;
+- *Not delivered · the run’s worktree was removed* (circle-x), and the other 02.S-family endings.
+
+Scope changes still do not return to plan review by themselves.
+
+**Frames** (x 48 / 1568 / 3088; rows at y 100 / 1148 / 2196 / 3244, labels 32 above):
+
+| Frame | Node |
+| --- | --- |
+| Agent working: messages, collapsed tool groups, a mid-turn delivery and a queued message, composer in steer mode, Details closed. Canonical home of `V17jfc` and `uoK7y` | `RrScB` |
+| A tool group expanded; scrolled up, *Not following* and *Jump to latest · 3 new*; empty composer, Send buttons 0.4 | `CxrSA` |
+| A question waits inline; the composer answers it | `ZxYGh` |
+| Plan v1 waits inline: *Approve plan & continue* on the card, *Request changes* from the composer; no *Pause run* while the run only waits | `haIEI` |
+| Ready for review: steps folded, the Review step’s message and result card, the run’s end marker, *Send follow-up* | `AzKYQ` |
+| Failed at Run checks: the failing command with output, the result card, Review not started, *Continue with instructions* | `hep0l` |
+| Details open (the invocation panel of the running step) | `gNa91` |
+| Step filter on 01 Research, Details following it | `LhLL8` |
+| Run not started (queued): the empty timeline says why and lists the steps | `zxIMy` |
+| Delivery states, the composer without Send now and unavailable, the inline approval card, an answered question, problem rows and the Messages view (compact, 1440 × 1445) | `OlLGD` |
+
+Reused: `zo9Py`, `TSJpn`, `SOW6S`, `u1XBP`, `DeizF`, `ZGwlv`, `mDnc3`, `N4SlQq`, `tfGRt`, `C3nu0z`, the invocation panel of `IFmpE` and the segmented period control of the usage dashboard. New components: `V17jfc` *Conversation / Timeline message* and `uoK7y` *Conversation / Tool group*, canonical in `RrScB`. No new variables.
+
+**Decisions (2026-10-01).** The user approved the frames and answered their open questions. Where a frame differs, these decisions win; the frames were not redrawn.
+
+- **No *Acknowledged by Builder*.** The agent’s reply shows in the timeline, so a delivered message keeps its delivery line and gets no acknowledgement line.
+- **Ctrl/Cmd+Enter sends after this turn** while an agent works, the safer default; *Send now* stays a separate button. The steer hint in `RrScB`, `gNa91` and `LhLL8` ends *Ctrl+Enter sends now.*; it should read *Ctrl+Enter sends after this turn.*
+- **Send now lands after the running tool call.** To verify in implementation for Codex App Server and Claude Code stream-json input.
+- **Tool approvals.** On the Conversation tab a request is the inline card. When the person is on another page, the approval dialog (ORC-41) still opens; *Needs you* and the status bar lead to the inline card.
+- **Failed state.** *Continue with instructions* is the primary action; *Run again* is secondary in the topbar on this tab.
+- **Progress.** The step header is enough while chatting; the progress rows and *Working context* stay on Summary.
+- **Specified, not drawn.** The paused and interrupted composer states and the still-growing tool group are specified here only; that is enough.
 
 ## Code index
 
@@ -1298,6 +1448,113 @@ The fixture shows all three Builder settings enforced by Codex. *Allowed command
 - Claude Code: one `--add-dir <folder>` each, so its edit tools may write there as in the worktree; its commands need nothing, since Claude Code does not confine commands to any folder (see *Any command* above). Checked with Claude Code 2.1.89 and an empty `CLAUDE_CONFIG_DIR`, without a model turn: the debug log adds each existing folder as a permission directory and leaves a missing one out; the folder's `.claude/settings.json` is looked up but, with `--setting-sources ""`, its rules were not applied. The panel reads *--add-dir for edit tools · commands not confined*.
 
 Proposed copy namespaces: `agents.permissions.*`, `agents.permissions.enforcement.*`, `pipelines.step.permissions.*`, `runs.permissions.*`, `runs.permissionRequest.*`.
+
+## Command categories and approval policy
+
+Drawn 2026-10-01, not built. Group `lozqh` ("States · Command categories and approval policy") in the section `DMBmo` ("States · Agent runtime permissions (ORC-44)", top level at x 46784), after its ORC-44 frames, at x 0 / y 1864, 4896 × 4924. The section grew from 3040 × 2300 to 4896 × 6884 so the group fits the x 48 / 1568 / 3088 columns. The user decided the behaviour; these frames show it. Fixture: Kontur, ORC-142 *Split the sync worker module*, Run 142 on Feature delivery, 03 Implement · Builder on Claude / Opus 5.5 (Builder v3), and Reviewer v2 for the read-only variant. Every command, path, time and count is illustrative. Proposed copy namespaces: `agents.permissions.policy.*`, `pipelines.step.permissions.policy.*`, `runs.permissions.policy.*`, `runs.permissionRequest.*` (the dialog) and `runs.activity.decision.*` (marks and the decision summary).
+
+**What it does.** When an agent's CLI asks before running a command (Claude Code's permission prompt, Codex's `sandbox_approval`), Orchester classifies the command and answers by its category, according to the profile's policy. Only what the policy sends to a person reaches *Needs you*. Every answer still covers one request: Orchester never gives the CLI a session grant, an `acceptForSession`, an `updatedPermissions` rule or an execpolicy amendment. Commands the CLI runs without asking (a listed command, a known-safe read-only one, a command inside Codex's sandbox) never reach the policy.
+
+### Categories and classification
+
+| Category | What lands here | Examples |
+| --- | --- | --- |
+| Read-only | Reads files, history and state; changes nothing | `cat`, `rg`, `wc`, `git status`, `git diff`, `git log` |
+| Worktree | Writes, moves or deletes only inside the run's worktree | `sed -i`, `git mv`, `rm`, `git add`, `git commit`, `mkdir`, `cargo build`, `cargo test` |
+| Run temp | Temp-folder files this run created earlier | `rm /tmp/worker_orig.rs` after this run wrote it |
+| Outside write | Writes or deletes outside the worktree, including a temp file the run did not create | `cp src/sync/worker.rs /tmp/worker_orig.rs` |
+| Network | Reaches the network | `curl`, `git fetch`, `git clone`, `cargo add`, `pnpm install` |
+| History / destructive | Rewrites or discards history, or deletes outside the temp folder | `git push`, `git reset --hard`, `git rebase`, `git branch -D`, `rm -rf` outside the temp folder |
+| Unknown | Anything not parsed to the end | scripts, `-Command` content Orchester can't read, unexpanded variables, aliases and functions |
+
+Rules (board `U97QE`):
+
+- **Parse into simple commands.** Bash and PowerShell, joined by `&&`, `||`, `;`, `|` or a new line, including subshells and `$( )`. A redirection is a write to its target (`> /tmp/out.txt` is Outside write).
+- **Classify each part** by program, subcommand, flags and the paths it writes, resolved against the worktree with links followed. `git push` is History / destructive although it also uses the network.
+- **The strictest part decides.** Each part gets its category's policy value; the command gets the strictest: Deny over Ask me over Allow. On a tie the stricter category names it, in this order: History / destructive, Unknown, Outside write, Network, Worktree, Run temp, Read-only.
+- **Run temp is earned.** A file in the temp folder is Run temp once a parsed command of this run created it and that command ran successfully (for example an approved Outside write that exited 0). Another run's temp files, and files whose creating command failed or was not parsed, stay Outside write (user decision 2026-10-01).
+- **Nothing is guessed.** What Orchester cannot read to the end is Unknown, and the dialog says where reading stopped.
+
+### Policy, defaults and narrowing
+
+The profile's Permissions tab gets **When the agent asks** after *Commands* (04.04 layout; frames `p8g7C`, `jYJJa`, `xMjXP`, shown scrolled to the section with the scroll thumb): a heading with the state (*Defaults for a profile that edits files* / *3 changed from the defaults*) and *Reset to defaults* (0.4 while nothing changed), one sentence on what it does, the relation to Allowed commands, then one row per category (*Approvals / Policy row*: icon, name, examples, and the *Approvals / Policy choice* control Allow · Ask me · Deny in the segmented style of the Conversation toolbar). A changed row is outlined (1.5 `$text`) and its examples end *· changed from Ask me*; the save status and *Save draft* follow the U8 header states. The tab's summary adds *When it asks: 3 allow, 4 ask*. The policy is part of the profile version: *Publish vN* makes it available to new runs.
+
+| Category | Writing profile | Read-only profile |
+| --- | --- | --- |
+| Read-only | Allow | Allow |
+| Worktree | Allow | Ask me; Allow unavailable (0.4) |
+| Run temp | Allow | Allow |
+| Outside write | Ask me | Ask me |
+| Network | Ask me | Ask me |
+| History / destructive | Ask me, or Deny; Allow unavailable | the same |
+| Unknown | Ask me, or Deny; Allow unavailable | the same |
+
+The read-only frame (`xMjXP`, Reviewer) says why Worktree asks: Reviewer doesn't edit files, and an approved command runs outside any sandbox, where it can change files.
+
+**Narrowing.** Effective policy = profile ∩ step ∩ run, per category. A pipeline step (`gPZzc`, the Review step inspector scrolled to its permissions) shows *When the agent asks* under the step constraints with a compact choice per category; values wider than the profile's are unavailable (0.4), a narrowed row is outlined and bold, the heading counts *2 narrowed*, and a note names what the profile allows (*Reviewer v2 asks you about Outside write and Network; this step denies them*). The run popover (`BuFfP`, 02.J layout) shows the effective policy in two columns, narrowing only (*History* denied for Run 142, *1 narrowed for this run*). A policy change applies **from the next request**, because Orchester answers each one; the other permissions keep their next-invocation / *Apply now* rule, so with only a policy change the primary button is *Apply from next request* and *Apply now* is 0.4. *Also save to the Builder profile* adds the narrowing to the profile draft. The popover's MCP rows are unchanged and left out of this frame for height.
+
+**Allowed commands and Deny.** Allowed commands stay an exact prefix list on top of the categories: a command whose every part matches a listed prefix runs without asking, whatever its category, **except a category set to Deny: Deny wins over a listed command** (user decision 2026-10-01). Orchester enforces it at the CLI: for Claude Code it adds deny rules for the denied category's forms (for History / destructive, `Bash(git push:*)`, `Bash(git reset --hard:*)`, …), which Claude Code checks before its allow rules; for Codex it declines such a request in its own approval handling. Every other command is classified. When a listed prefix overlaps a denied category, the profile warns (`jYJJa`: *git in Allowed commands also covers git push and git reset --hard*); with that category on Deny, the warning says those forms stay denied. *As drawn, `jYJJa`'s warning and the classification board `U97QE` (rule *Allowed commands come first*, enforcement row *Allowed commands run first, unseen by the policy*) say the list wins, Deny included; the frames were not redrawn, and this text wins.*
+
+**Enforcement panel** (`U97QE`, and the panel of `p8g7C`): rows *When the agent asks · Orchester decides by category* (`permission prompt → policy · one answer per request`; Codex `sandbox_approval → policy · accept, never acceptForSession`), *Allowed commands run first, except denied categories* (`allowed tools · 3 rules · deny rules for denied categories`; Codex: `declined in Orchester's approval handling`), *Every part of a command is classified* (`bash and PowerShell parser · strictest part decides`) and *No session grants* (`updatedPermissions never sent`). Codex adds *Commands inside the sandbox don't ask* (`Read-only and Worktree run in the sandbox · the policy sees escalations`) and keeps *Your own Codex rules still apply*. The steps-narrow line reads *A pipeline step or a run can make the policy stricter, never wider.*
+
+### The approval dialog
+
+The `GbNSA` dialog at 720 wide (`vyShL`, over the task Summary; on the Conversation tab the same request is the inline card, below). Header: *Approve command?* and what the policy did. Body: the category chip (*Approvals / Category chip*) with the policy value (*Ask me · Builder v3*) and *waiting since 12:11*; the reason in one line (*Writes outside the worktree:* `/tmp/worker_orig.rs`); the whole command in a mono block, never shortened; Agent, Working directory and Agent's note; what *similar* means here; *Each answer covers one request; Orchester never gives Builder's CLI a session grant.* Footer: *Always allow for this profile…* (text action, left), *Deny*, *Approve similar in this run* and primary *Approve once*. Deny keeps the command from running; the agent is told why and continues, the same for a person's Deny and a policy Deny (user decision 2026-10-01). Today both CLIs' approvals fail the step on Deny (`docs/interactive-tool-approvals.md`); the implementation must change that so the step continues.
+
+- **Compound command** (`k4cz1C`, first row): the dialog lists the parts (number, the part as written, category chip, what the policy says: *Allow · policy*, *Allowed command*, *Ask me · asks you*). The part that forced the ask is outlined (1.5 `$text`, on `$raised`), and the chip and reason name it (*asks you · forced by part 2 of 3*, *Part 2 writes outside the worktree*). Approve once runs the whole command once; Approve similar applies to the forcing part; with several asking parts, Approve similar is unavailable (*Several parts ask: approve once or deny.*).
+- **What "similar" means** (`k4cz1C`, second row): the same program and subcommand (`cargo add`; the program alone when it has no subcommands, `cp`) classified in the same category (Network), until this run ends. Flags, arguments and packages may differ. A command with another subcommand, a part in another category, or another part that asks still asks. The scope panel opens under the request while *Approve similar in this run* has hover or focus: the rule, then *Runs without asking* and *Still asks you* examples with why. Each later request is still answered one at a time and marked *approved by similar rule*. Rules live with the run, are listed with *Revoke*, and never reach the CLI.
+- **Always allow for this profile** (`ZJt4d`, first row) opens a second step in the dialog: the prefix to add, starting at program + subcommand (`git fetch`), with the exact command as the narrowest choice and a prefix that would also cover History / destructive forms locked with the reason (`git`); then the version note *Publishes Builder v4: v3 plus git fetch in Allowed commands*: runs that start later use v4, Run 142 keeps v3 and also allows the prefix until it ends (a change for this run), an unsaved draft is kept and gets the prefix, and the pipelines that use Builder are named. *Back* and primary *Add to v4 and approve*.
+- **Unknown** (`ZJt4d`, second row): *What Orchester read*, part by part, and where it stopped (`& $env:SYNC_SCRIPT -Rebuild` calls the program named by a variable that is unset until it runs). Approve similar and Always allow are unavailable (0.4, lock): *Orchester can't tell which later commands would be alike.*
+- **Deny by policy** asks no one: Orchester denies the request with the reason as the CLI's message, for example *Denied by Orchester policy (History / destructive: git push --force). Don't retry it. Continue without it, or say in your final message why it is needed.* For Unknown: *Orchester can't check what ./scripts/regen.sh runs. Run its steps as separate commands instead.* The step continues, as after a person's Deny.
+
+### Decision marks and the run's decisions
+
+Every command an agent asked about carries a mark (*Approvals / Decision mark*: 18 high, icon 11 and text 10 `$muted`, hairline outline, radius 4) in the Conversation timeline (inside tool groups), the Tools view and Activity rows, beside the exit code and duration:
+
+| Mark | Icon | When |
+| --- | --- | --- |
+| *approved by policy · Worktree* | shield-check | the effective policy is Allow for the category |
+| *approved by you · Outside write* | user-check | Approve once; after Approve similar it adds *· similar rule added* |
+| *approved by similar rule · Network* | copy-check | a rule from Approve similar answered it; the row names the rule |
+| *denied by policy · History* | shield-x | Deny without asking; the only filled mark (`$raised`, `$border`, `$text`), on a problem row that shows what the agent was told and never folds into a group |
+| *asked you · Unknown* | hand | waiting; once answered it becomes *approved by you* or *denied by you* |
+| *not asked · Allowed command* / *· known-safe read-only* | list-checks | the CLI ran it without asking; shown so nothing is silent |
+
+On the Conversation tab a waiting request is the inline approval card (as decided for the merged Conversation) with the category chip, reason, command and the same answers (`A9j8eD`), and the working line reads *Builder waits for your answer · since 12:19, its active time stopped*.
+
+**Per-run summary.** The Details pane opens on **Command decisions** (`A9j8eD`): totals by answer (by policy, by you, by similar rule, denied by policy, waiting) and a table by category with the same four answers as icon columns. Each row is a link that shows those commands in the timeline (*Tools*, filtered: `INTTC`, with *Showing Network commands only · 4 of 43 … · Show all*); the line under the table counts what ran without asking. Below it, *Approved as similar in this run* lists the rules with *Revoke*. Under the run's end marker one line counts the decisions with *Details ↗* (`E2cL0U`); the task Summary repeats it under the run's permissions.
+
+**Similar rules and Revoke.** Listed in the run popover (`BuFfP`) and the Details pane: the rule (`cargo add …`, category chip), since when and how many commands it approved, and *Revoke*. Revoke applies from the next request: those commands ask again (*asked you · Network*, and the row says the rule was revoked at 12:22); commands approved before stay approved. *Undo* restores the rule until the run ends; rules always end with the run (`E2cL0U`).
+
+### Frames
+
+Columns x 48 / 1568 / 3088 in `lozqh`; rows at y 100, 1148, 2355 and 3868 (the compact boards are taller than 960); labels 32 above.
+
+| Frame | Node | Position |
+| --- | --- | --- |
+| Profile permissions · When the agent asks · defaults, writing profile (Builder), enforcement panel with the policy rows | `p8g7C` | 48 / 100 |
+| Profile permissions · edited, unsaved (Network Allow, History and Unknown Deny) and the listed-prefix warning | `jYJJa` | 1568 / 100 |
+| Profile permissions · read-only profile (Reviewer): Worktree asks, Allow unavailable | `xMjXP` | 3088 / 100 |
+| Classification rules, categories table, shared parts (canonical home of the new components) and the Claude Code and Codex enforcement panels (compact, 1440 × 1119) | `U97QE` | 48 / 1148 |
+| Pipeline step inspector · the Review step narrows the policy | `gPZzc` | 1568 / 1148 |
+| Run permissions popover · the policy for this run, narrowed, and the similar rules with Revoke | `BuFfP` | 3088 / 1148 |
+| Approval dialog · one command, its category and reason, four answers | `vyShL` | 48 / 2355 |
+| Approval dialog · compound command; Approve similar scope explained (compact, 1440 × 1425) | `k4cz1C` | 1568 / 2355 |
+| Approval dialog · Always allow with the profile-version note; Unknown command (compact, 1440 × 1225) | `ZJt4d` | 3088 / 2355 |
+| Conversation · decision marks, denied by policy, inline Unknown request, Details on Command decisions | `A9j8eD` | 48 / 3868 |
+| Conversation · Tools view filtered to Network from the summary | `INTTC` | 1568 / 3868 |
+| Decision marks legend, denial rows, a revoked similar rule, the run's end summary (compact, 1440 × 797) | `E2cL0U` | 3088 / 3868 |
+
+Reused: `zo9Py`, `TSJpn`, `SOW6S`, `u1XBP`, `DeizF`, `ZGwlv`, `lcwsy`, `bpmzN`, `tfGRt`, `K8ItM`, `q5LzI`, `jNTVN`, `ajikA`, `mDnc3`, `N4SlQq`, `V17jfc` and `C3nu0z`, and copies of `HnBBr`, `wujuh`, `W29Od2`, `t0q3ws` and `gNa91`. New components, canonical in `U97QE`: `M7pU0A` *Approvals / Decision mark*, `EfQuh` *Approvals / Category chip*, `J8OVYQ` *Approvals / Policy choice* and `KU2fY` *Approvals / Policy row*. No new variables.
+
+**Decisions (2026-10-01).** The user approved the frames and answered their open questions. Where a frame differs, these decisions and the text above win; the frames were not redrawn.
+
+- **Allow is unavailable** for Unknown and History / destructive on every profile, and for Worktree on a read-only profile, as drawn.
+- **Deny wins over a listed command.** Orchester adds CLI deny rules for the denied category's forms (Claude Code checks deny rules before allow rules) and, for Codex, declines the request in its own approval handling. The profile keeps its warning when a listed prefix overlaps a denied category. `jYJJa` and `U97QE` still say the list wins.
+- **Deny lets the agent continue,** for a person's Deny and a policy Deny alike: the agent is told why. Both CLIs' approvals currently fail the step, so the implementation must change that.
+- **Always allow** publishes a new profile version with only that prefix added and keeps any unsaved draft, as drawn.
+- **Run temp** is a file in the temp folder that a parsed command of this run created, where that command ran successfully.
+- **The two extra marks stay:** *not asked · Allowed command* / *· known-safe read-only*, and *denied by you*.
 
 ## MCP servers
 
