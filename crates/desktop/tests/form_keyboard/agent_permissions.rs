@@ -412,6 +412,35 @@ fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_
 }
 
 #[test]
+fn agent_permissions_a_folder_no_edit_rule_can_name_is_not_enforceable() {
+  let mut desktop = seeded();
+  let mut db = ProjectDb::open(desktop.repo()).expect("project database");
+  let claude = db
+    .connections()
+    .expect("connections")
+    .into_iter()
+    .find(|connection| connection.name().as_str() == "Claude")
+    .expect("the Claude connection")
+    .id();
+  let permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(commands(&["rm -f build/x"])),
+    NetworkAccess::On,
+  )
+  .with_writable_folders(serde_json::from_str(r#"["\\\\server\\share\\cache"]"#).expect("a listed folder"));
+  profile(&mut db, "Cleaner", claude, permissions, false);
+  drop(db);
+  permissions_of(&mut desktop, "Cleaner");
+  // It edits by rule, and no rule can name a network share: a run would deny every edit there.
+  assert!(shows(&mut desktop, "Extra writable folders · not enforceable"));
+  assert!(shows(
+    &mut desktop,
+    "Edits on a network share can’t be allowed by rule, so a run can’t start."
+  ));
+  assert!(shows(&mut desktop, "Repository access · enforced"));
+}
+
+#[test]
 fn agent_permissions_claude_asking_read_only_runs_no_commands_and_says_why() {
   let mut desktop = seeded();
   permissions_of(&mut desktop, "Reviewer");

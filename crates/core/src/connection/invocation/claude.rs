@@ -59,8 +59,8 @@ use crate::{
     mcp::McpServerName,
   },
   permission::{
-    capability::EnforcedPermissions,
-    claude::{PermissionFolders, permission_args},
+    capability::{EnforcedPermissions, Mechanism, PermissionSetting},
+    claude::{PermissionFolders, edits_allowed_by_rule, permission_args},
   },
   resource::CommandEnvironment,
   run::STEP_RESULT_SCHEMA,
@@ -181,6 +181,23 @@ impl ClaudeInvocation<'_> {
     args.into_iter().map(OsString::from).collect()
   }
 
+  /// Refuses a step that edits by rule when a folder it may edit gets no rule: every edit there
+  /// would be denied without a word.
+  fn edit_rules_for_every_folder(&self) -> Result<(), InvocationError> {
+    if self.permissions.mechanism(PermissionSetting::Repository) != Mechanism::ClaudeEditRules {
+      return Ok(());
+    }
+    let granted = self
+      .permissions
+      .writable_folders()
+      .map_or(&[][..], |_| self.writable_roots);
+    let editable = std::iter::once(self.worktree).chain(granted.iter().map(PathBuf::as_path));
+    match editable.into_iter().find(|folder| !edits_allowed_by_rule(folder)) {
+      Some(folder) => Err(InvocationError::NoEditRule(folder.to_path_buf())),
+      None => Ok(()),
+    }
+  }
+
   /// The command that runs the step: in the worktree, with `prompt` on standard input, the
   /// allowed part of `environment` and the variables the project adds (`project`).
   pub fn command(
@@ -193,6 +210,7 @@ impl ClaudeInvocation<'_> {
       return Err(InvocationError::NoPermissionPrompt);
     }
     unicode_folders(self.writable_roots)?;
+    self.edit_rules_for_every_folder()?;
     let read_only: Vec<PathBuf> = [self.skills, self.code_index]
       .into_iter()
       .flatten()

@@ -250,9 +250,12 @@ C5 (rule hole) · Claude Code runs the commands `acceptEdits` allows only in the
 - A listed entry whose first word is one of the seven gets a hint under the command entries in the profile, the run
   permissions popover and the step inspector: "*rm -f build/x* also allows any arguments after it, including ones
   that change files." Prefix matching is unchanged.
+- No `Edit` rule can name a network share. A step that edits by rule refuses to start when its worktree or an
+  extra writable folder is on one (`InvocationError::NoEditRule`, recorded as the runner problem *could not
+  start*), and the enforcement panel shows that row as *not enforceable* with the reason.
 - Open: the `Edit` allow rules were read in both binaries (same matcher as the code index's deny rule: `//c/x` is
   rooted at `C:\`) but not exercised in a live model turn; a folder whose path holds `[` or `]` is matched by
-  Claude Code as a gitignore pattern; a worktree on a network share gets no allow rule, so its edits are denied.
+  Claude Code as a gitignore pattern.
 
 ORC-38 · Codebase index 2/2 (delivery, settings, activity) · branch `claude/codebase-index`
 

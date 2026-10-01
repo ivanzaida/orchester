@@ -162,6 +162,13 @@ pub(super) fn lists_file_commands(commands: &[CommandPrefix]) -> bool {
     .any(|entry| entry.as_str().split(' ').any(|word| MODE_ALLOWED.contains(&word)))
 }
 
+/// Whether an `Edit` allow rule can let a step that edits by rule ([`Mechanism::ClaudeEditRules`])
+/// edit in `folder`. Not on a network share, whose form in Claude Code's patterns is not documented:
+/// every edit there would be denied, so the invocation refuses such a folder and the profile shows it.
+pub fn edits_allowed_by_rule(folder: &Path) -> bool {
+  edit_rule(folder).is_some()
+}
+
 /// `Edit(//<folder>/**)`: as a deny rule it keeps Claude Code's edit tools out of `folder`, as an
 /// allow rule it lets them edit there. `folder` is an absolute path, written in the POSIX form
 /// Claude Code matches permission paths in (`C:\repo` is `//c/repo`). `None` for a path that is no

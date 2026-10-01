@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, ffi::OsString, path::Path};
 use orchester_core::{
   connection::{
     AgentProvider,
-    invocation::{ClaudeInvocation, ClaudeSession, Platform, result_schema},
+    invocation::{ClaudeInvocation, ClaudeSession, InvocationError, Platform, result_schema},
   },
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
@@ -269,6 +269,53 @@ fn claude_invocation_write_with_a_listed_file_command_edits_by_rule_without_acce
       ])
     );
   }
+}
+
+#[test]
+fn claude_invocation_refuses_edits_by_rule_on_a_network_share() {
+  let share = Path::new(r"\\server\share\repo\.orchester\worktrees\run");
+  let start = |permissions: &EnforcedPermissions, worktree, roots: &[std::path::PathBuf]| {
+    ClaudeInvocation {
+      worktree,
+      writable_roots: roots,
+      ..invocation(permissions)
+    }
+    .command("Do it".into(), Vec::new(), &CommandEnvironment::default())
+    .err()
+  };
+  let by_rule = enforced(
+    RepositoryAccess::Write,
+    allowed(&["rm -f build/x"]),
+    NetworkAccess::On,
+    Platform::Windows,
+  );
+  // No `Edit` rule can name a network share, so every edit there would be denied unseen.
+  assert_eq!(
+    start(&by_rule, share, &[]),
+    Some(InvocationError::NoEditRule(share.to_path_buf()))
+  );
+  let accepting = enforced(
+    RepositoryAccess::Write,
+    allowed(&["git"]),
+    NetworkAccess::On,
+    Platform::Windows,
+  );
+  assert_eq!(start(&accepting, share, &[]), None, "acceptEdits needs no rule");
+
+  let mut with_folder = AgentPermissions::new(RepositoryAccess::Write, allowed(&["rm -f build/x"]), NetworkAccess::On);
+  with_folder.set_writable_folders(serde_json::from_str(r#"["\\\\server\\share\\cache"]"#).expect("a listed folder"));
+  let with_folder = with_folder
+    .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
+    .expect("enforceable");
+  let cache = std::path::PathBuf::from(r"\\server\share\cache");
+  assert_eq!(
+    start(
+      &with_folder,
+      Path::new("/repo/.orchester/worktrees/run"),
+      std::slice::from_ref(&cache)
+    ),
+    Some(InvocationError::NoEditRule(cache))
+  );
 }
 
 #[test]

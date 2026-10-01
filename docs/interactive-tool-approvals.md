@@ -124,7 +124,9 @@ also deny a listed `sed -n` or `rm -f build/x`. A writing step whose allowed com
 these words therefore does not run in `acceptEdits`: it runs in `dontAsk` (`default` when it asks
 before MCP actions) and allows its edits with an `Edit(//<folder>/**)` rule for the worktree and
 each extra writable folder, which both versions accept like `acceptEdits` accepts an edit in a
-working directory, after the same deny rules and safety checks. Only the listed prefixes of those
+working directory, after the same deny rules and safety checks. No rule can name a folder on a
+network share, so such a step refuses to start when its worktree or an extra writable folder is on
+one, and the enforcement panel shows that setting as not enforceable. Only the listed prefixes of those
 commands then run: `sed -n 1p README.md` runs, `sed -i …` is denied; `rm -f build/x` runs,
 `rm -rf src` is denied. A prefix still covers what follows it, as every allowed command does
 (`sed -n -i …` starts with `sed -n`). The enforcement panel names this mechanism *allowed tools ·

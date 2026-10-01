@@ -116,6 +116,9 @@ pub enum InvocationError {
   /// The permissions ask a person, but the invocation has no way to ask.
   #[error("the step asks a person before some actions, but the agent was not given the permission prompt")]
   NoPermissionPrompt,
+  /// The step edits by `Edit` allow rules, and none can name this folder (a network share).
+  #[error("edits on a network share can't be allowed by rule: {0}")]
+  NoEditRule(PathBuf),
 }
 
 /// Refuses a folder the CLI would get mangled, before its arguments are built.

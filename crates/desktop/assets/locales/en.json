@@ -1723,6 +1723,7 @@
         "enforced": "{{setting}} · enforced",
         "staysOn": "Network stays on · off is not enforceable",
         "notEnforceable": "{{setting}} · not enforceable",
+        "networkShare": "Edits on a network share can’t be allowed by rule, so a run can’t start.",
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
         "noBypass": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
         "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
