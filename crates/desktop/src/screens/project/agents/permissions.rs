@@ -24,7 +24,9 @@ use orchester_core::{
 
 use super::editor::{ProfileEditor, Resets};
 use crate::{
-  agents::permissions::{file_command_hints, option_detail, option_title, unavailable, with_command, without_command},
+  agents::permissions::{
+    file_command_hints, native_unavailable, option_detail, option_title, unavailable, with_command, without_command,
+  },
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -89,14 +91,19 @@ impl ProfileEditor {
       ctx.t("agents.permissions.toolApprovals"),
       enabled,
     );
-    // Both CLIs route approvals to Orchester; only a profile without a connection cannot choose.
-    let control = if provider.is_some() || enabled {
+    // Both CLIs route approvals to Orchester; a profile without a connection cannot choose, nor can
+    // one on a native connection, which runs no agent yet.
+    let native = native_unavailable(ctx, provider);
+    let control = if native.is_none() && (provider.is_some() || enabled) {
       let permissions = self.permissions.clone();
       switch.render(move || permissions.update(|permissions| permissions.set_interactive_tool_approvals(!enabled)))
     } else {
       switch.locked()
     };
-    let content = Column::new().spacing(SpacingSize::Sm).child(control);
+    let content = Column::new()
+      .spacing(SpacingSize::Sm)
+      .child(control)
+      .with_children(native.map(|reason| unavailable_reason(&reason)));
     setting(ctx, "agents.permissions.toolApprovalsHeading", content.into())
   }
 

@@ -27,6 +27,7 @@ use super::{
   enforcement::row,
 };
 use crate::{
+  agents::permissions::native_unavailable,
   navigation::route::{ConnectionTab, Page},
   screens::project::page::TOPBAR_BUTTON_HEIGHT,
   theme::{ExtraSpacing, ExtraTypography},
@@ -34,9 +35,11 @@ use crate::{
 };
 
 impl ProfileEditor {
-  /// The project's MCP servers, each with a switch; or, without any, where to add one.
+  /// The project's MCP servers, each with a switch; or, without any, where to add one. On a native
+  /// connection, which runs no agent yet, the switches and the way to add one are locked with the reason.
   pub(super) fn mcp_setting(&self, ctx: &Ctx, provider: Option<AgentProvider>) -> Element {
     let servers = &self.context.agents.mcp;
+    let native = native_unavailable(ctx, provider);
     let column = Column::new()
       .id("agent-mcp")
       .width(Dimension::Pct(100.0))
@@ -48,27 +51,41 @@ impl ProfileEditor {
         .icon(Icon::Plus)
         .id("agent-mcp-add")
         .in_form()
-        .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
-        .link(
+        .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT));
+      let add = match native {
+        None => add.link(
           self
             .context
             .nav
             .link(Page::Connections(ConnectionTab::McpServers, None)),
-        )
-        .render(ctx);
+        ),
+        Some(_) => add.disabled(),
+      };
       return column
         .child(hint(ctx, "agents.permissions.mcp.none"))
-        .child(Row::new().child(add))
+        .child(Row::new().child(add.render(ctx)))
+        .with_children(native.map(|reason| unavailable_reason(&reason)))
         .into();
     }
     column
-      .with_children(servers.iter().map(|server| self.server_row(ctx, server, provider)))
+      .with_children(
+        servers
+          .iter()
+          .map(|server| self.server_row(ctx, server, provider, native.clone())),
+      )
       .child(hint(ctx, "agents.permissions.mcp.hint"))
       .into()
   }
 
-  /// A server's switch with where it runs, and why an agent would work without it.
-  fn server_row(&self, ctx: &Ctx, server: &McpServer, provider: Option<AgentProvider>) -> Element {
+  /// A server's switch with where it runs, and why an agent would work without it; locked with
+  /// `native`, the reason, on a native connection.
+  fn server_row(
+    &self,
+    ctx: &Ctx,
+    server: &McpServer,
+    provider: Option<AgentProvider>,
+    native: Option<Arc<str>>,
+  ) -> Element {
     let chosen = self.mcp.get().0.contains(server.id());
     let detail = match server.transport() {
       McpTransport::Stdio(stdio) => ctx.t_args("connections.mcp.row.stdio", [("program", stdio.program().as_str())]),
@@ -81,15 +98,19 @@ impl ProfileEditor {
       chosen,
     )
     .emphasized()
-    .detail(detail)
-    .render(move || {
-      mcp.update(|choice| {
-        if let Ok(toggled) = choice.0.toggled(id) {
-          *choice = McpChoice(toggled);
-        }
-      });
-    });
-    let unusable = self.unusable(ctx, server, provider);
+    .detail(detail);
+    let switch = if native.is_some() {
+      switch.locked()
+    } else {
+      switch.render(move || {
+        mcp.update(|choice| {
+          if let Ok(toggled) = choice.0.toggled(id) {
+            *choice = McpChoice(toggled);
+          }
+        });
+      })
+    };
+    let unusable = native.or_else(|| self.unusable(ctx, server, provider));
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)

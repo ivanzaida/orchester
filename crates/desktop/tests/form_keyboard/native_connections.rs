@@ -160,6 +160,15 @@ fn native_connection_reads_not_available_in_the_profile_and_the_pipeline_step() 
   // Off as chosen, like the summary: no run turns it on.
   assert!(shows(&mut desktop, "agent-network", "Off"));
   assert!(!shows(&mut desktop, "agent-network", "On"));
+  // Nothing about MCP can be chosen for an agent that does not run: adding a server leads nowhere.
+  assert!(shows(
+    &mut desktop,
+    "agent-mcp",
+    "Unavailable on this connection: Anthropic API (native) agents are not available in this version yet."
+  ));
+  desktop.press("agent-mcp-add");
+  desktop.pass();
+  assert!(has(&mut desktop, "agent-enforcement"), "the profile stays open");
 
   desktop.click("nav-pipelines");
   desktop.wait_for("pipeline-row");
