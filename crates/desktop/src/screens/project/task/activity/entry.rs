@@ -29,7 +29,7 @@ use super::{
 use crate::{
   display,
   navigation::route::ChangedFile,
-  tasks::transcript::{CommandEntry, Entry, EntryKind, ToolCommandEntry},
+  tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind, ToolCommandEntry},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, UNPARSED_OPACITY},
   ui::{
     icon::{Icon, IconSize, icon},
@@ -392,6 +392,14 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     }
     EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),
     EntryKind::ToolCommand(entry) => tool_command(ctx, entry),
+    EntryKind::McpTool(call) => plain(Icon::Plug, call.tool.clone(), mark_text(ctx, &call.mark), None),
+  }
+}
+
+/// Why nobody was asked about a call, as the decision marks of the command categories design word it.
+fn mark_text(ctx: &Ctx, mark: &CommandMark) -> Arc<str> {
+  match mark {
+    CommandMark::ExemptTool { server } => ctx.t_args("runs.activity.decision.notAskedExempt", [("server", &**server)]),
   }
 }
 
@@ -441,6 +449,13 @@ fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
       };
       (Icon::Terminal, meta, None)
     }
+  };
+  let meta = match &entry.mark {
+    Some(mark) => ctx.t_args(
+      "runs.activity.decision.withMeta",
+      [("meta", &*meta), ("mark", &*mark_text(ctx, mark))],
+    ),
+    None => meta,
   };
   Shown {
     glyph,

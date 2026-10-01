@@ -1,21 +1,28 @@
 //! MCP servers as the Connections screen edits them: the dialog's fields to a server and back, a
-//! variable taken from a secret written by the secret's name, and the profiles that give a server
-//! to their agents. Run with `cargo test -p orchester-desktop --test mcp_servers mcp`.
+//! variable taken from a secret written by the secret's name, the tools that run without asking, and
+//! the profiles that give a server to their agents. Run with `cargo test -p orchester-desktop --test mcp_servers mcp`.
 
 use std::fs;
 
 use orchester_core::{
-  connection::mcp::{McpEnvValue, McpServer, McpServerName, McpTransport},
+  connection::mcp::{
+    ExemptTools, HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport,
+    McpUrl,
+  },
   id::{ConnectionId, ProjectId, SecretId},
   name::Name,
   project::{Project, ProjectKey},
+  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, Slug},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
-  store::{McpServerStore, SecretStore},
+  store::{McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
-use orchester_desktop::connections::{
-  data::ProjectConnections,
-  mcp::{McpServerText, TransportChoice, parse_variables, save_in, secret_reference, set_enabled_in},
+use orchester_desktop::{
+  connections::{
+    data::ProjectConnections,
+    mcp::{McpServerText, TransportChoice, parse_variables, save_in, secret_reference, set_enabled_in},
+  },
+  pipelines::data::Assignables,
 };
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
@@ -159,4 +166,117 @@ fn mcp_servers_are_saved_listed_and_turned_off() {
   let stored = db.mcp_server(id).expect("read").expect("stored");
   assert_eq!(stored.name().as_str(), "docs-2");
   assert!(!stored.enabled(), "editing keeps the server off");
+}
+
+/// One tool name per line, kept in order through saving; a name either CLI would rename, or one listed
+/// twice, says why it cannot be saved.
+#[test]
+fn mcp_dialog_keeps_the_tools_that_run_without_asking() {
+  let (repo, db) = project_db();
+  let text = McpServerText {
+    exempt_tools: "get_screenshot
+
+batch_get
+"
+    .to_owned(),
+    variables: String::new(),
+    ..stdio_text()
+  };
+  let id = save_in(repo.path(), None, text.draft(&[], &[]).expect("valid")).expect("saved");
+  let stored = db.mcp_server(id).expect("read").expect("stored");
+  assert_eq!(
+    McpServerText::of(&stored, &[]).exempt_tools,
+    "get_screenshot
+batch_get"
+  );
+  for (tools, key) in [
+    ("get screenshot", "connections.mcp.errors.exemptToolName"),
+    (
+      "batch_get
+batch_get",
+      "connections.mcp.errors.exemptToolTwice",
+    ),
+    (&"a".repeat(65)[..], "connections.mcp.errors.exemptToolTooLong"),
+  ] {
+    let errors = McpServerText {
+      exempt_tools: tools.to_owned(),
+      ..text.clone()
+    }
+    .draft(&[], &[])
+    .expect_err("tools it cannot save");
+    assert_eq!(errors.exempt_tools.map(|message| message.key), Some(key), "{tools}");
+  }
+  let cleared = McpServerText {
+    exempt_tools: String::new(),
+    ..text
+  };
+  save_in(repo.path(), Some(id), cleared.draft(&[], &[]).expect("valid")).expect("saved");
+  assert!(
+    db.mcp_server(id)
+      .expect("read")
+      .expect("stored")
+      .exempt_tools()
+      .is_empty()
+  );
+}
+
+fn remote(name: &str, exempt: &str, enabled: bool) -> McpServer {
+  let mut server = McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new(name).expect("valid"),
+    McpTransport::Http(HttpServer::new(
+      McpUrl::new("http://localhost:7/mcp").expect("valid"),
+      None,
+    )),
+    McpEnvironment::default(),
+    Timestamp::from_unix_millis(1),
+  )
+  .expect("a valid server");
+  server.set_exempt_tools(ExemptTools::parse(exempt).expect("valid tools"));
+  server.set_enabled(enabled);
+  server
+}
+
+/// A step's permissions name the servers of its profile that run tools without asking: chosen, on,
+/// and listing some.
+#[test]
+fn mcp_pipeline_steps_see_which_servers_run_tools_without_asking() {
+  let (_repo, mut db) = project_db();
+  let servers = [
+    remote(
+      "pencil",
+      "get_screenshot
+batch_get",
+      true,
+    ),
+    remote("docs", "read", false),
+    remote("notes", "", true),
+    remote("unchosen", "read", true),
+  ];
+  for server in &servers {
+    db.create_mcp_server(server).expect("server");
+  }
+  let chosen = servers[..3].iter().map(McpServer::id).collect();
+  let body = AgentProfile::new(
+    Name::new("Builder").expect("valid"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    ConnectionId::generate(),
+    ModelId::new("haiku").expect("model"),
+    ProviderSettings::default(),
+  )
+  .with_mcp_servers(McpServerSelection::new(chosen).expect("distinct servers"));
+  let profile = db
+    .create_resource(
+      Slug::new("builder").expect("slug"),
+      Name::new("Builder").expect("valid"),
+      &body,
+      Timestamp::from_unix_millis(1),
+    )
+    .expect("profile");
+  db.publish_draft::<AgentProfile>(profile.id(), Timestamp::from_unix_millis(2))
+    .expect("published");
+  let assignables = Assignables::load(&db).expect("load");
+  let choice = assignables.profile(profile.id()).expect("the published profile");
+  assert_eq!(assignables.exempt_tools(choice), [("pencil".into(), 2)]);
 }

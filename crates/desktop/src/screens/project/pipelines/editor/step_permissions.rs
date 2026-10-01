@@ -3,7 +3,8 @@
 //! profile's. Only values at or below the profile's are offered: read-only instead of editing, a
 //! subset of the allowed commands (when the connection enforces a list), network off (when the
 //! connection enforces it). Without a profile (`UjHDL`) one row says that permissions come from
-//! the profile.
+//! the profile. A step that asks when a tool needs approval also lists, under that switch, the servers
+//! of the profile that run some tools without asking (no frame draws these lines).
 
 use std::sync::Arc;
 
@@ -72,6 +73,15 @@ pub fn rows(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, handle: &Edi
   rows.extend(commands_rows(ctx, choice, narrowing, &effective, &edit));
   rows.push(network_row(ctx, choice, narrowing, &effective, &edit));
   rows.push(tool_approvals_row(ctx, choice, narrowing, &edit));
+  if choice.permissions.interactive_tool_approvals() || narrowing.interactive_tool_approvals {
+    rows.extend(
+      props
+        .assignables
+        .exempt_tools(choice)
+        .into_iter()
+        .map(|(server, count)| note(&exempt_text(ctx, &server, count))),
+    );
+  }
   rows.push(note(&narrowing_note(ctx, choice, narrowing)));
   rows
 }
@@ -274,6 +284,16 @@ fn tool_approvals_row(ctx: &Ctx, choice: &ProfileChoice, narrowing: &StepPermiss
     .child(Text::new(&label).variant(TypographyStyle::Caption).flex(1.0))
     .child(switch)
     .into()
+}
+
+/// "pencil: 5 tools run without asking".
+fn exempt_text(ctx: &Ctx, server: &str, count: usize) -> Arc<str> {
+  let key = if count == 1 {
+    "pipelines.inspector.permissions.exemptTools.one"
+  } else {
+    "pipelines.inspector.permissions.exemptTools.other"
+  };
+  ctx.t_args(key, [("server", server), ("count", count.to_string().as_str())])
 }
 
 /// What the profile allows beyond the step (`m2XU9r`): "Reviewer v2 also allows pnpm lint.

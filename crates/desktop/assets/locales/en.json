@@ -884,6 +884,10 @@
       "beforeEditMeta": "{{tokens}} · {{before}} before first edit",
       "noEditMeta": "{{tokens}} · no edit",
       "stepOptionAttempt": "{{number}} · {{step}} · {{agent}} · attempt {{attempt}}",
+      "decision": {
+        "notAskedExempt": "not asked · exempt tool of {{server}}",
+        "withMeta": "{{meta}} · {{mark}}"
+      },
       "mcp": {
         "title": "Working without MCP server {{server}}",
         "titleUnnamed": "Working without an MCP server",
@@ -1757,6 +1761,12 @@
           "claudeCallsHow": "--allowedTools mcp__* · unverified",
           "claudeCallsAsk": "Each tool call waits for your decision",
           "claudeCallsAskHow": "--permission-prompt-tool · one call each",
+          "exempt": {
+            "one": "{{server}}: 1 tool runs without asking",
+            "other": "{{server}}: {{count}} tools run without asking"
+          },
+          "exemptClaudeHow": "--allowedTools mcp__{{server}}__<tool> · other tools ask",
+          "exemptCodexHow": "mcp_servers.{{server}}.tools.<tool>.approval_mode = approve · other tools ask",
           "outside": "Servers work outside these limits",
           "outsideHow": "own processes · network on",
           "noneLoad": "No MCP servers load",
@@ -2083,6 +2093,9 @@
       "secretName": "{{name}} ({{environment}})",
       "secretGone": "a secret this project no longer has",
       "variables": "Variables",
+      "exemptTools": "Tools that run without asking",
+      "exemptToolsNone": "None. When a profile asks before MCP actions, every tool of this server asks.",
+      "exemptToolsNote": "Only these tools of this server, and only for agent profiles that ask before MCP actions. Every other tool still asks.",
       "tools": "Discovered tools",
       "toolsNote": "Orchester does not connect to MCP servers itself, so it cannot list their tools yet. The agent’s CLI lists them when an agent starts.",
       "refreshTools": "Refresh tools",
@@ -2102,7 +2115,11 @@
         "tooLong": "This is too long",
         "workingDirectory": "Use a folder inside the worktree, or an absolute path",
         "variables": "A variable cannot be used as written",
-        "unknownSecret": "This project has no secret {{secret}}"
+        "unknownSecret": "This project has no secret {{secret}}",
+        "exemptToolName": "{{tool}} is not a tool name: use letters, digits, - and _",
+        "exemptToolTooLong": "A tool name is at most {{max}} characters long",
+        "exemptToolTwice": "{{tool}} is listed twice",
+        "exemptToolsTooMany": "List at most {{max}} tools"
       },
       "dialog": {
         "addTitle": "Add MCP server",
@@ -2112,6 +2129,7 @@
         "programPlaceholder": "npx",
         "folderHint": "A folder in the worktree, or an absolute path. Claude Code starts every server in the worktree.",
         "argumentsHint": "One argument per line, passed as written.",
+        "exemptToolsHint": "One tool name per line, as the server names it (get_screenshot). When an agent profile asks before MCP actions, only these tools of this server run without asking; every other tool still asks. List only tools that change nothing.",
         "variablesHint": "One NAME=value per line. ${secret:NAME@environment} takes the value of a project secret.",
         "addSecret": "Add a variable from a secret…",
         "noSecrets": "This project has no secrets",
@@ -2872,6 +2890,10 @@
         "commandsNarrowed": "Commands · narrowed",
         "networkStaysOn": "Stays on",
         "interactiveToolApprovals": "Ask when a tool needs approval",
+        "exemptTools": {
+          "one": "{{server}}: 1 tool runs without asking",
+          "other": "{{server}}: {{count}} tools run without asking"
+        },
         "onlyNarrow": "Steps can only narrow profile permissions.",
         "alsoAllows": "{{profile}} {{version}} also allows {{commands}}. Steps can only narrow profile permissions."
       }

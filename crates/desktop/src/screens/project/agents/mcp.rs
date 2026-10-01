@@ -2,7 +2,8 @@
 //! switch `K8ItM`): a switch per project server says whether the profile's agents get it,
 //! with where it runs, and why an agent would work without a chosen one (turned off, or a folder
 //! Claude Code cannot start it in). The enforcement panel's MCP rows say what the chosen CLI enforces
-//! for them (`orchester_core::permission::mcp`).
+//! for them (`orchester_core::permission::mcp`), and, when the profile asks before MCP actions, which
+//! servers run some tools without asking (no frame draws these rows; they follow the approval row).
 
 use std::sync::Arc;
 
@@ -142,8 +143,15 @@ impl ProfileEditor {
       };
       return vec![row(Icon::CircleCheck, &ctx.t(loaded), &ctx.t(loading))];
     }
+    let exempt = if permissions.interactive_tool_approvals() {
+      self.exempt_rows(ctx, provider)
+    } else {
+      Vec::new()
+    };
     if provider == AgentProvider::CodexCli {
-      return app_server_enforcement(ctx, permissions.interactive_tool_approvals());
+      let mut rows = app_server_enforcement(ctx, permissions.interactive_tool_approvals());
+      rows.splice(2..2, exempt);
+      return rows;
     }
     let loaded = if count == 1 {
       ctx.t("agents.permissions.enforcement.mcp.onlyOne")
@@ -172,12 +180,48 @@ impl ProfileEditor {
         &ctx.t("agents.permissions.enforcement.mcp.claudeCallsHow"),
       )
     });
+    rows.extend(exempt);
     rows.push(row(
       Icon::Unplug,
       &ctx.t("agents.permissions.enforcement.mcp.outside"),
       &ctx.t("agents.permissions.enforcement.mcp.outsideHow"),
     ));
     rows
+  }
+
+  /// One row per chosen server an agent gets that runs tools without asking: how many, and how the CLI
+  /// lets exactly those run.
+  fn exempt_rows(&self, ctx: &Ctx, provider: AgentProvider) -> Vec<Element> {
+    let servers = &self.context.agents.mcp;
+    let chosen = self.mcp.get();
+    chosen
+      .0
+      .exempt_tools(servers)
+      .into_iter()
+      .filter(|(name, _)| {
+        servers
+          .iter()
+          .any(|server| server.name() == *name && usable(server, provider))
+      })
+      .map(|(server, tools)| {
+        let key = if tools.len() == 1 {
+          "agents.permissions.enforcement.mcp.exempt.one"
+        } else {
+          "agents.permissions.enforcement.mcp.exempt.other"
+        };
+        let count = tools.len().to_string();
+        let title = ctx.t_args(key, [("server", server.as_str()), ("count", count.as_str())]);
+        let how = match provider {
+          AgentProvider::ClaudeCodeCli => "agents.permissions.enforcement.mcp.exemptClaudeHow",
+          AgentProvider::CodexCli => "agents.permissions.enforcement.mcp.exemptCodexHow",
+        };
+        row(
+          Icon::ListChecks,
+          &title,
+          &ctx.t_args(how, [("server", server.as_str())]),
+        )
+      })
+      .collect()
   }
 }
 

@@ -6,7 +6,7 @@ use orchester_core::{
   run::{ActivityEntry, TokenUsage},
   time::Timestamp,
 };
-use orchester_desktop::tasks::transcript::{EntryKind, ToolCommandEntry, entries};
+use orchester_desktop::tasks::transcript::{CommandMark, EntryKind, McpToolEntry, ToolCommandEntry, entries};
 
 fn stored(events: Vec<AgentEvent>) -> Vec<ActivityEntry> {
   let (execution, invocation) = (StepExecutionId::generate(), InvocationId::generate());
@@ -194,4 +194,48 @@ fn transcript_joins_a_tool_steps_command_and_keeps_how_it_ended() {
   );
   // A command that ran out of time is a failure: its entry starts open.
   assert!(entries[0].is_failure());
+}
+
+/// A call of a tool that runs without asking: Claude Code's command keeps the mark through its end; a
+/// Codex call, which no command shows, is an entry of its own.
+#[test]
+fn transcript_marks_an_mcp_call_that_was_not_asked() {
+  let not_asked = |item: &str, tool: &str| AgentEvent::McpToolNotAsked {
+    item: item.into(),
+    server: "pencil".into(),
+    tool: tool.into(),
+  };
+  let activity = stored(vec![
+    AgentEvent::CommandStarted {
+      item: "toolu_1".into(),
+      command: "mcp__pencil__get_screenshot".into(),
+    },
+    not_asked("toolu_1", "get_screenshot"),
+    AgentEvent::CommandFinished {
+      item: "toolu_1".into(),
+      command: "mcp__pencil__get_screenshot".into(),
+      output: "ok".into(),
+      exit_code: None,
+      status: CommandStatus::Completed,
+    },
+    not_asked("mcp-2", "batch_get"),
+  ]);
+  let entries = entries(&activity);
+  let mark = CommandMark::ExemptTool {
+    server: "pencil".into(),
+  };
+  let EntryKind::Command(command) = &entries[0].kind else {
+    panic!("the command comes first: {entries:?}");
+  };
+  assert_eq!(command.status, Some(CommandStatus::Completed));
+  assert_eq!(command.mark, Some(mark.clone()));
+  assert_eq!(
+    entries[1].kind,
+    EntryKind::McpTool(McpToolEntry {
+      tool: "batch_get".into(),
+      mark,
+    })
+  );
+  assert_eq!(entries.len(), 2);
+  assert!(!entries.iter().any(|entry| entry.is_failure()));
 }
