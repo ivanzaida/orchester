@@ -339,11 +339,7 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     },
     EntryKind::Command(entry) => command(ctx, entry),
     EntryKind::FileChange(change) => {
-      let (glyph, key) = match change.kind {
-        FileChangeKind::Added => (Icon::FilePlus, "runs.activity.fileAdded"),
-        FileChangeKind::Deleted => (Icon::FileMinus, "runs.activity.fileDeleted"),
-        FileChangeKind::Modified => (Icon::FilePenLine, "runs.activity.fileModified"),
-      };
+      let (glyph, key) = file_change_kind(change.kind);
       // Git's paths use `/` whatever the CLI reported.
       let path: Arc<str> = in_worktree(&change.path).replace('\\', "/").into();
       let meta = ctx.t_args("runs.activity.fileMeta", [("status", &*ctx.t(key))]);
@@ -393,6 +389,15 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),
     EntryKind::ToolCommand(entry) => tool_command(ctx, entry),
     EntryKind::McpTool(call) => plain(Icon::Plug, call.tool.clone(), mark_text(ctx, &call.mark), None),
+  }
+}
+
+/// A file change's glyph and the key of its status.
+fn file_change_kind(kind: FileChangeKind) -> (Icon, &'static str) {
+  match kind {
+    FileChangeKind::Added => (Icon::FilePlus, "runs.activity.fileAdded"),
+    FileChangeKind::Deleted => (Icon::FileMinus, "runs.activity.fileDeleted"),
+    FileChangeKind::Modified => (Icon::FilePenLine, "runs.activity.fileModified"),
   }
 }
 

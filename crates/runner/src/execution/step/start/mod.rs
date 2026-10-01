@@ -26,7 +26,7 @@ use orchester_core::{
   id::{InvocationId, StepExecutionId},
   memory::{InjectedMemory, RecalledMemory},
   permission::LaunchPermissions,
-  resource::Step,
+  resource::{AgentProfile, Step},
   run::{AssembledPrompt, CodeIndexPrompt, InvocationPrompt, ProfileInfo},
 };
 
@@ -136,10 +136,7 @@ impl RunTask {
     let cli = Cli {
       executable,
       model,
-      effort: body
-        .settings()
-        .iter()
-        .find_map(|(name, value)| (name == REASONING_EFFORT).then_some(value)),
+      effort: reasoning_effort(&body),
       enforced: &enforced,
       writable_roots: &writable_roots,
       worktree,
@@ -181,4 +178,12 @@ impl RunTask {
       permissions: enforced.launch(),
     })
   }
+}
+
+/// The reasoning effort `profile` sets, if any.
+fn reasoning_effort(profile: &AgentProfile) -> Option<&str> {
+  profile
+    .settings()
+    .iter()
+    .find_map(|(name, value)| (name == REASONING_EFFORT).then_some(value))
 }
