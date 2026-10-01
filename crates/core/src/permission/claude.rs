@@ -149,6 +149,13 @@ pub fn permission_args(
 /// Whether an allowed command contains a word `acceptEdits` runs without a rule. A
 /// `Bash(<command>:*)` deny rule could then match a listed command, so a writing step with
 /// `commands` does not run in `acceptEdits` ([`Mechanism::ClaudeEditRules`]).
+///
+/// Any word, not only the first: before matching a deny rule both CLI versions strip leading
+/// variable assignments (`A=1 rm`) and the wrappers `timeout`, `time`, `nice`, `stdbuf` and `nohup`,
+/// and a prefix rule also matches after `xargs ` (2.1.89 `Er`, `vt$` and `Lt$`; 2.1.284 the same).
+/// The deny rule would then deny a listed `timeout 60 rm -f x` or `xargs rm`. Matching any word
+/// covers these without copying the CLI's stripping; a word elsewhere (`git rm`) only makes the
+/// step edit by rule, which is as strict.
 pub(super) fn lists_file_commands(commands: &[CommandPrefix]) -> bool {
   commands
     .iter()

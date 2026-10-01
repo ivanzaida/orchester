@@ -216,7 +216,10 @@ fn claude_invocation_edits_by_rule_when_a_listed_command_is_one_accept_edits_run
       &["git", "sed -n"][..],
       &["rm -f build/x"],
       &["git rm"],
+      // A deny rule would match these after stripping `xargs`, a wrapper or an assignment.
       &["xargs mkdir"],
+      &["timeout 60 rm -f build/x"],
+      &["LANG=C sed -n"],
     ] {
       assert_eq!(
         repository(RepositoryAccess::Write, allowed(listed)),
