@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
 
-use orchester_core::connection::app_server_mcp::{McpInventoryError, verify_selected_servers};
+use orchester_core::connection::app_server_mcp::{
+  McpInventoryError, UnavailableServer, unavailable_selected, verify_selected_servers,
+};
 use serde_json::json;
 
 #[test]
@@ -36,4 +38,33 @@ fn selected_server_must_be_connected() {
       Err(McpInventoryError::UnavailableSelected)
     );
   }
+}
+
+/// A step that does not ask before MCP actions works without the selected servers that are not
+/// connected, each named with its state, never Codex's own diagnostic.
+#[test]
+fn selected_servers_that_are_not_connected_are_named_for_the_activity() {
+  let selected = BTreeSet::from(["docs".to_owned(), "missing".to_owned(), "pencil".to_owned()]);
+  let inventory = json!({"data":[
+    {"name":"docs","runtimeStatus":"failed","toolsError":"private diagnostic"},
+    {"name":"pencil","runtimeStatus":"connected","toolsError":null},
+    {"name":"global-other","runtimeStatus":"failed","toolsError":null}
+  ],"nextCursor":null});
+  assert_eq!(
+    unavailable_selected(&inventory, &selected),
+    Ok(vec![
+      UnavailableServer {
+        name: "missing".to_owned(),
+        state: None
+      },
+      UnavailableServer {
+        name: "docs".to_owned(),
+        state: Some("failed".to_owned())
+      },
+    ])
+  );
+  assert_eq!(
+    unavailable_selected(&json!({"data":[],"nextCursor":"more"}), &selected),
+    Err(McpInventoryError::TooLarge)
+  );
 }

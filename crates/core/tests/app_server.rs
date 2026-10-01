@@ -192,6 +192,14 @@ fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
       "total":{"inputTokens":100,"cachedInputTokens":20,"outputTokens":30,"reasoningOutputTokens":10,"totalTokens":130}}
   }});
   assert!(stream.parse(&usage.to_string()).expect("usage").is_empty());
+  // Repeated unchanged, as Codex does when its rate limits change: counted once.
+  assert!(stream.parse(&usage.to_string()).expect("usage").is_empty());
+  // A second model response of the same turn adds its own usage.
+  let second = json!({"method":"thread/tokenUsage/updated","params":{"threadId":"thread-2","turnId":"turn-3",
+    "tokenUsage":{"last":{"inputTokens":50,"cachedInputTokens":40,"outputTokens":5,"reasoningOutputTokens":0,"totalTokens":55},
+      "total":{"inputTokens":150,"cachedInputTokens":60,"outputTokens":35,"reasoningOutputTokens":10,"totalTokens":185}}
+  }});
+  assert!(stream.parse(&second.to_string()).expect("usage").is_empty());
   let ended = json!({"method":"turn/completed","params":{"threadId":"thread-2","turn":{"id":"turn-3","items":[],"status":"completed"}}});
   let updates = stream.parse(&ended.to_string()).expect("turn");
   assert!(matches!(
@@ -199,9 +207,9 @@ fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
     [
       Update::Activity(AgentEvent::TurnCompleted {
         usage: TokenUsage {
-          input: 100,
-          cached_input: 20,
-          output: 30
+          input: 150,
+          cached_input: 60,
+          output: 35
         }
       }),
       Update::TurnEnded

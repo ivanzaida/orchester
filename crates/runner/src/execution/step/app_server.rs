@@ -1,7 +1,11 @@
-//! Bidirectional Codex App Server conversation for one invocation. MCP user input and elicitation
-//! requests and command approvals can be answered once; file and standing permission grants remain disabled. Unexpected
-//! host requests fail the invocation. Global MCP servers remain available; project-selected
-//! servers must be connected before the turn begins.
+//! Bidirectional Codex App Server conversation for one invocation, the only way Codex runs. MCP user
+//! input and elicitation requests and command approvals can be answered once; file and standing
+//! permission grants remain disabled. A command approval comes from a rule when the step asks before
+//! commands, and from the sandbox when a command needs more than it allows (`sandbox_approval`, on
+//! whenever the step's other commands ask a person). Unexpected host requests fail the invocation.
+//! Global MCP servers remain available; a step that asks before MCP actions needs its project-selected
+//! servers connected before the turn begins, any other step works without one that is not and its
+//! activity says so. Codex's standard error is kept in the activity as raw lines.
 
 use std::{
   collections::BTreeSet,
@@ -13,7 +17,8 @@ use orchester_core::{
   command::{SecretVariable, redact_secrets},
   connection::{
     app_server::{AppServerStream, PendingApproval, Update},
-    app_server_mcp::verify_selected_servers,
+    app_server_mcp::{unavailable_selected, verify_selected_servers},
+    mcp::McpServerProblem,
     stream::{AgentEvent, OutputStream},
   },
   permission::NetworkAccess,
@@ -44,7 +49,10 @@ pub(super) struct AppServerSetup {
   pub effort: Option<String>,
   pub worktree: PathBuf,
   pub access: RepositoryAccess,
+  /// Commands an execpolicy rule asks about reach a person (*Ask before running commands*).
   pub command_approvals: bool,
+  /// Commands that need more than the sandbox reach a person.
+  pub sandbox_approvals: bool,
   pub tool_approvals: bool,
   pub network: NetworkAccess,
   pub writable_roots: Vec<PathBuf>,
@@ -124,7 +132,8 @@ impl AppServerSession {
     process: &Supervised,
   ) -> Result<Vec<Update>, AppServerFailure> {
     if stream == OutputStream::Stderr {
-      return Ok(Vec::new());
+      let line = line.to_owned();
+      return Ok(vec![Update::Activity(AgentEvent::Raw { stream, line })]);
     }
     let value: Value = serde_json::from_str(line).map_err(|_| "Codex App Server sent invalid JSON".to_owned())?;
     if value.get("method").is_some() {
@@ -140,7 +149,7 @@ impl AppServerSession {
           && (!matches!(self.phase, Phase::Turn | Phase::Working)
             || self.thread.as_deref() != Some(request.thread.as_str())
             || self.turn.as_deref() != request.turn.as_deref()
-            || (request.is_command() && !self.setup.command_approvals)
+            || (request.is_command() && !self.setup.command_approvals && !self.setup.sandbox_approvals)
             || (!request.is_command() && !self.setup.tool_approvals))
         {
           return Err(
@@ -218,10 +227,10 @@ impl AppServerSession {
         Ok(vec![Update::Activity(AgentEvent::SessionStarted { session: thread })])
       }
       (Phase::Servers, 4) => {
-        self.check_servers(result)?;
+        let left_out = self.check_servers(result)?;
         self.phase = Phase::Turn;
         self.start_turn(process).await.map_err(|error| io_message(&error))?;
-        Ok(Vec::new())
+        Ok(left_out)
       }
       (Phase::Turn, 5) => {
         self.phase = Phase::Working;
@@ -246,7 +255,7 @@ impl AppServerSession {
     let enabled = |key: &str| granular.get(key).and_then(Value::as_bool).unwrap_or(false);
     if enabled("mcp_elicitations") != self.setup.tool_approvals
       || enabled("rules") != self.setup.command_approvals
-      || enabled("sandbox_approval")
+      || enabled("sandbox_approval") != self.setup.sandbox_approvals
       || enabled("request_permissions")
       || enabled("skill_approval")
     {
@@ -318,8 +327,25 @@ impl AppServerSession {
     Ok(())
   }
 
-  fn check_servers(&self, result: &Value) -> Result<(), String> {
-    verify_selected_servers(result, &self.setup.expected_servers).map_err(|error| error.to_string())
+  /// The selected MCP servers the agent works without, as activity; an error when the step needs
+  /// them all (it asks before MCP actions) or the inventory cannot be read.
+  fn check_servers(&self, result: &Value) -> Result<Vec<Update>, String> {
+    if self.setup.tool_approvals {
+      verify_selected_servers(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+      return Ok(Vec::new());
+    }
+    let unavailable = unavailable_selected(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+    Ok(
+      unavailable
+        .into_iter()
+        .map(|server| {
+          Update::Activity(AgentEvent::McpServer {
+            server: Some(server.name),
+            problem: McpServerProblem::FailedToStart { detail: server.state },
+          })
+        })
+        .collect(),
+    )
   }
 
   async fn start_thread(&self, process: &Supervised) -> io::Result<()> {
@@ -329,7 +355,7 @@ impl AppServerSession {
     };
     let policy = json!({"granular":{
       "mcp_elicitations":self.setup.tool_approvals,
-      "rules":self.setup.command_approvals,"sandbox_approval":false,
+      "rules":self.setup.command_approvals,"sandbox_approval":self.setup.sandbox_approvals,
       "request_permissions":false,"skill_approval":false
     }});
     let cwd = self.setup.worktree.to_string_lossy();

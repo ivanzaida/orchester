@@ -5,7 +5,8 @@ use orchester_core::{
     invocation::Platform,
   },
   permission::{
-    AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess, StepPermissions,
+    AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, OutsideCommands,
+    RepositoryAccess, StepPermissions,
     capability::{Mechanism, PermissionSetting},
   },
 };
@@ -149,5 +150,129 @@ fn permissions_asking_before_commands_route_to_each_clis_approval_on_both_platfo
         Mechanism::ClaudeNoCommandsReadOnly
       );
     }
+  }
+}
+
+/// A command that needs more than the sandbox (`require_escalated`) reaches a person as an ordinary
+/// command approval, its justification shown as the reason; approved, only that call runs.
+#[test]
+fn command_approvals_ask_about_an_escalation_once() {
+  let message = json!({"id":200,"method":"item/commandExecution/requestApproval","params":{
+    "threadId":"thread-1","turnId":"turn-1","itemId":"item-1","startedAtMs":1,"kind":"command",
+    "environmentId":"local","command":"pnpm install","cwd":"/worktree",
+    "reason":"Do you want to reach the package registry?",
+    "proposedExecpolicyAmendment":["pnpm","install"],
+    "availableDecisions":["accept","acceptForSession",{"acceptWithExecpolicyAmendment":{"execpolicy_amendment":["pnpm","install"]}},"decline"]
+  }});
+  let updates = AppServerStream::default().parse(&message.to_string()).expect("request");
+  let [Update::Approval(request)] = updates.as_slice() else {
+    panic!("an escalation asks a person")
+  };
+  assert!(request.is_command());
+  assert_eq!(request.action, "pnpm install");
+  assert_eq!(
+    request.scope.as_deref(),
+    Some("Do you want to reach the package registry?")
+  );
+  for (approve, decision) in [(true, "accept"), (false, "decline")] {
+    assert_eq!(
+      serde_json::from_str::<Value>(&request.response(approve)).expect("response"),
+      json!({"id":200,"result":{"decision":decision}}),
+      "never a session grant or a rule amendment"
+    );
+  }
+}
+
+/// Edits keep their rules: a file change outside the writable roots is declined at once, as is a
+/// host of Codex's managed network proxy, whose grant may outlast the one command.
+#[test]
+fn command_approvals_decline_file_changes_and_network_hosts_without_a_person() {
+  let patch = json!({"id":300,"method":"item/fileChange/requestApproval","params":{
+    "threadId":"thread-1","turnId":"turn-1","itemId":"patch-1","startedAtMs":1,"grantRoot":"/elsewhere"
+  }});
+  let host = json!({"id":"n1","method":"item/commandExecution/requestApproval","params":{
+    "threadId":"thread-1","turnId":"turn-1","itemId":"item-2","startedAtMs":1,"command":"curl example.com",
+    "cwd":"/worktree","networkApprovalContext":{"host":"example.com","protocol":"https"},
+    "availableDecisions":["accept","decline"]
+  }});
+  for (message, id) in [(patch, json!(300)), (host, json!("n1"))] {
+    let updates = AppServerStream::default().parse(&message.to_string()).expect("request");
+    let [Update::Declined(response)] = updates.as_slice() else {
+      panic!("declined at once")
+    };
+    assert_eq!(
+      serde_json::from_str::<Value>(response).expect("response"),
+      json!({"id":id,"result":{"decision":"decline"}})
+    );
+  }
+}
+
+/// What happens to a command the permissions do not run by themselves, as each launch records it.
+#[test]
+fn permissions_record_whether_other_commands_ask_a_person() {
+  let listed =
+    CommandPermission::Allowed(AllowedCommands::new(vec![CommandPrefix::new("git").expect("prefix")]).expect("list"));
+  let none = CommandPermission::Allowed(AllowedCommands::default());
+  let cases = [
+    (
+      AgentProvider::CodexCli,
+      RepositoryAccess::Write,
+      CommandPermission::AnyInWorktree,
+      OutsideCommands::Asked,
+    ),
+    (
+      AgentProvider::CodexCli,
+      RepositoryAccess::ReadOnly,
+      CommandPermission::AnyInWorktree,
+      OutsideCommands::Asked,
+    ),
+    (
+      AgentProvider::CodexCli,
+      RepositoryAccess::Write,
+      CommandPermission::AskBefore,
+      OutsideCommands::Asked,
+    ),
+    (
+      AgentProvider::ClaudeCodeCli,
+      RepositoryAccess::Write,
+      listed.clone(),
+      OutsideCommands::Asked,
+    ),
+    (
+      AgentProvider::ClaudeCodeCli,
+      RepositoryAccess::ReadOnly,
+      listed,
+      OutsideCommands::Asked,
+    ),
+    (
+      AgentProvider::ClaudeCodeCli,
+      RepositoryAccess::Write,
+      CommandPermission::AskBefore,
+      OutsideCommands::Asked,
+    ),
+    (
+      AgentProvider::ClaudeCodeCli,
+      RepositoryAccess::ReadOnly,
+      CommandPermission::AskBefore,
+      OutsideCommands::Denied,
+    ),
+    (
+      AgentProvider::ClaudeCodeCli,
+      RepositoryAccess::Write,
+      none,
+      OutsideCommands::Denied,
+    ),
+  ];
+  for (provider, repository, commands, outside) in cases {
+    let enforced = AgentPermissions::new(repository, commands.clone(), NetworkAccess::On)
+      .enforced_on(provider, Platform::Windows)
+      .expect("enforceable");
+    assert_eq!(
+      enforced.outside_commands(),
+      outside,
+      "{provider:?} {repository:?} {commands:?}"
+    );
+    assert_eq!(enforced.launch().outside_commands(), Some(outside));
+    assert_eq!(enforced.launch().permissions(), enforced.permissions());
   }
 }

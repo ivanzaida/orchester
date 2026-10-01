@@ -58,19 +58,15 @@ fn remote(bearer: Option<Arc<SecretValue>>) -> McpLaunch {
 fn codex_command(mcp: &CodexMcp) -> Command {
   CodexInvocation {
     executable: Path::new("/bin/codex"),
-    model: "gpt-5.5",
-    reasoning_effort: None,
     access: RepositoryAccess::ReadOnly,
     network: NetworkAccess::Off,
     writable_roots: &[],
     worktree: Path::new("/repo/worktree"),
     platform: Platform::MacOs,
-    resume: None,
-    output_schema: None,
     mcp: Some(mcp),
     agent_files: CodexAgentFiles::Loaded,
   }
-  .command("Do it.".to_owned(), Vec::new(), &CommandEnvironment::default())
+  .command(Vec::new(), &CommandEnvironment::default())
   .expect("a Unicode worktree")
 }
 
@@ -115,11 +111,11 @@ fn mcp_codex_gets_servers_as_configuration_overrides_without_secret_values() {
   assert_eq!(mcp.args(), expected.as_slice());
   let command = codex_command(&mcp);
   let args = command.args();
-  let start = args
-    .iter()
-    .position(|arg| arg == "-C")
-    .expect("the worktree follows the servers");
-  assert_eq!(&args[start - expected.len()..start], expected.as_slice());
+  assert_eq!(
+    &args[args.len() - expected.len()..],
+    expected.as_slice(),
+    "the servers come last"
+  );
   assert_hidden(&command, &[TOKEN, BEARER]);
   let secrets: Vec<(&str, &str)> = command
     .secret_env()

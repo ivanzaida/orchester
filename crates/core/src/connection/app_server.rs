@@ -1,6 +1,12 @@
 //! The small part of Codex App Server's JSON-RPC stream an agent step needs. The parser keeps
 //! tool arguments out of activity and error output; only an explicit file path may become a
 //! request target. Unknown server requests fail closed instead of leaving a turn hanging.
+//!
+//! Two requests are declined at once, without a person, as Codex declined them before it could ask:
+//! a file change outside the writable roots (`item/fileChange/requestApproval`; edits keep their
+//! rules, only commands are asked about) and a command approval for a host of Codex's managed
+//! network proxy (`networkApprovalContext`, whose grant may outlast the one command). A command
+//! that needs more than the sandbox reaches a person as an ordinary command approval.
 
 use std::{collections::HashMap, fmt};
 
@@ -108,6 +114,8 @@ impl PendingApproval {
 pub enum Update {
   Activity(AgentEvent),
   Approval(PendingApproval),
+  /// A request declined at once: this JSON-RPC response answers it.
+  Declined(String),
   TurnEnded,
 }
 
@@ -124,7 +132,11 @@ struct ToolContext {
 #[derive(Default)]
 pub struct AppServerStream {
   tools: HashMap<String, ToolContext>,
+  /// The turn's usage so far: the `last` usage of each model response.
   usage: TokenUsage,
+  /// The thread's total at the latest usage notification. Codex repeats a notification unchanged
+  /// (when its rate limits change), so `last` counts only when the total moved.
+  total: Option<TokenUsage>,
 }
 
 impl AppServerStream {
@@ -145,18 +157,24 @@ impl AppServerStream {
     };
     let params = message.get("params").unwrap_or(&Value::Null);
     if let Some(id) = message.get("id") {
-      return self
-        .request(method, id, params)
-        .map(|request| vec![Update::Approval(request)]);
+      return self.request(method, id, params).map(|update| vec![update]);
     }
     Ok(self.notification(method, params))
   }
 
-  fn request(&self, method: &str, id: &Value, params: &Value) -> Result<PendingApproval, ProtocolError> {
+  fn request(&self, method: &str, id: &Value, params: &Value) -> Result<Update, ProtocolError> {
     match method {
-      "item/tool/requestUserInput" | "tool/requestUserInput" => self.user_input(id, params),
-      "mcpServer/elicitation/request" => self.elicitation(id, params),
-      "item/commandExecution/requestApproval" => Self::command_approval(id, params),
+      "item/tool/requestUserInput" | "tool/requestUserInput" => self.user_input(id, params).map(Update::Approval),
+      "mcpServer/elicitation/request" => self.elicitation(id, params).map(Update::Approval),
+      "item/commandExecution/requestApproval"
+        if params
+          .get("networkApprovalContext")
+          .is_some_and(|context| !context.is_null()) =>
+      {
+        Ok(declined(id, "decline"))
+      }
+      "item/commandExecution/requestApproval" => Self::command_approval(id, params).map(Update::Approval),
+      "item/fileChange/requestApproval" => Ok(declined(id, "decline")),
       _ => Err(ProtocolError::UnsupportedRequest {
         method: method.to_owned(),
       }),
@@ -298,9 +316,7 @@ impl AppServerStream {
       "item/started" => self.item_started(params),
       "item/completed" => self.item_completed(params),
       "thread/tokenUsage/updated" => {
-        if let Some(last) = params.get("tokenUsage").and_then(|value| value.get("last")) {
-          self.usage = usage(last);
-        }
+        self.count_usage(params.get("tokenUsage").unwrap_or(&Value::Null));
         Vec::new()
       }
       "turn/completed" => self.turn_completed(params),
@@ -370,6 +386,19 @@ impl AppServerStream {
     }
   }
 
+  /// A turn takes several model responses; each reports its own usage as `last`, and the thread's
+  /// running `total` grows by it.
+  fn count_usage(&mut self, token_usage: &Value) {
+    let (Some(last), Some(total)) = (token_usage.get("last"), token_usage.get("total")) else {
+      return;
+    };
+    let total = usage(total);
+    if self.total != Some(total) {
+      self.usage += usage(last);
+      self.total = Some(total);
+    }
+  }
+
   fn turn_completed(&mut self, params: &Value) -> Vec<Update> {
     let turn = params.get("turn").unwrap_or(&Value::Null);
     let mut updates = vec![Update::Activity(AgentEvent::TurnCompleted { usage: self.usage })];
@@ -384,6 +413,11 @@ impl AppServerStream {
     updates.push(Update::TurnEnded);
     updates
   }
+}
+
+/// The response that declines request `id` with `decision`.
+fn declined(id: &Value, decision: &str) -> Update {
+  Update::Declined(json!({"id": id, "result": {"decision": decision}}).to_string())
 }
 
 fn command_denial(params: &Value) -> Result<CommandDenial, ProtocolError> {

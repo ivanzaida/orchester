@@ -1,19 +1,15 @@
-//! What an agent CLI reports while it works, as provider-neutral [`AgentEvent`]s. Each provider
-//! has a parser for its own output format; lines a parser does not understand are kept as
+//! What an agent CLI reports while it works, as provider-neutral [`AgentEvent`]s: Claude Code's
+//! `stream-json` lines are read by [`ClaudeStream`], Codex App Server's JSON-RPC messages by
+//! [`crate::connection::app_server`]. Lines a parser does not understand are kept as
 //! [`AgentEvent::Raw`], so nothing the CLI prints is dropped silently (design: "Activity tab").
 
 mod claude;
-mod codex;
 mod redaction;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::{claude::ClaudeStream, codex::parse_codex_line};
-use crate::{
-  code_index::RipgrepFallback,
-  connection::{AgentProvider, mcp::McpServerProblem},
-  run::TokenUsage,
-};
+pub use self::claude::ClaudeStream;
+use crate::{code_index::RipgrepFallback, connection::mcp::McpServerProblem, run::TokenUsage};
 
 /// Which output of the CLI a line came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -343,29 +339,4 @@ impl InvocationTracker {
 enum Failure {
   Turn(String),
   NotSignedIn(String),
-}
-
-/// Reads one invocation's output into [`AgentEvent`]s with the parser of its CLI.
-#[derive(Clone, Debug)]
-pub enum AgentStream {
-  Codex,
-  Claude(ClaudeStream),
-}
-
-impl AgentStream {
-  pub fn new(provider: AgentProvider) -> Self {
-    match provider {
-      AgentProvider::CodexCli => Self::Codex,
-      AgentProvider::ClaudeCodeCli => Self::Claude(ClaudeStream::default()),
-    }
-  }
-
-  /// The events one line of output reports, in order; a line the parser does not understand is
-  /// one [`AgentEvent::Raw`].
-  pub fn parse(&mut self, stream: OutputStream, line: &str) -> Vec<AgentEvent> {
-    match self {
-      Self::Codex => vec![parse_codex_line(stream, line)],
-      Self::Claude(claude) => claude.parse(stream, line),
-    }
-  }
 }

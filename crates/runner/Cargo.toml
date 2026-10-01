@@ -133,6 +133,10 @@ name = "claude_unlisted"
 required-features = ["test-agent"]
 
 [[test]]
+name = "codex_escalations"
+required-features = ["test-agent"]
+
+[[test]]
 name = "claude_prompt_relay"
 required-features = ["test-agent"]
 

@@ -199,17 +199,24 @@ async fn mcp_servers_reach_codex_as_overrides_with_secrets_in_its_environment_on
       .any(|arg| arg.starts_with("mcp_servers.off.") || arg.starts_with("mcp_servers.ghost."))
   );
   assert!(argv[0].contains(r#"shell_environment_policy.exclude=["DOCS_TOKEN","ORCHESTER_MCP_TOKEN_KNOWLEDGE"]"#));
+  // The fake printed each value it got; the run's activity keeps every secret value out, so a value
+  // shows as redacted exactly where the secret reached the CLI's environment.
   let env = reported(&db, run.id(), "mcp-env: ");
-  assert!(env.contains(&format!("DOCS_TOKEN={TOKEN}")), "{env:?}");
-  assert!(
-    env.contains(&format!("ORCHESTER_MCP_TOKEN_KNOWLEDGE={BEARER}")),
-    "{env:?}"
+  assert_eq!(
+    env,
+    ["DOCS_TOKEN=<redacted>", "ORCHESTER_MCP_TOKEN_KNOWLEDGE=<redacted>"]
   );
+  let activity = format!("{:?}", db.activity(run.id(), 0).expect("activity"));
+  assert!(
+    !activity.contains(TOKEN) && !activity.contains(BEARER),
+    "no secret in the activity"
+  );
+  // Codex App Server reported `broken` not connected; the agent worked without it.
   let mut expected = expected_left_out();
   expected.push((
     Some("broken".to_owned()),
     McpServerProblem::FailedToStart {
-      detail: Some("program not found".to_owned()),
+      detail: Some("failed".to_owned()),
     },
   ));
   assert_eq!(left_out(&db, &run), expected);
@@ -225,8 +232,9 @@ async fn mcp_servers_reach_claude_code_in_a_private_file_removed_after_the_run()
   let argv = reported(&db, run.id(), "argv: ");
   assert_no_secret_in(&argv);
   assert_no_secret_in(&reported(&db, run.id(), "env: "));
+  assert!(argv[0].contains("--allowedTools Bash(git:*) Edit("), "{}", argv[0]);
   assert!(
-    argv[0].contains("--allowedTools Bash(git:*) mcp__files mcp__knowledge mcp__broken"),
+    argv[0].contains(" mcp__files mcp__knowledge mcp__broken"),
     "{}",
     argv[0]
   );

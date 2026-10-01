@@ -57,8 +57,6 @@ pub(super) enum ExecutionError {
   Store(#[from] StoreError),
   #[error("step execution {0} is not an agent step of the run")]
   NotAnAgentStep(StepExecutionId),
-  #[error("cannot write the step result schema: {0}")]
-  Schema(std::io::Error),
   #[error("the run has steps left but none can run")]
   Stalled,
   #[error(transparent)]
@@ -175,7 +173,6 @@ impl RunTask {
   }
 
   async fn steps(&mut self) -> Result<(), ExecutionError> {
-    self.write_result_schema()?;
     self.begin_code_index()?;
     loop {
       while let Ok(control) = self.controls.try_recv() {
@@ -289,22 +286,6 @@ impl RunTask {
         self.board.release(execution);
       }
     }
-  }
-
-  /// Writes the schema new agent sessions report their result in, where `--output-schema` finds
-  /// it: next to the project database, outside every worktree.
-  fn write_result_schema(&self) -> Result<(), ExecutionError> {
-    let path = self.schema_path();
-    // A missing or unreadable schema file is simply written again.
-    let current = std::fs::read_to_string(&path).ok();
-    if current.as_deref() != Some(orchester_core::run::STEP_RESULT_SCHEMA) {
-      std::fs::write(&path, orchester_core::run::STEP_RESULT_SCHEMA).map_err(ExecutionError::Schema)?;
-    }
-    Ok(())
-  }
-
-  pub(super) fn schema_path(&self) -> PathBuf {
-    self.root.join(".orchester").join("step-result.schema.json")
   }
 
   /// Applies a transition, stores its events with the new state and announces the change. After

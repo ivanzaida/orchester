@@ -480,6 +480,14 @@ pub fn reported(db: &ProjectDb, run: RunId, prefix: &str) -> Vec<String> {
     .collect()
 }
 
+/// The parameters of each `thread/start` or `thread/resume` `orchester-fake-codex` was sent, in order.
+pub fn threads(db: &ProjectDb, run: RunId) -> Vec<serde_json::Value> {
+  reported(db, run, "thread: ")
+    .iter()
+    .map(|thread| serde_json::from_str(thread).expect("the fake reports JSON"))
+    .collect()
+}
+
 /// Whether process `pid` still runs.
 pub fn is_running(pid: &str) -> bool {
   let output = if cfg!(windows) {

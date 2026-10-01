@@ -23,7 +23,7 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, StepSpec, git, project, reported, scheduler, wait_for};
+use self::support::{PATIENCE, Setup, StepSpec, git, project, reported, scheduler, threads, wait_for};
 
 fn key(value: &str) -> StepKey {
   StepKey::new(value).expect("key")
@@ -153,9 +153,9 @@ async fn run_permissions_apply_from_the_next_invocation() {
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let db = ProjectDb::open(root).expect("open");
   assert_eq!(db.invocations(id).expect("invocations").len(), 2, "nothing restarted");
-  let argv = reported(&db, id, "argv: ");
-  assert!(argv[0].contains("--sandbox workspace-write"), "{argv:?}");
-  assert!(argv[1].contains("--sandbox read-only"), "the next invocation: {argv:?}");
+  let threads = threads(&db, id);
+  assert_eq!(threads[0]["sandbox"], "workspace-write", "{threads:?}");
+  assert_eq!(threads[1]["sandbox"], "read-only", "the next invocation: {threads:?}");
   let changed = run.changed_permissions(builder).expect("changed");
   assert_eq!(changed.permissions(), &read_only());
   assert!(changed.applied().is_none());
@@ -206,11 +206,11 @@ async fn run_permissions_apply_now_restarts_after_the_command_with_the_same_sess
     launch_permissions(root, id),
     [original, enforced(&read_only(), AgentProvider::CodexCli)]
   );
-  let argv = reported(&db, id, "argv: ");
-  assert!(argv[0].contains("--sandbox workspace-write"), "{argv:?}");
+  let threads = threads(&db, id);
+  assert_eq!(threads[0]["sandbox"], "workspace-write", "{threads:?}");
   assert!(
-    argv[1].contains("exec resume") && argv[1].contains("sandbox_mode=read-only"),
-    "the session resumes with the new permissions: {argv:?}"
+    threads[1]["threadId"] == "fake-thread-1" && threads[1]["sandbox"] == "read-only",
+    "the session resumes with the new permissions: {threads:?}"
   );
   let applied = run
     .changed_permissions(builder)
@@ -321,9 +321,9 @@ async fn run_permissions_apply_now_restarts_every_agent_beside_others() {
       .any(|event| matches!(event.kind(), RunEventKind::PermissionsApplied { execution: applied, .. } if *applied == execution));
     assert!(restarted, "{step} restarted with the new permissions");
   }
-  let resumed = reported(&db, id, "argv: ")
+  let resumed = threads(&db, id)
     .into_iter()
-    .filter(|argv| argv.contains("exec resume") && argv.contains("sandbox_mode=read-only"))
+    .filter(|thread| thread.get("threadId").is_some() && thread["sandbox"] == "read-only")
     .count();
   assert_eq!(resumed, 2);
 }

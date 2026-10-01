@@ -8,7 +8,9 @@
 //!
 //! - Codex enforces read-only and workspace-write through its sandbox (on Windows only with
 //!   `windows.sandbox=elevated`). It has no way to deny every command outside a list, so *Allowed commands* is
-//!   unavailable. On Windows its sandbox does not turn network access off.
+//!   unavailable. On Windows its sandbox does not turn network access off. A command that needs more than the sandbox
+//!   (network while it is off, a write outside the writable roots, an escalation the model requests) asks a person
+//!   through App Server ([`OutsideCommands::Asked`]).
 //! - Claude Code removes its edit tools for read-only and limits Bash to `--allowedTools` prefix rules, besides the
 //!   commands it classifies as read-only, which it runs unlisted as Codex runs its known-safe ones ([`super::claude`]).
 //!   Any other command asks a person through its permission prompt tool. It cannot confine an arbitrary command to the
@@ -103,7 +105,8 @@ pub enum Mechanism {
   CodexReadOnlySandbox,
   /// `--sandbox workspace-write` (with `windows.sandbox=elevated` on Windows).
   CodexWorkspaceWriteSandbox,
-  /// Commands run inside the sandbox of the repository access.
+  /// Commands run inside the sandbox of the repository access; one that needs more asks a person
+  /// (App Server, the approval policy's `sandbox_approval`).
   CodexSandboxedCommands,
   /// Bidirectional App Server, one command decision without a persistent grant.
   CodexCommandApprovals,
@@ -249,10 +252,10 @@ impl EnforcedPermissions {
     self.network_stays_on
   }
 
-  /// What the CLI does with a command these permissions do not run by themselves. Codex declines a
-  /// command that needs more than its sandbox; Claude Code asks about every command outside the
-  /// allowed list, or about every command when it asks before commands, and denies commands only when
-  /// the step gets none at all.
+  /// What the CLI does with a command these permissions do not run by themselves. Codex asks a
+  /// person whenever a command needs more than its sandbox; Claude Code asks about every command
+  /// outside the allowed list, or about every command when it asks before commands, and denies
+  /// commands only when the step gets none at all.
   pub const fn outside_commands(&self) -> OutsideCommands {
     self.outside_commands
   }
@@ -322,8 +325,7 @@ impl AgentPermissions {
       });
     let outside_commands = match (provider, &permissions.commands) {
       (AgentProvider::ClaudeCodeCli, CommandPermission::Allowed(list)) if list.is_empty() => OutsideCommands::Denied,
-      (AgentProvider::ClaudeCodeCli, _) => OutsideCommands::Asked,
-      (AgentProvider::CodexCli, _) => OutsideCommands::Denied,
+      _ => OutsideCommands::Asked,
     };
     Ok(EnforcedPermissions {
       permissions,

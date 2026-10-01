@@ -15,7 +15,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::{
     app_server::Update,
-    stream::{AgentEvent, AgentStream, InvocationOutcome, InvocationTracker, OutputStream},
+    stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker, OutputStream},
   },
   id::{StepExecutionId, TaskId},
   run::{FirstEditTracker, Invocation, RunLimit},
@@ -115,19 +115,24 @@ pub(in super::super) struct Finished {
   pub(in super::super) approval_interrupted: bool,
 }
 
+/// How the runner follows a CLI: it reads Claude Code's `stream-json` output, and talks with Codex
+/// App Server.
+pub(super) enum Transport {
+  Claude(ClaudeStream),
+  AppServer(Box<AppServerSession>),
+}
+
 /// One running agent CLI and where its news goes.
 pub(in super::super) struct Worker {
   pub(in super::super) root: PathBuf,
   pub(in super::super) invocation: Invocation,
-  /// Reads the CLI's output with the parser of its provider.
-  pub(in super::super) output: AgentStream,
+  pub(super) transport: Transport,
   pub(in super::super) process: Supervised,
   pub(in super::super) notifier: Notifier,
   pub(in super::super) events: mpsc::UnboundedSender<WorkerEvent>,
   pub(in super::super) stops: mpsc::UnboundedReceiver<Stop>,
   /// The MCP configuration the CLI read, removed once the CLI has ended.
   pub(in super::super) mcp_file: Option<PrivateFile>,
-  pub(super) app_server: Option<AppServerSession>,
   /// The runner's end of Claude Code's permission prompt, when the step asks a person.
   pub(super) claude_approvals: Option<ClaudeApprovals>,
   /// Secret values of a Claude Code invocation's MCP servers, kept out of its activity and approvals.
@@ -189,6 +194,14 @@ impl Watch {
 }
 
 impl Worker {
+  /// The App Server conversation, for Codex.
+  pub(super) const fn app_server(&self) -> Option<&AppServerSession> {
+    match &self.transport {
+      Transport::AppServer(app) => Some(&**app),
+      Transport::Claude(_) => None,
+    }
+  }
+
   /// Follows the CLI until it exits, then tells the run how it ended.
   pub(in super::super) async fn work(mut self) {
     let execution = self.invocation.execution;
@@ -211,7 +224,7 @@ impl Worker {
     tokio::pin!(grace);
     let mut grace_armed = false;
     let mut listening = true;
-    let mut deciding = self.app_server.is_some() || self.claude_approvals.is_some();
+    let mut deciding = self.app_server().is_some() || self.claude_approvals.is_some();
     loop {
       tokio::select! {
         event = self.process.next() => match event {
@@ -272,25 +285,23 @@ impl Worker {
   }
 
   async fn receive_output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
-    if let Some(app) = self.app_server.as_mut() {
-      match app.receive(stream, line, &self.process).await {
-        Ok(updates) => {
-          for update in updates {
-            self.app_update(watch, update)?;
-          }
-        }
-        Err(error) => {
-          let event = match error {
-            AppServerFailure::Protocol(message) => AgentEvent::TurnFailed { message },
-            AppServerFailure::NotSignedIn(message) => AgentEvent::NotSignedIn { message },
-          };
-          self.observe(watch, event)?;
-          self.process.terminate();
+    let received = match &mut self.transport {
+      Transport::AppServer(app) => app.receive(stream, line, &self.process).await,
+      Transport::Claude(claude) => Ok(claude.parse(stream, line).into_iter().map(Update::Activity).collect()),
+    };
+    match received {
+      Ok(updates) => {
+        for update in updates {
+          self.app_update(watch, update).await?;
         }
       }
-    } else {
-      for event in self.output.parse(stream, line) {
+      Err(error) => {
+        let event = match error {
+          AppServerFailure::Protocol(message) => AgentEvent::TurnFailed { message },
+          AppServerFailure::NotSignedIn(message) => AgentEvent::NotSignedIn { message },
+        };
         self.observe(watch, event)?;
+        self.process.terminate();
       }
     }
     Ok(())
@@ -302,7 +313,7 @@ impl Worker {
     }
     let pending_safe = watch.approval.as_ref().is_some_and(|(_, awaiting)| {
       watch.commands.iter().all(|item| item == awaiting.item())
-        && !matches!((awaiting, &self.app_server), (Awaiting::Codex(request), Some(app)) if app.has_other_active_tools(request))
+        && !matches!((awaiting, self.app_server()), (Awaiting::Codex(request), Some(app)) if app.has_other_active_tools(request))
     });
     if watch.after_command.is_some() && (self.checkpoint_safe(watch) || pending_safe) {
       watch.stop = watch.after_command.take();
@@ -315,7 +326,7 @@ impl Worker {
   }
 
   async fn initialize_app_server(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
-    if let Some(app) = &self.app_server
+    if let Some(app) = self.app_server()
       && let Err(error) = app.start(&self.process).await
     {
       self.observe(
@@ -330,13 +341,20 @@ impl Worker {
   }
 
   fn checkpoint_safe(&self, watch: &Watch) -> bool {
-    watch.commands.is_empty() && !self.app_server.as_ref().is_some_and(AppServerSession::has_active_tools)
+    watch.commands.is_empty() && !self.app_server().is_some_and(AppServerSession::has_active_tools)
   }
 
-  fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), StoreError> {
+  async fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), StoreError> {
     match update {
       Update::Activity(event) => self.observe(watch, event),
       Update::Approval(request) => self.request_approval(watch, request),
+      Update::Declined(response) => {
+        // A process that cannot take the answer is ending; its exit says how.
+        if let Err(error) = self.process.send_line(response).await {
+          tracing::warn!(%error, "Codex App Server did not take a declined request's answer");
+        }
+        Ok(())
+      }
       Update::TurnEnded => {
         self.process.terminate();
         Ok(())
@@ -347,7 +365,7 @@ impl Worker {
   /// Takes in one event: a turn's usage goes to the run, and a new turn after a used-up budget
   /// ends the agent.
   pub(super) fn observe(&self, watch: &mut Watch, mut event: AgentEvent) -> Result<(), StoreError> {
-    if self.app_server.is_some() || !self.mcp_secrets.is_empty() {
+    if self.app_server().is_some() || !self.mcp_secrets.is_empty() {
       event.redact(&|text| self.redact(text));
     }
     let now = Timestamp::now();
@@ -421,7 +439,7 @@ impl Worker {
     self.check_prompt_reached(&mut watch)?;
     if watch.approval.is_some()
       || !watch.approved_calls.is_empty()
-      || self.app_server.as_ref().is_some_and(|app| !app.complete())
+      || self.app_server().is_some_and(|app| !app.complete())
     {
       approval_interrupted = watch
         .db
@@ -444,7 +462,7 @@ impl Worker {
       match (
         exit,
         watch.stop.is_some(),
-        self.app_server.as_ref().is_some_and(AppServerSession::complete),
+        self.app_server().is_some_and(AppServerSession::complete),
       ) {
         (_, false, true) => watch.tracker.outcome(Some(0)),
         (ProcessExit::Terminated, ..) | (_, true, _) => InvocationOutcome::Terminated,

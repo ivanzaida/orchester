@@ -19,7 +19,7 @@ use orchester_core::{
     AgentProvider,
     mcp::{McpServer, McpTransport},
   },
-  permission::mcp::{McpCalls, McpLoading, mcp_support},
+  permission::mcp::starts_in_its_folder,
 };
 
 use super::{
@@ -114,15 +114,13 @@ impl ProfileEditor {
     Some(ctx.t_args("agents.permissions.mcp.noFolder", [("folder", folder.as_str())]))
   }
 
-  /// What the connection's CLI enforces for the chosen servers (`kXyN7`): only they load, how
-  /// their tools are allowed, and that the servers work outside these permissions.
+  /// What the connection's CLI enforces for the chosen servers (`kXyN7`): which load, how their
+  /// tools are allowed, and that the servers work outside these permissions. Codex runs as App
+  /// Server, which also loads the user's global servers.
   pub(super) fn mcp_enforcement(&self, ctx: &Ctx, provider: AgentProvider) -> Vec<Element> {
     let permissions = self.permissions.get();
-    if provider == AgentProvider::CodexCli
-      && (permissions.interactive_tool_approvals()
-        || *permissions.commands() == orchester_core::permission::CommandPermission::AskBefore)
-    {
-      return interactive_enforcement(ctx, permissions.interactive_tool_approvals());
+    if provider == AgentProvider::CodexCli {
+      return app_server_enforcement(ctx, permissions.interactive_tool_approvals());
     }
     let chosen = self.mcp.get();
     // The chosen servers an agent gets: those the project has, that are on and that the CLI can start.
@@ -133,7 +131,6 @@ impl ProfileEditor {
       .iter()
       .filter(|server| chosen.0.contains(server.id()) && usable(server, provider))
       .count();
-    let support = mcp_support(provider);
     let loaded = match count {
       0 if !chosen.0.is_empty() => ctx.t("agents.permissions.enforcement.mcp.noneLoad"),
       0 => ctx.t("agents.permissions.enforcement.mcp.none"),
@@ -143,34 +140,28 @@ impl ProfileEditor {
         [("count", count.to_string().as_str())],
       ),
     };
-    let loading = match (count, support.loading) {
-      (0, _) if !chosen.0.is_empty() => ctx.t("agents.permissions.enforcement.mcp.noneLoadHow"),
-      (0, _) => ctx.t("agents.permissions.enforcement.mcp.noneHow"),
-      (_, McpLoading::CodexConfigOverrides) => ctx.t("agents.permissions.enforcement.mcp.codexLoading"),
-      (_, McpLoading::ClaudeStrictConfig) => ctx.t("agents.permissions.enforcement.mcp.claudeLoading"),
+    let loading = match count {
+      0 if !chosen.0.is_empty() => ctx.t("agents.permissions.enforcement.mcp.noneLoadHow"),
+      0 => ctx.t("agents.permissions.enforcement.mcp.noneHow"),
+      _ => ctx.t("agents.permissions.enforcement.mcp.claudeLoading"),
     };
     let mut rows = vec![row(Icon::CircleCheck, &loaded, &loading)];
     if count == 0 {
       return rows;
     }
     // Asking before MCP actions leaves Claude Code's MCP tools to its permission prompt.
-    let asks = provider == AgentProvider::ClaudeCodeCli && permissions.interactive_tool_approvals();
-    rows.push(match support.calls {
-      McpCalls::ClaudeAllowedTools if asks => row(
+    rows.push(if permissions.interactive_tool_approvals() {
+      row(
         Icon::CircleCheck,
         &ctx.t("agents.permissions.enforcement.mcp.claudeCallsAsk"),
         &ctx.t("agents.permissions.enforcement.mcp.claudeCallsAskHow"),
-      ),
-      McpCalls::CodexNeverAsks => row(
-        Icon::TriangleAlert,
-        &ctx.t("agents.permissions.enforcement.mcp.codexCalls"),
-        &ctx.t("agents.permissions.enforcement.mcp.codexCallsHow"),
-      ),
-      McpCalls::ClaudeAllowedTools => row(
+      )
+    } else {
+      row(
         Icon::CircleCheck,
         &ctx.t("agents.permissions.enforcement.mcp.claudeCalls"),
         &ctx.t("agents.permissions.enforcement.mcp.claudeCallsHow"),
-      ),
+      )
     });
     rows.push(row(
       Icon::Unplug,
@@ -188,7 +179,7 @@ fn usable(server: &McpServer, provider: AgentProvider) -> bool {
     McpTransport::Stdio(stdio) => stdio.working_directory().is_some(),
     McpTransport::Http(_) => false,
   };
-  server.enabled() && (!folder || mcp_support(provider).working_directory)
+  server.enabled() && (!folder || starts_in_its_folder(provider))
 }
 
 fn hint(ctx: &Ctx, key: &str) -> Element {
@@ -198,7 +189,9 @@ fn hint(ctx: &Ctx, key: &str) -> Element {
     .into()
 }
 
-fn interactive_enforcement(ctx: &Ctx, tool_approvals: bool) -> Vec<Element> {
+/// Codex App Server's MCP rows: the user's global servers load beside the chosen ones, and a tool
+/// call that asks for approval reaches a person only when the profile asks before MCP actions.
+fn app_server_enforcement(ctx: &Ctx, tool_approvals: bool) -> Vec<Element> {
   vec![
     row(
       Icon::CircleCheck,

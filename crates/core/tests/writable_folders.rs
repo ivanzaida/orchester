@@ -261,72 +261,39 @@ fn roots() -> Vec<PathBuf> {
   ROOTS.iter().map(PathBuf::from).collect()
 }
 
-fn codex_args(access: RepositoryAccess, resume: Option<&str>, roots: &[PathBuf]) -> Vec<String> {
+fn codex_args(access: RepositoryAccess, roots: &[PathBuf]) -> Vec<String> {
   CodexInvocation {
     executable: Path::new("/bin/codex"),
-    model: "gpt-5.5",
-    reasoning_effort: None,
     access,
     network: NetworkAccess::Off,
     writable_roots: roots,
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     platform: Platform::Windows,
-    resume,
-    output_schema: None,
     mcp: None,
     agent_files: CodexAgentFiles::Loaded,
   }
   .args()
-  .into_iter()
-  .map(|arg| arg.into_string().expect("unicode"))
-  .collect()
+  .expect("unicode paths")
 }
 
-const CODEX_ROOTS: &str =
-  r#"sandbox_workspace_write.writable_roots=["C:\\repo\\.orchester\\target","/shared/it's \"here\""]"#;
+const CODEX_ROOTS: &str = r#"sandbox_workspace_write.writable_roots=["/repo/.orchester/worktrees/run","C:\\repo\\.orchester\\target","/shared/it's \"here\""]"#;
 
+/// App Server starts new and resumed sessions alike, with the worktree first among the writable roots.
 #[test]
-fn writable_roots_reach_codex_in_new_and_resumed_sessions() {
-  let new = codex_args(RepositoryAccess::Write, None, &roots());
-  let sandbox = new.iter().position(|arg| arg == "--sandbox").expect("sandbox");
+fn writable_roots_reach_codex_beside_the_worktree() {
+  let args = codex_args(RepositoryAccess::Write, &roots());
+  assert_eq!(args.last().map(String::as_str), Some(CODEX_ROOTS), "{args:?}");
+  let read_only = codex_args(RepositoryAccess::ReadOnly, &roots());
   assert_eq!(
-    new[sandbox..],
-    [
-      "--sandbox",
-      "workspace-write",
-      "-c",
-      "windows.sandbox=elevated",
-      "-c",
-      CODEX_ROOTS,
-      "-C",
-      "/repo/.orchester/worktrees/run",
-      "-",
-    ]
+    read_only.last().map(String::as_str),
+    Some("sandbox_workspace_write.writable_roots=[]"),
+    "a read-only sandbox writes nowhere: {read_only:?}"
   );
-  let session = "01a0d831-b556-7730-be9d-2491a9359250";
-  let resumed = codex_args(RepositoryAccess::Write, Some(session), &roots());
-  let mode = resumed
-    .iter()
-    .position(|arg| arg == "sandbox_mode=workspace-write")
-    .expect("sandbox mode");
+  let alone = codex_args(RepositoryAccess::Write, &[]);
   assert_eq!(
-    resumed[mode..],
-    [
-      "sandbox_mode=workspace-write",
-      "-c",
-      "windows.sandbox=elevated",
-      "-c",
-      CODEX_ROOTS,
-      session,
-      "-",
-    ]
+    alone.last().map(String::as_str),
+    Some(r#"sandbox_workspace_write.writable_roots=["/repo/.orchester/worktrees/run"]"#)
   );
-  for args in [
-    codex_args(RepositoryAccess::ReadOnly, None, &roots()),
-    codex_args(RepositoryAccess::Write, None, &[]),
-  ] {
-    assert!(!args.iter().any(|arg| arg.contains("writable_roots")), "{args:?}");
-  }
 }
 
 fn claude_args(permissions: &AgentPermissions, session: ClaudeSession<'_>, roots: &[PathBuf]) -> Vec<String> {
