@@ -157,9 +157,31 @@ fn mcp_servers_revalidate_stored_rows_on_read() {
       [],
     )
     .unwrap();
-  assert!(matches!(db.mcp_servers(), Err(StoreError::Corrupt { .. })));
+  assert!(db.mcp_servers().unwrap().is_empty());
+  let id = db.unreadable_mcp_servers().unwrap()[0].id.parse().expect("stored id");
+  assert!(matches!(db.mcp_server(id), Err(StoreError::Corrupt { .. })));
   raw(&repo)
     .execute("UPDATE mcp_servers SET name = 'Not A Key'", [])
     .unwrap();
-  assert!(matches!(db.mcp_servers(), Err(StoreError::Corrupt { .. })));
+  assert!(matches!(db.mcp_server(id), Err(StoreError::Corrupt { .. })));
+}
+
+#[test]
+fn mcp_servers_list_the_readable_rows_and_report_the_others() {
+  let (repo, mut db) = project_repo();
+  let files = local("files", SecretId::generate());
+  db.create_mcp_server(&files).unwrap();
+  db.create_mcp_server(&remote("knowledge")).unwrap();
+  // A URL a later rule refuses: a backslash in the host.
+  raw(&repo)
+    .execute(
+      r"UPDATE mcp_servers SET settings = replace(settings, 'mcp.example.dev', 'mcp.example.dev\\@evil.example') WHERE name = 'knowledge'",
+      [],
+    )
+    .unwrap();
+  assert_eq!(db.mcp_servers().unwrap(), vec![files]);
+  let unreadable = db.unreadable_mcp_servers().unwrap();
+  assert_eq!(unreadable.len(), 1);
+  assert_eq!(unreadable[0].name, "knowledge");
+  assert!(unreadable[0].detail.contains("backslash"), "{}", unreadable[0].detail);
 }

@@ -84,6 +84,14 @@ impl ProjectConnections {
       .iter()
       .filter_map(|connection| Some((connection.id(), launch::resolve(connection.executable()?))))
       .collect();
+    for server in store.unreadable_mcp_servers()? {
+      tracing::warn!(
+        server = %server.id,
+        name = %server.name,
+        detail = %server.detail,
+        "an MCP server cannot be read and is left out of the connections"
+      );
+    }
     Ok(Self {
       github: Arc::new(github_connections(connections.clone())),
       connections: Arc::new(agent_connections(connections)),
