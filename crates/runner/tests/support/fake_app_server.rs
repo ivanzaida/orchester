@@ -15,6 +15,9 @@
 //! - "Use the design tools" calls the `get_screenshot` tool of the `pencil` MCP server (writing `read-once.txt`), then
 //!   its `batch_design` tool as the `write` tool above. A tool the thread's configuration approves runs without a
 //!   request; any other asks.
+//! - "Call a tool unasked" calls `batch_design` of `pencil` and asks, as Codex 0.159.2 does even with
+//!   `mcp_elicitations` off; it reports the answer (`mcp answer: <action>`), and when declined ends the call failed and
+//!   works on.
 
 use std::{fs, process::ExitCode};
 
@@ -58,7 +61,8 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Option<St
     .map(|(command, _)| command.to_owned());
   let patch = prompt.contains("Patch outside");
   let design = prompt.contains("Use the design tools");
-  if !fixture && escalation.is_none() && !patch && !design {
+  let unasked = prompt.contains("Call a tool unasked");
+  if !fixture && escalation.is_none() && !patch && !design && !unasked {
     return None;
   }
   session.approvals = Some(Approvals {
@@ -85,6 +89,8 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Option<St
     );
   } else if design {
     design_calls(session);
+  } else if unasked {
+    tool_request(session, "pencil", "batch_design");
   } else if patch {
     request(
       session,
@@ -174,6 +180,31 @@ fn command_answered(session: &mut Session, answer: &Value) -> Step {
 }
 
 fn mcp_answered(session: &mut Session, answer: &Value) -> Step {
+  let unasked = session
+    .approvals
+    .as_ref()
+    .is_some_and(|approvals| approvals.prompt.contains("Call a tool unasked"));
+  if unasked {
+    eprintln!(
+      "mcp answer: {}",
+      answer["result"]["action"].as_str().unwrap_or_default()
+    );
+  }
+  if unasked && answer["result"]["action"] == "decline" {
+    notify(
+      session,
+      "item/completed",
+      json!({"item": {"id": "mcp-1", "type": "mcpToolCall", "server": "pencil", "tool": "batch_design",
+        "status": "failed"}}),
+    );
+    let report = session
+      .approvals
+      .as_ref()
+      .map(|approvals| report_of(&approvals.prompt, approvals.structured));
+    return report.map_or(Step::Exit(ExitCode::from(2)), |report| {
+      finish(session, "hello", &report)
+    });
+  }
   if answer["result"]["action"] != "accept" {
     eprintln!("only an accepted elicitation continues: {answer}");
     return Step::Exit(ExitCode::from(2));
@@ -187,7 +218,7 @@ fn mcp_answered(session: &mut Session, answer: &Value) -> Step {
   notify(
     session,
     "item/completed",
-    json!({"item": {"id": "mcp-1", "type": "mcpToolCall"}}),
+    json!({"item": {"id": "mcp-1", "type": "mcpToolCall", "status": "completed"}}),
   );
   message(
     session,

@@ -132,7 +132,7 @@ impl RunTask {
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
     let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;
     let mcp_secrets = setup.claude_secrets();
-    let claude_exemptions = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
+    let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let cli = Cli {
       executable,
       model,
@@ -162,7 +162,7 @@ impl RunTask {
       None => command,
     };
     let mut left_out = left_out;
-    left_out.extend(index.problems(provider));
+    left_out.extend(index.problems(provider).into_iter().chain(unapplied));
     Ok(AgentStart {
       command,
       prompt: sources,

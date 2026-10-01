@@ -29,8 +29,14 @@ impl AgentEvent {
         }
         problem.redact(redact);
       }
-      // A server and a tool are names the project configured.
-      Self::SessionStarted { .. } | Self::TurnStarted | Self::TurnCompleted { .. } | Self::McpToolNotAsked { .. } => {}
+      // A tool name the server reported.
+      Self::McpToolDeclined { tool, .. } | Self::McpToolFinished { tool, .. } => *tool = redact(tool),
+      // Servers and tools named as the project configured them.
+      Self::SessionStarted { .. }
+      | Self::TurnStarted
+      | Self::TurnCompleted { .. }
+      | Self::McpToolNotAsked { .. }
+      | Self::McpExemptionNotApplied { .. } => {}
     }
   }
 }

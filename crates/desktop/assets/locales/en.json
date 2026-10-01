@@ -884,8 +884,15 @@
       "beforeEditMeta": "{{tokens}} · {{before}} before first edit",
       "noEditMeta": "{{tokens}} · no edit",
       "stepOptionAttempt": "{{number}} · {{step}} · {{agent}} · attempt {{attempt}}",
+      "mcpCall": "{{server}} MCP tool",
+      "mcpCallFailed": "failed",
       "decision": {
         "notAskedExempt": "not asked · exempt tool of {{server}}",
+        "approvedByYou": "approved by you · {{server}}",
+        "askedYou": "asked you · {{server}}",
+        "declinedUnasked": "declined, not asked · {{server}} asked for approval, and this step doesn’t ask before MCP actions",
+        "exemptionNotApplied": "{{tool}} of {{server}} asks after all",
+        "exemptionNotAppliedDetail": "It is listed to run without asking, but Claude Code names it mcp__{{server}}__{{tool}}, which could also be a tool of {{other}}. Rename one of the two servers to let it run without asking.",
         "withMeta": "{{meta}} · {{mark}}"
       },
       "mcp": {
@@ -1773,7 +1780,7 @@
             "other": "{{server}}: {{count}} tools run without asking"
           },
           "exemptClaudeHow": "--allowedTools mcp__{{server}}__<tool> · other tools ask",
-          "exemptCodexHow": "mcp_servers.{{server}}.tools.<tool>.approval_mode = approve · other tools ask",
+          "exemptCodexHow": "tools.<tool>.approval_mode = approve · other tools ask",
           "outside": "Servers work outside these limits",
           "outsideHow": "own processes · network on",
           "noneLoad": "No MCP servers load",

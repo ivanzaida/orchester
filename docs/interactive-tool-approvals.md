@@ -56,6 +56,16 @@ or permanent grant. No tool-specific implementation depends on Pencil. A real Pe
 temporary frame and returned its node ID in the same session; denial created nothing. The
 temporary frame was removed by that exact ID, preserving the existing design.
 
+A Codex MCP approval request in a step that does **not** ask before MCP actions is declined at once
+too: Codex 0.159.2 sends `mcpServer/elicitation/request` for a tool that needs approval even with
+`mcp_elicitations` off. Inside the active turn of the step's own thread the runner answers
+`{"action":"decline"}` (or the question's decline option) without a person and records the declined call
+(`McpToolDeclined`, *declined, not asked* in the activity); Codex tells the agent the call was rejected and the
+turn goes on. A request from another phase, thread or turn still fails the step. Each Codex MCP call also ends as an
+activity row of its own (`McpToolFinished`, with whether Codex asked first): *approved by you · <server>* when a
+person approved it, *asked you · <server>* when it was asked about and did not run, and the server's name alone
+when Codex did not ask.
+
 ## Tools that run without asking
 
 An MCP server connection can list **Tools that run without asking** (`ExemptTools` in
@@ -75,7 +85,11 @@ For Pencil: `get_editor_state`, `get_guidelines`, `batch_get`, `snapshot_layout`
   MCP tool's own `passthrough` into `ask`, and only an `ask` calls the prompt tool (`hw`). A tool's `readOnlyHint`
   does not change this in `default` mode. Exceptions that still ask: a tool whose `_meta` sets
   `anthropic/requiresUserInteraction`, an organisation's ask ceiling for the server; `allowManagedPermissionRulesOnly`
-  ignores the rules altogether (see the end of this document).
+  ignores the rules altogether (see the end of this document). Claude Code names a tool `mcp__<server>__<tool>`,
+  and a server name may hold `__` or end in `_`, so `b__c` of `a` and `c` of `a__b` (or `_x` of `a` and `x` of `a_`)
+  share a name. A listed tool whose name another server of the invocation could have gets no rule, since that rule
+  would let the other server's tool run unasked: it asks, the activity says so (*… asks after all*, naming the other
+  server; `McpExemptionNotApplied`), and its calls are never marked as the listed tool's.
 - **Codex App Server** gets `mcp_servers.<server>.tools.<tool>.approval_mode = "approve"` for each listed tool in the
   thread's configuration (`config` of `thread/start` and `thread/resume`, next to the user's servers turned off).
   0.159.2 then runs that tool without `mcpServer/elicitation/request`, while another tool of the same server still

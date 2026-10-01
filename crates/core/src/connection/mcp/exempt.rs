@@ -151,47 +151,105 @@ impl From<ExemptTools> for Vec<McpToolName> {
 
 /// The tools that run without asking in one invocation, by server: those of the servers it gives its
 /// agent. It decides only for an invocation that asks before MCP actions.
+///
+/// Claude Code names a tool `mcp__<server>__<tool>`, and server names may hold `__` or end in `_`, so one
+/// name can belong to two servers: `a` with `b__c` and `a__b` with `c`, `a` with `_x` and `a_` with `x`.
+/// An allow rule for such a name would let the other server's tool run unasked too, so a listed tool
+/// whose name another server of the invocation could also have gets no rule and still asks
+/// ([`Self::claude_unapplied`]). Codex names a tool by its server and the tool apart, so it has none.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct InvocationExemptions(Vec<(McpServerName, ExemptTools)>);
+pub struct InvocationExemptions {
+  exempt: Vec<(McpServerName, ExemptTools)>,
+  /// Every server of the invocation, whose names a Claude Code tool name could belong to.
+  servers: Vec<McpServerName>,
+}
+
+/// A listed tool Claude Code does not run without asking: its name could also be a tool of `other`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnappliedExemption {
+  pub server: McpServerName,
+  pub tool: McpToolName,
+  pub other: McpServerName,
+}
 
 impl InvocationExemptions {
-  /// The servers with tools that run without asking; a server without any is left out.
+  /// The invocation's servers with the tools each runs without asking (none for most).
   pub fn new(servers: impl IntoIterator<Item = (McpServerName, ExemptTools)>) -> Self {
-    Self(servers.into_iter().filter(|(_, tools)| !tools.is_empty()).collect())
+    let (mut exempt, mut names) = (Vec::new(), Vec::new());
+    for (server, tools) in servers {
+      names.push(server.clone());
+      if !tools.is_empty() {
+        exempt.push((server, tools));
+      }
+    }
+    Self { exempt, servers: names }
   }
 
   pub fn is_empty(&self) -> bool {
-    self.0.is_empty()
+    self.exempt.is_empty()
   }
 
   pub fn servers(&self) -> impl Iterator<Item = (&McpServerName, &ExemptTools)> {
-    self.0.iter().map(|(server, tools)| (server, tools))
+    self.exempt.iter().map(|(server, tools)| (server, tools))
   }
 
   /// Whether `tool` of `server` runs without asking, as Codex names a call (`server`, `tool`).
   pub fn exempts(&self, server: &str, tool: &str) -> bool {
     self
-      .0
+      .exempt
       .iter()
       .any(|(name, tools)| name.as_str() == server && tools.contains(tool))
   }
 
   /// The server and tool of a Claude Code tool named `mcp__<server>__<tool>` that runs without
-  /// asking; `None` for any other tool.
+  /// asking; `None` for any other tool, and for a name another server could also have.
   pub fn claude_tool(&self, name: &str) -> Option<(&McpServerName, &McpToolName)> {
     self
-      .0
-      .iter()
-      .flat_map(|(server, tools)| tools.tools().iter().map(move |tool| (server, tool)))
+      .listed()
+      .filter(|(server, tool)| self.other_owner(server, tool).is_none())
       .find(|(server, tool)| claude_tool_name(server, tool) == name)
   }
 
-  /// One Claude Code allow rule per tool: `mcp__<server>__<tool>`.
-  pub fn claude_rules(&self) -> impl Iterator<Item = String> {
+  /// One Claude Code allow rule per tool, `mcp__<server>__<tool>`, but for names another server
+  /// could also have.
+  pub fn claude_rules(&self) -> Vec<String> {
     self
-      .0
+      .listed()
+      .filter(|(server, tool)| self.other_owner(server, tool).is_none())
+      .map(|(server, tool)| claude_tool_name(server, tool))
+      .collect()
+  }
+
+  /// The listed tools that get no Claude Code rule, and the server their name could also belong to.
+  pub fn claude_unapplied(&self) -> Vec<UnappliedExemption> {
+    self
+      .listed()
+      .filter_map(|(server, tool)| {
+        self.other_owner(server, tool).map(|other| UnappliedExemption {
+          server: server.clone(),
+          tool: tool.clone(),
+          other: other.clone(),
+        })
+      })
+      .collect()
+  }
+
+  fn listed(&self) -> impl Iterator<Item = (&McpServerName, &McpToolName)> {
+    self
+      .exempt
       .iter()
-      .flat_map(|(server, tools)| tools.tools().iter().map(move |tool| claude_tool_name(server, tool)))
+      .flat_map(|(server, tools)| tools.tools().iter().map(move |tool| (server, tool)))
+  }
+
+  /// Another server of the invocation whose tools Claude Code could name as `tool` of `server` is named.
+  fn other_owner(&self, server: &McpServerName, tool: &McpToolName) -> Option<&McpServerName> {
+    let name = claude_tool_name(server, tool);
+    self.servers.iter().find(|other| {
+      *other != server
+        && name
+          .strip_prefix(&format!("mcp__{other}__"))
+          .is_some_and(|rest| !rest.is_empty())
+    })
   }
 }
 

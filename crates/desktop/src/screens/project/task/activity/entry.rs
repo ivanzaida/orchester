@@ -23,13 +23,14 @@ use super::{
   super::{super::ProjectNav, heading::step_state},
   engine, first_edit,
   mcp::mcp_server_text,
+  mcp_call,
   problem::problem_text,
   rows::{Header, RowKind, TranscriptRow},
 };
 use crate::{
   display,
   navigation::route::ChangedFile,
-  tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind, ToolCommandEntry},
+  tasks::transcript::{CommandEntry, Entry, EntryKind, ToolCommandEntry},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, UNPARSED_OPACITY},
   ui::{
     icon::{Icon, IconSize, icon},
@@ -147,7 +148,7 @@ fn header_meta(ctx: &Ctx, header: &Header) -> Arc<str> {
 }
 
 /// What an entry shows, apart from its time and whether it is open.
-struct Shown {
+pub(super) struct Shown {
   glyph: Icon,
   title: Arc<str>,
   meta: Arc<str>,
@@ -160,6 +161,22 @@ struct Shown {
   collapsible: bool,
   /// The repository path a press opens in the Changes tab.
   opens: Option<Arc<str>>,
+}
+
+impl Shown {
+  /// One line of `title` and `meta`, with `body` under it.
+  pub(super) const fn plain(glyph: Icon, title: Arc<str>, meta: Arc<str>, body: Option<Arc<str>>) -> Self {
+    Self {
+      glyph,
+      title,
+      meta,
+      body,
+      output: None,
+      omitted: None,
+      collapsible: false,
+      opens: None,
+    }
+  }
 }
 
 fn entry_row(
@@ -311,16 +328,7 @@ fn output(ctx: &Ctx, lines: &[Arc<str>], omitted: Option<&str>) -> Element {
 }
 
 fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
-  let plain = |glyph, title: Arc<str>, meta: Arc<str>, body| Shown {
-    glyph,
-    title,
-    meta,
-    body,
-    output: None,
-    omitted: None,
-    collapsible: false,
-    opens: None,
-  };
+  let plain = Shown::plain;
   match &entry.kind {
     EntryKind::Message(text) => plain(
       Icon::MessageSquare,
@@ -388,7 +396,10 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     }
     EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),
     EntryKind::ToolCommand(entry) => tool_command(ctx, entry),
-    EntryKind::McpTool(call) => plain(Icon::Plug, call.tool.clone(), mark_text(ctx, &call.mark), None),
+    EntryKind::McpTool(call) => mcp_call::call(ctx, call),
+    EntryKind::ExemptionNotApplied { server, tool, other } => {
+      mcp_call::exemption_not_applied(ctx, (server, tool, other))
+    }
   }
 }
 
@@ -398,13 +409,6 @@ fn file_change_kind(kind: FileChangeKind) -> (Icon, &'static str) {
     FileChangeKind::Added => (Icon::FilePlus, "runs.activity.fileAdded"),
     FileChangeKind::Deleted => (Icon::FileMinus, "runs.activity.fileDeleted"),
     FileChangeKind::Modified => (Icon::FilePenLine, "runs.activity.fileModified"),
-  }
-}
-
-/// Why nobody was asked about a call, as the decision marks of the command categories design word it.
-fn mark_text(ctx: &Ctx, mark: &CommandMark) -> Arc<str> {
-  match mark {
-    CommandMark::ExemptTool { server } => ctx.t_args("runs.activity.decision.notAskedExempt", [("server", &**server)]),
   }
 }
 
@@ -456,10 +460,7 @@ fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
     }
   };
   let meta = match &entry.mark {
-    Some(mark) => ctx.t_args(
-      "runs.activity.decision.withMeta",
-      [("meta", &*meta), ("mark", &*mark_text(ctx, mark))],
-    ),
+    Some(mark) => mcp_call::with_mark(ctx, &meta, mark),
     None => meta,
   };
   Shown {

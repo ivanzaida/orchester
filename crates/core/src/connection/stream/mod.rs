@@ -120,6 +120,29 @@ pub enum AgentEvent {
     server: String,
     tool: String,
   },
+  /// `tool` of MCP server `server` is listed to run without asking, but Claude Code would name it as
+  /// it could name a tool of `other`, so it got no allow rule and asks like any other tool.
+  McpExemptionNotApplied {
+    server: String,
+    tool: String,
+    other: String,
+  },
+  /// Codex App Server's MCP call `item` of `tool` of server `server` ended as `status`; `asked` when
+  /// Codex asked for approval of it first.
+  McpToolFinished {
+    item: String,
+    server: String,
+    tool: String,
+    status: CommandStatus,
+    asked: bool,
+  },
+  /// Codex asked for approval of the call `item` of `tool` of MCP server `server` in a step that does
+  /// not ask before MCP actions; Orchester declined it at once, without asking anyone.
+  McpToolDeclined {
+    item: String,
+    server: String,
+    tool: String,
+  },
   /// A tool step started the program of command tool `tool`; `command` is its command line as
   /// [`crate::resource::CommandAction::command_line`] writes it.
   ToolCommandStarted {
@@ -242,6 +265,9 @@ impl AgentEvent {
       Self::RunnerProblem { .. } => "runner_problem",
       Self::McpServer { .. } => "mcp_server",
       Self::McpToolNotAsked { .. } => "mcp_tool_not_asked",
+      Self::McpExemptionNotApplied { .. } => "mcp_exemption_not_applied",
+      Self::McpToolDeclined { .. } => "mcp_tool_declined",
+      Self::McpToolFinished { .. } => "mcp_tool_finished",
       Self::ToolCommandStarted { .. } => "tool_command_started",
       Self::ToolCommandFinished { .. } => "tool_command_finished",
     }

@@ -10,8 +10,11 @@ use orchester_core::{
     app_server::{AppServerStream, Update},
     app_server_mcp::thread_servers,
     invocation::{ClaudeInvocation, ClaudeMcp, ClaudeMcpConfig, ClaudeSession, CodexMcp, McpLaunch, Platform},
-    mcp::{ExemptTools, ExemptToolsError, InvocationExemptions, McpServerName, McpToolName, McpToolNameError, McpUrl},
-    stream::{AgentEvent, ClaudeStream, OutputStream},
+    mcp::{
+      ExemptTools, ExemptToolsError, InvocationExemptions, McpServerName, McpToolName, McpToolNameError, McpUrl,
+      UnappliedExemption,
+    },
+    stream::{AgentEvent, ClaudeStream, CommandStatus, OutputStream},
   },
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
 };
@@ -217,4 +220,107 @@ fn mcp_exempt_codex_call_is_reported_as_not_asked() {
   assert!(stream.parse(&started("i2", "batch_design")).expect("valid").is_empty());
   let mut plain = AppServerStream::default();
   assert!(plain.parse(&started("i3", "get_screenshot")).expect("valid").is_empty());
+}
+
+fn tool_use(tool: &str, id: &str) -> String {
+  json!({"type":"assistant","message":{"id":id,"content":[
+    {"type":"tool_use","id":id,"name":tool,"input":{}}
+  ]}})
+  .to_string()
+}
+
+/// Claude Code names `b__c` of `a` and `c` of `a__b` both `mcp__a__b__c`, and `_y` of `x` and `y` of
+/// `x_` both `mcp__x___y`. A rule for such a name would let the other server's tool run unasked, so the
+/// listed tool gets none, is reported, and a call of that name is never said to be the listed tool.
+#[test]
+fn mcp_exempt_claude_names_two_servers_could_share_get_no_rule() {
+  let exemptions = InvocationExemptions::new([
+    (name("a"), tools("b__c\nsafe")),
+    (name("a__b"), tools("")),
+    (name("x"), tools("_y")),
+    (name("x_"), tools("")),
+  ]);
+  assert_eq!(exemptions.claude_rules(), ["mcp__a__safe"]);
+  let unapplied = |server: &str, tool: &str, other: &str| UnappliedExemption {
+    server: name(server),
+    tool: McpToolName::new(tool).expect("valid"),
+    other: name(other),
+  };
+  assert_eq!(
+    exemptions.claude_unapplied(),
+    [unapplied("a", "b__c", "a__b"), unapplied("x", "_y", "x_")]
+  );
+  assert_eq!(exemptions.claude_tool("mcp__a__b__c"), None);
+  assert_eq!(exemptions.claude_tool("mcp__x___y"), None);
+  let mut stream = ClaudeStream::with_exemptions(exemptions.clone());
+  for (tool, id) in [("mcp__a__b__c", "toolu_1"), ("mcp__x___y", "toolu_2")] {
+    let events = stream.parse(OutputStream::Stdout, &tool_use(tool, id));
+    assert!(
+      !events
+        .iter()
+        .any(|event| matches!(event, AgentEvent::McpToolNotAsked { .. })),
+      "{events:?}"
+    );
+  }
+  let safe = stream.parse(OutputStream::Stdout, &tool_use("mcp__a__safe", "toolu_3"));
+  assert!(safe.contains(&AgentEvent::McpToolNotAsked {
+    item: "toolu_3".to_owned(),
+    server: "a".to_owned(),
+    tool: "safe".to_owned(),
+  }));
+  // Codex names a tool by its server and the tool apart: nothing collides.
+  assert!(exemptions.exempts("a", "b__c") && exemptions.exempts("x", "_y"));
+  // Without the other server, the name is the listed tool's alone.
+  let alone = InvocationExemptions::new([(name("a"), tools("b__c"))]);
+  assert_eq!(alone.claude_rules(), ["mcp__a__b__c"]);
+  assert!(alone.claude_unapplied().is_empty());
+}
+
+/// Every Codex MCP call ends as activity, with whether Codex asked for approval first.
+#[test]
+fn mcp_codex_call_ends_with_whether_it_was_asked() {
+  let mut stream = AppServerStream::default();
+  let started = |item: &str| {
+    json!({"method":"item/started","params":{"threadId":"t","turnId":"u","item":{
+      "id":item,"type":"mcpToolCall","server":"pencil","tool":"batch_design","arguments":{}
+    }}})
+    .to_string()
+  };
+  let completed = |item: &str, status: &str| {
+    json!({"method":"item/completed","params":{"threadId":"t","turnId":"u","item":{
+      "id":item,"type":"mcpToolCall","server":"pencil","tool":"batch_design","status":status
+    }}})
+    .to_string()
+  };
+  stream.parse(&started("asked")).expect("valid");
+  let request = json!({"id":7,"method":"mcpServer/elicitation/request","params":{
+    "threadId":"t","turnId":"u","serverName":"pencil","mode":"form",
+    "requestedSchema":{"type":"object","properties":{}}
+  }});
+  assert!(matches!(
+    stream.parse(&request.to_string()).expect("valid").as_slice(),
+    [Update::Approval(_)]
+  ));
+  let finished = |updates: Vec<Update>| -> AgentEvent {
+    let [Update::Activity(event)] = updates.as_slice() else {
+      panic!("one activity event");
+    };
+    event.clone()
+  };
+  let call = |item: &str, status: CommandStatus, asked: bool| AgentEvent::McpToolFinished {
+    item: item.to_owned(),
+    server: "pencil".to_owned(),
+    tool: "batch_design".to_owned(),
+    status,
+    asked,
+  };
+  assert_eq!(
+    finished(stream.parse(&completed("asked", "completed")).expect("valid")),
+    call("asked", CommandStatus::Completed, true)
+  );
+  stream.parse(&started("unasked")).expect("valid");
+  assert_eq!(
+    finished(stream.parse(&completed("unasked", "failed")).expect("valid")),
+    call("unasked", CommandStatus::Failed, false)
+  );
 }

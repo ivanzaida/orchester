@@ -136,6 +136,8 @@ struct ToolContext {
   server: String,
   action: String,
   target: Option<String>,
+  /// Codex asked for approval of the call.
+  asked: bool,
 }
 
 /// Parses notifications and correlates a later approval request with its pending tool item.
@@ -179,7 +181,13 @@ impl AppServerStream {
     };
     let params = message.get("params").unwrap_or(&Value::Null);
     if let Some(id) = message.get("id") {
-      return self.request(method, id, params).map(|update| vec![update]);
+      let update = self.request(method, id, params)?;
+      if let Update::Approval(request) = &update
+        && let Some(tool) = self.tools.get_mut(request.item())
+      {
+        tool.asked = true;
+      }
+      return Ok(vec![update]);
     }
     Ok(self.notification(method, params))
   }
@@ -379,6 +387,7 @@ impl AppServerStream {
             server,
             action,
             target: item.get("arguments").and_then(|args| string(args, "filePath")),
+            asked: false,
           };
           self.tools.insert(id, context);
           return not_asked.map(Update::Activity).into_iter().collect();
@@ -398,12 +407,7 @@ impl AppServerStream {
       return Vec::new();
     };
     match item.get("type").and_then(Value::as_str) {
-      Some("mcpToolCall") => {
-        if let Some(id) = string(item, "id") {
-          self.tools.remove(&id);
-        }
-        Vec::new()
-      }
+      Some("mcpToolCall") => mcp_tool_finished(item, string(item, "id").and_then(|id| self.tools.remove(&id))),
       Some("agentMessage") => string(item, "text")
         .map(|text| vec![Update::Activity(AgentEvent::Message { text })])
         .unwrap_or_default(),
@@ -473,6 +477,36 @@ fn command_denial(params: &Value) -> Result<CommandDenial, ProtocolError> {
   } else {
     Err(ProtocolError::InvalidApproval)
   }
+}
+
+/// The end of the MCP call `item`, started as `started`, as its activity: what it called and whether
+/// Codex asked first.
+fn mcp_tool_finished(item: &Value, started: Option<ToolContext>) -> Vec<Update> {
+  let (Some(id), Some(server), Some(tool)) = (
+    string(item, "id"),
+    started
+      .as_ref()
+      .map(|tool| tool.server.clone())
+      .or_else(|| string(item, "server")),
+    started
+      .as_ref()
+      .map(|tool| tool.action.clone())
+      .or_else(|| string(item, "tool")),
+  ) else {
+    return Vec::new();
+  };
+  let status = if item.get("status").and_then(Value::as_str) == Some("completed") {
+    CommandStatus::Completed
+  } else {
+    CommandStatus::Failed
+  };
+  vec![Update::Activity(AgentEvent::McpToolFinished {
+    item: id,
+    server,
+    tool,
+    status,
+    asked: started.is_some_and(|tool| tool.asked),
+  })]
 }
 
 fn command_finished(item: &Value) -> Vec<Update> {

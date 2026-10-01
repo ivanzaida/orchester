@@ -79,7 +79,7 @@ fn mcp_exempt_tools_are_named_in_the_enforcement_panel_when_the_profile_asks() {
     (AgentProvider::ClaudeCodeCli, "--allowedTools mcp__docs__<tool>"),
     (
       AgentProvider::CodexCli,
-      "mcp_servers.docs.tools.<tool>.approval_mode = approve",
+      "tools.<tool>.approval_mode = approve · other tools ask",
     ),
   ] {
     let mut desktop = profile_with_exempt_docs(provider);

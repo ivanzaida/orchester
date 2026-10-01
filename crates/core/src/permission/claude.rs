@@ -106,7 +106,7 @@ pub fn permission_args(
   let mode = if accepts_edits { "acceptEdits" } else { "default" };
   offered.push(COMMAND_TOOL);
   let mcp: Vec<String> = if ask_tools {
-    exempt.claude_rules().collect()
+    exempt.claude_rules()
   } else {
     mcp.iter().map(|server| format!("mcp__{server}")).collect()
   };

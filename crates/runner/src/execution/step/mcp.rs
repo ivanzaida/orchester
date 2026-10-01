@@ -55,13 +55,27 @@ impl McpSetup {
     }
   }
 
-  /// The tools of Claude Code's servers that run without asking, which its activity marks as not asked:
-  /// none unless the step `asks` before MCP actions.
-  pub(in super::super) fn claude_exemptions(&self, asks: bool) -> InvocationExemptions {
-    match self {
-      Self::Claude(Some(servers)) if asks => servers.exemptions.clone(),
-      Self::Claude(_) | Self::Codex(_) => InvocationExemptions::default(),
+  /// The tools of Claude Code's servers that run without asking, which its activity marks as not asked,
+  /// and an event for each listed tool that gets no allow rule because another server could have its
+  /// name: none unless the step `asks` before MCP actions.
+  pub(in super::super) fn claude_exemptions(&self, asks: bool) -> (InvocationExemptions, Vec<AgentEvent>) {
+    let Self::Claude(Some(servers)) = self else {
+      return (InvocationExemptions::default(), Vec::new());
+    };
+    if !asks {
+      return (InvocationExemptions::default(), Vec::new());
     }
+    let unapplied = servers
+      .exemptions
+      .claude_unapplied()
+      .into_iter()
+      .map(|unapplied| AgentEvent::McpExemptionNotApplied {
+        server: unapplied.server.to_string(),
+        tool: unapplied.tool.to_string(),
+        other: unapplied.other.to_string(),
+      })
+      .collect();
+    (servers.exemptions.clone(), unapplied)
   }
 }
 

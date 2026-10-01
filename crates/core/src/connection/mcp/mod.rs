@@ -19,7 +19,7 @@ use thiserror::Error;
 
 pub use self::{
   environment::{McpEnvValue, McpEnvironment, McpEnvironmentError},
-  exempt::{ExemptTools, ExemptToolsError, InvocationExemptions, McpToolName, McpToolNameError},
+  exempt::{ExemptTools, ExemptToolsError, InvocationExemptions, McpToolName, McpToolNameError, UnappliedExemption},
   name::{McpServerName, McpServerNameError},
   problem::McpServerProblem,
   transport::{HttpServer, McpTransport, McpUrl, StdioServer, TransportError, WorkingDirectory},
