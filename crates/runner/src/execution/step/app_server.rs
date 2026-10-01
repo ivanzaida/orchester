@@ -151,7 +151,8 @@ impl AppServerSession {
     process: &Supervised,
   ) -> Result<Vec<Update>, AppServerFailure> {
     if stream == OutputStream::Stderr {
-      let kept = self.stderr.keep(line);
+      let secrets = &self.setup.secrets;
+      let kept = self.stderr.keep(line, |text| redact_secrets(text, secrets));
       return Ok(
         kept
           .map(|line| Update::Activity(AgentEvent::Raw { stream, line }))
@@ -189,6 +190,11 @@ impl AppServerSession {
       return Ok(updates);
     }
     self.response(&value, process).await
+  }
+
+  /// Lines of Codex's standard error dropped once the activity kept as many as it keeps.
+  pub const fn stderr_left_out(&self) -> u64 {
+    self.stderr.left_out()
   }
 
   pub fn redact(&self, text: &str) -> String {

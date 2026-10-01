@@ -75,6 +75,7 @@ impl RunnerProblem {
       Self::StepBudgetReached { .. }
       | Self::RipgrepNotFound { .. }
       | Self::MemoryUnreadable { .. }
+      | Self::StderrLeftOut { .. }
       | Self::CliTooOld { .. }
       | Self::PermissionPromptUnreachable => {}
     }

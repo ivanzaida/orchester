@@ -87,7 +87,21 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
     ),
     RunnerProblem::MemoryUnreadable { records } => memory_unreadable(ctx, *records),
     RunnerProblem::CodexSettingsIgnored { folder } => codex_settings_ignored(ctx, folder),
+    RunnerProblem::StderrLeftOut { lines } => stderr_left_out(ctx, *lines),
   }
+}
+
+/// Lines of the CLI's standard error the activity did not keep.
+fn stderr_left_out(ctx: &Ctx, lines: u64) -> (Arc<str>, Option<Arc<str>>) {
+  let key = if lines == 1 {
+    "runs.activity.problem.stderrLeftOut.one"
+  } else {
+    "runs.activity.problem.stderrLeftOut.other"
+  };
+  (
+    ctx.t_args(key, [("count", lines.to_string().as_str())]),
+    Some(ctx.t("runs.activity.problem.stderrLeftOutDetail")),
+  )
 }
 
 /// The repository's `.codex` folder Codex left out, and what still applies.

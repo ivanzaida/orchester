@@ -15,7 +15,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::{
     app_server::Update,
-    stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker, OutputStream},
+    stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker, OutputStream, RunnerProblem},
   },
   id::{StepExecutionId, TaskId},
   run::{FirstEditTracker, Invocation, RunLimit},
@@ -434,9 +434,23 @@ impl Worker {
     Ok(())
   }
 
+  /// Ends the activity with how many lines of Codex's standard error it did not keep, if any.
+  fn note_stderr_left_out(&self, watch: &mut Watch) -> Result<(), StoreError> {
+    match self.app_server().map(AppServerSession::stderr_left_out) {
+      Some(lines) if lines > 0 => self.observe(
+        watch,
+        AgentEvent::RunnerProblem {
+          problem: RunnerProblem::StderrLeftOut { lines },
+        },
+      ),
+      _ => Ok(()),
+    }
+  }
+
   fn finish(&self, mut watch: Watch, exit: &ProcessExit) -> Result<Finished, StoreError> {
     let mut approval_interrupted = false;
     self.check_prompt_reached(&mut watch)?;
+    self.note_stderr_left_out(&mut watch)?;
     if watch.approval.is_some()
       || !watch.approved_calls.is_empty()
       || self.app_server().is_some_and(|app| !app.complete())

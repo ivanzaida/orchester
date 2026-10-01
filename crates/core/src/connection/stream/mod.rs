@@ -195,9 +195,11 @@ pub enum RunnerProblem {
   /// Memory could not be checked for unreadable records; `detail` is the storage error. The agent
   /// started all the same.
   MemoryScanFailed { detail: String },
-  /// The worktree has the repository's own Codex settings in `folder` (`.codex`), which Codex did not
-  /// load for the agent; the agent started all the same.
+  /// The worktree has the repository's own Codex settings in `folder` (`.codex\` in the worktree),
+  /// which Codex did not load for the agent; the agent started all the same.
   CodexSettingsIgnored { folder: String },
+  /// The CLI wrote `lines` more lines to standard error than the activity keeps; they were left out.
+  StderrLeftOut { lines: u64 },
 }
 
 /// Why a step's handoff was not kept as task memory. It names a secret, never its value.

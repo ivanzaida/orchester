@@ -812,6 +812,11 @@
         },
         "memoryScanFailed": "Task memory could not be checked for unreadable records; the agent started all the same",
         "codexSettingsIgnored": "This branch has .codex/ settings; Orchester ignores them",
+        "stderrLeftOut": {
+          "one": "{{count}} more line of the agent’s standard error left out",
+          "other": "{{count}} more lines of the agent’s standard error left out"
+        },
+        "stderrLeftOutDetail": "The activity keeps the first 1000 lines (256 KiB) of each agent start.",
         "codexSettingsIgnoredDetail": "Codex loaded no configuration, hooks, rules or MCP servers from {{folder}}. Its skills follow Repository agent files. Your own Codex settings still apply.",
         "memoryUnreadableDetail": "Agents get the other records. The unreadable ones stay in the project database as they are."
       },

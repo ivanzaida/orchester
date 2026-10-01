@@ -98,8 +98,9 @@ selected server is connected before starting the turn; any other step works with
 Codex did not connect, and its activity names it. If Codex is signed out,
 the step reports a clear `Not signed in` failure; Orchester does not start a separate login flow.
 Codex's standard error is kept in the step's activity as raw lines, without colours and without
-Codex's warning about unknown settings (which names the user's settings and files), at most 1000 lines
-of at most 4000 characters (256 KiB) per invocation; secret values are redacted as in all activity. A turn's usage adds the `last`
+Codex's warning about unknown settings (which names the user's settings and files), with secret values
+redacted before a line is cut, at most 1000 lines of at most 4000 characters (256 KiB) per invocation;
+the activity then says how many more lines it left out. A turn's usage adds the `last`
 usage of each `thread/tokenUsage/updated` whose thread total moved, so a model response is counted
 once even when Codex repeats the notification; Codex reports usage per model response, so a run or
 step budget applies when the turn ends.

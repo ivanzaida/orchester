@@ -11,7 +11,8 @@
 //!   `next_agent_should_know`), with the decision "Greet in README.md from <step>";
 //! - "Fail once": the first time a step works on it, the result says it failed; later it works as below;
 //! - "Flood standard error": first writes Codex's coloured warning about unknown settings with the setting it names, a
-//!   line of 5000 characters and 1100 numbered lines (`stderr line <n>`) to standard error, then works as below;
+//!   line of 5000 characters, 3995 `y` followed by the value of `DOCS_TOKEN` (an MCP server's secret, when the process
+//!   has it) and 1100 numbered lines (`stderr line <n>`) to standard error, then works as below;
 //! - "Write own file": writes `<step>.txt` instead of appending to `README.md`;
 //! - "Sign the line": appends `hello from <step>` instead of `hello`;
 //! - "Ask first": appends `draft` to `README.md` and ends with the step result `{"outcome":"question","summary":"Keep
@@ -93,6 +94,9 @@ fn flood_stderr() {
   );
   eprintln!("  user (C:\\Users\\me\\.codex\\config.toml): `disable_response_storage` is ignored.");
   eprintln!("\u{1b}[33mWARN\u{1b}[0m {}", "x".repeat(5000));
+  if let Ok(secret) = std::env::var("DOCS_TOKEN") {
+    eprintln!("{}{secret}", "y".repeat(3995));
+  }
   for line in 0..1100 {
     eprintln!("stderr line {line}");
   }

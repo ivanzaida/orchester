@@ -1,9 +1,10 @@
 //! Codex's standard error as a step's activity keeps it. App Server writes its own diagnostics there,
 //! some of which echo the user's configuration: a warning about settings Codex does not know names
 //! each setting and its file on indented lines under it. Those lines are left out, colours are
-//! removed, and an invocation keeps at most [`MAX_LINES`] lines of at most [`MAX_LINE_CHARS`]
-//! characters, [`MAX_BYTES`] in all; what comes after is dropped. Secret values are redacted later,
-//! with every other activity of the step.
+//! removed, secret values redacted (before a line is cut, so a cut never leaves part of a value), and
+//! an invocation keeps at most [`MAX_LINES`] lines of at most [`MAX_LINE_CHARS`] characters,
+//! [`MAX_BYTES`] in all; the lines after that are counted ([`StderrLog::left_out`]), and the step's
+//! activity ends with how many there were.
 
 /// Lines of standard error kept per invocation.
 const MAX_LINES: usize = 1000;
@@ -21,23 +22,35 @@ pub(super) struct StderrLog {
   bytes: usize,
   /// The previous line started Codex's echo of the user's settings.
   in_echo: bool,
+  /// Lines dropped once the bounds were reached.
+  left_out: u64,
 }
 
 impl StderrLog {
-  /// `line` as the activity keeps it, or `None` when it is left out.
-  pub(super) fn keep(&mut self, line: &str) -> Option<String> {
+  /// `line` as the activity keeps it, with secret values replaced by `redact`, or `None` when it is
+  /// left out.
+  pub(super) fn keep(&mut self, line: &str, redact: impl Fn(&str) -> String) -> Option<String> {
     let line = without_colours(line);
     if self.in_echo && line.starts_with(' ') {
       return None;
     }
     self.in_echo = line.contains(SETTINGS_ECHO);
-    if self.in_echo || self.lines >= MAX_LINES || self.bytes >= MAX_BYTES {
+    if self.in_echo {
       return None;
     }
-    let kept: String = line.chars().take(MAX_LINE_CHARS).collect();
+    if self.lines >= MAX_LINES || self.bytes >= MAX_BYTES {
+      self.left_out += 1;
+      return None;
+    }
+    let kept: String = redact(&line).chars().take(MAX_LINE_CHARS).collect();
     self.lines += 1;
     self.bytes += kept.len();
     Some(kept)
+  }
+
+  /// How many lines were dropped once the bounds were reached.
+  pub(super) const fn left_out(&self) -> u64 {
+    self.left_out
   }
 }
 
