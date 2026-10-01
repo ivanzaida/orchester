@@ -1,8 +1,9 @@
 # Orchester — native agent
 
-Date: 2026-10-01. Status: **proposal**, not agreed. Nothing here is implemented yet. Items marked *to verify* must be
-checked against the provider's current documentation before code relies on them. Items marked *open* need a decision
-from the user (collected in [Open questions](#10-risks-and-open-questions)).
+Date: 2026-10-01. Status: **decided, not started**. The user's answers are recorded in
+[Decisions (2026-10-01)](#decisions-2026-10-01) and folded into the sections below; no question is left open. Items
+marked *to verify* are facts to check against the provider's current documentation before code relies on them, not
+decisions.
 
 Sources:
 - Anthropic Messages API: the `claude-api` skill bundled with Claude Code (model table cached 2026-09-25).
@@ -15,6 +16,26 @@ running the coding-agent loop itself. It sends requests to a model API, runs the
 Orchester's own permission rules, and records everything as the same `AgentEvent` transcript the CLIs produce. Users
 add it as a connection of kind *Anthropic API (native)* or *OpenAI API (native)*, optionally with a custom base URL
 (DeepSeek and other compatible endpoints) and a custom model list.
+
+## Decisions (2026-10-01)
+
+The user answered the proposal's questions on 2026-10-01:
+
+1. **Allowed commands ask about the rest, everywhere.** *Allowed commands* means: listed and known-safe read-only
+   commands run, and every other command asks a person. This holds for the CLIs (branch `claude/ask-outside`
+   implements it) and for the native agent. There is no separate `AllowedThenAsk` option (§5.2).
+2. **A denial does not fail the step.** The native agent gets the denial as the command's result and continues. The
+   CLIs, where Deny still fails the step, will be aligned later (§5.2).
+3. **Shell for `shell: true`:** on Windows `pwsh` when it is found, otherwise Windows PowerShell 5.1; on macOS zsh
+   (§4.6).
+4. **Anthropic provider fallback is off by default.** A refusal is shown as a problem (§3.1, §7).
+5. **A Chat Completions client comes later**, after P3, for self-hosted servers (§3.2, §9).
+6. **The runner may talk to MCP servers itself** for native connections, in P4. The design rule in
+   `docs/design/orchester-workspace.md` (MCP servers) says so (§4.9).
+7. **No custom base URL or key for CLI connections** for now (§7).
+8. **No cost estimates.** At most later, as information in the Usage dashboard, never in limits (§10).
+9. **No `task_budget`** for now; revisit after P1 (§3.1).
+10. **One acknowledgement per project** is enough for presets with a data-location notice, such as DeepSeek (§7).
 
 ## 1. Goals and non-goals
 
@@ -30,8 +51,8 @@ These must work in the first shipped phase, the same way they work for Codex and
 - **Tools.**
   - Read, list/glob and search the worktree and the code index.
   - Exact-string edit, multi-edit, and write file.
-  - Run commands: allowed list plus known-safe read-only commands run without asking. Everything else goes through
-    the existing command approvals or is refused.
+  - Run commands: allowed list plus known-safe read-only commands run without asking. Every other command asks a
+    person through the existing command approvals; a denial goes back to the agent, which continues.
 - **Permissions.** Repository access, writable folders, commands and network map onto `EnforcedPermissions` with
   honest mechanisms. Options Orchester cannot enforce are locked, as they are for the CLIs.
 - **Run controls.** Usage accounting, run, step and daily token budgets, active-time limits, pause, cancel, resume
@@ -51,8 +72,9 @@ These must work in the first shipped phase, the same way they work for Codex and
   mode.
 - **Other sign-in and cloud clients.** No sign-in with a Claude or ChatGPT subscription; native connections use API
   keys only. No Bedrock, Vertex or Foundry clients.
-- **Other wire formats and caps.** No OpenAI Chat Completions wire format (see the
-  [OpenAI recommendation](#32-openai-responses)). No money-based budgets: limits stay in tokens, as today.
+- **Other wire formats and caps.** No OpenAI Chat Completions wire format before P3 is done (it follows as P3b, see
+  the [OpenAI recommendation](#32-openai-responses)). No money-based budgets or cost estimates: limits stay in tokens,
+  as today.
 - **Later phases.** MCP passthrough and memory tools come in P4; OS-level command sandboxing comes in P5.
 
 ## 2. Crate layout
@@ -272,7 +294,7 @@ profile model starts a new conversation segment with a compaction (§6.3).
   "robust combination for agent loops".
 - Each response appends one tool-use run and one tool-result run, well within the 20-position lookback.
 - The TTL is 5 minutes: turns start well under 5 minutes apart. An approval wait longer than that costs one cold
-  read. The 1-hour TTL is *open*, to measure in P1.
+  read. P1 measures whether the 1-hour TTL pays off; that is an engineering check, not a product decision.
 - Orchester instructions injected mid-run are appended as `{"role": "system"}` messages on models that support them
   (Opus 5/5.5, Fable 5.1, Sonnet 5.5). On others they go as a user text item. They are never edited into earlier
   turns.
@@ -281,12 +303,13 @@ profile model starts a new conversation segment with a compaction (§6.3).
 
 **Refusals.**
 - `stop_reason: "refusal"` (HTTP 200, `stop_details.category`) is checked before content. The turn's tools are not
-  run, and the loop ends `Failed(Refused{category})`, shown with its category.
-- On the official endpoint the connection offers *Retry declined requests on another model*, default on. It sends
-  `fallbacks: "default"` with beta `server-side-fallback-2026-07-01`, as the skill recommends for Opus 5.5, Sonnet
-  5.5 and Fable 5.1.
-- `served_by` records the model that answered, and the Activity shows the switch. The fallback model runs without the
-  earlier thinking blocks; the API drops them.
+  run, and the loop ends `Failed(Refused{category})`. The step fails and the refusal is shown as a problem with its
+  category (`RunnerProblem::ModelRefused{category}`, new).
+- **Provider fallback is off by default** (decision 4). The skill recommends `fallbacks: "default"` with beta
+  `server-side-fallback-2026-07-01` for Opus 5.5, Sonnet 5.5 and Fable 5.1; the official-endpoint connection offers it
+  as *Retry declined requests on another model*, unchecked. When a person turns it on, `served_by` records the model
+  that answered and the Activity shows the switch; the fallback model runs without the earlier thinking blocks, which
+  the API drops.
 
 **Errors and retries.** Every status maps to a typed `ModelError`:
 - **400** `InvalidRequest`, except the preserved-thinking recovery above. **401** `KeyRejected`. **402** `Billing`.
@@ -297,12 +320,11 @@ profile model starts a new conversation segment with a compaction (§6.3).
   impossible.
 - Context exhaustion (`model_context_window_exceeded`, or a 400 naming the context) leads to compaction (§6.3).
 
-**Considered for later.**
-- Mapping a step token budget onto `output_config.task_budget` (beta `task-budgets-2026-03-13`, at least 20k) so the
-  model paces itself.
-- Server-side compaction (beta `compact-2026-01-12`) on the official endpoint.
-
-Both are *open*. P1 uses the provider-neutral client-side compaction.
+**Not in P1.**
+- `output_config.task_budget` (beta `task-budgets-2026-03-13`, at least 20k) is not sent (decision 9). It is revisited
+  after P1, with P1's usage data.
+- Server-side compaction (beta `compact-2026-01-12`) on the official endpoint is a later option. P1 uses the
+  provider-neutral client-side compaction.
 
 ### 3.2 OpenAI Responses
 
@@ -355,8 +377,8 @@ included in `output_tokens_details.reasoning_tokens`). This fits `TokenUsage` ex
 - It is the wire format Codex itself uses, and DeepSeek serves it statelessly.
 - A Chat Completions client would be a third wire format, with its own reasoning, usage and tool-call shapes.
 
-Chat Completions only matters for local or third-party servers that do not offer Responses (for example some
-self-hosted gateways). That is *open*: add it later as `WireApi::OpenAiChat` if a user needs one.
+Chat Completions matters for self-hosted servers that do not offer Responses. It is added after P3 as
+`WireApi::OpenAiChat` (phase P3b, decision 5), behind the same `ModelClient` trait and fake-server tests.
 
 ### 3.3 Compatible endpoints and provider quirks
 
@@ -486,8 +508,11 @@ as an error result so the model can recover. It never ends the loop, except the 
   - The program is resolved on the agent `PATH` (ripgrep's folder first) through `exec::launch`, then run without a
     shell. This is what makes classification sound.
 - **Shell.** `shell: true` runs the string in the platform shell:
-  - Windows: `powershell.exe -NoProfile -NonInteractive -Command`;
-  - macOS: `/bin/bash -c` (*open*: zsh).
+  - Windows: `pwsh -NoProfile -NonInteractive -Command` when `pwsh` is found on the agent `PATH`, otherwise Windows
+    PowerShell 5.1, `powershell.exe -NoProfile -NonInteractive -Command`;
+  - macOS: `/bin/zsh -c` (decision 3).
+
+  The shell is resolved once per invocation and named in the system prompt.
 
   A shell command is never known-safe and never matches the allowed list. It needs a person (§5.2).
 - **Working directory and timeout.** `workdir` must be inside the worktree. `timeout_seconds` defaults to 120, with a
@@ -524,7 +549,8 @@ as an error result so the model can recover. It never ends the loop, except the 
   server's schema.
   - The runner acts as the MCP client: stdio or streamable HTTP, secrets from the vault as today. `rmcp` is already in
     the lock file through lurq.
-  - This changes the design rule "Orchester never talks to a server itself" for native connections only *(open)*.
+  - Decided (decision 6): for native connections the runner talks to the server itself. The design rule in
+    `docs/design/orchester-workspace.md` (MCP servers) now says so; CLI agents keep starting their servers themselves.
   - Calls follow `interactive_tool_approvals`.
 - **P4, memory tools.** `memory_search {query}` reads active records (FTS5, as recall does). `memory_propose {kind,
   text}` creates a *proposed* record and is screened against keychain secrets like handoffs.
@@ -582,7 +608,7 @@ with the documented `setsid` gap on macOS. This is the same class of gap the des
 
 `CommandPolicy::classify(&ParsedCommand, &EnforcedPermissions) -> CommandVerdict`, pure, in core:
 
-1. **Shell** (`shell: true`) → `Ask` if a person can be asked, else `Refuse(ShellNeedsPerson)`.
+1. **Shell** (`shell: true`) → `Ask`.
 2. **Allowed list.** `AllowedCommands::allows(CommandPrefix)`, the existing whole-word prefix match on the
    re-joined argv → `Run`.
 3. **Known-safe read-only** → `Run`. This is a new core table, `permission/known_safe.rs`, modelled on Codex's
@@ -598,24 +624,19 @@ with the documented `setsid` gap on macOS. This is the same class of gap the des
 
    Every argument that resolves to an existing path must lie in the **readable** scope; otherwise the command is not
    known-safe. This stops `cat ~/.ssh/id_rsa`.
-4. **Otherwise.** `Ask` when commands are *Ask before running* (`asks_a_person()`), else
-   `Refuse(NotAllowed{prefix_hint})`. A refusal emits `PermissionDenied` and returns an error result. It does not end
-   the step, unlike a person's denial.
+4. **Otherwise** → `Ask`. Every command that steps 2–3 do not run asks a person (decision 1). `Refuse` remains only
+   for calls that can never run: an unparsable command, or a `workdir` outside the worktree. A refusal emits
+   `PermissionDenied` and returns an error result; the loop continues.
 
-**Parity with C4 (plan, Done).** Known-safe commands run only once the allowed list has an entry, or with *Ask before
-running*. With `Allowed(empty)` the `run_command` tool is not offered at all, as Claude gets no `Bash`.
-
-**Mapping the existing `CommandPermission`:**
+**Mapping the existing `CommandPermission`** (the same meaning the CLIs have on branch `claude/ask-outside`):
 
 | Setting | Native behaviour |
 |---|---|
-| `AskBefore` | Known-safe runs; everything else asks a person. This is Codex-like. Claude asks even for reads. |
-| `Allowed(list)` | List plus known-safe runs; others are refused. No person is asked. |
+| `Allowed(list)` | Listed commands run. Known-safe read-only commands run once the list has an entry (plan C4). Every other command asks a person; with an empty list every command asks. In a read-only step the approval says that an approved command can change files. |
+| `AskBefore` | Every command asks a person, known-safe ones too, as Claude Code does. |
 | `AnyInWorktree` | Unavailable until P5. |
 
-The user's principle "allowed list plus known-safe run, everything else asks" needs a combination the current model
-cannot express. It is proposed as a new `CommandPermission::AllowedThenAsk(list)` *(open)*. Native can enforce it on
-day one. Claude can enforce it with allow rules plus `ask: ["Bash"]`, and Codex App Server *(to verify)*.
+`run_command` is always offered, because a command can always reach a person.
 
 **Approvals** reuse the existing path end to end:
 - `PendingToolApproval{command: true, action: <command, redacted>, target: <workdir>, server: "Orchester"}`;
@@ -624,8 +645,10 @@ day one. Claude can enforce it with allow rules plus `ask: ["Bash"]`, and Codex 
 - the wait is excluded from active time.
 
 The runner adds `Awaiting::Native{call, reply: oneshot::Sender<bool>}` next to `Awaiting::Claude`. **Approve once**
-runs that one command. **Deny** fails the step, as today. Native could instead hand the denial back to the model and
-continue *(open)*.
+runs that one command. **Deny** does not fail the step (decision 2): the call gets the error result *"Denied by a
+person. Do not run this command again; continue without it or explain in finish_step why you cannot."*, Activity
+records `PermissionDenied`, the approval row ends `denied`, and the loop continues. The CLIs, where Deny still fails
+the step, will be aligned later.
 
 ### 5.3 Network, environment and secrets
 
@@ -654,15 +677,15 @@ panel title becomes *Enforced by Orchester*.
 | ReadOnly | Enforced(`NativeWriteToolsWithheld`): no `edit_file`/`write_file`; writes refused by scope | same |
 | EditWorktree | Enforced(`NativeFileScope`) | same |
 | writable folders | `NativeFileScopeFolders` | same |
-| AskBeforeCommands | Enforced(`NativeCommandApprovals`) | same |
-| AllowedCommands | Enforced(`NativeCommandList`) | same |
+| AskBeforeCommands | Enforced(`NativeCommandApprovals`): every command asks | same |
+| AllowedCommands | Enforced(`NativeCommandList`): listed and known-safe run, others ask | same |
 | AnyCommand | **Unavailable(CannotConfineCommands)** | macOS: Enforced(`NativeSeatbeltCommands`) |
 | NetworkOff | **Unavailable(CannotBlockNetwork)** → stays On | macOS: Enforced(`NativeSeatbeltNetworkOff`) |
 | NetworkOn | Enforced(`NativeNetworkUnrestricted`) | same |
 
 The panel text must state the limit honestly. A listed command, like a listed Claude command, is chosen by Orchester
 but not confined, so it can write anywhere the user can. The mechanism text reads *listed and known-safe commands run
-unconfined · file tools confined to the worktree*. `mcp_support` for native in P1 means servers are left out with a
+unconfined · others ask you · file tools confined to the worktree*. `mcp_support` for native in P1 means servers are left out with a
 new `McpServerProblem::NotSupportedByConnection`, which is visible and does not fail the step.
 
 ### 5.5 OS sandboxing for commands (realistic now vs later)
@@ -801,8 +824,8 @@ Truncation notes are part of the result text so the model can narrow its request
 | API key | a project **secret** (kind API key), picked or created in place. The connection stores the `SecretId` only. The value is entered once in the secret field and never shown again. |
 | Models | fetched from `GET models` (source *From the endpoint*, with time) plus manual entries (source *Added by hand*). Each model has an id, optional context window, optional max output, and efforts. |
 | Default model / effort | used by profiles that do not choose; the effort list comes from the model |
-| Provider fallback | official Anthropic only (§3.1); default on |
-| Data notice acknowledged | timestamp and person; required before the first run for presets that flag it (DeepSeek) |
+| Provider fallback | official Anthropic only (§3.1); default **off** (decision 4) |
+| Data notice acknowledged | timestamp and person, once per project; required before the first run for presets that flag it (DeepSeek; decision 10) |
 
 **Statuses and test.** `ConnectionStatus` gains `KeyMissing`, `KeyRejected`, `BillingProblem` and
 `EndpointUnreachable`. `CheckResult` gains `Api { catalog, balance: Option<String> }` and the failure variants.
@@ -834,10 +857,9 @@ The desktop never reads the key.
 7. Run summary note for network stays on and unconfined listed commands. The existing Claude pattern can be reused.
 8. Approval modal content for a `run_command` with `shell: true` (shows the full shell string and the shell).
 
-**CLI connections with a custom endpoint** are *open*, not in P1–P5. Examples are Claude Code against DeepSeek's
-`/anthropic`, or Codex with a custom model provider. That would mean passing a base URL and key to a CLI, which
-reverses the rule "Orchester stores no credentials and never passes keys to CLIs" (`invocation/mod.rs` withholds
-`ANTHROPIC_*`).
+**CLI connections get no custom base URL or key** for now (decision 7). Orchester keeps storing no credentials for
+CLIs and passing none to them (`invocation/mod.rs` withholds `ANTHROPIC_*`). Pointing Claude Code at DeepSeek's
+`/anthropic`, or Codex at a custom model provider, is not offered.
 
 ## 8. Testing strategy
 
@@ -901,7 +923,10 @@ Done when:
 - [ ] A pipeline step runs on Opus 5.5 with prompt parity and ends with a validated `finish_step`. `question` waits,
   and the answer resumes the same conversation.
 - [ ] File tools are confined per §5.1, with the platform tests passing on Windows and cross-checked on macOS.
-- [ ] Commands are classified per §5.2. Approvals use the existing modal, and denial fails the step.
+- [ ] Commands are classified per §5.2: listed and known-safe run, every other command asks. Approvals use the
+  existing modal; a denial is returned to the agent, which continues, and the step does not fail.
+- [ ] A refusal (`stop_reason: "refusal"`) is shown as a problem with its category; provider fallback is off unless
+  the connection turns it on.
 - [ ] The capability rows and *Enforced by Orchester* panel follow §5.4. AnyCommand and NetworkOff are locked with
   reasons.
 - [ ] Budgets, time limit, pause, cancel and resume (including after a runner restart) pass the runner tests. Usage
@@ -924,11 +949,16 @@ Done when:
   `/user/balance` in the test, and the data-location acknowledgement.
 - [ ] A fake-server script per preset quirk. One live DeepSeek run is recorded.
 
+**P3b · OpenAI Chat Completions for self-hosted servers.** Size **M**. After P3 (decision 5).
+- [ ] `WireApi::OpenAiChat` behind `ModelClient`, with reasoning, usage and tool-call mapping and its quirks in
+  `WireQuirks`.
+- [ ] The §8 fake-server cases ported to the Chat wire format. One live run against a self-hosted server is recorded.
+
 **P4 · MCP passthrough and memory tools.** Size **M–L**.
 - [ ] The runner works as an MCP client for the profile's servers, with `interactive_tool_approvals` on calls.
   Secrets come from the vault, and redaction is tested.
 - [ ] `memory_search` and `memory_propose`, with secret screening.
-- [ ] The design rule change is approved and documented.
+- [ ] Runner-side MCP for native connections follows the design rule as updated on 2026-10-01 (decision 6).
 
 **P5 · Sandboxing.** Size **L**, research-heavy.
 - [ ] P5a, macOS: a seatbelt profile for commands enables AnyCommand and NetworkOff, probed per machine. Toolchains
@@ -937,7 +967,7 @@ Done when:
   repository and toolchain. Ship only what passes. Otherwise the rows stay locked, with the finding recorded in
   evidence.
 
-## 10. Risks and open questions
+## 10. Risks
 
 **Risks.**
 - **No OS sandbox for commands in P1.** Safety rests on Orchester deciding which commands start, and on what a listed
@@ -950,30 +980,11 @@ Done when:
   updates), and the Responses streaming details are partly *to verify*. The quirks struct confines the churn to
   `orchester-agent`.
 - **Cost surprises.** API usage is billed per token, unlike CLI subscriptions. Run budgets apply, but the defaults
-  (1.4M tokens per run) may cost real money on Opus-tier models. Consider showing an estimated cost on native
-  connections (needs a price table, which the design currently forbids: "money fields are ignored").
+  (1.4M tokens per run) may cost real money on Opus-tier models. Orchester shows no cost estimates (decision 8); at
+  most later, as information in the Usage dashboard, never in limits.
 - **Data residency.** DeepSeek stores data in the PRC, and every provider receives repository content. Labels and the
   acknowledgement are the mitigation.
 - **Fan-out of the closed enums.** The new variants touch many files in four crates. The prerequisite refactors keep
   every file under 600 lines, but the P1 diff is large.
 
-**Open questions for the user.**
-1. **Ask for the rest.** Should Orchester add *Allowed commands, ask for the rest* (`AllowedThenAsk`), which matches
-   "agents ask" exactly, for native first and the CLIs where they can enforce it?
-2. **Denial.** Should a denied command fail the step (parity, P1 default), or should the native agent be told
-   *denied* and continue?
-3. **Shell.** Which shell for `run_command` with `shell: true`: PowerShell 5.1 or `pwsh` when present on Windows, and
-   bash or zsh on macOS?
-4. **Provider fallback.** Should Anthropic provider fallback (`fallbacks: "default"`) be on by default? It keeps
-   steps running when a request is declined, but switches models mid-step.
-5. **Chat Completions.** Is a Chat Completions wire format needed for self-hosted or local servers (vLLM, Ollama,
-   LM Studio), or are Responses-capable endpoints enough?
-6. **MCP passthrough.** May the runner talk to MCP servers itself for native connections (P4)? This changes the
-   current design rule.
-7. **Custom endpoints for the CLIs.** Should CLI connections ever get a custom base URL and key (Claude Code or Codex
-   against DeepSeek)? That reverses "Orchester never passes keys to CLIs".
-8. **Cost.** Should native connections show estimated cost, given that the design keeps money out of limits?
-9. **Task budgets.** Should a step's token budget also be sent as Anthropic `task_budget` so the model paces itself
-   (beta, Opus 5.5 / Sonnet 5.5 / Fable 5.1)?
-10. **DeepSeek acknowledgement.** Is a per-project acknowledgement enough, or should DeepSeek-style presets need an
-    acknowledgement per run?
+All product questions were answered on 2026-10-01; see [Decisions (2026-10-01)](#decisions-2026-10-01).
