@@ -186,6 +186,13 @@ fn outside_section(text: &mut String, outside: &[&FileRecord]) {
   }
 }
 
+/// Whether the file at `path` is in a test folder at any depth: its definitions serve the tests.
+pub(crate) fn in_test_folder(path: &str) -> bool {
+  path
+    .rsplit_once('/')
+    .is_some_and(|(folders, _)| folders.split('/').any(|folder| TEST_FOLDERS.contains(&folder)))
+}
+
 fn is_test(path: &str) -> bool {
   let first = path.split('/').next().unwrap_or(path);
   path.contains('/') && TEST_FOLDERS.contains(&first)

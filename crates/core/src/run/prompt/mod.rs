@@ -19,7 +19,8 @@
 //! A resumed session was told them when it started, and the files stay where they were.
 //!
 //! New and resumed sessions alike are told about the code index ([`CodeIndexPrompt`]): where the index of the run's
-//! base revision is and the internal skill that explains searching it, or that ripgrep is missing and `git grep -n`
+//! base revision is, an excerpt of its package and module map, and the internal skill that explains searching it,
+//! or that ripgrep is missing and `git grep -n`
 //! searches instead. A resumed session is told again because the index may be new to it: the setting or ripgrep can
 //! have changed since it started.
 //!
@@ -99,12 +100,15 @@ pub struct SkillListing<'a> {
 pub enum CodeIndexPrompt<'a> {
   /// The index of the run's base `revision` is in `folder`; the skill whose `SKILL.md` is `skill`
   /// explains how to search it. `git_grep`: the agent has no ripgrep and searches with `git grep`
-  /// (not said to an agent with a search tool of its own).
+  /// (not said to an agent with a search tool of its own). `map` is the text of the index's
+  /// `map.md`, whose package and module map the prompt carries in a size-bounded excerpt; empty
+  /// leaves the excerpt out.
   Given {
     revision: &'a str,
     folder: &'a str,
     skill: &'a str,
     git_grep: bool,
+    map: &'a str,
   },
   /// ripgrep is not available to the agent: it searches tracked files with `git grep -n`.
   WithoutRipgrep,

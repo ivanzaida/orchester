@@ -14,6 +14,7 @@
 
 use std::{
   ffi::OsString,
+  fs,
   path::{Path, PathBuf},
 };
 
@@ -304,6 +305,8 @@ pub(super) enum IndexTold {
     folder: String,
     skill: String,
     git_grep: bool,
+    /// The index's `map.md`; empty when it cannot be read.
+    map: String,
   },
   WithoutRipgrep,
   Nothing,
@@ -321,6 +324,7 @@ impl IndexTold {
         folder: folder.to_string_lossy().into_owned(),
         skill: skill.to_string_lossy().into_owned(),
         git_grep: codex_without_ripgrep,
+        map: read_map(folder),
       },
       (CodeIndexUse::Unavailable { .. }, ..) if codex_without_ripgrep => Self::WithoutRipgrep,
       _ => Self::Nothing,
@@ -334,14 +338,26 @@ impl IndexTold {
         folder,
         skill,
         git_grep,
+        map,
       } => Some(CodeIndexPrompt::Given {
         revision,
         folder,
         skill,
         git_grep: *git_grep,
+        map,
       }),
       Self::WithoutRipgrep => Some(CodeIndexPrompt::WithoutRipgrep),
       Self::Nothing => None,
     }
   }
+}
+
+/// The text of the `map.md` of the index in `folder`. A map that cannot be read leaves only its
+/// excerpt out of the prompt: the agent still gets the index and reads the map itself.
+fn read_map(folder: &Path) -> String {
+  let file = folder.join("map.md");
+  fs::read_to_string(&file).unwrap_or_else(|error| {
+    tracing::warn!(%error, file = %file.display(), "the index map cannot be read; the prompt goes without its excerpt");
+    String::new()
+  })
 }

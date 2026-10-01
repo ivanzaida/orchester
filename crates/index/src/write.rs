@@ -1,4 +1,4 @@
-//! Writing an index's files into its folder: `tree.txt`, `symbols.tsv`, `docs.md` and `map.md`
+//! Writing an index's files into its folder: `tree.txt`, the symbols files, `docs.md` and `map.md`
 //! streamed from the records, and one outline file per outlined source file, written from the text
 //! just made or linked to the unchanged file of the earlier index, so an incremental build does not
 //! read or copy what did not change. Creating many small files is what an index spends most of its
@@ -22,11 +22,10 @@ use crate::{
   digest::{self, Digests, Hashing},
   outline_file::{outline_name, outline_path},
   record::{FileRecord, Outline},
-  render,
+  render::{self, SymbolList},
 };
 
 pub(crate) const TREE: &str = "tree.txt";
-pub(crate) const SYMBOLS: &str = "symbols.tsv";
 pub(crate) const DOCS: &str = "docs.md";
 const MAP: &str = "map.md";
 
@@ -40,10 +39,13 @@ pub(crate) fn write(
 ) -> Result<Digests, IndexError> {
   let mut digests = Digests::new();
   digests.insert(TREE.into(), stream(out, TREE, |file| render::tree(file, records))?);
-  digests.insert(
-    SYMBOLS.into(),
-    stream(out, SYMBOLS, |file| render::symbols(file, records))?,
-  );
+  for list in SymbolList::ALL {
+    let name = list.file();
+    digests.insert(
+      name.into(),
+      stream(out, name, |file| render::symbols(file, records, list))?,
+    );
+  }
   digests.insert(DOCS.into(), stream(out, DOCS, |file| render::docs(file, records))?);
   let file = out.join(MAP);
   fs::write(&file, map).map_err(IndexError::io("write", file))?;
