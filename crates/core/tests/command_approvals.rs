@@ -120,7 +120,11 @@ fn command_approvals_legacy_permissions_and_mcp_policy_round_trip() {
 
 #[test]
 fn permissions_asking_before_commands_route_to_each_clis_approval_on_both_platforms() {
-  for provider in AgentProvider::ALL {
+  let expected = [
+    (AgentProvider::CodexCli, Mechanism::CodexCommandApprovals),
+    (AgentProvider::ClaudeCodeCli, Mechanism::ClaudePermissionPrompt),
+  ];
+  for (provider, expected) in expected {
     for platform in [Platform::Windows, Platform::MacOs] {
       let mut ask = AgentPermissions::new(
         RepositoryAccess::ReadOnly,
@@ -130,10 +134,6 @@ fn permissions_asking_before_commands_route_to_each_clis_approval_on_both_platfo
       ask.set_interactive_tool_approvals(true);
       // Agents ask: a read-only Claude Code step asks about every command too, and its launch
       // permissions keep asking before commands.
-      let expected = match provider {
-        AgentProvider::CodexCli => Mechanism::CodexCommandApprovals,
-        AgentProvider::ClaudeCodeCli => Mechanism::ClaudePermissionPrompt,
-      };
       let enforced = ask.enforced_on(provider, platform).expect("supported");
       assert_eq!(enforced.mechanism(PermissionSetting::Commands), expected);
       assert_eq!(*enforced.permissions().commands(), CommandPermission::AskBefore);

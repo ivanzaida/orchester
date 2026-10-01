@@ -50,17 +50,19 @@ fn connection(db: &mut ProjectDb, label: &str, provider: AgentProvider, repo: &P
     Timestamp::now(),
   )
   .expect("absolute executable");
-  connection.record_check(ConnectionCheck {
-    at: Timestamp::now(),
-    result: CheckResult::Available {
-      version: "1.0.0".into(),
-      sign_in: SignIn::SignedIn,
-      catalog: ModelCatalog::new(
-        CatalogSource::Provider,
-        vec![CatalogModel::new(ModelId::new("model").expect("model"), Vec::new())],
-      ),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: "1.0.0".into(),
+        sign_in: SignIn::SignedIn,
+        catalog: ModelCatalog::new(
+          CatalogSource::Provider,
+          vec![CatalogModel::new(ModelId::new("model").expect("model"), Vec::new())],
+        ),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   let id = connection.id();
   db.create_connection(&connection.into_connection()).expect("connection");
   id

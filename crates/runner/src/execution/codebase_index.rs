@@ -260,9 +260,9 @@ impl RunTask {
       .connections()
       .map_err(|error| error.to_string())?
       .into_iter()
-      // Connections of other kinds (GitHub) bundle no ripgrep.
+      // Connections of other kinds (GitHub) and native agents, which run no program, bundle no ripgrep.
       .filter_map(|connection| AgentConnection::try_from(connection).ok())
-      .map(|connection| connection.executable().to_path_buf())
+      .filter_map(|connection| connection.executable().map(Path::to_path_buf))
       .collect();
     let clis: Vec<&Path> = executables.iter().map(PathBuf::as_path).collect();
     let Some(found) = ripgrep::locate(path.as_deref(), local_app_data.as_deref(), &clis) else {

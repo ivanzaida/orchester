@@ -66,7 +66,8 @@ pub fn choose_program_in(repo_root: &Path, id: ConnectionId, executable: PathBuf
   let mut db = ProjectDb::open(repo_root)?;
   let mut connection = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
   connection.set_executable(executable)?;
-  connection.record_check(probe::recheck(&connection))?;
+  let check = probe::recheck(&connection).expect("a connection pointed at a program can be checked");
+  connection.record_check(check)?;
   db.save_connection(&connection)?;
   Ok(())
 }

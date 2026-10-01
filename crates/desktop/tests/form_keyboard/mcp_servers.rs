@@ -356,17 +356,19 @@ fn agent_connection(db: &mut ProjectDb, repo: &Path, provider: AgentProvider) ->
     Timestamp::now(),
   )
   .expect("absolute executable");
-  connection.record_check(ConnectionCheck {
-    at: Timestamp::now(),
-    result: CheckResult::Available {
-      version: "2.1.89".into(),
-      sign_in: SignIn::SignedIn,
-      catalog: ModelCatalog::new(
-        CatalogSource::Provider,
-        vec![CatalogModel::new(ModelId::new("haiku").expect("model"), Vec::new())],
-      ),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: "2.1.89".into(),
+        sign_in: SignIn::SignedIn,
+        catalog: ModelCatalog::new(
+          CatalogSource::Provider,
+          vec![CatalogModel::new(ModelId::new("haiku").expect("model"), Vec::new())],
+        ),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   let id = connection.id();
   db.create_connection(&connection.into_connection()).expect("connection");
   id
@@ -380,6 +382,7 @@ pub(crate) fn seed_profile(repo: &Path, provider: AgentProvider, servers: Vec<Co
   let commands = match provider {
     AgentProvider::ClaudeCodeCli => CommandPermission::Allowed(AllowedCommands::default()),
     AgentProvider::CodexCli => CommandPermission::AskBefore,
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the desktop tests have no native agent"),
   };
   let connection = agent_connection(&mut db, repo, provider);
   let body = AgentProfile::new(

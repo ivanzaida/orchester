@@ -28,6 +28,7 @@ mod lifecycle;
 mod mcp_exempt_tools;
 mod mcp_servers;
 mod modal_layer;
+mod native_connections;
 mod new_task;
 mod pipeline_editor;
 mod pipeline_history;

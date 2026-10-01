@@ -998,6 +998,7 @@
       "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny prevents execution and fails this step.",
       "commandExplanationClaude": "{{agent}} requests this command in {{cwd}}. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "commandExplanationReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationNative": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "commandExplanationClaudeReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "command": "Command",
       "cwd": "Working directory",
@@ -1183,6 +1184,7 @@
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
       "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
+      "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
       "noCommits": "The repository has no commit to start the run from.",
       "buildSpaceLow": "Low disk space for CARGO_TARGET_DIR ({{target}}): {{available}} GiB free; at least {{required}} GiB is needed before this run can start. Free space or choose another build folder.",
@@ -1571,6 +1573,7 @@
     "connection": "Project connection",
     "model": "Model",
     "chooseConnectionFirst": "Choose a connection first",
+    "connectionNotAvailable": "{{connection}} · not available yet",
     "customModel": "Other model id…",
     "customModelPlaceholder": "Model id, as the CLI accepts it",
     "modelNotVerified": "{{model}} · not verified",
@@ -1728,11 +1731,14 @@
       "unavailable": {
         "cannotLimitCommands": "Unavailable on this connection: {{cli}} can’t limit commands to a list.",
         "cannotConfineCommands": "Unavailable on this connection: {{cli}} can’t confine commands to the worktree.",
-        "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so."
+        "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so.",
+        "nativeNotAvailable": "Unavailable on this connection: {{cli}} agents are not available in this version yet."
       },
       "enforcement": {
         "title": "Enforced by {{cli}}",
         "source": "{{connection}} · known limits on {{platform}}",
+        "nativeTitle": "Not enforced yet · native agents are not available",
+        "nativeSource": "{{connection}} · {{provider}}",
         "platform": {
           "windows": "Windows",
           "macos": "macOS"
@@ -1746,6 +1752,7 @@
         "notEnforceable": "{{setting}} · not enforceable",
         "networkShare": "Edits on a network share can’t be allowed by rule, so a run can’t start.",
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
+        "nativeNotAvailable": "This version enforces none of these settings and starts no agent on this connection.",
         "noBypass": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
         "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
@@ -1806,9 +1813,11 @@
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",
-        "notEnforceable": "{{cli}} cannot enforce {{option}}. Choose another option."
+        "notEnforceable": "{{cli}} cannot enforce {{option}}. Choose another option.",
+        "nativeNotAvailable": "Orchester doesn’t run {{cli}} agents in this version yet, so this profile can’t be published or run on its connection. Choose a Codex or Claude Code connection."
       },
       "blockedTitle": "This profile cannot be published with these permissions",
+      "nativeBlockedTitle": "This profile can’t run yet: its connection is a native agent",
       "changeConnection": "Change connection",
       "resetTitle": "Changed to what {{connection}} can enforce",
       "resetDetail": "Unavailable on this connection, so changed to the most restrictive option it enforces: {{changes}}. Review before publishing.",
@@ -1958,6 +1967,7 @@
     "ownership": "Connections belong to {{project}}. CLI connections use the account the CLI is signed in to on this computer; {{project}} records which account it expects.",
     "type": {
       "provider": "Provider",
+      "native": "Native",
       "agentProvider": "Agent provider",
       "mcp": "MCP",
       "mcpServer": "MCP server"
@@ -1976,11 +1986,27 @@
       "heading": "{{cli}} {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
       "detail": "A run found this when the model’s provider refused the CLI. Update the CLI, then check the connection again."
     },
+    "native": {
+      "row": "{{provider}} · {{preset}} · {{host}}",
+      "preset": {
+        "official": "Official preset",
+        "deepseek": "DeepSeek preset",
+        "custom": "Custom preset"
+      }
+    },
+    "nativeNotAvailable": {
+      "heading": "{{connection}} uses {{provider}}, which is not available yet",
+      "detail": "Native agents are not available in this version of Orchester. A step whose profile runs on this connection doesn’t start, so a run with one doesn’t start either. Choose a Codex or Claude Code connection."
+    },
     "provider": {
       "codex": "Codex CLI",
       "claude": "Claude Code CLI",
       "codexShort": "Codex",
       "claudeShort": "Claude",
+      "anthropicApi": "Anthropic API (native)",
+      "openaiApi": "OpenAI API (native)",
+      "anthropicApiShort": "Anthropic API",
+      "openaiApiShort": "OpenAI API",
       "openai": "OpenAI",
       "anthropic": "Anthropic"
     },
@@ -1992,7 +2018,8 @@
       "executableMissing": "Not found",
       "notRecognized": "Not recognized",
       "couldNotRun": "Could not run",
-      "checking": "Checking…"
+      "checking": "Checking…",
+      "notAvailable": "Not available yet"
     },
     "detail": {
       "notChecked": "This connection has not been checked yet.",
@@ -2002,7 +2029,8 @@
       "signInUnknown": "The CLI answers, but whether it is signed in could not be determined. Agents may fail to start until it is.",
       "executableMissing": "The program file does not exist. Edit the connection to choose it again, then check again.",
       "notRecognized": "The program answered, but not as the expected CLI. Edit the connection to choose the right file.",
-      "couldNotRun": "The program could not be started or did not answer in time. Check again, or edit the connection."
+      "couldNotRun": "The program could not be started or did not answer in time. Check again, or edit the connection.",
+      "nativeNotAvailable": "Native agents are not available in this version yet. Orchester does not test this connection or start agents on it; profiles that use it cannot run."
     },
     "property": {
       "provider": "Provider",
@@ -2011,6 +2039,7 @@
       "execution": "Execution",
       "authentication": "Authentication",
       "lastChecked": "Last checked",
+      "endpoint": "Endpoint",
       "version": "Version",
       "runs": "Runs with",
       "script": "Script"
@@ -2111,6 +2140,8 @@
         "urlRequired": "Enter the server’s URL",
         "urlScheme": "The URL starts with http:// or https:// and names a host",
         "urlCredentials": "Keep user names and passwords out of the URL; use a bearer token from a secret",
+        "urlBackslash": "Use / instead of \\ in the host and path of the URL",
+        "urlHost": "The IPv6 address in the URL is not valid",
         "whitespace": "Remove the spaces and line breaks",
         "tooLong": "This is too long",
         "workingDirectory": "Use a folder inside the worktree, or an absolute path",
@@ -2566,6 +2597,7 @@
     "connectionNameRequired": "Enter a name for the connection.",
     "connectionNameTaken": "Another connection of this project already has this name.",
     "connectionNotVerified": "The program was not recognized as the chosen CLI, so the connection cannot be saved.",
+    "nativeNotAvailable": "Native agents are not available in this version yet.",
     "executableNotAbsolute": "Choose the program file by its full path.",
     "secretNameTaken": "Another secret of this project already has this name in this environment.",
     "secretGone": "This secret no longer exists or was archived.",

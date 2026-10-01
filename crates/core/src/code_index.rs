@@ -76,22 +76,25 @@ pub enum RipgrepFallback {
   Unknown,
   /// Codex with the code index: it searches the index and the files with `git grep`.
   IndexWithGitGrep,
-  /// Claude Code with the code index: it searches with its own tools.
+  /// Claude Code or a native agent with the code index: it searches with its own tools.
   IndexWithOwnTools,
   /// Codex without the code index: it searches the files with `git grep`.
   GitGrep,
-  /// Claude Code without the code index: it searches with its own tools.
+  /// Claude Code or a native agent without the code index: it searches with its own tools.
   OwnTools,
 }
 
 impl RipgrepFallback {
-  /// The fallback of an agent on `provider`'s CLI that got the code index when `index_given`.
+  /// The fallback of an agent on `provider` that got the code index when `index_given`. A native
+  /// agent's search tool falls back to a built-in search (`docs/architecture/native-agent.md` §4.3).
   pub const fn of(provider: AgentProvider, index_given: bool) -> Self {
     match (provider, index_given) {
       (AgentProvider::CodexCli, true) => Self::IndexWithGitGrep,
       (AgentProvider::CodexCli, false) => Self::GitGrep,
-      (AgentProvider::ClaudeCodeCli, true) => Self::IndexWithOwnTools,
-      (AgentProvider::ClaudeCodeCli, false) => Self::OwnTools,
+      (AgentProvider::ClaudeCodeCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi, true) => {
+        Self::IndexWithOwnTools
+      }
+      (AgentProvider::ClaudeCodeCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi, false) => Self::OwnTools,
     }
   }
 }

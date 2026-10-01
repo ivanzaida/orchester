@@ -208,14 +208,16 @@ async fn execution_rejects_what_the_preflight_finds_and_tasks_that_are_not_queue
   let mut db = ProjectDb::open(root).expect("open");
   let stored = db.connections().expect("connections").remove(0);
   let mut connection = AgentConnection::try_from(stored).expect("an agent connection");
-  connection.record_check(ConnectionCheck {
-    at: Timestamp::now(),
-    result: CheckResult::Available {
-      version: "0.139.0".into(),
-      sign_in: SignIn::SignedOut,
-      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: "0.139.0".into(),
+        sign_in: SignIn::SignedOut,
+        catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   db.save_connection(&connection.into_connection()).expect("save");
   let (scheduler, _events) = scheduler(root);
   assert_eq!(

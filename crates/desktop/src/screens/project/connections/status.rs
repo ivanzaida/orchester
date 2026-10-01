@@ -3,17 +3,19 @@
 
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, ConnectionStatus},
+  connection::{AgentConnection, AgentProvider, ConnectionStatus, EndpointPreset},
   resource::ModelId,
 };
 
 use crate::ui::{icon::Icon, notice::Notice};
 
-/// Name of the CLI, e.g. "Codex CLI".
+/// Name of the CLI, e.g. "Codex CLI", or of the native provider, e.g. "Anthropic API (native)".
 pub const fn program_key(provider: AgentProvider) -> &'static str {
   match provider {
     AgentProvider::CodexCli => "connections.provider.codex",
     AgentProvider::ClaudeCodeCli => "connections.provider.claude",
+    AgentProvider::AnthropicApi => "connections.provider.anthropicApi",
+    AgentProvider::OpenAiApi => "connections.provider.openaiApi",
   }
 }
 
@@ -21,17 +23,17 @@ pub const fn program_key(provider: AgentProvider) -> &'static str {
 /// when nothing says so.
 pub fn cli_too_old(ctx: &Ctx, connection: &AgentConnection, model: &ModelId) -> Option<Element> {
   let too_old = connection.cannot_run(model)?;
+  let cli = match connection.provider() {
+    AgentProvider::CodexCli => "connections.cliTooOld.codex",
+    AgentProvider::ClaudeCodeCli => "connections.cliTooOld.claude",
+    // A native connection runs no CLI, so no refusal names a CLI version.
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return None,
+  };
   let model = unbroken(model.as_str());
   let heading = ctx.t_args(
     "connections.cliTooOld.heading",
     [
-      (
-        "cli",
-        &*ctx.t(match connection.provider() {
-          AgentProvider::CodexCli => "connections.cliTooOld.codex",
-          AgentProvider::ClaudeCodeCli => "connections.cliTooOld.claude",
-        }),
-      ),
+      ("cli", &*ctx.t(cli)),
       ("installed", too_old.installed.as_str()),
       ("model", &model),
       ("required", too_old.required.as_str()),
@@ -40,6 +42,26 @@ pub fn cli_too_old(ctx: &Ctx, connection: &AgentConnection, model: &ModelId) -> 
   Some(
     Notice::new(Icon::TriangleAlert, heading, ctx.t("connections.cliTooOld.detail"))
       .id("cli-too-old")
+      .into(),
+  )
+}
+
+/// That `connection` is to a native agent provider, which this version runs no agent on (`q5LzI`
+/// notice); `None` for an agent CLI.
+pub fn native_not_available(ctx: &Ctx, connection: &AgentConnection) -> Option<Element> {
+  if connection.provider().runs_agents() {
+    return None;
+  }
+  let heading = ctx.t_args(
+    "connections.nativeNotAvailable.heading",
+    [
+      ("connection", connection.name().as_str()),
+      ("provider", &*ctx.t(program_key(connection.provider()))),
+    ],
+  );
+  Some(
+    Notice::new(Icon::Lock, heading, ctx.t("connections.nativeNotAvailable.detail"))
+      .id("native-not-available")
       .into(),
   )
 }
@@ -55,14 +77,35 @@ pub const fn short_key(provider: AgentProvider) -> &'static str {
   match provider {
     AgentProvider::CodexCli => "connections.provider.codexShort",
     AgentProvider::ClaudeCodeCli => "connections.provider.claudeShort",
+    AgentProvider::AnthropicApi => "connections.provider.anthropicApiShort",
+    AgentProvider::OpenAiApi => "connections.provider.openaiApiShort",
   }
 }
 
-/// The company whose models the CLI runs, e.g. "OpenAI".
+/// The preset of a native connection's endpoint, e.g. "DeepSeek preset".
+pub const fn preset_key(preset: EndpointPreset) -> &'static str {
+  match preset {
+    EndpointPreset::Official => "connections.native.preset.official",
+    EndpointPreset::DeepSeek => "connections.native.preset.deepseek",
+    EndpointPreset::Custom => "connections.native.preset.custom",
+  }
+}
+
+/// The company whose models the provider runs, e.g. "OpenAI".
 pub const fn vendor_key(provider: AgentProvider) -> &'static str {
   match provider {
-    AgentProvider::CodexCli => "connections.provider.openai",
-    AgentProvider::ClaudeCodeCli => "connections.provider.anthropic",
+    AgentProvider::CodexCli | AgentProvider::OpenAiApi => "connections.provider.openai",
+    AgentProvider::ClaudeCodeCli | AgentProvider::AnthropicApi => "connections.provider.anthropic",
+  }
+}
+
+/// The status of an agent connection: *Not available yet* for a native one, which this version
+/// neither checks nor runs, else what its last check found.
+pub fn agent_status_label(connection: &AgentConnection) -> (Icon, &'static str) {
+  if connection.provider().runs_agents() {
+    status_label(connection.status())
+  } else {
+    (Icon::Lock, "connections.status.notAvailable")
   }
 }
 
@@ -79,15 +122,18 @@ pub const fn status_label(status: ConnectionStatus) -> (Icon, &'static str) {
 }
 
 /// What the status means and what to do about it. Signing in names the CLI's own command,
-/// which Orchester never runs itself.
+/// which Orchester never runs itself. A native connection says that this version cannot use it.
 pub const fn status_detail_key(status: ConnectionStatus, provider: AgentProvider) -> &'static str {
+  let sign_in = match provider {
+    AgentProvider::CodexCli => "connections.detail.signInCodex",
+    AgentProvider::ClaudeCodeCli => "connections.detail.signInClaude",
+    // A native connection is never checked, so no status describes it.
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return "connections.detail.nativeNotAvailable",
+  };
   match status {
     ConnectionStatus::NotChecked => "connections.detail.notChecked",
     ConnectionStatus::Connected => "connections.detail.connected",
-    ConnectionStatus::SignInRequired => match provider {
-      AgentProvider::CodexCli => "connections.detail.signInCodex",
-      AgentProvider::ClaudeCodeCli => "connections.detail.signInClaude",
-    },
+    ConnectionStatus::SignInRequired => sign_in,
     ConnectionStatus::SignInUnknown => "connections.detail.signInUnknown",
     ConnectionStatus::ExecutableMissing => "connections.detail.executableMissing",
     ConnectionStatus::NotRecognized => "connections.detail.notRecognized",

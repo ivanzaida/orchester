@@ -29,7 +29,10 @@ use orchester_core::{
 use orchester_exec::launch::{self, Via};
 use orchester_store::ProjectDb;
 
-use super::super::run::RunTask;
+use super::{
+  super::run::RunTask,
+  start::{NATIVE_NOT_AVAILABLE, problem},
+};
 use crate::private_file::PrivateFile;
 
 /// A server left out, by name (by id when the project no longer has it), and why.
@@ -52,11 +55,12 @@ impl McpSetup {
     }
   }
 
-  /// The tools of Claude Code's servers that run without asking, which its activity marks as not asked.
-  pub(in super::super) fn claude_exemptions(&self) -> InvocationExemptions {
+  /// The tools of Claude Code's servers that run without asking, which its activity marks as not asked:
+  /// none unless the step `asks` before MCP actions.
+  pub(in super::super) fn claude_exemptions(&self, asks: bool) -> InvocationExemptions {
     match self {
-      Self::Claude(Some(servers)) => servers.exemptions.clone(),
-      Self::Claude(None) | Self::Codex(_) => InvocationExemptions::default(),
+      Self::Claude(Some(servers)) if asks => servers.exemptions.clone(),
+      Self::Claude(_) | Self::Codex(_) => InvocationExemptions::default(),
     }
   }
 }
@@ -111,6 +115,8 @@ impl RunTask {
           .transpose()?;
         McpSetup::Claude(file)
       }
+      // `start::cli::program` refuses a native connection before its servers are set up.
+      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return Err(problem(NATIVE_NOT_AVAILABLE.to_owned())),
     };
     let left_out = left_out
       .into_iter()

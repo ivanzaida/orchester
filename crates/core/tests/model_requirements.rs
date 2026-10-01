@@ -28,14 +28,16 @@ fn claude(version: &str) -> AgentConnection {
     Timestamp::now(),
   )
   .expect("absolute path");
-  connection.record_check(ConnectionCheck {
-    at: Timestamp::now(),
-    result: CheckResult::Available {
-      version: version.to_owned(),
-      sign_in: SignIn::SignedIn,
-      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: version.to_owned(),
+        sign_in: SignIn::SignedIn,
+        catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   connection
 }
 

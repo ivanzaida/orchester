@@ -33,6 +33,7 @@ fn running_on(provider: AgentProvider, instructions: &'static str) -> Desktop {
   let fake = match provider {
     AgentProvider::CodexCli => fake,
     AgentProvider::ClaudeCodeCli => fake_claude(&fake),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the desktop tests have no native agent"),
   };
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
     seed_agent(repo, &fake, provider, |builder| {

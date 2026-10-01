@@ -179,6 +179,8 @@ fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
       (Some(AgentProvider::ClaudeCodeCli), true) => "runs.toolApproval.commandExplanationClaudeReadOnly",
       (Some(AgentProvider::CodexCli) | None, false) => "runs.toolApproval.commandExplanation",
       (Some(AgentProvider::CodexCli) | None, true) => "runs.toolApproval.commandExplanationReadOnly",
+      // No native agent runs in this version; the wording claims no sandbox for one.
+      (Some(AgentProvider::AnthropicApi | AgentProvider::OpenAiApi), _) => "runs.toolApproval.commandExplanationNative",
     };
     ctx.t_args(
       key,

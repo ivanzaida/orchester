@@ -46,9 +46,10 @@ fn pencil() -> McpServer {
 
 /// A Builder on `provider` that asks before MCP actions and gets `pencil`.
 fn asking(provider: AgentProvider, brief: &'static str) -> TestProject {
-  let commands = match provider {
-    AgentProvider::CodexCli => CommandPermission::AnyInWorktree,
-    AgentProvider::ClaudeCodeCli => CommandPermission::AskBefore,
+  let commands = if provider == AgentProvider::CodexCli {
+    CommandPermission::AnyInWorktree
+  } else {
+    CommandPermission::AskBefore
   };
   let mut permissions = AgentPermissions::new(RepositoryAccess::Write, commands, NetworkAccess::Off);
   permissions.set_interactive_tool_approvals(true);

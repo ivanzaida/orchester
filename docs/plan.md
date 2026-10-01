@@ -216,13 +216,25 @@ Tests: a headless `form_keyboard` test that records the tab and body bounds befo
 sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
 Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
 
-## N · Native agent (decided, not started)
+## N · Native agent (P1 in progress)
 
 Orchester runs the coding-agent loop itself against model APIs (Anthropic Messages, OpenAI Responses, compatible
 endpoints such as DeepSeek), next to the Codex and Claude Code CLIs. The design is
 `docs/architecture/native-agent.md`: crate layout, model clients, tools, permissions, context, connections, tests,
 and phases P1–P5 (with P3b, Chat Completions) with acceptance lists. The user's decisions of 2026-10-01 are recorded
 there; turn the phases into tasks here when work starts, beginning with P1.
+
+P1 is split into five tasks. P1a (ORC-56) is done (see *Done*). The rest:
+
+- **P1b · ORC-57:** core native module: conversation, tools, file and command policy, loop state machine (§2.1, §4,
+  §5.1–5.2).
+- **P1c · ORC-58:** the `orchester-agent` crate: Anthropic client (§3.1), file and search tools, fake model server
+  (§8).
+- **P1d · ORC-59:** runner integration: `Driver::Native`, approvals, persistence, resume (§2.2, §6). Native steps
+  start here, and the permissions panel then reads *Enforced by Orchester* (04.H8 `yh0Xe`) instead of *Not enforced
+  yet*.
+- **P1e · ORC-60:** connections UI, 04.H1–H11 (group `PNDQm`): the native form and inspector, test connection,
+  models, default model and effort, provider fallback and the data-location notice.
 
 ## L · After lurq 0.30.0
 
@@ -250,6 +262,21 @@ which also preserves text selection after a drag on scaled displays.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+ORC-56 · Native agent P1a: native connections stored and shown, nothing run · branch `claude/orc56-fixes`
+
+- **Done 2026-10-02.** `step/command.rs` is split into `step/start/{mod, cli, shared, prompt}.rs` and `step/worker.rs`
+  into `step/worker/{mod, observe, process}.rs`, with no behaviour change. `Connection` holds an `AgentEndpoint`
+  (program or `ApiEndpoint`: preset, base URL, key secret), and `AgentProvider` has `AnthropicApi`/`OpenAiApi` (stored
+  as `anthropic_api`/`openai_api`). A base URL is `https://` (or `http://` for this computer), with a valid host and
+  port and no credentials, query, fragment or backslash; MCP server URLs get the same host and backslash checks.
+- A native connection is never checked (`connection::check` has no answer for it, and it refuses an agent check)
+  and never runs: preflight refuses its steps and the runner refuses to start one. It reads *Not available yet* in
+  the connections list (type *Native*, cpu glyph, provider · preset · host) and inspector; a profile on it shows
+  one notice (*This profile can’t run yet: its connection is a native agent*), its permissions panel reads *Not
+  enforced yet*, network keeps the chosen access, and the MCP choices are locked with the reason. The pipeline step
+  and run preflight say the same.
+- Follow-ups: P1b–P1e (ORC-57…ORC-60) under *N · Native agent*.
 
 C6 · Commands outside the permissions ask a person ("List + ask") · branch `claude/ask-outside`
 

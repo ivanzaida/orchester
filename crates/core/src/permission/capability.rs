@@ -20,6 +20,8 @@
 //!   Claude Code through its permission prompt tool (`crate::connection::claude_approval`), where every command asks.
 //!   Claude Code runs an approved command outside any sandbox, so in a read-only step the approval says it can change
 //!   files.
+//! - Native agents (`docs/architecture/native-agent.md` §5.4) are not available in this version: no option is enforced
+//!   for them ([`Unavailable::NativeNotAvailable`]), so no profile runs on a native connection.
 //! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
 //!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
@@ -149,6 +151,8 @@ pub enum Unavailable {
   CannotConfineCommands,
   /// The CLI cannot keep commands off the network on this platform.
   CannotBlockNetwork,
+  /// Native agents are not available in this version, so nothing is enforced for them.
+  NativeNotAvailable,
 }
 
 /// Whether a CLI enforces an option on a platform.
@@ -189,6 +193,7 @@ pub const fn support(provider: AgentProvider, platform: Platform, option: Permis
     (AgentProvider::ClaudeCodeCli, O::AnyCommand) => No(U::CannotConfineCommands),
     (AgentProvider::ClaudeCodeCli, O::NetworkOff) => No(U::CannotBlockNetwork),
     (AgentProvider::ClaudeCodeCli, O::NetworkOn) => Enforced(M::ClaudeWebTools),
+    (AgentProvider::AnthropicApi | AgentProvider::OpenAiApi, _) => No(U::NativeNotAvailable),
   }
 }
 
@@ -205,6 +210,9 @@ pub enum PermissionProblem {
     option: PermissionOption,
     reason: Unavailable,
   },
+  /// The connection is to a native agent provider, which this version runs no agent on.
+  #[error("native agents are not available in this version")]
+  NativeNotAvailable,
 }
 
 /// Permissions as a CLI runs them, with how each setting is enforced.
@@ -270,6 +278,9 @@ impl AgentPermissions {
     provider: AgentProvider,
     platform: Platform,
   ) -> Result<EnforcedPermissions, PermissionProblem> {
+    let Some((folders_mechanism, outside_commands)) = cli_traits(provider) else {
+      return Err(PermissionProblem::NativeNotAvailable);
+    };
     for setting in [
       PermissionSetting::Repository,
       PermissionSetting::Commands,
@@ -299,6 +310,7 @@ impl AgentPermissions {
         let mechanism = match provider {
           AgentProvider::ClaudeCodeCli => Mechanism::ClaudeWebToolsRemoved,
           AgentProvider::CodexCli => enforced(PermissionOption::NetworkOn)?,
+          AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return Err(PermissionProblem::NativeNotAvailable),
         };
         (mechanism, Some(reason))
       }
@@ -306,14 +318,7 @@ impl AgentPermissions {
     let writable_folders = permissions
       .granted_folders()
       .is_some_and(|folders| !folders.is_empty())
-      .then_some(match provider {
-        AgentProvider::CodexCli => Mechanism::CodexWritableRoots,
-        AgentProvider::ClaudeCodeCli => Mechanism::ClaudeAddDir,
-      });
-    let outside_commands = match provider {
-      AgentProvider::ClaudeCodeCli => OutsideCommands::PermissionPrompt,
-      AgentProvider::CodexCli => OutsideCommands::SandboxApproval,
-    };
+      .then_some(folders_mechanism);
     Ok(EnforcedPermissions {
       permissions,
       repository,
@@ -330,10 +335,13 @@ impl AgentPermissions {
   }
 
   /// The network access a run on `provider` gets on `platform`: the chosen one, or on when off
-  /// cannot be enforced there (as [`Self::enforced_on`] runs it).
+  /// cannot be enforced there (as [`Self::enforced_on`] runs it). A native provider runs nothing in
+  /// this version, so nothing turns its network on: it keeps the chosen access.
   pub const fn effective_network(&self, provider: AgentProvider, platform: Platform) -> NetworkAccess {
     match self.network {
-      NetworkAccess::Off if !support(provider, platform, PermissionOption::NetworkOff).is_enforced() => {
+      NetworkAccess::Off
+        if provider.runs_agents() && !support(provider, platform, PermissionOption::NetworkOff).is_enforced() =>
+      {
         NetworkAccess::On
       }
       network => network,
@@ -390,5 +398,15 @@ impl AgentPermissions {
     )
     .fitted_to(provider, platform)
     .0
+  }
+}
+
+/// How a CLI grants the extra writable folders and asks a person about the commands its permissions
+/// do not run by themselves; `None` for a native provider, which enforces nothing in this version.
+const fn cli_traits(provider: AgentProvider) -> Option<(Mechanism, OutsideCommands)> {
+  match provider {
+    AgentProvider::CodexCli => Some((Mechanism::CodexWritableRoots, OutsideCommands::SandboxApproval)),
+    AgentProvider::ClaudeCodeCli => Some((Mechanism::ClaudeAddDir, OutsideCommands::PermissionPrompt)),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => None,
   }
 }
