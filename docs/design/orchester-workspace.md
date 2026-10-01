@@ -874,12 +874,12 @@ Each item links to its resource (*Open Builder 2*). Progress counts the items th
 
 Reused: sidebar `zo9Py` with `TSJpn`, `u1XBP`, `DeizF`, `ZGwlv`, `q5LzI`, `tfGRt`, `jNTVN`, `SOW6S`, `ajikA` and `hn8qO`; the setup layout of 01.04 `w6ODp4`, the dialog layout of 03.05 `c3jD7`, the library of 03.04 and 03.A, the editor of `j8OB3` and the profile editor of 04.03 `WPmtS`. No new components or variables.
 
-**Open questions.**
+**Decisions (2026-10-01).** The user approved the frames and answered their open questions. Where a frame differs, these decisions win.
 
-- **Setup as built.** Project setup today creates the project after the folder step and opens it. 03.10 assumes a *Starting point* step before *Runner & agents*. Until those later steps ship, the same choice can be offered once in the new project's empty Pipelines (03.11).
-- **Reuse instead of rename.** Should a preview row offer *Use Kontur's Builder instead* (like Import's *Reuse local*) for people who want the preset's pipeline on their existing profiles?
-- **Managing your presets.** Renaming, updating and deleting a saved preset is not drawn, and neither is sharing one between computers (presets live per user on this computer until a server exists).
-- **Skill scope after a rename.** 03.13 shows a skill scoped to the Verify step. Whether a preset skill keeps its step scope when the step's pipeline is renamed depends on the skill-scope rules.
+- **No Starting point step yet.** Until the later setup steps ship, a new project is offered the presets on its empty Pipelines (03.11 `imNnP`). The setup step of 03.10 `am0Dq` comes later.
+- **Always a renamed copy.** A preview row never offers to use the project's existing profile (*Use Kontur's Builder instead*). A name conflict always creates a renamed copy, for the permissions reason above.
+- **Managing your presets is out of scope.** Renaming, updating, deleting and sharing a saved preset come in a later task.
+- **Skill scope follows ids.** A skill's step scope refers to the step by id, not by name, so it survives the renames of a preset's pipeline and steps.
 
 ## Task library, bulk creation and scheduling
 
