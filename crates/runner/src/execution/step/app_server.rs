@@ -39,6 +39,9 @@ use thiserror::Error;
 use super::stderr::StderrLog;
 use crate::supervisor::Supervised;
 
+/// Characters kept of Codex's reason for refusing to resume a session.
+const REASON_CHARS: usize = 300;
+
 #[derive(Debug, Error)]
 pub(super) enum AppServerFailure {
   #[error("{0}")]
@@ -197,8 +200,8 @@ impl AppServerSession {
       .get("id")
       .and_then(Value::as_u64)
       .ok_or_else(|| "Codex App Server omitted a response ID".to_owned())?;
-    if value.get("error").is_some() {
-      return Err(format!("Codex App Server rejected {}", phase_name(self.phase)).into());
+    if let Some(error) = value.get("error") {
+      return Err(self.rejected(error).into());
     }
     let result = value
       .get("result")
@@ -266,6 +269,24 @@ impl AppServerSession {
       }
       (Phase::Complete, 5) => Ok(Vec::new()),
       _ => Err("Codex App Server responded out of sequence".to_owned().into()),
+    }
+  }
+
+  /// Why the step stops after Codex answered its request with `error`. A session Codex cannot resume
+  /// (its history is not in this Codex home, for one) is named with Codex's reason, cut to a line.
+  fn rejected(&self, error: &Value) -> String {
+    match (&self.setup.resume, self.phase) {
+      (Some(session), Phase::Thread) => {
+        let reason: String = error
+          .get("message")
+          .and_then(Value::as_str)
+          .unwrap_or("no reason given")
+          .chars()
+          .take(REASON_CHARS)
+          .collect();
+        format!("Codex could not resume the earlier session {session}: {reason}")
+      }
+      _ => format!("Codex App Server rejected {}", phase_name(self.phase)),
     }
   }
 

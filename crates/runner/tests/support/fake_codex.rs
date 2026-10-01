@@ -11,7 +11,8 @@
 //! `turn/start` without the prompt (`turn: `); and the prompt (its first line, then each line). The
 //! runner keeps standard error in the activity, so tests can check how it was started.
 //!
-//! A new session is `fake-thread-1`; `thread/resume` continues the thread it names in the worktree.
+//! A new session is `fake-thread-1`; `thread/resume` continues the thread it names in the worktree, unless
+//! its id has `-gone-` in it: then Codex has no history of it and refuses, as 0.159.2 does.
 //!
 //! Its configuration (`config/read`) has, besides the project servers of its arguments, the user's own
 //! server `user-global`, which runs unless the thread's configuration turns it off. Its layers are the
@@ -156,6 +157,10 @@ impl Session {
   /// asked for, the network and writable roots of the arguments, the local environment.
   fn thread(&mut self, method: &str, params: &Value) {
     eprintln!("thread: {params}");
+    if let Some(gone) = params["threadId"].as_str().filter(|id| id.contains("-gone-")) {
+      emit(&json!({"id": 3, "error": {"code": -32600, "message": format!("no rollout found for thread id {gone}")}}));
+      return;
+    }
     self.user_server_off = params["config"]["mcp_servers"]["user-global"]["enabled"] == json!(false);
     self.cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
     self.resumed = method == "thread/resume";

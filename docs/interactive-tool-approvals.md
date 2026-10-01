@@ -31,7 +31,10 @@ runs outside the sandbox, where it can change files.
 
 Changing permissions from a waiting task's popover applies to the next invocation. When continuing
 the task conversation, a session that ran through `codex exec` before App Server became the only
-transport resumes through App Server with its original session ID and worktree. Completed steps, uncommitted work, run limits and the saved pipeline remain
+transport resumes through App Server with its original session ID and worktree (`thread/resume` by
+id: 0.159.2's `thread/read` found such a session, with `source: exec`, without changing it). A session
+Codex has no history of stops the step with *Codex could not resume the earlier session <id>:* and
+Codex's reason (`no rollout found for thread id …`). Completed steps, uncommitted work, run limits and the saved pipeline remain
 intact. **Apply now** uses the existing checkpoint/restart mechanism. Approval requests and waiting
 time are persisted; waiting for a decision does not consume active agent time.
 
