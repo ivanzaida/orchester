@@ -6,7 +6,7 @@
 
 use std::{
   ffi::OsStr,
-  path::{Path, PathBuf},
+  path::{Component, Path, PathBuf},
 };
 
 /// The preamble `cmd-shim` writes; it sets `dp0` to the launcher's folder.
@@ -32,7 +32,9 @@ const PROGRAM_EXTENSION: &str = "exe";
 /// The program, relative to the launcher's folder, that an npm launcher starts with its own
 /// arguments. `None` for any other script.
 pub fn native_shim_program(text: &str) -> Option<PathBuf> {
-  let lines: Vec<&str> = text.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+  // Lines are compared as written: `cmd.exe` keeps trailing spaces, so `SET dp0=%~dp0 ` would set
+  // a different folder.
+  let lines: Vec<&str> = text.lines().filter(|line| !line.is_empty()).collect();
   let (launch, preamble) = lines.split_last()?;
   let (folder, program) = launch_line(launch)?;
   let preamble_fits = match folder {
@@ -41,7 +43,27 @@ pub fn native_shim_program(text: &str) -> Option<PathBuf> {
       .iter()
       .all(|line| QUIET_LINES.iter().any(|quiet| quiet.eq_ignore_ascii_case(line))),
   };
-  preamble_fits.then(|| program.split('\\').collect())
+  if !preamble_fits {
+    return None;
+  }
+  inside_folder(program)
+}
+
+/// `program` as a path inside the launcher's folder (`..` allowed). A drive (`C:`), a root or an
+/// empty or `.` part is refused: `Path::join` would replace the folder with it, or read it
+/// differently from `cmd.exe`, so the program started would not be the one the launcher runs.
+fn inside_folder(program: &str) -> Option<PathBuf> {
+  if program.contains(':') {
+    return None;
+  }
+  let plain = program.split('\\').all(|part| {
+    let mut components = Path::new(part).components();
+    matches!(
+      (components.next(), components.next()),
+      (Some(Component::Normal(_) | Component::ParentDir), None)
+    )
+  });
+  plain.then(|| program.split('\\').collect())
 }
 
 /// `"<folder>\<program>.exe" %*`: how the launcher names its folder, and the program's relative

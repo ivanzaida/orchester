@@ -100,6 +100,37 @@ fn process_shim_programs_of_other_scripts_are_not_guessed() {
   }
 }
 
+#[test]
+fn process_shim_programs_stay_inside_the_launcher_folder() {
+  const PROGRAM: &str = "node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe";
+  assert_eq!(
+    native_shim_program("@SETLOCAL\r\n\"%~dp0\\..\\tool\\bin\\tool.exe\" %*\r\n"),
+    Some(relative("../tool/bin/tool.exe"))
+  );
+  // `Path::join` would leave the folder for a drive (relative to that drive's current folder),
+  // a root or a share; `.` and empty parts are refused as well.
+  for elsewhere in [
+    "C:\\Windows\\System32\\cmd.exe",
+    "C:cmd.exe",
+    "\\Windows\\System32\\cmd.exe",
+    "\\\\server\\share\\cmd.exe",
+    "node_modules\\.\\claude.exe",
+    "node_modules\\\\claude.exe",
+  ] {
+    let text = CLAUDE_SHIM.replace(PROGRAM, elsewhere);
+    assert_eq!(native_shim_program(&text), None, "{elsewhere}");
+  }
+}
+
+#[test]
+fn process_shim_program_preamble_lines_are_compared_as_written() {
+  // `cmd.exe` keeps the trailing space: `dp0` would not be the launcher's folder.
+  let spaced = CLAUDE_SHIM.replace("SET dp0=%~dp0\n", "SET dp0=%~dp0 \n");
+  assert_eq!(native_shim_program(&spaced), None);
+  let indented = CLAUDE_SHIM.replace("\nSETLOCAL\n", "\n  SETLOCAL\n");
+  assert_eq!(native_shim_program(&indented), None);
+}
+
 /// `codex.cmd` next to its script, with or without Node.js beside it.
 fn installed_codex(folder: &Path, local_node: bool) -> PathBuf {
   let script = folder.join(relative("node_modules/@openai/codex/bin/codex.js"));
