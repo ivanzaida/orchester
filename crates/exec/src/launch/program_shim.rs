@@ -6,8 +6,10 @@
 
 use std::{
   ffi::OsStr,
-  path::{Component, Path, PathBuf},
+  path::{Path, PathBuf},
 };
+
+use super::command_script::inside_folder;
 
 /// The preamble `cmd-shim` writes; it sets `dp0` to the launcher's folder.
 const CMD_SHIM_PREAMBLE: [&str; 8] = [
@@ -47,23 +49,6 @@ pub fn native_shim_program(text: &str) -> Option<PathBuf> {
     return None;
   }
   inside_folder(program)
-}
-
-/// `program` as a path inside the launcher's folder (`..` allowed). A drive (`C:`), a root or an
-/// empty or `.` part is refused: `Path::join` would replace the folder with it, or read it
-/// differently from `cmd.exe`, so the program started would not be the one the launcher runs.
-fn inside_folder(program: &str) -> Option<PathBuf> {
-  if program.contains(':') {
-    return None;
-  }
-  let plain = program.split('\\').all(|part| {
-    let mut components = Path::new(part).components();
-    matches!(
-      (components.next(), components.next()),
-      (Some(Component::Normal(_) | Component::ParentDir), None)
-    )
-  });
-  plain.then(|| program.split('\\').collect())
 }
 
 /// `"<folder>\<program>.exe" %*`: how the launcher names its folder, and the program's relative

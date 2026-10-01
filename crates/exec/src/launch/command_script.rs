@@ -3,7 +3,7 @@
 
 use std::{
   fs, io,
-  path::{Path, PathBuf},
+  path::{Component, Path, PathBuf},
 };
 
 use super::{Launch, Via, program_shim::native_shim_program};
@@ -96,7 +96,25 @@ pub fn node_shim_script(text: &str) -> Option<PathBuf> {
       _ => found = Some(script),
     }
   }
-  found.map(|script| script.split('\\').collect())
+  found.and_then(inside_folder)
+}
+
+/// `relative`, the file a launcher names after its folder, as a path inside that folder (`..`
+/// allowed). A drive (`C:`), a root or an empty or `.` part is refused: `Path::join` would replace
+/// the folder with it, or read it differently from `cmd.exe`, so the file started would not be the
+/// one the launcher runs.
+pub(super) fn inside_folder(relative: &str) -> Option<PathBuf> {
+  if relative.contains(':') {
+    return None;
+  }
+  let plain = relative.split('\\').all(|part| {
+    let mut components = Path::new(part).components();
+    matches!(
+      (components.next(), components.next()),
+      (Some(Component::Normal(_) | Component::ParentDir), None)
+    )
+  });
+  plain.then(|| relative.split('\\').collect())
 }
 
 /// `<node> "<folder>\<script>" %*`: the Node.js program as written and the script's relative path.

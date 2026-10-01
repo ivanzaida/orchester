@@ -123,6 +123,26 @@ fn process_shim_programs_stay_inside_the_launcher_folder() {
 }
 
 #[test]
+fn process_shim_scripts_stay_inside_the_launcher_folder() {
+  const SCRIPT: &str = "node_modules\\@openai\\codex\\bin\\codex.js";
+  assert_eq!(
+    node_shim_script("@SETLOCAL\r\nnode  \"%~dp0\\..\\lib\\cli.js\" %*\r\n"),
+    Some(relative("../lib/cli.js"))
+  );
+  for elsewhere in [
+    "C:\\Users\\x\\cli.js",
+    "C:cli.js",
+    "\\lib\\cli.js",
+    "\\\\server\\share\\cli.js",
+    "node_modules\\.\\cli.js",
+    "node_modules\\\\cli.js",
+  ] {
+    let text = CODEX_SHIM.replace(SCRIPT, elsewhere);
+    assert_eq!(node_shim_script(&text), None, "{elsewhere}");
+  }
+}
+
+#[test]
 fn process_shim_program_preamble_lines_are_compared_as_written() {
   // `cmd.exe` keeps the trailing space: `dp0` would not be the launcher's folder.
   let spaced = CLAUDE_SHIM.replace("SET dp0=%~dp0\n", "SET dp0=%~dp0 \n");
