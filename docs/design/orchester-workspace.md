@@ -1112,7 +1112,7 @@ Drawn 2026-09-30 (ORC-27, Memory 3/3), group `K4KyPj` ("States · Memory", last 
 
 ## Delivery
 
-Drawn 2026-10-01, group `i2o8ko` ("States · Delivery & merge queue", last in 02 / Tasks & runs at x 0 / y 46467, height 5312; the section is now 51779 high). A proposal, not built. Fixture: Kontur, base `main`; ORC-128 *Add GitHub authentication* (run #128), ORC-131 *Add switcher keyboard shortcuts* (run #134), ORC-135, ORC-137, ORC-139 and the hashes are illustrative.
+Drawn 2026-10-01, group `i2o8ko` ("States · Delivery & merge queue", last in 02 / Tasks & runs at x 0 / y 46467, height 5312; the section is now 51779 high). Approved by the user 2026-10-01, not built. Fixture: Kontur, base `main` (illustrative: the base is the project's base branch setting); ORC-128 *Add GitHub authentication* (run #128), ORC-131 *Add switcher keyboard shortcuts* (run #134), ORC-135, ORC-137, ORC-139 and the hashes are illustrative.
 
 **Why.** A run used to end in *Ready for review* and a person pressed *Merge into main* (02.P). The run started from the base as it was then, main moved meanwhile, so merges conflicted; Check, Review and Verify had run against the old base, not against what lands; and several finished runs were not ordered.
 
@@ -1123,9 +1123,9 @@ Drawn 2026-10-01, group `i2o8ko` ("States · Delivery & merge queue", last in 02
 - **Conflicts.** An *Integrate* step runs with the integrator profile: it resolves the conflicts, re-runs Check and briefly reviews its own resolution, then delivery goes on. If it fails, the run leaves the queue as *Failed* and the task goes to Needs you with the conflicting files; nothing reaches the base.
 - **Never touch a dirty checkout.** If the base is checked out in the user's repository with uncommitted changes, delivery waits (*Blocked*) and says why; it continues by itself once the checkout is clean, or on *Retry*.
 - **The base moved during the re-check.** The check no longer matches what would land, so the run syncs again and Check runs again; a run is never merged on a check of an older base. The outdated check stays in Activity as *Check superseded*.
-- **Waiting for approval does not hold the queue** (proposal): the next run starts; when the person merges, the run syncs and checks again first if the base moved since its check.
+- **Waiting for approval does not hold the queue.** Later runs go ahead; when the person merges, the waiting run syncs and checks again first if the base moved since its check.
 
-**States of a queue row** (`DeizF` label, then the run, then actions): *Queued* (clock-3; position; *Move up*, *Remove* = leave the queue and return to Ready for review), *Syncing with main* (loader), *Re-checking* (loader), *Integrating conflicts* (loader, agent working) — all three *Open task*; *Waiting for approval* (hand; *Open task*, primary *Review & merge*), *Blocked* (circle-pause; the reason, the uncommitted files in mono; *Open task*, *Retry*), *Failed* (circle-x; the reason; *Open task*), *Merged* (git-merge; hash, time, method, *worktree and code index removed*; *Open task*). The active run shows its phases: *Synced with main › Check on the merged result › Your approval › Merge into main*.
+**States of a queue row** (`DeizF` label, then the run, then actions): *Queued* (clock-3; position; *Move up*, *Move to top*, *Remove* = leave the queue and return to Ready for review; no dragging), *Syncing with main* (loader), *Re-checking* (loader), *Integrating conflicts* (loader, agent working) — all three *Open task*; *Waiting for approval* (hand; *Open task*, primary *Review & merge*), *Blocked* (circle-pause; the reason, the uncommitted files in mono; *Open task*, *Retry*), *Failed* (circle-x; the reason; *Open task*), *Merged* (git-merge; hash, time, method, *worktree and code index removed*; *Open task*). The active run shows its phases: *Synced with main › Check on the merged result › Your approval › Merge into main*.
 
 **Where the queue lives.** A sidebar entry *Merge queue* (git-merge) right after Tasks, with the number of runs in the queue as its count (hidden at 0). Not a tab on Tasks: Tasks already has a *Queue* tab for starting runs, and the merge queue is one ordered, project-wide line whose blocked state stops every run in it, not a filter of tasks. Not Pull requests: that screen is GitHub review, and pull request delivery is not available. Every frame in the group uses this sidebar.
 
@@ -1149,7 +1149,22 @@ Drawn 2026-10-01, group `i2o8ko` ("States · Delivery & merge queue", last in 02
 
 Reused: sidebar `zo9Py` with nav items `TSJpn`, `u1XBP`, `DeizF`, `ajikA`, `ZGwlv`, `K8ItM`, `tfGRt`, `l3hyb`, `i9rVFu`, `mDnc3`, `N4SlQq`, `mBkeJ`, `zemhy`, `SOW6S`, the dialog layout of `C2CPbs`, the Memory page layout of `Qxdzi`. No new components or variables. Proposed copy namespace: `delivery.*` (`delivery.step.*`, `delivery.queue.*`, `delivery.readyToMerge.*`, `delivery.integrate.*`).
 
-**Open questions.** Whether *Waiting for approval* should hold the queue instead; whether *Move up* is enough or rows need drag and *Move to top*; a limit on re-syncs when the base keeps moving; what *Resolve myself* hands over (the worktree path, an editor, a terminal) and how the queue learns the resolution is committed; Squash's commit message; whether a run whose pipeline has no Deliver step keeps today's *Merge into main* (02.P) — the frames assume it does.
+**Decisions (2026-10-01).**
+
+- **Base branch.** Delivery targets the project's base branch setting; `main` in the frames is fixture data.
+- **Approval does not hold the queue.** See above. The frames draw it.
+- **Reordering.** *Move up* and *Move to top* on queued rows. There is no dragging. The frames draw *Move up* only; *Move to top* sits beside it.
+- **Re-sync limit.** A run re-syncs at most 3 times in a row because the base moved during its check. After that it leaves the queue and goes to Needs you with the reason *main keeps moving* (the base branch's name).
+- **Resolve myself.** It shows the run's worktree path with *Open folder* and *Open in editor*. When the person presses *I’ve resolved it*, Orchester:
+  - checks that no conflict markers are left;
+  - checks that the branch merges cleanly with the current base;
+  - runs Check again;
+  - puts the run back in the queue.
+
+  This view is not drawn yet.
+- **Squash message.** The squash commit is titled `ORC-N: <task title>`; its body holds a short summary of the work and the run number.
+- **Pipelines without a Deliver step.** They keep the manual *Merge into <base>* (02.P) on the task page; their runs never join the queue.
+- **Ready to merge checks.** The dialog lists exactly the steps the run's pipeline has, plus the re-check on the merged result, so a pipeline with *Verify* shows it. `L1SoP` draws only *Run checks* and *Review* of the fixture pipeline; the built dialog also lists its other steps.
 
 ## Application lifecycle and runner connection
 
