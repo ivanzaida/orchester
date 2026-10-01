@@ -202,7 +202,8 @@ fn claude_catalog(
   ]);
   let mut connection = connection(AgentProvider::ClaudeCodeCli);
   connection
-    .record_check(check(AgentProvider::ClaudeCodeCli, &executable(), &runner, &[], now()).expect("a CLI is checked"));
+    .record_check(check(AgentProvider::ClaudeCodeCli, &executable(), &runner, &[], now()).expect("a CLI is checked"))
+    .expect("an agent check fits a CLI connection");
   let catalog = connection.catalog().expect("a successful check has a catalog").clone();
   (connection.status(), catalog)
 }
@@ -353,7 +354,8 @@ fn check_failures_become_statuses() {
     let runner = Replay::new([("--version", answer)]);
     let mut connection = connection(AgentProvider::CodexCli);
     connection
-      .record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()).expect("a CLI is checked"));
+      .record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()).expect("a CLI is checked"))
+      .expect("an agent check fits a CLI connection");
     assert_eq!(connection.status(), expected);
     assert!(connection.models().is_empty());
   }
@@ -368,7 +370,8 @@ fn sign_in_status_that_cannot_run_is_unknown() {
   ]);
   let mut connection = connection(AgentProvider::CodexCli);
   connection
-    .record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()).expect("a CLI is checked"));
+    .record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()).expect("a CLI is checked"))
+    .expect("an agent check fits a CLI connection");
   assert_eq!(connection.status(), ConnectionStatus::SignInUnknown);
   assert!(connection.status().is_usable());
   assert!(connection.models().is_empty());
@@ -390,7 +393,8 @@ fn changing_the_executable_drops_the_last_check() {
   let runner = Replay::new([("--version", Err(CommandError::NotFound))]);
   let mut connection = connection(AgentProvider::CodexCli);
   connection
-    .record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()).expect("a CLI is checked"));
+    .record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()).expect("a CLI is checked"))
+    .expect("an agent check fits a CLI connection");
   assert_eq!(connection.status(), ConnectionStatus::ExecutableMissing);
   connection
     .set_executable(executable().with_file_name("other.exe"))

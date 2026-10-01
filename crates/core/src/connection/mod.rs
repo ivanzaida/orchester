@@ -171,11 +171,14 @@ impl LastCheck {
     }
   }
 
+  /// Whether the check can describe a connection of `kind`. A native agent connection has no
+  /// program, so no agent check describes it.
   const fn fits(&self, kind: &ConnectionKind) -> bool {
-    matches!(
-      (self, kind),
-      (Self::Agent(_), ConnectionKind::Agent(_)) | (Self::GitHub(_), ConnectionKind::GitHub { .. })
-    )
+    match (self, kind) {
+      (Self::Agent(_), ConnectionKind::Agent(provider)) => !provider.is_native(),
+      (Self::GitHub(_), ConnectionKind::GitHub { .. }) => true,
+      (Self::Agent(_), ConnectionKind::GitHub { .. }) | (Self::GitHub(_), ConnectionKind::Agent(_)) => false,
+    }
   }
 }
 
@@ -284,7 +287,8 @@ impl Connection {
     Ok(())
   }
 
-  /// Replaces the last check. A check of another kind of connection is refused.
+  /// Replaces the last check. A check of another kind of connection, or any check of a native
+  /// agent connection, is refused.
   pub fn record_check(&mut self, check: LastCheck) -> Result<(), ConnectionError> {
     if !check.fits(&self.kind) {
       return Err(ConnectionError::CheckKindMismatch(self.id));

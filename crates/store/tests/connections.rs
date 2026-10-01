@@ -66,7 +66,9 @@ fn connection_round_trip_keeps_the_check() {
   db.create_connection(&codex).expect("create");
   assert_eq!(db.connection(codex.id()).expect("read").as_ref(), Some(&*codex));
 
-  codex.record_check(available());
+  codex
+    .record_check(available())
+    .expect("an agent check fits a CLI connection");
   codex.rename(Name::new("Codex · Kontur").expect("valid name"));
   db.save_connection(&codex).expect("save");
   let stored = db.connection(codex.id()).expect("read").expect("exists");
@@ -121,7 +123,9 @@ fn saving_an_unknown_connection_fails() {
 fn connection_rows_hold_no_credentials_and_a_status() {
   let (repo, mut db) = project_repo();
   let mut codex = connection(&repo, "Codex", AgentProvider::CodexCli);
-  codex.record_check(available());
+  codex
+    .record_check(available())
+    .expect("an agent check fits a CLI connection");
   db.create_connection(&codex).expect("create");
   let raw = Sqlite::open(repo.path().join(".orchester/orchester.db")).expect("open raw database");
   let (kind, status, settings): (String, String, String) = raw

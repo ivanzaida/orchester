@@ -215,7 +215,7 @@ where
       draft.executable,
       now,
     )?;
-    connection.record_check(draft.check);
+    connection.record_check(draft.check)?;
     store.create_connection(&connection)?;
     return Ok(connection.id());
   };
@@ -223,7 +223,7 @@ where
   let mut connection = AgentConnection::try_from(stored)?;
   connection.rename(draft.name);
   connection.set_executable(draft.executable)?;
-  connection.record_check(draft.check);
+  connection.record_check(draft.check)?;
   store.save_connection(&connection)?;
   Ok(id)
 }

@@ -120,8 +120,9 @@ impl AgentConnection {
     }
   }
 
-  pub fn record_check(&mut self, check: ConnectionCheck) {
-    self.connection.last_check = Some(LastCheck::Agent(check));
+  /// See [`Connection::record_check`]: a native connection refuses the check.
+  pub fn record_check(&mut self, check: ConnectionCheck) -> Result<(), ConnectionError> {
+    self.connection.record_check(LastCheck::Agent(check))
   }
 
   /// Models found by the last successful check.

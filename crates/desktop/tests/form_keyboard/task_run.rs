@@ -168,14 +168,16 @@ pub(crate) fn seed_agent(
     now,
   )
   .expect("absolute path");
-  connection.record_check(ConnectionCheck {
-    at: now,
-    result: CheckResult::Available {
-      version: version.into(),
-      sign_in: SignIn::SignedIn,
-      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: now,
+      result: CheckResult::Available {
+        version: version.into(),
+        sign_in: SignIn::SignedIn,
+        catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   let connection = connection.into_connection();
   db.create_connection(&connection).expect("connection");
   let profile = AgentProfile::new(

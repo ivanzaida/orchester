@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{
-    AgentConnection, AgentEndpoint, AgentProvider, AgentRuntime, ApiEndpoint, BaseUrl, Connection, ConnectionError,
-    ConnectionKind, ConnectionStatus, EndpointError, EndpointPreset, WireApi, check, invocation::Platform,
-    parse_version,
+    AgentConnection, AgentEndpoint, AgentProvider, AgentRuntime, ApiEndpoint, BaseUrl, CheckResult, Connection,
+    ConnectionCheck, ConnectionError, ConnectionKind, ConnectionStatus, EndpointError, EndpointPreset, LastCheck,
+    WireApi, check, invocation::Platform, parse_version,
   },
   id::{ConnectionId, SecretId},
   name::Name,
@@ -147,6 +147,34 @@ fn a_native_connection_is_reached_at_its_api_and_never_at_a_program() {
       Timestamp::from_unix_millis(1_000),
     ),
     Err(ConnectionError::RelativeExecutable(_))
+  ));
+}
+
+#[test]
+fn a_native_connection_refuses_an_agent_check() {
+  let endpoint = api(EndpointPreset::Official, "https://api.openai.com/v1");
+  let mut connection = native(AgentProvider::OpenAiApi, endpoint.clone()).expect("native connection");
+  let agent_check = ConnectionCheck {
+    at: Timestamp::from_unix_millis(2_000),
+    result: CheckResult::ExecutableMissing,
+  };
+  assert!(matches!(
+    connection.record_check(agent_check.clone()),
+    Err(ConnectionError::CheckKindMismatch(_))
+  ));
+  assert_eq!(connection.last_check(), None);
+  assert_eq!(connection.status(), ConnectionStatus::NotChecked);
+  // A stored check of a native connection does not load either.
+  assert!(matches!(
+    Connection::from_stored(
+      ConnectionId::generate(),
+      Name::new("OpenAI").expect("valid name"),
+      ConnectionKind::Agent(AgentProvider::OpenAiApi),
+      AgentEndpoint::Api(endpoint),
+      Some(LastCheck::Agent(agent_check)),
+      Timestamp::from_unix_millis(1_000),
+    ),
+    Err(ConnectionError::CheckKindMismatch(_))
   ));
 }
 

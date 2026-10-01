@@ -37,14 +37,16 @@ fn connection(provider: AgentProvider, sign_in: SignIn) -> Connection {
     at(1),
   )
   .expect("absolute path");
-  connection.record_check(ConnectionCheck {
-    at: at(2),
-    result: CheckResult::Available {
-      version: "0.139.0".into(),
-      sign_in,
-      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: at(2),
+      result: CheckResult::Available {
+        version: "0.139.0".into(),
+        sign_in,
+        catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   connection.into_connection()
 }
 
