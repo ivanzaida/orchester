@@ -216,6 +216,14 @@ Tests: a headless `form_keyboard` test that records the tab and body bounds befo
 sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
 Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
 
+## N · Native agent (decided, not started)
+
+Orchester runs the coding-agent loop itself against model APIs (Anthropic Messages, OpenAI Responses, compatible
+endpoints such as DeepSeek), next to the Codex and Claude Code CLIs. The design is
+`docs/architecture/native-agent.md`: crate layout, model clients, tools, permissions, context, connections, tests,
+and phases P1–P5 (with P3b, Chat Completions) with acceptance lists. The user's decisions of 2026-10-01 are recorded
+there; turn the phases into tasks here when work starts, beginning with P1.
+
 ## L · After lurq 0.30.0
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
