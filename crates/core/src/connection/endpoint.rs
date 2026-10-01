@@ -11,7 +11,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::http_url::{self, Scheme};
+use super::http_url::{self, HostError, Scheme};
 use crate::id::SecretId;
 
 /// Longest base URL, in characters.
@@ -133,8 +133,7 @@ impl BaseUrl {
     if url.chars().count() > MAX_URL_CHARS {
       return Err(EndpointError::TooLong);
     }
-    // HTTP clients read a backslash as a slash, so it could end the host where this check does not.
-    if url.contains('\\') {
+    if url.contains(http_url::BACKSLASH) {
       return Err(EndpointError::Backslash);
     }
     if url.contains(['?', '#']) {
@@ -145,7 +144,10 @@ impl BaseUrl {
     if authority.contains('@') {
       return Err(EndpointError::UrlCredentials);
     }
-    let host = host_of(authority)?;
+    let host = http_url::host(authority).map_err(|error| match error {
+      HostError::Missing => EndpointError::NoHost,
+      HostError::Invalid => EndpointError::InvalidHost,
+    })?;
     let loopback = LOOPBACK_HOSTS.iter().any(|local| local.eq_ignore_ascii_case(host));
     if scheme == Scheme::Http && !loopback {
       return Err(EndpointError::UrlScheme);
@@ -162,42 +164,6 @@ impl BaseUrl {
     let rest = self.0.split_once("://").map_or(self.0.as_str(), |(_, rest)| rest);
     http_url::authority(rest)
   }
-}
-
-/// The host of `authority`, checked with its port: a bracketed IPv6 address or a name of letters,
-/// digits, `-`, `.` and `_`, then nothing or `:` and a port number.
-fn host_of(authority: &str) -> Result<&str, EndpointError> {
-  let (host, port) = match authority.strip_prefix('[') {
-    Some(inside) => {
-      let end = inside.find(']').ok_or(EndpointError::InvalidHost)?;
-      let address = &inside[..end];
-      if address.is_empty() || !address.chars().all(|c| c.is_ascii_hexdigit() || c == ':' || c == '.') {
-        return Err(EndpointError::InvalidHost);
-      }
-      let port = match &inside[end + 1..] {
-        "" => None,
-        after => Some(after.strip_prefix(':').ok_or(EndpointError::InvalidHost)?),
-      };
-      (&authority[..end + 2], port)
-    }
-    None => match authority.split_once(':') {
-      Some((host, port)) => (host, Some(port)),
-      None => (authority, None),
-    },
-  };
-  if host.is_empty() {
-    return Err(EndpointError::NoHost);
-  }
-  let name = |c: char| c.is_alphanumeric() || matches!(c, '-' | '.' | '_');
-  if !host.starts_with('[') && !host.chars().all(name) {
-    return Err(EndpointError::InvalidHost);
-  }
-  // `u16` parsing alone would take a sign.
-  let valid_port = |port: &str| port.chars().all(|c| c.is_ascii_digit()) && port.parse::<u16>().is_ok();
-  if port.is_some_and(|port| !valid_port(port)) {
-    return Err(EndpointError::InvalidHost);
-  }
-  Ok(host)
 }
 
 impl fmt::Display for BaseUrl {

@@ -66,6 +66,21 @@ fn mcp_urls_are_http_without_credentials() {
     McpUrl::new("https://mcp.example.dev/a b"),
     Err(TransportError::Whitespace(_))
   ));
+  assert!(McpUrl::new("http://[::1]:8931/mcp").is_ok());
+  for invalid in [r"https://mcp.example.dev\@evil.example/", r"http://localhost\mcp"] {
+    assert_eq!(McpUrl::new(invalid), Err(TransportError::Backslash), "{invalid}");
+  }
+  for invalid in [
+    "http://[::1]x/mcp",
+    "http://[::1/mcp",
+    "https://[]/mcp",
+    "https://mcp.example.dev:/mcp",
+    "https://mcp.example.dev:http/mcp",
+    "https://mcp.example.dev:99999/mcp",
+    "https://mcp<1>.example.dev/mcp",
+  ] {
+    assert_eq!(McpUrl::new(invalid), Err(TransportError::InvalidHost), "{invalid}");
+  }
 }
 
 #[test]

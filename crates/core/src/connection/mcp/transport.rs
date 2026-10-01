@@ -10,7 +10,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::super::http_url;
+use super::super::http_url::{self, HostError};
 use crate::{
   id::SecretId,
   resource::{CommandArg, CommandProgram},
@@ -29,6 +29,10 @@ pub enum TransportError {
   /// any process can read it. A credential belongs in a project secret.
   #[error("the URL of an MCP server must not contain a user name or password")]
   UrlCredentials,
+  #[error("the URL of an MCP server must not contain a backslash")]
+  Backslash,
+  #[error("the host or port in the URL of an MCP server is not valid")]
+  InvalidHost,
   #[error("`{0}` contains a space or a control character")]
   Whitespace(String),
   #[error("`{0}` is longer than {MAX_CHARS} characters")]
@@ -107,8 +111,8 @@ impl HttpServer {
   }
 }
 
-/// The URL of an HTTP server: `http://` or `https://`, a host, no user name or password, no
-/// whitespace.
+/// The URL of an HTTP server: `http://` or `https://`, a host and an optional port, no user name or
+/// password, no whitespace or backslash.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct McpUrl(String);
@@ -121,14 +125,18 @@ impl McpUrl {
       return Err(TransportError::BlankUrl);
     }
     check_text(url)?;
+    if url.contains(http_url::BACKSLASH) {
+      return Err(TransportError::Backslash);
+    }
     let (_, rest) = http_url::split_scheme(url).ok_or(TransportError::UrlScheme)?;
     let authority = http_url::authority(rest);
     if authority.contains('@') {
       return Err(TransportError::UrlCredentials);
     }
-    if authority.is_empty() || authority.starts_with(':') {
-      return Err(TransportError::UrlScheme);
-    }
+    http_url::host(authority).map_err(|error| match error {
+      HostError::Missing => TransportError::UrlScheme,
+      HostError::Invalid => TransportError::InvalidHost,
+    })?;
     Ok(Self(url.to_owned()))
   }
 

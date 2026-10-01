@@ -2127,6 +2127,8 @@
         "urlRequired": "Enter the server’s URL",
         "urlScheme": "The URL starts with http:// or https:// and names a host",
         "urlCredentials": "Keep user names and passwords out of the URL; use a bearer token from a secret",
+        "urlBackslash": "Use / instead of \\ in the URL",
+        "urlHost": "The host or port in the URL is not valid",
         "whitespace": "Remove the spaces and line breaks",
         "tooLong": "This is too long",
         "workingDirectory": "Use a folder inside the worktree, or an absolute path",
