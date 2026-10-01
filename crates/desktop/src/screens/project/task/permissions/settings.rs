@@ -26,7 +26,9 @@ use orchester_core::{
 
 use super::RunPermissionsProps;
 use crate::{
-  agents::permissions::{option_title, unavailable, with_command, without_command},
+  agents::permissions::{
+    file_command_hints, option_title, unavailable, unlisted_commands, with_command, without_command,
+  },
   messages::Message,
   theme::{ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY},
   ui::{
@@ -253,6 +255,8 @@ fn commands(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPe
     if let Some(error) = edit.command_error.get() {
       content.push(field_error(&message_text(ctx, &error)));
     }
+    content.extend(file_command_hints(ctx, &list).iter().map(|note| hint(note)));
+    content.extend(unlisted_commands(ctx, provider, &list).map(|note| hint(&note)));
   }
   group(ctx, "agents.permissions.commands", content)
 }
@@ -279,13 +283,7 @@ fn tool_approvals(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &A
     None => None,
   };
   if let Some(transport) = transport.filter(|_| enabled || *draft.commands() == CommandPermission::AskBefore) {
-    controls.push(
-      // The same hint as the unavailable reasons above it (`W29Od2`).
-      Text::new(&ctx.t(transport))
-        .variant(ExtraTypography::Hint.role())
-        .color(PaletteColor::TextMuted)
-        .into(),
-    );
+    controls.push(hint(&ctx.t(transport)));
   }
   group(ctx, "agents.permissions.toolApprovalsHeading", controls)
 }
@@ -408,15 +406,15 @@ fn changed_note(ctx: &Ctx, list: &AllowedCommands, props: &RunPermissionsProps) 
       [("commands", join(removed).as_str())],
     ));
   }
-  notes
-    .into_iter()
-    .map(|note| {
-      Text::new(&note)
-        .variant(ExtraTypography::Hint.role())
-        .color(PaletteColor::TextMuted)
-        .into()
-    })
-    .collect()
+  notes.iter().map(|note| hint(note)).collect()
+}
+
+/// A note under a setting, in the style of the unavailable reasons (`W29Od2`).
+fn hint(note: &str) -> Element {
+  Text::new(note)
+    .variant(ExtraTypography::Hint.role())
+    .color(PaletteColor::TextMuted)
+    .into()
 }
 
 /// Network (`q4Nelz`): a switch, locked on with the reason when off cannot be enforced.

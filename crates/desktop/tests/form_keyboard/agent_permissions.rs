@@ -209,6 +209,12 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
     &mut desktop,
     "Unavailable on this connection: Codex CLI can’t limit commands to a list."
   ));
+  // Only Claude Code also runs known-safe read-only commands besides the list.
+  assert!(shows(
+    &mut desktop,
+    "Only these commands run. Anything else is denied and the agent is told why."
+  ));
+  assert!(!shows(&mut desktop, "known-safe read-only"));
   assert!(shows(&mut desktop, "Ask before running commands"));
   let network_off_enforced = cfg!(not(windows));
   assert_eq!(
@@ -324,6 +330,33 @@ fn agent_permissions_choose_an_option_and_add_a_command() {
 }
 
 #[test]
+fn agent_permissions_reset_names_the_option_it_chose() {
+  let mut desktop = seeded();
+  permissions_of(&mut desktop, "Reviewer");
+  desktop.press("agent-tab-profile");
+  desktop.wait_for("agent-connection-select");
+  let mut select = desktop
+    .tree
+    .get_element_by_id_mut("agent-connection-select")
+    .and_then(|element| element.as_select())
+    .expect("the connection select");
+  let codex = select
+    .labels()
+    .iter()
+    .position(|label| label.contains("Codex"))
+    .expect("the Codex connection");
+  select.commit(codex);
+  desktop.pass();
+  desktop.wait_for("agent-permissions-reset");
+  // Codex cannot limit commands to a list; the reset names what it chose instead.
+  assert!(shows(
+    &mut desktop,
+    "Unavailable on this connection, so changed to the most restrictive option it enforces: Allowed commands became \
+     Any command in the worktree. Review before publishing."
+  ));
+}
+
+#[test]
 fn agent_permissions_the_connection_cannot_enforce_block_publishing() {
   let mut desktop = seeded();
   permissions_of(&mut desktop, "Scout");
@@ -361,6 +394,7 @@ fn step_inspector_narrows_the_profile_commands_and_never_widens() {
   desktop.press("step-card-review");
   desktop.wait_for("step-command-2");
   assert!(shows(&mut desktop, "Commands · narrowed"));
+  assert!(shows(&mut desktop, READ_ONLY_COMMANDS));
   assert!(shows(&mut desktop, "Reviewer v1 also allows pnpm lint."));
   // A read-only profile offers no repository choice, and a step cannot add commands of its own.
   assert!(desktop.tree.get_element_by_id("step-repository").is_none());
@@ -379,6 +413,64 @@ fn step_inspector_narrows_the_profile_commands_and_never_widens() {
       .root()
       .is_some_and(|root| contains_text(root, "Reviewer v1 also allows git."))
   });
+}
+
+/// What Claude Code runs besides a non-empty list of allowed commands.
+const READ_ONLY_COMMANDS: &str =
+  "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them.";
+
+#[test]
+fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_commands_edit() {
+  let mut desktop = seeded();
+  permissions_of(&mut desktop, "Reviewer");
+  assert!(shows(
+    &mut desktop,
+    "These commands run, as do known-safe read-only commands such as ls, cat or git log."
+  ));
+  assert!(shows(&mut desktop, READ_ONLY_COMMANDS));
+  desktop.tab_to("agent-new-command", MAX_STOPS);
+  desktop.type_text("sed -n");
+  desktop.enter();
+  desktop.wait_for("agent-command-3");
+  // A prefix allows whatever follows it, and for sed that includes -i.
+  assert!(shows(
+    &mut desktop,
+    "sed -n also allows any arguments after it, including ones that change files."
+  ));
+  assert!(!shows(&mut desktop, "git also allows any arguments"));
+  desktop.press("agent-permission-edit");
+  // A deny rule for sed would deny the listed form too, so edits are allowed by rule instead.
+  assert!(shows(&mut desktop, "allowed tools · edit rules per folder"));
+  assert!(!shows(&mut desktop, "permission mode · accept edits"));
+}
+
+#[test]
+fn agent_permissions_a_folder_no_edit_rule_can_name_is_not_enforceable() {
+  let mut desktop = seeded();
+  let mut db = ProjectDb::open(desktop.repo()).expect("project database");
+  let claude = db
+    .connections()
+    .expect("connections")
+    .into_iter()
+    .find(|connection| connection.name().as_str() == "Claude")
+    .expect("the Claude connection")
+    .id();
+  let permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(commands(&["rm -f build/x"])),
+    NetworkAccess::On,
+  )
+  .with_writable_folders(serde_json::from_str(r#"["\\\\server\\share\\cache"]"#).expect("a listed folder"));
+  profile(&mut db, "Cleaner", claude, permissions, false);
+  drop(db);
+  permissions_of(&mut desktop, "Cleaner");
+  // It edits by rule, and no rule can name a network share: a run would deny every edit there.
+  assert!(shows(&mut desktop, "Extra writable folders · not enforceable"));
+  assert!(shows(
+    &mut desktop,
+    "Edits on a network share can’t be allowed by rule, so a run can’t start."
+  ));
+  assert!(shows(&mut desktop, "Repository access · enforced"));
 }
 
 #[test]

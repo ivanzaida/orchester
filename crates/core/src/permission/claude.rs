@@ -8,12 +8,20 @@
 //!   working directory are accepted, and in print mode nothing else is asked, so a command no rule allows is denied and
 //!   the CLI reports the denial.
 //! - Allowed commands become `--allowedTools "Bash(<prefix>:*)"` prefix rules. Without any, `Bash` is removed (the
-//!   probe: it can change files, so a read-only step must not have it).
-//! - `acceptEdits` also runs `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` without a rule (both 2.1.89 and
-//!   2.1.284: a mode check after the deny, ask and allow rules). A writing step therefore denies each of them with a
-//!   `Bash(<command>:*)` rule unless an allowed command starts with it; deny rules come first. Commands Claude Code
-//!   classifies as read-only (`ls`, `cat`, `git log`, …) still run without a rule: they change no file, but the list is
-//!   not the only thing that runs (`docs/plan.md`, C4).
+//!   probe: it can change files, so a read-only step must not have it). With some, Claude Code also runs the commands
+//!   it classifies as read-only (`ls`, `cat`, `git log`, …) without a rule, in every permission mode (both 2.1.89 and
+//!   2.1.284: the last check before asking). They change no file; the user accepted them as Codex's known-safe
+//!   read-only commands are accepted (`docs/plan.md`, C4), and the option's text says so.
+//! - `acceptEdits` also runs `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form without a rule (both
+//!   versions: a mode check after the deny, ask and allow rules). A writing step therefore denies each of them with a
+//!   `Bash(<command>:*)` rule. A deny rule matching a command's prefix wins over every allow rule (both versions check
+//!   prefix deny rules first, also after stripping variable assignments, wrappers and `xargs`), so it would deny a
+//!   listed `sed -n` as well: a writing step whose allowed commands contain one of these words does not run in
+//!   `acceptEdits` at all ([`Mechanism::ClaudeEditRules`]). It runs in `dontAsk` (`default` when a person is asked) and
+//!   allows its edits with an `Edit(//<folder>/**)` rule for the worktree and each extra writable folder: both versions
+//!   accept an edit there by such a rule as `acceptEdits` does in a working directory, after the same deny rules and
+//!   safety checks, and a command's own path check (2.1.89 runs it before the allow rules) accepts a write there by the
+//!   same rule. Then only the listed prefixes of those commands run.
 //! - Network off cannot be enforced (commands keep network access, and Claude Code's own sandbox is not supported on
 //!   Windows), so network stays on; when off was chosen the web tools are still removed.
 //! - The tools of the MCP servers the invocation gives the agent are allowed with one `mcp__<server>` rule per server;
@@ -39,7 +47,10 @@
 
 use std::path::Path;
 
-use super::{CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess, capability::EnforcedPermissions};
+use super::{
+  CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
+  capability::{EnforcedPermissions, Mechanism, PermissionSetting},
+};
 use crate::connection::mcp::McpServerName;
 
 const READ_TOOLS: [&str; 4] = ["Read", "Glob", "Grep", "TodoWrite"];
@@ -47,13 +58,26 @@ const EDIT_TOOLS: [&str; 3] = ["Edit", "Write", "NotebookEdit"];
 const WEB_TOOLS: [&str; 2] = ["WebFetch", "WebSearch"];
 const COMMAND_TOOL: &str = "Bash";
 /// Commands `acceptEdits` runs without a rule.
-const MODE_ALLOWED: [&str; 7] = ["mkdir", "touch", "rm", "rmdir", "mv", "cp", "sed"];
+const MODE_ALLOWED: [&str; 7] = super::FILE_COMMANDS;
 /// Settings that make every command ask.
 const ASK_EVERY_COMMAND: &str = r#"{"permissions":{"ask":["Bash"]}}"#;
 
+/// The folders a Claude Code invocation's permissions name.
+#[derive(Clone, Copy, Debug)]
+pub struct PermissionFolders<'a> {
+  /// Where a writing step may edit: the worktree and the extra writable folders it is granted.
+  pub editable: &'a [&'a Path],
+  /// Folders the agent may read but must not change.
+  pub protected: &'a [&'a Path],
+}
+
 /// The permission arguments of a Claude Code invocation that runs with `enforced`, gives the agent the MCP
-/// servers `mcp` and must not change the files under the folders `protected`.
-pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName], protected: &[&Path]) -> Vec<String> {
+/// servers `mcp` and may change files only as `folders` say.
+pub fn permission_args(
+  enforced: &EnforcedPermissions,
+  mcp: &[McpServerName],
+  folders: PermissionFolders<'_>,
+) -> Vec<String> {
   let permissions = enforced.permissions();
   let commands = match permissions.commands() {
     CommandPermission::Allowed(commands) => commands.entries(),
@@ -66,22 +90,27 @@ pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName], pr
   let ask_commands = writes && *permissions.commands() == CommandPermission::AskBefore;
   let ask_tools = permissions.interactive_tool_approvals();
   let network = permissions.network() == NetworkAccess::On && enforced.network_stays_on().is_none();
+  let edit_rules = enforced.mechanism(PermissionSetting::Repository) == Mechanism::ClaudeEditRules;
+  let accepts_edits = writes && !edit_rules;
   let mut offered: Vec<&str> = READ_TOOLS.to_vec();
   let mut denied: Vec<String> = Vec::new();
-  let mode = if writes {
+  if writes {
     offered.extend(EDIT_TOOLS);
-    "acceptEdits"
   } else {
     denied.extend(EDIT_TOOLS.map(str::to_owned));
-    if ask_tools { "default" } else { "dontAsk" }
+  }
+  let mode = match (accepts_edits, ask_tools) {
+    (true, _) => "acceptEdits",
+    (false, true) => "default",
+    (false, false) => "dontAsk",
   };
   if commands.is_empty() && !ask_commands {
     denied.push(COMMAND_TOOL.to_owned());
   } else {
     offered.push(COMMAND_TOOL);
   }
-  if writes && !commands.is_empty() {
-    denied.extend(mode_allowed_outside(commands));
+  if accepts_edits && !commands.is_empty() {
+    denied.extend(MODE_ALLOWED.map(|command| format!("{COMMAND_TOOL}({command}:*)")));
   }
   let mcp = if ask_tools { &[] } else { mcp };
   if network {
@@ -91,7 +120,7 @@ pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName], pr
   }
   if writes {
     // Every edit tool is denied already in a read-only step.
-    denied.extend(protected.iter().filter_map(|folder| edit_rule(folder)));
+    denied.extend(folders.protected.iter().filter_map(|folder| edit_rule(folder)));
   }
   let mut args = vec![
     "--tools".to_owned(),
@@ -109,28 +138,43 @@ pub fn permission_args(enforced: &EnforcedPermissions, mcp: &[McpServerName], pr
   if !commands.is_empty() || !mcp.is_empty() {
     args.push("--allowedTools".to_owned());
     args.extend(commands.iter().map(|entry| format!("{COMMAND_TOOL}({entry}:*)")));
+    if edit_rules {
+      args.extend(folders.editable.iter().filter_map(|folder| edit_rule(folder)));
+    }
     args.extend(mcp.iter().map(|server| format!("mcp__{server}")));
   }
   args
 }
 
-/// A deny rule for each command `acceptEdits` would run that no allowed command starts with.
-fn mode_allowed_outside(commands: &[CommandPrefix]) -> impl Iterator<Item = String> + '_ {
-  MODE_ALLOWED
-    .into_iter()
-    .filter(|command| {
-      commands
-        .iter()
-        .all(|entry| entry.as_str().split(' ').next() != Some(*command))
-    })
-    .map(|command| format!("{COMMAND_TOOL}({command}:*)"))
+/// Whether an allowed command contains a word `acceptEdits` runs without a rule. A
+/// `Bash(<command>:*)` deny rule could then match a listed command, so a writing step with
+/// `commands` does not run in `acceptEdits` ([`Mechanism::ClaudeEditRules`]).
+///
+/// Any word, not only the first: before matching a deny rule both CLI versions strip leading
+/// variable assignments (`A=1 rm`) and the wrappers `timeout`, `time`, `nice`, `stdbuf` and `nohup`,
+/// and a prefix rule also matches after `xargs ` (2.1.89 `Er`, `vt$` and `Lt$`; 2.1.284 the same).
+/// The deny rule would then deny a listed `timeout 60 rm -f x` or `xargs rm`. Matching any word
+/// covers these without copying the CLI's stripping; a word elsewhere (`git rm`) only makes the
+/// step edit by rule, which is as strict.
+pub(super) fn lists_file_commands(commands: &[CommandPrefix]) -> bool {
+  commands
+    .iter()
+    .any(|entry| entry.as_str().split(' ').any(|word| MODE_ALLOWED.contains(&word)))
 }
 
-/// `Edit(//<folder>/**)`, which keeps Claude Code's edit tools out of `folder`, an absolute path, in
-/// the POSIX form Claude Code matches permission paths in (`C:\repo` is `//c/repo`). `None` for a
-/// path that is no text, which the invocation refuses before it gets here, and for a network path
+/// Whether an `Edit` allow rule can let a step that edits by rule ([`Mechanism::ClaudeEditRules`])
+/// edit in `folder`. Not on a network share, whose form in Claude Code's patterns is not documented:
+/// every edit there would be denied, so the invocation refuses such a folder and the profile shows it.
+pub fn edits_allowed_by_rule(folder: &Path) -> bool {
+  edit_rule(folder).is_some()
+}
+
+/// `Edit(//<folder>/**)`: as a deny rule it keeps Claude Code's edit tools out of `folder`, as an
+/// allow rule it lets them edit there. `folder` is an absolute path, written in the POSIX form
+/// Claude Code matches permission paths in (`C:\repo` is `//c/repo`). `None` for a path that is no
+/// text, which the invocation refuses before it gets here, and for a network path
 /// (`\\server\share`), whose form in Claude Code's patterns is not documented: such a folder is kept
-/// from edits only by its files being read-only.
+/// from edits only by its files being read-only, and where edits need an allow rule it gets none.
 fn edit_rule(folder: &Path) -> Option<String> {
   let text = folder.to_str()?.replace('\\', "/");
   let text = text.strip_prefix("//?/").unwrap_or(&text);

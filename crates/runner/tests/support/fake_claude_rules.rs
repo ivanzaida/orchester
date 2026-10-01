@@ -1,7 +1,12 @@
-//! How `orchester-fake-claude` decides a `Bash` call before any prompt, the way Claude Code 2.1.89
-//! and 2.1.284 do: deny rules first, then a rule asking for the whole tool (`--settings`
-//! `permissions.ask`), then allow rules, then `acceptEdits`, which runs `mkdir`, `touch`, `rm`,
-//! `rmdir`, `mv`, `cp` and `sed` without a rule; anything else asks.
+//! How `orchester-fake-claude` decides a `Bash` call, the way Claude Code 2.1.89 and 2.1.284 do:
+//!
+//! 1. deny rules, the whole tool or a `Bash(<prefix>:*)` prefix of the command, which win over every allow rule;
+//! 2. a rule asking for the whole tool (`--settings` `permissions.ask`);
+//! 3. outside `acceptEdits`, the path check of a command that writes files, which 2.1.89 runs before the allow rules:
+//!    it asks unless an `Edit(…)` allow rule covers the worktree;
+//! 4. allow rules, by prefix;
+//! 5. `acceptEdits`, which runs `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form;
+//! 6. anything else asks, and print mode denies what it would ask unless the invocation names a permission prompt tool.
 
 /// Commands `acceptEdits` runs without a rule.
 const MODE_ALLOWED: [&str; 7] = ["mkdir", "touch", "rm", "rmdir", "mv", "cp", "sed"];
@@ -12,6 +17,8 @@ pub enum Decision {
   DeniedByRule,
   AllowedByRule,
   AllowedByMode,
+  /// Print mode without a permission prompt: what would ask is denied.
+  DeniedUnasked,
   Ask,
 }
 
@@ -21,6 +28,7 @@ impl Decision {
       Self::DeniedByRule => "deny-by-rule",
       Self::AllowedByRule => "allow-by-rule",
       Self::AllowedByMode => "allow-by-mode",
+      Self::DeniedUnasked => "deny-unasked",
       Self::Ask => "ask",
     }
   }
@@ -31,7 +39,7 @@ pub fn bash(args: &[String], command: &str) -> Decision {
   let denied = values(args, "--disallowedTools");
   if denied
     .iter()
-    .any(|rule| *rule == "Bash" || *rule == format!("Bash({first}:*)"))
+    .any(|rule| *rule == "Bash" || prefix_rule(rule).is_some_and(|prefix| covers(prefix, command)))
   {
     return Decision::DeniedByRule;
   }
@@ -41,20 +49,42 @@ pub fn bash(args: &[String], command: &str) -> Decision {
   {
     return Decision::Ask;
   }
-  let allowed = values(args, "--allowedTools").into_iter().any(|rule| {
-    rule
-      .strip_prefix("Bash(")
-      .and_then(|rule| rule.strip_suffix(":*)"))
-      .is_some_and(|prefix| command == prefix || command.starts_with(&format!("{prefix} ")))
-  });
-  if allowed {
+  let allowed = values(args, "--allowedTools");
+  let accepts_edits = values(args, "--permission-mode").contains(&"acceptEdits");
+  let edits_by_rule = allowed.iter().any(|rule| rule.starts_with("Edit("));
+  let writes = MODE_ALLOWED.contains(&first) && (first != "sed" || command.contains(" -i"));
+  if writes && !accepts_edits && !edits_by_rule {
+    return unasked(args);
+  }
+  if allowed
+    .iter()
+    .any(|rule| prefix_rule(rule).is_some_and(|prefix| covers(prefix, command)))
+  {
     return Decision::AllowedByRule;
   }
-  let accepts_edits = values(args, "--permission-mode").contains(&"acceptEdits");
   if accepts_edits && MODE_ALLOWED.contains(&first) {
     return Decision::AllowedByMode;
   }
-  Decision::Ask
+  unasked(args)
+}
+
+/// `Ask`, which print mode turns into a denial unless a permission prompt tool answers it.
+fn unasked(args: &[String]) -> Decision {
+  if args.iter().any(|arg| arg == "--permission-prompt-tool") {
+    Decision::Ask
+  } else {
+    Decision::DeniedUnasked
+  }
+}
+
+/// The prefix of a `Bash(<prefix>:*)` rule.
+fn prefix_rule(rule: &str) -> Option<&str> {
+  rule.strip_prefix("Bash(")?.strip_suffix(":*)")
+}
+
+/// Whether `prefix` matches `command` as Claude Code's prefix rules do: the same words, or more after them.
+fn covers(prefix: &str, command: &str) -> bool {
+  command == prefix || command.starts_with(&format!("{prefix} "))
 }
 
 /// The values after `flag`, up to the next option.

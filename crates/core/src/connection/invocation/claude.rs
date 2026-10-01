@@ -18,19 +18,23 @@
 //!   Orchester's permission prompt relay and `--permission-prompt-tool` naming its tool
 //!   ([`crate::connection::claude_approval`]); on a resumed session too, as the prompt is not part of the session.
 //! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
-//!   offered, permission mode, denied tools, allowed command prefixes). Bypass modes are never used.
+//!   offered, permission mode, denied tools, allowed command prefixes, and the edit rules of the worktree and the extra
+//!   writable folders when the step does not run in `acceptEdits`). Bypass modes are never used.
 //! - Extra writable folders ([`crate::permission::writable`]), for an agent that edits files: one `--add-dir` each, so
-//!   its edit tools may write there as in the working directory. Its commands need nothing: Claude Code does not
-//!   confine them to any folder. Checked 2026-09-28 with Claude Code 2.1.89 without a model turn: the debug log shows
-//!   each existing folder added as a permission directory (`cliArg`) and a missing one left out; the folder's own
-//!   `.claude/settings.json` is looked up but, with `--setting-sources ""`, its rules were not applied.
+//!   its edit tools may write there as in the working directory (in `acceptEdits`; with edit rules, by the folder's
+//!   `Edit` allow rule). Its commands need nothing: Claude Code does not confine them to any folder. Checked 2026-09-28
+//!   with Claude Code 2.1.89 without a model turn: the debug log shows each existing folder added as a permission
+//!   directory (`cliArg`) and a missing one left out; the folder's own `.claude/settings.json` is looked up but, with
+//!   `--setting-sources ""`, its rules were not applied.
 //! - Repository agent files ([`crate::agent_files`]): `--setting-sources ""` already keeps `CLAUDE.md` and
 //!   `.claude/skills` out (checked 2026-09-29 against the request the CLI sends), so the project's setting adds
 //!   nothing.
 //! - Orchester's skills ([`crate::resource::Skill`]) are placed in a folder outside the worktree, which `--add-dir`
 //!   lets the agent read (Claude Code asks before reading outside its working directories, and print mode denies what
-//!   it would ask). An agent that edits files may also write there; the folder is its own and written again when it
-//!   starts. The code index of the run's base revision (`crate::code_index`) is given the same way.
+//!   it would ask). In `acceptEdits` an agent that edits files may also write there, as in every working directory; the
+//!   folder is its own and written again when it starts. A step that edits by rule
+//!   ([`crate::permission::capability::Mechanism::ClaudeEditRules`]) gets no rule for it, so it only reads it. The code
+//!   index of the run's base revision (`crate::code_index`) is given the same way.
 //! - Sessions: a new session gets an id Orchester chose (`--session-id`); a continue after a pause or a limit resumes
 //!   the session the CLI reported (`--resume`), with the permissions given again. Sessions are kept on disk (no
 //!   `--no-session-persistence`) so that they can be resumed.
@@ -54,7 +58,10 @@ use crate::{
     claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
     mcp::McpServerName,
   },
-  permission::{capability::EnforcedPermissions, claude::permission_args},
+  permission::{
+    capability::{EnforcedPermissions, Mechanism, PermissionSetting},
+    claude::{PermissionFolders, edits_allowed_by_rule, permission_args},
+  },
   resource::CommandEnvironment,
   run::STEP_RESULT_SCHEMA,
 };
@@ -147,12 +154,22 @@ impl ClaudeInvocation<'_> {
       args.extend(["--permission-prompt-tool".to_owned(), PROMPT_TOOL.to_owned()]);
     }
     let servers = self.mcp.map_or(&[][..], |(_, servers)| servers);
+    let granted = if self.permissions.writable_folders().is_some() {
+      self.writable_roots
+    } else {
+      &[]
+    };
+    let editable: Vec<&Path> = std::iter::once(self.worktree)
+      .chain(granted.iter().map(PathBuf::as_path))
+      .collect();
     let protected: Vec<&Path> = self.code_index.into_iter().collect();
-    args.extend(permission_args(self.permissions, servers, &protected));
-    if self.permissions.writable_folders().is_some() {
-      for root in self.writable_roots {
-        args.extend(["--add-dir".to_owned(), root.to_string_lossy().into_owned()]);
-      }
+    let folders = PermissionFolders {
+      editable: &editable,
+      protected: &protected,
+    };
+    args.extend(permission_args(self.permissions, servers, folders));
+    for root in granted {
+      args.extend(["--add-dir".to_owned(), root.to_string_lossy().into_owned()]);
     }
     for folder in [self.skills, self.code_index].into_iter().flatten() {
       args.extend(["--add-dir".to_owned(), folder.to_string_lossy().into_owned()]);
@@ -162,6 +179,23 @@ impl ClaudeInvocation<'_> {
       ClaudeSession::Resume(session) => args.extend(["--resume".to_owned(), session.to_owned()]),
     }
     args.into_iter().map(OsString::from).collect()
+  }
+
+  /// Refuses a step that edits by rule when a folder it may edit gets no rule: every edit there
+  /// would be denied without a word.
+  fn edit_rules_for_every_folder(&self) -> Result<(), InvocationError> {
+    if self.permissions.mechanism(PermissionSetting::Repository) != Mechanism::ClaudeEditRules {
+      return Ok(());
+    }
+    let granted = self
+      .permissions
+      .writable_folders()
+      .map_or(&[][..], |_| self.writable_roots);
+    let editable = std::iter::once(self.worktree).chain(granted.iter().map(PathBuf::as_path));
+    match editable.into_iter().find(|folder| !edits_allowed_by_rule(folder)) {
+      Some(folder) => Err(InvocationError::NoEditRule(folder.to_path_buf())),
+      None => Ok(()),
+    }
   }
 
   /// The command that runs the step: in the worktree, with `prompt` on standard input, the
@@ -176,6 +210,7 @@ impl ClaudeInvocation<'_> {
       return Err(InvocationError::NoPermissionPrompt);
     }
     unicode_folders(self.writable_roots)?;
+    self.edit_rules_for_every_folder()?;
     let read_only: Vec<PathBuf> = [self.skills, self.code_index]
       .into_iter()
       .flatten()

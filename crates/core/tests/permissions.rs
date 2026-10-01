@@ -63,6 +63,16 @@ fn permissions_command_prefix_normalizes_spaces_and_rejects_chaining() {
 }
 
 #[test]
+fn permissions_command_prefix_names_a_file_command_by_its_first_word() {
+  for value in ["rm -f build/x", "sed -n", "mkdir", "cp a b"] {
+    assert!(prefix(value).starts_with_file_command(), "{value}");
+  }
+  for value in ["git rm", "rmdirs", "pnpm test", "timeout 60 rm"] {
+    assert!(!prefix(value).starts_with_file_command(), "{value}");
+  }
+}
+
+#[test]
 fn permissions_command_prefix_matches_whole_words() {
   assert!(prefix("pnpm test").covers(&prefix("pnpm test src/auth")));
   assert!(prefix("pnpm test").covers(&prefix("pnpm test")));
@@ -513,7 +523,13 @@ fn permissions_map_to_claude_arguments_without_bypass_modes() {
   let claude = |permissions: &AgentPermissions, platform| {
     permissions
       .enforced_on(AgentProvider::ClaudeCodeCli, platform)
-      .map(|enforced| claude::permission_args(&enforced, &[], &[]))
+      .map(|enforced| {
+        let folders = claude::PermissionFolders {
+          editable: &[],
+          protected: &[],
+        };
+        claude::permission_args(&enforced, &[], folders)
+      })
   };
   let read_only = permissions(
     RepositoryAccess::ReadOnly,

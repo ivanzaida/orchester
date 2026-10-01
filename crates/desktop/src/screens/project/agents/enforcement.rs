@@ -4,6 +4,8 @@
 //! it shows rather than a check time, then what it enforces for the chosen MCP servers (`mcp`). Then the rules: no
 //! bypass mode, steps only narrow.
 
+use std::path::Path;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -18,7 +20,8 @@ use orchester_core::{
   connection::{AgentConnection, AgentProvider, invocation::Platform},
   permission::{
     AgentPermissions, NetworkAccess,
-    capability::{EnforcedPermissions, PermissionOption, PermissionProblem, PermissionSetting, support},
+    capability::{EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, PermissionSetting, support},
+    claude::edits_allowed_by_rule,
   },
 };
 
@@ -54,7 +57,7 @@ impl ProfileEditor {
           ctx,
           connection.provider(),
           &self.permissions.get(),
-          &result,
+          (&result, &self.context.project.repo_root),
         ));
         rows.extend(self.agent_files_rows(ctx, connection.provider()));
         rows.extend(self.mcp_enforcement(ctx, connection.provider()));
@@ -128,16 +131,19 @@ fn heading(ctx: &Ctx, connection: &AgentConnection) -> Element {
 
 /// One row per setting (`F5JRp`, `FSFlp`, `A9ogd`), and one for the extra writable folders (not drawn). Network reads
 /// *stays on* wherever the connection cannot enforce off, whatever was chosen, as the locked switch beside it shows.
+/// A setting whose folder no `Edit` rule can name (the repository on a network share, where the worktrees are) reads
+/// as not enforceable, with the reason.
 fn setting_rows(
   ctx: &Ctx,
   provider: AgentProvider,
   permissions: &AgentPermissions,
-  result: &Result<EnforcedPermissions, PermissionProblem>,
+  (result, repo_root): (&Result<EnforcedPermissions, PermissionProblem>, &Path),
 ) -> Vec<Element> {
   let enforced = match result {
     Ok(enforced) => enforced,
     Err(problem) => return vec![not_enforceable(ctx, problem)],
   };
+  let gaps = EditRuleGaps::of(enforced, repo_root);
   let commands = PermissionOption::of_commands(permissions.commands());
   let network_stays_on = !support(provider, Platform::current(), PermissionOption::NetworkOff).is_enforced();
   let rows = [
@@ -158,7 +164,10 @@ fn setting_rows(
     .into_iter()
     .map(|(setting, name)| {
       let how = mechanism(ctx, enforced.mechanism(setting), enforced.permissions());
-      let detail = mechanism_detail(ctx, enforced.mechanism(setting));
+      let detail = mechanism_detail(ctx, enforced.mechanism(setting), enforced.permissions());
+      if setting == PermissionSetting::Repository && gaps.worktree {
+        return without_edit_rule(ctx, &name, &how);
+      }
       let (glyph, title) = if setting == PermissionSetting::Network && network_stays_on {
         (Icon::Lock, ctx.t("agents.permissions.enforcement.staysOn"))
       } else {
@@ -173,17 +182,53 @@ fn setting_rows(
   // Extra writable folders, after repository access as on the tab, when the agent gets any.
   if let Some(folders) = enforced.writable_folders() {
     let name = ctx.t("agents.permissions.folders");
-    let title = ctx.t_args("agents.permissions.enforcement.enforced", [("setting", &*name)]);
-    rows.insert(
-      1,
-      row(
-        Icon::CircleCheck,
-        &title,
-        &mechanism(ctx, folders, enforced.permissions()),
-      ),
-    );
+    let how = mechanism(ctx, folders, enforced.permissions());
+    let folders_row = if gaps.folders {
+      without_edit_rule(ctx, &name, &how)
+    } else {
+      let title = ctx.t_args("agents.permissions.enforcement.enforced", [("setting", &*name)]);
+      row(Icon::CircleCheck, &title, &how)
+    };
+    rows.insert(1, folders_row);
   }
   rows
+}
+
+/// Where a step that edits by rule ([`Mechanism::ClaudeEditRules`]) gets no `Edit` rule on this
+/// project, so every edit there would be denied and a run refuses to start.
+struct EditRuleGaps {
+  /// The repository, which holds the worktrees.
+  worktree: bool,
+  /// An extra writable folder.
+  folders: bool,
+}
+
+impl EditRuleGaps {
+  fn of(enforced: &EnforcedPermissions, repo_root: &Path) -> Self {
+    if enforced.mechanism(PermissionSetting::Repository) != Mechanism::ClaudeEditRules {
+      return Self {
+        worktree: false,
+        folders: false,
+      };
+    }
+    let folders = enforced.permissions().granted_folders().is_some_and(|folders| {
+      folders
+        .entries()
+        .iter()
+        .any(|folder| !edits_allowed_by_rule(&folder.lexical_path(repo_root)))
+    });
+    Self {
+      worktree: !edits_allowed_by_rule(repo_root),
+      folders,
+    }
+  }
+}
+
+/// `name` as not enforceable because its folder is on a network share, with how it would be enforced.
+fn without_edit_rule(ctx: &Ctx, name: &str, how: &str) -> Element {
+  let title = ctx.t_args("agents.permissions.enforcement.notEnforceable", [("setting", name)]);
+  let reason = ctx.t("agents.permissions.enforcement.networkShare");
+  row_with_detail(Icon::Lock, &title, how, Some(&reason))
 }
 
 fn not_enforceable(ctx: &Ctx, problem: &PermissionProblem) -> Element {

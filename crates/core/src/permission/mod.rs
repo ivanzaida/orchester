@@ -36,6 +36,10 @@ pub enum CommandPrefixError {
   ForbiddenCharacter(char),
 }
 
+/// Commands that create, copy, move, remove or edit files; Claude Code's `acceptEdits` runs exactly
+/// these without a rule ([`claude`]).
+const FILE_COMMANDS: [&str; 7] = ["mkdir", "touch", "rm", "rmdir", "mv", "cp", "sed"];
+
 /// A command an agent may run, matched by prefix on whole words: `pnpm test` also allows
 /// `pnpm test src/auth`, not `pnpm tester`. Words are separated by single spaces.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -63,6 +67,17 @@ impl CommandPrefix {
 
   pub fn as_str(&self) -> &str {
     &self.0
+  }
+
+  /// Whether the first word creates, copies, moves, removes or edits files (`mkdir`, `touch`, `rm`,
+  /// `rmdir`, `mv`, `cp`, `sed`). As every prefix, it also allows any arguments after it, which for
+  /// these can change other files than the listed form names (`rm -f build/x ../src`).
+  pub fn starts_with_file_command(&self) -> bool {
+    self
+      .0
+      .split(' ')
+      .next()
+      .is_some_and(|first| FILE_COMMANDS.contains(&first))
   }
 
   /// Whether this prefix allows `other`: the same words, or `other` continues them.

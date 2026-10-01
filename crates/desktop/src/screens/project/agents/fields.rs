@@ -116,7 +116,8 @@ impl ProfileEditor {
         )
       })
       .collect();
-    let select = styled_select(ctx, Select::new(self.connection.clone()).options(options));
+    let select =
+      styled_select(ctx, Select::new(self.connection.clone()).options(options)).id("agent-connection-select");
     let note = error.map_or(FieldNote::None, |error| FieldNote::Error(message_text(ctx, error)));
     field(
       &ctx.t("agents.connection"),

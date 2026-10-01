@@ -7,11 +7,14 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  connection::AgentProvider,
+  connection::{AgentProvider, invocation::Platform},
   permission::{
     AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPermission, CommandPrefix, CommandPrefixError,
     NetworkAccess, RepositoryAccess,
-    capability::{EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Unavailable},
+    capability::{
+      EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Support, Unavailable,
+      support,
+    },
   },
 };
 
@@ -30,9 +33,13 @@ pub const fn option_title(option: PermissionOption) -> &'static str {
   }
 }
 
-/// What an option allows (`C85wh` in `lcwsy`).
-pub const fn option_detail(option: PermissionOption) -> &'static str {
+/// What an option allows on `provider` (`C85wh` in `lcwsy`). Only Claude Code also runs known-safe
+/// read-only commands besides an allowed list, so only its *Allowed commands* says so.
+pub fn option_detail(option: PermissionOption, provider: Option<AgentProvider>) -> &'static str {
   match option {
+    PermissionOption::AllowedCommands if runs_read_only_unlisted(provider) => {
+      "agents.permissions.option.allowed.claudeDetail"
+    }
     PermissionOption::ReadOnly => "agents.permissions.option.readOnly.detail",
     PermissionOption::EditWorktree => "agents.permissions.option.editWorktree.detail",
     PermissionOption::AskBeforeCommands => "agents.permissions.option.askBefore.detail",
@@ -77,6 +84,7 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     }
     Mechanism::ClaudeEditToolsRemoved => "agents.permissions.mechanism.claudeEditToolsRemoved",
     Mechanism::ClaudeAcceptEdits => "agents.permissions.mechanism.claudeAcceptEdits",
+    Mechanism::ClaudeEditRules => "agents.permissions.mechanism.claudeEditRules",
     Mechanism::ClaudeWebTools => "agents.permissions.mechanism.claudeWebTools",
     Mechanism::ClaudeWebToolsRemoved => "agents.permissions.mechanism.claudeWebToolsRemoved",
     Mechanism::CodexWritableRoots => "agents.permissions.mechanism.codexWritableRoots",
@@ -99,10 +107,45 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
   ctx.t(key)
 }
 
-/// Why a mechanism limits more than its setting asks, as a line under it; `None` for most.
-pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism) -> Option<Arc<str>> {
-  (mechanism == Mechanism::ClaudeNoCommandsReadOnly)
-    .then(|| ctx.t("agents.permissions.mechanism.claudeNoCommandsReadOnlyDetail"))
+/// What a mechanism does beyond its setting's words, as a line under it; `None` for most.
+pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions) -> Option<Arc<str>> {
+  match (mechanism, permissions.commands()) {
+    (Mechanism::ClaudeNoCommandsReadOnly, _) => {
+      Some(ctx.t("agents.permissions.mechanism.claudeNoCommandsReadOnlyDetail"))
+    }
+    (Mechanism::ClaudeAllowedTools, CommandPermission::Allowed(list)) if !list.is_empty() => {
+      Some(ctx.t(READ_ONLY_COMMANDS))
+    }
+    _ => None,
+  }
+}
+
+/// That Claude Code also runs known-safe read-only commands without a rule (`docs/plan.md`, C4).
+const READ_ONLY_COMMANDS: &str = "agents.permissions.claudeReadOnlyCommands";
+
+/// What runs besides `list` on `provider`: Claude Code's known-safe read-only commands, once the
+/// list has a command (without one it gets no command tool). `None` where only the list runs.
+pub fn unlisted_commands(ctx: &Ctx, provider: Option<AgentProvider>, list: &AllowedCommands) -> Option<Arc<str>> {
+  (runs_read_only_unlisted(provider) && !list.is_empty()).then(|| ctx.t(READ_ONLY_COMMANDS))
+}
+
+/// Whether `provider` enforces an allowed list the way that also runs known-safe read-only commands.
+fn runs_read_only_unlisted(provider: Option<AgentProvider>) -> bool {
+  provider.is_some_and(|provider| {
+    support(provider, Platform::current(), PermissionOption::AllowedCommands)
+      == Support::Enforced(Mechanism::ClaudeAllowedTools)
+  })
+}
+
+/// For each entry of `list` whose first word changes files (`rm`, `sed`, …), that it also allows
+/// any arguments after it, including ones that change other files.
+pub fn file_command_hints(ctx: &Ctx, list: &AllowedCommands) -> Vec<Arc<str>> {
+  list
+    .entries()
+    .iter()
+    .filter(|entry| entry.starts_with_file_command())
+    .map(|entry| ctx.t_args("agents.permissions.fileCommandPrefix", [("command", entry.as_str())]))
+    .collect()
 }
 
 fn runs_no_commands(permissions: &AgentPermissions) -> bool {

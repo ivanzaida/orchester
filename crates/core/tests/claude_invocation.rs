@@ -7,11 +7,11 @@ use std::{collections::BTreeMap, ffi::OsString, path::Path};
 use orchester_core::{
   connection::{
     AgentProvider,
-    invocation::{ClaudeInvocation, ClaudeSession, Platform, result_schema},
+    invocation::{ClaudeInvocation, ClaudeSession, InvocationError, Platform, result_schema},
   },
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
-    capability::EnforcedPermissions,
+    capability::{EnforcedPermissions, Mechanism, PermissionSetting},
   },
   resource::{CommandEnvironment, VariableName},
   run::STEP_RESULT_SCHEMA,
@@ -204,6 +204,118 @@ fn claude_invocation_write_accepts_edits_and_allows_the_listed_commands() {
       ])
     );
   }
+}
+
+#[test]
+fn claude_invocation_edits_by_rule_when_a_listed_command_is_one_accept_edits_runs_unlisted() {
+  for platform in PLATFORMS {
+    let repository = |repository, commands| {
+      enforced(repository, commands, NetworkAccess::On, platform).mechanism(PermissionSetting::Repository)
+    };
+    for listed in [
+      &["git", "sed -n"][..],
+      &["rm -f build/x"],
+      &["git rm"],
+      // A deny rule would match these after stripping `xargs`, a wrapper or an assignment.
+      &["xargs mkdir"],
+      &["timeout 60 rm -f build/x"],
+      &["LANG=C sed -n"],
+    ] {
+      assert_eq!(
+        repository(RepositoryAccess::Write, allowed(listed)),
+        Mechanism::ClaudeEditRules,
+        "{listed:?}"
+      );
+    }
+    for commands in [
+      allowed(&["git", "pnpm test"]),
+      allowed(&[]),
+      CommandPermission::AskBefore,
+    ] {
+      assert_eq!(
+        repository(RepositoryAccess::Write, commands),
+        Mechanism::ClaudeAcceptEdits
+      );
+    }
+    assert_eq!(
+      repository(RepositoryAccess::ReadOnly, allowed(&["sed -n"])),
+      Mechanism::ClaudeEditToolsRemoved
+    );
+  }
+}
+
+#[test]
+fn claude_invocation_write_with_a_listed_file_command_edits_by_rule_without_accept_edits() {
+  for platform in PLATFORMS {
+    let permissions = enforced(
+      RepositoryAccess::Write,
+      allowed(&["sed -n", "rm -f build/x"]),
+      NetworkAccess::On,
+      platform,
+    );
+    // A `Bash(sed:*)` or `Bash(rm:*)` deny rule would deny the listed forms as well, and
+    // `acceptEdits` would run every other form: the step edits by rule instead.
+    assert_eq!(
+      args(&invocation(&permissions)),
+      expected(&[
+        "--tools",
+        "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash,WebFetch,WebSearch",
+        "--permission-mode",
+        "dontAsk",
+        "--allowedTools",
+        "Bash(sed -n:*)",
+        "Bash(rm -f build/x:*)",
+        "Edit(//repo/.orchester/worktrees/run/**)",
+      ])
+    );
+  }
+}
+
+#[test]
+fn claude_invocation_refuses_edits_by_rule_on_a_network_share() {
+  let share = Path::new(r"\\server\share\repo\.orchester\worktrees\run");
+  let start = |permissions: &EnforcedPermissions, worktree, roots: &[std::path::PathBuf]| {
+    ClaudeInvocation {
+      worktree,
+      writable_roots: roots,
+      ..invocation(permissions)
+    }
+    .command("Do it".into(), Vec::new(), &CommandEnvironment::default())
+    .err()
+  };
+  let by_rule = enforced(
+    RepositoryAccess::Write,
+    allowed(&["rm -f build/x"]),
+    NetworkAccess::On,
+    Platform::Windows,
+  );
+  // No `Edit` rule can name a network share, so every edit there would be denied unseen.
+  assert_eq!(
+    start(&by_rule, share, &[]),
+    Some(InvocationError::NoEditRule(share.to_path_buf()))
+  );
+  let accepting = enforced(
+    RepositoryAccess::Write,
+    allowed(&["git"]),
+    NetworkAccess::On,
+    Platform::Windows,
+  );
+  assert_eq!(start(&accepting, share, &[]), None, "acceptEdits needs no rule");
+
+  let mut with_folder = AgentPermissions::new(RepositoryAccess::Write, allowed(&["rm -f build/x"]), NetworkAccess::On);
+  with_folder.set_writable_folders(serde_json::from_str(r#"["\\\\server\\share\\cache"]"#).expect("a listed folder"));
+  let with_folder = with_folder
+    .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
+    .expect("enforceable");
+  let cache = std::path::PathBuf::from(r"\\server\share\cache");
+  assert_eq!(
+    start(
+      &with_folder,
+      Path::new("/repo/.orchester/worktrees/run"),
+      std::slice::from_ref(&cache)
+    ),
+    Some(InvocationError::NoEditRule(cache))
+  );
 }
 
 #[test]

@@ -207,7 +207,14 @@ struct Ask {
 
 impl Ask {
   fn of(prompt: &str) -> Option<Self> {
-    let (call, tool, input) = if prompt.contains("Ask before publishing") {
+    // "Run `<command>`.": that command.
+    let run = prompt
+      .split_once("Run `")
+      .and_then(|(_, rest)| rest.split_once('`'))
+      .map(|(command, _)| command);
+    let (call, tool, input) = if let Some(command) = run {
+      ("toolu_run", "Bash", serde_json::json!({"command": command}))
+    } else if prompt.contains("Ask before publishing") {
       (
         "toolu_publish",
         "Bash",
@@ -357,11 +364,14 @@ impl Fake {
     });
     if rule != fake_claude_rules::Decision::Ask {
       eprintln!("permission: {} {}", &ask.call, rule.as_str());
-      let ran = rule != fake_claude_rules::Decision::DeniedByRule;
+      let ran = matches!(
+        rule,
+        fake_claude_rules::Decision::AllowedByRule | fake_claude_rules::Decision::AllowedByMode
+      );
       if ran && append(worktree, "ran").is_err() {
         eprintln!("cannot write README.md");
       }
-      self.tool_result(&ask.call, if ran { "ok" } else { "Denied by a rule." }, !ran);
+      self.tool_result(&ask.call, if ran { "ok" } else { "Denied." }, !ran);
       return self.finish(worktree, "hello", step);
     }
     let knocks = self.prompt.contains("Knock first");

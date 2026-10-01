@@ -159,22 +159,11 @@ permission popover (`W29Od2`), the pipeline step switch (`wujuh`), the command a
 mismatch. Round 1 (at `6422a6d`) found two major mismatches (the transport note's role, the MCP arguments without a
 label) and five minor ones; all are fixed and wait for a re-check.
 
-### C4 · Claude Code runs read-only commands outside the allowed list (non-UI)
-
-With *Allowed commands*, Claude Code still runs commands its own classifier calls read-only (`ls`, `cat`, `grep`,
-`git log`, …) without a rule, in `dontAsk` and `acceptEdits` alike. They change no file, but "Only these commands run"
-is not exact. Its `acceptEdits` file commands are denied since `claude/claude-support`. Decide whether to ask for the
-whole tool and deny outside the list (the whole-tool ask rule precedes allow rules, so that would need the permission
-prompt to allow listed commands) or to document the exception in the option's text. **needs decision**
-
 ### C5 · Follow-ups from the Claude Code review (non-UI)
 
 - The runner records a model's required CLI version (C3) by reading, changing and saving the whole connection. A
   person who edits the same connection in the desktop at that moment wins or loses as the last writer. Record the
   requirement with a targeted update, or merge it on save.
-- `mode_allowed_outside` (`crates/core/src/permission/claude.rs`) drops the whole `Bash(<cmd>:*)` deny rule as soon as
-  one allowed entry starts with that command. With `rm build` allowed, `acceptEdits` runs any `rm`. A narrower rule is
-  needed, if Claude Code's rule order allows one.
 
 ### C6 · Tool approval layout issues found during C2 (UI)
 
@@ -234,6 +223,39 @@ which also preserves text selection after a drag on scaled displays.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+C4 · Claude Code runs known-safe read-only commands outside the allowed list · branch `claude/allowed-commands`
+
+- **Done 2026-10-01.** User decision: they stay allowed, as Codex's known-safe read-only commands are. Said
+  wherever the list is explained for Claude Code: the *Allowed commands* option (*These commands run, as do known-safe
+  read-only commands such as ls, cat or git log. …*), the empty list's hint (*… so none runs, not even a read-only
+  one.*), a detail under the enforcement panel's Commands row, a hint under the run permissions popover's commands and
+  a note under the pipeline step's commands (*Claude Code also runs known-safe read-only commands, such as ls, cat or
+  git log, without listing them.*); also `docs/interactive-tool-approvals.md`, the capability table's notes and the
+  design document's permission rows. Other connections (Codex, where the option is unavailable) keep *Only these
+  commands run. …*
+- Design verification of these texts passed (at `23f988e`). The Pencil design was not changed; where it shows the
+  old option text on a Claude Code profile, the design needs the new text.
+
+C5 (rule hole) · Claude Code runs the commands `acceptEdits` allows only in their listed forms · branch
+`claude/allowed-commands`
+
+- **Done 2026-10-01.** Both CLI versions check prefix deny rules before allow rules (2.1.89 `W__`, 2.1.284 `hBt`),
+  so a `Bash(sed:*)` deny also denies a listed `sed -n`; dropping it let `acceptEdits` run any `sed`. A writing
+  step whose allowed commands contain `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` or `sed` now runs in `dontAsk`
+  (`default` when it asks before MCP actions) with `Edit(//<folder>/**)` allow rules for the worktree and the extra
+  writable folders (`Mechanism::ClaudeEditRules`, enforcement panel *allowed tools · edit rules per folder*); other
+  writing steps keep `acceptEdits` with all seven deny rules. `orchester-fake-claude` models the real precedence;
+  runner tests: `sed -n` runs, `sed -i` is denied, `rm -f build/x` runs, `rm -rf src` is denied.
+- A listed entry whose first word is one of the seven gets a hint under the command entries in the profile, the run
+  permissions popover and the step inspector: "*rm -f build/x* also allows any arguments after it, including ones
+  that change files." Prefix matching is unchanged.
+- No `Edit` rule can name a network share. A step that edits by rule refuses to start when its worktree or an
+  extra writable folder is on one (`InvocationError::NoEditRule`, recorded as the runner problem *could not
+  start*), and the enforcement panel shows that row as *not enforceable* with the reason.
+- Open: the `Edit` allow rules were read in both binaries (same matcher as the code index's deny rule: `//c/x` is
+  rooted at `C:\`) but not exercised in a live model turn; a folder whose path holds `[` or `]` is matched by
+  Claude Code as a gitignore pattern.
 
 ORC-38 · Codebase index 2/2 (delivery, settings, activity) · branch `claude/codebase-index`
 

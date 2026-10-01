@@ -1623,7 +1623,8 @@
         },
         "allowed": {
           "title": "Allowed commands",
-          "detail": "Only these commands run. Anything else is denied and the agent is told why."
+          "detail": "Only these commands run. Anything else is denied and the agent is told why.",
+          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Anything else is denied and the agent is told why."
         },
         "any": {
           "title": "Any command in the worktree",
@@ -1638,7 +1639,9 @@
       "claudeTransport": "Claude Code asks Orchester through its permission prompt tool. Only the project-selected MCP servers load.",
       "commandPlaceholder": "e.g. pnpm test",
       "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
-      "noCommands": "No command is allowed yet.",
+      "fileCommandPrefix": "{{command}} also allows any arguments after it, including ones that change files.",
+      "noCommands": "No command is allowed yet, so none runs, not even a read-only one.",
+      "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them.",
       "commandInvalid": {
         "blank": "Type a command first.",
         "tooLong": "A command is at most {{max}} characters long.",
@@ -1721,6 +1724,7 @@
         "enforced": "{{setting}} · enforced",
         "staysOn": "Network stays on · off is not enforceable",
         "notEnforceable": "{{setting}} · not enforceable",
+        "networkShare": "Edits on a network share can’t be allowed by rule, so a run can’t start.",
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
         "noBypass": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
         "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
@@ -1765,6 +1769,7 @@
         "claudeEditToolsRemoved": "edit tools removed · listed cmds run",
         "claudeEditToolsRemovedNoCommands": "edit tools removed · no commands",
         "claudeAcceptEdits": "permission mode · accept edits",
+        "claudeEditRules": "allowed tools · edit rules per folder",
         "claudeAllowedTools": {
           "one": "allowed tools · 1 prefix rule",
           "other": "allowed tools · {{count}} prefix rules"
@@ -1783,7 +1788,8 @@
       "blockedTitle": "This profile cannot be published with these permissions",
       "changeConnection": "Change connection",
       "resetTitle": "Changed to what {{connection}} can enforce",
-      "resetDetail": "Unavailable on this connection and replaced by the most restrictive option it enforces: {{options}}. Review before publishing.",
+      "resetDetail": "Unavailable on this connection, so changed to the most restrictive option it enforces: {{changes}}. Review before publishing.",
+      "resetChange": "{{from}} became {{to}}",
       "appliesTitle": "Applies to new runs after publishing",
       "appliesDetail": "Runs keep the permissions they launched with. You can still change them for a single run from its task page.",
       "mcp": {

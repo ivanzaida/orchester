@@ -9,9 +9,10 @@
 //! - Codex enforces read-only and workspace-write through its sandbox (on Windows only with
 //!   `windows.sandbox=elevated`). It has no way to deny every command outside a list, so *Allowed commands* is
 //!   unavailable. On Windows its sandbox does not turn network access off.
-//! - Claude Code removes its edit tools for read-only and limits Bash to `--allowedTools` prefix rules. It cannot
-//!   confine an arbitrary command to the worktree (its own sandbox is not supported on Windows and is not used), and it
-//!   can block its web tools but not network use by commands.
+//! - Claude Code removes its edit tools for read-only and limits Bash to `--allowedTools` prefix rules, besides the
+//!   commands it classifies as read-only, which it runs unlisted as Codex runs its known-safe ones ([`super::claude`]).
+//!   It cannot confine an arbitrary command to the worktree (its own sandbox is not supported on Windows and is not
+//!   used), and it can block its web tools but not network use by commands.
 //! - Asking before commands or MCP actions routes each request to a person in Orchester: Codex through App Server,
 //!   Claude Code through its permission prompt tool (`crate::connection::claude_approval`), where every command asks.
 //!   Claude Code runs an approved command outside any sandbox, so a read-only step gets no command tool at all.
@@ -111,6 +112,10 @@ pub enum Mechanism {
   ClaudeEditToolsRemoved,
   /// `--permission-mode acceptEdits`, edits in the working directory.
   ClaudeAcceptEdits,
+  /// `--allowedTools "Edit(//<folder>/**)"` for the worktree and the extra writable folders, without
+  /// `acceptEdits`: the allowed commands contain `rm`, `sed` or another command that mode would run in
+  /// any form ([`super::claude`]).
+  ClaudeEditRules,
   /// `--add-dir <folder>`: the edit tools may also write there; commands were never confined.
   ClaudeAddDir,
   /// `--permission-prompt-tool` with a rule asking before every command: a person decides each one.
@@ -118,7 +123,8 @@ pub enum Mechanism {
   /// A read-only step gets no command tool: Claude Code would run an approved command outside any
   /// sandbox, where it could write.
   ClaudeNoCommandsReadOnly,
-  /// `--allowedTools "Bash(<prefix>:*)"`, one rule per command.
+  /// `--allowedTools "Bash(<prefix>:*)"`, one rule per command. Claude Code also runs the commands it
+  /// classifies as read-only without a rule once it has the command tool.
   ClaudeAllowedTools,
   /// WebFetch and WebSearch stay available.
   ClaudeWebTools,
@@ -262,7 +268,10 @@ impl AgentPermissions {
       Support::Enforced(mechanism) => Ok(mechanism),
       Support::Unavailable(reason) => Err(PermissionProblem::NotEnforceable { option, reason }),
     };
-    let repository = enforced(PermissionOption::of_repository(self.repository))?;
+    let repository = match enforced(PermissionOption::of_repository(self.repository))? {
+      Mechanism::ClaudeAcceptEdits if self.lists_file_commands() => Mechanism::ClaudeEditRules,
+      mechanism => mechanism,
+    };
     let commands = match enforced(PermissionOption::of_commands(&self.commands))? {
       Mechanism::ClaudePermissionPrompt if self.repository == RepositoryAccess::ReadOnly => {
         Mechanism::ClaudeNoCommandsReadOnly
@@ -299,6 +308,10 @@ impl AgentPermissions {
       writable_folders,
       network_stays_on,
     })
+  }
+
+  fn lists_file_commands(&self) -> bool {
+    matches!(&self.commands, CommandPermission::Allowed(list) if super::claude::lists_file_commands(list.entries()))
   }
 
   /// The network access a run on `provider` gets on `platform`: the chosen one, or on when off
