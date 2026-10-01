@@ -34,6 +34,19 @@ pub enum McpServerError {
   EnvironmentOnHttp,
 }
 
+/// A stored MCP server that cannot be read back, for example because its URL breaks a rule added
+/// after it was saved: listings leave it out, so it never hides the other servers, and
+/// [`crate::store::McpServerStore::unreadable_mcp_servers`] reports it. The store keeps the row
+/// unchanged.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnreadableMcpServer {
+  /// The id and name as stored; either may be what cannot be read.
+  pub id: String,
+  pub name: String,
+  /// What is wrong with the row.
+  pub detail: String,
+}
+
 /// A project's MCP server.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct McpServer {

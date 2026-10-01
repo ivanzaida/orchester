@@ -69,8 +69,17 @@ pub fn unavailable(ctx: &Ctx, reason: Unavailable, provider: AgentProvider) -> O
     Unavailable::CannotLimitCommands => "agents.permissions.unavailable.cannotLimitCommands",
     Unavailable::CannotConfineCommands => "agents.permissions.unavailable.cannotConfineCommands",
     Unavailable::CannotBlockNetwork => "agents.permissions.unavailable.cannotBlockNetwork",
+    Unavailable::NativeNotAvailable => "agents.permissions.unavailable.nativeNotAvailable",
   };
   Some(ctx.t_args(key, [("cli", &*ctx.t(program_key(provider)))]))
+}
+
+/// Why a profile on `provider` has no choice that only a running agent would use (asking before MCP
+/// actions, its MCP servers): native agents are not available yet. `None` for an agent CLI, or
+/// without a connection.
+pub fn native_unavailable(ctx: &Ctx, provider: Option<AgentProvider>) -> Option<Arc<str>> {
+  let provider = provider.filter(|provider| !provider.runs_agents())?;
+  unavailable(ctx, Unavailable::NativeNotAvailable, provider)
 }
 
 /// How a CLI enforces a setting, in its own terms (`s8kRYf`, `D1auE7`, `rRzit`).
@@ -315,6 +324,9 @@ pub fn problem(ctx: &Ctx, problem: &PermissionProblem, provider: AgentProvider) 
       "agents.permissions.problem.notEnforceable",
       [("cli", &*cli), ("option", &*ctx.t(option_title(*option)))],
     ),
+    PermissionProblem::NativeNotAvailable => {
+      ctx.t_args("agents.permissions.problem.nativeNotAvailable", [("cli", &*cli)])
+    }
   }
 }
 

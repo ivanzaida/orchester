@@ -119,7 +119,7 @@ impl ConnectionDialog {
       let control = value_box(ctx, "connection-provider", &value, ValueTone::Value, None);
       return field(&label, control, FieldNote::None);
     }
-    let options = AgentProvider::ALL.map(|provider| (ProviderChoice(provider), ctx.t(program_key(provider))));
+    let options = AgentProvider::CLI.map(|provider| (ProviderChoice(provider), ctx.t(program_key(provider))));
     select_field(ctx, "connection-provider", &label, self.provider.clone(), options)
   }
 

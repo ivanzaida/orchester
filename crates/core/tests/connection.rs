@@ -169,7 +169,7 @@ fn check_codex_reads_version_sign_in_and_catalog() {
     ("login status", Ok(ok("Logged in using ChatGPT\n"))),
     ("debug models --bundled", Ok(ok(CODEX_CATALOG))),
   ]);
-  let check = check(AgentProvider::CodexCli, &executable(), &runner, &[], now());
+  let check = check(AgentProvider::CodexCli, &executable(), &runner, &[], now()).expect("a CLI is checked");
   let CheckResult::Available {
     version,
     sign_in,
@@ -201,7 +201,9 @@ fn claude_catalog(
     (CLAUDE_MODELS, models),
   ]);
   let mut connection = connection(AgentProvider::ClaudeCodeCli);
-  connection.record_check(check(AgentProvider::ClaudeCodeCli, &executable(), &runner, &[], now()));
+  connection
+    .record_check(check(AgentProvider::ClaudeCodeCli, &executable(), &runner, &[], now()).expect("a CLI is checked"))
+    .expect("an agent check fits a CLI connection");
   let catalog = connection.catalog().expect("a successful check has a catalog").clone();
   (connection.status(), catalog)
 }
@@ -336,7 +338,8 @@ fn check_runs_the_cli_with_the_given_environment_only() {
     &Environment,
     &environment,
     now(),
-  );
+  )
+  .expect("a CLI is checked");
   assert_eq!(check.result.status(), ConnectionStatus::Connected);
 }
 
@@ -350,7 +353,9 @@ fn check_failures_become_statuses() {
   for (answer, expected) in cases {
     let runner = Replay::new([("--version", answer)]);
     let mut connection = connection(AgentProvider::CodexCli);
-    connection.record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()));
+    connection
+      .record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()).expect("a CLI is checked"))
+      .expect("an agent check fits a CLI connection");
     assert_eq!(connection.status(), expected);
     assert!(connection.models().is_empty());
   }
@@ -364,7 +369,9 @@ fn sign_in_status_that_cannot_run_is_unknown() {
     ("debug models --bundled", Ok(failed("", "boom"))),
   ]);
   let mut connection = connection(AgentProvider::CodexCli);
-  connection.record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()));
+  connection
+    .record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()).expect("a CLI is checked"))
+    .expect("an agent check fits a CLI connection");
   assert_eq!(connection.status(), ConnectionStatus::SignInUnknown);
   assert!(connection.status().is_usable());
   assert!(connection.models().is_empty());
@@ -385,7 +392,9 @@ fn connection(provider: AgentProvider) -> AgentConnection {
 fn changing_the_executable_drops_the_last_check() {
   let runner = Replay::new([("--version", Err(CommandError::NotFound))]);
   let mut connection = connection(AgentProvider::CodexCli);
-  connection.record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()));
+  connection
+    .record_check(check(AgentProvider::CodexCli, &executable(), &runner, &[], now()).expect("a CLI is checked"))
+    .expect("an agent check fits a CLI connection");
   assert_eq!(connection.status(), ConnectionStatus::ExecutableMissing);
   connection
     .set_executable(executable().with_file_name("other.exe"))
@@ -402,7 +411,7 @@ fn candidates_follow_the_path_order() {
   let first = std::env::current_dir().expect("current directory").join("a");
   let second = std::env::current_dir().expect("current directory").join("b");
   let path: OsString = std::env::join_paths([&first, &second]).expect("joinable paths");
-  let candidates = executable_candidates(AgentProvider::ClaudeCodeCli.program_name(), Some(&path));
+  let candidates = executable_candidates(AgentProvider::ClaudeCodeCli.program_name().expect("a CLI"), Some(&path));
   assert!(candidates[0].starts_with(&first));
   assert!(candidates.last().expect("candidates").starts_with(&second));
   assert!(
@@ -410,5 +419,5 @@ fn candidates_follow_the_path_order() {
       .iter()
       .all(|candidate| candidate.file_stem().is_some_and(|stem| stem == "claude"))
   );
-  assert!(executable_candidates(AgentProvider::CodexCli.program_name(), None).is_empty());
+  assert!(executable_candidates(AgentProvider::CodexCli.program_name().expect("a CLI"), None).is_empty());
 }

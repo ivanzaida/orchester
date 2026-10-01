@@ -60,6 +60,7 @@ icons! {
   Code => '\u{e093}',
   CodeXml => '\u{e206}',
   Copy => '\u{e09e}',
+  Cpu => '\u{e0a9}',
   Crosshair => '\u{e0ac}',
   Database => '\u{e0ad}',
   Download => '\u{e0b2}',

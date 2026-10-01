@@ -16,10 +16,10 @@
 use crate::connection::AgentProvider;
 
 /// Whether `provider` starts a server in the folder it is set to: Codex does, Claude Code starts
-/// every server in the worktree.
+/// every server in the worktree, and a native agent starts none in this version.
 pub const fn starts_in_its_folder(provider: AgentProvider) -> bool {
   match provider {
     AgentProvider::CodexCli => true,
-    AgentProvider::ClaudeCodeCli => false,
+    AgentProvider::ClaudeCodeCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => false,
   }
 }

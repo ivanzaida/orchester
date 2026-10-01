@@ -98,7 +98,8 @@ fn editing_a_connection_keeps_its_id_and_rejects_taken_names() {
   assert_eq!(save(&mut db, edited, now()).expect("edit"), claude);
   let stored = db.connection(claude).expect("read").expect("exists");
   assert_eq!(stored.name().as_str(), "Claude · Kontur");
-  assert!(stored.executable().ends_with("bin/claude.exe") || stored.executable().ends_with("bin\\claude.exe"));
+  let executable = stored.executable().expect("a CLI connection has a program");
+  assert!(executable.ends_with("bin/claude.exe") || executable.ends_with("bin\\claude.exe"));
   let taken = ConnectionDraft {
     id: Some(claude),
     ..draft(&repo, "Claude 2", signed_out())

@@ -155,7 +155,7 @@ fn each_cli_says_how_it_treats_the_repository_agent_files() {
     ),
   ];
   for (provider, setting, mechanism) in cases {
-    assert_eq!(setting.mechanism(provider), mechanism);
+    assert_eq!(setting.mechanism(provider), Some(mechanism));
   }
   assert_eq!(RepositoryAgentFiles::default(), RepositoryAgentFiles::On);
 }

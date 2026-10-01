@@ -3,7 +3,8 @@
 use std::{ops::Deref, path::PathBuf};
 
 use super::{
-  AgentProvider, Connection, ConnectionError, ConnectionKind, ConnectionStatus, LastCheck, SignIn,
+  AgentEndpoint, AgentProvider, ApiEndpoint, Connection, ConnectionError, ConnectionKind, ConnectionStatus, LastCheck,
+  SignIn,
   catalog::{CatalogModel, ModelCatalog},
   compare_versions,
   model_requirements::CliTooOld,
@@ -69,7 +70,7 @@ pub struct AgentConnection {
 }
 
 impl AgentConnection {
-  /// A connection that has not been checked yet.
+  /// A connection to the agent CLI at `executable` that has not been checked yet.
   pub fn new(
     id: ConnectionId,
     name: Name,
@@ -77,7 +78,21 @@ impl AgentConnection {
     executable: PathBuf,
     created_at: Timestamp,
   ) -> Result<Self, ConnectionError> {
-    let connection = Connection::new(id, name, ConnectionKind::Agent(provider), executable, created_at)?;
+    let endpoint = AgentEndpoint::Program(executable);
+    let connection = Connection::new(id, name, ConnectionKind::Agent(provider), endpoint, created_at)?;
+    Ok(Self { connection, provider })
+  }
+
+  /// A connection to a native `provider` at the model API `api`.
+  pub fn native(
+    id: ConnectionId,
+    name: Name,
+    provider: AgentProvider,
+    api: ApiEndpoint,
+    created_at: Timestamp,
+  ) -> Result<Self, ConnectionError> {
+    let endpoint = AgentEndpoint::Api(api);
+    let connection = Connection::new(id, name, ConnectionKind::Agent(provider), endpoint, created_at)?;
     Ok(Self { connection, provider })
   }
 
@@ -105,8 +120,9 @@ impl AgentConnection {
     }
   }
 
-  pub fn record_check(&mut self, check: ConnectionCheck) {
-    self.connection.last_check = Some(LastCheck::Agent(check));
+  /// See [`Connection::record_check`]: a native connection refuses the check.
+  pub fn record_check(&mut self, check: ConnectionCheck) -> Result<(), ConnectionError> {
+    self.connection.record_check(LastCheck::Agent(check))
   }
 
   /// Models found by the last successful check.

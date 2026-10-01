@@ -25,7 +25,7 @@ use super::{
 use crate::{
   messages::Message,
   pipelines::fields::{ModelChoice, RouteChoice, model_choices},
-  screens::project::connections::status::cli_too_old,
+  screens::project::connections::status::{cli_too_old, native_not_available},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -177,6 +177,12 @@ pub fn model(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields) -> Vec<Elem
     "pipelines.inspector.editProfile",
   ));
   // After the model readback, not between the select and it (`q5LzI`).
+  elements.extend(
+    profile
+      .agent
+      .as_ref()
+      .and_then(|connection| native_not_available(ctx, connection)),
+  );
   elements.extend(
     profile
       .agent

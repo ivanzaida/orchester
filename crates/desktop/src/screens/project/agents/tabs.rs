@@ -151,13 +151,20 @@ impl ProfileEditor {
     enforced_summary(ctx, &self.permissions.get(), enforced, Length::Long)
   }
 
-  /// What blocks publishing, and what the last connection change reset.
+  /// What blocks publishing, and what the last connection change reset. On a native connection
+  /// this is the one notice saying that the profile can't run there yet.
   pub(super) fn permission_notices(&self, ctx: &Ctx) -> Vec<Element> {
     let mut notices = Vec::new();
     if let (Some(problem), Some(connection)) = (self.permission_problem(), self.selected_connection()) {
+      let title = match problem {
+        PermissionProblem::NativeNotAvailable => "agents.permissions.nativeBlockedTitle",
+        PermissionProblem::NoEnforceableOption { .. } | PermissionProblem::NotEnforceable { .. } => {
+          "agents.permissions.blockedTitle"
+        }
+      };
       let mut notice = Notice::new(
         Icon::Lock,
-        ctx.t("agents.permissions.blockedTitle"),
+        ctx.t(title),
         self::problem(ctx, &problem, connection.provider()),
       )
       .emphasized()

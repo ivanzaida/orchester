@@ -1,8 +1,9 @@
 //! The `mcp_servers` table. A variable whose value comes from a secret stores the secret's id; the
-//! value itself is only in the OS keychain.
+//! value itself is only in the OS keychain. A row that cannot be read back is left out of the list
+//! and reported on its own ([`UnreadableMcpServer`]), so one damaged row never hides the others.
 
 use orchester_core::{
-  connection::mcp::{McpEnvironment, McpServer, McpServerName, McpTransport},
+  connection::mcp::{McpEnvironment, McpServer, McpServerName, McpTransport, UnreadableMcpServer},
   id::ConnectionId,
   store::McpServerStore,
   time::Timestamp,
@@ -68,11 +69,34 @@ impl McpServerStore for ProjectDb {
   }
 
   fn mcp_server(&self, id: ConnectionId) -> Result<Option<McpServer>, StoreError> {
-    Ok(load(&self.connection, "WHERE id = ?1", [id.to_string()])?.pop())
+    stored(&self.connection, "WHERE id = ?1", [id.to_string()])?
+      .pop()
+      .map(StoredRow::into_server)
+      .transpose()
   }
 
   fn mcp_servers(&self) -> Result<Vec<McpServer>, StoreError> {
-    load(&self.connection, "ORDER BY name", [])
+    let rows = stored(&self.connection, "ORDER BY name", [])?;
+    // A row that cannot be read back is left out, not lost: `unreadable_mcp_servers` reports it.
+    Ok(rows.into_iter().filter_map(|row| row.into_server().ok()).collect())
+  }
+
+  fn unreadable_mcp_servers(&self) -> Result<Vec<UnreadableMcpServer>, StoreError> {
+    let rows = stored(&self.connection, "ORDER BY name", [])?;
+    Ok(
+      rows
+        .into_iter()
+        .filter_map(|row| {
+          let (id, name) = (row.id.clone(), row.name.clone());
+          let error = row.into_server().err()?;
+          Some(UnreadableMcpServer {
+            id,
+            name,
+            detail: error.to_string(),
+          })
+        })
+        .collect(),
+    )
   }
 }
 
@@ -99,12 +123,13 @@ fn ensure_name_free(sqlite: &Connection, server: &McpServer) -> Result<(), Store
   }
 }
 
-fn load(sqlite: &Connection, clause: &str, params: impl Params) -> Result<Vec<McpServer>, StoreError> {
+/// The stored rows `clause` selects, not yet checked against the rules of a server.
+fn stored(sqlite: &Connection, clause: &str, params: impl Params) -> Result<Vec<StoredRow>, StoreError> {
   let mut statement = sqlite.prepare(&format!("{SELECT} {clause}"))?;
   let rows = statement
     .query_map(params, StoredRow::read)?
     .collect::<Result<Vec<_>, _>>()?;
-  rows.into_iter().map(StoredRow::into_server).collect()
+  Ok(rows)
 }
 
 struct StoredRow {

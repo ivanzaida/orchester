@@ -255,6 +255,8 @@ fn transport_message(error: &TransportError) -> Message {
     TransportError::BlankUrl => Message::new("connections.mcp.errors.urlRequired"),
     TransportError::UrlScheme => Message::new("connections.mcp.errors.urlScheme"),
     TransportError::UrlCredentials => Message::new("connections.mcp.errors.urlCredentials"),
+    TransportError::Backslash => Message::new("connections.mcp.errors.urlBackslash"),
+    TransportError::InvalidHost => Message::new("connections.mcp.errors.urlHost"),
     TransportError::Whitespace(_) => Message::new("connections.mcp.errors.whitespace"),
     TransportError::TooLong(_) => Message::new("connections.mcp.errors.tooLong"),
     TransportError::BlankWorkingDirectory | TransportError::OutsideWorktree(_) => {

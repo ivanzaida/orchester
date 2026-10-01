@@ -10,7 +10,11 @@ use crate::{
   },
   blob::ContentHash,
   code_index::{CodeIndexSetting, CodeIndexUse},
-  connection::{Connection, mcp::McpServer, stream::AgentEvent},
+  connection::{
+    Connection,
+    mcp::{McpServer, UnreadableMcpServer},
+    stream::AgentEvent,
+  },
   conversation::Message,
   diff::RevisionDiff,
   id::{ConnectionId, IdempotencyKey, InvocationId, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
@@ -213,8 +217,12 @@ pub trait McpServerStore {
 
   fn mcp_server(&self, id: ConnectionId) -> Result<Option<McpServer>, Self::Error>;
 
-  /// All MCP servers of the project, ordered by name.
+  /// The MCP servers of the project that can be read back, ordered by name; [`Self::unreadable_mcp_servers`]
+  /// lists the others.
   fn mcp_servers(&self) -> Result<Vec<McpServer>, Self::Error>;
+
+  /// The stored MCP servers that cannot be read back, ordered by name, and why.
+  fn unreadable_mcp_servers(&self) -> Result<Vec<UnreadableMcpServer>, Self::Error>;
 }
 
 /// Project secrets' metadata. Values are never stored here: they are in the OS keychain
