@@ -1110,6 +1110,47 @@ Drawn 2026-09-30 (ORC-27, Memory 3/3), group `K4KyPj` ("States · Memory", last 
 - **Project settings › Memory** — fifth tab after Code index, full page (1104 high), laid out like Limits: *Saving* with *Task memory* and *Project memory*, each two option cards side by side (*Save automatically* / *Save after approval*; *· default* on task automatic and project after approval); *Given to each agent* with *Records per invocation* (8, 1–50) and *Tokens per invocation* (3,000, 500–20,000) in `sN3du` fields with read-backs; notice (history) *Changes apply to the next agent invocation*. `B64KNU` saved; `X1X42` out of range: field stroke `$subtle`, circle-alert 12 + 11 `$text` error that names the saved value (*Enter a whole number from 1 to 50. Still 8.*), topbar *2 values not saved*.
 - **Activity** — `IFmpE` is 02.I with the invocation panel row *Memory given* · *8 records · 2.1k tokens ›* after *Code index*, a footnote sentence, and transcript entries with the brain glyph (*Searched memory* “session refresh” · 3 records; *Saved to task memory* with its text, ↗ to the Memory tab). Board `upPCd`: the row expanded into the records as given, grouped (latest handoff, decisions, warnings, best matches; glyph, text, estimated tokens in mono), *Open in Memory ↗*; records changed later (*superseded since*, *edited since*, *Deleted record · by you at 12:40* muted with circle-off); *Token limit reached: 4 lower-ranked matches were left out.*; *None* for an invocation before any record existed.
 
+## Delivery
+
+Drawn 2026-10-01, group `i2o8ko` ("States · Delivery & merge queue", last in 02 / Tasks & runs at x 0 / y 46467, height 5312; the section is now 51779 high). A proposal, not built. Fixture: Kontur, base `main`; ORC-128 *Add GitHub authentication* (run #128), ORC-131 *Add switcher keyboard shortcuts* (run #134), ORC-135, ORC-137, ORC-139 and the hashes are illustrative.
+
+**Why.** A run used to end in *Ready for review* and a person pressed *Merge into main* (02.P). The run started from the base as it was then, main moved meanwhile, so merges conflicted; Check, Review and Verify had run against the old base, not against what lands; and several finished runs were not ordered.
+
+**Behaviour (decided with the user).**
+
+- **Deliver step.** A pipeline ends in a *Deliver* step, set in the pipeline editor. Modes: *Approve to merge* (default; the run waits in Needs you), *Auto-merge* (merges when every step passed), *Pull request* (visibly unavailable: *Coming later*, never offered as working). Merge method: *Merge commit* (default) or *Squash*. *Resolve conflicts with* chooses the agent profile of the Integrate step. *Re-run Check on the merged result* is on by default and locked on for Auto-merge.
+- **Merge queue per project.** Runs that passed every step queue and deliver one at a time, first finished first. For each: merge the current base into the run's branch; if clean, run the Check tool again on the merged result; if it passes, merge into the base (merge commit or squash), remove the run's worktree and its code index, delete the merged branch and mark the task done.
+- **Conflicts.** An *Integrate* step runs with the integrator profile: it resolves the conflicts, re-runs Check and briefly reviews its own resolution, then delivery goes on. If it fails, the run leaves the queue as *Failed* and the task goes to Needs you with the conflicting files; nothing reaches the base.
+- **Never touch a dirty checkout.** If the base is checked out in the user's repository with uncommitted changes, delivery waits (*Blocked*) and says why; it continues by itself once the checkout is clean, or on *Retry*.
+- **The base moved during the re-check.** The check no longer matches what would land, so the run syncs again and Check runs again; a run is never merged on a check of an older base. The outdated check stays in Activity as *Check superseded*.
+- **Waiting for approval does not hold the queue** (proposal): the next run starts; when the person merges, the run syncs and checks again first if the base moved since its check.
+
+**States of a queue row** (`DeizF` label, then the run, then actions): *Queued* (clock-3; position; *Move up*, *Remove* = leave the queue and return to Ready for review), *Syncing with main* (loader), *Re-checking* (loader), *Integrating conflicts* (loader, agent working) — all three *Open task*; *Waiting for approval* (hand; *Open task*, primary *Review & merge*), *Blocked* (circle-pause; the reason, the uncommitted files in mono; *Open task*, *Retry*), *Failed* (circle-x; the reason; *Open task*), *Merged* (git-merge; hash, time, method, *worktree and code index removed*; *Open task*). The active run shows its phases: *Synced with main › Check on the merged result › Your approval › Merge into main*.
+
+**Where the queue lives.** A sidebar entry *Merge queue* (git-merge) right after Tasks, with the number of runs in the queue as its count (hidden at 0). Not a tab on Tasks: Tasks already has a *Queue* tab for starting runs, and the merge queue is one ordered, project-wide line whose blocked state stops every run in it, not a filter of tasks. Not Pull requests: that screen is GitHub review, and pull request delivery is not available. Every frame in the group uses this sidebar.
+
+**Frames** (x 48 / 1568 / 3088; rows at y 100 / 1148 / 2196 / 3244 / 4292, labels 32 above):
+
+| Frame | Node |
+| --- | --- |
+| Pipeline / Deliver step, Approve to merge (inspector, *Delivers: approve to merge* chip in the toolbar) | `j8OB3` |
+| Pipeline / Deliver step, Auto-merge with squash, re-check locked (0.45, lock and reason) | `jMrlP` |
+| Overview / Needs you: *READY TO MERGE* card (*Review & merge*) and *CONFLICTS NEED YOU* | `Trfj3` |
+| Ready to merge / dialog (720) over the task: run, branch → base, changes (files, +/−), checks incl. the check on the merged result, commits; *Reject*, *Open changes*, primary *Merge into main* | `L1SoP` |
+| Integrate failed / dialog: conflicting files with *Open file*, what Integrate did, the integrator's words; *Reject*, primary *Resolve myself* | `ZTHyA` |
+| Merge queue / delivering now, waiting (with order), today | `u2l38w` |
+| Merge queue / blocked by uncommitted changes in the checkout | `hz1Nz` |
+| Merge queue rows: every state with its actions, and the re-sync when main moved (compact) | `bPm7k` |
+| Merge queue / empty, naming a pipeline without a Deliver step | `crYQv` |
+| Task / Delivering: status *Delivering*, stage *Deliver*, verification rows *Deliver · sync with main*, *Deliver · Check on the merged result* | `rS8mx` |
+| Task / Integrating: stages *Integrate* then *Deliver*, Integrator in *Agents on this run* | `TfSI6` |
+| Task / *Merged into main · 9c41e02 · worktree removed* | `wuHGi` |
+| Activity / Deliver and Integrate executions: joined the queue, sync with conflicts, resolved files, Check, the integrator's review, check superseded, re-sync, merge, clean-up | `HW9mB` |
+
+Reused: sidebar `zo9Py` with nav items `TSJpn`, `u1XBP`, `DeizF`, `ajikA`, `ZGwlv`, `K8ItM`, `tfGRt`, `l3hyb`, `i9rVFu`, `mDnc3`, `N4SlQq`, `mBkeJ`, `zemhy`, `SOW6S`, the dialog layout of `C2CPbs`, the Memory page layout of `Qxdzi`. No new components or variables. Proposed copy namespace: `delivery.*` (`delivery.step.*`, `delivery.queue.*`, `delivery.readyToMerge.*`, `delivery.integrate.*`).
+
+**Open questions.** Whether *Waiting for approval* should hold the queue instead; whether *Move up* is enough or rows need drag and *Move to top*; a limit on re-syncs when the base keeps moving; what *Resolve myself* hands over (the worktree path, an editor, a terminal) and how the queue learns the resolution is committed; Squash's commit message; whether a run whose pipeline has no Deliver step keeps today's *Merge into main* (02.P) — the frames assume it does.
+
 ## Application lifecycle and runner connection
 
 These states express the lifecycle in [storage.md › Lifecycle](../architecture/storage.md#lifecycle): closing the window closes the application, the runner and agents cannot outlive it, and nothing restarts automatically after the application itself ended; runs interrupted by a runner drop while the application is open continue automatically after reconnecting. They sit in section 02, group `Z7Fyr8` ("States · Application lifecycle"), over the project Overview (`Twtqc`) background. [Group overview](previews/organization/Z7Fyr8.png).
