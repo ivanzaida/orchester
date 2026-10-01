@@ -1579,8 +1579,7 @@
       "aliases": "{{connection}} did not list its models; these are the current model ids and the aliases its CLI help documents.",
       "providerAndCurrentIds": "These are the current model ids, then the models {{connection}} lists itself.",
       "custom": "This model id is not verified: {{connection}} decides whether it accepts it when an agent starts.",
-      "notChecked": "{{connection}} has not been checked yet, so its models are unknown. Check it on the Connections screen.",
-      "native": "{{connection}} runs native agents, which are not available in this version yet."
+      "notChecked": "{{connection}} has not been checked yet, so its models are unknown. Check it on the Connections screen."
     },
     "effort": "Reasoning effort",
     "effortDefault": "CLI default",
@@ -1803,9 +1802,10 @@
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",
         "notEnforceable": "{{cli}} cannot enforce {{option}}. Choose another option.",
-        "nativeNotAvailable": "{{cli}} agents are not available in this version yet, so this profile cannot run on its connection. Choose a Codex or Claude Code connection."
+        "nativeNotAvailable": "Orchester doesn’t run {{cli}} agents in this version yet, so this profile can’t be published or run on its connection. Choose a Codex or Claude Code connection."
       },
       "blockedTitle": "This profile cannot be published with these permissions",
+      "nativeBlockedTitle": "This profile can’t run yet: its connection is a native agent",
       "changeConnection": "Change connection",
       "resetTitle": "Changed to what {{connection}} can enforce",
       "resetDetail": "Unavailable on this connection, so changed to the most restrictive option it enforces: {{changes}}. Review before publishing.",

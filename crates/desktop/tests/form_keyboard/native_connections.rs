@@ -21,6 +21,7 @@ use crate::{
 
 const INSPECTOR: &str = "connection-inspector";
 const NOTICE: &str = "native-not-available";
+const BLOCKED: &str = "agent-permissions-blocked";
 
 /// A native Anthropic connection, a published Builder profile on it and a published pipeline whose
 /// one step runs the Builder.
@@ -122,17 +123,15 @@ fn native_connection_reads_not_available_in_the_profile_and_the_pipeline_step() 
   let item = format!("agent-{builder}");
   desktop.wait_for(&item);
   desktop.click(&item);
-  desktop.wait_for(NOTICE);
+  desktop.wait_for(BLOCKED);
   assert!(shows(
     &mut desktop,
-    NOTICE,
-    "Claude API · Kontur uses Anthropic API (native), which is not available yet"
+    BLOCKED,
+    "This profile can’t run yet: its connection is a native agent"
   ));
-  assert!(shows(
-    &mut desktop,
-    "agent-provider-explanation",
-    "runs native agents, which are not available in this version yet"
-  ));
+  // One notice says it: no second notice and no model-source line repeat it.
+  assert!(!has(&mut desktop, NOTICE));
+  assert!(!has(&mut desktop, "agent-provider-explanation"));
   let labels = desktop
     .tree
     .get_element_by_id_mut("agent-connection-select")
