@@ -1957,6 +1957,7 @@
     "ownership": "Connections belong to {{project}}. CLI connections use the account the CLI is signed in to on this computer; {{project}} records which account it expects.",
     "type": {
       "provider": "Provider",
+      "native": "Native",
       "agentProvider": "Agent provider",
       "mcp": "MCP",
       "mcpServer": "MCP server"
@@ -1974,6 +1975,14 @@
       "codex": "Codex CLI",
       "heading": "{{cli}} {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
       "detail": "A run found this when the model’s provider refused the CLI. Update the CLI, then check the connection again."
+    },
+    "native": {
+      "row": "{{provider}} · {{preset}} · {{host}}",
+      "preset": {
+        "official": "Official preset",
+        "deepseek": "DeepSeek preset",
+        "custom": "Custom preset"
+      }
     },
     "nativeNotAvailable": {
       "heading": "{{connection}} uses {{provider}}, which is not available yet",

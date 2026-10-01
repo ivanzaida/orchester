@@ -156,6 +156,12 @@ impl BaseUrl {
   pub fn as_str(&self) -> &str {
     &self.0
   }
+
+  /// The host and port, as the connection list shows where the API is (`api.deepseek.com`).
+  pub fn host(&self) -> &str {
+    let rest = self.0.split_once("://").map_or(self.0.as_str(), |(_, rest)| rest);
+    http_url::authority(rest)
+  }
 }
 
 /// The host of `authority`, checked with its port: a bracketed IPv6 address or a name of letters,

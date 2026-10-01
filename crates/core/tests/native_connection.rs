@@ -85,6 +85,11 @@ fn native_providers_run_over_a_wire_format_and_run_no_agent_yet() {
 fn native_base_urls_are_https_or_this_computer_without_credentials_or_query() {
   let url = BaseUrl::new(" https://api.deepseek.com/ ").expect("valid");
   assert_eq!(url.as_str(), "https://api.deepseek.com");
+  assert_eq!(url.host(), "api.deepseek.com");
+  assert_eq!(
+    BaseUrl::new("http://[::1]:8080/v1").expect("valid").host(),
+    "[::1]:8080"
+  );
   assert_eq!(
     BaseUrl::new("https://gateway.example.dev:8443/v1")
       .expect("valid")

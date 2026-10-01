@@ -23,7 +23,7 @@ use orchester_core::{
 
 use super::{
   super::super::github::status as github_status,
-  status::{CHECKING, agent_status_label, program_key, vendor_key},
+  status::{CHECKING, agent_status_label, preset_key, program_key, vendor_key},
 };
 use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
@@ -59,18 +59,13 @@ struct RowContent {
   status: (Icon, Arc<str>),
 }
 
+/// An agent connection: a CLI (`d9bo3`), or a native one with its provider, preset and host (`Df2af` in
+/// 04.H4 `lJG42`).
 pub fn connection_row(ctx: &Ctx, connection: &AgentConnection, state: &RowState, link: Link) -> Element {
-  let provider = connection.provider();
-  let (vendor, program) = (ctx.t(vendor_key(provider)), ctx.t(program_key(provider)));
-  let description = match connection.version() {
-    Some(version) => ctx.t_args(
-      "connections.row.description",
-      [("vendor", &*vendor), ("program", &*program), ("version", version)],
-    ),
-    None => ctx.t_args(
-      "connections.row.descriptionUnchecked",
-      [("vendor", &*vendor), ("program", &*program)],
-    ),
+  let (glyph, kind) = if connection.provider().is_native() {
+    (Icon::Cpu, "connections.type.native")
+  } else {
+    (Icon::Bot, "connections.type.provider")
   };
   let usage_key = if state.uses == 1 {
     "connections.usage.one"
@@ -84,14 +79,42 @@ pub fn connection_row(ctx: &Ctx, connection: &AgentConnection, state: &RowState,
   };
   let content = RowContent {
     id: connection.id(),
-    icon: icon(Icon::Bot, IconSize::Notice, PaletteColor::TextPrimary).into(),
+    icon: icon(glyph, IconSize::Notice, PaletteColor::TextPrimary).into(),
     name: connection.name().as_str().into(),
-    description,
-    kind: ctx.t("connections.type.provider"),
+    description: agent_description(ctx, connection),
+    kind: ctx.t(kind),
     usage: ctx.t_args(usage_key, [("count", state.uses.to_string().as_str())]),
     status: (status_icon, ctx.t(status_key)),
   };
   row(content, state, link)
+}
+
+/// What an agent connection runs: the vendor, CLI and its version, or a native provider with its
+/// endpoint's preset and host.
+fn agent_description(ctx: &Ctx, connection: &AgentConnection) -> Arc<str> {
+  let provider = connection.provider();
+  let program = ctx.t(program_key(provider));
+  if let Some(api) = connection.endpoint().api() {
+    return ctx.t_args(
+      "connections.native.row",
+      [
+        ("provider", &*program),
+        ("preset", &*ctx.t(preset_key(api.preset()))),
+        ("host", api.base_url().host()),
+      ],
+    );
+  }
+  let vendor = ctx.t(vendor_key(provider));
+  match connection.version() {
+    Some(version) => ctx.t_args(
+      "connections.row.description",
+      [("vendor", &*vendor), ("program", &*program), ("version", version)],
+    ),
+    None => ctx.t_args(
+      "connections.row.descriptionUnchecked",
+      [("vendor", &*vendor), ("program", &*program)],
+    ),
+  }
 }
 
 /// A GitHub connection (`iYGKy`): the host, `gh` and the account it is signed in to, and the

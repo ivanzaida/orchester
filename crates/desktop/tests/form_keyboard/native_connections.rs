@@ -88,7 +88,12 @@ fn native_connection_reads_not_available_in_the_list_and_offers_no_test_or_edit(
   let row = format!("connection-{connection}");
   desktop.wait_for(&row);
   assert!(shows(&mut desktop, &row, "Not available yet"));
-  assert!(shows(&mut desktop, &row, "Anthropic API (native)"));
+  assert!(shows(
+    &mut desktop,
+    &row,
+    "Anthropic API (native) · Official preset · api.anthropic.com"
+  ));
+  assert!(shows(&mut desktop, &row, "Native"));
   desktop.wait_for(INSPECTOR);
   for text in [
     "Claude API · Kontur",

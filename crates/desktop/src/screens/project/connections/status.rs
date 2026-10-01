@@ -3,7 +3,7 @@
 
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, ConnectionStatus},
+  connection::{AgentConnection, AgentProvider, ConnectionStatus, EndpointPreset},
   resource::ModelId,
 };
 
@@ -79,6 +79,15 @@ pub const fn short_key(provider: AgentProvider) -> &'static str {
     AgentProvider::ClaudeCodeCli => "connections.provider.claudeShort",
     AgentProvider::AnthropicApi => "connections.provider.anthropicApiShort",
     AgentProvider::OpenAiApi => "connections.provider.openaiApiShort",
+  }
+}
+
+/// The preset of a native connection's endpoint, e.g. "DeepSeek preset".
+pub const fn preset_key(preset: EndpointPreset) -> &'static str {
+  match preset {
+    EndpointPreset::Official => "connections.native.preset.official",
+    EndpointPreset::DeepSeek => "connections.native.preset.deepseek",
+    EndpointPreset::Custom => "connections.native.preset.custom",
   }
 }
 
