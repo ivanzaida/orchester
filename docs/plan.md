@@ -266,7 +266,10 @@ C6 · Commands outside the permissions ask a person ("List + ask") · branch `cl
   the run popover say. The repository's own `.codex` folder never loads: the worktree and its repository are marked
   untrusted, a project layer Codex loaded anyway refuses the step, and a branch with `.codex/` gets a note in its
   activity. Live turns: `docs/evidence/ask-outside-e2e-2026-10-01.md`.
-- Open: design verification of the changed texts is pending.
+- Open (macOS): check whether Codex canonicalises its working folder (`/var` → `/private/var`, symlinks) before it
+  looks trust up, against the keys Orchester writes (the worktree and repository paths as the runner names them). If
+  it does, a trusted repository's `.codex` would load; until checked on a Mac, the runner's `config/read` layer check
+  fails such a step closed ("Codex loaded the repository's own Codex settings").
 
 ORC-48 · Make the code index useful to agents · branch `orchester/orc-48-run-2`
 

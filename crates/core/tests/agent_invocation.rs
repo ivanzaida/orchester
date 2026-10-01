@@ -90,6 +90,11 @@ fn invocation_marks_the_worktree_and_its_repository_untrusted() {
     ),
     r#"projects={"\\\\server\\share\\repo\\wt"={trust_level="untrusted"},"\\\\server\\share\\repo"={trust_level="untrusted"}}"#
   );
+  // Equal keys appear once: a key twice in an inline table would stop Codex from starting.
+  assert_eq!(
+    untrusted(r"\\?\H:\Repo", "h:/Repo", Platform::Windows),
+    r#"projects={"h:\\Repo"={trust_level="untrusted"}}"#
+  );
 }
 
 /// What App Server would otherwise take from the user's own Codex setup is turned off on every start:

@@ -156,14 +156,15 @@ impl CodexInvocation<'_> {
   /// `config/read` and the execpolicy load log, without a model turn (2026-10-01). An inline table
   /// merges with the user's own `projects`; a dotted key would split at the dot of `.orchester`.
   fn untrusted_projects(&self) -> String {
-    let entries: Vec<String> = [self.worktree, self.repository]
-      .into_iter()
-      .map(|folder| {
-        format!(
-          "{}={{trust_level=\"untrusted\"}}",
-          toml_string(&trust_key(folder, self.platform))
-        )
-      })
+    let mut keys = vec![
+      trust_key(self.worktree, self.platform),
+      trust_key(self.repository, self.platform),
+    ];
+    // A key twice in one inline table would stop Codex from starting.
+    keys.dedup();
+    let entries: Vec<String> = keys
+      .iter()
+      .map(|key| format!("{}={{trust_level=\"untrusted\"}}", toml_string(key)))
       .collect();
     format!("projects={{{}}}", entries.join(","))
   }
