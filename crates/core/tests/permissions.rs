@@ -6,7 +6,7 @@ use std::path::Path;
 use orchester_core::{
   connection::{
     AgentProvider,
-    invocation::{CodexAgentFiles, CodexInvocation, Platform},
+    invocation::{CODEX_ISOLATION, CodexAgentFiles, CodexInvocation, Platform},
   },
   permission::{
     AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPermission, CommandPrefix, CommandPrefixError,
@@ -455,7 +455,8 @@ fn codex_args(permissions: &AgentPermissions, platform: Platform) -> Vec<String>
 
 #[test]
 fn permissions_map_to_codex_sandbox_arguments_per_platform() {
-  let sandbox = |args: &[String]| args[2..].to_vec();
+  // After `app-server --stdio` and the isolation overrides.
+  let sandbox = |args: &[String]| args[2 + 2 * CODEX_ISOLATION.len()..].to_vec();
   let read_only = permissions(
     RepositoryAccess::ReadOnly,
     CommandPermission::AnyInWorktree,

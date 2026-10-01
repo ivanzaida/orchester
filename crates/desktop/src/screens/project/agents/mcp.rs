@@ -189,13 +189,13 @@ fn hint(ctx: &Ctx, key: &str) -> Element {
     .into()
 }
 
-/// Codex App Server's MCP rows: the user's global servers load beside the chosen ones, and a tool
-/// call that asks for approval reaches a person only when the profile asks before MCP actions.
+/// Codex App Server's MCP rows: only the chosen servers run (the user's own are turned off), and a
+/// tool call that asks for approval reaches a person only when the profile asks before MCP actions.
 fn app_server_enforcement(ctx: &Ctx, tool_approvals: bool) -> Vec<Element> {
   vec![
     row(
       Icon::CircleCheck,
-      &ctx.t("agents.permissions.enforcement.mcp.inherited"),
+      &ctx.t("agents.permissions.enforcement.mcp.codexChosen"),
       &ctx.t("agents.permissions.transport"),
     ),
     row(

@@ -223,6 +223,10 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
      Commands that need more than the sandbox ask you first."
   ));
   assert!(shows(&mut desktop, "sandbox · escalations ask you"));
+  // App Server cannot leave the user's own execpolicy rules out; the panel says so.
+  assert!(shows(&mut desktop, "Your Codex rules still apply"));
+  assert!(shows(&mut desktop, "allow rules run unsandboxed, unasked"));
+  assert!(shows(&mut desktop, "Only the chosen MCP servers run"));
   assert!(shows(
     &mut desktop,
     "Commands that need more than the sandbox ask you first."

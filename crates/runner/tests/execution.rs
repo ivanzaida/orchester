@@ -67,6 +67,11 @@ fn assert_thread_and_turn(stderr: &[&str]) {
   };
   let thread = reported("thread: ");
   assert_eq!(thread["model"], "gpt-5.5");
+  // The user's own MCP server, read from `config/read`, is turned off for the thread.
+  assert_eq!(
+    thread["config"],
+    serde_json::json!({"mcp_servers": {"user-global": {"enabled": false}}})
+  );
   assert_eq!(thread["sandbox"], "workspace-write");
   // Commands that need more than the sandbox ask a person; nothing else does.
   assert_eq!(
@@ -103,14 +108,17 @@ fn assert_transcript(db: &ProjectDb, run: RunId) {
     .iter()
     .find_map(|line| line.strip_prefix("argv: "))
     .expect("argv reported");
+  // What the user's own Codex setup would add is turned off first: notify, plugins, apps and the
+  // permission requests that could stay granted.
+  let isolation = "app-server --stdio -c notify=[] -c features.plugins=false -c features.apps=false -c \
+                   features.exec_permission_approvals=false -c features.request_permissions_tool=false ";
   // The profile has network off, which Codex cannot enforce on Windows: network stays on there.
   let expected = if cfg!(windows) {
-    "app-server --stdio -c windows.sandbox=elevated -c sandbox_workspace_write.network_access=true -c \
-     sandbox_workspace_write.writable_roots=["
+    "-c windows.sandbox=elevated -c sandbox_workspace_write.network_access=true -c sandbox_workspace_write.writable_roots=["
   } else {
-    "app-server --stdio -c sandbox_workspace_write.network_access=false -c sandbox_workspace_write.writable_roots=["
+    "-c sandbox_workspace_write.network_access=false -c sandbox_workspace_write.writable_roots=["
   };
-  assert!(argv.starts_with(expected), "{argv}");
+  assert!(argv.starts_with(&format!("{isolation}{expected}")), "{argv}");
   assert_thread_and_turn(&stderr);
   let environment = stderr
     .iter()

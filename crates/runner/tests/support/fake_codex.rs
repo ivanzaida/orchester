@@ -1,6 +1,6 @@
 //! A stand-in for `codex app-server --stdio` in the runner's execution tests, the only way Orchester
 //! starts Codex. It speaks the part of the JSON-RPC protocol the runner uses (`initialize`,
-//! `account/read`, `thread/start` or `thread/resume`, `mcpServerStatus/list`, `turn/start`) and
+//! `account/read`, `config/read`, `thread/start` or `thread/resume`, `mcpServerStatus/list`, `turn/start`) and
 //! answers the way Codex 0.159 did in the probes (`.tmp/agent-runtime/`), without a model. What a
 //! turn does depends on its prompt (`fake_codex_work`); the requests a person decides are in
 //! `fake_app_server`.
@@ -12,6 +12,9 @@
 //! runner keeps standard error in the activity, so tests can check how it was started.
 //!
 //! A new session is `fake-thread-1`; `thread/resume` continues the thread it names in the worktree.
+//!
+//! Its configuration (`config/read`) has, besides the project servers of its arguments, the user's own
+//! server `user-global`, which runs unless the thread's configuration turns it off.
 
 #![allow(
   clippy::print_stdout,
@@ -104,6 +107,8 @@ pub struct Session {
   pub thread: String,
   pub resumed: bool,
   roots: BTreeSet<String>,
+  /// The user's server `user-global` was turned off for the thread.
+  user_server_off: bool,
   /// The person's decisions the turn waits on, if any.
   pub approvals: Option<fake_app_server::Approvals>,
 }
@@ -117,6 +122,7 @@ impl Session {
       thread: String::new(),
       resumed: false,
       roots: BTreeSet::new(),
+      user_server_off: false,
       approvals: None,
     }
   }
@@ -128,6 +134,7 @@ impl Session {
       Some("initialized") => {}
       Some("account/read") => emit(&json!({"id": 2, "result": {"account": {"type": "chatgpt"}}})),
       Some(method @ ("thread/start" | "thread/resume")) => self.thread(method, params),
+      Some("config/read") => emit(&json!({"id": 6, "result": {"config": self.configuration()}})),
       Some("mcpServerStatus/list") => emit(&json!({"id": 4, "result": {"data": self.servers(), "nextCursor": null}})),
       Some("turn/start") => return self.turn(params),
       None => return fake_app_server::answered(self, message),
@@ -143,6 +150,7 @@ impl Session {
   /// asked for, the network and writable roots of the arguments, the local environment.
   fn thread(&mut self, method: &str, params: &Value) {
     eprintln!("thread: {params}");
+    self.user_server_off = params["config"]["mcp_servers"]["user-global"]["enabled"] == json!(false);
     self.cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
     self.resumed = method == "thread/resume";
     self.thread = params["threadId"].as_str().unwrap_or("fake-thread-1").to_owned();
@@ -181,14 +189,33 @@ impl Session {
     self.roots.insert(self.cwd.to_string_lossy().into_owned());
   }
 
-  /// The project servers of the arguments; `broken` did not start.
-  fn servers(&self) -> Vec<Value> {
-    let names: BTreeSet<&str> = self
+  /// The project servers of the arguments.
+  fn project_servers(&self) -> BTreeSet<&str> {
+    self
       .args
       .iter()
       .filter_map(|arg| arg.strip_prefix("mcp_servers.")?.split('.').next())
+      .collect()
+  }
+
+  /// The effective configuration: the project servers and the user's own `user-global`.
+  fn configuration(&self) -> Value {
+    let mut servers: serde_json::Map<String, Value> = self
+      .project_servers()
+      .into_iter()
+      .map(|name| (name.to_owned(), json!({"enabled": true})))
       .collect();
-    names
+    servers.insert(
+      "user-global".to_owned(),
+      json!({"enabled": true, "command": "user-tool"}),
+    );
+    json!({"mcp_servers": servers, "hooks": null})
+  }
+
+  /// The project servers, of which `broken` did not start, and the user's own server.
+  fn servers(&self) -> Vec<Value> {
+    let mut servers: Vec<Value> = self
+      .project_servers()
       .into_iter()
       .map(|name| {
         let status = if self.broken && name == "broken" {
@@ -198,7 +225,10 @@ impl Session {
         };
         json!({"name": name, "runtimeStatus": status, "toolsError": null})
       })
-      .collect()
+      .collect();
+    let user = if self.user_server_off { "disabled" } else { "connected" };
+    servers.push(json!({"name": "user-global", "runtimeStatus": user, "toolsError": null}));
+    servers
   }
 
   fn turn(&mut self, params: &Value) -> Step {

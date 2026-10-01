@@ -11,7 +11,7 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{
     AgentProvider, compare_versions,
-    invocation::{CodexAgentFiles, CodexInvocation, Platform, agent_environment},
+    invocation::{CODEX_ISOLATION, CodexAgentFiles, CodexInvocation, Platform, agent_environment},
     rank_installed,
   },
   permission::NetworkAccess,
@@ -33,8 +33,36 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
   }
 }
 
+/// The arguments after the isolation overrides, which every invocation starts with.
 fn args(invocation: &CodexInvocation<'_>) -> Vec<String> {
-  invocation.args().expect("unicode paths")
+  let args = invocation.args().expect("unicode paths");
+  let isolation: Vec<String> = CODEX_ISOLATION
+    .iter()
+    .flat_map(|setting| ["-c".to_owned(), (*setting).to_owned()])
+    .collect();
+  assert_eq!(args[2..2 + isolation.len()], isolation, "{args:?}");
+  [&args[..2], &args[2 + isolation.len()..]].concat()
+}
+
+/// What App Server would otherwise take from the user's own Codex setup is turned off on every start:
+/// the notify program, plugins and apps, and the permission requests that could stay granted.
+#[test]
+fn invocation_turns_off_what_the_users_codex_setup_would_add() {
+  let args = invocation(RepositoryAccess::Write, Platform::MacOs)
+    .args()
+    .expect("unicode paths");
+  for setting in [
+    "notify=[]",
+    "features.plugins=false",
+    "features.apps=false",
+    "features.exec_permission_approvals=false",
+    "features.request_permissions_tool=false",
+  ] {
+    assert!(
+      args.windows(2).any(|pair| pair == ["-c", setting]),
+      "{setting}: {args:?}"
+    );
+  }
 }
 
 #[test]
@@ -47,7 +75,7 @@ fn app_server_keeps_normal_codex_home_and_open_stdin_without_bypass_flags() {
     .expect("unicode paths");
   assert!(command.interactive_stdin());
   assert!(command.stdin().is_none());
-  assert_eq!(command.args()[..2], ["app-server", "--stdio"]);
+  assert_eq!(command.args()[..4], ["app-server", "--stdio", "-c", "notify=[]"]);
   assert!(!command.args().iter().any(|arg| arg.contains("dangerously")));
   assert_eq!(
     command

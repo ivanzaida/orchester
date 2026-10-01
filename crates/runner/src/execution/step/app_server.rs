@@ -3,9 +3,13 @@
 //! permission grants remain disabled. A command approval comes from a rule when the step asks before
 //! commands, and from the sandbox when a command needs more than it allows (`sandbox_approval`, on
 //! whenever the step's other commands ask a person). Unexpected host requests fail the invocation.
-//! Global MCP servers remain available; a step that asks before MCP actions needs its project-selected
-//! servers connected before the turn begins, any other step works without one that is not and its
-//! activity says so. Codex's standard error is kept in the activity as raw lines.
+//! The MCP servers of the user's own configuration and of a trusted project's `.codex` folders, read
+//! with `config/read` before the thread starts, are turned off for the thread, and the thread's
+//! inventory must show every server the step does not choose turned off; a configuration with hooks
+//! refuses the step (`orchester_core::connection::app_server_mcp`). A step that asks before MCP
+//! actions needs its project-selected servers connected before the turn begins, any other step works
+//! without one that is not and its activity says so. Codex's standard error is kept in the activity
+//! as raw lines.
 
 use std::{
   collections::BTreeSet,
@@ -17,7 +21,9 @@ use orchester_core::{
   command::{SecretVariable, redact_secrets},
   connection::{
     app_server::{AppServerStream, PendingApproval, Update},
-    app_server_mcp::{unavailable_selected, verify_selected_servers},
+    app_server_mcp::{
+      refuse_user_hooks, servers_to_turn_off, unavailable_selected, verify_only_chosen_run, verify_selected_servers,
+    },
     mcp::McpServerProblem,
     stream::{AgentEvent, OutputStream},
   },
@@ -76,6 +82,7 @@ impl AppServerSetup {
 enum Phase {
   Initialize,
   Account,
+  Configuration,
   Thread,
   Servers,
   Turn,
@@ -89,6 +96,8 @@ pub(super) struct AppServerSession {
   thread: Option<String>,
   turn: Option<String>,
   stream: AppServerStream,
+  /// The configured MCP servers the step does not choose, turned off for its thread.
+  turned_off: Vec<String>,
 }
 
 impl AppServerSession {
@@ -96,6 +105,7 @@ impl AppServerSession {
     Self {
       setup,
       phase: Phase::Initialize,
+      turned_off: Vec::new(),
       thread: None,
       turn: None,
       stream: AppServerStream::default(),
@@ -202,6 +212,17 @@ impl AppServerSession {
             "Codex is not signed in. Sign in to the normal Codex account and retry this step.".to_owned(),
           ));
         }
+        self.phase = Phase::Configuration;
+        let cwd = self.setup.worktree.to_string_lossy();
+        send(process, json!({"id":6,"method":"config/read","params":{"cwd":cwd}}))
+          .await
+          .map_err(|error| io_message(&error))?;
+        Ok(Vec::new())
+      }
+      (Phase::Configuration, 6) => {
+        refuse_user_hooks(result).map_err(|error| error.to_string())?;
+        self.turned_off =
+          servers_to_turn_off(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
         self.phase = Phase::Thread;
         self.start_thread(process).await.map_err(|error| io_message(&error))?;
         Ok(Vec::new())
@@ -330,6 +351,7 @@ impl AppServerSession {
   /// The selected MCP servers the agent works without, as activity; an error when the step needs
   /// them all (it asks before MCP actions) or the inventory cannot be read.
   fn check_servers(&self, result: &Value) -> Result<Vec<Update>, String> {
+    verify_only_chosen_run(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
     if self.setup.tool_approvals {
       verify_selected_servers(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
       return Ok(Vec::new());
@@ -359,12 +381,18 @@ impl AppServerSession {
       "request_permissions":false,"skill_approval":false
     }});
     let cwd = self.setup.worktree.to_string_lossy();
+    // A table merges with the user's configuration: each server of it is turned off by name.
+    let servers: serde_json::Map<String, Value> = self
+      .turned_off
+      .iter()
+      .map(|name| (name.clone(), json!({"enabled":false})))
+      .collect();
+    let config = json!({"mcp_servers":servers});
     let params = match &self.setup.resume {
       Some(thread) => json!({"threadId":thread,"cwd":cwd,"model":self.setup.model,
-        "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox}),
+        "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),
       None => json!({"cwd":cwd,"model":self.setup.model,
-        "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,
-        "config":{"features":{"apps":false}}}),
+        "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),
     };
     let method = if self.setup.resume.is_some() {
       "thread/resume"
@@ -394,6 +422,7 @@ fn phase_name(phase: Phase) -> &'static str {
   match phase {
     Phase::Initialize => "initialize",
     Phase::Account => "account/read",
+    Phase::Configuration => "config/read",
     Phase::Thread => "thread/start or resume",
     Phase::Servers => "mcpServerStatus/list",
     Phase::Turn => "turn/start",

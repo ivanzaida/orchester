@@ -1,7 +1,7 @@
 //! How an agent step starts the Codex CLI: always as a bidirectional App Server, so that a request
 //! for a person's decision can reach "Needs you" (`docs/interactive-tool-approvals.md`):
 //!
-//! `codex app-server --stdio [-c windows.sandbox=elevated] [-c sandbox_workspace_write.network_access=<on>]
+//! `codex app-server --stdio <isolation> [-c windows.sandbox=elevated] [-c sandbox_workspace_write.network_access=<on>]
 //!  -c sandbox_workspace_write.writable_roots=[<worktree>, <folders>] [-c project_doc_max_bytes=0
 //!  [-c skills.config=[<skills>]]] [<MCP servers>]`
 //!
@@ -20,11 +20,16 @@
 //! - Extra writable folders ([`crate::permission::writable`]) are added to the `workspace-write` sandbox as a TOML
 //!   array of basic strings, with the worktree, which Codex also reports as the local environment's workspace root. A
 //!   folder that does not exist is accepted and ignored, so the runner creates them first.
-//! - App Server has no `--ignore-user-config` or `--ignore-rules`: the user's own configuration, their global MCP
-//!   servers and the execpolicy rules files load as for the user's own Codex sessions. The runner checks the sandbox,
-//!   approval policy, reviewer, network, writable roots and model Codex activated against the step's permissions before
-//!   the turn starts. The MCP servers the profile chooses are passed as configuration overrides ([`CodexMcp`]), their
-//!   secrets through the process environment only.
+//! - App Server has no `--ignore-user-config` or `--ignore-rules`, so it loads the user's own configuration (and a
+//!   trusted project's `.codex` folders). What of it would reach the agent is turned off ([`ISOLATION`]): the `notify`
+//!   program, plugins (with their skills and MCP servers), apps, and the permission requests that could stay granted
+//!   for later commands. The user's and the project's own MCP servers are turned off for the thread by name, which the
+//!   runner reads with `config/read` first (`crate::connection::app_server_mcp`). The execpolicy `.rules` files cannot
+//!   be turned off in App Server (0.159.2 has no setting for it): a command an `allow` rule there matches runs outside
+//!   the sandbox without asking, which the enforcement panel says. The runner checks the sandbox, approval policy,
+//!   reviewer, network, writable roots and model Codex activated against the step's permissions before the turn starts.
+//!   The MCP servers the profile chooses are passed as configuration overrides ([`CodexMcp`]), their secrets through
+//!   the process environment only.
 //! - Repository agent files ([`crate::agent_files`]): while the project has them off, `AGENTS.md` is left out with
 //!   `project_doc_max_bytes=0` and each skill of `<worktree>/.agents/skills` is disabled by the path of its `SKILL.md`
 //!   (`{path="…",enabled=false}`), on new and resumed sessions alike.
@@ -45,6 +50,19 @@ use crate::{
   permission::NetworkAccess,
   resource::{CommandEnvironment, RepositoryAccess},
 };
+
+/// Configuration overrides that keep the user's own Codex setup from the agent. Checked against Codex
+/// 0.159.2 with `config/read` and `mcpServerStatus/list`, without a model turn (2026-10-01): `notify`
+/// becomes empty (an array replaces the user's), and the plugin servers (`code-review`, `cua_repl`)
+/// and `codex_app` are gone from the thread's MCP inventory. A table such as `mcp_servers` merges
+/// with the user's rather than replacing it, so servers are turned off one by one instead.
+pub const ISOLATION: [&str; 5] = [
+  "notify=[]",
+  "features.plugins=false",
+  "features.apps=false",
+  "features.exec_permission_approvals=false",
+  "features.request_permissions_tool=false",
+];
 
 /// Everything that decides how one Codex App Server process starts.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,6 +96,9 @@ impl CodexInvocation<'_> {
   pub fn args(&self) -> Result<Vec<String>, InvocationError> {
     unicode_folders(self.writable_roots)?;
     let mut args = vec!["app-server".to_owned(), "--stdio".to_owned()];
+    for setting in ISOLATION {
+      args.extend(["-c".to_owned(), setting.to_owned()]);
+    }
     if self.platform == Platform::Windows {
       args.extend(["-c".to_owned(), "windows.sandbox=elevated".to_owned()]);
     }

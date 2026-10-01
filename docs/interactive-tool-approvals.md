@@ -55,12 +55,25 @@ temporary frame was removed by that exact ID, preserving the existing design.
 
 ## Codex profile
 
-App Server has no `--ignore-user-config` or `--ignore-rules`, so every Codex step inherits the user's
-normal Codex account, configuration, configured global MCP servers and execpolicy rules files; an
-`allow` rule there lets a matching command run outside the sandbox without asking. Orchester adds the
-project-selected MCP servers. A step that asks before MCP actions checks that each selected server is
-connected before starting the turn; any other step works without a selected server Codex did not
-connect, and its activity names it. Other global servers remain available. If Codex is signed out,
+App Server has no `--ignore-user-config` or `--ignore-rules`, so it loads the user's normal Codex
+account and configuration, and the `.codex` folders of a trusted project. Orchester keeps what of it
+would reach the agent out (checked against 0.159.2 with `config/read` and `mcpServerStatus/list`,
+without a model turn):
+
+| From the user's setup | Neutralised by |
+| --- | --- |
+| `notify` program | `-c notify=[]` (an array replaces the user's) |
+| plugins, their skills and MCP servers (`code-review`, `cua_repl`, …) | `-c features.plugins=false` |
+| apps (`codex_app`) | `-c features.apps=false` |
+| permission overlays that can stay granted (`with_additional_permissions`, `request_permissions`) | `-c features.exec_permission_approvals=false`, `-c features.request_permissions_tool=false` |
+| the user's and a project's MCP servers | each turned off for the thread by name (`config` of `thread/start`/`thread/resume`: `mcp_servers.<name>.enabled=false`), the names read with `config/read` first; a table merges with the user's, so `mcp_servers={}` would not remove them. The thread's inventory must then show every server the step does not choose `disabled`, or the step fails. |
+| hooks | cannot be turned off: a configuration that defines any refuses the step |
+| execpolicy `.rules` files (`$CODEX_HOME/rules`, a trusted project's `.codex/rules`) | **cannot be turned off**: 0.159.2 has no setting for it in App Server. A command an `allow` rule matches runs outside the sandbox without asking. The enforcement panel says *Your Codex rules still apply · allow rules run unsandboxed, unasked*. |
+
+The user's model, reasoning effort and service tier defaults still apply where the profile sets none.
+Orchester adds the project-selected MCP servers. A step that asks before MCP actions checks that each
+selected server is connected before starting the turn; any other step works without a selected server
+Codex did not connect, and its activity names it. If Codex is signed out,
 the step reports a clear `Not signed in` failure; Orchester does not start a separate login flow.
 Codex's standard error is kept in the step's activity as raw lines. A turn's usage adds the `last`
 usage of each `thread/tokenUsage/updated` whose thread total moved, so a model response is counted
