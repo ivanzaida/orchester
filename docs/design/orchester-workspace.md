@@ -1061,11 +1061,11 @@ Superseded (kept on the canvas, not redrawn):
 
 **Following live (ORC-36).** While the end of the timeline is in view, it follows new items (*Following live*, radio). Scrolling up stops following (*Not following*, circle-pause) and shows *Jump to latest · 3 new* (arrow-down, 30 high) centred 16 above the composer; the count is of new timeline items, not raw events. Jumping, or sending a message, scrolls to the end and follows again. Opening the tab starts at the end, or at a card that waits for you.
 
-**Composer.** Always visible at the bottom of the main column (dock: hairline above, padding 12 / 32 / 14), in the 840 column, with the recipient select and *Attach* (unavailable, 0.4) in its action row and one line under it that says what sending does now. Enter adds a line; Ctrl/Cmd+Enter presses the state’s primary action; drafts and retries follow the existing contract (kept until stored, sent once).
+**Composer.** Always visible at the bottom of the main column (dock: hairline above, padding 12 / 32 / 14), in the 840 column, with the recipient select and *Attach* (unavailable, 0.4) in its action row and one line under it that says what sending does now. Enter adds a line; Ctrl/Cmd+Enter presses the state’s primary action, except while an agent works, when it sends after this turn (below); drafts and retries follow the existing contract (kept until stored, sent once).
 
 | Run state | Composer |
 | --- | --- |
-| An agent works | *To: Builder · working*; **Send now** (zap, primary) and **Send after this turn** (clock-3, secondary); Ctrl/Cmd+Shift+Enter sends after this turn. Hint: *Send now reaches Builder at its next tool call, while it works. Send after this turn waits until Builder finishes its turn.* |
+| An agent works | *To: Builder · working*; **Send now** (zap, primary) and **Send after this turn** (clock-3, secondary); Ctrl/Cmd+Enter sends after this turn, the safer default, and *Send now* is pressed only with its own button. Hint: *Send now reaches Builder at its next tool call, while it works. Send after this turn waits until Builder finishes its turn.* |
 | A tool step runs, or the recipient is not the working agent | One **Send** that queues (*Queued · waiting for Reviewer’s next turn*) with the reason in the hint. |
 | A question waits | *Answering Builder’s question from 12:09* above the field, the field focused, recipient fixed to the asker (0.4), **Send answer**; the agent continues at once. |
 | A plan waits | *Changes to plan v1 · sent to Planner*, **Request changes** (undo-2), unavailable while empty; *Approve plan & continue* is on the card only. |
@@ -1075,7 +1075,7 @@ Superseded (kept on the canvas, not redrawn):
 | Queued, not started | *To: Explorer · first step*, **Send when the run starts**; messages wait in the task. |
 | Merged, worktree removed, no agent step | Visible but disabled: *No agent of this run reads messages any more.*, recipient and Send at 0.4, a lock and the reason (*The run’s worktree was removed, so its agent cannot continue.*, *This run’s work was merged.*, *This run has no agent step to continue.*). |
 
-**Delivery.** *Send now* gives the message to the agent while its turn runs, at the next boundary between tool calls: Codex through App Server, which steers the running turn (`turn/steer`); Claude Code through a stream-json user message on stdin (`--input-format stream-json`). Both are unverified until checked against the installed versions on Windows and macOS; a connection that cannot take a message mid-turn offers only *Send after this turn*, with *Send now* unavailable (0.4, lock) and the reason. *Send after this turn* queues the message as the agent’s next input when its turn ends. A message to an agent that is not working waits for that agent’s next turn, as before. Delivery lines (icon 11 `$subtle`, text 10 `$muted`):
+**Delivery.** *Send now* gives the message to the agent while its turn runs, after the tool call that is running: Codex through App Server, which steers the running turn (`turn/steer`); Claude Code through a stream-json user message on stdin (`--input-format stream-json`). That it lands after the running tool call is to verify in implementation, for both, on Windows and macOS; a connection that cannot take a message mid-turn offers only *Send after this turn*, with *Send now* unavailable (0.4, lock) and the reason. *Send after this turn* queues the message as the agent’s next input when its turn ends. A message to an agent that is not working waits for that agent’s next turn, as before. Delivery lines (icon 11 `$subtle`, text 10 `$muted`):
 
 - *Sending now · Builder gets it at its next tool call* (loader);
 - *Delivered mid-turn to Builder · 12:05, at its next tool call* (zap);
@@ -1103,14 +1103,15 @@ Scope changes still do not return to plan review by themselves.
 
 Reused: `zo9Py`, `TSJpn`, `SOW6S`, `u1XBP`, `DeizF`, `ZGwlv`, `mDnc3`, `N4SlQq`, `tfGRt`, `C3nu0z`, the invocation panel of `IFmpE` and the segmented period control of the usage dashboard. New components: `V17jfc` *Conversation / Timeline message* and `uoK7y` *Conversation / Tool group*, canonical in `RrScB`. No new variables.
 
-**Open questions.**
+**Decisions (2026-10-01).** The user approved the frames and answered their open questions. Where a frame differs, these decisions win; the frames were not redrawn.
 
-- *Acknowledged by Builder* (M8) is not drawn: the agent’s reply follows in the timeline. Keep it as a delivery line, or drop it?
-- Ctrl/Cmd+Enter presses *Send now* while an agent works. Should the safer *Send after this turn* be the default instead?
-- Where exactly *Send now* lands (after the running tool call, or at the next model request) for Codex App Server and for Claude Code’s stream-json input is to be checked; the copy says *at its next tool call*.
-- On this tab a tool approval is an inline card. Does the ORC-41 dialog still open when the person is on another page, or do Needs you and the status bar lead to the card?
-- In the failed state the composer’s *Continue with instructions* is the primary action and *Run again* turns secondary in the topbar (it is primary on Summary). Is that right?
-- The progress rows and *Working context* leave the conversation for Summary. Is the step header enough while chatting?
+- **No *Acknowledged by Builder*.** The agent’s reply shows in the timeline, so a delivered message keeps its delivery line and gets no acknowledgement line.
+- **Ctrl/Cmd+Enter sends after this turn** while an agent works, the safer default; *Send now* stays a separate button. The steer hint in `RrScB`, `gNa91` and `LhLL8` ends *Ctrl+Enter sends now.*; it should read *Ctrl+Enter sends after this turn.*
+- **Send now lands after the running tool call.** To verify in implementation for Codex App Server and Claude Code stream-json input.
+- **Tool approvals.** On the Conversation tab a request is the inline card. When the person is on another page, the approval dialog (ORC-41) still opens; *Needs you* and the status bar lead to the inline card.
+- **Failed state.** *Continue with instructions* is the primary action; *Run again* is secondary in the topbar on this tab.
+- **Progress.** The step header is enough while chatting; the progress rows and *Working context* stay on Summary.
+- **Specified, not drawn.** The paused and interrupted composer states and the still-growing tool group are specified here only; that is enough.
 
 ## Code index
 
