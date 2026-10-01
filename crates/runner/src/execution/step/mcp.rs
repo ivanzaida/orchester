@@ -18,7 +18,7 @@ use orchester_core::{
   connection::{
     AgentProvider,
     invocation::{ClaudeMcpConfig, CodexMcp, LaunchValue, McpLaunch, Platform},
-    mcp::{McpEnvValue, McpServer, McpServerName, McpServerProblem, McpTransport, StdioServer},
+    mcp::{InvocationExemptions, McpEnvValue, McpServer, McpServerName, McpServerProblem, McpTransport, StdioServer},
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, SecretId},
@@ -51,12 +51,22 @@ impl McpSetup {
       Self::Claude(None) | Self::Codex(_) => Vec::new(),
     }
   }
+
+  /// The tools of Claude Code's servers that run without asking, which its activity marks as not asked.
+  pub(in super::super) fn claude_exemptions(&self) -> InvocationExemptions {
+    match self {
+      Self::Claude(Some(servers)) => servers.exemptions.clone(),
+      Self::Claude(None) | Self::Codex(_) => InvocationExemptions::default(),
+    }
+  }
 }
 
-/// The MCP configuration file of a Claude Code invocation, the servers in it and their secret values.
+/// The MCP configuration file of a Claude Code invocation, the servers in it, their tools that run
+/// without asking and their secret values.
 pub(in super::super) struct ClaudeServers {
   pub(in super::super) file: PrivateFile,
   pub(in super::super) servers: Vec<McpServerName>,
+  pub(in super::super) exemptions: InvocationExemptions,
   pub(in super::super) secrets: Vec<SecretVariable>,
 }
 
@@ -91,6 +101,7 @@ impl RunTask {
               .map(|file| ClaudeServers {
                 file,
                 servers: config.servers().to_vec(),
+                exemptions: config.exemptions().clone(),
                 secrets: config.secrets().to_vec(),
               })
               .map_err(|error| RunnerProblem::CouldNotStart {
@@ -159,7 +170,8 @@ fn launched(
   let stdio = match server.transport() {
     McpTransport::Http(http) => {
       let bearer = http.bearer().map(|secret| secrets.read(secret)).transpose()?;
-      return Ok(McpLaunch::http(server.name().clone(), http.url().clone(), bearer));
+      let launch = McpLaunch::http(server.name().clone(), http.url().clone(), bearer);
+      return Ok(launch.with_exempt_tools(server.exempt_tools().clone()));
     }
     McpTransport::Stdio(stdio) => stdio,
   };
@@ -176,12 +188,8 @@ fn launched(
     };
     variables.push((name.clone(), value));
   }
-  Ok(McpLaunch::stdio(
-    server.name().clone(),
-    program,
-    working_directory,
-    variables,
-  ))
+  let launch = McpLaunch::stdio(server.name().clone(), program, working_directory, variables);
+  Ok(launch.with_exempt_tools(server.exempt_tools().clone()))
 }
 
 /// The program that starts and its arguments: the file the server's program is on the `PATH`

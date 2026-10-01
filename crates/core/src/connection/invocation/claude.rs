@@ -13,7 +13,8 @@
 //!   carry allow rules that would widen the permissions; a repository's `.claude/settings.json` could do the same, or
 //!   run hooks, and in a writing step the agent could edit that file for the invocations after it.
 //! - MCP servers: only those the profile chooses, from a file the runner writes for the invocation
-//!   ([`super::ClaudeMcpConfig`]); their tools are allowed with `--allowedTools mcp__<server>` rules.
+//!   ([`super::ClaudeMcpConfig`]); their tools are allowed with `--allowedTools mcp__<server>` rules, or, when the step
+//!   asks before MCP actions, only the tools that run without asking, with `mcp__<server>__<tool>` rules.
 //! - Approvals: a step that asks a person before commands or MCP actions, or about commands outside its allowed list,
 //!   also gets the configuration file of Orchester's permission prompt relay and `--permission-prompt-tool` naming its
 //!   tool ([`crate::connection::claude_approval`]); on a resumed session too, as the prompt is not part of the session.
@@ -56,7 +57,7 @@ use crate::{
   command::Command,
   connection::{
     claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
-    mcp::McpServerName,
+    mcp::{InvocationExemptions, McpServerName},
   },
   permission::{
     capability::{EnforcedPermissions, Mechanism, PermissionSetting},
@@ -89,6 +90,16 @@ impl<'a> ClaudeSession<'a> {
   }
 }
 
+/// The MCP servers a Claude Code invocation gives its agent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClaudeMcp<'a> {
+  /// The file that configures them.
+  pub config: &'a Path,
+  pub servers: &'a [McpServerName],
+  /// Their tools that run without asking when the step asks before MCP actions.
+  pub exempt: &'a InvocationExemptions,
+}
+
 /// Everything that decides how one Claude Code invocation starts.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClaudeInvocation<'a> {
@@ -103,8 +114,8 @@ pub struct ClaudeInvocation<'a> {
   pub writable_roots: &'a [PathBuf],
   pub worktree: &'a Path,
   pub session: ClaudeSession<'a>,
-  /// The MCP servers the invocation gives the agent: the file that configures them and their names.
-  pub mcp: Option<(&'a Path, &'a [McpServerName])>,
+  /// The MCP servers the invocation gives the agent.
+  pub mcp: Option<ClaudeMcp<'a>>,
   /// The folder holding the skills the agent gets, if it gets any.
   pub skills: Option<&'a Path>,
   /// The code index folder the agent gets, if it gets one (`crate::code_index`).
@@ -142,7 +153,7 @@ impl ClaudeInvocation<'_> {
     args.extend(["--json-schema".to_owned(), result_schema()]);
     let configs: Vec<&Path> = self
       .mcp
-      .map(|(config, _)| config)
+      .map(|mcp| mcp.config)
       .into_iter()
       .chain(self.approvals)
       .collect();
@@ -153,7 +164,8 @@ impl ClaudeInvocation<'_> {
     if self.approvals.is_some() {
       args.extend(["--permission-prompt-tool".to_owned(), PROMPT_TOOL.to_owned()]);
     }
-    let servers = self.mcp.map_or(&[][..], |(_, servers)| servers);
+    let none = InvocationExemptions::default();
+    let (servers, exempt) = self.mcp.map_or((&[][..], &none), |mcp| (mcp.servers, mcp.exempt));
     let granted = if self.permissions.writable_folders().is_some() {
       self.writable_roots
     } else {
@@ -167,7 +179,7 @@ impl ClaudeInvocation<'_> {
       editable: &editable,
       protected: &protected,
     };
-    args.extend(permission_args(self.permissions, servers, folders));
+    args.extend(permission_args(self.permissions, servers, exempt, folders));
     for root in granted {
       args.extend(["--add-dir".to_owned(), root.to_string_lossy().into_owned()]);
     }

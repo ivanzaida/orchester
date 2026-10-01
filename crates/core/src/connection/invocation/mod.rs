@@ -12,7 +12,7 @@ use std::{
 };
 
 pub use self::{
-  claude::{ClaudeInvocation, ClaudeSession, result_schema},
+  claude::{ClaudeInvocation, ClaudeMcp, ClaudeSession, result_schema},
   codex::{CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION},
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
 };

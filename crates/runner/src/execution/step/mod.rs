@@ -286,7 +286,7 @@ impl RunTask {
       invocation: invocation.clone(),
       transport: match start.app_server {
         Some(setup) => Transport::AppServer(Box::new(AppServerSession::new(setup))),
-        None => Transport::Claude(ClaudeStream::default()),
+        None => Transport::Claude(ClaudeStream::with_exemptions(start.claude_exemptions)),
       },
       process,
       notifier: self.notifier.clone(),

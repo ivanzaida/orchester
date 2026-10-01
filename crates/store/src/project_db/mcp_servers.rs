@@ -1,8 +1,9 @@
 //! The `mcp_servers` table. A variable whose value comes from a secret stores the secret's id; the
-//! value itself is only in the OS keychain.
+//! value itself is only in the OS keychain. The tools that run without asking are part of the
+//! settings since they were added; settings written before then have none.
 
 use orchester_core::{
-  connection::mcp::{McpEnvironment, McpServer, McpServerName, McpTransport},
+  connection::mcp::{ExemptTools, McpEnvironment, McpServer, McpServerName, McpTransport},
   id::ConnectionId,
   store::McpServerStore,
   time::Timestamp,
@@ -24,6 +25,8 @@ const SETTINGS_SCHEMA: u32 = 1;
 struct Settings {
   transport: McpTransport,
   environment: McpEnvironment,
+  #[serde(default, skip_serializing_if = "ExemptTools::is_empty")]
+  exempt_tools: ExemptTools,
 }
 
 impl McpServerStore for ProjectDb {
@@ -80,6 +83,7 @@ fn settings(server: &McpServer) -> Result<String, StoreError> {
   let settings = Settings {
     transport: server.transport().clone(),
     environment: server.environment().clone(),
+    exempt_tools: server.exempt_tools().clone(),
   };
   encode_json(WHAT, SETTINGS_SCHEMA, &settings)
 }
@@ -128,13 +132,15 @@ impl StoredRow {
 
   fn into_server(self) -> Result<McpServer, StoreError> {
     let settings: Settings = decode_json(WHAT, SETTINGS_SCHEMA, &self.settings)?;
-    McpServer::from_stored(
+    let mut server = McpServer::from_stored(
       parse("MCP server id", &self.id)?,
       McpServerName::new(&self.name).map_err(|error| corrupt("MCP server name", error))?,
       (settings.transport, settings.environment),
       self.enabled,
       Timestamp::from_unix_millis(self.created_at),
     )
-    .map_err(|error| corrupt("MCP server", error))
+    .map_err(|error| corrupt("MCP server", error))?;
+    server.set_exempt_tools(settings.exempt_tools);
+    Ok(server)
   }
 }

@@ -7,6 +7,7 @@ use orchester_core::{
   connection::{
     AgentProvider,
     invocation::{CODEX_ISOLATION, CodexAgentFiles, CodexInvocation, Platform},
+    mcp::InvocationExemptions,
   },
   permission::{
     AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPermission, CommandPrefix, CommandPrefixError,
@@ -514,7 +515,7 @@ fn permissions_map_to_claude_arguments_without_bypass_modes() {
           editable: &[],
           protected: &[],
         };
-        claude::permission_args(&enforced, &[], folders)
+        claude::permission_args(&enforced, &[], &InvocationExemptions::default(), folders)
       })
   };
   let read_only = permissions(

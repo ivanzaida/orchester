@@ -25,7 +25,7 @@ use zeroize::Zeroizing;
 use super::is_agent_variable;
 use crate::{
   command::SecretVariable,
-  connection::mcp::{McpServerName, McpServerProblem, McpUrl},
+  connection::mcp::{ExemptTools, InvocationExemptions, McpServerName, McpServerProblem, McpUrl},
   resource::VariableName,
   secret::SecretValue,
 };
@@ -57,6 +57,7 @@ enum Transport {
 pub struct McpLaunch {
   name: McpServerName,
   transport: Transport,
+  exempt: ExemptTools,
 }
 
 impl McpLaunch {
@@ -76,6 +77,7 @@ impl McpLaunch {
         working_directory,
         environment,
       },
+      exempt: ExemptTools::none(),
     }
   }
 
@@ -83,7 +85,15 @@ impl McpLaunch {
     Self {
       name,
       transport: Transport::Http { url, bearer },
+      exempt: ExemptTools::none(),
     }
+  }
+
+  /// This server, its tools `exempt` running without asking when the step asks before MCP actions.
+  #[must_use]
+  pub fn with_exempt_tools(mut self, exempt: ExemptTools) -> Self {
+    self.exempt = exempt;
+    self
   }
 
   pub const fn name(&self) -> &McpServerName {
@@ -126,6 +136,7 @@ pub struct CodexMcp {
   args: Vec<String>,
   secrets: Vec<SecretVariable>,
   servers: Vec<McpServerName>,
+  exemptions: InvocationExemptions,
 }
 
 impl CodexMcp {
@@ -144,6 +155,7 @@ impl CodexMcp {
         Err(problem) => left_out.push((server.name.clone(), problem)),
       }
     }
+    mcp.exemptions = exemptions(servers.iter().filter(|server| mcp.servers.contains(&server.name)));
     if !mcp.secrets.is_empty() {
       let names: Vec<&str> = mcp.secrets.iter().map(SecretVariable::name).collect();
       mcp.args.extend([
@@ -167,6 +179,11 @@ impl CodexMcp {
   /// The exact server names supplied by this invocation, for App Server inventory checks.
   pub fn servers(&self) -> &[McpServerName] {
     &self.servers
+  }
+
+  /// The tools of these servers that run without asking when the step asks before MCP actions.
+  pub const fn exemptions(&self) -> &InvocationExemptions {
+    &self.exemptions
   }
 
   /// The secret variables `server` adds to the Codex process, or why it cannot have them.
@@ -236,6 +253,7 @@ impl CodexMcp {
 pub struct ClaudeMcpConfig {
   contents: Zeroizing<String>,
   servers: Vec<McpServerName>,
+  exemptions: InvocationExemptions,
   /// The secret values in the file, by the variable or header they fill.
   secrets: Vec<SecretVariable>,
 }
@@ -278,6 +296,7 @@ impl ClaudeMcpConfig {
     let config = Self {
       contents: Zeroizing::new(contents),
       servers: kept.iter().map(|server| server.name.clone()).collect(),
+      exemptions: exemptions(kept.iter().copied()),
       secrets: kept
         .iter()
         .flat_map(|server| server.secret_variables())
@@ -301,6 +320,16 @@ impl ClaudeMcpConfig {
   pub fn secrets(&self) -> &[SecretVariable] {
     &self.secrets
   }
+
+  /// The tools of these servers that run without asking when the step asks before MCP actions.
+  pub const fn exemptions(&self) -> &InvocationExemptions {
+    &self.exemptions
+  }
+}
+
+/// The tools of `servers` that run without asking.
+fn exemptions<'a>(servers: impl Iterator<Item = &'a McpLaunch>) -> InvocationExemptions {
+  InvocationExemptions::new(servers.map(|server| (server.name.clone(), server.exempt.clone())))
 }
 
 impl fmt::Debug for ClaudeMcpConfig {

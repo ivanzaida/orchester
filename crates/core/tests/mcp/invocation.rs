@@ -5,8 +5,8 @@ use orchester_core::{
   connection::{
     AgentProvider,
     invocation::{
-      ClaudeInvocation, ClaudeMcpConfig, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, LaunchValue,
-      McpLaunch, Platform,
+      ClaudeInvocation, ClaudeMcp, ClaudeMcpConfig, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp,
+      LaunchValue, McpLaunch, Platform,
     },
     mcp::{McpServerName, McpServerProblem, McpUrl},
   },
@@ -244,7 +244,11 @@ fn mcp_claude_gets_a_private_config_file_and_allows_only_the_servers_tools() {
     writable_roots: &[],
     worktree: Path::new("/repo/worktree"),
     session: ClaudeSession::New(Uuid::nil()),
-    mcp: Some((config_path, config.servers())),
+    mcp: Some(ClaudeMcp {
+      config: config_path,
+      servers: config.servers(),
+      exempt: config.exemptions(),
+    }),
     skills: None,
     code_index: None,
     // Every Claude Code step asks about commands through the permission prompt.

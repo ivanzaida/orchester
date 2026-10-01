@@ -24,8 +24,9 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, REASONING_EFFORT,
     invocation::{
-      ClaudeInvocation, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError, Platform,
+      ClaudeInvocation, ClaudeMcp, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError, Platform,
     },
+    mcp::InvocationExemptions,
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
@@ -72,6 +73,8 @@ pub(super) struct AgentStart {
   pub(super) claude_approvals: Option<ClaudeApprovals>,
   /// Secret values of Claude Code's MCP servers, kept out of the invocation's activity.
   pub(super) mcp_secrets: Vec<SecretVariable>,
+  /// The tools of Claude Code's MCP servers that run without asking, when the step asks before MCP actions.
+  pub(super) claude_exemptions: InvocationExemptions,
   pub(super) agent: String,
   /// The task memory its prompt holds, to record with the invocation.
   pub(super) memory: Vec<InjectedMemory>,
@@ -155,6 +158,11 @@ impl RunTask {
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
     let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;
     let mcp_secrets = setup.claude_secrets();
+    let claude_exemptions = if enforced.permissions().interactive_tool_approvals() {
+      setup.claude_exemptions()
+    } else {
+      InvocationExemptions::default()
+    };
     let cli = Cli {
       connection: &connection,
       model,
@@ -197,6 +205,7 @@ impl RunTask {
       app_server,
       claude_approvals,
       mcp_secrets,
+      claude_exemptions,
       agent: body.role().as_str().to_owned(),
       memory: recalled.injected(),
       permissions: enforced.launch(),
@@ -303,6 +312,11 @@ impl RunTask {
         writable_roots: cli.writable_roots.to_vec(),
         resume: cli.resume.map(str::to_owned),
         expected_servers,
+        exemptions: if cli.enforced.permissions().interactive_tool_approvals() {
+          mcp.exemptions().clone()
+        } else {
+          InvocationExemptions::default()
+        },
         output_schema: schema,
         secrets: mcp.secrets().to_vec(),
       },
@@ -378,9 +392,11 @@ impl RunTask {
       writable_roots: cli.writable_roots,
       worktree: cli.worktree,
       session: ClaudeSession::continuing(cli.resume),
-      mcp: servers
-        .as_ref()
-        .map(|servers| (servers.file.path(), servers.servers.as_slice())),
+      mcp: servers.as_ref().map(|servers| ClaudeMcp {
+        config: servers.file.path(),
+        servers: &servers.servers,
+        exempt: &servers.exemptions,
+      }),
       skills: cli.skills,
       code_index: cli.code_index,
       approvals: cli.approvals,

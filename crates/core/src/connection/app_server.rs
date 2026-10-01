@@ -13,7 +13,10 @@ use std::{collections::HashMap, fmt};
 use serde_json::{Value, json};
 use thiserror::Error;
 
-use super::stream::{AgentEvent, CommandStatus, FileChange, FileChangeKind};
+use super::{
+  mcp::InvocationExemptions,
+  stream::{AgentEvent, CommandStatus, FileChange, FileChangeKind},
+};
 use crate::run::TokenUsage;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -144,9 +147,21 @@ pub struct AppServerStream {
   /// The thread's total at the latest usage notification. Codex repeats a notification unchanged
   /// (when its rate limits change), so `last` counts only when the total moved.
   total: Option<TokenUsage>,
+  /// The MCP tools that run without asking, in a step that asks before MCP actions.
+  exemptions: InvocationExemptions,
 }
 
 impl AppServerStream {
+  /// A stream whose calls of the tools `exemptions` names are reported as not asked
+  /// ([`AgentEvent::McpToolNotAsked`]): the thread's configuration approves them
+  /// (`crate::connection::app_server_mcp::thread_servers`), so Codex runs them without a request.
+  pub fn with_exemptions(exemptions: InvocationExemptions) -> Self {
+    Self {
+      exemptions,
+      ..Self::default()
+    }
+  }
+
   /// A started MCP action remains active until its completion notification arrives.
   pub fn has_active_tools(&self) -> bool {
     !self.tools.is_empty()
@@ -350,6 +365,14 @@ impl AppServerStream {
           string(item, "server"),
           string(item, "tool"),
         ) {
+          let not_asked = self
+            .exemptions
+            .exempts(&server, &action)
+            .then(|| AgentEvent::McpToolNotAsked {
+              item: id.clone(),
+              server: server.clone(),
+              tool: action.clone(),
+            });
           let context = ToolContext {
             thread,
             turn,
@@ -358,6 +381,7 @@ impl AppServerStream {
             target: item.get("arguments").and_then(|args| string(args, "filePath")),
           };
           self.tools.insert(id, context);
+          return not_asked.map(Update::Activity).into_iter().collect();
         }
         Vec::new()
       }

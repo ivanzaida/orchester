@@ -25,9 +25,10 @@ use orchester_core::{
     app_server::{AppServerStream, PendingApproval, Update},
     app_server_config::{refuse_taken_names, repository_settings},
     app_server_mcp::{
-      refuse_user_hooks, servers_to_turn_off, unavailable_selected, verify_only_chosen_run, verify_selected_servers,
+      refuse_user_hooks, servers_to_turn_off, thread_servers, unavailable_selected, verify_only_chosen_run,
+      verify_selected_servers,
     },
-    mcp::McpServerProblem,
+    mcp::{InvocationExemptions, McpServerProblem},
     stream::{AgentEvent, OutputStream, RunnerProblem},
   },
   permission::NetworkAccess,
@@ -71,6 +72,8 @@ pub(super) struct AppServerSetup {
   pub writable_roots: Vec<PathBuf>,
   pub resume: Option<String>,
   pub expected_servers: BTreeSet<String>,
+  /// The MCP tools that run without asking: empty unless the step asks before MCP actions.
+  pub exemptions: InvocationExemptions,
   pub output_schema: Option<Value>,
   pub secrets: Vec<SecretVariable>,
 }
@@ -111,13 +114,13 @@ pub(super) struct AppServerSession {
 impl AppServerSession {
   pub fn new(setup: AppServerSetup) -> Self {
     Self {
-      setup,
       phase: Phase::Initialize,
       turned_off: Vec::new(),
       stderr: StderrLog::default(),
       thread: None,
       turn: None,
-      stream: AppServerStream::default(),
+      stream: AppServerStream::with_exemptions(setup.exemptions.clone()),
+      setup,
     }
   }
 
@@ -439,13 +442,7 @@ impl AppServerSession {
       "request_permissions":false,"skill_approval":false
     }});
     let cwd = self.setup.worktree.to_string_lossy();
-    // A table merges with the user's configuration: each server of it is turned off by name.
-    let servers: serde_json::Map<String, Value> = self
-      .turned_off
-      .iter()
-      .map(|name| (name.clone(), json!({"enabled":false})))
-      .collect();
-    let config = json!({"mcp_servers":servers});
+    let config = json!({"mcp_servers":thread_servers(&self.turned_off, &self.setup.exemptions)});
     let params = match &self.setup.resume {
       Some(thread) => json!({"threadId":thread,"cwd":cwd,"model":self.setup.model,
         "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),

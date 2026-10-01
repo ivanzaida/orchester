@@ -33,6 +33,18 @@ impl Ask {
         "mcp__docs__write",
         serde_json::json!({"filePath": "docs/docs-token-value-7f3a.md", "text": "notes"}),
       )
+    } else if prompt.contains("Read the design") {
+      (
+        "toolu_design_read",
+        "mcp__pencil__get_screenshot",
+        serde_json::json!({"nodeId": "a1"}),
+      )
+    } else if prompt.contains("Change the design") {
+      (
+        "toolu_design_change",
+        "mcp__pencil__batch_design",
+        serde_json::json!({"operations": "I(a1)"}),
+      )
     } else if prompt.contains("Make a folder") {
       (
         "toolu_mkdir",
@@ -71,9 +83,11 @@ impl Fake {
     let block = serde_json::json!({"type": "tool_use", "id": ask.call, "name": ask.tool, "input": ask.input});
     self.assistant("msg_ask", &block.to_string());
     let command = ask.input.get("command").and_then(serde_json::Value::as_str);
-    let rule = command.map_or(fake_claude_rules::Decision::Ask, |command| {
-      fake_claude_rules::bash(args, command)
-    });
+    let rule = match command {
+      Some(command) => fake_claude_rules::bash(args, command),
+      None if ask.tool.starts_with("mcp__") => fake_claude_rules::mcp(args, &ask.tool),
+      None => fake_claude_rules::Decision::Ask,
+    };
     if rule != fake_claude_rules::Decision::Ask {
       eprintln!("permission: {} {}", &ask.call, rule.as_str());
       let ran = rule.runs();

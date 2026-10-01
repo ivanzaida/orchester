@@ -24,7 +24,7 @@ use serde_json::Value;
 
 use super::{AgentEvent, CommandStatus, FileChange, FileChangeKind, OutputStream};
 use crate::{
-  connection::mcp::McpServerProblem,
+  connection::mcp::{InvocationExemptions, McpServerProblem},
   run::{StepResult, TokenUsage},
 };
 
@@ -50,6 +50,8 @@ pub struct ClaudeStream {
   /// The last text the agent wrote.
   last_text: Option<String>,
   signed_out: bool,
+  /// The MCP tools that run without asking, in a step that asks before MCP actions.
+  exemptions: InvocationExemptions,
 }
 
 #[derive(Clone, Debug)]
@@ -61,6 +63,15 @@ struct Call {
 }
 
 impl ClaudeStream {
+  /// A stream whose calls of the tools `exemptions` names are reported as not asked
+  /// ([`AgentEvent::McpToolNotAsked`]): they run by an allow rule, never reaching the permission prompt.
+  pub fn with_exemptions(exemptions: InvocationExemptions) -> Self {
+    Self {
+      exemptions,
+      ..Self::default()
+    }
+  }
+
   /// The events one line of Claude Code output reports, possibly none: a repeated usage, an edit
   /// whose result is still to come or the end of a CLI that already said it is not signed in.
   /// Standard error carries the CLI's own diagnostics, which are kept as raw lines, like anything
@@ -106,6 +117,9 @@ impl ClaudeStream {
       understood &= KNOWN_BLOCKS.contains(&kind);
       if let Some(event) = self.content(block, error) {
         events.push(event);
+      }
+      if kind == "tool_use" {
+        events.extend(self.not_asked(block));
       }
     }
     let usage = message.get("usage").and_then(usage).unwrap_or_default();
@@ -157,6 +171,16 @@ impl ClaudeStream {
     });
     self.calls.insert(item, Call { tool, command, file });
     started
+  }
+
+  /// A call of a tool that runs without asking.
+  fn not_asked(&self, block: &Value) -> Option<AgentEvent> {
+    let (server, tool) = self.exemptions.claude_tool(block.get("name")?.as_str()?)?;
+    Some(AgentEvent::McpToolNotAsked {
+      item: text(block, "id")?,
+      server: server.to_string(),
+      tool: tool.to_string(),
+    })
   }
 
   /// Tool results; a user message without any is not understood.

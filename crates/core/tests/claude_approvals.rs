@@ -11,8 +11,8 @@ use orchester_core::{
       ApprovalToken, ClaudeApprovalConfig, ClaudeApprovalScope, ClaudeAsk, PROMPT_TOOL, prompt_result, refusal,
       relay::{RelayStep, ask_result, relay_step},
     },
-    invocation::{ClaudeInvocation, ClaudeSession, InvocationError, Platform},
-    mcp::McpServerName,
+    invocation::{ClaudeInvocation, ClaudeMcp, ClaudeSession, InvocationError, Platform},
+    mcp::{InvocationExemptions, McpServerName},
   },
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess, claude::PermissionFolders,
@@ -214,7 +214,11 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
       writable_roots: &[],
       worktree: Path::new("/repo/.orchester/worktrees/run"),
       session: ClaudeSession::Resume("s"),
-      mcp: Some((Path::new("/tmp/servers.json"), &servers)),
+      mcp: Some(ClaudeMcp {
+        config: Path::new("/tmp/servers.json"),
+        servers: &servers,
+        exempt: &InvocationExemptions::default(),
+      }),
       skills: None,
       code_index: None,
       approvals: Some(Path::new("/tmp/approvals.json")),
@@ -245,6 +249,7 @@ fn permission_args_of(permissions: &AgentPermissions) -> Vec<String> {
       .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
       .expect("enforceable"),
     &[],
+    &InvocationExemptions::default(),
     folders,
   )
 }

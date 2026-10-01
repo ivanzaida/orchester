@@ -113,6 +113,13 @@ pub enum AgentEvent {
     server: Option<String>,
     problem: McpServerProblem,
   },
+  /// The agent called `tool` of MCP server `server` (as tool call `item`), and nobody was asked: the step asks
+  /// before MCP actions, and the server lists the tool among those that run without asking.
+  McpToolNotAsked {
+    item: String,
+    server: String,
+    tool: String,
+  },
   /// A tool step started the program of command tool `tool`; `command` is its command line as
   /// [`crate::resource::CommandAction::command_line`] writes it.
   ToolCommandStarted {
@@ -234,6 +241,7 @@ impl AgentEvent {
       Self::Raw { .. } => "raw",
       Self::RunnerProblem { .. } => "runner_problem",
       Self::McpServer { .. } => "mcp_server",
+      Self::McpToolNotAsked { .. } => "mcp_tool_not_asked",
       Self::ToolCommandStarted { .. } => "tool_command_started",
       Self::ToolCommandFinished { .. } => "tool_command_finished",
     }
