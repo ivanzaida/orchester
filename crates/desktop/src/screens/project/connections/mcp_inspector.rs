@@ -1,9 +1,10 @@
 //! Selected MCP server's details (`OXa0o` in 04.D `QdLRd`): name, whether it is on, how the agent's
 //! CLI reaches it (type, program or endpoint, arguments, folder), how it authenticates, its
-//! variables (a secret by its name only), its tools and the profiles that give it to their agents.
-//! Orchester never talks to a server itself, so *Refresh tools* and *Test connection* are shown
+//! variables (a secret by its name only), the tools that run without asking, its tools and the profiles that give it to
+//! their agents. Orchester never talks to a server itself, so *Refresh tools* and *Test connection* are shown
 //! unavailable, with why; the actions pinned below are *Edit connection* and turning the server on
-//! or off. Laid out like the agent connection inspector (`JuVaA`).
+//! or off. Laid out like the agent connection inspector (`JuVaA`). The tools that run without asking,
+//! which no frame draws, follow the variables as their own part.
 
 use std::sync::Arc;
 
@@ -73,6 +74,7 @@ impl McpInspector<'_> {
       .child(label(status_icon, &ctx.t(status_key)))
       .with_children(self.properties(ctx))
       .with_children(self.variables(ctx))
+      .child(self.exempt_tools(ctx))
       .child(heading(ctx, "connections.mcp.tools"))
       .child(note(ctx, "connections.mcp.toolsNote"))
       .child(button(
@@ -215,6 +217,28 @@ impl McpInspector<'_> {
         .with_children(rows)
         .into(),
     )
+  }
+
+  /// The tools that run without asking, one per line in mono, and when they apply.
+  fn exempt_tools(&self, ctx: &Ctx) -> Element {
+    let tools = self.server.exempt_tools();
+    let column = Column::new()
+      .id("mcp-exempt-tools-details")
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Stack.role())
+      .child(heading(ctx, "connections.mcp.exemptTools"));
+    if tools.is_empty() {
+      return column.child(note(ctx, "connections.mcp.exemptToolsNone")).into();
+    }
+    column
+      .with_children(
+        tools
+          .tools()
+          .iter()
+          .map(|tool| Text::new(tool.as_str()).variant(ExtraTypography::MonoValue.role())),
+      )
+      .child(note(ctx, "connections.mcp.exemptToolsNote"))
+      .into()
   }
 
   /// The secret's name and environment, or that the project no longer lists it.

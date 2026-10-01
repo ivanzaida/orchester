@@ -10,6 +10,9 @@
 //! 7. a few commands Claude Code classifies as read-only (`ls`, `cat`, `git status`, `git log`, `git diff`);
 //! 8. `acceptEdits`, which runs `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form;
 //! 9. anything else asks. `dontAsk` denies what would ask, and so does print mode without a permission prompt tool.
+//!
+//! An MCP tool (`mcp__<server>__<tool>`) runs by an allow rule naming exactly that tool, or the whole server
+//! (`mcp__<server>`, `mcp__<server>__*`), as 2.1.286 matches them; anything else asks.
 
 /// Commands `acceptEdits` runs without a rule.
 const MODE_ALLOWED: [&str; 7] = ["mkdir", "touch", "rm", "rmdir", "mv", "cp", "sed"];
@@ -66,6 +69,24 @@ pub fn bash(args: &[String], command: &str) -> Decision {
     [decision] => *decision,
     _ if decisions.iter().all(|decision| decision.runs()) => Decision::AllowedByRule,
     _ => unasked(args),
+  }
+}
+
+/// What the CLI does with a call of the MCP tool `tool`.
+pub fn mcp(args: &[String], tool: &str) -> Decision {
+  // `mcp__<server>` or `mcp__<server>__*`: every tool of the server, named `mcp__<server>__<tool>`.
+  let server_of = |rule: &str| -> Option<String> {
+    let server = rule.strip_suffix("__*").unwrap_or(rule);
+    let name = server.strip_prefix("mcp__")?;
+    (!name.contains("__")).then(|| format!("{server}__"))
+  };
+  let allowed = values(args, "--allowedTools")
+    .iter()
+    .any(|rule| *rule == tool || server_of(rule).is_some_and(|server| tool.starts_with(&server)));
+  if allowed {
+    Decision::AllowedByRule
+  } else {
+    unasked(args)
   }
 }
 

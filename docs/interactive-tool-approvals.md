@@ -56,6 +56,57 @@ or permanent grant. No tool-specific implementation depends on Pencil. A real Pe
 temporary frame and returned its node ID in the same session; denial created nothing. The
 temporary frame was removed by that exact ID, preserving the existing design.
 
+A Codex MCP approval request in a step that does **not** ask before MCP actions is declined at once
+too: Codex 0.159.2 sends `mcpServer/elicitation/request` for a tool that needs approval even with
+`mcp_elicitations` off. Inside the active turn of the step's own thread the runner answers
+`{"action":"decline"}` (or the question's decline option) without a person and records the declined call
+(`McpToolDeclined`, *declined, not asked* in the activity); Codex tells the agent the call was rejected and the
+turn goes on. A request from another phase, thread or turn still fails the step. Each Codex MCP call also ends as an
+activity row of its own (`McpToolFinished`, with whether Codex asked first): *approved by you · <server>* when a
+person approved it, *asked you · <server>* when it was asked about and did not run, and the server's name alone
+when Codex did not ask.
+
+## Tools that run without asking
+
+An MCP server connection can list **Tools that run without asking** (`ExemptTools` in
+`orchester_core::connection::mcp`, kept in the server's settings JSON; settings written before have none): tool
+names in the order listed, each of ASCII letters, digits, `-` and `_`, at most 64 characters, at most 64 per server,
+none twice. A name with other characters is refused, because both CLIs rename such a tool and a rule naming it as
+the server writes it would never match. The list applies only to that server's listed tools, and only when the
+profile, the step or the run asks before MCP actions; without asking, the server's tools are allowed or declined as
+before. It is meant for tools that change nothing. Orchester does not list a server's tools, so the names are typed.
+For Pencil: `get_editor_state`, `get_guidelines`, `batch_get`, `snapshot_layout`, `get_screenshot` and
+`get_variables`; not `export_nodes`, which writes image files into the folder its call names (`outputDir`).
+
+- **Claude Code** gets one `--allowedTools mcp__<server>__<tool>` rule per listed tool and still no server-wide
+  `mcp__<server>` rule, so every other tool of the server reaches the permission prompt. Read in the 2.1.286 binary:
+  a rule matches a tool by its exact name, or by server when the rule has no tool part, `*` or a glob there (`Ar`,
+  `ZSn`; `mcp__<server>__*` is server-wide); the permission check (`pzt`) reaches the allow rules before it turns an
+  MCP tool's own `passthrough` into `ask`, and only an `ask` calls the prompt tool (`hw`). A tool's `readOnlyHint`
+  does not change this in `default` mode. Exceptions that still ask: a tool whose `_meta` sets
+  `anthropic/requiresUserInteraction`, an organisation's ask ceiling for the server; `allowManagedPermissionRulesOnly`
+  ignores the rules altogether (see the end of this document). Claude Code names a tool `mcp__<server>__<tool>`,
+  and a server name may hold `__` or end in `_`, so `b__c` of `a` and `c` of `a__b` (or `_x` of `a` and `x` of `a_`)
+  share a name. A listed tool whose name another server of the invocation could have gets no rule, since that rule
+  would let the other server's tool run unasked: it asks, the activity says so (*… asks after all*, naming the other
+  server; `McpExemptionNotApplied`), and its calls are never marked as the listed tool's.
+- **Codex App Server** gets `mcp_servers.<server>.tools.<tool>.approval_mode = "approve"` for each listed tool in the
+  thread's configuration (`config` of `thread/start` and `thread/resume`, next to the user's servers turned off).
+  0.159.2 then runs that tool without `mcpServer/elicitation/request`, while another tool of the same server still
+  sends one; the runner never answers a request on a tool's behalf. Checked 2026-10-02 with turns against a local mock
+  of the Responses API (no model): one tool set to `approve` ran unasked, another asked; `config/read` lists the
+  setting; an unknown mode is refused (*unknown variant*, expecting `auto`, `prompt`, `writes` or `approve`). A tool
+  not listed keeps Codex's default mode `auto`, in which Codex itself runs a tool annotated `readOnlyHint`, or with
+  both `destructiveHint` and `openWorldHint` false, without asking; Orchester leaves that default as it is.
+- **Activity**: each such call records `McpToolNotAsked` and reads *not asked · exempt tool of <server>*, the wording
+  of the command categories design's marks: after the exit and duration of Claude Code's command row, and as a row of
+  its own for Codex, which reports no command for an MCP call. It is no approval: no `tool_approvals` row, nothing in
+  *Needs you*.
+- **Screens** (no frame draws them): the MCP server dialog edits the list one name per line under the transport's
+  fields; the Connections inspector lists the names after the variables, or *None*; while the profile asks before MCP
+  actions, its enforcement panel has a row per server (*pencil: 6 tools run without asking*, with the CLI's rule), and
+  the pipeline step inspector repeats the line under *Ask when a tool needs approval*.
+
 ## Codex profile
 
 App Server has no `--ignore-user-config` or `--ignore-rules`, so it loads the user's normal Codex
@@ -160,7 +211,8 @@ edit tools removed; its approval says that Claude Code runs an approved command 
 where it can change files. For MCP actions the `mcp__<server>` allow rules are left out. Everything else Claude Code asks about (edits or reads
 outside the working folders, web fetches, the approval tool itself) is denied at once, as print mode
 denies it without the prompt. Every MCP tool call of a server asks; Claude Code does not pass the
-server's own approval hints to the prompt.
+server's own approval hints to the prompt; only the tools a server lists to run without asking get an
+`mcp__<server>__<tool>` allow rule ([Tools that run without asking](#tools-that-run-without-asking)).
 
 **Approve once** answers `{"behavior":"allow","updatedInput":{}}`: the call runs with its own input
 (2.1.89 keeps the input when `updatedInput` is empty), no `updatedPermissions` rule is returned, and

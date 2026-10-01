@@ -7,6 +7,7 @@ mod entry;
 mod first_edit;
 mod footer;
 mod mcp;
+mod mcp_call;
 mod panel;
 mod problem;
 mod rows;

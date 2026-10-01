@@ -11,6 +11,9 @@
 //! `turn/start` without the prompt (`turn: `); and the prompt (its first line, then each line). The
 //! runner keeps standard error in the activity, so tests can check how it was started.
 //!
+//! The thread's configuration may approve MCP tools (`mcp_servers.<server>.tools.<tool>.approval_mode =
+//! "approve"`); such a tool runs without an approval request, as in Codex 0.159.2.
+//!
 //! A new session is `fake-thread-1`; `thread/resume` continues the thread it names in the worktree, unless
 //! its id has `-gone-` in it: then Codex has no history of it and refuses, as 0.159.2 does.
 //!
@@ -113,6 +116,8 @@ pub struct Session {
   roots: BTreeSet<String>,
   /// The user's server `user-global` was turned off for the thread.
   user_server_off: bool,
+  /// The MCP tools the thread's configuration approves (`<server>/<tool>`), which run without a request.
+  pub approved_tools: BTreeSet<String>,
   /// The person's decisions the turn waits on, if any.
   pub approvals: Option<fake_app_server::Approvals>,
 }
@@ -127,6 +132,7 @@ impl Session {
       resumed: false,
       roots: BTreeSet::new(),
       user_server_off: false,
+      approved_tools: BTreeSet::new(),
       approvals: None,
     }
   }
@@ -162,6 +168,7 @@ impl Session {
       return;
     }
     self.user_server_off = params["config"]["mcp_servers"]["user-global"]["enabled"] == json!(false);
+    self.approved_tools = approved_tools(&params["config"]["mcp_servers"]);
     self.cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
     self.resumed = method == "thread/resume";
     self.thread = params["threadId"].as_str().unwrap_or("fake-thread-1").to_owned();
@@ -300,6 +307,19 @@ impl Session {
     let structured = !params["outputSchema"].is_null();
     fake_codex_work::work(self, &prompt, structured)
   }
+}
+
+/// The tools of `servers` (a thread's `mcp_servers` configuration) whose approval mode is `approve`.
+fn approved_tools(servers: &Value) -> BTreeSet<String> {
+  let mut approved = BTreeSet::new();
+  for (server, settings) in servers.as_object().into_iter().flatten() {
+    for (tool, settings) in settings["tools"].as_object().into_iter().flatten() {
+      if settings["approval_mode"] == "approve" {
+        approved.insert(format!("{server}/{tool}"));
+      }
+    }
+  }
+  approved
 }
 
 /// Writes one protocol line.

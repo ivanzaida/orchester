@@ -7,11 +7,21 @@
 //! activity says so ([`unavailable_selected`]). User hooks would run programs of the user's setup
 //! with the agent's work, and nothing turns them off, so a configuration with any refuses the step
 //! ([`refuse_user_hooks`]).
+//!
+//! A step that asks before MCP actions approves the tools its servers list to run without asking in
+//! the thread's configuration ([`thread_servers`]): `mcp_servers.<server>.tools.<tool>.approval_mode =
+//! "approve"`. Codex 0.159.2 then runs that tool without an approval request, while the server's other
+//! tools ask as before (checked 2026-10-02 with turns against a local mock model: one tool set to
+//! `approve` ran unasked while another tool of the same server sent `mcpServer/elicitation/request`;
+//! `config/read` lists the setting, and an unknown mode is refused with *unknown variant*, expecting
+//! `auto`, `prompt`, `writes` or `approve`). A tool not listed keeps Codex's default mode (`auto`).
 
 use std::collections::BTreeSet;
 
-use serde_json::Value;
+use serde_json::{Map, Value, json};
 use thiserror::Error;
+
+use super::mcp::InvocationExemptions;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum McpInventoryError {
@@ -142,4 +152,23 @@ pub fn unavailable_selected(
     }
   }
   Ok(unavailable)
+}
+
+/// The `mcp_servers` table of a thread's configuration: each server of `turned_off` turned off by name
+/// (a table merges with the user's configuration, so `mcp_servers={}` would not remove them), and each
+/// tool of `exempt` approved, so that Codex runs it without asking.
+pub fn thread_servers(turned_off: &[String], exempt: &InvocationExemptions) -> Map<String, Value> {
+  let mut servers: Map<String, Value> = turned_off
+    .iter()
+    .map(|name| (name.clone(), json!({"enabled": false})))
+    .collect();
+  for (server, tools) in exempt.servers() {
+    let tools: Map<String, Value> = tools
+      .tools()
+      .iter()
+      .map(|tool| (tool.to_string(), json!({"approval_mode": "approve"})))
+      .collect();
+    servers.insert(server.to_string(), json!({"tools": tools}));
+  }
+  servers
 }

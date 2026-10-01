@@ -128,6 +128,16 @@ that failed to start in a signed-in run, and whether Claude's `mcp__<name>` allo
 confirmed or fixed, with the observed CLI output saved as a fixture and parser tests updated
 (`crates/core/src/connection/mcp/`).
 
+### M7 · Tools that run without asking, built on `claude/mcp-tool-exempt`
+
+An MCP server lists tools that run without asking when a profile asks before MCP actions (first use: Pencil's
+`get_editor_state`, `get_guidelines`, `batch_get`, `snapshot_layout`, `get_screenshot`, `get_variables`; not
+`export_nodes`, which writes files). Claude Code: `mcp__<server>__<tool>` allow rules; Codex App Server: the tool's
+`approval_mode = "approve"` in the thread configuration (`docs/interactive-tool-approvals.md`). **Done when** an
+independent design verifier (no frame exists; closest patterns) reports no blocking or major mismatch for the MCP
+server dialog's *Tools that run without asking* area, the inspector's list, the profile enforcement row, the step
+inspector line and the activity mark.
+
 ### M6 · Environment names in secret references (needs decision)
 
 Environments display in lower case (`@staging`, *(staging)*) where the design writes *Staging*, and typing `@Staging`

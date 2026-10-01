@@ -33,7 +33,11 @@
 //!   Windows), so network stays on; when off was chosen the web tools are still removed.
 //! - The tools of the MCP servers the invocation gives the agent are allowed with one `mcp__<server>` rule per server;
 //!   without a rule, print mode denies them. The servers themselves run outside these permissions.
-//! - *Ask before MCP actions*: the MCP servers' tools have no `mcp__<server>` rules, so each call asks.
+//! - *Ask before MCP actions*: the MCP servers' tools have no `mcp__<server>` rules, so each call asks, except the
+//!   tools a server lists to run without asking ([`crate::connection::mcp::ExemptTools`]): each gets an
+//!   `mcp__<server>__<tool>` allow rule. 2.1.286 matches such a rule to exactly that tool of that server, and checks
+//!   the allow rules before it calls the permission prompt tool, so these calls never reach a person; the server's
+//!   other tools still have no rule and ask.
 //! - The disallowed list repeats what `--tools` leaves out that the permissions deny, so a tool list that grows in a
 //!   later CLI version does not widen them.
 //! - A folder the agent may read but must not change (the shared code index, which `--add-dir` makes a working
@@ -50,7 +54,7 @@ use super::{
   CommandPermission, NetworkAccess, RepositoryAccess,
   capability::{EnforcedPermissions, Mechanism, PermissionSetting},
 };
-use crate::connection::mcp::McpServerName;
+use crate::connection::mcp::{InvocationExemptions, McpServerName};
 
 const READ_TOOLS: [&str; 4] = ["Read", "Glob", "Grep", "TodoWrite"];
 const EDIT_TOOLS: [&str; 3] = ["Edit", "Write", "NotebookEdit"];
@@ -69,10 +73,11 @@ pub struct PermissionFolders<'a> {
 }
 
 /// The permission arguments of a Claude Code invocation that runs with `enforced`, gives the agent the MCP
-/// servers `mcp` and may change files only as `folders` say.
+/// servers `mcp`, whose tools `exempt` run without asking, and may change files only as `folders` say.
 pub fn permission_args(
   enforced: &EnforcedPermissions,
   mcp: &[McpServerName],
+  exempt: &InvocationExemptions,
   folders: PermissionFolders<'_>,
 ) -> Vec<String> {
   let permissions = enforced.permissions();
@@ -100,7 +105,11 @@ pub fn permission_args(
   // Commands always reach a person in the end, which `dontAsk` would deny before asking.
   let mode = if accepts_edits { "acceptEdits" } else { "default" };
   offered.push(COMMAND_TOOL);
-  let mcp = if ask_tools { &[] } else { mcp };
+  let mcp: Vec<String> = if ask_tools {
+    exempt.claude_rules()
+  } else {
+    mcp.iter().map(|server| format!("mcp__{server}")).collect()
+  };
   if network {
     offered.extend(WEB_TOOLS);
   } else {
@@ -129,7 +138,7 @@ pub fn permission_args(
     if edit_rules {
       args.extend(folders.editable.iter().filter_map(|folder| edit_rule(folder)));
     }
-    args.extend(mcp.iter().map(|server| format!("mcp__{server}")));
+    args.extend(mcp);
   }
   args
 }

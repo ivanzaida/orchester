@@ -12,8 +12,9 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentProvider,
     invocation::{
-      ClaudeInvocation, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError, Platform,
+      ClaudeInvocation, ClaudeMcp, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError, Platform,
     },
+    mcp::InvocationExemptions,
     stream::RunnerProblem,
   },
   permission::{CommandPermission, OutsideCommands, capability::EnforcedPermissions},
@@ -120,6 +121,11 @@ impl RunTask {
         writable_roots: cli.writable_roots.to_vec(),
         resume: cli.resume.map(str::to_owned),
         expected_servers,
+        exemptions: if cli.enforced.permissions().interactive_tool_approvals() {
+          mcp.exemptions().clone()
+        } else {
+          InvocationExemptions::default()
+        },
         output_schema: schema,
         secrets: mcp.secrets().to_vec(),
       },
@@ -142,9 +148,11 @@ impl RunTask {
       writable_roots: cli.writable_roots,
       worktree: cli.worktree,
       session: ClaudeSession::continuing(cli.resume),
-      mcp: servers
-        .as_ref()
-        .map(|servers| (servers.file.path(), servers.servers.as_slice())),
+      mcp: servers.as_ref().map(|servers| ClaudeMcp {
+        config: servers.file.path(),
+        servers: &servers.servers,
+        exempt: &servers.exemptions,
+      }),
       skills: cli.skills,
       code_index: cli.code_index,
       approvals: cli.approvals,

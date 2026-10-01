@@ -4,11 +4,14 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, ConnectionKind},
+  connection::{
+    AgentConnection, AgentProvider, ConnectionKind,
+    mcp::{McpServer, McpServerSelection},
+  },
   id::ResourceId,
   permission::AgentPermissions,
   resource::{AgentProfile, ModelId, Pipeline, ResourceKind, Tool, ToolAction, ToolKind, Version, VersionNumber},
-  store::{ConnectionStore, ResourceStore, TaskStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, TaskStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -29,6 +32,8 @@ pub struct ProfileChoice {
   pub permissions: AgentPermissions,
   /// That connection, when it is an agent CLI: which models it cannot run.
   pub agent: Option<AgentConnection>,
+  /// The MCP servers the profile gives its agents.
+  pub mcp: McpServerSelection,
 }
 
 /// A published tool a step can call.
@@ -49,6 +54,8 @@ pub struct ToolChoice {
 pub struct Assignables {
   pub profiles: Vec<ProfileChoice>,
   pub tools: Vec<ToolChoice>,
+  /// The project's MCP servers, which say what the profiles' servers run without asking.
+  pub mcp_servers: Vec<McpServer>,
 }
 
 impl Assignables {
@@ -73,6 +80,7 @@ impl Assignables {
           name: resource.name().as_str().into(),
           version: version.number(),
           model: version.body().model().clone(),
+          mcp: version.body().mcp_servers().clone(),
         });
       }
     }
@@ -93,7 +101,21 @@ impl Assignables {
         });
       }
     }
-    Ok(Self { profiles, tools })
+    Ok(Self {
+      profiles,
+      tools,
+      mcp_servers: store.mcp_servers()?,
+    })
+  }
+
+  /// The servers `profile`'s agents get that run tools without asking, with how many.
+  pub fn exempt_tools(&self, profile: &ProfileChoice) -> Vec<(Arc<str>, usize)> {
+    profile
+      .mcp
+      .exempt_tools(&self.mcp_servers)
+      .into_iter()
+      .map(|(server, tools)| (server.as_str().into(), tools.len()))
+      .collect()
   }
 
   pub fn profile(&self, id: ResourceId) -> Option<&ProfileChoice> {

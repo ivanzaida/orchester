@@ -25,9 +25,10 @@ use orchester_core::{
     app_server::{AppServerStream, PendingApproval, Update},
     app_server_config::{refuse_taken_names, repository_settings},
     app_server_mcp::{
-      refuse_user_hooks, servers_to_turn_off, unavailable_selected, verify_only_chosen_run, verify_selected_servers,
+      refuse_user_hooks, servers_to_turn_off, thread_servers, unavailable_selected, verify_only_chosen_run,
+      verify_selected_servers,
     },
-    mcp::McpServerProblem,
+    mcp::{InvocationExemptions, McpServerProblem},
     stream::{AgentEvent, OutputStream, RunnerProblem},
   },
   permission::NetworkAccess,
@@ -71,6 +72,8 @@ pub(super) struct AppServerSetup {
   pub writable_roots: Vec<PathBuf>,
   pub resume: Option<String>,
   pub expected_servers: BTreeSet<String>,
+  /// The MCP tools that run without asking: empty unless the step asks before MCP actions.
+  pub exemptions: InvocationExemptions,
   pub output_schema: Option<Value>,
   pub secrets: Vec<SecretVariable>,
 }
@@ -111,13 +114,13 @@ pub(super) struct AppServerSession {
 impl AppServerSession {
   pub fn new(setup: AppServerSetup) -> Self {
     Self {
-      setup,
       phase: Phase::Initialize,
       turned_off: Vec::new(),
       stderr: StderrLog::default(),
       thread: None,
       turn: None,
-      stream: AppServerStream::default(),
+      stream: AppServerStream::with_exemptions(setup.exemptions.clone()),
+      setup,
     }
   }
 
@@ -169,27 +172,48 @@ impl AppServerSession {
           .map(str::to_owned);
       }
       let updates = self.stream.parse(line).map_err(|error| error.to_string())?;
-      for update in &updates {
-        if let Update::Approval(request) = update
-          && (!matches!(self.phase, Phase::Turn | Phase::Working)
-            || self.thread.as_deref() != Some(request.thread.as_str())
-            || self.turn.as_deref() != request.turn.as_deref()
-            || (request.is_command() && !self.setup.command_approvals && !self.setup.sandbox_approvals)
-            || (!request.is_command() && !self.setup.tool_approvals))
-        {
-          return Err(
-            "Codex App Server requested a tool decision outside the active turn"
-              .to_owned()
-              .into(),
-          );
-        }
-      }
+      let updates = self.screen(updates)?;
       if updates.iter().any(|update| matches!(update, Update::TurnEnded)) {
         self.phase = Phase::Complete;
       }
       return Ok(updates);
     }
     self.response(&value, process).await
+  }
+
+  /// Fails the step on a decision Codex asks outside the active turn, or about a command this step
+  /// never leaves to a person. An MCP approval in a step that does not ask before MCP actions is
+  /// declined at once, without a person, and the declined call is recorded: Codex 0.159.2 asks it even
+  /// with `mcp_elicitations` off.
+  fn screen(&self, updates: Vec<Update>) -> Result<Vec<Update>, AppServerFailure> {
+    let mut screened = Vec::with_capacity(updates.len());
+    for update in updates {
+      let Update::Approval(request) = update else {
+        screened.push(update);
+        continue;
+      };
+      let active = matches!(self.phase, Phase::Turn | Phase::Working)
+        && self.thread.as_deref() == Some(request.thread.as_str())
+        && self.turn.as_deref() == request.turn.as_deref();
+      if !active || (request.is_command() && !self.setup.command_approvals && !self.setup.sandbox_approvals) {
+        return Err(
+          "Codex App Server requested a tool decision outside the active turn"
+            .to_owned()
+            .into(),
+        );
+      }
+      if !request.is_command() && !self.setup.tool_approvals {
+        screened.push(Update::Activity(AgentEvent::McpToolDeclined {
+          item: request.item().to_owned(),
+          server: request.server.clone(),
+          tool: request.action.clone(),
+        }));
+        screened.push(Update::Declined(request.response(false)));
+        continue;
+      }
+      screened.push(Update::Approval(request));
+    }
+    Ok(screened)
   }
 
   /// Lines of Codex's standard error dropped once the activity kept as many as it keeps.
@@ -439,13 +463,7 @@ impl AppServerSession {
       "request_permissions":false,"skill_approval":false
     }});
     let cwd = self.setup.worktree.to_string_lossy();
-    // A table merges with the user's configuration: each server of it is turned off by name.
-    let servers: serde_json::Map<String, Value> = self
-      .turned_off
-      .iter()
-      .map(|name| (name.clone(), json!({"enabled":false})))
-      .collect();
-    let config = json!({"mcp_servers":servers});
+    let config = json!({"mcp_servers":thread_servers(&self.turned_off, &self.setup.exemptions)});
     let params = match &self.setup.resume {
       Some(thread) => json!({"threadId":thread,"cwd":cwd,"model":self.setup.model,
         "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),

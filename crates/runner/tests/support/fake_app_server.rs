@@ -12,6 +12,12 @@
 //!   (`escalation: <decision>`).
 //! - "Patch outside" wants to change a file outside the writable roots and asks; it reports the answer (`file change:
 //!   <decision>`) and works on.
+//! - "Use the design tools" calls the `get_screenshot` tool of the `pencil` MCP server (writing `read-once.txt`), then
+//!   its `batch_design` tool as the `write` tool above. A tool the thread's configuration approves runs without a
+//!   request; any other asks.
+//! - "Call a tool unasked" calls `batch_design` of `pencil` and asks, as Codex 0.159.2 does even with
+//!   `mcp_elicitations` off; it reports the answer (`mcp answer: <action>`), and when declined ends the call failed and
+//!   works on.
 
 use std::{fs, process::ExitCode};
 
@@ -54,7 +60,9 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Option<St
     .and_then(|(_, rest)| rest.split_once('`'))
     .map(|(command, _)| command.to_owned());
   let patch = prompt.contains("Patch outside");
-  if !fixture && escalation.is_none() && !patch {
+  let design = prompt.contains("Use the design tools");
+  let unasked = prompt.contains("Call a tool unasked");
+  if !fixture && escalation.is_none() && !patch && !design && !unasked {
     return None;
   }
   session.approvals = Some(Approvals {
@@ -79,6 +87,10 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Option<St
         "command": command, "cwd": cwd, "reason": "Do you want to reach the package registry?",
         "availableDecisions": ["accept", "acceptForSession", "decline"]}),
     );
+  } else if design {
+    design_calls(session);
+  } else if unasked {
+    tool_request(session, "pencil", "batch_design");
   } else if patch {
     request(
       session,
@@ -163,11 +175,36 @@ fn command_answered(session: &mut Session, answer: &Value) -> Step {
     json!({"item": {"id": "command-1", "type": "commandExecution", "command": "disposable-command",
       "status": "completed", "exitCode": 0, "aggregatedOutput": ""}}),
   );
-  tool_request(session);
+  tool_request(session, "disposable", "write");
   Step::Go
 }
 
 fn mcp_answered(session: &mut Session, answer: &Value) -> Step {
+  let unasked = session
+    .approvals
+    .as_ref()
+    .is_some_and(|approvals| approvals.prompt.contains("Call a tool unasked"));
+  if unasked {
+    eprintln!(
+      "mcp answer: {}",
+      answer["result"]["action"].as_str().unwrap_or_default()
+    );
+  }
+  if unasked && answer["result"]["action"] == "decline" {
+    notify(
+      session,
+      "item/completed",
+      json!({"item": {"id": "mcp-1", "type": "mcpToolCall", "server": "pencil", "tool": "batch_design",
+        "status": "failed"}}),
+    );
+    let report = session
+      .approvals
+      .as_ref()
+      .map(|approvals| report_of(&approvals.prompt, approvals.structured));
+    return report.map_or(Step::Exit(ExitCode::from(2)), |report| {
+      finish(session, "hello", &report)
+    });
+  }
   if answer["result"]["action"] != "accept" {
     eprintln!("only an accepted elicitation continues: {answer}");
     return Step::Exit(ExitCode::from(2));
@@ -181,7 +218,7 @@ fn mcp_answered(session: &mut Session, answer: &Value) -> Step {
   notify(
     session,
     "item/completed",
-    json!({"item": {"id": "mcp-1", "type": "mcpToolCall"}}),
+    json!({"item": {"id": "mcp-1", "type": "mcpToolCall", "status": "completed"}}),
   );
   message(
     session,
@@ -208,17 +245,43 @@ fn command_request(session: &Session) {
   );
 }
 
-fn tool_request(session: &Session) {
+/// Calls `tool` of `server` and asks about it; approved, it writes `mcp-once.txt`.
+fn tool_request(session: &Session, server: &str, tool: &str) {
   notify(
     session,
     "item/started",
-    json!({"item": {"id": "mcp-1", "type": "mcpToolCall", "server": "disposable", "tool": "write",
+    json!({"item": {"id": "mcp-1", "type": "mcpToolCall", "server": server, "tool": tool,
       "arguments": {"filePath": "mcp-once.txt"}}}),
   );
   request(
     session,
     MCP,
     "mcpServer/elicitation/request",
-    json!({"serverName": "disposable", "mode": "form", "requestedSchema": {"type": "object", "properties": {}}}),
+    json!({"serverName": server, "mode": "form", "requestedSchema": {"type": "object", "properties": {}}}),
   );
+}
+
+/// Reads the design, unasked only when approved by configuration, then changes it.
+fn design_calls(session: &Session) {
+  let read = json!({"id": "mcp-read", "type": "mcpToolCall", "server": "pencil", "tool": "get_screenshot",
+    "arguments": {}});
+  if !session.approved_tools.contains("pencil/get_screenshot") {
+    notify(session, "item/started", json!({"item": read}));
+    request(
+      session,
+      MCP,
+      "mcpServer/elicitation/request",
+      json!({"serverName": "pencil", "mode": "form", "requestedSchema": {"type": "object", "properties": {}}}),
+    );
+    return;
+  }
+  notify(session, "item/started", json!({"item": read}));
+  eprintln!("unasked: pencil/get_screenshot");
+  if fs::write(session.cwd.join("read-once.txt"), "read").is_err() {
+    eprintln!("cannot write read-once.txt");
+  }
+  let mut done = read;
+  done["status"] = json!("completed");
+  notify(session, "item/completed", json!({"item": done}));
+  tool_request(session, "pencil", "batch_design");
 }

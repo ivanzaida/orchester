@@ -20,12 +20,13 @@ use orchester_core::{
   command::{Command, SecretVariable},
   connection::{
     REASONING_EFFORT,
+    mcp::InvocationExemptions,
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
   memory::{InjectedMemory, RecalledMemory},
   permission::LaunchPermissions,
-  resource::Step,
+  resource::{AgentProfile, Step},
   run::{AssembledPrompt, CodeIndexPrompt, InvocationPrompt, ProfileInfo},
 };
 
@@ -66,6 +67,8 @@ pub(super) struct AgentStart {
   pub(super) claude_approvals: Option<ClaudeApprovals>,
   /// Secret values of Claude Code's MCP servers, kept out of the invocation's activity.
   pub(super) mcp_secrets: Vec<SecretVariable>,
+  /// The tools of Claude Code's MCP servers that run without asking, when the step asks before MCP actions.
+  pub(super) claude_exemptions: InvocationExemptions,
   pub(super) agent: String,
   /// The task memory its prompt holds, to record with the invocation.
   pub(super) memory: Vec<InjectedMemory>,
@@ -129,13 +132,11 @@ impl RunTask {
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
     let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;
     let mcp_secrets = setup.claude_secrets();
+    let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let cli = Cli {
       executable,
       model,
-      effort: body
-        .settings()
-        .iter()
-        .find_map(|(name, value)| (name == REASONING_EFFORT).then_some(value)),
+      effort: reasoning_effort(&body),
       enforced: &enforced,
       writable_roots: &writable_roots,
       worktree,
@@ -161,7 +162,7 @@ impl RunTask {
       None => command,
     };
     let mut left_out = left_out;
-    left_out.extend(index.problems(provider));
+    left_out.extend(index.problems(provider).into_iter().chain(unapplied));
     Ok(AgentStart {
       command,
       prompt: sources,
@@ -171,9 +172,18 @@ impl RunTask {
       app_server,
       claude_approvals,
       mcp_secrets,
+      claude_exemptions,
       agent: body.role().as_str().to_owned(),
       memory: recalled.injected(),
       permissions: enforced.launch(),
     })
   }
+}
+
+/// The reasoning effort `profile` sets, if any.
+fn reasoning_effort(profile: &AgentProfile) -> Option<&str> {
+  profile
+    .settings()
+    .iter()
+    .find_map(|(name, value)| (name == REASONING_EFFORT).then_some(value))
 }

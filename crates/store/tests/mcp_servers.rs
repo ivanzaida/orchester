@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fs};
 
 use orchester_core::{
   connection::mcp::{
-    HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerName, McpTransport, McpUrl, StdioServer,
+    ExemptTools, HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerName, McpTransport, McpUrl, StdioServer,
     WorkingDirectory,
   },
   id::{ConnectionId, ProjectId, SecretId},
@@ -184,4 +184,60 @@ fn mcp_servers_list_the_readable_rows_and_report_the_others() {
   assert_eq!(unreadable.len(), 1);
   assert_eq!(unreadable[0].name, "knowledge");
   assert!(unreadable[0].detail.contains("backslash"), "{}", unreadable[0].detail);
+}
+
+#[test]
+fn mcp_servers_keep_their_tools_that_run_without_asking() {
+  let (repo, mut db) = project_repo();
+  let mut server = remote("pencil");
+  db.create_mcp_server(&server).unwrap();
+  let settings = |repo: &TempDir| -> String {
+    raw(repo)
+      .query_row("SELECT settings FROM mcp_servers WHERE name = 'pencil'", [], |row| {
+        row.get(0)
+      })
+      .unwrap()
+  };
+  assert!(
+    !settings(&repo).contains("exempt_tools"),
+    "a server without such tools stores them as before"
+  );
+  server.set_exempt_tools(
+    ExemptTools::parse(
+      "get_screenshot
+batch_get
+get_editor_state",
+    )
+    .unwrap(),
+  );
+  db.save_mcp_server(&server).unwrap();
+  drop(db);
+  let mut db = ProjectDb::open(repo.path()).unwrap();
+  let stored = db.mcp_server(server.id()).unwrap().expect("stored");
+  let names: Vec<&str> = stored.exempt_tools().tools().iter().map(|tool| tool.as_str()).collect();
+  assert_eq!(
+    names,
+    ["get_screenshot", "batch_get", "get_editor_state"],
+    "in the listed order"
+  );
+  assert_eq!(stored, server);
+  raw(&repo)
+    .execute(
+      "UPDATE mcp_servers SET settings = replace(settings, 'batch_get', 'batch get')",
+      [],
+    )
+    .unwrap();
+  assert!(
+    matches!(db.mcp_server(server.id()), Err(StoreError::Corrupt { .. })),
+    "a stored tool name is checked again"
+  );
+  server.set_exempt_tools(ExemptTools::default());
+  db.save_mcp_server(&server).unwrap();
+  assert!(
+    db.mcp_server(server.id())
+      .unwrap()
+      .expect("stored")
+      .exempt_tools()
+      .is_empty()
+  );
 }
