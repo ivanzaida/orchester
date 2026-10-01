@@ -10,6 +10,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use super::super::http_url;
 use crate::{
   id::SecretId,
   resource::{CommandArg, CommandProgram},
@@ -120,12 +121,8 @@ impl McpUrl {
       return Err(TransportError::BlankUrl);
     }
     check_text(url)?;
-    let lower = url.to_ascii_lowercase();
-    let rest = ["http://", "https://"]
-      .into_iter()
-      .find_map(|scheme| lower.strip_prefix(scheme).map(|_| &url[scheme.len()..]))
-      .ok_or(TransportError::UrlScheme)?;
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let (_, rest) = http_url::split_scheme(url).ok_or(TransportError::UrlScheme)?;
+    let authority = http_url::authority(rest);
     if authority.contains('@') {
       return Err(TransportError::UrlCredentials);
     }
@@ -142,7 +139,7 @@ impl McpUrl {
   /// The host and port, as the connection list shows where a server is (`mcp.example.dev`).
   pub fn host(&self) -> &str {
     let rest = self.0.split_once("://").map_or(self.0.as_str(), |(_, rest)| rest);
-    rest.split(['/', '?', '#']).next().unwrap_or(rest)
+    http_url::authority(rest)
   }
 }
 

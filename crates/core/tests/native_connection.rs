@@ -91,10 +91,12 @@ fn native_base_urls_are_https_or_this_computer_without_credentials_or_query() {
       .as_str(),
     "https://gateway.example.dev:8443/v1"
   );
+  assert!(BaseUrl::new("https://[2001:db8::1]:443/v1").is_ok());
   for local in [
     "http://localhost:11434/v1",
     "http://127.0.0.1:8080",
     "http://[::1]:8080/",
+    "HTTP://LOCALHOST:11434",
   ] {
     assert!(BaseUrl::new(local).is_ok(), "{local} is this computer");
   }
@@ -109,6 +111,18 @@ fn native_base_urls_are_https_or_this_computer_without_credentials_or_query() {
     ("https://api.example.dev/v1?key=1", EndpointError::UrlQuery),
     ("https://api.example.dev/v1#models", EndpointError::UrlQuery),
     ("https://api.example.dev/a b", EndpointError::Whitespace),
+    (r"https://api.example.dev\@evil.example", EndpointError::Backslash),
+    (r"http://localhost\.evil.example", EndpointError::Backslash),
+    ("http://[::1]x", EndpointError::InvalidHost),
+    ("http://[::1", EndpointError::InvalidHost),
+    ("https://[]/v1", EndpointError::InvalidHost),
+    ("https://[api.example.dev]", EndpointError::InvalidHost),
+    ("https://api.example.dev:", EndpointError::InvalidHost),
+    ("https://api.example.dev:https", EndpointError::InvalidHost),
+    ("https://api.example.dev:+443", EndpointError::InvalidHost),
+    ("https://api.example.dev:99999", EndpointError::InvalidHost),
+    ("https://api<1>.example.dev", EndpointError::InvalidHost),
+    ("http://localhost:8080@api.example.dev", EndpointError::UrlCredentials),
   ];
   for (url, error) in refused {
     assert_eq!(BaseUrl::new(url), Err(error), "{url}");

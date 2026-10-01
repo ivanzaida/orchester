@@ -18,6 +18,7 @@ mod claude_catalog;
 mod discovery;
 mod endpoint;
 mod github;
+mod http_url;
 pub mod invocation;
 pub mod mcp;
 mod model_requirements;
