@@ -127,7 +127,7 @@ impl RunTask {
     let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
     let enforced = self.enforced(key, &body, provider)?;
     let writable_roots = self.writable_roots(&enforced)?;
-    let environment = self.environment(worktree)?;
+    let environment = self.environment()?;
     let repository = self.repository_skills_left_out(provider, worktree)?;
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
     let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;

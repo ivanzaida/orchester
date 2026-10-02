@@ -12,6 +12,7 @@ mod memory;
 mod native_commands;
 mod recovery;
 mod task_edits;
+mod task_groups;
 mod tool_approvals;
 
 pub(super) const MIGRATIONS: &[&str] = &[
@@ -582,4 +583,6 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   code_index::MIGRATION,
   memory::MIGRATION,
   native_commands::MIGRATION,
+  task_groups::MIGRATION,
+  task_groups::FINISHED_MIGRATION,
 ];

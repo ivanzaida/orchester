@@ -63,7 +63,8 @@ pub enum Command {
   Ping { nonce: u64 },
   /// Starts a run of the queued task `task`. Idempotent by `key`: repeating it (a retry after
   /// a lost reply) answers with the run the first request created. Answered with
-  /// [`Reply::RunStarted`] or [`Reply::Rejected`].
+  /// [`Reply::RunStarted`] or [`Reply::Rejected`]. An explicit first-run request also releases
+  /// its scheduling group’s persisted session-end hold; it does not bypass group eligibility.
   StartRun { key: IdempotencyKey, task: TaskId },
   /// Starts the next run of task `task`, whose latest run `after` failed or was cancelled (Run
   /// again): from the first step, in a new worktree on a new branch from the current base, with
@@ -217,6 +218,8 @@ pub enum Event {
   Stopped { mode: ShutdownMode },
   /// Run `run` of task `task` changed state (status, step, attempt); read it from the database.
   RunChanged { run: RunId, task: TaskId },
+  /// A reviewed queue group's waiting reason changed; reread the task list.
+  TaskGroupChanged { key: IdempotencyKey },
   /// Run `run`'s transcript grew to `sequence` entries. Coalesced: one notification can stand
   /// for many entries.
   AgentActivity { run: RunId, sequence: u64 },
@@ -302,6 +305,10 @@ pub enum Rejection {
   TaskNotFound,
   /// Only queued tasks start a run.
   TaskNotQueued,
+  /// A reviewed group's order, concurrency or shared cap holds this task.
+  TaskGroupWaiting {
+    hold: orchester_core::task_group::GroupHold,
+  },
   /// The run cannot start until these are resolved.
   Preflight {
     problems: Vec<PreflightProblem>,

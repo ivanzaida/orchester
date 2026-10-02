@@ -5,7 +5,7 @@ use orchester_core::{
   name::Name,
   project::{ProjectKey, TaskKey},
   resource::VersionNumber,
-  task::{EditError, LimitsError, MissingDetail, QueueError, Task, TaskDetails, TaskLimits, TaskStatus},
+  task::{EditError, LimitsError, MissingDetail, QueueError, ReturnError, Task, TaskDetails, TaskLimits, TaskStatus},
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -67,6 +67,17 @@ fn complete_draft_is_queued_once() {
     task.queue(VersionNumber::FIRST),
     Err(QueueError::NotDraft(TaskStatus::Queued))
   );
+}
+
+#[test]
+fn queued_task_without_a_run_returns_to_the_drafts() {
+  let mut task = task(complete());
+  assert_eq!(task.return_to_draft(false), Err(ReturnError::NotQueued));
+  task.queue(VersionNumber::FIRST).expect("queue");
+  assert_eq!(task.return_to_draft(true), Err(ReturnError::HasRun));
+  assert_eq!(task.return_to_draft(false), Ok(()));
+  assert_eq!(task.status(), TaskStatus::Draft);
+  assert_eq!(task.pipeline_version(), None);
 }
 
 #[test]
