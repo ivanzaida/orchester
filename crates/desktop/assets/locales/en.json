@@ -327,9 +327,10 @@
       "answer": "Answer question  →",
       "approval": "APPROVAL",
       "requestTool": "{{agent}} asks to use {{server}} {{tool}}",
-      "requestCommand": "{{agent}} asks to run a command",
+      "requestCommand": "{{agent}} asks to run {{command}}",
       "requestContext": "{{task}} · Run {{run}} · {{step}} · since {{time}}",
-      "review": "Review"
+      "review": "Review",
+      "requestContextCommand": "{{task}} · Run {{run}} · {{step}} · {{category}} · since {{time}}"
     },
     "activity": {
       "title": "Recent activity",
@@ -1158,11 +1159,11 @@
       },
       "notAwaited": "This tool action no longer waits for a decision.",
       "commandTitle": "Approve command?",
-      "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
-      "commandExplanationClaude": "{{agent}} requests this command in {{cwd}}. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
-      "commandExplanationReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
-      "commandExplanationNative": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action; it does not change later permissions. Deny tells the agent, and it continues without the command; the step does not fail.",
-      "commandExplanationClaudeReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
+      "commandExplanation": "{{agent}} asks to run this command. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
+      "commandExplanationClaude": "{{agent}} asks to run this command. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
+      "commandExplanationReadOnly": "{{agent}} asks to run this command. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
+      "commandExplanationNative": "{{agent}} asks to run this command. Approve once permits only this action; it does not change later permissions. Deny tells the agent, and it continues without the command; the step does not fail.",
+      "commandExplanationClaudeReadOnly": "{{agent}} asks to run this command. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
       "command": "Command",
       "commandLines": {
         "one": "Command · {{lines}} line, as recorded",
@@ -1185,7 +1186,8 @@
         "timeLimitValue": "{{seconds}} s",
         "unsandboxedTitle": "Runs outside any sandbox",
         "unsandboxedDetail": "Orchester keeps its file tools inside the worktree, but not commands. This one runs as you: it can read and change whatever your account can and reach the network. Secrets are not in its environment."
-      }
+      },
+      "firstLineMore": "{{line}} …"
     },
     "ready": {
       "status": "Ready for review",
@@ -4561,7 +4563,7 @@
     },
     "approvals": {
       "asksTool": "{{agent}} asks to use {{server}} {{tool}} · {{task}}",
-      "asksCommand": "{{agent}} asks to run a command · {{task}}",
+      "asksCommand": "{{agent}} asks to run {{command}} · {{task}}",
       "openSeveral": "{{asks}} · {{count}} waiting",
       "waitingOne": "1 approval waiting · {{asks}}",
       "waitingOther": "{{count}} approvals waiting · {{asks}}",

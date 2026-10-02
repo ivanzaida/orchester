@@ -13,7 +13,7 @@ use lurq::{
 use super::item::{action, glyph, item, label, separator, truncated_label, value};
 use crate::{
   display,
-  screens::project::approval_queue::ApprovalQueue,
+  screens::project::{approval_queue::ApprovalQueue, command_line},
   tasks::{approvals::ShownApproval, data::AutoApprovingRun},
   ui::{icon::Icon, link::Press},
 };
@@ -69,9 +69,14 @@ fn asks(ctx: &Ctx, shown: &ShownApproval) -> Arc<str> {
   let approval = &shown.approval;
   let task = shown.task.as_deref().unwrap_or_default();
   if approval.command {
+    let command = command_line(ctx, shown);
     return ctx.t_args(
       "statusBar.approvals.asksCommand",
-      [("agent", approval.agent.as_str()), ("task", task)],
+      [
+        ("agent", approval.agent.as_str()),
+        ("command", &*command),
+        ("task", task),
+      ],
     );
   }
   ctx.t_args(

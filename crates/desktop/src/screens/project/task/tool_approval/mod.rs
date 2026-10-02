@@ -238,6 +238,15 @@ impl View<'_> {
   }
 }
 
+/// A command on one line, for where a request is named in passing (Needs you, the status bar): its first
+/// line, marked when more follow.
+pub(in crate::screens) fn command_line(ctx: &Ctx, shown: &ShownApproval) -> Arc<str> {
+  match shown.first_line() {
+    (line, true) => ctx.t_args("runs.toolApproval.firstLineMore", [("line", line)]),
+    (line, false) => line.into(),
+  }
+}
+
 /// The dialog of the request the queue shows among `pending`; nothing while it is closed.
 pub(in crate::screens::project) fn modal(
   ctx: &mut Ctx,

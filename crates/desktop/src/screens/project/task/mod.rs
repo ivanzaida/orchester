@@ -55,8 +55,10 @@ use orchester_core::{
   run::{RunStatus, TaskPhase},
   task::TaskStatus,
 };
+pub(in crate::screens) use tool_approval::command_line;
 pub(super) use tool_approval::modal as tool_approval_modal;
 
+pub(super) use self::activity::category_key;
 use self::{
   activity::{ActivityProps, ActivityTab},
   changes::{ChangesProps, ChangesTab, CheckpointedLoad},

@@ -9,13 +9,18 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::time::Timestamp;
 
-use super::super::{ProjectNav, approval_queue::ApprovalQueue, task_rows::status_copy};
+use super::super::{
+  ProjectNav,
+  approval_queue::ApprovalQueue,
+  task::{category_key, command_line},
+  task_rows::status_copy,
+};
 use crate::{
   display,
   navigation::route::{Page, TaskPageTab},
@@ -109,9 +114,10 @@ pub(super) fn attention(
 fn request(ctx: &Ctx, shown: &ShownApproval, queue: Option<&ApprovalQueue>) -> Element {
   let approval = &shown.approval;
   let title = if approval.command {
+    let command = command_line(ctx, shown);
     ctx.t_args(
       "overview.attention.requestCommand",
-      [("agent", approval.agent.as_str())],
+      [("agent", approval.agent.as_str()), ("command", &*command)],
     )
   } else {
     ctx.t_args(
@@ -123,18 +129,25 @@ fn request(ctx: &Ctx, shown: &ShownApproval, queue: Option<&ApprovalQueue>) -> E
       ],
     )
   };
-  let context = ctx.t_args(
-    "overview.attention.requestContext",
-    [
-      ("task", shown.task.as_deref().unwrap_or_default()),
-      (
-        "run",
-        shown.run.map(|run| run.get().to_string()).unwrap_or_default().as_str(),
-      ),
-      ("step", shown.step.as_deref().unwrap_or_default()),
-      ("time", display::clock(approval.requested_at).as_str()),
-    ],
-  );
+  let category = shown
+    .choices
+    .category
+    .map(|category| ctx.t(category_key(category)))
+    .unwrap_or_default();
+  let run = shown.run.map(|run| run.get().to_string()).unwrap_or_default();
+  let since = display::clock(approval.requested_at);
+  let names = [
+    ("task", shown.task.as_deref().unwrap_or_default()),
+    ("run", run.as_str()),
+    ("step", shown.step.as_deref().unwrap_or_default()),
+    ("category", &*category),
+    ("time", since.as_str()),
+  ];
+  let context = if approval.command {
+    ctx.t_args("overview.attention.requestContextCommand", names)
+  } else {
+    ctx.t_args("overview.attention.requestContext", names)
+  };
   let review = ActionButton::new(ctx.t("overview.attention.review"))
     .id(format!("overview-request-review-{}", approval.id))
     .icon(Icon::Hand)
@@ -157,7 +170,13 @@ fn request(ctx: &Ctx, shown: &ShownApproval, queue: Option<&ApprovalQueue>) -> E
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Start)
         .child(icon(Icon::Hand, IconSize::Small, PaletteColor::TextPrimary))
-        .child(Text::new(&title).variant(TypographyStyle::Label).flex(1.0)),
+        .child(
+          Text::new(&title)
+            .variant(TypographyStyle::Label)
+            .nowrap()
+            .text_overflow(TextOverflow::Elipsis)
+            .flex(1.0),
+        ),
     )
     .child(Text::new(&context).variant(TypographyStyle::Caption))
     .child(review.render(ctx))

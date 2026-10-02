@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -185,7 +185,10 @@ fn column(title: &str, glyph: Icon, examples: Vec<Example>) -> Element {
         .child(
           Text::new(&example.value)
             .variant(ExtraTypography::MonoValue.role())
-            .color(PaletteColor::TextPrimary),
+            .color(PaletteColor::TextPrimary)
+            .nowrap()
+            .text_overflow(TextOverflow::Elipsis)
+            .width(Dimension::Pct(100.0)),
         )
         .with_children(example.why.map(|why| {
           Text::new(&why)

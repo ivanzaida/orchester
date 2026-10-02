@@ -134,11 +134,7 @@ fn queue_button(view: &View<'_>, glyph: Icon, id: &'static str, target: Option<&
 
 fn explanation(ctx: &Ctx, shown: &ShownApproval) -> Arc<str> {
   let approval = &shown.approval;
-  let names = [
-    ("agent", approval.agent.as_str()),
-    ("cwd", approval.target.as_deref().unwrap_or_default()),
-    ("server", approval.server.as_str()),
-  ];
+  let names = [("agent", approval.agent.as_str()), ("server", approval.server.as_str())];
   if let Some(native) = approval.native {
     return ctx.t_args(native_approval::explanation_key(native, shown.read_only), names);
   }
@@ -201,10 +197,13 @@ fn cli_details(values: &ValueRows<'_>, column: Column, shown: &ShownApproval) ->
   } else {
     "runs.toolApproval.target"
   };
-  let target = approval
-    .target
-    .as_deref()
-    .map(|value| values.value(ValueRows::TARGET, &ctx.t(target_key), value));
+  // A command's folder as the repository names it (`.orchester/worktrees/…`), an MCP target as recorded.
+  let target = if command {
+    shown.cwd.as_deref()
+  } else {
+    approval.target.as_deref()
+  };
+  let target = target.map(|value| values.value(ValueRows::TARGET, &ctx.t(target_key), value));
   let column = column.child(property(&ctx.t("runs.toolApproval.agent"), &agent(ctx, shown)));
   let column = if command {
     column.with_children(target).child(values.command(&approval.action))

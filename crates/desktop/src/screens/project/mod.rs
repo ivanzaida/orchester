@@ -9,6 +9,7 @@
 
 mod agents;
 pub(crate) mod approval_queue;
+pub(in crate::screens) use self::task::command_line;
 pub(crate) mod connections;
 mod import;
 mod instructions;

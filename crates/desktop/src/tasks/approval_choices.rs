@@ -81,6 +81,8 @@ pub struct ApprovalChoices {
   pub told: Arc<str>,
   /// Codex asks: it declines a denied request and tells the agent in its own words.
   pub codex: bool,
+  /// A command's category; `None` for an MCP call.
+  pub category: Option<CommandCategory>,
 }
 
 impl ApprovalChoices {
@@ -133,6 +135,10 @@ impl ApprovalChoices {
         denial_message(approval).into()
       },
       codex,
+      category: match &subject {
+        ApprovalSubject::Command(command) => Some(command.category()),
+        ApprovalSubject::McpTool { .. } => None,
+      },
     }
   }
 }

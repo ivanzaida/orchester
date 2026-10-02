@@ -43,11 +43,13 @@ fn waiting(number: usize) -> ShownApproval {
     task: Some("ORC-146".into()),
     task_id: Some(TaskId::generate()),
     step: Some("Design".into()),
+    cwd: None,
     choices: ApprovalChoices {
       similar: Err(SimilarUnavailable::Unknown),
       always: Err(AlwaysBlocked::Missing),
       told: "The person reviewing this run denied pencil batch_design. Continue without it.".into(),
       codex: false,
+      category: None,
     },
   }
 }

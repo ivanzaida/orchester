@@ -38,7 +38,18 @@ pub struct ShownApproval {
   pub task: Option<Arc<str>>,
   pub task_id: Option<TaskId>,
   pub step: Option<Arc<str>>,
+  /// A command's working folder relative to the repository when it lies in it, else as recorded.
+  pub cwd: Option<String>,
   pub choices: ApprovalChoices,
+}
+
+impl ShownApproval {
+  /// A command's first line, and whether more lines follow, for a one-line mention of it.
+  pub fn first_line(&self) -> (&str, bool) {
+    let mut lines = self.approval.action.lines();
+    let first = lines.next().unwrap_or_default();
+    (first, lines.next().is_some())
+  }
 }
 
 /// The pending requests of the project at `repo_root`, oldest first, each with its agent's CLI.
@@ -95,9 +106,22 @@ fn shown(db: &ProjectDb, repo_root: &Path, approval: PendingToolApproval) -> Sho
     task_id: task.as_ref().map(Task::id),
     task: task.map(|task| Arc::from(task.key().to_string())),
     step: step.map(|step| step.name),
+    cwd: approval
+      .command
+      .then(|| relative_cwd(repo_root, approval.target.as_deref()))
+      .flatten(),
     choices,
     approval,
   }
+}
+
+/// `target` as the repository names it, when it lies in `repo_root`.
+fn relative_cwd(repo_root: &Path, target: Option<&str>) -> Option<String> {
+  let target = Path::new(target?);
+  Some(target.strip_prefix(repo_root).map_or_else(
+    |_| target.display().to_string(),
+    |relative| relative.display().to_string(),
+  ))
 }
 
 /// The asking step as the run pinned it.
