@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Row, Spacer, Text},
+  components::{Row, Spacer, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -72,11 +72,22 @@ pub(in crate::screens::project::task) fn step_header(
         .variant(TypographyStyle::Mono)
         .color(PaletteColor::TextMuted),
     )
-    .child(Text::new(&title).variant(TypographyStyle::Label).nowrap())
+    // The step's name keeps its room in a narrow window; the engine and times give way first.
+    .child(
+      Text::new(&title)
+        .id("activity-step-title")
+        .variant(TypographyStyle::Label)
+        .nowrap()
+        .flex_shrink(0.0),
+    )
     .with_children(ran.then(|| {
       Text::new(&header_meta(ctx, head))
+        .id("activity-step-meta")
         .variant(TypographyStyle::Caption)
         .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .min_width(Dimension::Px(0.0))
+        .flex_shrink(1.0)
     }))
     .child(Spacer::new().flex(1.0))
     .with_children(tokens)

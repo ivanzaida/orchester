@@ -186,7 +186,9 @@ fn waiting_page_states(desktop: &mut Desktop) {
   // The conversation's toolbar takes two lines: the live state stays beside the step filter, left
   // of Details, and both stay in the window.
   desktop.click("task-tab-conversation");
-  desktop.wait_until("the conversation", |desktop| has(desktop, "conversation-live-state"));
+  desktop.wait_until("the conversation", |desktop| {
+    has(desktop, "conversation-live-state") && has(desktop, "activity-step-title")
+  });
   let state = desktop.bounds("conversation-live-state");
   let details = desktop.bounds("conversation-details");
   let filter = desktop.bounds("activity-step-filter");
@@ -195,6 +197,16 @@ fn waiting_page_states(desktop: &mut Desktop) {
   assert!(details.x + details.width <= 960.0, "{details:?} in the window");
   assert!((state.y - filter.y).abs() < 8.0, "{state:?} beside {filter:?}");
   assert!(search.y > filter.y + filter.height, "{search:?} under {filter:?}");
+  // A step's name keeps its room; the engine and times beside it give way, within the window.
+  desktop.pass();
+  desktop.pass();
+  let (title, meta) = (
+    desktop.bounds("activity-step-title"),
+    desktop.bounds("activity-step-meta"),
+  );
+  assert!((title.y - meta.y).abs() < 4.0, "{title:?} beside {meta:?}");
+  assert!(title.x + title.width <= meta.x, "{title:?} before {meta:?}");
+  assert!(meta.x + meta.width <= 960.0, "{meta:?} in the window");
   desktop.click("task-tab-summary");
   desktop.wait_until("the decisions", |desktop| has(desktop, "task-retry-settings"));
   desktop.tree.resize(1440, 960);
