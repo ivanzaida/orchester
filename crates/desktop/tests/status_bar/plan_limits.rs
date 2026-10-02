@@ -4,7 +4,7 @@ use orchester_desktop::plan_limits::Connections;
 
 use super::*;
 
-fn cli(provider: orchester_core::connection::AgentProvider) -> orchester_core::connection::AgentConnection {
+pub(super) fn cli(provider: orchester_core::connection::AgentProvider) -> orchester_core::connection::AgentConnection {
   use orchester_core::{connection::AgentConnection, id::ConnectionId, name::Name, time::Timestamp};
   AgentConnection::new(
     ConnectionId::generate(),
@@ -70,13 +70,21 @@ fn with_connections(
   readings: orchester_core::connection::plan_limits::PlanReadings,
   connections: Connections,
 ) -> (App, Tree) {
+  let mut bar = project(Some(2));
+  bar.project.as_mut().expect("project").connections = connections;
+  with_bar(width, readings, bar)
+}
+
+pub(super) fn with_bar(
+  width: u32,
+  readings: orchester_core::connection::plan_limits::PlanReadings,
+  bar: StatusBarProps,
+) -> (App, Tree) {
   let mut app = App::new();
   theme::install(&mut app);
   i18n::install(&app).expect("locale");
   let mut tree = Tree::new();
   tree.resize(width, 960);
-  let mut bar = project(Some(2));
-  bar.project.as_mut().expect("project").connections = connections;
   tree.mount_root::<Shell>(
     &mut app,
     ShellProps {
@@ -449,4 +457,32 @@ fn status_bar_plan_limits_block_without_its_window_names_no_reset() {
     "{copy}"
   );
   assert!(!copy.contains("until 1") && !copy.contains("until 2") && !copy.contains("until 0"));
+}
+
+#[test]
+fn status_bar_plan_limits_whole_hours_reset_reads_without_minutes() {
+  use orchester_core::{
+    connection::{
+      AgentProvider,
+      plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
+    },
+    time::Timestamp,
+  };
+  let now = Timestamp::now();
+  let reset = Timestamp::from_unix_millis(now.unix_millis() + 3 * 3_600_000 - 1_000);
+  let mut readings = PlanReadings::default();
+  readings.observe(LimitReading {
+    provider: AgentProvider::CodexCli,
+    at: now,
+    limits: PlanLimits {
+      windows: vec![LimitWindow::new(300, Some(7.0), Some(reset), LimitState::Normal, false).expect("window")],
+      plan: None,
+      credits: None,
+      blocked: None,
+    },
+  });
+  let (mut app, mut tree) = with_limits(1440, readings, vec![cli(AgentProvider::CodexCli)]);
+  hover(&mut app, &mut tree, "status-plan-limits");
+  let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
+  assert!(copy.contains("7% resets in 3 h From"), "{copy}");
 }

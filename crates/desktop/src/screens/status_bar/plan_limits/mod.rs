@@ -166,15 +166,20 @@ fn compact(ctx: &Ctx, entry: &Entry<'_>) -> Vec<Element> {
     PaletteColor::TextPrimary
   };
   if state == LimitState::Reached {
-    let reason = match entry.block_beyond_reset() {
-      Some(LimitBlock::Credits) => Some(ctx.t("statusBar.planLimits.reasonCredits")),
-      Some(LimitBlock::Workspace) => Some(ctx.t("statusBar.planLimits.reasonWorkspace")),
+    // A reason is prose in the label's role; a reset time is a value in mono, as in `WuIp9`.
+    let detail = match entry.block_beyond_reset() {
+      Some(LimitBlock::Credits) => Some(label(
+        &ctx.t("statusBar.planLimits.reasonCredits"),
+        PaletteColor::TextPrimary,
+      )),
+      Some(LimitBlock::Workspace) => Some(label(
+        &ctx.t("statusBar.planLimits.reasonWorkspace"),
+        PaletteColor::TextPrimary,
+      )),
       Some(_) => None,
-      None => Some(text::reset(
-        ctx,
-        entry.window().and_then(LimitWindow::resets),
-        entry.now,
-        false,
+      None => Some(value(
+        &text::reset(ctx, entry.window().and_then(LimitWindow::resets), entry.now, false),
+        PaletteColor::TextPrimary,
       )),
     };
     let heading = Text::new(&ctx.t_args(
@@ -184,9 +189,7 @@ fn compact(ctx: &Ctx, entry: &Entry<'_>) -> Vec<Element> {
     .variant(ExtraTypography::StatusLabel.role())
     .nowrap()
     .into();
-    return std::iter::once(heading)
-      .chain(reason.map(|reason| value(&reason, PaletteColor::TextPrimary)))
-      .collect();
+    return std::iter::once(heading).chain(detail).collect();
   }
   let percent = entry
     .window()

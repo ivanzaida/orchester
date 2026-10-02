@@ -27,7 +27,7 @@ use crate::{
     overview::{OverviewTab, figure},
     usage::ProjectUsage,
   },
-  theme::{STATUS_LABELS_MIN_WIDTH, STATUS_TOKENS_MIN_WIDTH, STATUS_VERSION_MIN_WIDTH},
+  theme::{STATUS_WIDTHS, STATUS_WIDTHS_REACHED},
   ui::{icon::Icon, link::Press},
 };
 
@@ -39,8 +39,13 @@ pub fn counts(
   (limits, width): (&plan_limits::Props, f32),
 ) -> Element {
   // R (`VTnmr`): remove version, tokens, then count labels; limits always stay.
-  let show_labels =
-    width >= STATUS_LABELS_MIN_WIDTH && !(width < STATUS_TOKENS_MIN_WIDTH && plan_limits::reached(limits));
+  // A reached or refused CLI widens the plan limits item, so the rest gives way earlier.
+  let widths = if plan_limits::reached(limits) {
+    STATUS_WIDTHS_REACHED
+  } else {
+    STATUS_WIDTHS
+  };
+  let show_labels = width >= widths.labels;
   let mut row = Row::new()
     .flex_shrink(0.0)
     .height(Dimension::Pct(100.0))
@@ -62,7 +67,7 @@ pub fn counts(
       .child(opens(agents, opener, Page::TASKS))
       .child(opens(queued, opener, Page::TASKS))
       .child(opens(needs_you, opener, Page::Overview(OverviewTab::NeedsYou)));
-    if width >= STATUS_TOKENS_MIN_WIDTH {
+    if width >= widths.tokens {
       row = row.child(tokens(ctx, project.usage.as_ref(), &unknown, hints));
     }
     if plan_limits::shown(limits) {
@@ -71,7 +76,7 @@ pub fn counts(
     row = row.child(separator());
   }
   row = row.child(mcp_item(ctx, mcp, hints));
-  if width >= STATUS_VERSION_MIN_WIDTH {
+  if width >= widths.version {
     row = row.child(version(ctx, hints));
   }
   row.into()

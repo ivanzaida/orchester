@@ -26,6 +26,7 @@ use orchester_desktop::{
 use orchester_ipc::SessionEnd;
 use tokio::runtime::Runtime;
 
+mod narrow;
 mod plan_limits;
 
 /// Provides the session's activity and the window's feed of it, as the root does, above the bar.

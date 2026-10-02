@@ -63,6 +63,12 @@ pub fn reset(ctx: &Ctx, at: Option<Timestamp>, now: Timestamp, relative: bool) -
       [("minutes", minutes.to_string().as_str())],
     );
   }
+  if relative && minutes < DAY_MINUTES && minutes.is_multiple_of(60) {
+    return ctx.t_args(
+      "statusBar.planLimits.resetsInHours",
+      [("hours", (minutes / 60).to_string().as_str())],
+    );
+  }
   if relative && minutes < DAY_MINUTES {
     return ctx.t_args(
       "statusBar.planLimits.resetsIn",

@@ -116,8 +116,11 @@ impl Component for StatusBar {
     };
     // The bar spans the window; reading its width re-renders the bar as the window resizes.
     let width = ctx.window().logical_width();
+    // The left group takes the room the right group leaves and never more: its activity gives
+    // way with an ellipsis instead of running under the right group.
     let mut left = Row::new()
       .flex(1.0)
+      .clip()
       .height(Dimension::Pct(100.0))
       .align_items(Alignment::Center);
     if let Some(project) = &props.project {

@@ -29,14 +29,9 @@ fn plan_limits_emphasis_follows_pencil() {
   assert_eq!(theme::PLAN_WINDOW_LABEL, 44.0);
   assert_eq!((theme::PLAN_METER_WIDTH, theme::PLAN_METER_HEIGHT), (100.0, 4.0));
   assert_eq!(theme::PLAN_PERCENT_WIDTH, 32.0);
-  assert_eq!(
-    (
-      theme::STATUS_LABELS_MIN_WIDTH,
-      theme::STATUS_TOKENS_MIN_WIDTH,
-      theme::STATUS_VERSION_MIN_WIDTH
-    ),
-    (960.0, 1120.0, 1280.0)
-  );
+  let widths = |widths: theme::StatusBarWidths| (widths.version, widths.tokens, widths.labels);
+  assert_eq!(widths(theme::STATUS_WIDTHS), (1280.0, 1120.0, 960.0));
+  assert_eq!(widths(theme::STATUS_WIDTHS_REACHED), (1360.0, 1200.0, 1120.0));
 }
 
 #[test]

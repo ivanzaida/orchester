@@ -3852,6 +3852,7 @@
       "resetsAt": "resets {{time}}",
       "resetsIn": "resets in {{hours}} h {{minutes}} min",
       "resetsInMinutes": "resets in {{minutes}} min",
+      "resetsInHours": "resets in {{hours}} h",
       "resetsOnDay": "resets {{weekday}} {{time}}",
       "resetUnknown": "Reset not reported",
       "fiveHour": "5-hour",
