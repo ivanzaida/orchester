@@ -263,7 +263,8 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
     the panel can say *denied by you*) and the result the agent was given for it.
   - The prompt must honour `AgentFilesMechanism::OrchesterLoads`/`OrchesterLeftOut`, which the enforcement panel
     already shows.
-- **P1e · ORC-60 (in progress):** connections UI, 04.H1–H11 (group `PNDQm`). Built: Add connection's four kinds
+- **P1e · ORC-60 (done 2026-10-02, branch `claude/orc60-fix`; independent review and design verification passed):**
+  connections UI, 04.H1–H11 (group `PNDQm`). Built: Add connection's four kinds
   (OpenAI API locked until P2), the native form with the Official preset (DeepSeek and Custom locked until P3),
   Advanced base URL, the key secret picked or created with the connection in the environment chosen (Development by
   default, as in Secrets), models added by hand with default model and effort, provider fallback (04.H1–H3); the
