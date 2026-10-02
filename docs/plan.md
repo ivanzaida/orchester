@@ -387,7 +387,7 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
 select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
-scaled displays in 0.30.4. This workspace uses 0.33.1: its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0), and a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1). Since 0.31.0 the MCP server also offers `lurq_inspect` and
+scaled displays in 0.30.4. This workspace uses 0.34.0: its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). Since 0.31.0 the MCP server also offers `lurq_inspect` and
 `lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
