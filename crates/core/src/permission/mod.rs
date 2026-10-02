@@ -6,8 +6,10 @@
 //! [`capability`]; an option it cannot enforce is never offered, and Orchester never starts an agent
 //! in a bypass mode.
 
+pub(crate) mod canonical;
 pub mod capability;
 pub mod claude;
+pub mod known_safe;
 mod launch;
 pub mod mcp;
 mod narrow;
@@ -82,6 +84,14 @@ impl CommandPrefix {
       .is_some_and(|first| FILE_COMMANDS.contains(&first))
   }
 
+  /// Whether this prefix allows the program and arguments `argv`: its words are the first elements of
+  /// `argv`, each whole. An argument with spaces matches no word, so `git "status --short"` is not
+  /// `git status`, while arguments after the prefix may hold anything (`git commit -m "a message"`).
+  pub fn covers_argv(&self, argv: &[String]) -> bool {
+    let words: Vec<&str> = self.0.split(' ').collect();
+    argv.len() >= words.len() && words.iter().zip(argv).all(|(word, arg)| *word == arg)
+  }
+
   /// Whether this prefix allows `other`: the same words, or `other` continues them.
   pub fn covers(&self, other: &Self) -> bool {
     other.0 == self.0 || other.0.strip_prefix(&self.0).is_some_and(|rest| rest.starts_with(' '))
@@ -147,6 +157,11 @@ impl AllowedCommands {
   /// Whether some entry allows `command`.
   pub fn allows(&self, command: &CommandPrefix) -> bool {
     self.0.iter().any(|entry| entry.covers(command))
+  }
+
+  /// Whether some entry allows the program and arguments `argv` ([`CommandPrefix::covers_argv`]).
+  pub fn allows_argv(&self, argv: &[String]) -> bool {
+    self.0.iter().any(|entry| entry.covers_argv(argv))
   }
 
   /// The entries of `self` that `wider` allows, for narrowing.
