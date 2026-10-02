@@ -196,7 +196,8 @@ impl SaveError {
         ConnectionError::NotAgent(_)
         | ConnectionError::NotGitHub(_)
         | ConnectionError::CheckKindMismatch(_)
-        | ConnectionError::PresetNotOffered,
+        | ConnectionError::PresetNotOffered
+        | ConnectionError::FallbackNotOffered,
       ) => Message::new("errors.storage"),
       // Only a native connection has no program to point at.
       Self::Connection(ConnectionError::EndpointMismatch(_)) | Self::NativeNotAvailable => {

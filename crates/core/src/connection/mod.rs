@@ -22,6 +22,7 @@ mod http_url;
 pub mod invocation;
 pub mod mcp;
 mod model_requirements;
+mod native_models;
 mod provider;
 pub mod stream;
 
@@ -39,13 +40,14 @@ pub use self::{
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
   claude_catalog::parse_claude_models,
   discovery::{Installed, compare_versions, rank_installed},
-  endpoint::{AgentEndpoint, ApiEndpoint, BaseUrl, EndpointError, EndpointPreset},
+  endpoint::{AgentEndpoint, ApiEndpoint, BaseUrl, EndpointError, EndpointPreset, offers_provider_fallback},
   github::{
     GH_PROGRAM, GhAdvice, GhAuthStatus, GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin,
     GitHubNameError, GitHubState, REQUIRED_SCOPE, check_github, gh_auth_status_command, gh_version_command,
     parse_gh_auth_status, parse_gh_version,
   },
   model_requirements::{CliTooOld, ModelRequirements, parse_cli_too_old},
+  native_models::{Effort, ModelSource, NativeModel, NativeModels, NativeModelsError},
   provider::{AgentProvider, AgentRuntime, WireApi},
 };
 use crate::{id::ConnectionId, name::Name, time::Timestamp};
@@ -89,6 +91,8 @@ pub enum ConnectionError {
   EndpointMismatch(ConnectionId),
   #[error("the DeepSeek preset is not offered on the Anthropic API")]
   PresetNotOffered,
+  #[error("provider fallback is offered on the official Anthropic API only")]
+  FallbackNotOffered,
 }
 
 /// Whether the CLI is signed in, as far as its own status command tells.
@@ -113,6 +117,14 @@ pub enum ConnectionStatus {
   ExecutableMissing,
   NotRecognized,
   CouldNotRun,
+  /// A native connection's key secret is archived or gone.
+  KeyMissing,
+  /// The model API refused the key (401).
+  KeyRejected,
+  /// The model API accepted the key but refuses to serve it for billing (402).
+  BillingProblem,
+  /// The model API could not be reached or did not answer in time.
+  EndpointUnreachable,
 }
 
 impl ConnectionStatus {
@@ -126,6 +138,10 @@ impl ConnectionStatus {
       Self::ExecutableMissing => "executable_missing",
       Self::NotRecognized => "not_recognized",
       Self::CouldNotRun => "could_not_run",
+      Self::KeyMissing => "key_missing",
+      Self::KeyRejected => "key_rejected",
+      Self::BillingProblem => "billing_problem",
+      Self::EndpointUnreachable => "endpoint_unreachable",
     }
   }
 
@@ -172,11 +188,11 @@ impl LastCheck {
     }
   }
 
-  /// Whether the check can describe a connection of `kind`. A native agent connection has no
-  /// program, so no agent check describes it.
+  /// Whether the check can describe a connection of `kind`: a check of a model API describes a native
+  /// agent connection, a check of a program any other.
   const fn fits(&self, kind: &ConnectionKind) -> bool {
     match (self, kind) {
-      (Self::Agent(_), ConnectionKind::Agent(provider)) => !provider.is_native(),
+      (Self::Agent(check), ConnectionKind::Agent(provider)) => check.result.is_api() == provider.is_native(),
       (Self::GitHub(_), ConnectionKind::GitHub { .. }) => true,
       (Self::Agent(_), ConnectionKind::GitHub { .. }) | (Self::GitHub(_), ConnectionKind::Agent(_)) => false,
     }
@@ -288,8 +304,21 @@ impl Connection {
     Ok(())
   }
 
-  /// Replaces the last check. A check of another kind of connection, or any check of a native
-  /// agent connection, is refused.
+  /// Points a native connection at another model API setup. The last check stays while the API and
+  /// its key do; another preset, base URL or key drops it.
+  pub fn set_api(&mut self, api: ApiEndpoint) -> Result<(), ConnectionError> {
+    let same_api = self.endpoint.api().is_some_and(|current| {
+      current.preset() == api.preset() && current.base_url() == api.base_url() && current.key() == api.key()
+    });
+    self.endpoint = fitted(self.id, &self.kind, AgentEndpoint::Api(api))?;
+    if !same_api {
+      self.last_check = None;
+    }
+    Ok(())
+  }
+
+  /// Replaces the last check. A check of another kind of connection, or of a program for a native
+  /// agent connection (or of a model API for any other), is refused.
   pub fn record_check(&mut self, check: LastCheck) -> Result<(), ConnectionError> {
     if !check.fits(&self.kind) {
       return Err(ConnectionError::CheckKindMismatch(self.id));
@@ -312,18 +341,22 @@ impl Connection {
 }
 
 /// `endpoint` if it is how a connection of `kind` is reached: an absolute program path for a CLI,
-/// an API endpoint with a preset its provider offers for a native agent.
+/// an API endpoint with a preset (and provider fallback) its provider offers for a native agent.
 fn fitted(id: ConnectionId, kind: &ConnectionKind, endpoint: AgentEndpoint) -> Result<AgentEndpoint, ConnectionError> {
-  match (&endpoint, kind.is_api()) {
-    (AgentEndpoint::Program(path), false) if !path.is_absolute() => {
+  match (&endpoint, kind) {
+    (AgentEndpoint::Program(path), _) if !kind.is_api() && !path.is_absolute() => {
       Err(ConnectionError::RelativeExecutable(path.clone()))
     }
-    (AgentEndpoint::Api(api), true)
-      if api.preset() == EndpointPreset::DeepSeek && *kind == ConnectionKind::Agent(AgentProvider::AnthropicApi) =>
-    {
-      Err(ConnectionError::PresetNotOffered)
+    (AgentEndpoint::Api(api), ConnectionKind::Agent(provider)) if kind.is_api() => {
+      if !api.preset().offered_on(*provider) {
+        return Err(ConnectionError::PresetNotOffered);
+      }
+      if api.provider_fallback() && !offers_provider_fallback(*provider, api.preset()) {
+        return Err(ConnectionError::FallbackNotOffered);
+      }
+      Ok(endpoint)
     }
-    (AgentEndpoint::Program(_), false) | (AgentEndpoint::Api(_), true) => Ok(endpoint),
-    (AgentEndpoint::Program(_), true) | (AgentEndpoint::Api(_), false) => Err(ConnectionError::EndpointMismatch(id)),
+    (AgentEndpoint::Program(_), _) if !kind.is_api() => Ok(endpoint),
+    _ => Err(ConnectionError::EndpointMismatch(id)),
   }
 }

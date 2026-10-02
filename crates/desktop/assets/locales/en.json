@@ -1647,7 +1647,8 @@
         "allowed": {
           "title": "Allowed commands",
           "detail": "Only these commands run. Anything else is denied and the agent is told why.",
-          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you first."
+          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you first.",
+          "nativeDetail": "Listed and known-safe read-only commands run. Every other command asks you first."
         },
         "any": {
           "title": "Any command in the worktree",
@@ -1739,13 +1740,19 @@
         "cannotLimitCommands": "Unavailable on this connection: {{cli}} can’t limit commands to a list.",
         "cannotConfineCommands": "Unavailable on this connection: {{cli}} can’t confine commands to the worktree.",
         "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so.",
-        "nativeNotAvailable": "Unavailable on this connection: {{cli}} agents are not available in this version yet."
+        "nativeMcp": "Unavailable on this connection: {{cli}} agents get no MCP servers in this version, so they are left out."
       },
       "enforcement": {
         "title": "Enforced by {{cli}}",
         "source": "{{connection}} · known limits on {{platform}}",
-        "nativeTitle": "Not enforced yet · native agents are not available",
-        "nativeSource": "{{connection}} · {{provider}}",
+        "nativeTitle": "Enforced by Orchester",
+        "native": {
+          "anyCommand": "Any command · not enforceable",
+          "anyCommandHow": "no sandbox · commands can’t be confined",
+          "mcp": "MCP servers are left out",
+          "mcpHow": "none start for native agents yet",
+          "listedNotConfined": "A listed command is chosen by Orchester, not confined: it runs as you and can write anywhere you can."
+        },
         "platform": {
           "windows": "Windows",
           "macos": "macOS"
@@ -1759,7 +1766,6 @@
         "notEnforceable": "{{setting}} · not enforceable",
         "networkShare": "Edits on a network share can’t be allowed by rule, so a run can’t start.",
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
-        "nativeNotAvailable": "This version enforces none of these settings and starts no agent on this connection.",
         "noBypass": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
         "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
@@ -1792,6 +1798,8 @@
           "codexLeftOut": "project_doc_max_bytes=0 · skills off",
           "codexLoads": "loads AGENTS.md · .agents/skills",
           "claude": "--setting-sources \"\" · loads neither",
+          "orchesterLoads": "prompt adds AGENTS.md · repository skills",
+          "orchesterLeftOut": "prompt holds neither",
           "note": "Repository agent files is set for all of {{project}} in Project settings › General, not per profile.",
           "summary": "· Repository files off"
         }
@@ -1816,7 +1824,13 @@
         "claudeWebTools": "web tools allowed",
         "claudeWebToolsRemoved": "web tools removed · commands keep network",
         "claudeAddDir": "--add-dir for edit tools · commands not confined",
-        "claudePermissionPrompt": "--permission-prompt-tool · asks each command"
+        "claudePermissionPrompt": "--permission-prompt-tool · asks each command",
+        "nativeWriteToolsWithheld": "write tools withheld · reads stay in the worktree",
+        "nativeFileScope": "file tools · worktree only, .git protected",
+        "nativeFileScopeFolders": "file tools · also these folders · commands not confined",
+        "nativeCommandApprovals": "Orchester asks you before each command",
+        "nativeCommandList": "listed and known-safe commands run unconfined · others ask you",
+        "nativeNetwork": "commands keep the network · no web tools"
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",
@@ -1993,13 +2007,125 @@
       "heading": "{{cli}} {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
       "detail": "A run found this when the model’s provider refused the CLI. Update the CLI, then check the connection again."
     },
+    "kind": {
+      "label": "Kind",
+      "codexDetail": "OpenAI’s CLI on this computer, signed in with its own login.",
+      "claudeDetail": "Anthropic’s CLI on this computer, signed in with its own login.",
+      "anthropicDetail": "Orchester runs the agent itself on Anthropic’s Messages API, with an API key from Secrets.",
+      "openaiDetail": "Orchester runs the agent itself on OpenAI’s Responses API, with an API key from Secrets.",
+      "notYet": "OpenAI API connections come in a later version of Orchester."
+    },
     "native": {
       "row": "{{provider}} · {{preset}} · {{host}}",
       "preset": {
         "official": "Official preset",
         "deepseek": "DeepSeek preset",
-        "custom": "Custom preset"
+        "custom": "Custom preset",
+        "label": "Preset",
+        "officialTitle": "Official",
+        "deepseekTitle": "DeepSeek",
+        "customTitle": "Custom",
+        "customHost": "your server",
+        "deepseekOnAnthropic": "The DeepSeek preset uses OpenAI Responses. DeepSeek’s Anthropic route is reachable through Custom.",
+        "later": "Compatible endpoints come in a later version of Orchester.",
+        "notOffered": "This preset is not offered on this provider."
+      },
+      "url": {
+        "label": "Base URL",
+        "advanced": "Advanced",
+        "hint": "https://, or http:// for localhost, 127.0.0.1 or [::1]. Shown in full wherever the connection is.",
+        "wireMessages": "Wire format · Anthropic Messages",
+        "wireResponses": "Wire format · OpenAI Responses",
+        "blank": "Enter the base URL.",
+        "scheme": "Use https://, or http:// for localhost, 127.0.0.1 or [::1].",
+        "host": "Enter a valid host and port.",
+        "credentials": "Keep user names and passwords out of the URL.",
+        "query": "Remove the query or fragment.",
+        "characters": "Remove spaces and backslashes from the URL.",
+        "tooLong": "The URL is too long."
+      },
+      "key": {
+        "label": "API key · project secret",
+        "none": "Choose a secret…",
+        "option": "{{name}} ({{environment}})",
+        "new": "New secret…",
+        "name": "Secret name",
+        "namePlaceholder": "ANTHROPIC_API_KEY",
+        "value": "Value",
+        "newHint": "Saved to Secrets with the connection, as an API key. The value is never shown again.",
+        "nameInvalid": "Use letters, digits and underscores for the secret name.",
+        "taken": "{{project}} already has a secret {{name}}.",
+        "valueRequired": "Enter the key’s value.",
+        "noticeTitle": "The key stays in Secrets",
+        "noticeDetail": "The connection stores only which secret holds the key. Orchester reads it when an agent starts; it is never shown, logged or given to the agent.",
+        "authentication": "API key · {{name}} ({{environment}})",
+        "gone": "API key · secret missing",
+        "choose": "Choose a secret",
+        "openSecrets": "Open Secrets",
+        "replace": "Replace in Secrets"
+      },
+      "save": {
+        "noKey": "Choose or create the API key’s secret.",
+        "noModels": "Add at least one model.",
+        "defaultsInvalid": "Choose the default model and effort again."
+      },
+      "fallback": {
+        "label": "Provider fallback",
+        "switch": "Retry declined requests on another model",
+        "detail": "Off by default. When on, a request the model declines is retried on another Anthropic model, and Activity shows the switch.",
+        "notOffered": "Not offered on this endpoint: only the official Anthropic API retries on another model."
+      },
+      "testAgain": "Test again",
+      "testUnavailable": "Testing a native connection comes with native agent runs in a later version. Until then Orchester neither reaches the API nor reads the key.",
+      "execution": "This computer (Orchester runs the agent)",
+      "modelTraffic": "Orchester’s own HTTPS",
+      "property": {
+        "preset": "Preset",
+        "modelTraffic": "Model traffic",
+        "balance": "Balance"
       }
+    },
+    "models": {
+      "title": "Models",
+      "none": "No models yet. Add one by hand.",
+      "default": "default",
+      "source": {
+        "endpoint": "From the endpoint · {{time}}",
+        "preset": "From the preset",
+        "manual": "Added by hand"
+      },
+      "context": "{{tokens}} context",
+      "maxOutput": "{{tokens}} output",
+      "joined": "{{first}} · {{second}}",
+      "separator": " · ",
+      "noEfforts": "no effort setting",
+      "edit": "Edit models",
+      "fetch": "Fetch models",
+      "fetchUnavailable": "Fetching models needs a test of the connection, which comes in a later version. Add models by hand meanwhile.",
+      "addByHand": "Add a model by hand",
+      "add": "Add a model",
+      "editModel": "Edit",
+      "remove": "Remove",
+      "removeModel": "Remove model",
+      "save": "Save model",
+      "saveAll": "Save models",
+      "dialogTitle": "Models · {{connection}}",
+      "id": "Model id",
+      "contextWindow": "Context window · tokens · optional",
+      "maxOutputLabel": "Max output · tokens · optional",
+      "efforts": "Efforts",
+      "inUse": "{{profiles}} uses {{model}}. Switch to another model before removing it.",
+      "invalidId": "Enter the model id as the API names it, without spaces.",
+      "listedAlready": "{{model}} is listed already.",
+      "invalidTokens": "Enter a whole number of tokens, or leave it empty.",
+      "defaultModel": "Default model",
+      "defaultEffort": "Default effort",
+      "noDefault": "No default",
+      "modelsEffort": "The model’s own"
+    },
+    "dataNotice": {
+      "sent": "Prompts, repository content and command output are sent to {{host}}.",
+      "storedInPrc": "Data is stored in the PRC, per DeepSeek’s privacy policy."
     },
     "nativeNotAvailable": {
       "heading": "{{connection}} uses {{provider}}, which is not available yet",
@@ -2026,7 +2152,10 @@
       "notRecognized": "Not recognized",
       "couldNotRun": "Could not run",
       "checking": "Checking…",
-      "notAvailable": "Not available yet"
+      "keyMissing": "Key missing",
+      "keyRejected": "Key rejected",
+      "billingProblem": "Billing problem",
+      "endpointUnreachable": "Endpoint unreachable"
     },
     "detail": {
       "notChecked": "This connection has not been checked yet.",
@@ -2037,7 +2166,12 @@
       "executableMissing": "The program file does not exist. Edit the connection to choose it again, then check again.",
       "notRecognized": "The program answered, but not as the expected CLI. Edit the connection to choose the right file.",
       "couldNotRun": "The program could not be started or did not answer in time. Check again, or edit the connection.",
-      "nativeNotAvailable": "Native agents are not available in this version yet. Orchester does not test this connection or start agents on it; profiles that use it cannot run."
+      "nativeConnected": "The API accepted the key when it was last tested. Orchester runs agents with it once native agents are available.",
+      "nativeNotChecked": "Testing a native connection comes with native agent runs in a later version. Until then Orchester neither reaches its API nor reads its key, and profiles that use it cannot run.",
+      "keyMissing": "The key’s secret is archived or gone. Choose another secret, or add one in Secrets.",
+      "keyRejected": "The API refused the key (401). Replace its value in Secrets, then test again.",
+      "billingProblem": "The API accepted the key but refuses to serve it (402): the balance is empty or billing is not set up.",
+      "endpointUnreachable": "The endpoint could not be reached or did not answer in time. Check the base URL and the network, then test again."
     },
     "property": {
       "provider": "Provider",

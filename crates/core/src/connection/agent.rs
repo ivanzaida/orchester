@@ -9,9 +9,10 @@ use super::{
   compare_versions,
   model_requirements::CliTooOld,
 };
-use crate::{id::ConnectionId, name::Name, resource::ModelId, time::Timestamp};
+use crate::{id::ConnectionId, name::Name, resource::ModelId, secret::Secret, time::Timestamp};
 
-/// What running an agent CLI's read-only commands found.
+/// What running an agent CLI's read-only commands found, or what testing a native connection's model
+/// API found (`docs/architecture/native-agent.md` §7: listing its models spends no tokens).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum CheckResult {
@@ -27,6 +28,14 @@ pub enum CheckResult {
   NotRecognized,
   /// The program could not be started or did not answer in time.
   CouldNotRun,
+  /// The model API answered and accepted the key; `balance` as the provider reports it, where it does.
+  Api { balance: Option<String> },
+  /// The model API refused the key.
+  KeyRejected,
+  /// The model API accepted the key but does not serve it for billing; `balance` as reported.
+  BillingProblem { balance: Option<String> },
+  /// The model API could not be reached or did not answer in time.
+  EndpointUnreachable,
 }
 
 impl CheckResult {
@@ -42,6 +51,26 @@ impl CheckResult {
       Self::ExecutableMissing => ConnectionStatus::ExecutableMissing,
       Self::NotRecognized => ConnectionStatus::NotRecognized,
       Self::CouldNotRun => ConnectionStatus::CouldNotRun,
+      Self::Api { .. } => ConnectionStatus::Connected,
+      Self::KeyRejected => ConnectionStatus::KeyRejected,
+      Self::BillingProblem { .. } => ConnectionStatus::BillingProblem,
+      Self::EndpointUnreachable => ConnectionStatus::EndpointUnreachable,
+    }
+  }
+
+  /// Whether this is a check of a model API rather than of a program.
+  pub const fn is_api(&self) -> bool {
+    matches!(
+      self,
+      Self::Api { .. } | Self::KeyRejected | Self::BillingProblem { .. } | Self::EndpointUnreachable
+    )
+  }
+
+  /// The balance the model API reported.
+  pub fn balance(&self) -> Option<&str> {
+    match self {
+      Self::Api { balance } | Self::BillingProblem { balance } => balance.as_deref(),
+      _ => None,
     }
   }
 }
@@ -113,6 +142,32 @@ impl AgentConnection {
     self.connection.set_executable(executable)
   }
 
+  /// The model API of a native connection.
+  pub const fn api(&self) -> Option<&ApiEndpoint> {
+    self.connection.endpoint.api()
+  }
+
+  /// See [`Connection::set_api`].
+  pub fn set_api(&mut self, api: ApiEndpoint) -> Result<(), ConnectionError> {
+    self.connection.set_api(api)
+  }
+
+  /// The connection's status where `active` are the project's secrets that are not archived: a native
+  /// connection whose key secret is not among them reads *Key missing*, whatever its last check found,
+  /// since nothing reaches the API without the key.
+  pub fn status_with(&self, active: &[Secret]) -> ConnectionStatus {
+    match self.api() {
+      Some(api)
+        if !active
+          .iter()
+          .any(|secret| secret.id() == api.key() && !secret.is_archived()) =>
+      {
+        ConnectionStatus::KeyMissing
+      }
+      _ => self.connection.status(),
+    }
+  }
+
   pub fn last_check(&self) -> Option<&ConnectionCheck> {
     match self.connection.last_check.as_ref()? {
       LastCheck::Agent(check) => Some(check),
@@ -120,7 +175,7 @@ impl AgentConnection {
     }
   }
 
-  /// See [`Connection::record_check`]: a native connection refuses the check.
+  /// See [`Connection::record_check`]: a native connection takes a check of its model API only.
   pub fn record_check(&mut self, check: ConnectionCheck) -> Result<(), ConnectionError> {
     self.connection.record_check(LastCheck::Agent(check))
   }

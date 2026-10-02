@@ -241,10 +241,20 @@ P1 is split into five tasks. P1a (ORC-56) is done (see *Done*). The rest:
 - **P1c · ORC-58:** the `orchester-agent` crate: Anthropic client (§3.1), file and search tools, fake model server
   (§8).
 - **P1d · ORC-59:** runner integration: `Driver::Native`, approvals, persistence, resume (§2.2, §6). Native steps
-  start here, and the permissions panel then reads *Enforced by Orchester* (04.H8 `yh0Xe`) instead of *Not enforced
-  yet*.
-- **P1e · ORC-60:** connections UI, 04.H1–H11 (group `PNDQm`): the native form and inspector, test connection,
-  models, default model and effort, provider fallback and the data-location notice.
+  start here (`AgentProvider::runs_agents`). Also left here by P1e, because only a native run or the runner's model
+  client produces what they show: *Test connection* and *Fetch models* through the runner (`Command::CheckConnection`,
+  §7; it records `CheckResult::Api`/`KeyRejected`/`BillingProblem`/`EndpointUnreachable` and fetched models with
+  `ModelSource::Endpoint`), the shell approval content (04.H9 `wvh5j`), the Activity rows of native tool calls,
+  approvals and denials (04.H10 `IcGvI`), and the run summary note (04.H11 `ZvWcK`). The prompt must honour
+  `AgentFilesMechanism::OrchesterLoads`/`OrchesterLeftOut`, which the enforcement panel already shows.
+- **P1e · ORC-60 (in progress):** connections UI, group `PNDQm`. Built: Add connection's four kinds (OpenAI API
+  locked until P2), the native form with the Official preset (DeepSeek and Custom locked until P3), Advanced base
+  URL, the key secret picked or created with the connection, models added by hand with default model and effort,
+  provider fallback (04.H1–H3); the native inspector with its statuses, key missing derived from the project's
+  secrets (04.H4, H5); the models dialog (04.H6); and the §5.4 capability rows with *Enforced by Orchester* (04.H8).
+  Test connection and Fetch models are visibly unavailable. Left for P1d: see its bullet. Tests: `form_keyboard
+  native_` (`native_connections`, `native_dialog`), core `native_connection`/`native_setup`, store `connections
+  native`.
 
 ## L · After lurq 0.30.0
 

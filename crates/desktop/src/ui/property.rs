@@ -85,6 +85,22 @@ pub fn wrapping_top_property(label: &str, value: &str) -> Element {
     .into()
 }
 
+/// A mono value shown in full, wrapping when it is longer than the row, e.g. a native connection's
+/// endpoint (04.H4 `lJG42`).
+pub fn wrapping_mono_property(label: &str, value: &str) -> Element {
+  property_row(label, Alignment::Start)
+    .min_height(Dimension::Px(PROPERTY_HEIGHT))
+    .child(
+      Text::new(value)
+        .variant(ExtraTypography::MonoValue.role())
+        .color(PaletteColor::TextPrimary)
+        .text_align(TextAlign::Right)
+        .flex(1.0)
+        .selectable(true),
+    )
+    .into()
+}
+
 /// A mono value (`style` Mono) with a note under it that wraps, e.g. the code index an agent got and
 /// why it had no ripgrep (`O4YLY` in `rd1Vo`).
 pub fn noted_property(label: &str, value: &str, note: &str) -> Element {

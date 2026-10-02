@@ -72,12 +72,17 @@ pub(super) fn dialog(
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),
     )
-    .child(actions(ctx, context, bar));
+    .child(actions(ctx, context, bar, CONNECTION_SAVE));
   backdrop(ctx, form(submit, dialog))
 }
 
+/// The save button of an action bar: its id and its label.
+pub(super) type SaveButton = (&'static str, &'static str);
+
+const CONNECTION_SAVE: SaveButton = ("connection-save", "connections.dialog.save");
+
 /// The form's padding: 28 all round but 16 at the right, beside the 12px gutter (`cJGKL`).
-fn padded(fields: Element) -> Element {
+pub(super) fn padded(fields: Element) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_vertical(ExtraSpacing::Rail.role())
@@ -88,7 +93,7 @@ fn padded(fields: Element) -> Element {
     .into()
 }
 
-fn header(ctx: &Ctx, title: &str, context: &DialogContext) -> Element {
+pub(super) fn header(ctx: &Ctx, title: &str, context: &DialogContext) -> Element {
   let close = context.close.clone();
   let owner = ctx.t_args(
     "connections.dialog.owner",
@@ -120,16 +125,12 @@ fn header(ctx: &Ctx, title: &str, context: &DialogContext) -> Element {
     .into()
 }
 
-fn actions(ctx: &Ctx, context: &DialogContext, bar: SaveBar) -> Element {
-  let label = if bar.saving {
-    "connections.dialog.saving"
-  } else {
-    "connections.dialog.save"
-  };
+pub(super) fn actions(ctx: &Ctx, context: &DialogContext, bar: SaveBar, (id, save): SaveButton) -> Element {
+  let label = if bar.saving { "connections.dialog.saving" } else { save };
   let save_button = ActionButton::new(ctx.t(label))
     .primary()
     .icon(Icon::Check)
-    .id("connection-save")
+    .id(id)
     .in_form()
     .height(Dimension::Px(BUTTON_HEIGHT));
   let save_button = match bar.submit {

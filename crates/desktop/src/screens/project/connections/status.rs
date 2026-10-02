@@ -5,6 +5,7 @@ use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, ConnectionStatus, EndpointPreset},
   resource::ModelId,
+  secret::Secret,
 };
 
 use crate::ui::{icon::Icon, notice::Notice};
@@ -99,14 +100,10 @@ pub const fn vendor_key(provider: AgentProvider) -> &'static str {
   }
 }
 
-/// The status of an agent connection: *Not available yet* for a native one, which this version
-/// neither checks nor runs, else what its last check found.
-pub fn agent_status_label(connection: &AgentConnection) -> (Icon, &'static str) {
-  if connection.provider().runs_agents() {
-    status_label(connection.status())
-  } else {
-    (Icon::Lock, "connections.status.notAvailable")
-  }
+/// The status of an agent connection, with a native one whose key secret is not among `secrets` (the
+/// project's that are not archived) reading *Key missing*.
+pub fn agent_status_label(connection: &AgentConnection, secrets: &[Secret]) -> (Icon, &'static str) {
+  status_label(connection.status_with(secrets))
 }
 
 pub const fn status_label(status: ConnectionStatus) -> (Icon, &'static str) {
@@ -118,26 +115,40 @@ pub const fn status_label(status: ConnectionStatus) -> (Icon, &'static str) {
     ConnectionStatus::ExecutableMissing => (Icon::AlertCircle, "connections.status.executableMissing"),
     ConnectionStatus::NotRecognized => (Icon::AlertCircle, "connections.status.notRecognized"),
     ConnectionStatus::CouldNotRun => (Icon::AlertCircle, "connections.status.couldNotRun"),
+    ConnectionStatus::KeyMissing => (Icon::KeyRound, "connections.status.keyMissing"),
+    ConnectionStatus::KeyRejected => (Icon::AlertCircle, "connections.status.keyRejected"),
+    ConnectionStatus::BillingProblem => (Icon::AlertCircle, "connections.status.billingProblem"),
+    ConnectionStatus::EndpointUnreachable => (Icon::CloudOff, "connections.status.endpointUnreachable"),
   }
 }
 
 /// What the status means and what to do about it. Signing in names the CLI's own command,
-/// which Orchester never runs itself. A native connection says that this version cannot use it.
+/// which Orchester never runs itself. A native connection that was never tested says that testing it
+/// is not available in this version.
 pub const fn status_detail_key(status: ConnectionStatus, provider: AgentProvider) -> &'static str {
-  let sign_in = match provider {
-    AgentProvider::CodexCli => "connections.detail.signInCodex",
-    AgentProvider::ClaudeCodeCli => "connections.detail.signInClaude",
-    // A native connection is never checked, so no status describes it.
-    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return "connections.detail.nativeNotAvailable",
+  const CLI: (&str, &str) = ("connections.detail.notChecked", "connections.detail.connected");
+  const NATIVE: (&str, &str) = (
+    "connections.detail.nativeNotChecked",
+    "connections.detail.nativeConnected",
+  );
+  let (sign_in, (not_checked, connected)) = match provider {
+    AgentProvider::CodexCli => ("connections.detail.signInCodex", CLI),
+    AgentProvider::ClaudeCodeCli => ("connections.detail.signInClaude", CLI),
+    // A native connection signs in with its key, so no sign-in status describes it.
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => ("connections.detail.notChecked", NATIVE),
   };
   match status {
-    ConnectionStatus::NotChecked => "connections.detail.notChecked",
-    ConnectionStatus::Connected => "connections.detail.connected",
+    ConnectionStatus::NotChecked => not_checked,
+    ConnectionStatus::Connected => connected,
     ConnectionStatus::SignInRequired => sign_in,
     ConnectionStatus::SignInUnknown => "connections.detail.signInUnknown",
     ConnectionStatus::ExecutableMissing => "connections.detail.executableMissing",
     ConnectionStatus::NotRecognized => "connections.detail.notRecognized",
     ConnectionStatus::CouldNotRun => "connections.detail.couldNotRun",
+    ConnectionStatus::KeyMissing => "connections.detail.keyMissing",
+    ConnectionStatus::KeyRejected => "connections.detail.keyRejected",
+    ConnectionStatus::BillingProblem => "connections.detail.billingProblem",
+    ConnectionStatus::EndpointUnreachable => "connections.detail.endpointUnreachable",
   }
 }
 

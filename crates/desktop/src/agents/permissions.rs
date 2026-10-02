@@ -33,11 +33,14 @@ pub const fn option_title(option: PermissionOption) -> &'static str {
   }
 }
 
-/// What an option allows on `provider` (`C85wh` in `lcwsy`). Only Claude Code also runs known-safe
-/// read-only commands besides an allowed list, so only its *Allowed commands* says so; only Codex
-/// asks about commands that need more than its sandbox, so only its *Any command* says that.
+/// What an option allows on `provider` (`C85wh` in `lcwsy`). Claude Code and native agents also run
+/// known-safe read-only commands besides an allowed list, so only their *Allowed commands* says so;
+/// only Codex asks about commands that need more than its sandbox, so only its *Any command* says that.
 pub fn option_detail(option: PermissionOption, provider: Option<AgentProvider>) -> &'static str {
   match option {
+    PermissionOption::AllowedCommands if provider.is_some_and(AgentProvider::is_native) => {
+      "agents.permissions.option.allowed.nativeDetail"
+    }
     PermissionOption::AllowedCommands if runs_read_only_unlisted(provider) => {
       "agents.permissions.option.allowed.claudeDetail"
     }
@@ -69,17 +72,19 @@ pub fn unavailable(ctx: &Ctx, reason: Unavailable, provider: AgentProvider) -> O
     Unavailable::CannotLimitCommands => "agents.permissions.unavailable.cannotLimitCommands",
     Unavailable::CannotConfineCommands => "agents.permissions.unavailable.cannotConfineCommands",
     Unavailable::CannotBlockNetwork => "agents.permissions.unavailable.cannotBlockNetwork",
-    Unavailable::NativeNotAvailable => "agents.permissions.unavailable.nativeNotAvailable",
   };
   Some(ctx.t_args(key, [("cli", &*ctx.t(program_key(provider)))]))
 }
 
-/// Why a profile on `provider` has no choice that only a running agent would use (asking before MCP
-/// actions, its MCP servers): native agents are not available yet. `None` for an agent CLI, or
-/// without a connection.
-pub fn native_unavailable(ctx: &Ctx, provider: Option<AgentProvider>) -> Option<Arc<str>> {
-  let provider = provider.filter(|provider| !provider.runs_agents())?;
-  unavailable(ctx, Unavailable::NativeNotAvailable, provider)
+/// Why a profile on `provider` has no MCP choices (its servers, asking before MCP actions): native
+/// agents get no MCP servers in this version (`docs/architecture/native-agent.md` §5.4, P4). `None`
+/// for an agent CLI, or without a connection.
+pub fn native_mcp_unavailable(ctx: &Ctx, provider: Option<AgentProvider>) -> Option<Arc<str>> {
+  let provider = provider.filter(|provider| provider.is_native())?;
+  Some(ctx.t_args(
+    "agents.permissions.unavailable.nativeMcp",
+    [("cli", &*ctx.t(program_key(provider)))],
+  ))
 }
 
 /// How a CLI enforces a setting, in its own terms (`s8kRYf`, `D1auE7`, `rRzit`).
@@ -103,6 +108,12 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexWritableRoots => "agents.permissions.mechanism.codexWritableRoots",
     Mechanism::ClaudeAddDir => "agents.permissions.mechanism.claudeAddDir",
     Mechanism::ClaudePermissionPrompt => "agents.permissions.mechanism.claudePermissionPrompt",
+    Mechanism::NativeWriteToolsWithheld => "agents.permissions.mechanism.nativeWriteToolsWithheld",
+    Mechanism::NativeFileScope => "agents.permissions.mechanism.nativeFileScope",
+    Mechanism::NativeFileScopeFolders => "agents.permissions.mechanism.nativeFileScopeFolders",
+    Mechanism::NativeCommandApprovals => "agents.permissions.mechanism.nativeCommandApprovals",
+    Mechanism::NativeCommandList => "agents.permissions.mechanism.nativeCommandList",
+    Mechanism::NativeNetworkUnrestricted => "agents.permissions.mechanism.nativeNetwork",
     Mechanism::ClaudeAllowedTools => {
       let count = match permissions.commands() {
         CommandPermission::Allowed(commands) => commands.entries().len(),
@@ -324,9 +335,6 @@ pub fn problem(ctx: &Ctx, problem: &PermissionProblem, provider: AgentProvider) 
       "agents.permissions.problem.notEnforceable",
       [("cli", &*cli), ("option", &*ctx.t(option_title(*option)))],
     ),
-    PermissionProblem::NativeNotAvailable => {
-      ctx.t_args("agents.permissions.problem.nativeNotAvailable", [("cli", &*cli)])
-    }
   }
 }
 

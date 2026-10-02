@@ -2,8 +2,8 @@
 //! CLI enforces it, or that it cannot. The design has it come from a capability check of the CLI;
 //! what exists is core's capability table for this platform, so the panel says whose known limits
 //! it shows rather than a check time, then what it enforces for the chosen MCP servers (`mcp`). Then the rules: no
-//! bypass mode, steps only narrow. A native connection enforces nothing in this version: the panel says it is not
-//! available yet.
+//! bypass mode, steps only narrow. On a native connection Orchester enforces the settings itself (04.H8 `yh0Xe`): the
+//! panel lists its mechanisms, what it cannot enforce, and that MCP servers are left out.
 
 use std::path::Path;
 
@@ -60,8 +60,10 @@ impl ProfileEditor {
           &self.permissions.get(),
           (&result, &self.context.project.repo_root),
         ));
-        if connection.provider().runs_agents() {
-          rows.extend(self.agent_files_rows(ctx, connection.provider()));
+        rows.extend(self.agent_files_rows(ctx, connection.provider()));
+        if connection.provider().is_native() {
+          rows.extend(native_rows(ctx));
+        } else {
           rows.extend(self.mcp_enforcement(ctx, connection.provider()));
         }
         rows
@@ -81,23 +83,21 @@ impl ProfileEditor {
 }
 
 impl ProfileEditor {
-  /// Whether the CLI loads the repository's own agent files and how (`e9t1b` in `bYDCI`), and
-  /// that the project sets it, not the profile (`k9Q3LT`). Nothing for a provider this version runs
-  /// no agent on.
+  /// Whether the agent loads the repository's own agent files and how (`e9t1b` in `bYDCI`), and
+  /// that the project sets it, not the profile (`k9Q3LT`).
   fn agent_files_rows(&self, ctx: &Ctx, provider: AgentProvider) -> Vec<Element> {
     let setting = self.context.agents.agent_files;
-    let Some(mechanism) = setting.mechanism(provider) else {
-      return Vec::new();
-    };
     let (glyph, title) = if setting.is_on() {
       (Icon::FolderGit, "agents.permissions.enforcement.repositoryFiles.on")
     } else {
       (Icon::CircleCheck, "agents.permissions.enforcement.repositoryFiles.off")
     };
-    let how = ctx.t(match mechanism {
+    let how = ctx.t(match setting.mechanism(provider) {
       AgentFilesMechanism::CodexLoads => "agents.permissions.enforcement.repositoryFiles.codexLoads",
       AgentFilesMechanism::CodexLeftOut => "agents.permissions.enforcement.repositoryFiles.codexLeftOut",
       AgentFilesMechanism::ClaudeNoProjectSettings => "agents.permissions.enforcement.repositoryFiles.claude",
+      AgentFilesMechanism::OrchesterLoads => "agents.permissions.enforcement.repositoryFiles.orchesterLoads",
+      AgentFilesMechanism::OrchesterLeftOut => "agents.permissions.enforcement.repositoryFiles.orchesterLeftOut",
     });
     let project = self.context.project.project.name().as_str();
     vec![
@@ -113,33 +113,25 @@ impl ProfileEditor {
   }
 }
 
-/// "Enforced by Codex CLI" and whose limits these are (`FLmZD`). A native connection enforces
-/// nothing in this version, so its heading says so and names no limits.
+/// "Enforced by Codex CLI" and whose limits these are (`FLmZD`); on a native connection *Enforced by
+/// Orchester*, which runs the agent itself (04.H8 `yh0Xe`).
 fn heading(ctx: &Ctx, connection: &AgentConnection) -> Element {
   let provider = connection.provider();
   let cli = ctx.t(program_key(provider));
   let name = connection.name().as_str();
-  let (title, source) = if provider.runs_agents() {
-    let platform = ctx.t(match Platform::current() {
-      Platform::Windows => "agents.permissions.enforcement.platform.windows",
-      Platform::MacOs => "agents.permissions.enforcement.platform.macos",
-    });
-    (
-      ctx.t_args("agents.permissions.enforcement.title", [("cli", &*cli)]),
-      ctx.t_args(
-        "agents.permissions.enforcement.source",
-        [("connection", name), ("platform", &*platform)],
-      ),
-    )
+  let platform = ctx.t(match Platform::current() {
+    Platform::Windows => "agents.permissions.enforcement.platform.windows",
+    Platform::MacOs => "agents.permissions.enforcement.platform.macos",
+  });
+  let title = if provider.is_native() {
+    ctx.t("agents.permissions.enforcement.nativeTitle")
   } else {
-    (
-      ctx.t("agents.permissions.enforcement.nativeTitle"),
-      ctx.t_args(
-        "agents.permissions.enforcement.nativeSource",
-        [("connection", name), ("provider", &*cli)],
-      ),
-    )
+    ctx.t_args("agents.permissions.enforcement.title", [("cli", &*cli)])
   };
+  let source = ctx.t_args(
+    "agents.permissions.enforcement.source",
+    [("connection", name), ("platform", &*platform)],
+  );
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
@@ -268,12 +260,30 @@ fn not_enforceable(ctx: &Ctx, problem: &PermissionProblem) -> Element {
   let name = match problem {
     PermissionProblem::NoEnforceableOption { setting } => ctx.t(setting_label(*setting)),
     PermissionProblem::NotEnforceable { option, .. } => ctx.t(option_title(*option)),
-    PermissionProblem::NativeNotAvailable => {
-      return line(Icon::Lock, &ctx.t("agents.permissions.enforcement.nativeNotAvailable"));
-    }
   };
   let title = ctx.t_args("agents.permissions.enforcement.notEnforceable", [("setting", &*name)]);
   line(Icon::Lock, &title)
+}
+
+/// What Orchester cannot enforce for a native agent and what it leaves out (04.H8 `yh0Xe`): any command
+/// in the worktree, MCP servers, and that a listed command is chosen but not confined.
+fn native_rows(ctx: &Ctx) -> Vec<Element> {
+  vec![
+    row(
+      Icon::Lock,
+      &ctx.t("agents.permissions.enforcement.native.anyCommand"),
+      &ctx.t("agents.permissions.enforcement.native.anyCommandHow"),
+    ),
+    row(
+      Icon::Plug,
+      &ctx.t("agents.permissions.enforcement.native.mcp"),
+      &ctx.t("agents.permissions.enforcement.native.mcpHow"),
+    ),
+    line(
+      Icon::TriangleAlert,
+      &ctx.t("agents.permissions.enforcement.native.listedNotConfined"),
+    ),
+  ]
 }
 
 /// A setting and how it is enforced (`S9nIp1`): the text over the mechanism in mono.

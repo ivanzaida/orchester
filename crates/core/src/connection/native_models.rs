@@ -1,0 +1,213 @@
+//! The models a native connection offers (`docs/architecture/native-agent.md` §7): each with its
+//! optional limits, the reasoning efforts it accepts and where it came from, plus the default model
+//! and effort that profiles which choose none run with.
+
+use std::num::NonZeroU32;
+
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+use crate::{resource::ModelId, time::Timestamp};
+
+/// A reasoning effort a native model accepts, from the least to the most.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Effort {
+  Low,
+  Medium,
+  High,
+  #[serde(rename = "xhigh")]
+  XHigh,
+  Max,
+}
+
+impl Effort {
+  pub const ALL: [Self; 5] = [Self::Low, Self::Medium, Self::High, Self::XHigh, Self::Max];
+
+  /// The value the model API takes, which is also how it is shown.
+  pub const fn as_str(self) -> &'static str {
+    match self {
+      Self::Low => "low",
+      Self::Medium => "medium",
+      Self::High => "high",
+      Self::XHigh => "xhigh",
+      Self::Max => "max",
+    }
+  }
+}
+
+/// Where a model and its limits come from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "source")]
+pub enum ModelSource {
+  /// The endpoint listed it when it was fetched at `at`.
+  Endpoint { at: Timestamp },
+  /// The preset fills it in (DeepSeek's limits and efforts).
+  Preset,
+  /// A person added it by hand.
+  Manual,
+}
+
+/// A model of a native connection.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeModel {
+  id: ModelId,
+  /// Tokens the model reads at most; unknown when `None`.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  context_window: Option<NonZeroU32>,
+  /// Tokens the model writes at most in one response; unknown when `None`.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  max_output: Option<NonZeroU32>,
+  /// Accepted efforts, least first; none: the model takes no effort setting.
+  #[serde(default)]
+  efforts: Vec<Effort>,
+  #[serde(flatten)]
+  source: ModelSource,
+}
+
+impl NativeModel {
+  /// The efforts are kept once each, least first.
+  pub fn new(
+    id: ModelId,
+    context_window: Option<NonZeroU32>,
+    max_output: Option<NonZeroU32>,
+    mut efforts: Vec<Effort>,
+    source: ModelSource,
+  ) -> Self {
+    efforts.sort_unstable();
+    efforts.dedup();
+    Self {
+      id,
+      context_window,
+      max_output,
+      efforts,
+      source,
+    }
+  }
+
+  pub const fn id(&self) -> &ModelId {
+    &self.id
+  }
+
+  pub const fn context_window(&self) -> Option<NonZeroU32> {
+    self.context_window
+  }
+
+  pub const fn max_output(&self) -> Option<NonZeroU32> {
+    self.max_output
+  }
+
+  pub fn efforts(&self) -> &[Effort] {
+    &self.efforts
+  }
+
+  pub const fn source(&self) -> ModelSource {
+    self.source
+  }
+}
+
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum NativeModelsError {
+  #[error("model {} is listed twice", .0.as_str())]
+  Duplicate(ModelId),
+  #[error("the default model {} is not listed", .0.as_str())]
+  DefaultNotListed(ModelId),
+  #[error("the default model does not take effort {}", .0.as_str())]
+  EffortNotOffered(Effort),
+  #[error("a default effort needs a default model")]
+  EffortWithoutModel,
+}
+
+/// The models of a native connection, with the default model and effort. Every id is listed once,
+/// the default model is listed, and the default effort is one the default model takes.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "StoredModels", into = "StoredModels")]
+pub struct NativeModels {
+  models: Vec<NativeModel>,
+  default_model: Option<ModelId>,
+  default_effort: Option<Effort>,
+}
+
+impl NativeModels {
+  pub fn new(
+    models: Vec<NativeModel>,
+    default_model: Option<ModelId>,
+    default_effort: Option<Effort>,
+  ) -> Result<Self, NativeModelsError> {
+    for (index, model) in models.iter().enumerate() {
+      if models[..index].iter().any(|earlier| earlier.id == model.id) {
+        return Err(NativeModelsError::Duplicate(model.id.clone()));
+      }
+    }
+    let chosen = match &default_model {
+      Some(id) => Some(
+        models
+          .iter()
+          .find(|model| &model.id == id)
+          .ok_or_else(|| NativeModelsError::DefaultNotListed(id.clone()))?,
+      ),
+      None => None,
+    };
+    match (chosen, default_effort) {
+      (None, Some(_)) => return Err(NativeModelsError::EffortWithoutModel),
+      (Some(model), Some(effort)) if !model.efforts.contains(&effort) => {
+        return Err(NativeModelsError::EffortNotOffered(effort));
+      }
+      _ => {}
+    }
+    Ok(Self {
+      models,
+      default_model,
+      default_effort,
+    })
+  }
+
+  pub fn models(&self) -> &[NativeModel] {
+    &self.models
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.models.is_empty()
+  }
+
+  pub fn model(&self, id: &ModelId) -> Option<&NativeModel> {
+    self.models.iter().find(|model| &model.id == id)
+  }
+
+  pub const fn default_model(&self) -> Option<&ModelId> {
+    self.default_model.as_ref()
+  }
+
+  pub const fn default_effort(&self) -> Option<Effort> {
+    self.default_effort
+  }
+}
+
+/// [`NativeModels`] as stored, checked when read back.
+#[derive(Serialize, Deserialize)]
+struct StoredModels {
+  #[serde(default)]
+  models: Vec<NativeModel>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  default_model: Option<ModelId>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  default_effort: Option<Effort>,
+}
+
+impl TryFrom<StoredModels> for NativeModels {
+  type Error = NativeModelsError;
+
+  fn try_from(stored: StoredModels) -> Result<Self, NativeModelsError> {
+    Self::new(stored.models, stored.default_model, stored.default_effort)
+  }
+}
+
+impl From<NativeModels> for StoredModels {
+  fn from(models: NativeModels) -> Self {
+    Self {
+      models: models.models,
+      default_model: models.default_model,
+      default_effort: models.default_effort,
+    }
+  }
+}

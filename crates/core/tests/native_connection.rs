@@ -1,5 +1,6 @@
-//! Native agent connections (`docs/architecture/native-agent.md` §2.1, §7) before native agents run:
-//! their providers, endpoints and base URL rules, and that nothing checks, enforces or runs them yet.
+//! Native agent connections (`docs/architecture/native-agent.md` §2.1, §5.4, §7) before native agents
+//! run: their providers, endpoints and base URL rules, how Orchester will enforce their permissions, and
+//! that no program check describes them.
 
 use std::path::PathBuf;
 
@@ -13,8 +14,9 @@ use orchester_core::{
   id::{ConnectionId, SecretId},
   name::Name,
   permission::{
-    AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess,
-    capability::{PermissionOption, PermissionProblem, Support, Unavailable, support},
+    AgentPermissions, AllowedCommands, CommandPermission, FolderBounds, NetworkAccess, OutsideCommands,
+    RepositoryAccess, WritableFolder, WritableFolders,
+    capability::{Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Support, Unavailable, support},
   },
   time::Timestamp,
 };
@@ -230,40 +232,83 @@ fn native_deepseek_preset_is_offered_on_the_openai_api_only() {
 }
 
 #[test]
-fn nothing_is_enforced_checked_or_run_for_a_native_provider() {
-  let permissions = AgentPermissions::new(
-    RepositoryAccess::ReadOnly,
+fn orchester_enforces_a_native_provider_alike_on_both_platforms() {
+  use Mechanism as M;
+  let rows = [
+    (
+      PermissionOption::ReadOnly,
+      Support::Enforced(M::NativeWriteToolsWithheld),
+    ),
+    (PermissionOption::EditWorktree, Support::Enforced(M::NativeFileScope)),
+    (
+      PermissionOption::AskBeforeCommands,
+      Support::Enforced(M::NativeCommandApprovals),
+    ),
+    (
+      PermissionOption::AllowedCommands,
+      Support::Enforced(M::NativeCommandList),
+    ),
+    (
+      PermissionOption::AnyCommand,
+      Support::Unavailable(Unavailable::CannotConfineCommands),
+    ),
+    (
+      PermissionOption::NetworkOff,
+      Support::Unavailable(Unavailable::CannotBlockNetwork),
+    ),
+    (
+      PermissionOption::NetworkOn,
+      Support::Enforced(M::NativeNetworkUnrestricted),
+    ),
+  ];
+  let root = tempfile::tempdir().expect("temporary folder");
+  std::fs::create_dir_all(root.path().join("repo")).expect("repository folder");
+  let bounds = FolderBounds::new(&root.path().join("repo"), None).expect("bounds");
+  let target = WritableFolder::new(".orchester/target", &bounds).expect("folder");
+  let folders = WritableFolders::new(vec![target]).expect("folders");
+  let offline = AgentPermissions::new(
+    RepositoryAccess::Write,
     CommandPermission::Allowed(AllowedCommands::default()),
+    NetworkAccess::Off,
+  )
+  .with_writable_folders(folders);
+  let any = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AnyInWorktree,
     NetworkAccess::On,
   );
   for provider in [AgentProvider::AnthropicApi, AgentProvider::OpenAiApi] {
     for platform in [Platform::Windows, Platform::MacOs] {
-      for option in [
-        PermissionOption::ReadOnly,
-        PermissionOption::EditWorktree,
-        PermissionOption::AskBeforeCommands,
-        PermissionOption::AllowedCommands,
-        PermissionOption::AnyCommand,
-        PermissionOption::NetworkOff,
-        PermissionOption::NetworkOn,
-      ] {
-        assert_eq!(
-          support(provider, platform, option),
-          Support::Unavailable(Unavailable::NativeNotAvailable)
-        );
+      for (option, expected) in rows {
+        assert_eq!(support(provider, platform, option), expected, "{option:?}");
       }
+      let enforced = offline.enforced_on(provider, platform).expect("enforced by Orchester");
+      assert_eq!(enforced.mechanism(PermissionSetting::Repository), M::NativeFileScope);
+      assert_eq!(enforced.mechanism(PermissionSetting::Commands), M::NativeCommandList);
       assert_eq!(
-        permissions.enforced_on(provider, platform),
-        Err(PermissionProblem::NativeNotAvailable)
+        enforced.mechanism(PermissionSetting::Network),
+        M::NativeNetworkUnrestricted
       );
-      // No run turns the network on, so the profile shows the access it chose.
-      let offline = AgentPermissions::new(
-        RepositoryAccess::ReadOnly,
-        CommandPermission::Allowed(AllowedCommands::default()),
-        NetworkAccess::Off,
+      assert_eq!(enforced.writable_folders(), Some(M::NativeFileScopeFolders));
+      // Off cannot be enforced, so commands keep the network, as with Claude Code.
+      assert_eq!(enforced.network_stays_on(), Some(Unavailable::CannotBlockNetwork));
+      assert_eq!(enforced.permissions().network(), NetworkAccess::On);
+      assert_eq!(enforced.outside_commands(), OutsideCommands::OrchesterAsks);
+      assert_eq!(offline.effective_network(provider, platform), NetworkAccess::On);
+      assert_eq!(
+        any.enforced_on(provider, platform),
+        Err(PermissionProblem::NotEnforceable {
+          option: PermissionOption::AnyCommand,
+          reason: Unavailable::CannotConfineCommands,
+        })
       );
-      assert_eq!(offline.effective_network(provider, platform), NetworkAccess::Off);
     }
+  }
+}
+
+#[test]
+fn nothing_checks_a_native_provider_as_a_program() {
+  for provider in [AgentProvider::AnthropicApi, AgentProvider::OpenAiApi] {
     let checked = check(
       provider,
       &program(),
