@@ -209,6 +209,8 @@ pub enum ShutdownMode {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Event {
+  /// Live account reading; session-only, never reconstructed from project storage.
+  PlanLimits(orchester_core::connection::plan_limits::LimitReading),
   /// The answer to request `id`.
   Reply { id: RequestId, reply: Reply },
   /// The last event of a connection: the runner has stopped all work and exits.

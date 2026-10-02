@@ -23,6 +23,7 @@ pub mod invocation;
 pub mod mcp;
 mod model_requirements;
 mod native_models;
+pub mod plan_limits;
 mod provider;
 pub mod stream;
 

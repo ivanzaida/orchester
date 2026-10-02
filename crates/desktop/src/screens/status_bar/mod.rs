@@ -8,6 +8,7 @@ mod hint;
 mod item;
 mod mcp_item;
 mod open;
+mod plan_limits;
 mod popover;
 mod runner_item;
 mod timed;
@@ -49,6 +50,8 @@ const POPOVER_GAP: f32 = 9.0;
 /// The open project, when there is one.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectBar {
+  pub project_name: String,
+  pub connections: crate::plan_limits::Connections,
   pub repo_root: PathBuf,
   pub runner: RunnerStatus,
   /// Queued tasks; `None` while the tasks are read.
@@ -99,8 +102,26 @@ impl Component for StatusBar {
       .as_ref()
       .map(|project| project.runner.state_for(&project.repo_root));
     let hints = hint::Hints::new(&self.hint, &self.anchors);
+    let readings = WindowFeed::of(ctx).limits.get().0;
+    let limits = plan_limits::Props {
+      project_name: props
+        .project
+        .as_ref()
+        .map_or_else(String::new, |project| project.project_name.clone()),
+      connections: props
+        .project
+        .as_ref()
+        .map_or_else(Default::default, |project| project.connections.clone()),
+      readings,
+      brief: false,
+    };
+    // The bar spans the window; reading its width re-renders the bar as the window resizes.
+    let width = ctx.window().logical_width();
+    // The left group takes the room the right group leaves and never more: its activity gives
+    // way with an ellipsis instead of running under the right group.
     let mut left = Row::new()
       .flex(1.0)
+      .clip()
       .height(Dimension::Pct(100.0))
       .align_items(Alignment::Center);
     if let Some(project) = &props.project {
@@ -132,7 +153,7 @@ impl Component for StatusBar {
       .background(PaletteColor::SurfaceBase)
       .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(left)
-      .child(counts(ctx, (props.project.as_ref(), mcp), &opener, &hints))
+      .child(counts(ctx, (props.project.as_ref(), mcp), &opener, &hints, (&limits, width)))
       .with_children(popover)
       // A hint would cover the popover it belongs to.
       .with_children(hints.popup().filter(|_| !self.popover.get()))

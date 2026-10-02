@@ -239,14 +239,16 @@ impl Component for ConnectionsScreen {
     let work = work_action(ctx);
     let pick = pick_action(ctx);
     let reload = revision.clone();
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("project shell provides navigation");
+    let changed = nav.clone();
     ctx.watch(&work.state(), move |state| {
       if !state.is_pending() && state.data.is_some() {
         reload.update(|revision| *revision += 1);
+        changed.resources_changed();
       }
     });
-    let nav = ctx
-      .use_context::<ProjectNav>()
-      .expect("the project shell provides ProjectNav");
     let dialog = if nav.take_add_github() {
       DialogMode::AddGitHub
     } else {
@@ -478,6 +480,7 @@ impl ConnectionsScreen {
         // The saved connection is shown in place of the one shown before it was saved.
         nav.replace(view.page(Some(id)));
         revision.update(|revision| *revision += 1);
+        nav.resources_changed();
         saved.set(DialogMode::Closed);
       }),
       retype: Arc::new(move |kind| {
