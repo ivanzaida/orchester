@@ -246,21 +246,23 @@ windows of one model (`seven_day_opus`, `seven_day_sonnet`, …) are not shown.
 ### ORC-30 · Tasks list: select tasks, Set pipeline, Run selected · branch `claude/orc30` (UI)
 
 Built in Orchester run #10 (`orchester/orc-30-run-2`, on the old base `37716df`) and merged with master on
-2026-10-02 on `claude/orc30`. Row and select-all selection with the ready/incomplete split, readiness reasons, Set
-pipeline (published pipelines, drafts only, skipped tasks explained), search by title/id/brief, the pipeline filter
-and sort combined with the tabs, and Run selected opening the parallel/sequential scheduling review (editable order,
-task limits, aggregate token cap) that queues each task exactly once: groups are stored atomically and first runs
-use stable first-run keys, so a retry never starts a task twice; the runner keeps the reviewed concurrency and its
-agent slots. Undrawn states (assignment, review keyboard Move/Undo, waiting reasons) are documented as implemented,
-not drawn yet. The run passed Implement, Check and Review; its Verify failed on design mismatches (the task order
-started about 12px high, the settings were denser than the design), fixed on `claude/orc30` after the merge.
+2026-10-02 on `claude/orc30` (merge `162206c`). Row and select-all selection with the ready/incomplete split,
+readiness reasons, Set pipeline (published pipelines, drafts only, skipped tasks explained), search by title/id/brief,
+the pipeline filter and sort combined with the tabs, and Run selected opening the parallel/sequential scheduling review
+(editable order, task limits, aggregate token cap) that queues each task exactly once: groups are stored atomically
+and first runs use stable first-run keys, so a retry never starts a task twice; the runner keeps the reviewed
+concurrency and its agent slots. Undrawn states (assignment, review keyboard Move/Undo, waiting reasons) are
+documented as implemented, not drawn yet. The row of the task New task's Create just made stays highlighted next to
+the selection checkboxes. The run passed Implement, Check and Review; its Verify failed on design mismatches (the
+task order started about 12px high, the settings were denser than the design). Both were fixed on `claude/orc30`
+(`9971dbf`) and compared by the implementer only; the remaining differences seen were 2–3px (the token read-back's
+line box, the page heading) and data the fixture lacks (merge dependencies).
 Tests: `cargo test -p orchester-core --test task_groups task_group`, `cargo test -p orchester-store --test
 task_groups task_group`, `cargo test -p orchester-runner --features test-agent --test task_groups task_group`,
-`cargo test -p orchester-desktop --test form_keyboard task_bulk`, `cargo test -p orchester-desktop --test tasks
-task_bulk`.
+`cargo test -p orchester-desktop --test form_keyboard task_bulk`, `cargo test -p orchester-desktop --test tasks task`.
 
 **Done when** an independent design verifier reports no blocking or major mismatches against Tasks `J9467` and the
-scheduling reviews `W1Dq6` (parallel) and `IyJ5a` (sequential); then move this entry to *Done*.
+scheduling reviews `W1Dq6` (parallel) and `IyJ5a` (sequential); then move this entry to *Done*. Not verified yet.
 
 ## N · Native agent (P1 in progress)
 
