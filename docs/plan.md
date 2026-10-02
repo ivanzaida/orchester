@@ -402,11 +402,17 @@ ORC-61 · Conversation merged with Activity, Send now and following live (absorb
   tool event splits a group (also in *Tools*); a declined MCP call, a memory one too, is a problem row; *Messages*
   counts only the matches it shows; a queued message for an agent the pipeline no longer offers is not named with an
   empty name; a Codex message accepted by `turn/steer` but not taken before `turn/completed` is delivered at the turn's
-  end, never sent again (Codex records it into the thread as the turn finishes).
+  end, never sent again (Codex records it into the thread as the turn finishes). Second review (2026-10-03): a message
+  on its way to one agent goes into no other agent's prompt until that agent ends; an acceptance Codex sends after
+  `turn/completed` still delivers at the turn's end; *Send after this turn* and the runner's late delivery change a
+  message only while it stands as read (`ConversationStore::change_delivery`), so a race never fails the step;
+  master merged again for the Changes tab count.
 - Tests: `cargo test -p orchester-runner --features test-agent --test send_now send_`, `--test conversation
   conversation`; `cargo test -p orchester-desktop --test timeline timeline_`, `--test conversation conversation`,
   `--test form_keyboard` with `conversation`, `composer_`, `activity_`, `multiline_command`, `tool_approval`,
-  `run_permissions`, `task_graph`; `-p orchester-core --test app_server turn`.
+  `run_permissions`, `task_graph`, `changes`, `integration`; `--test changes c`; `-p orchester-core --test app_server
+  turn`; `-p orchester-runner --features test-agent --test send_now_delivery send_now_`; `-p orchester-store --test
+  conversation conversation`.
 - **Differs from the design:** no *Memory* tab yet (its screens come with Memory 3/3), so result cards link Changes and
   Summary only; a failed step starts open; matched words are not highlighted. An approval card sits after the tool
   call that asked for it when the CLI reported that call first (they are matched by time, not by call).
