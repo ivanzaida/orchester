@@ -147,12 +147,12 @@ impl Component for StatusBar {
       project.lost_to_runner.unwrap_or_else(|| project.runner.interrupted())
     });
     // A request waiting for a person comes before the latest activity, and any run that auto-approves after it.
+    // A runner problem comes first: nothing can be answered without the runner.
     let queue = ctx.use_context::<ApprovalQueue>();
-    let waiting = props
-      .project
-      .as_ref()
-      .map(|project| approvals_item::approvals(ctx, &project.approvals, queue.as_ref()))
-      .unwrap_or_default();
+    let waiting = match (&props.project, &slot) {
+      (_, bar::ActivitySlot::RunnerProblem(_)) | (None, _) => Vec::new(),
+      (Some(project), _) => approvals_item::approvals(ctx, &project.approvals, queue.as_ref()),
+    };
     left = if waiting.is_empty() {
       left.with_children(activity_slot(
         ctx,
