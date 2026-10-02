@@ -4,18 +4,24 @@
 //! or the step's earlier session continued — handed to a [`worker::Worker`] of its own.
 
 mod app_server;
-mod command;
+mod approval;
+mod claude_approval;
+mod cli_version;
 mod end;
 mod mcp;
+mod memory;
 mod skills;
+mod start;
+mod stderr;
 pub(super) mod worker;
 
 use orchester_core::{
-  connection::stream::{AgentEvent, AgentStream, InvocationOutcome, RunnerProblem},
+  connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, RunnerProblem},
   conversation::{Message, latest_question},
   id::StepExecutionId,
+  memory::MemoryStore,
   resource::ModelId,
-  run::{Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
+  run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
   store::{ActivityStore, ConversationStore, RunStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -25,7 +31,7 @@ use tokio::sync::mpsc;
 
 use self::{
   app_server::AppServerSession,
-  worker::{Stop, Worker},
+  worker::{Stop, Transport, Worker},
 };
 use super::{
   record::RecordError,
@@ -213,15 +219,25 @@ impl RunTask {
         return Ok(true);
       }
     };
-    let mut start = match self.command(execution, &continuation, (invocation.id, workspace.path())) {
+    let start = self
+      .agent_index()
+      .map_err(|detail| RunnerProblem::CouldNotStart { detail })
+      .and_then(|index| self.command(execution, &continuation, (invocation.id, workspace.path()), index));
+    let mut start = match start {
       Ok(start) => start,
       Err(problem) => {
         self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted)?;
         return Ok(true);
       }
     };
+    self.db.save_invocation_permissions(invocation.id, &start.permissions)?;
+    invocation.permissions = Some(start.permissions.clone());
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
-    self.record_left_out(&invocation, std::mem::take(&mut start.mcp_left_out))?;
+    self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
+    self.db.save_edit_progress(invocation.id, &EditProgress::default())?;
+    self.db.save_injected_memory(invocation.id, &start.memory)?;
+    self.report_unreadable_memory(&invocation)?;
+    self.record_left_out(&invocation, std::mem::take(&mut start.left_out))?;
     let process = match Supervised::start(&start.command) {
       Ok(process) => process,
       Err(error) => {
@@ -234,12 +250,12 @@ impl RunTask {
     };
     // Messages that never reached a started agent stay queued.
     self.deliver(execution, &invocation, std::mem::take(&mut continuation.messages))?;
-    let output = AgentStream::new(start.provider);
-    self.spawn(execution, invocation, (output, process, start), workspace)?;
+    self.spawn(execution, invocation, (process, start), workspace)?;
     Ok(true)
   }
 
-  /// Records that the agent of `invocation` works without the MCP servers of `left_out`.
+  /// Records what the agent of `invocation` works without: the MCP servers and the codebase index
+  /// of `left_out`.
   fn record_left_out(&mut self, invocation: &Invocation, left_out: Vec<AgentEvent>) -> Result<(), ExecutionError> {
     if left_out.is_empty() {
       return Ok(());
@@ -258,23 +274,27 @@ impl RunTask {
     &mut self,
     execution: StepExecutionId,
     invocation: Invocation,
-    (output, process, start): (AgentStream, Supervised, command::AgentStart),
+    (process, start): (Supervised, start::AgentStart),
     workspace: Workspace,
   ) -> Result<(), ExecutionError> {
     let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);
     let (stops, stopped) = mpsc::unbounded_channel();
     let (approvals, decisions) = mpsc::unbounded_channel();
-    let interactive = start.app_server.is_some();
+    let interactive = start.app_server.is_some() || start.claude_approvals.is_some();
     let worker = Worker {
       root: self.root.clone(),
       invocation: invocation.clone(),
-      output,
+      transport: match start.app_server {
+        Some(setup) => Transport::AppServer(Box::new(AppServerSession::new(setup))),
+        None => Transport::Claude(ClaudeStream::with_exemptions(start.claude_exemptions)),
+      },
       process,
       notifier: self.notifier.clone(),
       events: self.worker_events.clone(),
       stops: stopped,
       mcp_file: start.mcp_file,
-      app_server: start.app_server.map(AppServerSession::new),
+      claude_approvals: start.claude_approvals,
+      mcp_secrets: start.mcp_secrets,
       agent: start.agent,
       task: self.task.id(),
       decisions,
@@ -304,8 +324,9 @@ impl RunTask {
 
   /// Starts `execution` if it has not started; a follow-up resumes the session of its step's passed
   /// execution. One that was stopped mid-step, that a reviewer sent back, that asked a question or
-  /// that finished its turn while messages came in continues: the session of its last invocation,
-  /// if the CLI reported one, is resumed. Either way the messages queued for its agent go with it.
+  /// that finished its turn while messages came in continues its earlier session. Recovery of an
+  /// upstream step starts dependent sessions afresh while retaining their saved work. Either way
+  /// the messages queued for its agent go with it.
   fn begin_step(&mut self, execution: StepExecutionId) -> Result<Continuation, ExecutionError> {
     let messages = self.queued_for(execution)?;
     let status = self.run.execution(execution).map(|execution| execution.status());
@@ -388,7 +409,7 @@ impl RunTask {
       {
         return Ok(Some(session));
       }
-      earlier = self.run.previous_execution(execution);
+      earlier = self.run.recovered_execution(execution);
     }
     Ok(None)
   }

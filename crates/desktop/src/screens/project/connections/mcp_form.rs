@@ -1,6 +1,7 @@
 //! Fields of the MCP server dialog (`cJGKL` in 04.E `yRb2k`, 04.E2 `Qvhc6`; errors as in 04.E3
 //! `Hpycl`): name and type, transport and who starts or reaches the server, then a program's file,
-//! folder, arguments and variables, or a URL and its bearer token. Where a secret goes is said in a
+//! folder, arguments and variables, or a URL and its bearer token, then the tools that run without
+//! asking (no frame draws them; they take the arguments' area). Where a secret goes is said in a
 //! notice.
 
 use std::sync::Arc;
@@ -70,6 +71,16 @@ impl McpDialog {
       TransportChoice::Http => column.with_children(self.http_fields(ctx, errors)),
     };
     column
+      .child(area_field(
+        ctx,
+        (
+          "mcp-exempt-tools",
+          "connections.mcp.exemptTools",
+          hint(ctx, "connections.mcp.dialog.exemptToolsHint"),
+        ),
+        &self.exempt_tools,
+        errors.exempt_tools.as_ref(),
+      ))
       .child(Notice::new(
         Icon::ShieldCheck,
         ctx.t("connections.mcp.dialog.secretsTitle"),

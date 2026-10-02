@@ -9,7 +9,12 @@ use crate::{
     import::{RepositoryDraft, RepositoryOrigin},
   },
   blob::ContentHash,
-  connection::{Connection, mcp::McpServer, stream::AgentEvent},
+  code_index::{CodeIndexSetting, CodeIndexUse},
+  connection::{
+    Connection,
+    mcp::{McpServer, UnreadableMcpServer},
+    stream::AgentEvent,
+  },
   conversation::Message,
   diff::RevisionDiff,
   id::{ConnectionId, IdempotencyKey, InvocationId, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
@@ -17,6 +22,7 @@ use crate::{
   integration::RunMerge,
   limits::ProjectLimits,
   name::Name,
+  permission::LaunchPermissions,
   pull_request::{PullRequest, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
   resource::{
@@ -24,8 +30,8 @@ use crate::{
   },
   revision::Revision,
   run::{
-    ActivityEntry, Checkpoint, Invocation, InvocationPrompt, ListedRun, NewRun, Plan, Run, RunEvent, RunNumber,
-    StepOutput,
+    ActivityEntry, Checkpoint, EditProgress, Invocation, InvocationPrompt, ListedRun, NewRun, Plan, Run, RunEvent,
+    RunNumber, StepOutput,
   },
   secret::Secret,
   task::{Task, TaskDetails},
@@ -79,6 +85,12 @@ pub trait SettingsStore {
   fn repository_agent_files(&self) -> Result<RepositoryAgentFiles, Self::Error>;
 
   fn save_repository_agent_files(&mut self, setting: RepositoryAgentFiles) -> Result<(), Self::Error>;
+
+  /// Whether the project's agents get the code index (Project settings › Code index); on until it
+  /// was changed.
+  fn code_index(&self) -> Result<CodeIndexSetting, Self::Error>;
+
+  fn save_code_index(&mut self, setting: CodeIndexSetting) -> Result<(), Self::Error>;
 }
 
 /// Content-addressed project blobs (`docs/architecture/storage.md`, "Blobs"), e.g. a skill's
@@ -205,8 +217,12 @@ pub trait McpServerStore {
 
   fn mcp_server(&self, id: ConnectionId) -> Result<Option<McpServer>, Self::Error>;
 
-  /// All MCP servers of the project, ordered by name.
+  /// The MCP servers of the project that can be read back, ordered by name; [`Self::unreadable_mcp_servers`]
+  /// lists the others.
   fn mcp_servers(&self) -> Result<Vec<McpServer>, Self::Error>;
+
+  /// The stored MCP servers that cannot be read back, ordered by name, and why.
+  fn unreadable_mcp_servers(&self) -> Result<Vec<UnreadableMcpServer>, Self::Error>;
 }
 
 /// Project secrets' metadata. Values are never stored here: they are in the OS keychain
@@ -400,6 +416,15 @@ pub trait ActivityStore {
     now: Timestamp,
   ) -> Result<Invocation, Self::Error>;
 
+  /// Records the exact enforced policy used to prepare an open agent invocation, once, before
+  /// its process starts. Existing snapshots cannot be replaced, including by save_invocation.
+  /// Older invocations remain unknown; this method must not infer or backfill their policy.
+  fn save_invocation_permissions(
+    &mut self,
+    invocation: InvocationId,
+    permissions: &LaunchPermissions,
+  ) -> Result<(), Self::Error>;
+
   /// Stores the session, usage, end and outcome of an existing invocation.
   fn save_invocation(&mut self, invocation: &Invocation) -> Result<(), Self::Error>;
 
@@ -414,6 +439,19 @@ pub trait ActivityStore {
   /// prompts had sources.
   fn invocation_prompt(&self, invocation: InvocationId) -> Result<Option<InvocationPrompt>, Self::Error>;
 
+  /// Stores what `invocation` got of the code index, once, before its CLI starts.
+  fn save_invocation_code_index(&mut self, invocation: InvocationId, used: &CodeIndexUse) -> Result<(), Self::Error>;
+
+  /// What `invocation` got of the code index; `None` for one recorded before it was kept.
+  fn invocation_code_index(&self, invocation: InvocationId) -> Result<Option<CodeIndexUse>, Self::Error>;
+
+  /// Stores what `invocation` used before its agent first changed a file, replacing what was
+  /// stored.
+  fn save_edit_progress(&mut self, invocation: InvocationId, progress: &EditProgress) -> Result<(), Self::Error>;
+
+  /// What `invocation` used before its first edit; `None` for one recorded before it was kept.
+  fn edit_progress(&self, invocation: InvocationId) -> Result<Option<EditProgress>, Self::Error>;
+
   /// Appends `events` of `invocation` to its run's transcript, atomically, and returns the
   /// sequence of the last one (of the transcript so far when `events` is empty).
   fn append_activity(
@@ -424,6 +462,10 @@ pub trait ActivityStore {
 
   /// Transcript entries of a run after sequence `after` (0: from the start), in order.
   fn activity(&self, run: RunId, after: u64) -> Result<Vec<ActivityEntry>, Self::Error>;
+
+  /// The last message the agent of `execution` wrote in `run`'s transcript, with its sequence: its
+  /// final message once its latest invocation ended.
+  fn last_agent_message(&self, run: RunId, execution: StepExecutionId) -> Result<Option<(u64, String)>, Self::Error>;
 
   /// Tokens that counted toward budgets in every run of the project since `since`, from the
   /// usage each completed turn reported.

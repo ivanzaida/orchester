@@ -9,7 +9,7 @@ use lurq::core::Signal;
 use orchester_core::{
   connection::AgentProvider,
   id::{StepExecutionId, TaskId},
-  run::{StepStatus, TokenUsage},
+  run::{EditProgress, StepStatus, TokenUsage},
   time::Timestamp,
 };
 
@@ -59,6 +59,9 @@ pub(super) struct Header {
   /// `None` while an invocation runs.
   pub(super) ended: Option<Timestamp>,
   pub(super) usage: TokenUsage,
+  /// What the execution used before its first edit; `None` for a tool step or launches recorded
+  /// before it was kept.
+  pub(super) before_edit: Option<EditProgress>,
   pub(super) status: Option<StepStatus>,
   pub(super) open: bool,
 }
@@ -162,6 +165,7 @@ fn header(run: &RunView, execution: StepExecutionId, status: StepStatus, toggles
       invocations.last().and_then(|invocation| invocation.ended_at)
     },
     usage: invocations.iter().map(|invocation| invocation.usage).sum(),
+    before_edit: run.index.execution_edit(execution),
     status: Some(status),
     open: toggles.is_open(&key, running || status.is_open()),
   })

@@ -23,7 +23,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
 
-use self::support::{Setup, project, reported, scheduler, wait_for};
+use self::support::{Setup, project, reported, scheduler, threads, wait_for};
 
 /// Publishes the Builder profile again, allowing it to write to `entries` besides its worktree.
 fn allow_folders(root: &Path, entries: &[String]) {
@@ -89,14 +89,12 @@ async fn writable_folders_reach_codex_as_writable_roots_and_are_created() {
   allow_folders(root, &entries);
   let (id, run) = run(root, project.task).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
-  let argv = reported(&ProjectDb::open(root).expect("open"), id, "argv: ");
-  let roots = format!(
-    "-c sandbox_workspace_write.writable_roots=[{},{}]",
-    toml(&paths[0]),
-    toml(&paths[1])
-  );
+  let db = ProjectDb::open(root).expect("open");
+  let argv = reported(&db, id, "argv: ");
+  // After the worktree, which App Server reports as its environment's workspace root.
+  let roots = format!(",{},{}]", toml(&paths[0]), toml(&paths[1]));
   assert!(argv[0].contains(&roots), "{roots} in {argv:?}");
-  assert!(argv[0].contains("--sandbox workspace-write"), "{argv:?}");
+  assert_eq!(threads(&db, id)[0]["sandbox"], "workspace-write");
   assert!(paths[0].is_dir(), "created before the agent started");
 }
 
@@ -115,7 +113,9 @@ async fn writable_folders_reach_claude_as_one_add_dir_each() {
   let argv = reported(&ProjectDb::open(root).expect("open"), id, "argv: ");
   let add = format!("--add-dir {} --add-dir {}", paths[0].display(), paths[1].display());
   assert!(argv[0].contains(&add), "{add} in {argv:?}");
-  assert!(argv[0].contains("--permission-mode acceptEdits"), "{argv:?}");
+  // With allowed commands the step edits by rule, one for the worktree and one for each folder.
+  assert!(argv[0].contains("--permission-mode default"), "{argv:?}");
+  assert_eq!(argv[0].matches(" Edit(/").count(), 3, "{argv:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

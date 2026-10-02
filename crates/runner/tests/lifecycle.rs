@@ -21,7 +21,7 @@ use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
 use self::support::{
-  PATIENCE, Setup, killed_mid_run, project, reported, scheduler, wait_for, wait_for_idle, wait_for_turns,
+  PATIENCE, Setup, killed_mid_run, project, scheduler, threads, wait_for, wait_for_idle, wait_for_turns,
 };
 
 fn slots(count: u32) -> NonZeroU32 {
@@ -101,12 +101,9 @@ async fn lifecycle_reconnect_after_a_killed_runner_continues_from_the_checkpoint
   // The killed agent's invocation is closed, and the continue resumed its session.
   assert_eq!(invocations[0].outcome, Some(InvocationOutcome::Terminated));
   assert!(invocations[0].ended_at.is_some());
-  let argv = reported(&db, run, "argv: ");
-  let resumed = argv.last().expect("two launches");
-  assert!(
-    resumed.contains("exec resume") && resumed.contains("fake-thread-1"),
-    "{argv:?}"
-  );
+  let threads = threads(&db, run);
+  let resumed = threads.last().expect("two launches");
+  assert_eq!(resumed["threadId"], "fake-thread-1", "{threads:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -317,7 +314,10 @@ async fn lifecycle_immediate_shutdown_interrupts_a_run_saving_at_a_checkpoint() 
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lifecycle_daily_budget_stops_the_run_and_refuses_new_work() {
-  let project = project(&Setup::new("Work in turns."));
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    ..Setup::new("Work in turns.")
+  });
   let root = project.repo.path();
   let mut db = ProjectDb::open(root).expect("open");
   let tight = ProjectLimits::new(

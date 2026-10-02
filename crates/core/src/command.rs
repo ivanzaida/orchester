@@ -55,6 +55,18 @@ impl PartialEq for SecretVariable {
 
 impl Eq for SecretVariable {}
 
+/// Removes process secrets, including their JSON-escaped form, before text leaves the process boundary.
+pub fn redact_secrets(text: &str, secrets: &[SecretVariable]) -> String {
+  let mut secrets: Vec<_> = secrets.iter().filter(|secret| !secret.expose().is_empty()).collect();
+  secrets.sort_by_key(|secret| std::cmp::Reverse(secret.expose().len()));
+  secrets.iter().fold(text.to_owned(), |text, secret| {
+    let encoded = serde_json::to_string(secret.expose()).expect("a string always serializes to JSON");
+    text
+      .replace(&encoded[1..encoded.len() - 1], "<redacted>")
+      .replace(secret.expose(), "<redacted>")
+  })
+}
+
 /// A program to run to completion. Everything that differs from the calling process is spelled
 /// out here: arguments, working directory, environment changes and standard input.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -63,7 +63,7 @@ fn run(repo_root: &std::path::Path, id: ConnectionId, work: Work) -> Result<(), 
   match work {
     Work::Recheck => recheck_in(repo_root, id).map_err(|error| {
       tracing::error!(%error, "cannot store the connection check");
-      messages::store_error(&error)
+      error.message()
     }),
     Work::Program(executable) => choose_program_in(repo_root, id, executable).map_err(|error| {
       tracing::error!(%error, "cannot point the connection at the chosen program");

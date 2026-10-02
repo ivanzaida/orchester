@@ -56,7 +56,17 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<
   let (notifications, outgoing) = mpsc::unbounded_channel();
   // Replies of requests answered later travel with the notifications.
   let replies = notifications.clone();
-  let scheduler = Scheduler::new(project_root, Notifier::new(notifications), Arc::new(KeychainVault));
+  let relay = std::env::current_exe()
+    .inspect_err(
+      |error| tracing::error!(%error, "cannot find the runner's own program for Claude Code's permission prompt"),
+    )
+    .ok();
+  let scheduler = Scheduler::new(
+    project_root,
+    Notifier::new(notifications),
+    Arc::new(KeychainVault),
+    relay,
+  );
   // A frame read cannot be interrupted without losing data, so requests are read on their own task.
   let (incoming, requests) = mpsc::unbounded_channel::<Incoming>();
   let reading = tokio::spawn(async move {

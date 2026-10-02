@@ -11,6 +11,7 @@ mod support;
 use std::{future::Future, task::Poll, time::Duration};
 
 use orchester_core::{
+  connection::AgentProvider,
   id::IdempotencyKey,
   run::{PauseReason, RaisedLimits, RunLimit, RunStatus},
   store::RunStore,
@@ -25,6 +26,7 @@ async fn settling_a_raise_waits_for_the_task_that_stopped_the_run() {
   let hold = hold_first_settled();
   let project = project(&Setup {
     budget: 5_000,
+    provider: AgentProvider::ClaudeCodeCli,
     ..Setup::new("Work in turns.")
   });
   let root = project.repo.path();

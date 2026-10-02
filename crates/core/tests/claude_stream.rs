@@ -5,14 +5,11 @@
 //! probe recorded (`.tmp/cli-probe/REPORT.md`) and are not captured output.
 
 use orchester_core::{
-  connection::{
-    AgentProvider,
-    stream::{
-      AgentEvent, AgentStream, ClaudeStream, CommandStatus, FileChange, FileChangeKind, InvocationOutcome,
-      InvocationTracker, OutputStream,
-    },
+  connection::stream::{
+    AgentEvent, ClaudeStream, CommandStatus, FileChange, FileChangeKind, InvocationOutcome, InvocationTracker,
+    OutputStream,
   },
-  run::TokenUsage,
+  run::{StepOutcome, StepResult, TokenUsage},
 };
 
 fn replay(fixture: &str) -> Vec<AgentEvent> {
@@ -167,8 +164,74 @@ fn claude_stream_counts_what_only_the_result_reports() {
         }
       },
       AgentEvent::Message { text: "Done.".into() },
+      AgentEvent::TurnFailed {
+        message: "Claude Code ended its turn without the step result: a JSON object with outcome and summary".into()
+      },
     ]
   );
+}
+
+fn result_line(text: &str, structured: Option<&str>) -> String {
+  let structured = structured.map_or_else(String::new, |output| format!(r#","structured_output":{output}"#));
+  format!(
+    r#"{{"type":"result","subtype":"success","is_error":false,"result":{},"usage":{{"input_tokens":0,"output_tokens":0}},"permission_denials":[]{structured}}}"#,
+    serde_json::to_string(text).expect("JSON")
+  )
+}
+
+/// The events of `line` and the outcome and summary of the step result the last message holds.
+fn last_message(line: &str) -> (Vec<AgentEvent>, Option<(StepOutcome, String)>) {
+  let mut stream = ClaudeStream::default();
+  let events = stream.parse(OutputStream::Stdout, line);
+  let result = tracked(&events)
+    .last_message()
+    .and_then(StepResult::parse)
+    .map(|result| (result.outcome, result.summary));
+  (events, result)
+}
+
+#[test]
+fn claude_stream_takes_the_structured_output_as_the_step_result() {
+  let question = r#"{"outcome":"question","summary":"Which database?"}"#;
+  let (events, result) = last_message(&result_line("I need a decision first.", Some(question)));
+  assert_eq!(result, Some((StepOutcome::Question, "Which database?".to_owned())));
+  assert!(
+    !events
+      .iter()
+      .any(|event| matches!(event, AgentEvent::TurnFailed { .. }))
+  );
+}
+
+#[test]
+fn claude_stream_takes_the_result_that_closes_prose_or_fails_the_turn() {
+  let failed = r#"{"outcome":"failed","summary":"The build breaks."}"#;
+  for text in [
+    format!("The build breaks at step 3.\n\n{failed}"),
+    format!("The build breaks.\n\n```json\n{failed}\n```\n"),
+    "Report:\n{\n  \"outcome\": \"failed\",\n  \"summary\": \"The build breaks.\"\n}".to_owned(),
+  ] {
+    let (_, result) = last_message(&result_line(&text, None));
+    assert_eq!(
+      result,
+      Some((StepOutcome::Failed, "The build breaks.".to_owned())),
+      "{text}"
+    );
+  }
+  for text in [
+    "All done, it works.".to_owned(),
+    format!("{failed}\nAnd one more thing."),
+    r#"Result: {"outcome":"done","summary":"x"}"#.to_owned(),
+    r#"{"outcome":"maybe","summary":"x"}"#.to_owned(),
+  ] {
+    let (events, _) = last_message(&result_line(&text, None));
+    assert!(
+      events
+        .iter()
+        .any(|event| matches!(event, AgentEvent::TurnFailed { .. })),
+      "{text} must not pass"
+    );
+    assert!(!tracked(&events).outcome(Some(0)).is_success(), "{text}");
+  }
 }
 
 #[test]
@@ -188,6 +251,15 @@ fn claude_stream_reports_permission_denials_and_goes_on() {
   let tracker = tracked(&events);
   assert_eq!(tracker.outcome(Some(0)), InvocationOutcome::Completed);
   assert_eq!(tracker.usage().counted(), 25 + 45);
+  // The result that closes the prose becomes the last message.
+  let result = tracker
+    .last_message()
+    .and_then(StepResult::parse)
+    .expect("a step result");
+  assert_eq!(
+    (result.outcome, result.summary.as_str()),
+    (StepOutcome::Done, "Went on without the page.")
+  );
 }
 
 #[test]
@@ -211,7 +283,7 @@ fn claude_stream_reads_an_error_result_as_a_failed_turn() {
 
 #[test]
 fn claude_stream_keeps_what_it_does_not_understand() {
-  let mut stream = AgentStream::new(AgentProvider::ClaudeCodeCli);
+  let mut stream = ClaudeStream::default();
   for (output, line) in [
     (OutputStream::Stdout, "not json"),
     (OutputStream::Stdout, r#"{"type":"system","subtype":"hook_started"}"#),

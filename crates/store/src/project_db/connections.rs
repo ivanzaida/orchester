@@ -1,12 +1,12 @@
 //! The `connections` table. No credentials are stored: the agent CLIs and the GitHub CLI keep
-//! their own login.
+//! their own login, and a native agent connection names the project secret holding its key.
 
 use std::path::PathBuf;
 
 use orchester_core::{
   connection::{
-    AgentProvider, CheckResult, Connection, ConnectionCheck, ConnectionKind, GitHubCheck, GitHubCheckResult,
-    GitHubHost, LastCheck,
+    AgentEndpoint, AgentProvider, ApiEndpoint, CheckResult, Connection, ConnectionCheck, ConnectionKind, GitHubCheck,
+    GitHubCheckResult, GitHubHost, LastCheck, ModelRequirements,
   },
   id::ConnectionId,
   name::Name,
@@ -30,10 +30,19 @@ const GH_CLI: &str = "gh_cli";
 const SETTINGS_SCHEMA: u32 = 1;
 const CHECK_SCHEMA: u32 = 1;
 
-/// Settings of an agent provider connection.
+/// Settings of an agent CLI connection.
 #[derive(Serialize, Deserialize)]
 struct ProviderSettings {
   executable: String,
+  /// Absent before model requirements were recorded, and while none is.
+  #[serde(default, skip_serializing_if = "ModelRequirements::is_empty")]
+  model_requirements: ModelRequirements,
+}
+
+/// Settings of a native agent connection: its model API.
+#[derive(Serialize, Deserialize)]
+struct NativeSettings {
+  api: ApiEndpoint,
 }
 
 /// Settings of a GitHub connection.
@@ -129,16 +138,32 @@ struct Columns {
 
 impl Columns {
   fn of(connection: &Connection) -> Result<Self, StoreError> {
-    let executable = path_text("connection executable", connection.executable())?.to_owned();
-    let (kind, provider, settings) = match connection.kind() {
-      ConnectionKind::Agent(provider) => (
-        AGENT_PROVIDER,
-        provider_text(*provider),
-        encode_json("connection settings", SETTINGS_SCHEMA, &ProviderSettings { executable })?,
-      ),
-      ConnectionKind::GitHub { host } => {
+    let (kind, provider, settings) = match (connection.kind(), connection.endpoint()) {
+      (ConnectionKind::Agent(provider), AgentEndpoint::Program(executable)) => {
+        let settings = ProviderSettings {
+          executable: path_text("connection executable", executable)?.to_owned(),
+          model_requirements: connection.model_requirements().clone(),
+        };
+        (
+          AGENT_PROVIDER,
+          provider_text(*provider),
+          encode_json("connection settings", SETTINGS_SCHEMA, &settings)?,
+        )
+      }
+      (ConnectionKind::Agent(provider), AgentEndpoint::Api(api)) => {
+        let settings = NativeSettings { api: api.clone() };
+        (
+          AGENT_PROVIDER,
+          provider_text(*provider),
+          encode_json("connection settings", SETTINGS_SCHEMA, &settings)?,
+        )
+      }
+      (ConnectionKind::GitHub { host }, endpoint) => {
+        let executable = endpoint
+          .program()
+          .expect("a GitHub connection is reached through its program");
         let settings = GitHubSettings {
-          executable,
+          executable: path_text("connection executable", executable)?.to_owned(),
           host: host.clone(),
         };
         (
@@ -199,29 +224,39 @@ impl StoredRow {
   }
 
   fn into_connection(self) -> Result<Connection, StoreError> {
-    let (kind, executable, last_check) = match self.kind.as_str() {
+    let ((kind, endpoint, last_check), requirements) = match self.kind.as_str() {
       AGENT_PROVIDER => self.agent_parts()?,
-      GITHUB => self.github_parts()?,
+      GITHUB => (self.github_parts()?, ModelRequirements::default()),
       other => return Err(corrupt("connection kind", other)),
     };
     Connection::from_stored(
       parse("connection id", &self.id)?,
       Name::new(&self.name).map_err(|error| corrupt("connection name", error))?,
       kind,
-      PathBuf::from(executable),
+      endpoint,
       last_check,
       Timestamp::from_unix_millis(self.created_at),
     )
+    .map(|connection| connection.with_model_requirements(requirements))
     .map_err(|error| corrupt("connection", error))
   }
 
-  fn agent_parts(&self) -> Result<Parts, StoreError> {
-    let settings: ProviderSettings = decode_json("connection settings", SETTINGS_SCHEMA, &self.settings)?;
+  fn agent_parts(&self) -> Result<(Parts, ModelRequirements), StoreError> {
+    let provider = parse_provider(&self.provider)?;
     let last_check = self
       .check::<CheckResult>()?
       .map(|(at, result)| LastCheck::Agent(ConnectionCheck { at, result }));
-    let kind = ConnectionKind::Agent(parse_provider(&self.provider)?);
-    Ok((kind, settings.executable, last_check))
+    let kind = ConnectionKind::Agent(provider);
+    if provider.is_native() {
+      let settings: NativeSettings = decode_json("connection settings", SETTINGS_SCHEMA, &self.settings)?;
+      return Ok((
+        (kind, AgentEndpoint::Api(settings.api), last_check),
+        ModelRequirements::default(),
+      ));
+    }
+    let settings: ProviderSettings = decode_json("connection settings", SETTINGS_SCHEMA, &self.settings)?;
+    let endpoint = AgentEndpoint::Program(PathBuf::from(settings.executable));
+    Ok(((kind, endpoint, last_check), settings.model_requirements))
   }
 
   fn github_parts(&self) -> Result<Parts, StoreError> {
@@ -233,7 +268,11 @@ impl StoredRow {
       .check::<GitHubCheckResult>()?
       .map(|(at, result)| LastCheck::GitHub(GitHubCheck { at, result }));
     let kind = ConnectionKind::GitHub { host: settings.host };
-    Ok((kind, settings.executable, last_check))
+    Ok((
+      kind,
+      AgentEndpoint::Program(PathBuf::from(settings.executable)),
+      last_check,
+    ))
   }
 
   fn check<T: DeserializeOwned>(&self) -> Result<Option<(Timestamp, T)>, StoreError> {
@@ -247,13 +286,15 @@ impl StoredRow {
   }
 }
 
-/// Kind, executable and last check of a stored connection.
-type Parts = (ConnectionKind, String, Option<LastCheck>);
+/// Kind, endpoint and last check of a stored connection.
+type Parts = (ConnectionKind, AgentEndpoint, Option<LastCheck>);
 
 const fn provider_text(provider: AgentProvider) -> &'static str {
   match provider {
     AgentProvider::CodexCli => "codex_cli",
     AgentProvider::ClaudeCodeCli => "claude_code_cli",
+    AgentProvider::AnthropicApi => "anthropic_api",
+    AgentProvider::OpenAiApi => "openai_api",
   }
 }
 
@@ -261,6 +302,8 @@ fn parse_provider(value: &str) -> Result<AgentProvider, StoreError> {
   match value {
     "codex_cli" => Ok(AgentProvider::CodexCli),
     "claude_code_cli" => Ok(AgentProvider::ClaudeCodeCli),
+    "anthropic_api" => Ok(AgentProvider::AnthropicApi),
+    "openai_api" => Ok(AgentProvider::OpenAiApi),
     other => Err(corrupt("connection provider", other)),
   }
 }

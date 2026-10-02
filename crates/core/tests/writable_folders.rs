@@ -261,72 +261,40 @@ fn roots() -> Vec<PathBuf> {
   ROOTS.iter().map(PathBuf::from).collect()
 }
 
-fn codex_args(access: RepositoryAccess, resume: Option<&str>, roots: &[PathBuf]) -> Vec<String> {
+fn codex_args(access: RepositoryAccess, roots: &[PathBuf]) -> Vec<String> {
   CodexInvocation {
     executable: Path::new("/bin/codex"),
-    model: "gpt-5.5",
-    reasoning_effort: None,
+    repository: Path::new("/repo"),
     access,
     network: NetworkAccess::Off,
     writable_roots: roots,
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     platform: Platform::Windows,
-    resume,
-    output_schema: None,
     mcp: None,
     agent_files: CodexAgentFiles::Loaded,
   }
   .args()
-  .into_iter()
-  .map(|arg| arg.into_string().expect("unicode"))
-  .collect()
+  .expect("unicode paths")
 }
 
-const CODEX_ROOTS: &str =
-  r#"sandbox_workspace_write.writable_roots=["C:\\repo\\.orchester\\target","/shared/it's \"here\""]"#;
+const CODEX_ROOTS: &str = r#"sandbox_workspace_write.writable_roots=["/repo/.orchester/worktrees/run","C:\\repo\\.orchester\\target","/shared/it's \"here\""]"#;
 
+/// App Server starts new and resumed sessions alike, with the worktree first among the writable roots.
 #[test]
-fn writable_roots_reach_codex_in_new_and_resumed_sessions() {
-  let new = codex_args(RepositoryAccess::Write, None, &roots());
-  let sandbox = new.iter().position(|arg| arg == "--sandbox").expect("sandbox");
+fn writable_roots_reach_codex_beside_the_worktree() {
+  let args = codex_args(RepositoryAccess::Write, &roots());
+  assert_eq!(args.last().map(String::as_str), Some(CODEX_ROOTS), "{args:?}");
+  let read_only = codex_args(RepositoryAccess::ReadOnly, &roots());
   assert_eq!(
-    new[sandbox..],
-    [
-      "--sandbox",
-      "workspace-write",
-      "-c",
-      "windows.sandbox=elevated",
-      "-c",
-      CODEX_ROOTS,
-      "-C",
-      "/repo/.orchester/worktrees/run",
-      "-",
-    ]
+    read_only.last().map(String::as_str),
+    Some("sandbox_workspace_write.writable_roots=[]"),
+    "a read-only sandbox writes nowhere: {read_only:?}"
   );
-  let session = "01a0d831-b556-7730-be9d-2491a9359250";
-  let resumed = codex_args(RepositoryAccess::Write, Some(session), &roots());
-  let mode = resumed
-    .iter()
-    .position(|arg| arg == "sandbox_mode=workspace-write")
-    .expect("sandbox mode");
+  let alone = codex_args(RepositoryAccess::Write, &[]);
   assert_eq!(
-    resumed[mode..],
-    [
-      "sandbox_mode=workspace-write",
-      "-c",
-      "windows.sandbox=elevated",
-      "-c",
-      CODEX_ROOTS,
-      session,
-      "-",
-    ]
+    alone.last().map(String::as_str),
+    Some(r#"sandbox_workspace_write.writable_roots=["/repo/.orchester/worktrees/run"]"#)
   );
-  for args in [
-    codex_args(RepositoryAccess::ReadOnly, None, &roots()),
-    codex_args(RepositoryAccess::Write, None, &[]),
-  ] {
-    assert!(!args.iter().any(|arg| arg.contains("writable_roots")), "{args:?}");
-  }
 }
 
 fn claude_args(permissions: &AgentPermissions, session: ClaudeSession<'_>, roots: &[PathBuf]) -> Vec<String> {
@@ -343,6 +311,8 @@ fn claude_args(permissions: &AgentPermissions, session: ClaudeSession<'_>, roots
     session,
     mcp: None,
     skills: None,
+    code_index: None,
+    approvals: None,
   }
   .args()
   .into_iter()
@@ -374,4 +344,33 @@ fn writable_roots_reach_claude_as_one_add_dir_each_in_new_and_resumed_sessions()
   .with_writable_folders(folders(&[".orchester/target"]));
   let args = claude_args(&read_only, ClaudeSession::New(id), &roots());
   assert!(!args.contains(&"--add-dir".to_owned()), "{args:?}");
+}
+
+#[test]
+fn writable_roots_get_an_edit_rule_where_claude_runs_without_accept_edits() {
+  let commands = AllowedCommands::new(vec![CommandPrefix::new("rm -f build/x").expect("prefix")]).expect("list");
+  let permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(commands),
+    NetworkAccess::On,
+  )
+  .with_writable_folders(folders(&[".orchester/target", "../shared"]));
+  let args = claude_args(&permissions, ClaudeSession::Resume("s-1"), &roots());
+  let allowed = args.iter().position(|arg| arg == "--allowedTools").expect("allowed");
+  let first = args.iter().position(|arg| arg == "--add-dir").expect("add-dir");
+  assert_eq!(
+    args[allowed + 1..first],
+    [
+      "Bash(rm -f build/x:*)",
+      "Edit(//repo/.orchester/worktrees/run/**)",
+      "Edit(//c/repo/.orchester/target/**)",
+      "Edit(//shared/it's \"here\"/**)",
+    ]
+  );
+  // Without allowed commands the step runs in `acceptEdits`, which needs no rule.
+  let asking = AgentPermissions::new(RepositoryAccess::Write, CommandPermission::AskBefore, NetworkAccess::On)
+    .with_writable_folders(folders(&[".orchester/target"]));
+  let accepting = claude_args(&asking, ClaudeSession::Resume("s-1"), &roots());
+  assert!(accepting.contains(&"acceptEdits".to_owned()), "{accepting:?}");
+  assert!(!accepting.iter().any(|arg| arg.starts_with("Edit(")), "{accepting:?}");
 }

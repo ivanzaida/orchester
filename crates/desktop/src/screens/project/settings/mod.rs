@@ -2,9 +2,11 @@
 //! project's name and folder, its GitHub repository and the account it expects, with *Check
 //! again*, linking a repository detected later and *Use signed-in account*; its token budgets and
 //! default time limit; the variables its runs add to the environment of agents and tools; whether
-//! agents may load the repository's own agent files (ORC-15).
+//! agents may load the repository's own agent files (ORC-15); the code index agents get and the
+//! search tool it needs (ORC-38 `i220W`).
 
 mod agent_files;
+mod code_index;
 mod environment;
 mod general;
 mod limits;
@@ -29,6 +31,7 @@ use lurq::{
 use orchester_core::id::ConnectionId;
 
 use self::{
+  code_index::{CodeIndexProps, CodeIndexTab},
   environment::{EnvironmentProps, EnvironmentTab},
   limits::{LimitsProps, LimitsTab},
   work::{SettingsWork, WorkAction, work_action},
@@ -93,10 +96,11 @@ impl Actions {
 }
 
 pub struct SettingsScreen {
-  /// Whether the General, Limits and Environment tabs' changes are stored.
+  /// Whether the General, Limits, Environment and Code index tabs' changes are stored.
   general_status: Signal<SettingsSave>,
   limits_status: Signal<SettingsSave>,
   environment_status: Signal<SettingsSave>,
+  code_index_status: Signal<SettingsSave>,
   /// Bumped after a change, to read the project's connections and link again.
   revision: Signal<u64>,
   /// A `gh` chosen for github.com while the project has no connection there.
@@ -124,6 +128,7 @@ impl Component for SettingsScreen {
       general_status: ctx.signal(SettingsSave::Saved),
       limits_status: ctx.signal(SettingsSave::Saved),
       environment_status: ctx.signal(SettingsSave::Saved),
+      code_index_status: ctx.signal(SettingsSave::Saved),
       revision: ctx.signal(0_u64),
       program: ctx.signal(None),
       program_for: ctx.signal(None),
@@ -152,6 +157,7 @@ impl Component for SettingsScreen {
       SettingsTab::General => ("settings.tabs.general", "settings.description"),
       SettingsTab::Limits => ("settings.tabs.limits", "settings.limits.description"),
       SettingsTab::Environment => ("settings.tabs.environment", "settings.environment.description"),
+      SettingsTab::CodeIndex => ("settings.tabs.codeIndex", "settings.codeIndex.description"),
     };
     let breadcrumb = ctx.t_args(
       "settings.breadcrumb",
@@ -170,6 +176,13 @@ impl Component for SettingsScreen {
         EnvironmentProps {
           open: open.clone(),
           status: self.environment_status.clone(),
+        },
+      ),
+      (_, SettingsTab::CodeIndex) => ctx.mount_keyed::<CodeIndexTab>(
+        "settings-code-index",
+        CodeIndexProps {
+          open: open.clone(),
+          status: self.code_index_status.clone(),
         },
       ),
       (Loaded::Loading, SettingsTab::General) => Column::new().flex(1.0).into(),
@@ -275,6 +288,7 @@ impl SettingsScreen {
       SettingsTab::General => self.general_status.get(),
       SettingsTab::Limits => self.limits_status.get(),
       SettingsTab::Environment => self.environment_status.get(),
+      SettingsTab::CodeIndex => self.code_index_status.get(),
     };
     let text = match status {
       SettingsSave::Saved => ctx.t("settings.saved"),
@@ -308,6 +322,11 @@ impl SettingsScreen {
           "settings-tab-environment",
           "settings.tabs.environment",
           SettingsTab::Environment,
+        ),
+        tab(
+          "settings-tab-code-index",
+          "settings.tabs.codeIndex",
+          SettingsTab::CodeIndex,
         ),
       ],
     )

@@ -108,9 +108,11 @@ impl Prompt {
       },
       instructions,
       skills: &[],
+      code_index: None,
       dependencies,
       revision: None,
       messages: None,
+      memory: &[],
     }
   }
 }

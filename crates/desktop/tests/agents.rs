@@ -70,14 +70,16 @@ fn codex(repo: &TempDir) -> AgentConnection {
       CatalogModel::new(model("gpt-5.4-mini"), Vec::new()),
     ],
   );
-  connection.record_check(ConnectionCheck {
-    at: now(),
-    result: CheckResult::Available {
-      version: "0.139.0".into(),
-      sign_in: SignIn::SignedIn,
-      catalog,
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: now(),
+      result: CheckResult::Available {
+        version: "0.139.0".into(),
+        sign_in: SignIn::SignedIn,
+        catalog,
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   connection
 }
 

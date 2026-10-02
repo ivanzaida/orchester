@@ -170,15 +170,15 @@ fn run_permissions_the_connection_cannot_enforce_are_refused() {
       .change_permissions(builder, wider(), PermissionsApply::NextInvocation, CLAUDE, at(12)),
     Err(RunError::PermissionsNotEnforceable { .. })
   ));
-  let ask = AgentPermissions::new(
+  let unconfined = AgentPermissions::new(
     RepositoryAccess::ReadOnly,
-    CommandPermission::AskBefore,
+    CommandPermission::AnyInWorktree,
     NetworkAccess::On,
   );
   assert!(matches!(
     logged
       .run
-      .change_permissions(builder, ask, PermissionsApply::NextInvocation, CODEX_MAC, at(12)),
+      .change_permissions(builder, unconfined, PermissionsApply::NextInvocation, CLAUDE, at(12)),
     Err(RunError::PermissionsNotEnforceable { .. })
   ));
   assert!(logged.run.changed_permissions(builder).is_none(), "nothing changed");

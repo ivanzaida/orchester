@@ -12,8 +12,11 @@ pub const REASONING_EFFORT: &str = "reasoning_effort";
 pub enum CatalogSource {
   /// The CLI listed its models.
   Provider,
-  /// The CLI cannot list models; these are the aliases its own help documents.
+  /// The CLI could not list models; these are the aliases its own help documents (Claude Code:
+  /// after Anthropic's current model ids).
   DocumentedAliases,
+  /// Claude Code listed the models it knows by alias; Anthropic's current model ids come first.
+  ProviderAndCurrentIds,
 }
 
 /// A model the connection offers and the reasoning efforts it accepts (none: the setting is

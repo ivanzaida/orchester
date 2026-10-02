@@ -43,6 +43,8 @@ pub enum PreflightProblem {
   ConnectionMissing { step: StepKey },
   /// The profile's connection is not an agent CLI, so it cannot run the step.
   UnsupportedProvider { step: StepKey },
+  /// The profile's connection is to a native agent provider, which this version runs no agent on.
+  NativeNotAvailable { step: StepKey },
   /// The connection's last check says its CLI cannot be used (not signed in, missing, …).
   ConnectionNotUsable { step: StepKey, status: ConnectionStatus },
   /// The connection's CLI cannot enforce the step's effective permissions (profile ∩ step) on this
@@ -185,6 +187,9 @@ fn usable_provider(
   let ConnectionKind::Agent(provider) = connection.kind() else {
     return Err(PreflightProblem::UnsupportedProvider { step });
   };
+  if !provider.runs_agents() {
+    return Err(PreflightProblem::NativeNotAvailable { step });
+  }
   let status = connection.status();
   if !status.is_usable() {
     return Err(PreflightProblem::ConnectionNotUsable { step, status });

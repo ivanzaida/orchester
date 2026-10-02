@@ -3,17 +3,26 @@
 //! GitHub through the GitHub CLI. MCP servers ([`mcp`]) are the third kind, configured for the agent
 //! CLIs to start or reach. A program connection is signed in through the program's own login; Orchester
 //! stores no credentials and never asks the programs for them. It holds the executable and what the last
-//! check found out about it.
+//! check found out about it. A native agent provider ([`AgentProvider::is_native`]) is reached at a model
+//! API instead ([`AgentEndpoint::Api`]), with its key in a project secret; this version stores and shows
+//! such connections but runs no agent on them.
 
 mod adapter;
 mod agent;
 pub mod app_server;
+pub mod app_server_config;
 pub mod app_server_mcp;
 mod catalog;
+pub mod claude_approval;
+mod claude_catalog;
 mod discovery;
+mod endpoint;
 mod github;
+mod http_url;
 pub mod invocation;
 pub mod mcp;
+mod model_requirements;
+mod provider;
 pub mod stream;
 
 use std::path::{Path, PathBuf};
@@ -28,34 +37,18 @@ pub use self::{
   },
   agent::{AgentConnection, CheckResult, ConnectionCheck},
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
+  claude_catalog::parse_claude_models,
   discovery::{Installed, compare_versions, rank_installed},
+  endpoint::{AgentEndpoint, ApiEndpoint, BaseUrl, EndpointError, EndpointPreset},
   github::{
     GH_PROGRAM, GhAdvice, GhAuthStatus, GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin,
     GitHubNameError, GitHubState, REQUIRED_SCOPE, check_github, gh_auth_status_command, gh_version_command,
     parse_gh_auth_status, parse_gh_version,
   },
+  model_requirements::{CliTooOld, ModelRequirements, parse_cli_too_old},
+  provider::{AgentProvider, AgentRuntime, WireApi},
 };
 use crate::{id::ConnectionId, name::Name, time::Timestamp};
-
-/// The agent CLIs Orchester can run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentProvider {
-  CodexCli,
-  ClaudeCodeCli,
-}
-
-impl AgentProvider {
-  pub const ALL: [Self; 2] = [Self::CodexCli, Self::ClaudeCodeCli];
-
-  /// Name of the program on the `PATH`.
-  pub const fn program_name(self) -> &'static str {
-    match self {
-      Self::CodexCli => "codex",
-      Self::ClaudeCodeCli => "claude",
-    }
-  }
-}
 
 /// What a connection connects to.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -67,12 +60,17 @@ pub enum ConnectionKind {
 }
 
 impl ConnectionKind {
-  /// Name of the program on the `PATH`.
-  pub const fn program_name(&self) -> &'static str {
+  /// Name of the program on the `PATH`; `None` for a native agent provider.
+  pub const fn program_name(&self) -> Option<&'static str> {
     match self {
       Self::Agent(provider) => provider.program_name(),
-      Self::GitHub { .. } => GH_PROGRAM,
+      Self::GitHub { .. } => Some(GH_PROGRAM),
     }
+  }
+
+  /// Whether the connection is reached at a model API rather than a program.
+  const fn is_api(&self) -> bool {
+    matches!(self, Self::Agent(provider) if provider.is_native())
   }
 }
 
@@ -86,6 +84,11 @@ pub enum ConnectionError {
   NotGitHub(ConnectionId),
   #[error("the check does not belong to the kind of connection {0}")]
   CheckKindMismatch(ConnectionId),
+  /// A program for a native provider, or an API endpoint for a program.
+  #[error("connection {0} is not reached that way")]
+  EndpointMismatch(ConnectionId),
+  #[error("the DeepSeek preset is not offered on the Anthropic API")]
+  PresetNotOffered,
 }
 
 /// Whether the CLI is signed in, as far as its own status command tells.
@@ -169,11 +172,14 @@ impl LastCheck {
     }
   }
 
+  /// Whether the check can describe a connection of `kind`. A native agent connection has no
+  /// program, so no agent check describes it.
   const fn fits(&self, kind: &ConnectionKind) -> bool {
-    matches!(
-      (self, kind),
-      (Self::Agent(_), ConnectionKind::Agent(_)) | (Self::GitHub(_), ConnectionKind::GitHub { .. })
-    )
+    match (self, kind) {
+      (Self::Agent(_), ConnectionKind::Agent(provider)) => !provider.is_native(),
+      (Self::GitHub(_), ConnectionKind::GitHub { .. }) => true,
+      (Self::Agent(_), ConnectionKind::GitHub { .. }) | (Self::GitHub(_), ConnectionKind::Agent(_)) => false,
+    }
   }
 }
 
@@ -184,9 +190,11 @@ pub struct Connection {
   id: ConnectionId,
   name: Name,
   kind: ConnectionKind,
-  executable: PathBuf,
+  endpoint: AgentEndpoint,
   last_check: Option<LastCheck>,
   created_at: Timestamp,
+  /// The CLI versions models need, as refusals said ([`ModelRequirements`]); agent CLIs only.
+  model_requirements: ModelRequirements,
 }
 
 impl Connection {
@@ -195,28 +203,41 @@ impl Connection {
     id: ConnectionId,
     name: Name,
     kind: ConnectionKind,
-    executable: PathBuf,
+    endpoint: AgentEndpoint,
     created_at: Timestamp,
   ) -> Result<Self, ConnectionError> {
+    let endpoint = fitted(id, &kind, endpoint)?;
     Ok(Self {
       id,
       name,
       kind,
-      executable: absolute(executable)?,
+      endpoint,
       last_check: None,
       created_at,
+      model_requirements: ModelRequirements::default(),
     })
+  }
+
+  /// This connection with the model requirements it had recorded.
+  #[must_use]
+  pub fn with_model_requirements(mut self, requirements: ModelRequirements) -> Self {
+    self.model_requirements = requirements;
+    self
+  }
+
+  pub const fn model_requirements(&self) -> &ModelRequirements {
+    &self.model_requirements
   }
 
   pub fn from_stored(
     id: ConnectionId,
     name: Name,
     kind: ConnectionKind,
-    executable: PathBuf,
+    endpoint: AgentEndpoint,
     last_check: Option<LastCheck>,
     created_at: Timestamp,
   ) -> Result<Self, ConnectionError> {
-    let mut connection = Self::new(id, name, kind, executable, created_at)?;
+    let mut connection = Self::new(id, name, kind, endpoint, created_at)?;
     if let Some(check) = last_check {
       connection.record_check(check)?;
     }
@@ -235,8 +256,13 @@ impl Connection {
     &self.kind
   }
 
-  pub fn executable(&self) -> &Path {
-    &self.executable
+  pub const fn endpoint(&self) -> &AgentEndpoint {
+    &self.endpoint
+  }
+
+  /// The program the connection runs; `None` when it is reached at a model API.
+  pub fn executable(&self) -> Option<&Path> {
+    self.endpoint.program()
   }
 
   pub const fn last_check(&self) -> Option<&LastCheck> {
@@ -252,17 +278,18 @@ impl Connection {
   }
 
   /// Points the connection at another program. The last check described the previous one,
-  /// so it is dropped.
+  /// so it is dropped. A connection reached at a model API has no program to change.
   pub fn set_executable(&mut self, executable: PathBuf) -> Result<(), ConnectionError> {
-    let executable = absolute(executable)?;
-    if executable != self.executable {
-      self.executable = executable;
+    let endpoint = fitted(self.id, &self.kind, AgentEndpoint::Program(executable))?;
+    if endpoint != self.endpoint {
+      self.endpoint = endpoint;
       self.last_check = None;
     }
     Ok(())
   }
 
-  /// Replaces the last check. A check of another kind of connection is refused.
+  /// Replaces the last check. A check of another kind of connection, or any check of a native
+  /// agent connection, is refused.
   pub fn record_check(&mut self, check: LastCheck) -> Result<(), ConnectionError> {
     if !check.fits(&self.kind) {
       return Err(ConnectionError::CheckKindMismatch(self.id));
@@ -284,10 +311,19 @@ impl Connection {
   }
 }
 
-fn absolute(path: PathBuf) -> Result<PathBuf, ConnectionError> {
-  if path.is_absolute() {
-    Ok(path)
-  } else {
-    Err(ConnectionError::RelativeExecutable(path))
+/// `endpoint` if it is how a connection of `kind` is reached: an absolute program path for a CLI,
+/// an API endpoint with a preset its provider offers for a native agent.
+fn fitted(id: ConnectionId, kind: &ConnectionKind, endpoint: AgentEndpoint) -> Result<AgentEndpoint, ConnectionError> {
+  match (&endpoint, kind.is_api()) {
+    (AgentEndpoint::Program(path), false) if !path.is_absolute() => {
+      Err(ConnectionError::RelativeExecutable(path.clone()))
+    }
+    (AgentEndpoint::Api(api), true)
+      if api.preset() == EndpointPreset::DeepSeek && *kind == ConnectionKind::Agent(AgentProvider::AnthropicApi) =>
+    {
+      Err(ConnectionError::PresetNotOffered)
+    }
+    (AgentEndpoint::Program(_), false) | (AgentEndpoint::Api(_), true) => Ok(endpoint),
+    (AgentEndpoint::Program(_), true) | (AgentEndpoint::Api(_), false) => Err(ConnectionError::EndpointMismatch(id)),
   }
 }

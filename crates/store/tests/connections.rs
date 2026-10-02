@@ -2,10 +2,11 @@ use std::{fs, path::PathBuf};
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ConnectionStatus,
-    GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin, ModelCatalog, SignIn,
+    AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, BaseUrl, CatalogModel, CatalogSource, CheckResult,
+    ConnectionCheck, ConnectionStatus, EndpointPreset, GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost,
+    GitHubLogin, ModelCatalog, SignIn,
   },
-  id::{ConnectionId, ProjectId},
+  id::{ConnectionId, ProjectId, SecretId},
   name::Name,
   project::{Project, ProjectKey},
   resource::ModelId,
@@ -65,7 +66,9 @@ fn connection_round_trip_keeps_the_check() {
   db.create_connection(&codex).expect("create");
   assert_eq!(db.connection(codex.id()).expect("read").as_ref(), Some(&*codex));
 
-  codex.record_check(available());
+  codex
+    .record_check(available())
+    .expect("an agent check fits a CLI connection");
   codex.rename(Name::new("Codex · Kontur").expect("valid name"));
   db.save_connection(&codex).expect("save");
   let stored = db.connection(codex.id()).expect("read").expect("exists");
@@ -120,7 +123,9 @@ fn saving_an_unknown_connection_fails() {
 fn connection_rows_hold_no_credentials_and_a_status() {
   let (repo, mut db) = project_repo();
   let mut codex = connection(&repo, "Codex", AgentProvider::CodexCli);
-  codex.record_check(available());
+  codex
+    .record_check(available())
+    .expect("an agent check fits a CLI connection");
   db.create_connection(&codex).expect("create");
   let raw = Sqlite::open(repo.path().join(".orchester/orchester.db")).expect("open raw database");
   let (kind, status, settings): (String, String, String) = raw
@@ -218,6 +223,137 @@ fn damaged_github_host_is_reported() {
   raw
     .execute(
       "UPDATE connections SET settings = json_set(settings, '$.body.host', 'https://github.com')",
+      [],
+    )
+    .expect("damage the row");
+  assert!(matches!(
+    db.connections(),
+    Err(StoreError::Corrupt {
+      what: "connection settings",
+      ..
+    })
+  ));
+}
+
+#[test]
+fn connection_round_trip_keeps_the_model_requirements_a_refusal_recorded() {
+  let (repo, mut db) = project_repo();
+  let mut claude = connection(&repo, "Claude", AgentProvider::ClaudeCodeCli);
+  db.create_connection(&claude).expect("create");
+  let settings = || -> String {
+    Sqlite::open(repo.path().join(".orchester").join("orchester.db"))
+      .expect("open the database")
+      .query_row("SELECT settings FROM connections", [], |row| row.get(0))
+      .expect("settings")
+  };
+  assert!(
+    !settings().contains("model_requirements"),
+    "left out while none is recorded"
+  );
+  let opus = ModelId::new("claude-opus-5-5").expect("valid model");
+  claude.record_model_requirement(&opus, "2.1.280");
+  db.save_connection(&claude).expect("save");
+  let reopened = ProjectDb::open(repo.path()).expect("reopen");
+  let stored = AgentConnection::try_from(reopened.connection(claude.id()).expect("read").expect("exists"))
+    .expect("an agent connection");
+  assert_eq!(stored.model_requirements().required(&opus), Some("2.1.280"));
+  assert!(settings().contains(r#""model_requirements":{"claude-opus-5-5":"2.1.280"}"#));
+}
+
+fn native(provider: AgentProvider, preset: EndpointPreset, url: &str, key: SecretId) -> AgentConnection {
+  AgentConnection::native(
+    ConnectionId::generate(),
+    Name::new(&format!("{url} · Kontur")).expect("valid name"),
+    provider,
+    ApiEndpoint::new(preset, BaseUrl::new(url).expect("valid base URL"), key),
+    Timestamp::from_unix_millis(1_000),
+  )
+  .expect("native connection")
+}
+
+#[test]
+fn native_connection_round_trip_keeps_provider_and_endpoint() {
+  let (repo, mut db) = project_repo();
+  let key = SecretId::generate();
+  let claude = native(
+    AgentProvider::AnthropicApi,
+    EndpointPreset::Official,
+    "https://api.anthropic.com",
+    key,
+  );
+  let deepseek = native(
+    AgentProvider::OpenAiApi,
+    EndpointPreset::DeepSeek,
+    "https://api.deepseek.com",
+    SecretId::generate(),
+  );
+  db.create_connection(&claude).expect("create");
+  db.create_connection(&deepseek).expect("create");
+
+  let reopened = ProjectDb::open(repo.path()).expect("reopen");
+  for connection in [&claude, &deepseek] {
+    let stored = reopened.connection(connection.id()).expect("read").expect("exists");
+    let stored = AgentConnection::try_from(stored).expect("an agent connection");
+    assert_eq!(&stored, connection);
+    assert_eq!(stored.status(), ConnectionStatus::NotChecked);
+    assert_eq!(stored.executable(), None);
+  }
+  let stored = AgentConnection::try_from(reopened.connection(claude.id()).expect("read").expect("exists"))
+    .expect("an agent connection");
+  assert_eq!(stored.provider(), AgentProvider::AnthropicApi);
+  let AgentEndpoint::Api(api) = stored.endpoint() else {
+    panic!("a native connection is reached at its API");
+  };
+  assert_eq!(
+    (api.preset(), api.base_url().as_str(), api.key()),
+    (EndpointPreset::Official, "https://api.anthropic.com", key)
+  );
+}
+
+#[test]
+fn native_connection_rows_hold_the_endpoint_and_the_secret_id_only() {
+  let (repo, mut db) = project_repo();
+  let key = SecretId::generate();
+  let deepseek = native(
+    AgentProvider::OpenAiApi,
+    EndpointPreset::DeepSeek,
+    "https://api.deepseek.com/",
+    key,
+  );
+  db.create_connection(&deepseek).expect("create");
+  let raw = Sqlite::open(repo.path().join(".orchester/orchester.db")).expect("open raw database");
+  let (kind, provider, status, settings): (String, String, String, String) = raw
+    .query_row("SELECT kind, provider, status, settings FROM connections", [], |row| {
+      Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+    })
+    .expect("row");
+  assert_eq!(
+    (kind.as_str(), provider.as_str(), status.as_str()),
+    ("agent_provider", "openai_api", "not_checked")
+  );
+  let settings: serde_json::Value = serde_json::from_str(&settings).expect("JSON settings");
+  assert_eq!(
+    settings["body"],
+    serde_json::json!({
+      "api": {"preset": "deepseek", "base_url": "https://api.deepseek.com", "key": key.to_string()}
+    })
+  );
+}
+
+#[test]
+fn damaged_native_base_url_is_reported() {
+  let (repo, mut db) = project_repo();
+  let claude = native(
+    AgentProvider::AnthropicApi,
+    EndpointPreset::Official,
+    "https://api.anthropic.com",
+    SecretId::generate(),
+  );
+  db.create_connection(&claude).expect("create");
+  let raw = Sqlite::open(repo.path().join(".orchester/orchester.db")).expect("open raw database");
+  raw
+    .execute(
+      "UPDATE connections SET settings = json_set(settings, '$.body.api.base_url', 'http://api.anthropic.com')",
       [],
     )
     .expect("damage the row");

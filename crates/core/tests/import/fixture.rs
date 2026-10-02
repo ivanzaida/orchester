@@ -8,7 +8,7 @@ use std::{
 };
 
 use orchester_core::{
-  connection::{AgentProvider, Connection, ConnectionKind},
+  connection::{AgentEndpoint, AgentProvider, Connection, ConnectionKind},
   id::{ConnectionId, ProjectId, ResourceId, SecretId},
   import::{Catalog, CatalogResource, Content},
   name::Name,
@@ -77,7 +77,7 @@ pub fn codex(title: &str) -> Connection {
     ConnectionId::generate(),
     name(title),
     ConnectionKind::Agent(AgentProvider::CodexCli),
-    std::env::temp_dir().join("codex"),
+    AgentEndpoint::Program(std::env::temp_dir().join("codex")),
     at(1),
   )
   .expect("absolute executable")
@@ -88,7 +88,7 @@ pub fn claude(title: &str) -> Connection {
     ConnectionId::generate(),
     name(title),
     ConnectionKind::Agent(AgentProvider::ClaudeCodeCli),
-    std::env::temp_dir().join("claude"),
+    AgentEndpoint::Program(std::env::temp_dir().join("claude")),
     at(1),
   )
   .expect("absolute executable")

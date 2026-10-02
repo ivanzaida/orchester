@@ -9,7 +9,7 @@ use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
   id::ResourceId,
   permission::AgentPermissions,
-  resource::{AgentProfile, StepKey, Version, VersionNumber},
+  resource::{AgentProfile, StepKey, StepKind, Version, VersionNumber},
   revision::Revision,
   run::{Invocation, Run, RunEventKind},
   store::{McpServerStore, ResourceStore, RunStore},
@@ -57,6 +57,7 @@ pub struct RunPermissions {
   /// The MCP servers the pinned profile version gives its agents, by name (by id when the project
   /// no longer has one). They are not changed for a run.
   pub mcp_servers: Vec<Arc<str>>,
+  pub tool_approvals_required: bool,
 }
 
 /// What the run's step `step`, on the pinned profile version `version` of `profile_id`, runs with.
@@ -93,6 +94,8 @@ pub fn run_permissions(
     can_apply_now: run.can_apply_permissions_now(profile_id),
     draft: latest.get().saturating_add(1),
     mcp_servers: mcp_servers(db, version.body())?,
+    tool_approvals_required: matches!(run.snapshot().body().step(step).map(|step| &step.kind),
+      Some(StepKind::Agent { permissions, .. }) if permissions.interactive_tool_approvals),
   }))
 }
 

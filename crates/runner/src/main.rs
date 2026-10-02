@@ -1,9 +1,12 @@
-//! `orchester-runner <project-root>`: started by the desktop, one per project.
+//! `orchester-runner <project-root>`: started by the desktop, one per project. Started by Claude
+//! Code as `orchester-runner --claude-permission-prompt`, it is the relay of a step's permission
+//! prompt instead ([`orchester_runner::approval_relay`]).
 
-use std::{io, path::PathBuf, process::ExitCode, sync::Arc};
+use std::{io, path::PathBuf, process::ExitCode, sync::Arc, time::Duration};
 
 use orchester_ipc::{EXIT_PROJECT_LOCKED, IpcError};
 use orchester_runner::{
+  approval_relay,
   lock::{LockError, RunnerLock},
   log_file, private_file, server,
   shutdown_signal::ShutdownSignal,
@@ -14,6 +17,8 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 
 /// Agents run on the runtime's workers while database and git calls block one of them briefly.
 const WORKER_THREADS: usize = 2;
+/// How long blocking work still running when the runner stops may take to finish.
+const BLOCKING_GRACE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Error)]
 enum RunnerError {
@@ -30,6 +35,12 @@ enum RunnerError {
 }
 
 fn main() -> ExitCode {
+  if std::env::args_os()
+    .nth(1)
+    .is_some_and(|first| first == approval_relay::RELAY_FLAG)
+  {
+    return approval_relay::run();
+  }
   let project_root = project_root_argument();
   let (log_file, log_error) = match project_root.as_ref().map(|root| log_file::open(root)) {
     Ok(Ok((_, file))) => (Some(file), None),
@@ -83,10 +94,15 @@ fn run(project_root: Result<PathBuf, RunnerError>) -> Result<(), RunnerError> {
     .enable_all()
     .build()
     .map_err(RunnerError::Runtime)?;
-  runtime.block_on(async {
+  let served = runtime.block_on(async {
     let shutdown = ShutdownSignal::install().map_err(RunnerError::Signal)?;
     Ok(server::serve(&project_root, shutdown).await?)
-  })
+  });
+  // Blocking work still running (a codebase index build, which can take a minute) does not hold
+  // up the exit: it is abandoned with the process. A build is published by one rename only once
+  // complete, so an abandoned one leaves only its staging folder, which the next build removes.
+  runtime.shutdown_timeout(BLOCKING_GRACE);
+  served
 }
 
 /// Files with secret values an earlier runner of the project left behind when it ended abnormally. The lock

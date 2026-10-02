@@ -13,32 +13,24 @@ use orchester_core::{
   resource::RepositoryAccess as StepAccess,
 };
 
-fn codex<'a>(resume: Option<&'a str>, agent_files: CodexAgentFiles<'a>) -> CodexInvocation<'a> {
+fn codex(agent_files: CodexAgentFiles<'_>) -> CodexInvocation<'_> {
   CodexInvocation {
     executable: Path::new("/bin/codex"),
-    model: "gpt-5.5",
-    reasoning_effort: None,
+    repository: Path::new("/repo"),
     access: StepAccess::ReadOnly,
     network: NetworkAccess::Off,
     writable_roots: &[],
     worktree: Path::new("/repo/.orchester/worktrees/run"),
     platform: Platform::MacOs,
-    resume,
-    output_schema: None,
     mcp: None,
     agent_files,
   }
 }
 
-fn strings(args: Vec<std::ffi::OsString>) -> Vec<String> {
-  args
-    .into_iter()
-    .map(|arg| arg.into_string().expect("unicode"))
-    .collect()
-}
-
-/// The arguments between the sandbox and what ends the command line (session or `-C`).
-fn agent_file_args(args: &[String]) -> Vec<String> {
+/// The agent file overrides among Codex's arguments. App Server starts new and resumed sessions with
+/// the same arguments, so both leave the files out alike.
+fn agent_file_args(invocation: &CodexInvocation<'_>) -> Vec<String> {
+  let args = invocation.args().expect("unicode paths");
   args
     .windows(2)
     .filter(|pair| pair[0] == "-c" && (pair[1].starts_with("project_doc") || pair[1].starts_with("skills.")))
@@ -48,10 +40,7 @@ fn agent_file_args(args: &[String]) -> Vec<String> {
 
 #[test]
 fn codex_loads_the_repository_agent_files_while_the_setting_is_on() {
-  for resume in [None, Some("session-1")] {
-    let args = strings(codex(resume, CodexAgentFiles::Loaded).args());
-    assert!(agent_file_args(&args).is_empty(), "{args:?}");
-  }
+  assert!(agent_file_args(&codex(CodexAgentFiles::Loaded)).is_empty());
 }
 
 #[test]
@@ -66,21 +55,18 @@ fn codex_leaves_agents_md_and_each_repository_skill_out_while_the_setting_is_off
      {path=\"/repo/.orchester/worktrees/run/.agents/skills/group/\\\"quoted\\\"/SKILL.md\",enabled=false}]"
       .to_owned(),
   ];
-  for resume in [None, Some("session-1")] {
-    let args = strings(codex(resume, CodexAgentFiles::LeftOut { skills: &skills }).args());
-    assert_eq!(agent_file_args(&args), expected, "{args:?}");
-    // The prompt still ends the command line: the session (resume) or `-C` come right before it.
-    assert_eq!(args.last().map(String::as_str), Some("-"));
-    if let Some(session) = resume {
-      assert_eq!(args[args.len() - 2], session);
-    }
-  }
+  assert_eq!(
+    agent_file_args(&codex(CodexAgentFiles::LeftOut { skills: &skills })),
+    expected
+  );
 }
 
 #[test]
 fn codex_without_repository_skills_only_leaves_agents_md_out() {
-  let args = strings(codex(None, CodexAgentFiles::LeftOut { skills: &[] }).args());
-  assert_eq!(agent_file_args(&args), ["project_doc_max_bytes=0"]);
+  assert_eq!(
+    agent_file_args(&codex(CodexAgentFiles::LeftOut { skills: &[] })),
+    ["project_doc_max_bytes=0"]
+  );
 }
 
 #[cfg(unix)]
@@ -90,8 +76,8 @@ fn codex_refuses_a_repository_skill_path_that_is_not_unicode() {
 
   use orchester_core::{connection::invocation::InvocationError, resource::CommandEnvironment};
   let skills = [PathBuf::from(OsStr::from_bytes(b"/repo/.agents/skills/\xff/SKILL.md"))];
-  let error = codex(None, CodexAgentFiles::LeftOut { skills: &skills })
-    .command(String::new(), Vec::new(), &CommandEnvironment::default())
+  let error = codex(CodexAgentFiles::LeftOut { skills: &skills })
+    .command(Vec::new(), &CommandEnvironment::default())
     .expect_err("not unicode");
   assert!(matches!(error, InvocationError::NotUnicode(_)));
 }
@@ -111,7 +97,17 @@ fn claude<'a>(
     session,
     mcp: None,
     skills,
+    code_index: None,
+    approvals: None,
   }
+}
+
+fn strings(invocation: &ClaudeInvocation<'_>) -> Vec<String> {
+  invocation
+    .args()
+    .into_iter()
+    .map(|arg| arg.into_string().expect("unicode"))
+    .collect()
 }
 
 #[test]
@@ -125,14 +121,14 @@ fn claude_code_never_loads_project_settings_and_reads_the_skills_folder_it_is_gi
   .expect("enforceable");
   let skills = Path::new("/repo/.orchester/skills/e1");
   for session in [ClaudeSession::New(uuid::Uuid::nil()), ClaudeSession::Resume("s-1")] {
-    let without = strings(claude(&permissions, session, None).args());
+    let without = strings(&claude(&permissions, session, None));
     let setting = without
       .iter()
       .position(|arg| arg == "--setting-sources")
       .expect("present");
     assert_eq!(without[setting + 1], "");
     assert!(!without.contains(&"--add-dir".to_owned()));
-    let with = strings(claude(&permissions, session, Some(skills)).args());
+    let with = strings(&claude(&permissions, session, Some(skills)));
     let add = with
       .iter()
       .position(|arg| arg == "--add-dir")
@@ -159,7 +155,7 @@ fn each_cli_says_how_it_treats_the_repository_agent_files() {
     ),
   ];
   for (provider, setting, mechanism) in cases {
-    assert_eq!(setting.mechanism(provider), mechanism);
+    assert_eq!(setting.mechanism(provider), Some(mechanism));
   }
   assert_eq!(RepositoryAgentFiles::default(), RepositoryAgentFiles::On);
 }
