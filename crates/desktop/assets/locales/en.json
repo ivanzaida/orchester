@@ -1228,9 +1228,7 @@
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
       "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
-      "noCommits": "The repository has no commit to start the run from.",
-      "buildSpaceLow": "Low disk space for CARGO_TARGET_DIR ({{target}}): {{available}} GiB free; at least {{required}} GiB is needed before this run can start. Free space or choose another build folder.",
-      "buildSpaceUnavailable": "Cannot check free space for CARGO_TARGET_DIR ({{target}}). Check that the folder or its volume is accessible before starting this run."
+      "noCommits": "The repository has no commit to start the run from."
     },
     "start": {
       "incomplete": "Add the missing details before running the task.",
@@ -1734,9 +1732,6 @@
         "duplicate": "{{folder}} is already listed.",
         "tooMany": "At most {{max}} folders can be listed."
       },
-      "targetTitle": "Allow agents to write to {{variable}}",
-      "targetDetail": "Environment sets {{variable}} to {{folder}}. Agents that edit files write only inside their worktree, so their builds cannot write there until you add it.",
-      "addTargetFolder": "Add folder",
       "networkOff": "Off",
       "networkOn": "On",
       "networkOffDetail": "Package installs and web requests fail while network access is off.",
@@ -2684,11 +2679,6 @@
       "detail": "Added to the environment of every agent CLI and command tool this project’s runs start, on top of the cleaned environment every program gets (PATH, HOME, TEMP and the like). A command tool’s own variables win over these.",
       "variables": "Variables · NAME=value per line",
       "hint": "Stored and shown in plain text, so never put secrets here.",
-      "targetTitle": "Share one build folder between run worktrees",
-      "targetDetail": "Each run works in its own worktree, and Cargo builds each one into a target folder of its own, often 10–20 GB. With CARGO_TARGET_DIR every run builds into .orchester/target beside the worktrees instead.",
-      "addTarget": "Add CARGO_TARGET_DIR",
-      "agentsTitle": "Agents need permission to write to {{variable}}",
-      "agentsDetail": "Agents that edit files write only inside their worktree. Add {{folder}} to Extra writable folders under Agents › Permissions for each profile that builds.",
       "changesTitle": "Changes apply to the next agent or command that starts",
       "changesDetail": "An agent or command already running keeps the environment it started with."
     },

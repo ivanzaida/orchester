@@ -8,11 +8,11 @@ verifier must launch the printed path, never `target/debug/orchester` after pinn
 Windows, from the run worktree:
 
 ```powershell
-if (-not $env:CARGO_TARGET_DIR) { throw 'set the run CARGO_TARGET_DIR first' }
 cargo build --locked -p orchester-desktop -p orchester-runner
 if ($LASTEXITCODE -ne 0) { throw 'app build failed' }
+$target = (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).target_directory
 New-Item -ItemType Directory -Force .tmp/verification | Out-Null
-$desktop = cargo run --quiet --locked -p orchester-exec --bin pin-verifier-app -- "$env:CARGO_TARGET_DIR/debug" '.tmp/verification'
+$desktop = cargo run --quiet --locked -p orchester-exec --bin pin-verifier-app -- "$target/debug" '.tmp/verification'
 if ($LASTEXITCODE -ne 0) { throw 'app pinning failed' }
 # Pass $desktop to the exact-PID MCP client. Do not start it via cargo run.
 ```
@@ -20,19 +20,19 @@ if ($LASTEXITCODE -ne 0) { throw 'app pinning failed' }
 macOS, from the run worktree:
 
 ```sh
-: "${CARGO_TARGET_DIR:?set the run CARGO_TARGET_DIR first}"
 cargo build --locked -p orchester-desktop -p orchester-runner
 if [ "$?" -ne 0 ]; then echo 'app build failed' >&2; exit 1; fi
+target=$(cargo metadata --format-version 1 --no-deps | python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])')
 mkdir -p .tmp/verification
 desktop=$(cargo run --quiet --locked -p orchester-exec --bin pin-verifier-app -- \
-  "$CARGO_TARGET_DIR/debug" .tmp/verification)
+  "$target/debug" .tmp/verification)
 if [ "$?" -ne 0 ]; then echo 'app pinning failed' >&2; exit 1; fi
 # Pass "$desktop" to the exact-PID MCP client. Do not start it via cargo run.
 ```
 
 The helper opens the built files, hashes each before and after copying, compares the copies,
 then checks the source paths again. A changed source makes pinning fail and removes its partial
-copy; rebuild and retry. Once pinning succeeds, later builds in the shared Cargo target cannot
+copy; rebuild and retry. Once pinning succeeds, later builds in the Cargo target directory cannot
 replace either pinned file. Each call creates a fresh directory so an earlier verifier keeps
 its own pair. The helper preserves executable permissions on macOS.
 

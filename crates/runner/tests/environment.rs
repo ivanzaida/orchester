@@ -1,6 +1,7 @@
 //! The variables Project settings › Environment adds, which reach the agent CLI and the command
-//! tools of every run, end to end with `orchester-fake-codex` and `orchester-test-command`. Needs
-//! `git`. Run with `cargo test -p orchester-runner --features test-agent --test environment
+//! tools of every run unchanged, end to end with `orchester-fake-codex` and
+//! `orchester-test-command`. A variable that names a folder is passed as written, like any other.
+//! Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test environment
 //! environment`.
 
 mod support;
@@ -9,18 +10,17 @@ use std::collections::BTreeMap;
 
 use orchester_core::{
   connection::stream::AgentEvent,
-  id::IdempotencyKey,
+  id::{IdempotencyKey, RunId},
   resource::{CommandEnvironment, Draft, ResourceKind, Tool, ToolAction, VariableName},
-  run::{PreflightProblem, RunStatus},
-  store::{ActivityStore, ResourceStore, RunStore, SettingsStore},
+  run::{Run, RunStatus},
+  store::{ActivityStore, ResourceStore, SettingsStore},
   time::Timestamp,
 };
-use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
 use self::support::{Setup, StepSpec, TestProject, project, reported, scheduler, tools::ToolSpec, wait_for};
 
-async fn run_to_the_end(project: &TestProject) -> orchester_core::run::Run {
+async fn run_to_the_end(project: &TestProject) -> Run {
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
@@ -30,6 +30,27 @@ async fn run_to_the_end(project: &TestProject) -> orchester_core::run::Run {
   wait_for(root, &mut events, id, |run| run.status().is_terminal()).await
 }
 
+/// `BUILD_DIR` set to an absolute folder beside the worktrees.
+fn build_dir(project: &TestProject) -> (String, CommandEnvironment) {
+  let folder = project.repo.path().join(".orchester").join("build");
+  let folder = folder.to_str().expect("a Unicode temporary path").to_owned();
+  let name = VariableName::new("BUILD_DIR").expect("valid name");
+  let environment = CommandEnvironment::new(BTreeMap::from([(name, folder.clone())])).expect("valid variables");
+  (folder, environment)
+}
+
+/// What the run's command tool printed.
+fn command_output(db: &ProjectDb, run: RunId) -> String {
+  db.activity(run, 0)
+    .expect("activity")
+    .into_iter()
+    .find_map(|entry| match entry.event {
+      AgentEvent::ToolCommandFinished { output, .. } => Some(output),
+      _ => None,
+    })
+    .expect("the command finished")
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn environment_additions_reach_the_agent_cli_and_the_command_tool() {
   let setup = Setup {
@@ -37,7 +58,7 @@ async fn environment_additions_reach_the_agent_cli_and_the_command_tool() {
       StepSpec::new("implement", "Implement", "Append one line.", &[]),
       StepSpec::new("checks", "Checks", "", &["implement"]).command(ToolSpec::test_command(&[
         "env",
-        "CARGO_TARGET_DIR",
+        "BUILD_DIR",
         "env",
         "GH_TOKEN",
       ])),
@@ -46,58 +67,26 @@ async fn environment_additions_reach_the_agent_cli_and_the_command_tool() {
   };
   let project = project(&setup);
   let root = project.repo.path();
-  let target = root.join(".orchester").join("target");
-  let target = target.to_str().expect("a Unicode temporary path").to_owned();
-  let name = VariableName::new("CARGO_TARGET_DIR").expect("valid name");
-  let environment = CommandEnvironment::new(BTreeMap::from([(name, target.clone())])).expect("valid variables");
+  let (folder, environment) = build_dir(&project);
   ProjectDb::open(root)
     .expect("open")
     .save_project_environment(&environment)
     .expect("save the project's environment");
   let run = run_to_the_end(&project).await;
-  let effective = std::path::Path::new(&target)
-    .join("worktrees")
-    .join(run.id().to_string());
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let db = ProjectDb::open(root).expect("open");
-  let names = reported(&db, run.id(), "env: ");
+  assert_eq!(reported(&db, run.id(), "build dir: "), vec![folder.clone()]);
+  let output = command_output(&db, run.id());
   assert!(
-    names[0].split(',').any(|name| name == "CARGO_TARGET_DIR"),
-    "the agent CLI sees it: {names:?}"
-  );
-  assert_eq!(
-    reported(&db, run.id(), "cargo target: "),
-    vec![effective.to_string_lossy().into_owned()],
-    "agent and subsequent check use the same worktree target"
-  );
-  let output = db
-    .activity(run.id(), 0)
-    .expect("activity")
-    .into_iter()
-    .find_map(|entry| match entry.event {
-      AgentEvent::ToolCommandFinished { output, .. } => Some(output),
-      _ => None,
-    })
-    .expect("the command finished");
-  assert!(
-    output
-      .lines()
-      .any(|line| line == format!("CARGO_TARGET_DIR={}", effective.display())),
+    output.lines().any(|line| line == format!("BUILD_DIR={folder}")),
     "{output}"
   );
   // Only what the project added passes; the rest of the environment stays cleaned.
   assert!(output.lines().any(|line| line == "GH_TOKEN is not set"), "{output}");
-  assert_eq!(
-    db.project_environment()
-      .expect("stored configuration")
-      .get("CARGO_TARGET_DIR"),
-    Some(target.as_str()),
-    "the configured build root is preserved"
-  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn environment_parallel_worktrees_have_distinct_cargo_targets() {
+async fn environment_parallel_worktrees_get_the_same_value() {
   let project = project(&Setup {
     steps: vec![
       StepSpec::new("left", "Left", "Write own file.", &[]),
@@ -105,66 +94,22 @@ async fn environment_parallel_worktrees_have_distinct_cargo_targets() {
     ],
     ..Setup::new("Build separately.")
   });
-  let root = project.repo.path();
-  let target = root.join(".orchester/target");
-  let environment = CommandEnvironment::new(BTreeMap::from([(
-    VariableName::new("CARGO_TARGET_DIR").expect("name"),
-    target.to_string_lossy().into_owned(),
-  )]))
-  .expect("environment");
-  let mut db = ProjectDb::open(root).expect("open");
-  db.save_project_environment(&environment).expect("save");
-  let run = run_to_the_end(&project).await;
-  assert_eq!(run.status(), &RunStatus::Succeeded);
-  let mut actual = reported(&db, run.id(), "cargo target: ");
-  actual.sort();
-  let mut expected: Vec<_> = run.attempts()[0]
-    .executions()
-    .iter()
-    .map(|execution| {
-      target
-        .join("worktrees")
-        .join(execution.id().to_string())
-        .to_string_lossy()
-        .into_owned()
-    })
-    .collect();
-  expected.sort();
-  assert_eq!(actual, expected);
-  assert_ne!(actual[0], actual[1]);
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn environment_relative_cargo_target_stays_in_the_worktree() {
-  let project = project(&Setup::new("Say hello."));
-  let environment = CommandEnvironment::new(BTreeMap::from([(
-    VariableName::new("CARGO_TARGET_DIR").expect("name"),
-    "target".to_owned(),
-  )]))
-  .expect("environment");
+  let (folder, environment) = build_dir(&project);
   let mut db = ProjectDb::open(project.repo.path()).expect("open");
   db.save_project_environment(&environment).expect("save");
   let run = run_to_the_end(&project).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
-  assert_eq!(reported(&db, run.id(), "cargo target: "), vec!["target"]);
+  assert_eq!(reported(&db, run.id(), "build dir: "), vec![folder.clone(), folder]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn environment_command_tool_target_override_is_scoped_to_its_worktree() {
+async fn environment_command_tool_variables_pass_unchanged() {
   let project = project(&Setup {
-    steps: vec![
-      StepSpec::new("checks", "Checks", "", &[]).command(ToolSpec::test_command(&["env", "CARGO_TARGET_DIR"])),
-    ],
-    ..Setup::new("Build in an isolated directory.")
+    steps: vec![StepSpec::new("checks", "Checks", "", &[]).command(ToolSpec::test_command(&["env", "BUILD_DIR"]))],
+    ..Setup::new("Build in a folder of its own.")
   });
-  let root = project.repo.path();
-  let target = root.join(".orchester/tool-target");
-  let environment = CommandEnvironment::new(BTreeMap::from([(
-    VariableName::new("CARGO_TARGET_DIR").expect("name"),
-    target.to_string_lossy().into_owned(),
-  )]))
-  .expect("environment");
-  let mut db = ProjectDb::open(root).expect("open");
+  let (folder, environment) = build_dir(&project);
+  let mut db = ProjectDb::open(project.repo.path()).expect("open");
   let tool = db.resources(ResourceKind::Tool).expect("tools")[0].id();
   let version = db.latest_version::<Tool>(tool).expect("read").expect("version");
   let ToolAction::Command(action) = version.body().action() else {
@@ -176,90 +121,9 @@ async fn environment_command_tool_target_override_is_scoped_to_its_worktree() {
   db.publish_draft::<Tool>(tool, Timestamp::now()).expect("publish");
   let run = run_to_the_end(&project).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
-  let expected = target.join("worktrees").join(run.id().to_string());
-  let output = db
-    .activity(run.id(), 0)
-    .expect("activity")
-    .into_iter()
-    .find_map(|entry| match entry.event {
-      AgentEvent::ToolCommandFinished { output, .. } => Some(output),
-      _ => None,
-    })
-    .expect("command output");
+  let output = command_output(&db, run.id());
   assert!(
-    output
-      .lines()
-      .any(|line| line == format!("CARGO_TARGET_DIR={}", expected.display())),
+    output.lines().any(|line| line == format!("BUILD_DIR={folder}")),
     "{output}"
   );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn environment_space_preflight_reports_an_unmeasurable_target_before_creating_a_run() {
-  let project = project(&Setup::new("Do one task."));
-  let root = project.repo.path();
-  let blocker = root.join("not-a-directory");
-  std::fs::write(&blocker, "x").expect("write blocker");
-  let target = blocker.join("target");
-  let environment = CommandEnvironment::new(BTreeMap::from([(
-    VariableName::new("CARGO_TARGET_DIR").expect("name"),
-    target.to_string_lossy().into_owned(),
-  )]))
-  .expect("valid environment");
-  let mut db = ProjectDb::open(root).expect("open");
-  db.save_project_environment(&environment).expect("save environment");
-  let (scheduler, _events) = scheduler(root);
-  assert_eq!(
-    scheduler.start_run(IdempotencyKey::generate(), project.task).await,
-    Err(Rejection::Preflight {
-      problems: vec![PreflightProblem::BuildSpaceUnavailable { target }],
-    })
-  );
-  assert!(db.runs_of_task(project.task).expect("read runs").is_empty());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn environment_space_preflight_rejects_a_dangling_target_link() {
-  let project = project(&Setup::new("Do one task."));
-  let root = project.repo.path();
-  let target = root.join("shared-target-link");
-  let missing = root.join("missing-target-volume");
-  #[cfg(windows)]
-  {
-    // A junction needs no symlink privilege on Windows. Remove its destination after creation.
-    std::fs::create_dir(&missing).expect("create junction destination");
-    let output = std::process::Command::new("cmd")
-      .args(["/C", "mklink", "/J"])
-      .arg(&target)
-      .arg(&missing)
-      .output()
-      .expect("create junction");
-    assert!(
-      output.status.success(),
-      "mklink /J: {}",
-      String::from_utf8_lossy(&output.stderr)
-    );
-    std::fs::remove_dir(&missing).expect("remove junction destination");
-  }
-  #[cfg(unix)]
-  std::os::unix::fs::symlink(&missing, &target).expect("create dangling target symlink");
-  assert!(
-    std::fs::symlink_metadata(&target).is_ok(),
-    "the link itself still exists"
-  );
-  let environment = CommandEnvironment::new(BTreeMap::from([(
-    VariableName::new("CARGO_TARGET_DIR").expect("name"),
-    target.to_string_lossy().into_owned(),
-  )]))
-  .expect("valid environment");
-  let mut db = ProjectDb::open(root).expect("open");
-  db.save_project_environment(&environment).expect("save environment");
-  let (scheduler, _events) = scheduler(root);
-  assert_eq!(
-    scheduler.start_run(IdempotencyKey::generate(), project.task).await,
-    Err(Rejection::Preflight {
-      problems: vec![PreflightProblem::BuildSpaceUnavailable { target }],
-    })
-  );
-  assert!(db.runs_of_task(project.task).expect("read runs").is_empty());
 }
