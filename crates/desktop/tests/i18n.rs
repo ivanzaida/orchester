@@ -143,7 +143,7 @@ fn locales_name_task_statuses_as_designed() {
     ("failed", "Failed"),
     ("succeeded", "Completed"),
     ("interrupted", "Interrupted"),
-    ("cancelled", "Cancelled"),
+    ("cancelled", "Canceled"),
     ("draft", "Draft"),
   ];
   for (phase, label) in designed {

@@ -471,37 +471,7 @@ fn seed_readiness(repo: &Path) {
 
 #[test]
 fn organization_add_link_skips_empty_and_cyclic_choices() {
-  use orchester_core::task::organization::{BlockingTask, DependencyGate};
-  let mut desktop = Desktop::with_seeded_project(|repo| {
-    let mut db = ProjectDb::open(repo).expect("open");
-    let details = TaskDetails {
-      title: Name::new("Dependency").expect("title"),
-      brief: String::new(),
-      acceptance_criteria: vec![],
-      pipeline: None,
-      limits: None,
-    };
-    let tasks = db
-      .create_tasks(
-        IdempotencyKey::generate(),
-        vec![details.clone(), details.clone(), details],
-        Timestamp::now(),
-      )
-      .expect("tasks");
-    let linked = TaskOrganization::new(
-      WorkflowStatus::Todo,
-      Priority::None,
-      None,
-      vec![BlockingTask {
-        task: tasks[0].id(),
-        gate: DependencyGate::Merge,
-      }],
-      vec![],
-    )
-    .expect("organization");
-    db.set_task_organization(tasks[1].id(), &linked, ChangeActor::Person, Timestamp::now())
-      .expect("link");
-  });
+  let mut desktop = Desktop::with_seeded_project(seed_dependencies);
   desktop.wait_for("nav-tasks");
   desktop.click("nav-tasks");
   desktop.wait_for("task-row-KON-1");
@@ -542,6 +512,17 @@ fn organization_add_link_skips_empty_and_cyclic_choices() {
   );
   desktop.tab_to("task-add-blocking-link", 40);
   desktop.enter();
+  // KON-3 is unfinished: Run says why beside it (`ZLhiM`), and the search no longer offers it.
+  desktop.wait_for("task-run-unavailable");
+  assert!(crate::github::shows(
+    &mut desktop,
+    "task-run-unavailable",
+    "Blocked by KON-3"
+  ));
+  desktop.tab_to("task-open-blocking-picker", 40);
+  desktop.enter();
+  desktop.wait_for("task-blocking-option-KON-2");
+  assert!(desktop.tree.get_element_by_id("task-blocking-option-KON-3").is_none());
   desktop.tab_to("save-draft", 40);
   desktop.enter();
   desktop.wait_until("valid dependency saved", |desktop| {
@@ -549,4 +530,37 @@ fn organization_add_link_skips_empty_and_cyclic_choices() {
   });
   let stored = tasks(&desktop.repo);
   assert_eq!(stored[0].organization().dependencies()[0].task, stored[2].id());
+}
+
+/// KON-1, KON-2 and KON-3, all named Dependency; KON-2 is blocked by KON-1.
+fn seed_dependencies(repo: &Path) {
+  use orchester_core::task::organization::{BlockingTask, DependencyGate};
+  let mut db = ProjectDb::open(repo).expect("open");
+  let details = TaskDetails {
+    title: Name::new("Dependency").expect("title"),
+    brief: String::new(),
+    acceptance_criteria: vec![],
+    pipeline: None,
+    limits: None,
+  };
+  let tasks = db
+    .create_tasks(
+      IdempotencyKey::generate(),
+      vec![details.clone(), details.clone(), details],
+      Timestamp::now(),
+    )
+    .expect("tasks");
+  let linked = TaskOrganization::new(
+    WorkflowStatus::Todo,
+    Priority::None,
+    None,
+    vec![BlockingTask {
+      task: tasks[0].id(),
+      gate: DependencyGate::Merge,
+    }],
+    vec![],
+  )
+  .expect("organization");
+  db.set_task_organization(tasks[1].id(), &linked, ChangeActor::Person, Timestamp::now())
+    .expect("link");
 }

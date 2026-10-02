@@ -115,6 +115,12 @@ fn organization_edit_form_keeps_the_cancel_confirmation_after_an_earlier_save() 
       .is_some(),
     "the confirmation stays open until it is answered"
   );
+  // N2: asking to confirm is not a failed save, in the status bar or under the actions.
+  assert!(!crate::agent_permissions::shows(&mut desktop, "Could not save task"));
+  assert!(!crate::agent_permissions::shows(
+    &mut desktop,
+    "Confirm stopping the active run"
+  ));
   assert_ne!(stored_status(&desktop), WorkflowStatus::Canceled);
 }
 
@@ -206,7 +212,7 @@ fn organization_header_follows_the_run_ending() {
   desktop.wait_until("the run stopped and the task canceled", |desktop| {
     stored_status(desktop) == WorkflowStatus::Canceled
       && desktop.tree.get_element_by_id("task-cancel-confirmation").is_none()
-      && crate::github::shows(desktop, "task-page", "Cancelled")
+      && crate::github::shows(desktop, "task-page", "Canceled")
   });
   choose_in_header(&mut desktop, "task-header-status", "Todo", |desktop| {
     stored_status(desktop) == WorkflowStatus::Todo

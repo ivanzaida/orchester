@@ -36,9 +36,36 @@ pub(super) fn outcome(ctx: &Ctx, tasks: &ProjectTasks, outcomes: Option<&Outcome
   let Some(outcomes) = outcomes else {
     return column.into();
   };
-  let changed = outcomes.results.iter().filter(|(_, result)| result.is_ok()).count();
+  let changed = outcomes
+    .results
+    .iter()
+    .filter(|(_, result)| result == &Ok(true))
+    .count();
   if changed > 0 {
     column = column.child(summary(ctx, tasks, &outcomes.mutation, changed));
+  }
+  let unchanged = outcomes
+    .results
+    .iter()
+    .filter(|(_, result)| result == &Ok(false))
+    .count();
+  if let (Mutation::RemoveTags(ids), 1..) = (&outcomes.mutation, unchanged) {
+    let text = ctx.t_args(
+      plural(
+        unchanged == 1,
+        "tasks.selection.tagsMissing.one",
+        "tasks.selection.tagsMissing.other",
+      ),
+      [
+        ("tags", tag_names(ctx, tasks, ids).as_str()),
+        ("count", unchanged.to_string().as_str()),
+      ],
+    );
+    column = column.child(
+      Text::new(&text)
+        .variant(TypographyStyle::Caption)
+        .id("bulk-outcome-unchanged"),
+    );
   }
   for (id, result) in &outcomes.results {
     let Err(error) = result else {

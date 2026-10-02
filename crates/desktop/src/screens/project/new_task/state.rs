@@ -73,7 +73,11 @@ impl NewTaskForm {
       recovered,
       ready,
       saving: saving.is_pending(),
-      save_error: saving.error.clone().filter(|_| !saving.is_pending()),
+      // Only a save that failed last shows its error; asking to confirm Canceled is not one.
+      save_error: saving
+        .error
+        .clone()
+        .filter(|error| saving.is_rejected() && !super::persistence::needs_cancel_confirmation(error)),
       starting: starting.is_pending(),
       retrying: self.retrying.get(),
       starting_pipeline: starting

@@ -19,6 +19,7 @@ mod pages;
 mod pipelines;
 mod pull_requests;
 mod repository_import;
+pub(crate) mod run_blockers;
 mod runner;
 mod runner_card;
 mod secrets;

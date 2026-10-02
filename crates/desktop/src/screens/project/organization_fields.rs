@@ -15,7 +15,10 @@ use orchester_core::{
   task::organization::{BlockingTask, DependencyGate, OrganizationError, Priority, TaskOrganization, WorkflowStatus},
 };
 
-use super::tag_picker::{TagPicker, TagPickerProps};
+use super::{
+  run_blockers::RunBlockers,
+  tag_picker::{TagPicker, TagPickerProps},
+};
 use crate::{
   tasks::organization::{
     OrganizationValue, PickerAppearance, PriorityChoice, WorkflowChoice, priority_select, workflow_select,
@@ -40,6 +43,8 @@ pub struct OrganizationDraft {
   pub reason: Signal<String>,
   pub value: Signal<OrganizationValue>,
   pub ready: Signal<bool>,
+  /// What blocks Run, shown beside the run action (`ZLhiM`).
+  pub blockers: Signal<RunBlockers>,
 }
 
 impl OrganizationDraft {
@@ -51,6 +56,7 @@ impl OrganizationDraft {
       reason: ctx.signal(String::new()),
       value: ctx.signal(OrganizationValue::default()),
       ready: ctx.signal(true),
+      blockers: ctx.signal(RunBlockers::default()),
     }
   }
   pub fn seed(&self, value: &TaskOrganization) {
@@ -145,12 +151,16 @@ impl Component for OrganizationFields {
           locked: props.locked,
           value: draft.value.clone(),
           ready: draft.ready.clone(),
+          blockers: draft.blockers.clone(),
           reason: draft.reason.clone(),
           blocked: draft.blocked.clone(),
         },
       ));
     } else {
       draft.ready.set(true);
+      if draft.blockers.get_untracked() != RunBlockers::default() {
+        draft.blockers.set(RunBlockers::default());
+      }
     }
     content
   }
@@ -194,6 +204,7 @@ struct DependencyProps {
   locked: bool,
   value: Signal<OrganizationValue>,
   ready: Signal<bool>,
+  blockers: Signal<RunBlockers>,
   reason: Signal<String>,
   blocked: Signal<bool>,
 }
@@ -249,6 +260,10 @@ impl Component for DependencyFields {
         .is_some_and(|phase| link.gate.is_completed(phase))
     });
     props.ready.set(unfinished.is_empty());
+    let blockers = RunBlockers::of(&tasks, &organization, &unfinished);
+    if props.blockers.get_untracked() != blockers {
+      props.blockers.set(blockers);
+    }
     column = column.child(readiness_note(
       ctx,
       &tasks,
@@ -362,19 +377,35 @@ impl DependencyFields {
 
   /// The tasks matching the search, each with a check once chosen (`tUwII`); the current task is
   /// named apart, since it cannot block itself.
-  fn results(&self, ctx: &Ctx, props: &DependencyProps, tasks: &crate::tasks::data::ProjectTasks) -> Column {
-    let query = self.query.get().trim().to_lowercase();
-    let matches = |task: &&orchester_core::task::Task| {
-      !query.is_empty()
-        && (task.details().title.as_str().to_lowercase().contains(&query)
-          || task.key().to_string().to_lowercase().contains(&query))
-    };
-    let chosen = self.choice.get().0;
-    let options: Vec<Element> = tasks
+  /// The tasks the search offers: matching it, neither the current task nor one already linked.
+  fn offered<'a>(
+    &self,
+    props: &DependencyProps,
+    tasks: &'a crate::tasks::data::ProjectTasks,
+  ) -> Vec<&'a orchester_core::task::Task> {
+    let linked = props.value.get().0;
+    tasks
       .tasks
       .iter()
-      .filter(matches)
+      .filter(|task| self.matches(task))
       .filter(|task| Some(task.id()) != props.task)
+      .filter(|task| !linked.dependencies().iter().any(|link| link.task == task.id()))
+      .collect()
+  }
+
+  fn matches(&self, task: &orchester_core::task::Task) -> bool {
+    let query = self.query.get().trim().to_lowercase();
+    !query.is_empty()
+      && (task.details().title.as_str().to_lowercase().contains(&query)
+        || task.key().to_string().to_lowercase().contains(&query))
+  }
+
+  fn results(&self, ctx: &Ctx, props: &DependencyProps, tasks: &crate::tasks::data::ProjectTasks) -> Column {
+    let matches = |task: &&orchester_core::task::Task| self.matches(task);
+    let chosen = self.choice.get().0;
+    let options: Vec<Element> = self
+      .offered(props, tasks)
+      .into_iter()
       .map(|task| {
         let label = ctx.t_args(
           "tasks.blocked.pickerLabel",
@@ -434,6 +465,12 @@ impl DependencyFields {
     }
     let (choice, value, picking) = (self.choice.clone(), props.value.clone(), self.picking.clone());
     let cycle = self.creates_cycle(props, tasks);
+    // Only a task the results show now can be added.
+    let offered = self
+      .choice
+      .get()
+      .0
+      .is_some_and(|chosen| self.offered(props, tasks).iter().any(|task| task.id() == chosen));
     let (query, clear_choice) = (self.query.clone(), self.choice.clone());
     let add = ActionButton::new(ctx.t("tasks.blocked.addSelected"))
       .icon(Icon::Plus)
@@ -446,7 +483,7 @@ impl DependencyFields {
           picking.set(false);
         }
       })
-      .enabled(self.choice.get().0.is_some() && !cycle)
+      .enabled(offered && !cycle)
       .render(ctx);
     Column::new()
       .width(Dimension::Pct(100.0))

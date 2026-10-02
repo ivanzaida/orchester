@@ -109,3 +109,69 @@ fn organization_tag_rename_onto_an_existing_name_offers_merge() {
     tags.len() == 1 && tags[0].id() == desktop_tag
   });
 }
+
+/// N1: bulk Remove tag counts the tasks that had the tag and names those that did not (`HI91q`).
+#[test]
+fn organization_bulk_remove_tag_counts_only_tasks_that_had_it() {
+  use orchester_core::{
+    id::IdempotencyKey,
+    store::TaskStore,
+    task::{
+      TaskDetails,
+      organization::{ChangeActor, Priority, TaskOrganization, WorkflowStatus},
+    },
+    time::Timestamp,
+  };
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let mut db = ProjectDb::open(repo).expect("open");
+    let details = TaskDetails {
+      title: Name::new("Bulk untagged").expect("title"),
+      brief: String::new(),
+      acceptance_criteria: vec![],
+      pipeline: None,
+      limits: None,
+    };
+    let tasks = db
+      .create_tasks(
+        IdempotencyKey::generate(),
+        vec![details.clone(), details.clone(), details],
+        Timestamp::now(),
+      )
+      .expect("tasks");
+    let tag = db.create_project_tag(Name::new("Desktop").expect("name")).expect("tag");
+    let tagged = TaskOrganization::new(WorkflowStatus::Backlog, Priority::None, None, vec![], vec![tag.id()])
+      .expect("organization");
+    db.set_task_organization(tasks[0].id(), &tagged, ChangeActor::Person, Timestamp::now())
+      .expect("tag the first task");
+  });
+  let tag = ProjectDb::open(&desktop.repo)
+    .expect("open")
+    .project_tags()
+    .expect("tags")[0]
+    .id();
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  for key in ["KON-1", "KON-2", "KON-3"] {
+    desktop.press(&format!("task-select-{key}"));
+  }
+  desktop.press("bulk-remove-tags");
+  desktop.wait_for(&format!("bulk-remove-tag-{tag}"));
+  desktop.press(&format!("bulk-remove-tag-{tag}"));
+  assert!(crate::agent_permissions::shows(
+    &mut desktop,
+    "Desktop is removed wherever present. Other tags stay."
+  ));
+  desktop.press("bulk-tags-remove-apply");
+  desktop.wait_for("bulk-outcome-unchanged");
+  assert!(crate::github::shows(
+    &mut desktop,
+    "bulk-outcome",
+    "Removed Desktop from 1 task."
+  ));
+  assert!(crate::github::shows(
+    &mut desktop,
+    "bulk-outcome-unchanged",
+    "2 selected tasks did not have Desktop."
+  ));
+}

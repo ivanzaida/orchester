@@ -6,9 +6,9 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction, Placement},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Modal, ModalTarget, Popup, Row},
+  components::{Column, Modal, ModalTarget, Popup, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -72,11 +72,12 @@ pub(super) enum Mutation {
   AddTags(Vec<TagId>),
   RemoveTags(Vec<TagId>),
 }
-/// The change a bulk action made and how it went for each selected task.
+/// The change a bulk action made and how it went for each selected task: whether it changed the
+/// task (Remove tag leaves a task without the tags as it was), or why it could not.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Outcomes {
   pub mutation: Mutation,
-  pub results: Vec<(TaskId, Result<(), Message>)>,
+  pub results: Vec<(TaskId, Result<bool, Message>)>,
 }
 impl lurq::app::component::DevtoolsInspectable for Outcomes {}
 type Action = FutureAction<(Vec<TaskId>, Mutation, bool), Outcomes, Message>;
@@ -339,6 +340,28 @@ impl BulkOrganization {
         .id(format!("bulk-remove-tag-{id}")),
       );
     }
+    // What Remove does with the chosen tags (`yM02l` in `HI91q`).
+    let chosen: Vec<&str> = props
+      .tasks
+      .tags
+      .iter()
+      .filter(|tag| self.tags.get().0.tags().contains(&tag.id()))
+      .map(|tag| tag.name().as_str())
+      .collect();
+    if !chosen.is_empty() {
+      column = column.child(
+        Text::new(&ctx.t_args(
+          if chosen.len() == 1 {
+            "tasks.selection.removeHint.one"
+          } else {
+            "tasks.selection.removeHint.other"
+          },
+          [("tags", chosen.join(&ctx.t("common.listSeparator")).as_str())],
+        ))
+        .variant(TypographyStyle::Caption)
+        .width(Dimension::Pct(100.0)),
+      );
+    }
     let (apply, tags) = (action.clone(), self.tags.clone());
     column.child(
       ActionButton::new(ctx.t_args(
@@ -413,7 +436,7 @@ async fn apply(
   mutation: Mutation,
   confirmed: bool,
   runners: &Runners,
-) -> Result<(), Message> {
+) -> Result<bool, Message> {
   if confirmed && matches!(mutation, Mutation::Status(WorkflowStatus::Canceled)) {
     let root = root.to_owned();
     let run = background::run(move || ProjectDb::open(&root).and_then(|db| db.active_task_run(task)))
@@ -429,9 +452,14 @@ async fn apply(
   let root = root.to_owned();
   background::run(move || {
     let mut db = ProjectDb::open(&root)?;
+    let had = std::cell::Cell::new(false);
     db.update_task_organizations(&[task], ChangeActor::Person, Timestamp::now(), |value| {
+      if let Mutation::RemoveTags(tags) = &mutation {
+        had.set(had.get() || value.tags().iter().any(|tag| tags.contains(tag)));
+      }
       update(value, &mutation)
-    })
+    })?;
+    Ok::<_, orchester_store::StoreError>(had.get() || !matches!(mutation, Mutation::RemoveTags(_)))
   })
   .await?
   .map_err(|error| messages::store_error(&error))

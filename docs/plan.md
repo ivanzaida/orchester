@@ -207,6 +207,11 @@ the tab's rows, or "N tasks match" while filtered; renaming a project tag onto a
 it; the Blocked flag sits beside the run label in 60-high rows; the blocking-task search lists results with a check,
 Add selected task and the current task apart (`tUwII`); an empty filtered list is the `rVJoA` notice with Clear
 filters.
+Re-verification follow-ups: bulk Remove tag counts the tasks that had the tag and names the others ("2 selected
+tasks did not have Desktop."), with the panel hint; asking to confirm Canceled in Edit task is no failed save (no
+status-bar failure, no inline error); the task form shows "Run unavailable" with the unfinished blocking tasks above
+its run action (`ZLhiM`); "Canceled" is the one spelling in the app's text; the bulk Add tag picker has one frame;
+the blocking search offers no linked task and adds only a task it shows.
 
 **Remaining:** an independent Review of both merges and the fixes, Pencil frames for the combined bar, query lines and
 narrow table, and independent app/Pencil verification of the 24 ORC-39 states (`docs/design/orchester-workspace.md`,

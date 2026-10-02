@@ -43,21 +43,28 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
     let runners = runners.clone();
     let (activity, spec) = (activity.clone(), operations::task_draft(&open, details.title.as_str()));
     async move {
-      let save = async move {
-        if confirmed
-          && organization.status() == orchester_core::task::organization::WorkflowStatus::Canceled
-          && let crate::tasks::data::SaveTarget::Task(task) = target
+      let canceling = match target {
+        crate::tasks::data::SaveTarget::Task(task)
+          if organization.status() == orchester_core::task::organization::WorkflowStatus::Canceled =>
         {
-          let root = repo_root.clone();
-          let run = background::run(move || ProjectDb::open(&root).and_then(|db| db.active_task_run(task)))
-            .await?
-            .map_err(|error| messages::store_error(&error))?;
-          if let Some(run) = run {
-            runners
-              .control_run(orchester_ipc::Command::CancelRun { run })
-              .await
-              .map_err(|error| crate::tasks::run::control_message(&error))?;
-          }
+          Some(task)
+        }
+        _ => None,
+      };
+      // Asking to confirm is not a failed save: it is not reported as one (`N1vwaM`).
+      let active = match canceling {
+        Some(task) => active_run(&repo_root, task).await?,
+        None => None,
+      };
+      if active.is_some() && !confirmed {
+        return Err(Message::new(messages::CANCEL_CONFIRM_REQUIRED));
+      }
+      let save = async move {
+        if confirmed && let Some(run) = active {
+          runners
+            .control_run(orchester_ipc::Command::CancelRun { run })
+            .await
+            .map_err(|error| crate::tasks::run::control_message(&error))?;
         }
         let saved = background::run(move || {
           let mut db = ProjectDb::open(&repo_root).map_err(TaskDraftSaveError::Store)?;
@@ -100,4 +107,15 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
 /// asks before saving again with the cancellation confirmed.
 pub(super) fn needs_cancel_confirmation(error: &Message) -> bool {
   error.key == messages::CANCEL_CONFIRM_REQUIRED
+}
+
+/// The run of `task` that has not ended, if any.
+async fn active_run(
+  root: &std::path::Path,
+  task: orchester_core::id::TaskId,
+) -> Result<Option<orchester_core::id::RunId>, Message> {
+  let root = root.to_owned();
+  background::run(move || ProjectDb::open(&root).and_then(|db| db.active_task_run(task)))
+    .await?
+    .map_err(|error| messages::store_error(&error))
 }

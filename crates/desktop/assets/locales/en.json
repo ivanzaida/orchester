@@ -345,7 +345,7 @@
       "succeeded": "Run #{{run}} completed",
       "merged": "Run #{{run}} merged",
       "failed": "Run #{{run}} failed",
-      "cancelled": "Run #{{run}} was cancelled"
+      "cancelled": "Run #{{run}} was canceled"
     },
     "insights": "Run activity and attention",
     "summary": {
@@ -366,7 +366,7 @@
         "previous": "Waiting for the previous task to be ready for review",
         "concurrency": "Waiting for task concurrency",
         "groupCap": "Held at the group token cap. Select the waiting tasks and choose Return to drafts to schedule them again.",
-        "failure": "Held after a task failed or was cancelled. Select the waiting tasks and choose Return to drafts to schedule them again.",
+        "failure": "Held after a task failed or was canceled. Select the waiting tasks and choose Return to drafts to schedule them again.",
         "startFailed": "Start failed. Check the runner log and retry after resolving the problem.",
         "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks."
       },
@@ -553,6 +553,14 @@
         "one": "Removed {{tags}} from {{count}} task.",
         "other": "Removed {{tags}} from {{count}} tasks."
       },
+      "tagsMissing": {
+        "one": "{{count}} selected task did not have {{tags}}.",
+        "other": "{{count}} selected tasks did not have {{tags}}."
+      },
+      "removeHint": {
+        "one": "{{tags}} is removed wherever present. Other tags stay.",
+        "other": "{{tags}} are removed wherever present. Other tags stay."
+      },
       "failed": "{{task}} could not be updated: {{reason}}",
       "run": "Run",
       "tagMembership": "{{tag}} · on {{count}} of {{total}} tasks",
@@ -578,7 +586,7 @@
       "succeeded": "Completed",
       "merged": "Merged",
       "failed": "Failed",
-      "cancelled": "Cancelled",
+      "cancelled": "Canceled",
       "unreadable": "Unreadable"
     },
     "readiness": {
@@ -603,7 +611,7 @@
       "succeeded": "Every step passed",
       "merged": "Merged into {{branch}}",
       "failed": "Run failed",
-      "cancelled": "Run cancelled"
+      "cancelled": "Run canceled"
     },
     "pipeline": {
       "notChosen": "No pipeline",
@@ -736,6 +744,12 @@
       "rowUnfinished": "Blocked · {{tasks}} unfinished",
       "informational": "Blocked · {{reason}}",
       "runUnavailable": "Run is unavailable until the linked blocking tasks finish.",
+      "runUnavailableTitle": "Run unavailable",
+      "blockerLabel": "{{task}} — {{title}}",
+      "runUnavailableOne": "Blocked by {{task}} — {{title}}. This task is still {{status}}.",
+      "runUnavailableMany": "Blocked by {{tasks}}. These tasks are not finished.",
+      "finishedLink": "{{task}} is {{status}} and does not block Run.",
+      "unblockHint": "Clear Blocked to remove the manual flag and reason. Blocking links are edited separately.",
       "runUnavailableWhile": "Run is unavailable while {{tasks}} is unfinished.",
       "messageKept": "Your message is kept. The agent reads it once the blocking tasks finish.",
       "linkLabel": "{{key}} · {{title}}",
@@ -886,8 +900,8 @@
         "interrupted": "Run {{run}} · Attempt {{attempt}} · interrupted at {{step}}",
         "succeeded": "Run {{run}} · Attempt {{attempt}} · every step passed",
         "failed": "Run {{run}} · Attempt {{attempt}} · failed at {{step}}",
-        "cancelled": "Run {{run}} · Attempt {{attempt}} · cancelled",
-        "cancelledBeforeStart": "Run {{run}} · cancelled before it started",
+        "cancelled": "Run {{run}} · Attempt {{attempt}} · canceled",
+        "cancelledBeforeStart": "Run {{run}} · canceled before it started",
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
         "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted",
         "brokeAgain": "Run {{run}} · Attempt {{attempt}} · {{step}} stopped again without a result",
@@ -918,9 +932,9 @@
         "run": "Run #{{run}}",
         "runUnnumbered": "Run",
         "failedAt": "Failed at {{step}}",
-        "cancelledAt": "Cancelled at {{step}} · work kept on {{branch}}",
-        "cancelled": "Cancelled · work kept on {{branch}}",
-        "cancelledBeforeStart": "Cancelled before it started"
+        "cancelledAt": "Canceled at {{step}} · work kept on {{branch}}",
+        "cancelled": "Canceled · work kept on {{branch}}",
+        "cancelledBeforeStart": "Canceled before it started"
       },
       "tabDetail": "Nothing this run did can be shown until its record can be read. Summary lists the task’s other runs.",
       "rejected": "This run could not be read, so it cannot change. The database file is kept unchanged."
@@ -934,7 +948,7 @@
       "passed": "Done",
       "failed": "Failed",
       "skipped": "Skipped",
-      "cancelled": "Cancelled"
+      "cancelled": "Canceled"
     },
     "permissions": {
       "label": {
@@ -1058,7 +1072,7 @@
         "failedCommandDetail": "Activity shows the command, its exit code and its output.",
         "waitingTitle": "{{step}} needs your decision",
         "waitingDetail": "Automatic execution has stopped. Allow another attempt, return the work to an earlier step, or stop the run.",
-        "cancelledTitle": "The run was cancelled",
+        "cancelledTitle": "The run was canceled",
         "cancelledDetail": "Completed work stays on {{branch}}."
       }
     },
@@ -1077,7 +1091,7 @@
         "complete": "Complete",
         "failed": "Failed",
         "skipped": "Skipped",
-        "cancelled": "Cancelled"
+        "cancelled": "Canceled"
       },
       "failure": {
         "reported": "Reported failed",
@@ -3044,7 +3058,7 @@
       "installingDetail": "Agents that start before it finishes still use slower search. You can leave this page; the install continues until it finishes, you cancel it or you close Orchester.",
       "installingDetailContinues": "Agents that start before it finishes still use slower search. You can leave this page; the install continues until it finishes or you cancel it, also after you close Orchester.",
       "cancelInstall": "Cancel",
-      "installCancelled": "You cancelled the install; {{installer}} was stopped. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "installCancelled": "You canceled the install; {{installer}} was stopped. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
       "installTimedOut": "{{installer}} did not finish within {{minutes}} minutes and was stopped. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
       "running": "Running",
       "lastOutput": "Last output: {{line}}",

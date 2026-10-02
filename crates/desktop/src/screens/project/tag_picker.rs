@@ -211,24 +211,25 @@ impl TagPicker {
     let create = action.clone();
     let typed = self.query.clone();
     let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
-    let mut menu = Column::new()
-      .width(if props.inline {
-        Dimension::Pct(100.0)
-      } else {
-        Dimension::Px(MENU_WIDTH)
-      })
-      .padding(crate::theme::ExtraSpacing::Stack.role())
-      .background(PaletteColor::SurfaceRaised)
-      .rounded(RadiusSize::Md)
-      .border_inside(BorderSize::Sm, PaletteColor::Border)
-      .spacing(SpacingSize::Sm)
-      .child(Text::new(&ctx.t("tasks.tags.search")).variant(TypographyStyle::Caption))
-      .child(
-        text_input(ctx, "tag-search", input.clone(), false, TypographyStyle::Body)
-          .placeholder(&ctx.t("tasks.tags.search"))
-          .on_input(move |event: lurq::app::events::TextInputEvent| input.set(event.new_value)),
-      )
-      .child(ScrollVertical::new(choices).max_height(Dimension::Px(MENU_HEIGHT)));
+    // Inline, the picker sits in the bulk Add tag panel, which is the only frame (`HI91q`).
+    let mut menu = if props.inline {
+      Column::new().width(Dimension::Pct(100.0))
+    } else {
+      Column::new()
+        .width(Dimension::Px(MENU_WIDTH))
+        .padding(crate::theme::ExtraSpacing::Stack.role())
+        .background(PaletteColor::SurfaceRaised)
+        .rounded(RadiusSize::Md)
+        .border_inside(BorderSize::Sm, PaletteColor::Border)
+    }
+    .spacing(SpacingSize::Sm)
+    .child(Text::new(&ctx.t("tasks.tags.search")).variant(TypographyStyle::Caption))
+    .child(
+      text_input(ctx, "tag-search", input.clone(), false, TypographyStyle::Body)
+        .placeholder(&ctx.t("tasks.tags.search"))
+        .on_input(move |event: lurq::app::events::TextInputEvent| input.set(event.new_value)),
+    )
+    .child(ScrollVertical::new(choices).max_height(Dimension::Px(MENU_HEIGHT)));
     // Create and what the typed name means come before Manage project tags (`IOWwP`, `yrT73`).
     let existing = tags
       .iter()

@@ -546,7 +546,7 @@ fn run_controls_cancel_a_working_run() {
   desktop.wait_until("the cancelled run", |desktop| {
     has(desktop, "task-page") && !has(desktop, "task-cancel-run")
   });
-  assert!(shows(&mut desktop, "task-notice", "The run was cancelled"));
+  assert!(shows(&mut desktop, "task-notice", "The run was canceled"));
 }
 
 #[test]
