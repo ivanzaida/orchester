@@ -1176,6 +1176,7 @@ Reused: `zo9Py`, `TSJpn`, `SOW6S`, `u1XBP`, `DeizF`, `ZGwlv`, `mDnc3`, `N4SlQq`,
 - **Failed state.** *Continue with instructions* is the primary action; *Run again* is secondary in the topbar on this tab.
 - **Progress.** The step header is enough while chatting; the progress rows and *Working context* stay on Summary.
 - **Specified, not drawn.** The paused and interrupted composer states and the still-growing tool group are specified here only; that is enough.
+- **Search** (2026-10-02, after ORC-61's Design step drew Tools view and search, `q4fCXK`, `a5hF4`, `gLVQQ`): following live continues while a search is active, and matches are counted, not highlighted inside the text.
 
 ## Code index
 
