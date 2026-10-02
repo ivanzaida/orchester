@@ -22,7 +22,7 @@ use crate::{
   },
   ui::{
     button::ActionButton,
-    field::{FieldNote, field, text_input},
+    field::{FieldNote, field, locked_input, text_input},
     icon::Icon,
   },
 };
@@ -72,10 +72,13 @@ pub struct OrganizationFieldsProps {
   pub draft: OrganizationDraft,
   pub root: PathBuf,
   pub task: Option<TaskId>,
+  /// The form is locked (a queued task awaiting its first run, or Create & run under way): the
+  /// fields show the stored values and cannot change.
+  pub locked: bool,
 }
 impl PartialEq for OrganizationFieldsProps {
   fn eq(&self, other: &Self) -> bool {
-    self.root == other.root && self.task == other.task
+    self.root == other.root && self.task == other.task && self.locked == other.locked
   }
 }
 impl lurq::app::component::DevtoolsInspectable for OrganizationFieldsProps {}
@@ -99,7 +102,7 @@ impl Component for OrganizationFields {
     };
     let mut content = Column::new()
       .spacing(SpacingSize::Lg)
-      .child(organization_pickers(ctx, draft))
+      .child(organization_pickers(ctx, draft, !props.locked))
       .child(Text::new(&ctx.t("tasks.tags.label")).variant(TypographyStyle::Caption))
       .child(ctx.mount_keyed::<TagPicker>(
         "form-tags",
@@ -107,12 +110,12 @@ impl Component for OrganizationFields {
           root: props.root.clone(),
           appearance: PickerAppearance::Field,
           selected: draft.value.clone(),
-          enabled: true,
+          enabled: !props.locked,
         },
       ))
-      .child(blocked_control(ctx, blocked, flip));
+      .child(blocked_control(ctx, blocked, flip, !props.locked));
     if blocked {
-      let control: Element = text_input(
+      let input = text_input(
         ctx,
         "task-blocked-reason",
         reason.clone(),
@@ -121,8 +124,8 @@ impl Component for OrganizationFields {
       )
       .multiline()
       .height(Dimension::Px(BLOCKED_REASON_HEIGHT))
-      .on_input(move |event: lurq::app::events::TextInputEvent| reason.set(event.new_value))
-      .into();
+      .on_input(move |event: lurq::app::events::TextInputEvent| reason.set(event.new_value));
+      let control: Element = locked_input(input, props.locked).into();
       content = content.child(field(&ctx.t("tasks.blocked.reason"), control, note));
     }
     if blocked || !draft.value.get().0.dependencies().is_empty() {
@@ -131,6 +134,7 @@ impl Component for OrganizationFields {
         DependencyProps {
           root: props.root,
           task: props.task,
+          locked: props.locked,
           value: draft.value.clone(),
           ready: draft.ready.clone(),
           reason: draft.reason.clone(),
@@ -144,7 +148,7 @@ impl Component for OrganizationFields {
   }
 }
 
-fn organization_pickers(ctx: &Ctx, draft: &OrganizationDraft) -> Element {
+fn organization_pickers(ctx: &Ctx, draft: &OrganizationDraft, enabled: bool) -> Element {
   Row::new()
     .spacing(SpacingSize::Lg)
     .child(Column::new().flex(1.0).child(field(
@@ -153,7 +157,7 @@ fn organization_pickers(ctx: &Ctx, draft: &OrganizationDraft) -> Element {
         ctx,
         draft.status.clone(),
         "task-workflow-field",
-        true,
+        enabled,
         PickerAppearance::Field,
       ),
       FieldNote::None,
@@ -164,7 +168,7 @@ fn organization_pickers(ctx: &Ctx, draft: &OrganizationDraft) -> Element {
         ctx,
         draft.priority.clone(),
         "task-priority-field",
-        true,
+        enabled,
         PickerAppearance::Field,
       ),
       FieldNote::None,
@@ -179,6 +183,7 @@ impl lurq::app::component::DevtoolsInspectable for DependencyChoice {}
 struct DependencyProps {
   root: PathBuf,
   task: Option<TaskId>,
+  locked: bool,
   value: Signal<OrganizationValue>,
   ready: Signal<bool>,
   reason: Signal<String>,
@@ -186,7 +191,7 @@ struct DependencyProps {
 }
 impl PartialEq for DependencyProps {
   fn eq(&self, other: &Self) -> bool {
-    self.root == other.root && self.task == other.task
+    self.root == other.root && self.task == other.task && self.locked == other.locked
   }
 }
 impl lurq::app::component::DevtoolsInspectable for DependencyProps {}
@@ -244,6 +249,9 @@ impl Component for DependencyFields {
       },
     ));
     column = self.link_rows(ctx, &props, &tasks, column);
+    if props.locked {
+      return column;
+    }
     column.child(self.add_control(ctx, &props, &tasks))
   }
 }
@@ -310,6 +318,7 @@ impl DependencyFields {
                   .expect("removing a dependency preserves organization invariants");
                 });
               })
+              .enabled(!props.locked)
               .render(ctx),
           ),
       );
@@ -457,25 +466,28 @@ fn readiness_note(ctx: &Ctx, tasks: &crate::tasks::data::ProjectTasks, unfinishe
 // ZLhiM free-text reason field.
 const BLOCKED_REASON_HEIGHT: f32 = 96.0;
 
-fn blocked_control(ctx: &Ctx, checked: bool, value: Signal<bool>) -> Element {
-  let button = crate::ui::pressable::keyboard_stop(
-    crate::ui::pressable::surface()
-      .id("task-blocked-field")
-      .cursor(lurq::node::CursorIcon::Pointer)
-      .hovered_style(lurq::node::Style::new().background(lurq::app::theme::PaletteColor::AccentMuted))
-      .on_click(move |_| value.update(|value| *value = !*value))
-      .child(
-        Row::new()
-          .spacing(SpacingSize::Sm)
-          .child(crate::ui::icon::icon(
-            if checked { Icon::SquareCheck } else { Icon::Square },
-            crate::ui::icon::IconSize::Small,
-            lurq::app::theme::PaletteColor::TextPrimary,
-          ))
-          .child(Text::new(&ctx.t("tasks.blocked.label")).variant(TypographyStyle::Caption)),
-      ),
-    crate::ui::pressable::Ring::Outer,
-  );
+/// The Blocked checkbox; `enabled` is false in the locked form, where it only shows the value.
+fn blocked_control(ctx: &Ctx, checked: bool, value: Signal<bool>, enabled: bool) -> Element {
+  let content = Row::new()
+    .spacing(SpacingSize::Sm)
+    .child(crate::ui::icon::icon(
+      if checked { Icon::SquareCheck } else { Icon::Square },
+      crate::ui::icon::IconSize::Small,
+      lurq::app::theme::PaletteColor::TextPrimary,
+    ))
+    .child(Text::new(&ctx.t("tasks.blocked.label")).variant(TypographyStyle::Caption));
+  let surface = crate::ui::pressable::surface().id("task-blocked-field").child(content);
+  let button = if enabled {
+    crate::ui::pressable::keyboard_stop(
+      surface
+        .cursor(lurq::node::CursorIcon::Pointer)
+        .hovered_style(lurq::node::Style::new().background(lurq::app::theme::PaletteColor::AccentMuted))
+        .on_click(move |_| value.update(|value| *value = !*value)),
+      crate::ui::pressable::Ring::Outer,
+    )
+  } else {
+    surface
+  };
   Row::new()
     .spacing(SpacingSize::Sm)
     .child(button)

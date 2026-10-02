@@ -349,3 +349,14 @@ pub fn marked_value_box(
   };
   value_box_parts(ctx, id, (text, typography), tone, Trailing::Marker(glyph), height)
 }
+
+/// `input` as a locked form shows it: its value stays as it is and it takes no focus.
+pub fn locked_input(input: TextInput, locked: bool) -> TextInput {
+  if locked {
+    input
+      .on_input(|event: lurq::app::events::TextInputEvent| event.prevent_default())
+      .focusable(false)
+  } else {
+    input
+  }
+}

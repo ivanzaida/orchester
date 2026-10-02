@@ -1,16 +1,17 @@
 //! Task organization after a change: a failed save does not pass for the last one that
-//! succeeded, and the task header's pickers follow the task as it is now.
+//! succeeded, the task header's pickers follow the task as it is now, and the locked Retry form
+//! keeps the stored organization.
 
 use std::{path::Path, time::Duration};
 
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   name::Name,
-  resource::ResourceKind,
+  resource::{ResourceKind, VersionNumber},
   store::{ResourceStore, TaskStore},
   task::{
     TaskDetails, TaskLimits,
-    organization::{Priority, WorkflowStatus},
+    organization::{ChangeActor, Priority, TaskOrganization, WorkflowStatus},
   },
   tokens::TokenBudget,
 };
@@ -211,4 +212,52 @@ fn organization_header_follows_the_run_ending() {
   }
   assert!(desktop.tree.get_element_by_id("task-cancel-confirmation").is_none());
   assert_eq!(stored_status(&desktop), WorkflowStatus::Canceled);
+}
+
+/// KON-1, queued for its first run with no run recorded, In progress and High.
+fn seed_queued(repo: &Path) {
+  let mut db = ProjectDb::open(repo).expect("open");
+  delivery(&mut db);
+  let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
+  let id = db
+    .create_tasks(IdempotencyKey::generate(), vec![complete(pipeline)], at(10))
+    .expect("task")[0]
+    .id();
+  let organization = TaskOrganization::default()
+    .with_status(WorkflowStatus::InProgress)
+    .with_priority(Priority::High);
+  db.set_task_organization(id, &organization, ChangeActor::Person, at(11))
+    .expect("organized");
+  let mut task = db.task(id).expect("read").expect("task");
+  task.queue(VersionNumber::FIRST).expect("a complete task");
+  db.save_task(&task).expect("queued");
+}
+
+/// R3: Retry run starts the task as stored, so the locked form offers no organization change.
+#[test]
+fn organization_locked_retry_form_keeps_the_stored_organization() {
+  let mut desktop = Desktop::with_seeded_project(seed_queued);
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  desktop.click("task-row-KON-1");
+  desktop.wait_for("task-workflow-field");
+  let stops = desktop.stops(STOPS, false);
+  assert!(stops.contains(&Some("create-and-run".into())), "Retry run is available");
+  for control in [
+    "task-workflow-field",
+    "task-priority-field",
+    "task-tags-picker",
+    "task-blocked-field",
+  ] {
+    assert!(!stops.contains(&Some(control.into())), "{control} is locked");
+  }
+  desktop.press("task-blocked-field");
+  desktop.press("task-tags-picker");
+  desktop.pass();
+  assert!(desktop.tree.get_element_by_id("task-blocked-reason").is_none());
+  assert!(desktop.tree.get_element_by_id("tag-search").is_none());
+  let organization = tasks(&desktop.repo)[0].organization().clone();
+  assert_eq!(organization.status(), WorkflowStatus::InProgress);
+  assert_eq!(organization.priority(), Priority::High);
 }
