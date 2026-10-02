@@ -134,6 +134,15 @@ fn claude_approvals_show_mcp_arguments_without_secrets_that_json_escapes() {
 }
 
 #[test]
+fn claude_approvals_remove_a_secret_held_as_a_number() {
+  let shown = shown_with(
+    vec![secret("PIN", "4815162342")],
+    &json!({"pin": 4_815_162_342_u64, "retries": 3}),
+  );
+  assert_eq!(shown, r#"{"pin":"<redacted>","retries":3}"#);
+}
+
+#[test]
 fn claude_approvals_remove_a_secret_deep_inside_long_arguments() {
   let token = "sk-live-0123456789abcdef";
   let text = format!(

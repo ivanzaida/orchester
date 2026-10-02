@@ -34,7 +34,7 @@ pub const WINDOW_CONTROL_WIDTH: f32 = tokens::WINDOW_CONTROL_WIDTH;
 /// Width of the lifecycle dialogs at most (`um9B1`, `KS2RU`, `BovYZ`); narrower windows keep
 /// `ExtraSpacing::DialogMargin` on either side instead.
 pub const LIFECYCLE_DIALOG_WIDTH: f32 = tokens::LIFECYCLE_DIALOG_WIDTH;
-/// The tallest a value in the approval dialog grows before it scrolls (04.H9 `bwWuT`).
+/// The tallest a long value's box in the approval dialog grows before it scrolls (`E5NBo` in `bjrgu`).
 pub const APPROVAL_VALUE_MAX_HEIGHT: f32 = tokens::APPROVAL_VALUE_MAX_HEIGHT;
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = tokens::CONNECTOR_STROKE;

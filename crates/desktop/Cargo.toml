@@ -49,7 +49,9 @@ orchester-store.workspace = true
 orchester-vault.workspace = true
 parking_lot.workspace = true
 rfd.workspace = true
-# Checks that an MCP call's arguments are JSON before the approval dialog lays them out for reading.
+# Checks that an MCP call's arguments are JSON, without building them, before the approval dialog
+# lays them out for reading.
+serde.workspace = true
 serde_json.workspace = true
 syntect.workspace = true
 thiserror.workspace = true

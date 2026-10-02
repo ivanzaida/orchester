@@ -22,7 +22,7 @@ use orchester_core::{
 };
 use orchester_ipc::Command;
 
-use super::{approval_value::ValueRows, native_approval};
+use super::{approval_arguments::ArgumentsCache, approval_value::ValueRows, native_approval};
 use crate::{
   messages::Message,
   runner::Runners,
@@ -105,6 +105,7 @@ fn decision_action(ctx: &mut Ctx) -> DecisionAction {
 pub(super) struct ToolApprovalDialog {
   requested: Signal<Option<Choice>>,
   copied: Signal<Copied>,
+  arguments: ArgumentsCache,
 }
 
 impl Component for ToolApprovalDialog {
@@ -115,6 +116,7 @@ impl Component for ToolApprovalDialog {
     Self {
       requested: ctx.signal(None),
       copied: ctx.signal(Copied::default()),
+      arguments: ArgumentsCache::default(),
     }
   }
 
@@ -135,6 +137,7 @@ impl Component for ToolApprovalDialog {
         action: &action,
         requested_signal: &self.requested,
         copied: &self.copied,
+        arguments: &self.arguments,
       },
     );
     Modal::new(content).target(ModalTarget::Root).dismiss_on_escape(false)
@@ -165,6 +168,7 @@ struct DialogState<'a> {
   action: &'a DecisionAction,
   requested_signal: &'a Signal<Option<Choice>>,
   copied: &'a Signal<Copied>,
+  arguments: &'a ArgumentsCache,
 }
 
 fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
@@ -174,11 +178,14 @@ fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
   };
   // No taller than the screen: the details scroll between the header and the buttons, so Approve
   // and Deny stay in view however long the values are.
-  let details = ScrollVertical::new(details(&ValueRows::new(ctx, state.copied), state.props))
-    .id("tool-approval-details-scroll")
-    .width(Dimension::Pct(100.0))
-    .flex_shrink(1.0)
-    .scrollbar(select_menu_scrollbar());
+  let details = ScrollVertical::new(details(
+    &ValueRows::new(ctx, state.copied, state.arguments),
+    state.props,
+  ))
+  .id("tool-approval-details-scroll")
+  .width(Dimension::Pct(100.0))
+  .flex_shrink(1.0)
+  .scrollbar(select_menu_scrollbar());
   let panel = Column::new()
     .id("tool-approval-dialog")
     .width(Dimension::Px(width))
@@ -305,18 +312,23 @@ fn cli_details(values: &ValueRows<'_>, column: Column, approval: &PendingToolApp
         .as_deref()
         .map(|value| values.value(ValueRows::TARGET, &ctx.t(target), value)),
     )
-    .with_children(approval.scope.as_deref().map(|scope| scope_row(values, command, scope)))
+    .with_children(
+      approval
+        .scope
+        .as_deref()
+        .map(|scope| scope_row(values, approval, scope)),
+    )
 }
 
 /// What a request says beside its action: for a command, the reason the agent gave; for an MCP
 /// call, its arguments as one line of JSON with secret values removed, recorded whole up to
 /// `ARGUMENTS_CEILING` and shown here in full under their label.
-fn scope_row(values: &ValueRows<'_>, command: bool, scope: &str) -> Element {
+fn scope_row(values: &ValueRows<'_>, approval: &PendingToolApproval, scope: &str) -> Element {
   let ctx = values.ctx();
-  if command {
+  if approval.command {
     property(&ctx.t("runs.toolApproval.note"), scope)
   } else {
-    values.arguments(&ctx.t("runs.toolApproval.arguments"), scope)
+    values.arguments(&ctx.t("runs.toolApproval.arguments"), &approval.id, scope)
   }
 }
 

@@ -19,7 +19,7 @@ use lurq::{
 };
 
 use super::{button::ActionButton, field::field_error, icon::Icon};
-use crate::theme::{APPROVAL_VALUE_MAX_HEIGHT, ExtraColor, ExtraSpacing, ExtraTypography, command_scrollbar};
+use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, command_scrollbar};
 
 /// Copy button height (`eFsWL`).
 const COPY_HEIGHT: f32 = 26.0;
@@ -33,16 +33,17 @@ impl lurq::app::component::DevtoolsInspectable for Copied {}
 /// Where the row is: in a dialog (a form), with 11px text (`cdRcl`) and Copy as a Tab stop; on a
 /// page (an inspector), with 10px text (`Z913A`) and Copy pointer-only, since only form controls
 /// take the focus; or in a transcript entry's details, with the output's mono text (`mMUyR`).
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum CommandPlace {
   Dialog,
   Page,
   /// Lines are kept as recorded and scroll sideways inside the box; Copy stays in view.
   Transcript,
-  /// A value the approval dialog asks about: the transcript's box, with Copy a Tab stop of the
-  /// dialog, and lines that also scroll down inside it once they are taller than
-  /// [`APPROVAL_VALUE_MAX_HEIGHT`].
-  Approval,
+  /// A long value in a dialog: the transcript's box, with Copy a Tab stop of the dialog, no
+  /// taller than `max_height`; its lines also scroll down inside it.
+  Capped {
+    max_height: f32,
+  },
 }
 
 /// A single-line display preview: every run of whitespace that holds a line break, with the
@@ -120,8 +121,8 @@ pub fn laid_out_row(
       copy.in_form().render(ctx),
     ),
     CommandPlace::Page => wrapping_row(&id, shown, TypographyStyle::Mono, copy.render(ctx)),
-    CommandPlace::Transcript => transcript_row(&id, shown, copy.render(ctx), false),
-    CommandPlace::Approval => transcript_row(&id, shown, copy.in_form().render(ctx), true),
+    CommandPlace::Transcript => transcript_row(&id, shown, copy.render(ctx), None),
+    CommandPlace::Capped { max_height } => transcript_row(&id, shown, copy.in_form().render(ctx), Some(max_height)),
   };
   if outcome != Some(false) {
     return row.into();
@@ -174,9 +175,9 @@ fn wrapping_row(id: &str, command: &str, typography: TypographyStyle, copy: Elem
 
 /// Transcript details (`uA3Sh` in `N4SlQq`): every line as recorded, never wrapped, scrolling
 /// sideways in a viewport of the box's own; Copy keeps its column at the top right. The box's
-/// bottom padding sits inside the viewport, where lurq overlays the horizontal thumb. A `capped`
-/// viewport is no taller than [`APPROVAL_VALUE_MAX_HEIGHT`] and scrolls down as well.
-fn transcript_row(id: &str, command: &str, copy: Element, capped: bool) -> Row {
+/// bottom padding sits inside the viewport, where lurq overlays the horizontal thumb. A box with a
+/// `max_height` is no taller, and its viewport scrolls down as well.
+fn transcript_row(id: &str, command: &str, copy: Element, max_height: Option<f32>) -> Row {
   let lines = Column::new().padding_bottom(ExtraSpacing::Tight.role()).child(
     Column::new()
       .padding_vertical(ExtraSpacing::CommandLines.role())
@@ -190,14 +191,20 @@ fn transcript_row(id: &str, command: &str, copy: Element, capped: bool) -> Row {
           .nowrap(),
       ),
   );
-  command_box(id)
+  let row = command_box(id);
+  let row = match max_height {
+    Some(max_height) => row.max_height(Dimension::Px(max_height)),
+    None => row,
+  };
+  row
     .padding_top(ExtraSpacing::Tight.role())
     // Selecting or copying details must not toggle the enclosing transcript entry.
     .on_click(|event: MouseEvent| event.stop_propagation())
-    .child(lines_viewport(id, lines, capped))
+    .child(lines_viewport(id, lines, max_height.is_some()))
     .child(Column::new().padding_bottom(ExtraSpacing::Tight.role()).child(copy))
 }
 
+/// Where the lines scroll: sideways, or both ways in a `capped` box, as tall as the box lets it.
 fn lines_viewport(id: &str, lines: Column, capped: bool) -> Element {
   let id = format!("{id}-scroll");
   if !capped {
@@ -212,7 +219,6 @@ fn lines_viewport(id: &str, lines: Column, capped: bool) -> Element {
     .id(id)
     .scrollbar(command_scrollbar())
     .min_width(Dimension::Px(0.0))
-    .max_height(Dimension::Px(APPROVAL_VALUE_MAX_HEIGHT))
     .flex(1.0)
     .into()
 }

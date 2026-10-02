@@ -298,10 +298,20 @@ pub fn prompt_result(approve: bool) -> String {
   }
 }
 
-/// `value` with `secrets` removed from every text in it, keys included.
+/// `value` with `secrets` removed from every text in it, keys included. A number whose digits hold a
+/// secret, such as a numeric PIN, becomes the redacted text in its place.
 fn redacted(value: &Value, secrets: &[SecretVariable]) -> Value {
   match value {
     Value::String(text) => Value::String(redact_secrets(text, secrets)),
+    Value::Number(number) => {
+      let digits = number.to_string();
+      let text = redact_secrets(&digits, secrets);
+      if text == digits {
+        value.clone()
+      } else {
+        Value::String(text)
+      }
+    }
     Value::Array(items) => Value::Array(items.iter().map(|item| redacted(item, secrets)).collect()),
     Value::Object(fields) => Value::Object(
       fields

@@ -3,7 +3,10 @@
 //! transcript's command box, which scrolls instead of cutting it; Copy takes the value as recorded;
 //! and Approve and Deny stay in view in the smallest window.
 
-use std::sync::Arc;
+use std::{
+  sync::Arc,
+  time::{Duration, Instant},
+};
 
 use lurq::{
   app::events::ScrollPhase,
@@ -23,7 +26,12 @@ use orchester_desktop::theme::{APPROVAL_VALUE_MAX_HEIGHT, STATUS_BAR_HEIGHT, TIT
 use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
-use crate::{github::shows, harness::Desktop, native_run::native_run, unreadable_run::at};
+use crate::{
+  github::shows,
+  harness::{Desktop, expected},
+  native_run::native_run,
+  unreadable_run::at,
+};
 
 const DIALOG: &str = "tool-approval-dialog";
 const ACTION: &str = "tool-approval-action";
@@ -150,12 +158,17 @@ fn wheel(desktop: &mut Desktop, id: &str, (dx, dy): (f32, f32)) {
 fn assert_scrolls_down(desktop: &mut Desktop, id: &str) {
   let scroll = format!("{id}-scroll");
   let text = format!("{id}-text");
+  let frame = desktop.bounds(id);
   let viewport = desktop.bounds(&scroll);
   let before = desktop.bounds(&text);
   assert!(
-    viewport.height <= APPROVAL_VALUE_MAX_HEIGHT + 0.5,
+    frame.height <= APPROVAL_VALUE_MAX_HEIGHT + 0.5,
     "{id} is {} px tall",
-    viewport.height
+    frame.height
+  );
+  assert!(
+    viewport.y + viewport.height <= frame.y + frame.height + 0.5,
+    "{id} keeps its lines inside"
   );
   assert!(before.height > viewport.height, "{id}'s lines run past its box");
   wheel(desktop, &scroll, (0.0, -120.0));
@@ -394,4 +407,83 @@ fn tool_approval_arguments_cut_at_the_ceiling_say_so_under_what_was_kept() {
   let kept = format!("{{\n  \"text\": \"{}", "x".repeat(ARGUMENTS_CEILING - 9));
   assert_whole(&mut desktop, ARGUMENTS, &format!("{kept}\n… cut at 256 KB"));
   assert_buttons_in_view_at_minimum_size(&mut desktop);
+}
+
+#[test]
+fn tool_approval_deeply_nested_arguments_are_shown_as_recorded_and_quickly() {
+  // 120 levels deep, and 20 000 elements at the bottom: laid out one a line, every element would
+  // carry 240 spaces of indent, about 5 MB.
+  let raw = format!("{}{}{}", "[".repeat(120), vec!["1"; 20_000].join(","), "]".repeat(120));
+  serde_json::from_str::<Value>(&raw).expect("valid JSON");
+  let started = Instant::now();
+  let mut desktop = mcp_arguments(raw.clone());
+  let elapsed = started.elapsed();
+  assert_whole(&mut desktop, ARGUMENTS, &raw);
+  assert!(shows(&mut desktop, "tool-approval-arguments-note", "Shown as recorded"));
+  assert!(elapsed < Duration::from_secs(3), "the dialog appears in {elapsed:?}");
+  // Small arguments nested as deep are still laid out.
+  let small = format!("{}1{}", "[".repeat(100), "]".repeat(100));
+  let mut desktop = mcp_arguments(small);
+  let lines = desktop
+    .tree
+    .get_element_by_id(&format!("{ARGUMENTS}-text"))
+    .and_then(|element| element.text_content().map(str::to_owned))
+    .expect("the arguments are shown");
+  assert_eq!(lines.lines().count(), 201, "one bracket a line, and the number");
+  assert!(desktop.tree.get_element_by_id("tool-approval-arguments-note").is_none());
+}
+
+#[test]
+fn tool_approval_values_of_60_columns_stay_beside_their_label() {
+  let inline = |target: &'static str| {
+    let mut desktop = approval_dialog(Request {
+      command: false,
+      action: "batch_get",
+      target: Some(target),
+      scope: None,
+      native: None,
+    });
+    let beside = desktop.tree.get_element_by_id(&format!("{TARGET}-text")).is_none();
+    if !beside {
+      assert_whole(&mut desktop, TARGET, target);
+    }
+    beside
+  };
+  assert!(inline(&*"a".repeat(60).leak()), "60 columns fit");
+  assert!(!inline(&*"a".repeat(61).leak()), "61 do not");
+  // A character outside ASCII counts as two columns.
+  assert!(inline(&*"é".repeat(30).leak()), "30 wide characters fit");
+  assert!(!inline(&*format!("{}a", "é".repeat(30)).leak()), "61 columns do not");
+  // A tab or another control character never stays beside the label, however short.
+  assert!(!inline("docs/\tnotes.md"));
+  assert!(!inline("docs/\u{1b}[31mnotes.md"));
+}
+
+#[test]
+fn tool_approval_tab_goes_through_each_copy_then_deny_and_approve() {
+  let mut desktop = approval_dialog(Request {
+    command: true,
+    action: HEREDOC,
+    target: Some(LONG_TARGET),
+    scope: None,
+    native: None,
+  });
+  let action_copy = format!("{ACTION}-copy");
+  let target_copy = format!("{TARGET}-copy");
+  desktop.tab_to(&action_copy, 8);
+  assert_eq!(
+    desktop.stops(4, false),
+    expected(&[
+      Some(&target_copy),
+      Some("tool-approval-deny"),
+      Some("tool-approval-approve-once"),
+      Some(&action_copy),
+    ]),
+    "Tab goes on from the action's Copy and wraps in the dialog"
+  );
+  assert_eq!(
+    desktop.stops(1, true),
+    expected(&[Some("tool-approval-approve-once")]),
+    "Shift+Tab goes back"
+  );
 }

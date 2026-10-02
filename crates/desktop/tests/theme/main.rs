@@ -51,10 +51,10 @@ fn window_chrome_follows_pencil() {
 }
 
 #[test]
-fn approval_values_scroll_past_the_shell_string_cap() {
-  // The full shell string of 04.H9 (`bwWuT` in `coKjY`) scrolls once it is 160 tall; every long
-  // value of the approval dialog shares that cap.
-  assert_eq!(theme::APPROVAL_VALUE_MAX_HEIGHT, 160.0);
+fn approval_values_scroll_past_twelve_lines() {
+  // A long value's box in the approval dialog is at most 12 lines with its padding, 232 (`E5NBo`
+  // in `bjrgu`); the full shell string of 04.H9 (`bwWuT`) shares the cap.
+  assert_eq!(theme::APPROVAL_VALUE_MAX_HEIGHT, 232.0);
 }
 
 #[test]

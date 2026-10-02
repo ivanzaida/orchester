@@ -333,14 +333,17 @@ Tool approval dialog: long values shown in full · branch `claude/approval-long`
 
 - **Done 2026-10-02, design verification pending.** A value that does not fit beside its label (Action, Command or
   Target/Working directory when longer than 60 mono columns or multiline, and MCP Arguments always) moves under its
-  label into the transcript command box (`CommandPlace::Approval`: lines as recorded, no wrapping, scrolling both ways
-  in a box no taller than `theme::APPROVAL_VALUE_MAX_HEIGHT`, 160, shared with 04.H9's shell string; Copy at the top
-  right takes the value as recorded). Arguments that parse as JSON read one member a line (2-space indent, only
+  label into the transcript command box (`CommandPlace::Capped`: lines as recorded, no wrapping, scrolling both ways
+  in a box no taller than `theme::APPROVAL_VALUE_MAX_HEIGHT`, 232 = 12 lines (`E5NBo` in `bjrgu`), shared with 04.H9's
+  shell string; Copy at the top right takes the value as recorded). Arguments that parse as JSON read one member a line (2-space indent, only
   whitespace between tokens changes); otherwise as recorded. The dialog is no taller than the screen: its details
   scroll between the header and the buttons, so Approve and Deny stay in view at 960 x 700. Redaction is unchanged
   (the runner records redacted values; the dialog only lays them out). This also fixes C6's cut working directory row.
-- Design: no frame draws a long value; the block follows 04.H9 `bwWuT` in `coKjY` (label above a canvas box). A
-  designer should draw it.
+- Design: long values are drawn in `bjrgu` ("Approval choices", approved); the cap follows its 12 lines.
+- Arguments are laid out once per approval (`ArgumentsCache`, keyed by approval id and stored value), checked with
+  `serde::de::IgnoredAny`, and laid out only while the result stays within 4 x their size (at least 64 KB, at most
+  512 KB); past that they are shown as recorded with a note (`runs.toolApproval.argumentsAsRecorded`), since the
+  agent writes them and deep nesting multiplies the indentation. A number holding a secret's digits is redacted too.
 - MCP arguments are recorded whole (they were cut at 600 characters): Claude Code's permission prompt removes secret
   values from every text in them first, then `run::recorded_arguments` keeps them whole up to `ARGUMENTS_CEILING`
   (256 KB). Past it they are cut at a character boundary and end with a visible `… cut at 256 KB` line; the dialog lays
@@ -349,7 +352,8 @@ Tool approval dialog: long values shown in full · branch `claude/approval-long`
   changes. Codex App Server has no cap: its MCP approvals record no arguments at all, by design of that parser.
 - Left: a command's *Agent's note* still cuts with an ellipsis.
 - Tests: `cargo test -p orchester-desktop --test form_keyboard tool_approval` (Copy: `tool_approval_copy -- --ignored`,
-  writes the clipboard and restores it); `-p orchester-core --test claude_approvals claude_approvals`.
+  writes the clipboard and restores it); `-p orchester-core --test claude_approvals claude_approvals`; `--test theme
+  approval`.
 
 ORC-57 · Native agent P1b: core native module
 
