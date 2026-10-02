@@ -229,7 +229,7 @@ Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
 Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label
-can stay cut after the window widens until lurq 0.32.1 (text layout cache). Implemented on `claude/orc17`, with master merged into the branch on 2026-10-02 (merge `c290682`) and the review and
+could stay cut after the window widened; fixed by lurq 0.33.0 (text layout cache). Implemented on `claude/orc17`, with master merged into the branch on 2026-10-02 (merge `c290682`) and the review and
 design follow-ups on top. Codex and Claude Code report their account's limits live during agent turns: Codex App
 Server's `account/rateLimits/updated` notification and Claude Code's `stream-json` `rate_limit_event`. The runner hands
 each reading to the desktop without storing it; the status bar shows the newest reading per CLI across open projects,
@@ -323,11 +323,10 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
 select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
-scaled displays in 0.30.4. This workspace uses 0.32.0. Since 0.31.0 the MCP server also offers `lurq_inspect` and
+scaled displays in 0.30.4. This workspace uses 0.33.0, whose layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit. Since 0.31.0 the MCP server also offers `lurq_inspect` and
 `lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
-0.32.0 percentage-width children of a wrapping row resolve against the row's width. A patch release such as 0.32.1
-needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already admits it) and, to keep
-naming the version in use, this line.
+0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
+admits it) and, to keep naming the version in use, this line.
 
 ## P · Product decisions waiting for the user
 
