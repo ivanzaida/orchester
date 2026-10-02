@@ -3,7 +3,8 @@
 //! the tabs, and the Summary (`uVIxb`, `F5Lsi`; the plan review 02.11 `x3lVC` while a plan waits for
 //! a decision), Conversation (02.12 `jgqPe`), Changes or Activity (02.I `SfXU1`) tab. The run is
 //! read from the project database and read again whenever the runner reports a change or a message
-//! is sent; its changes up to its latest checkpoint are read again when it records a new one. Once
+//! is sent; its changes up to its latest checkpoint are read again when it records a new one, and
+//! what its worktree holds beyond that while an agent works, for the Changes tab and its count. Once
 //! the run ended, what it left in the repository is read too: Ready for review merges it, and
 //! *Remove worktree* clears it. Artifacts come in a later milestone and are shown unavailable.
 
@@ -58,7 +59,7 @@ pub(super) use tool_approval::modal as tool_approval_modal;
 
 use self::{
   activity::{ActivityProps, ActivityTab},
-  changes::{ChangesProps, ChangesTab, CheckpointedLoad},
+  changes::{ChangesProps, ChangesTab, RunChanges},
   controls::{ControlAction, RunControl, control_action, control_buttons},
   notice::Lost,
   ready::{ReadyForReview, ReadyProps},
@@ -72,7 +73,7 @@ use crate::{
   programs::Programs,
   runner::{Runners, state::RunnerState},
   tasks::{
-    changes::checkpointed_in,
+    changes::Refresh,
     data::PipelineChoice,
     detail::TaskDetail,
     integration::{LeftBehind, leftovers_in},
@@ -136,6 +137,8 @@ pub struct TaskScreen {
   retry: Signal<u64>,
   /// Reads the task again once a message was sent.
   reload: Signal<u64>,
+  /// Wakes the worktree reads while an agent works; they end with the page.
+  refresh: Refresh,
   /// Puts the focus in the conversation's composer (Ask agent).
   focus_composer: Signal<bool>,
   /// Why Edit task, opened for this task, was refused and this page shown instead.
@@ -172,6 +175,7 @@ impl Component for TaskScreen {
       requested: ctx.signal(None),
       retry: ctx.signal(0),
       reload: ctx.signal(0),
+      refresh: changes::worktree_refresh(ctx),
       focus_composer,
       refused_edit: ctx.signal(None),
       nav,
@@ -238,11 +242,8 @@ impl Component for TaskScreen {
     }
     let online = props.runner == RunnerState::Online;
     let lost = detail.lost_its_runner(online).then(|| Lost::of(&props.runner));
-    let checkpointed = self.checkpointed(ctx, &props, &detail);
-    let files = match &checkpointed {
-      Some(CheckpointedLoad::Ready(checkpointed)) => checkpointed.files(),
-      _ => None,
-    };
+    let changes = self.changes(ctx, &props, &detail, lost.is_some());
+    let files = changes.as_ref().and_then(RunChanges::listed_files);
     let leftovers = self.leftovers(ctx, &props, &detail);
     let again = run_again::offer(ctx, &props.project, &detail, props.revision, leftovers.as_ref());
     let body = self.body(
@@ -250,7 +251,7 @@ impl Component for TaskScreen {
       &props,
       &detail,
       (lost, files, again.reason),
-      (checkpointed, leftovers.clone()),
+      (changes, leftovers.clone()),
     );
     let runner_notice = connection_notice(ctx, &props.runner, props.runner_since, &self.runners).map(padded);
     let control_error = self.error_rows(ctx, &control);
@@ -288,7 +289,7 @@ impl TaskScreen {
     props: &TaskProps,
     detail: &Arc<TaskDetail>,
     (lost, files, reason): (Option<Lost>, Option<usize>, Option<Element>),
-    (checkpointed, leftovers): (Option<CheckpointedLoad>, Option<Result<Leftovers, Message>>),
+    (changes, leftovers): (Option<RunChanges>, Option<Result<Leftovers, Message>>),
   ) -> Element {
     if let Some(run) = &detail.latest_unreadable {
       return match props.tab {
@@ -298,7 +299,7 @@ impl TaskScreen {
         TaskPageTab::Activity => tab_state::unreadable(ctx, "activity-unreadable", run),
       };
     }
-    let live = detail.phase() == TaskPhase::Running && lost.is_none();
+    let live = agent_at_work(detail, lost.is_some());
     if props.tab == TaskPageTab::Summary
       && let Some(run) = detail.run.as_ref()
       && let Some(review) = PlanReview::of(run)
@@ -311,7 +312,7 @@ impl TaskScreen {
           &format!("task-ready-{}", run.id()),
           ReadyProps {
             detail: detail.clone(),
-            checkpointed,
+            checkpointed: changes.map(|changes| changes.checkpointed),
             open: props.project.clone(),
             leftovers,
           },
@@ -351,9 +352,8 @@ impl TaskScreen {
         ChangesProps {
           repo_root: props.project.repo_root.clone(),
           detail: detail.clone(),
-          checkpointed: checkpointed.unwrap_or(CheckpointedLoad::Loading),
+          changes: changes.unwrap_or_default(),
           file: props.file.clone(),
-          live,
           retry: self.retry.clone(),
         },
       ),
@@ -404,6 +404,18 @@ impl TaskScreen {
     }
   }
 
+  /// The latest run's changes, read once for the Changes tab and the count on its label; `None`
+  /// without a run.
+  fn changes(&self, ctx: &mut Ctx, props: &TaskProps, detail: &TaskDetail, lost: bool) -> Option<RunChanges> {
+    let run = detail.run.as_ref()?;
+    let repo_root = &props.project.repo_root;
+    let at_work = (agent_at_work(detail, lost), props.tab == TaskPageTab::Changes);
+    Some(RunChanges {
+      checkpointed: changes::checkpointed(ctx, repo_root, run, self.retry.get()),
+      worktree: changes::not_checkpointed(ctx, repo_root, run, &self.refresh, at_work),
+    })
+  }
+
   /// *Remove worktree* in the topbar, while a run that ended still has worktrees.
   fn removal(
     &self,
@@ -425,42 +437,6 @@ impl TaskScreen {
         leftovers: leftovers.clone(),
       },
     ))
-  }
-
-  /// The latest run's changes from its base to its latest checkpoint, read again when it records
-  /// a new one; `None` without a run.
-  fn checkpointed(&self, ctx: &mut Ctx, props: &TaskProps, detail: &TaskDetail) -> Option<CheckpointedLoad> {
-    let run = detail.run.as_ref()?;
-    let programs = ctx
-      .use_context::<Programs>()
-      .expect("the root provides Programs before mounting screens");
-    let head = run
-      .run
-      .last_checkpoint()
-      .map(|checkpoint| checkpoint.revision().clone());
-    let deps = (
-      props.project.repo_root.clone(),
-      run.run.base().clone(),
-      head,
-      self.retry.get(),
-    );
-    let load = ctx.future(deps, move |(repo_root, base, head, _)| {
-      let programs = programs.clone();
-      async move {
-        background::run(move || checkpointed_in(&repo_root, &programs, &base, head.as_ref()))
-          .await?
-          .map_err(|error| {
-            tracing::warn!(%error, "cannot read the run's changes");
-            error.message()
-          })
-      }
-    });
-    let state = load.state().get();
-    Some(match (state.data, state.error) {
-      (_, Some(error)) => CheckpointedLoad::Failed(error),
-      (Some(checkpointed), None) => CheckpointedLoad::Ready(checkpointed),
-      (None, None) => CheckpointedLoad::Loading,
-    })
   }
 }
 
@@ -519,8 +495,8 @@ impl TaskScreen {
     )
   }
 
-  /// Summary, Changes with the count of files changed up to the latest checkpoint, and Activity;
-  /// the others need later milestones (`X7jYe`, `kUKxD`).
+  /// Summary, Changes with the count of the files it lists, and Activity; the others need later
+  /// milestones (`X7jYe`, `kUKxD`).
   fn tabs(&self, ctx: &Ctx, props: &TaskProps, files: Option<usize>) -> Element {
     let height = Dimension::Pct(100.0);
     let tab = |id, key, value: Option<TaskPageTab>| {
@@ -553,6 +529,11 @@ impl TaskScreen {
       ],
     )
   }
+}
+
+/// An agent is at work on the run: its worktree changes and its activity grows.
+fn agent_at_work(detail: &TaskDetail, lost: bool) -> bool {
+  detail.phase() == TaskPhase::Running && !lost
 }
 
 /// Why the runner did not carry out a run control (`field-error` below the heading).

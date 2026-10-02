@@ -26,6 +26,14 @@ use thiserror::Error;
 
 use crate::{messages::Message, programs::Programs};
 
+mod count;
+mod follow;
+
+pub use self::{
+  count::listed_files,
+  follow::{Follower, Refresh},
+};
+
 /// The `git` program, looked up on the `PATH` like the runner does.
 pub const GIT: &str = "git";
 

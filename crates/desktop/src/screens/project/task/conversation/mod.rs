@@ -54,7 +54,7 @@ pub(super) struct ComposerFocus(pub(super) Signal<bool>);
 pub(super) struct TabContext<'a> {
   pub(super) repo_root: &'a Path,
   pub(super) lost: Option<Lost>,
-  /// Files changed up to the latest checkpoint, once read.
+  /// The files the Changes tab lists, once read (`RunChanges::listed_files`).
   pub(super) files: Option<usize>,
   /// What the latest run left once it ended, once read.
   pub(super) leftovers: Option<&'a Leftovers>,

@@ -205,7 +205,7 @@ fn merged_conversation_takes_no_messages(desktop: &mut Desktop) {
   });
   assert!(shows(desktop, "task-notice", "Merged into main"));
   assert!(!has(desktop, "task-conversation-policy"));
-  assert!(shows(desktop, "task-working-context", "Permissions"));
+  assert!(shows(desktop, "task-working-context", "Last ran with"));
   assert!(!has(desktop, "task-permissions-view"), "nothing to change");
   assert!(has(desktop, "conversation-input-closed"));
   desktop.press("conversation-recipient");
